@@ -3,6 +3,6 @@ error: true
 ---
 
 accept_tcp "127.0.0.1:31337",
-         tls={keyfile: "tests/operators/accept_tcp/test.yaml"} {
+         tls={keyfile: "tests/operators/accept_tcp/tls/error_tls_missing_certfile.tql"} {
   read_lines
 }

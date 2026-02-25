@@ -13,6 +13,7 @@
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -205,7 +206,7 @@ private:
   folly::SocketAddress address_;
   located<ir::pipeline> user_pipeline_;
   let_id peer_let_id_;
-  std::optional<tls_options> tls_;
+  Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;

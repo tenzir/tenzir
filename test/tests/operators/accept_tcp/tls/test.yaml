@@ -1,5 +1,0 @@
-suite: accept-tcp-tls
-fixtures:
-  - tcp:
-      tls: true
-timeout: 60

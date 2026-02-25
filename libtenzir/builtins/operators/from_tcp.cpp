@@ -13,6 +13,7 @@
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
@@ -82,17 +83,22 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     while (not done_) {
       TENZIR_VERBOSE("from_tcp: connecting to {}", address_.describe());
-      auto connect_error = std::optional<std::string>{};
+      auto connect_error = Option<std::string>{};
       try {
         auto transport = co_await folly::coro::co_withExecutor(
           evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
                                                            connect_timeout));
         reconnect_backoff_ = connect_initial_backoff;
         co_return Box<folly::coro::Transport>{std::move(transport)};
+      } catch (const folly::OperationCancelled&) {
+        co_return {};
       } catch (const std::exception& ex) {
         connect_error = ex.what();
       }
       if (connect_error) {
+        if (done_) {
+          co_return {};
+        }
         diagnostic::warning("from_tcp: failed to connect to {}: {}",
                             address_.describe(), *connect_error)
           .emit(dh);
@@ -198,7 +204,7 @@ private:
   std::string host_;
   located<ir::pipeline> user_pipeline_;
   let_id peer_let_id_;
-  std::optional<tls_options> tls_;
+  Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   bool done_ = false;

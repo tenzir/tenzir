@@ -1,0 +1,17 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+assertions:
+  fixtures:
+    tcp:
+      client_received_contains: "hello-from-serve_tcp"
+timeout: 60
+---
+
+from {
+  line: "hello-from-serve_tcp"
+}
+serve_tcp env("TCP_ENDPOINT") {
+  write_ndjson
+}

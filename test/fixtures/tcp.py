@@ -1,98 +1,118 @@
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import ssl
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
+from typing import Any
 
-from tenzir_test import fixture
+from tenzir_test import FixtureHandle, fixture
 from tenzir_test.fixtures import current_options
 
 from ._utils import find_free_port, generate_self_signed_cert
 
 _HOST = "127.0.0.1"
 _COMMON_NAME = "tenzir-node.example.org"
+_CLIENT_RETRY_DELAY = 0.01
 
 
 @dataclass(frozen=True)
 class TcpOptions:
     tls: bool = False
     mode: str = "client"  # "client" sends data; "server" receives data
+    payload: str = "foo\n"
 
 
-@fixture(options=TcpOptions)
-def tcp() -> Iterator[dict[str, str]]:
+@dataclass(frozen=True)
+class TcpAssertions:
+    server_received_contains: str | None = None
+    client_received_contains: str | None = None
+    server_sent_contains: str | None = None
+
+
+@dataclass
+class _TcpState:
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    server_received: bytearray = field(default_factory=bytearray)
+    client_received: bytearray = field(default_factory=bytearray)
+    server_sent: bytearray = field(default_factory=bytearray)
+
+
+@fixture(options=TcpOptions, assertions=TcpAssertions)
+def tcp() -> FixtureHandle:
     opts = current_options("tcp")
+    if opts.mode not in {"client", "server"}:
+        raise RuntimeError("tcp fixture option `mode` must be one of: client, server")
     port = find_free_port()
     endpoint = f"{_HOST}:{port}"
     stop_event = threading.Event()
-
-    if opts.mode == "client":
-        yield from _run_client(opts, port, endpoint, stop_event)
-    else:
-        yield from _run_server(opts, port, endpoint, stop_event)
-
-
-def _run_client(
-    opts: TcpOptions,
-    port: int,
-    endpoint: str,
-    stop_event: threading.Event,
-) -> Iterator[dict[str, str]]:
+    state = _TcpState()
+    payload = opts.payload.encode()
     temp_dir = Path(tempfile.mkdtemp(prefix="tcp-")) if opts.tls else None
-
+    cert_path: Path | None = None
+    key_path: Path | None = None
+    ca_path: Path | None = None
+    cert_and_key_path: Path | None = None
     if opts.tls:
         assert temp_dir is not None
         cert_path, key_path, ca_path, cert_and_key_path = generate_self_signed_cert(
             temp_dir, _COMMON_NAME
         )
+    server_capture_path: str | None = None
+    client_capture_path: str | None = None
+    if opts.mode == "server":
+        fd, server_capture_path = tempfile.mkstemp(prefix="tcp-server-", suffix=".log")
+        os.close(fd)
+    else:
+        fd, client_capture_path = tempfile.mkstemp(prefix="tcp-client-", suffix=".log")
+        os.close(fd)
 
-    def _send_payload() -> None:
-        if opts.tls:
-            context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-            context.check_hostname = False
-            context.load_verify_locations(cafile=ca_path)
-        while not stop_event.is_set():
-            try:
-                with socket.create_connection((_HOST, port), timeout=1) as raw_sock:
-                    if opts.tls:
-                        with context.wrap_socket(
-                            raw_sock, server_hostname=_COMMON_NAME
-                        ) as tls_sock:
-                            tls_sock.sendall(b"foo\n")
-                            try:
-                                tls_sock.shutdown(socket.SHUT_WR)
-                                while not stop_event.is_set():
-                                    chunk = tls_sock.recv(1024)
-                                    if not chunk:
-                                        break
-                            except OSError:
-                                pass
-                    else:
-                        raw_sock.sendall(b"foo\n")
-                        try:
-                            raw_sock.shutdown(socket.SHUT_WR)
-                            while not stop_event.is_set():
-                                chunk = raw_sock.recv(1024)
-                                if not chunk:
-                                    break
-                        except OSError:
-                            pass
-            except (ConnectionRefusedError, ssl.SSLError, OSError):
-                time.sleep(0.1)
-                continue
-            time.sleep(0.1)
-
-    worker = threading.Thread(target=_send_payload, daemon=True)
+    if opts.mode == "client":
+        worker = threading.Thread(
+            target=_run_client_worker,
+            kwargs={
+                "port": port,
+                "stop_event": stop_event,
+                "state": state,
+                "payload": payload,
+                "tls": opts.tls,
+                "ca_path": ca_path,
+                "capture_path": client_capture_path,
+            },
+            daemon=True,
+        )
+    else:
+        worker = threading.Thread(
+            target=_run_server_worker,
+            kwargs={
+                "port": port,
+                "stop_event": stop_event,
+                "state": state,
+                "payload": payload,
+                "tls": opts.tls,
+                "capture_path": server_capture_path,
+                "cert_path": cert_path,
+                "key_path": key_path,
+            },
+            daemon=True,
+        )
     worker.start()
 
     env: dict[str, str] = {"TCP_ENDPOINT": endpoint}
+    if server_capture_path is not None:
+        env["TCP_FILE"] = server_capture_path
+    if client_capture_path is not None:
+        env["TCP_CLIENT_FILE"] = client_capture_path
     if opts.tls:
+        assert cert_path is not None
+        assert key_path is not None
+        assert ca_path is not None
+        assert cert_and_key_path is not None
         env.update(
             {
                 "TCP_CERTFILE": str(cert_path),
@@ -102,85 +122,172 @@ def _run_client(
             }
         )
 
-    try:
-        yield env
-    finally:
-        stop_event.set()
-        worker.join(timeout=1)
-        if temp_dir is not None:
-            import shutil
+    def _assert_test(
+        *,
+        test: Path,
+        assertions: TcpAssertions | dict[str, Any],
+        **_: Any,
+    ) -> None:
+        if isinstance(assertions, dict):
+            assertions = TcpAssertions(**assertions)
+        with state.lock:
+            server_received = state.server_received.decode("utf-8", errors="replace")
+            client_received = state.client_received.decode("utf-8", errors="replace")
+            server_sent = state.server_sent.decode("utf-8", errors="replace")
+        if assertions.server_received_contains is not None:
+            if assertions.server_received_contains not in server_received:
+                raise AssertionError(
+                    f"{test.name}: expected fixture server capture to contain "
+                    f"{assertions.server_received_contains!r}, got {server_received!r}"
+                )
+        if assertions.client_received_contains is not None:
+            if assertions.client_received_contains not in client_received:
+                raise AssertionError(
+                    f"{test.name}: expected fixture client capture to contain "
+                    f"{assertions.client_received_contains!r}, got {client_received!r}"
+                )
+        if assertions.server_sent_contains is not None:
+            if assertions.server_sent_contains not in server_sent:
+                raise AssertionError(
+                    f"{test.name}: expected fixture server send buffer to contain "
+                    f"{assertions.server_sent_contains!r}, got {server_sent!r}"
+                )
 
+    def _teardown() -> None:
+        stop_event.set()
+        worker.join(timeout=2)
+        if server_capture_path is not None and os.path.exists(server_capture_path):
+            os.remove(server_capture_path)
+        if client_capture_path is not None and os.path.exists(client_capture_path):
+            os.remove(client_capture_path)
+        if temp_dir is not None:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    return FixtureHandle(
+        env=env,
+        teardown=_teardown,
+        hooks={"assert_test": _assert_test},
+    )
 
-def _run_server(
-    opts: TcpOptions,
+
+def _run_client_worker(
     port: int,
-    endpoint: str,
     stop_event: threading.Event,
-) -> Iterator[dict[str, str]]:
-    temp_dir = Path(tempfile.mkdtemp(prefix="tcp-")) if opts.tls else None
-    fd, path = tempfile.mkstemp(prefix="tcp-server-", suffix=".log")
-    os.close(fd)
+    state: _TcpState,
+    payload: bytes,
+    tls: bool,
+    ca_path: Path | None,
+    capture_path: str | None,
+) -> None:
+    context: ssl.SSLContext | None = None
+    if tls:
+        assert ca_path is not None
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.check_hostname = False
+        context.load_verify_locations(cafile=ca_path)
+    while not stop_event.is_set():
+        try:
+            raw_sock = socket.create_connection((_HOST, port), timeout=1)
+        except (ConnectionRefusedError, OSError):
+            time.sleep(_CLIENT_RETRY_DELAY)
+            continue
+        try:
+            with raw_sock:
+                sock: socket.socket | ssl.SSLSocket
+                if context is not None:
+                    sock = context.wrap_socket(raw_sock, server_hostname=_COMMON_NAME)
+                else:
+                    sock = raw_sock
+                with sock:
+                    sock.settimeout(0.2)
+                    if payload:
+                        sock.sendall(payload)
+                    if context is None:
+                        try:
+                            sock.shutdown(socket.SHUT_WR)
+                        except OSError:
+                            pass
+                    idle_deadline = time.monotonic() + 2
+                    with (
+                        open(capture_path, "ab")
+                        if capture_path
+                        else open(os.devnull, "wb")
+                    ) as capture:
+                        while not stop_event.is_set():
+                            try:
+                                chunk = sock.recv(4096)
+                            except socket.timeout:
+                                if time.monotonic() >= idle_deadline:
+                                    break
+                                continue
+                            except OSError:
+                                break
+                            if not chunk:
+                                break
+                            capture.write(chunk)
+                            capture.flush()
+                            with state.lock:
+                                state.client_received.extend(chunk)
+                            idle_deadline = time.monotonic() + 2
+        except (ssl.SSLError, OSError):
+            pass
+        time.sleep(_CLIENT_RETRY_DELAY)
 
-    if opts.tls:
-        assert temp_dir is not None
-        cert_path, key_path, ca_path, cert_and_key_path = generate_self_signed_cert(
-            temp_dir, _COMMON_NAME
-        )
 
-    def _serve() -> None:
-        with (
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server,
-            open(path, "wb") as fh,
-        ):
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server.bind((_HOST, port))
-            server.listen(1)
-            server.settimeout(0.1)
-            while not stop_event.is_set():
-                try:
-                    conn, _ = server.accept()
-                except socket.timeout:
-                    continue
-                if opts.tls:
+def _run_server_worker(
+    port: int,
+    stop_event: threading.Event,
+    state: _TcpState,
+    payload: bytes,
+    tls: bool,
+    capture_path: str | None,
+    cert_path: Path | None,
+    key_path: Path | None,
+) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((_HOST, port))
+        server.listen(1)
+        server.settimeout(0.1)
+        while not stop_event.is_set():
+            try:
+                conn, _ = server.accept()
+            except socket.timeout:
+                continue
+            try:
+                if tls:
+                    assert cert_path is not None
+                    assert key_path is not None
                     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                     ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
                     conn = ctx.wrap_socket(conn, server_side=True)
                 with conn:
-                    while True:
-                        data = conn.recv(4096)
-                        if not data:
-                            break
-                        fh.write(data)
-                        fh.flush()
-                break
-
-    worker = threading.Thread(target=_serve, daemon=True)
-    worker.start()
-
-    env: dict[str, str] = {
-        "TCP_ENDPOINT": endpoint,
-        "TCP_FILE": path,
-    }
-    if opts.tls:
-        env.update(
-            {
-                "TCP_CERTFILE": str(cert_path),
-                "TCP_KEYFILE": str(key_path),
-                "TCP_CAFILE": str(ca_path),
-                "TCP_CERTKEYFILE": str(cert_and_key_path),
-            }
-        )
-
-    try:
-        yield env
-    finally:
-        stop_event.set()
-        worker.join(timeout=1)
-        if os.path.exists(path):
-            os.remove(path)
-        if temp_dir is not None:
-            import shutil
-
-            shutil.rmtree(temp_dir, ignore_errors=True)
+                    conn.settimeout(0.2)
+                    if payload:
+                        conn.sendall(payload)
+                        with state.lock:
+                            state.server_sent.extend(payload)
+                    idle_deadline = time.monotonic() + 2
+                    with (
+                        open(capture_path, "ab")
+                        if capture_path
+                        else open(os.devnull, "wb")
+                    ) as capture:
+                        while not stop_event.is_set():
+                            try:
+                                data = conn.recv(4096)
+                            except socket.timeout:
+                                if time.monotonic() >= idle_deadline:
+                                    break
+                                continue
+                            except OSError:
+                                break
+                            if not data:
+                                break
+                            capture.write(data)
+                            capture.flush()
+                            with state.lock:
+                                state.server_received.extend(data)
+                            idle_deadline = time.monotonic() + 2
+            except (ssl.SSLError, OSError):
+                pass

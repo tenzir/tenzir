@@ -1,0 +1,11 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+timeout: 60
+---
+
+accept_tcp env("TCP_ENDPOINT") {
+  read_lines
+}
+head 1

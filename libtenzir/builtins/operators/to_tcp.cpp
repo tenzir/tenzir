@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/async/notify.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
@@ -14,6 +13,7 @@
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
@@ -21,7 +21,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
-#include <folly/coro/Mutex.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
@@ -37,6 +37,8 @@ constexpr auto connect_timeout = std::chrono::seconds{5};
 constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5000};
 constexpr auto write_timeout = std::chrono::seconds{5};
+constexpr auto write_queue_capacity = uint32_t{256};
+using WriteQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -62,21 +64,23 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        done_ = true;
+        request_stop();
         co_return;
       }
       tls_context_ = std::move(*context);
     }
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
-    auto pipeline_copy = args_.printer.inner;
-    if (not pipeline_copy.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      done_ = true;
+    auto pipeline = std::move(args_.printer.inner);
+    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+      request_stop();
       co_return;
     }
-    auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline_copy),
+    auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
                                       tag_v<table_slice>);
     TENZIR_UNUSED(sub);
+    write_queue_ = std::make_shared<WriteQueue>(write_queue_capacity);
+    write_task_ = ctx.spawn_task(write_loop(ctx.dh()));
     co_return;
   }
 
@@ -86,13 +90,13 @@ public:
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
     if (not sub) {
-      done_ = true;
+      request_stop();
       co_return;
     }
     auto pipeline = as<OpenPipeline<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
-      done_ = true;
+      request_stop();
     }
   }
 
@@ -100,57 +104,34 @@ public:
     diagnostic::error("subpipeline for `to_tcp` must return bytes")
       .primary(args_.printer.source.subloc(0, 1))
       .emit(ctx);
-    done_ = true;
+    request_stop();
     co_return;
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (done_ or not chunk or chunk->size() == 0) {
+    TENZIR_UNUSED(ctx);
+    if (done_ or not chunk or chunk->size() == 0 or not write_queue_) {
       co_return;
     }
-    auto lock = co_await write_mutex_->co_scoped_lock();
-    while (true) {
-      if (not transport_) {
-        co_await connect(ctx.dh());
-      }
-      TENZIR_ASSERT(transport_);
-      auto data = folly::ByteRange{
-        reinterpret_cast<unsigned char const*>(chunk->data()),
-        chunk->size(),
-      };
-      try {
-        co_await folly::coro::timeout(
-          folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
-          write_timeout);
-        reconnect_backoff_ = connect_initial_backoff;
-        co_return;
-      } catch (std::exception const& ex) {
-        diagnostic::warning("to_tcp: failed to write to {}: {}",
-                            address_.describe(), ex.what())
-          .emit(ctx);
-        transport_.reset();
-      }
-    }
+    co_await write_queue_->enqueue(Option{std::move(chunk)});
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    auto sub = ctx.get_sub(make_view(sub_key_));
-    if (sub) {
-      auto pipeline = as<OpenPipeline<table_slice>>(*sub);
-      co_await pipeline.close();
-      co_await sub_finished_->wait();
-    }
-    {
-      auto lock = co_await write_mutex_->co_scoped_lock();
-      transport_.reset();
-    }
-    done_ = true;
+    TENZIR_UNUSED(ctx);
     co_return FinalizeBehavior::done;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    sub_finished_->notify_one();
+    if (write_queue_) {
+      co_await write_queue_->enqueue(None{});
+      if (write_task_) {
+        co_await write_task_->join();
+        write_task_ = None{};
+      }
+    } else {
+      done_ = true;
+    }
     co_return;
   }
 
@@ -160,8 +141,8 @@ public:
 
 private:
   auto connect(diagnostic_handler& dh) -> Task<void> {
-    while (true) {
-      auto connect_error = std::optional<std::string>{};
+    while (not done_) {
+      auto connect_error = Option<std::string>{};
       try {
         auto transport = co_await folly::coro::co_withExecutor(
           evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
@@ -173,10 +154,18 @@ private:
         transport_ = std::move(boxed);
         reconnect_backoff_ = connect_initial_backoff;
         co_return;
+      } catch (folly::OperationCancelled const&) {
+        co_return;
       } catch (std::exception const& ex) {
+        if (done_) {
+          co_return;
+        }
         connect_error = ex.what();
       }
       if (connect_error) {
+        if (done_) {
+          co_return;
+        }
         diagnostic::warning("to_tcp: failed to connect to {}: {}",
                             address_.describe(), *connect_error)
           .emit(dh);
@@ -188,18 +177,72 @@ private:
     }
   }
 
+  auto write_loop(diagnostic_handler& dh) -> Task<void> {
+    TENZIR_ASSERT(write_queue_);
+    while (true) {
+      auto next = co_await write_queue_->dequeue();
+      if (not next) {
+        break;
+      }
+      auto chunk = std::move(*next);
+      if (not chunk or chunk->size() == 0) {
+        continue;
+      }
+      while (not done_) {
+        if (not transport_) {
+          co_await connect(dh);
+          if (done_ or not transport_) {
+            break;
+          }
+        }
+        auto data = folly::ByteRange{
+          reinterpret_cast<unsigned char const*>(chunk->data()),
+          chunk->size(),
+        };
+        try {
+          co_await folly::coro::timeout(
+            folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
+            write_timeout);
+          reconnect_backoff_ = connect_initial_backoff;
+          break;
+        } catch (folly::OperationCancelled const&) {
+          co_return;
+        } catch (std::exception const& ex) {
+          if (done_) {
+            break;
+          }
+          diagnostic::warning("to_tcp: failed to write to {}: {}",
+                              address_.describe(), ex.what())
+            .emit(dh);
+          transport_ = None{};
+        }
+      }
+    }
+    transport_ = None{};
+    done_ = true;
+  }
+
+  auto request_stop() -> void {
+    if (done_) {
+      return;
+    }
+    done_ = true;
+    if (write_queue_) {
+      TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
+    }
+  }
+
   ToTcpArgs args_;
   data sub_key_ = data{int64_t{0}};
   folly::SocketAddress address_;
   std::string host_;
-  std::optional<tls_options> tls_;
+  Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
-  std::optional<Box<folly::coro::Transport>> transport_;
+  Option<Box<folly::coro::Transport>> transport_;
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
-  std::shared_ptr<folly::coro::Mutex> write_mutex_
-    = std::make_shared<folly::coro::Mutex>();
-  std::shared_ptr<Notify> sub_finished_ = std::make_shared<Notify>();
+  std::shared_ptr<WriteQueue> write_queue_;
+  Option<AsyncHandle<void>> write_task_;
   bool done_ = false;
 };
 

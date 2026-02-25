@@ -1,0 +1,21 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+      tls: true
+assertions:
+  fixtures:
+    tcp:
+      server_sent_contains: "foo"
+timeout: 60
+---
+
+let $tls = {
+  cacert: env("TCP_CAFILE"),
+  skip_peer_verification: true,
+}
+
+from_tcp env("TCP_ENDPOINT"), tls=$tls {
+  read_lines
+}
+head 1
