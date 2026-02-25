@@ -214,7 +214,7 @@ public:
     auto endpoint_arg = d.positional("endpoint", &ToTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &ToTcpArgs::tls);
     auto printer_arg = d.pipeline(&ToTcpArgs::printer);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto ep = to<struct endpoint>(endpoint_str.inner);
       auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);

@@ -218,7 +218,7 @@ public:
     auto tls_arg = d.named("tls", &FromTcpArgs::tls);
     d.pipeline(&FromTcpArgs::user_pipeline,
                {{"peer", &FromTcpArgs::peer_info}});
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<struct endpoint>(ep_str.inner);
       auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
