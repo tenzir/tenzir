@@ -1,0 +1,4 @@
+metrics "operator_profile", retro=true
+where pipeline_id == "00000000-0000-0000-0000-000000000001"
+head 1
+select has_pipeline_id=(pipeline_id != ""), has_operator_id=(operator_id != "")
