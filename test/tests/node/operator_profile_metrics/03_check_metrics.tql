@@ -18,10 +18,10 @@ every 1s {
 }
 head 1
 operator_ids = sort(operator_ids)
-sub_seconds = timestamps.map(t => t - t.floor(1s))
+unaligned = timestamps.map(t => t - t.floor(1s)).where(d => d != 0ns)
 select \
   operator_ids,
-  sub_seconds,
+  unaligned,
   total_events_in,
   total_events_out,
   has_cpu=(total_cpu > 0.0),
