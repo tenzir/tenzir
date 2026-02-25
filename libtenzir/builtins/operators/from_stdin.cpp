@@ -16,18 +16,18 @@
 #include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/ViaIfAsync.h>
-#include <folly/executors/GlobalExecutor.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncPipe.h>
 #include <folly/net/NetworkSocket.h>
-#include <sys/stat.h>
 
 #include <cerrno>
 #include <cstring>
 #include <deque>
 #include <fcntl.h>
 #include <memory>
+#include <optional>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::from_stdin {
@@ -104,7 +104,7 @@ public:
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     if (done_) {
       co_await wait_forever();
     }
@@ -155,93 +155,64 @@ public:
   }
 
 private:
-  static auto read_stdin_blocking(std::shared_ptr<ChunkQueue> queue,
-                                  diagnostic_handler& dh) -> Task<void> {
-    auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
-    if (orig_flags < 0) {
-      auto err = errno;
-      diagnostic::error(
-        "from_stdin: failed to inspect stdin flags before blocking read")
-        .note("errno {}: {}", err, std::strerror(err))
-        .emit(dh);
-      co_await queue->enqueue(std::nullopt);
-      co_return;
+  struct ProducerSink {
+    explicit ProducerSink(std::shared_ptr<ChunkQueue> queue)
+      : queue_{std::move(queue)} {
     }
-    if ((orig_flags & O_NONBLOCK) != 0) {
-      if (::fcntl(STDIN_FILENO, F_SETFL, orig_flags & ~O_NONBLOCK) != 0) {
-        auto err = errno;
-        diagnostic::error("from_stdin: failed to switch stdin to blocking mode")
-          .note("errno {}: {}", err, std::strerror(err))
-          .emit(dh);
-        co_await queue->enqueue(std::nullopt);
+
+    auto try_push(std::optional<chunk_ptr>& item) -> bool {
+      return queue_->try_enqueue(std::move(item));
+    }
+
+    auto push(std::optional<chunk_ptr> item) -> Task<void> {
+      co_await queue_->enqueue(std::move(item));
+    }
+
+    auto finish_once() -> Task<void> {
+      if (finished_) {
         co_return;
       }
+      finished_ = true;
+      co_await queue_->enqueue(std::nullopt);
     }
-    auto guard = folly::makeGuard([orig_flags] {
-      ::fcntl(STDIN_FILENO, F_SETFL, orig_flags);
-    });
-    auto buffer = std::vector<std::byte>(buffer_size);
-    while (true) {
-      auto bytes_read = ::read(STDIN_FILENO, buffer.data(), buffer.size());
-      if (bytes_read > 0) {
-        auto item = std::optional{
-          chunk::copy(buffer.data(), static_cast<size_t>(bytes_read))};
-        if (not item.value()) {
-          diagnostic::error("from_stdin: failed to allocate input chunk")
-            .emit(dh);
-          break;
-        }
-        co_await queue->enqueue(std::move(item));
-        continue;
-      }
-      if (bytes_read == 0) {
-        break;
-      }
-      if (errno == EINTR) {
-        continue;
-      }
-      auto err = errno;
-      diagnostic::error("from_stdin: blocking read failed")
-        .note("errno {}: {}", err, std::strerror(err))
-        .emit(dh);
-      break;
-    }
-    co_await queue->enqueue(std::nullopt);
-  }
 
-  static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
-                         diagnostic_handler& dh) -> Task<void> {
-    struct stat st{};
-    if (::fstat(STDIN_FILENO, &st) != 0) {
-      auto err = errno;
-      diagnostic::error("from_stdin: failed to inspect stdin")
-        .note("errno {}: {}", err, std::strerror(err))
-        .emit(dh);
-      co_await queue->enqueue(std::nullopt);
-      co_return;
+    template <class EmitFn>
+    auto fail_once(EmitFn&& emit) -> Task<void> {
+      if (failed_) {
+        co_return;
+      }
+      failed_ = true;
+      std::forward<EmitFn>(emit)();
+      co_await finish_once();
     }
-    if (S_ISREG(st.st_mode)) {
-      co_await read_stdin_blocking(queue, dh);
-      co_return;
-    }
+
+  private:
+    std::shared_ptr<ChunkQueue> queue_;
+    bool finished_ = false;
+    bool failed_ = false;
+  };
+
+  static auto read_stdin_eventable(ProducerSink& sink, diagnostic_handler& dh)
+    -> Task<void> {
     // Set stdin to non-blocking for event-driven IO.
     auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
     if (orig_flags < 0) {
       auto err = errno;
-      diagnostic::error("from_stdin: failed to get stdin flags")
-        .note("errno {}: {}", err, std::strerror(err))
-        .emit(dh);
-      co_await queue->enqueue(std::nullopt);
+      co_await sink.fail_once([&] {
+        diagnostic::error("from_stdin: failed to get stdin flags")
+          .note("errno {}: {}", err, std::strerror(err))
+          .emit(dh);
+      });
       co_return;
     }
     auto rc = ::fcntl(STDIN_FILENO, F_SETFL, orig_flags | O_NONBLOCK);
     if (rc < 0) {
-      diagnostic::warning("from_stdin: failed to enable non-blocking mode, "
-                          "falling back to "
-                          "blocking reads: {}",
-                          std::strerror(errno))
-        .emit(dh);
-      co_await read_stdin_blocking(queue, dh);
+      auto err = errno;
+      co_await sink.fail_once([&] {
+        diagnostic::error("from_stdin: failed to enable non-blocking mode")
+          .note("errno {}: {}", err, std::strerror(err))
+          .emit(dh);
+      });
       co_return;
     }
     auto guard = folly::makeGuard([orig_flags] {
@@ -256,11 +227,11 @@ private:
     reader->setReadCB(&cb);
     if (not reader->isHandlerRegistered()) {
       reader->setReadCB(nullptr);
-      diagnostic::warning(
-        "from_stdin: stdin is not eventable on this platform, falling back to "
-        "blocking reads")
-        .emit(dh);
-      co_await read_stdin_blocking(queue, dh);
+      co_await sink.fail_once([&] {
+        diagnostic::error("from_stdin: stdin is not eventable")
+          .note("from_stdin requires eventable stdin")
+          .emit(dh);
+      });
       co_return;
     }
     // The callback object lives on this coroutine frame, so unregister it on
@@ -272,24 +243,24 @@ private:
       while (not cb.chunks.empty()) {
         auto item = std::optional{std::move(cb.chunks.front())};
         cb.chunks.pop_front();
-        if (not queue->try_enqueue(std::move(item))) {
+        if (not sink.try_push(item)) {
           // Queue is full — pause the reader to apply backpressure.
           reader->setReadCB(nullptr);
-          co_await queue->enqueue(std::move(item));
+          co_await sink.push(std::move(item));
           reader->setReadCB(&cb);
           if (not reader->isHandlerRegistered()) {
             reader->setReadCB(nullptr);
-            diagnostic::warning(
-              "from_stdin: async stdin re-registration failed, falling back "
-              "to blocking reads")
-              .emit(dh);
-            co_await read_stdin_blocking(queue, dh);
+            co_await sink.fail_once([&] {
+              diagnostic::error(
+                "from_stdin: async stdin re-registration failed")
+                .emit(dh);
+            });
             co_return;
           }
         }
       }
       if (cb.done) {
-        break;
+        co_return;
       }
       // Check again to avoid waiting if callback pushed while processing.
       if (cb.done or not cb.chunks.empty()) {
@@ -297,7 +268,13 @@ private:
       }
       co_await cb.notify.wait();
     }
-    co_await queue->enqueue(std::nullopt);
+  }
+
+  static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
+                         diagnostic_handler& dh) -> Task<void> {
+    auto sink = std::make_shared<ProducerSink>(std::move(queue));
+    co_await read_stdin_eventable(*sink, dh);
+    co_await sink->finish_once();
   }
 
   FromStdinArgs args_;
