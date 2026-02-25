@@ -1,9 +1,14 @@
 suite: from-s3
 fixtures: [s3]
+requires:
+  operators:
+    - from_s3
 assertions:
   fixtures:
     s3:
       state: unchanged
 timeout: 30
 skip:
-  on: fixture-unavailable
+  on:
+    - fixture-unavailable
+    - capability-unavailable

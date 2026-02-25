@@ -1,9 +1,14 @@
 suite: from-abs
 fixtures: [abs]
+requires:
+  operators:
+    - from_azure_blob_storage
 assertions:
   fixtures:
     abs:
       state: unchanged
 timeout: 30
 skip:
-  on: fixture-unavailable
+  on:
+    - fixture-unavailable
+    - capability-unavailable
