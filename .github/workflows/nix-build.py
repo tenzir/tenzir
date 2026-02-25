@@ -896,11 +896,10 @@ def cmd_upload(args: argparse.Namespace) -> int:
 
         for label, files in packages.items():
             for pkg_file in files:
-                # Only upload versioned packages for releases
-                if args.release_tag:
-                    dest = f"{store}/{label}/{pkg_file.name}"
-                    notice(f"Copying artifact to {dest}")
-                    _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
+                # Always upload canonical package names to configured stores.
+                dest = f"{store}/{label}/{pkg_file.name}"
+                notice(f"Copying artifact to {dest}")
+                _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
 
                 # Create alias copies directly from local file
                 for alias in args.package_aliases:
