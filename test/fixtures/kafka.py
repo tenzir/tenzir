@@ -100,6 +100,19 @@ class KafkaOptions:
     session_token: str = ""
 
 
+def _resolve_project_relative_path(path: str) -> Path:
+    """Resolve fixture paths relative to the active test project root."""
+    candidate = Path(path).expanduser()
+    if candidate.is_absolute():
+        return candidate.resolve(strict=False)
+    ctx = current_context()
+    if ctx is not None:
+        root = ctx.env.get("TENZIR_TEST_ROOT")
+        if root:
+            return (Path(root) / candidate).resolve(strict=False)
+    return candidate.resolve(strict=False)
+
+
 def _start_kafka(
     runtime: RuntimeSpec,
     port: int,
@@ -560,10 +573,11 @@ def kafka() -> Iterator[dict[str, str]]:
                 f"kafka fixture option `compression` must be one of: {allowed}"
             )
         if opts.payload_file:
-            payload_path = Path(opts.payload_file)
+            payload_path = _resolve_project_relative_path(opts.payload_file)
             if not payload_path.is_file():
                 raise RuntimeError(
-                    "kafka fixture option `payload_file` must reference a file"
+                    "kafka fixture option `payload_file` must reference a file "
+                    f"(resolved to {payload_path})"
                 )
             payload_file = str(payload_path.resolve())
         else:
