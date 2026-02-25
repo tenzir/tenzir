@@ -1656,12 +1656,13 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
           });
       }
       queue.cancel();
-      // Emit final metrics snapshot so the last interval is not lost.
-      auto snapshot = exec_ctx.metrics()->take_snapshot();
-      exec_ctx.emit_metrics(snapshot);
-      exec_ctx.emit_profiler(
-        floor(time::clock::now(), defaults::metrics_interval));
     });
+    // Emit final metrics after the scope has joined all tasks, so the
+    // periodic emission coroutine is guaranteed to have finished.
+    auto snapshot = exec_ctx.metrics()->take_snapshot();
+    exec_ctx.emit_metrics(snapshot);
+    exec_ctx.emit_profiler(
+      floor(time::clock::now(), defaults::metrics_interval));
   } catch (folly::OperationCancelled) {
     // TODO: ?
     throw;
