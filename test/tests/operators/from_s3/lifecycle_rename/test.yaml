@@ -5,5 +5,3 @@ assertions:
     s3:
       state: renamed
 timeout: 30
-skip:
-  on: fixture-unavailable
