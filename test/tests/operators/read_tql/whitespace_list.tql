@@ -1,0 +1,1 @@
+from_stdin { read_tql }

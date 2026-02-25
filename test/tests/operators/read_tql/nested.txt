@@ -1,0 +1,20 @@
+{
+  list: [
+    1,
+    2,
+    3,
+  ],
+  rec: {
+    inner: "value",
+  },
+  mixed: [
+    {
+      a: 1,
+      b: null,
+    },
+    {
+      a: null,
+      b: 2,
+    },
+  ],
+}

@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: 1}, {x: 2}, {x: 3}
+slice stride=0
