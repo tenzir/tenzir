@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/multi_series_builder_argument_parser.hpp"
+
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder.hpp>
@@ -13,6 +15,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/parser.hpp>
+
+#include <folly/coro/Sleep.h>
 
 #include <algorithm>
 #include <cctype>
@@ -201,21 +205,46 @@ auto add_record_expression_to_builder(const ast::expression& expr,
 }
 
 // Empty args struct for read_tql (no arguments needed)
-struct ReadTqlArgs {};
+struct ReadTqlArgs {
+  multi_series_builder::options msb_options;
+};
 
 class ReadTql final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadTql(ReadTqlArgs /*args*/) {
+  explicit ReadTql(ReadTqlArgs args) : opts_{std::move(args.msb_options)} {
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  struct PeriodicTick {};
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    builder_.emplace(opts_, ctx);
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(builder_);
+    auto ready = builder_->yield_ready_as_table_slice();
+    TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
+    next_tick_ = ready.wait_for;
+    for (auto& slice : ready) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
     if (done_ || not input || input->size() == 0) {
       co_return;
-    }
-    // Lazily construct the builder on first use (it needs diagnostic_handler)
-    if (not builder_) {
-      builder_.emplace(multi_series_builder::options{}, ctx);
     }
     // Append new data to buffer
     buffer_.append(reinterpret_cast<const char*>(input->data()), input->size());
@@ -229,34 +258,26 @@ public:
       co_return;
     }
     // Process complete records from buffer
-    co_await process_buffer(push, ctx, false);
+    process_buffer(ctx, false);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     // Ensure builder exists even if no data was processed
     if (not builder_) {
       builder_.emplace(multi_series_builder::options{}, ctx);
     }
     // Process any remaining complete records in buffer
-    co_await process_buffer(push, ctx, true);
+    process_buffer(ctx, true);
     // Finalize and yield remaining slices
     for (auto& slice : builder_->finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
+    co_return FinalizeBehavior::done;
   }
 
   auto state() -> OperatorState override {
     return done_ ? OperatorState::done : OperatorState::unspecified;
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    // Note: The multi_series_builder state is not serialized. Records that
-    // have been parsed but not yet yielded (via yield_ready_as_table_slice)
-    // may be lost on restore. This is acceptable because yield_ready is called
-    // after each parsed record, so any pending state is minimal.
-    // Before serializing, compact the buffer to remove already-processed data.
-    compact_buffer();
-    serde("buffer", buffer_);
   }
 
 private:
@@ -285,8 +306,7 @@ private:
 
   /// Processes complete records from the buffer.
   /// If is_final is true, emits a warning for incomplete trailing records.
-  auto process_buffer(Push<table_slice>& push, OpCtx& ctx, bool is_final)
-    -> Task<void> {
+  auto process_buffer(OpCtx& ctx, bool is_final) -> void {
     auto sp = session_provider::make(ctx.dh());
     while (buffer_offset_ < buffer_.size()) {
       auto view = buffer_view();
@@ -330,10 +350,6 @@ private:
       }
       // Advance past the parsed prefix.
       advance_buffer(parsed->bytes_consumed);
-      // Yield any ready slices
-      for (auto& slice : builder_->yield_ready_as_table_slice()) {
-        co_await push(std::move(slice));
-      }
       if (parsed->has_error) {
         buffer_.clear();
         buffer_offset_ = 0;
@@ -343,8 +359,10 @@ private:
     }
   }
 
-  std::string buffer_;
+  multi_series_builder::options opts_;
+  duration next_tick_ = opts_.settings.timeout;
   size_t buffer_offset_ = 0;
+  std::string buffer_;
   std::optional<multi_series_builder> builder_;
   bool done_ = false;
 };
@@ -357,6 +375,8 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReadTqlArgs, ReadTql>{};
+    auto msb = add_msb_to_describer(d, &ReadTqlArgs::msb_options);
+    d.validate(msb);
     return d.without_optimize();
   }
 };
