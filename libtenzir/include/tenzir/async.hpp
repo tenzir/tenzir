@@ -55,6 +55,7 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <folly/Executor.h>
+#include <folly/executors/IOExecutor.h>
 
 namespace tenzir {
 
@@ -112,7 +113,8 @@ public:
     = 0;
   virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
   /// Returns a profiling-wrapped IO executor for this operator.
-  virtual auto io_executor() -> folly::Executor::KeepAlive<> = 0;
+  virtual auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor>
+    = 0;
   // TODO: Change `void` to `Any`.
   virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
   virtual auto save_checkpoint(chunk_ptr chunk) -> Task<void> = 0;

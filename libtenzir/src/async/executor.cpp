@@ -732,7 +732,7 @@ private:
       });
   }
 
-  auto io_executor() -> folly::Executor::KeepAlive<> override {
+  auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     if (not io_executor_) {
       io_executor_ = exec_ctx_.make_io_executor(id_);
     }
@@ -1201,7 +1201,7 @@ private:
   bool input_is_void_;
   bool output_is_void_;
   std::shared_ptr<const registry> reg_ = global_registry();
-  folly::Executor::KeepAlive<> io_executor_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
 
   size_t next_subpipeline_id_ = 0;
 

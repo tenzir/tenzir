@@ -218,7 +218,9 @@ public:
     = 0;
 
   /// Returns a per-operator IO executor.
-  virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> = 0;
+  virtual auto make_io_executor(OpId id)
+    -> folly::Executor::KeepAlive<folly::IOExecutor>
+    = 0;
 
   /// Returns the metrics receiver actor handle, if available.
   virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
