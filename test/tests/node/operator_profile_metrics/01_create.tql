@@ -1,2 +1,2 @@
-api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: "//neo\nfrom {}\nselect x=1\ndiscard"}
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: "//neo\nevery 1s { version }\nhead 3\nwrite_json\ndiscard"}
 discard

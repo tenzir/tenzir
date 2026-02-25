@@ -1,4 +1,19 @@
 {
-  has_pipeline_id: true,
-  has_operator_id: true,
+  operator_ids: [
+    "0/0",
+    "0/0-0/0",
+    "0/1",
+    "0/2",
+    "0/3",
+  ],
+  total_events_in: 3,
+  total_events_out: 3,
+  has_cpu: true,
+  has_bytes_in: true,
+  has_bytes_out: true,
+  has_batches_in: true,
+  has_batches_out: true,
+  has_signals_in: true,
+  has_signals_out: true,
+  has_task_count: true,
 }
