@@ -1593,20 +1593,22 @@ auto build_profiler_snapshot(
     auto clamp_sub = [](size_t a, size_t b) {
       return a >= b ? a - b : 0;
     };
+    // Channel "in" = data pushed by sender = sender's output.
+    // Channel "out" = data pulled by receiver = receiver's input.
     if (auto si = op_index.find(sender_target); si != op_index.end()) {
       auto& agg = aggs[si->second];
-      agg.bytes_in += bytes_in;
-      agg.batches_in += batches_in;
-      agg.events_in += events_in;
-      agg.signals_in += signals_in;
+      agg.bytes_out += bytes_in;
+      agg.batches_out += batches_in;
+      agg.events_out += events_in;
+      agg.signals_out += signals_in;
       agg.buffer_bytes += clamp_sub(bytes_in, bytes_out);
     }
     if (auto ri = op_index.find(receiver_target); ri != op_index.end()) {
       auto& agg = aggs[ri->second];
-      agg.bytes_out += bytes_out;
-      agg.batches_out += batches_out;
-      agg.events_out += events_out;
-      agg.signals_out += signals_out;
+      agg.bytes_in += bytes_out;
+      agg.batches_in += batches_out;
+      agg.events_in += events_out;
+      agg.signals_in += signals_out;
     }
   }
   // Merge executor stats per operator. IO executor stats are merged into
