@@ -1,0 +1,7 @@
+suite: platform-client-cert-auth
+fixtures:
+  - platform_ws:
+      tls: true
+timeout: 120
+skip:
+  on: fixture-unavailable
