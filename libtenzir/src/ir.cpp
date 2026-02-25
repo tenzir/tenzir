@@ -239,12 +239,13 @@ struct IfArgs {
   }
 };
 
-class If final : public Operator<table_slice, table_slice> {
+/// Shared implementation for both transform and sink variants of `if`.
+class IfImpl {
 public:
-  explicit If(IfArgs args) : args_{std::move(args)} {
+  explicit IfImpl(IfArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto start(OpCtx& ctx) -> Task<void> {
     // Spawn subpipelines if they are not already spawned (due to restore).
     if (not ctx.get_sub(true).has_value()) {
       co_await ctx.spawn_sub(true, args_.consequence, tag_v<table_slice>);
@@ -255,8 +256,8 @@ public:
     }
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
+    -> Task<void> {
     // FIXME: If the inner subpipelines terminate and get erased, this can fail.
     auto true_sub = check(ctx.get_sub(true));
     auto consequence = as<OpenPipeline<table_slice>>(std::move(true_sub));
@@ -309,14 +310,14 @@ public:
         if (alternative) {
           alternative_closed_
             = (co_await alternative->push(std::move(slice))).is_err();
-        } else {
-          co_await push(std::move(slice));
+        } else if (push) {
+          co_await (*push)(std::move(slice));
         }
       }
     }
   }
 
-  auto state() -> OperatorState override {
+  auto state() -> OperatorState {
     if (consequence_closed_ and alternative_closed_) {
       return OperatorState::done;
     }
@@ -327,6 +328,50 @@ private:
   IfArgs args_;
   bool consequence_closed_ = false;
   bool alternative_closed_ = false;
+};
+
+class If final : public Operator<table_slice, table_slice> {
+public:
+  explicit If(IfArgs args) : impl_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return impl_.start(ctx);
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    return impl_.process(std::move(input), ctx, &push);
+  }
+
+  auto state() -> OperatorState override {
+    return impl_.state();
+  }
+
+private:
+  IfImpl impl_;
+};
+
+/// Sink variant of `if` for when both branches return void.
+class IfSink final : public Operator<table_slice, void> {
+public:
+  explicit IfSink(IfArgs args) : impl_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return impl_.start(ctx);
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    return impl_.process(std::move(input), ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return impl_.state();
+  }
+
+private:
+  IfImpl impl_;
 };
 
 } // namespace
@@ -359,6 +404,12 @@ public:
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
+    auto dh = null_diagnostic_handler{};
+    auto output = infer_type(input, dh);
+    TENZIR_ASSERT(output and *output);
+    if ((**output).is<void>()) {
+      return IfSink{std::move(args_)};
+    }
     return If{std::move(args_)};
   }
 
