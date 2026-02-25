@@ -1581,6 +1581,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
               defaults::metrics_interval));
           auto snapshot = exec_ctx.metrics()->take_snapshot();
           exec_ctx.emit_metrics(snapshot);
+          exec_ctx.emit_profiler();
         }
       });
       queue.spawn([&] -> Task<std::monostate> {
@@ -1655,6 +1656,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       // Emit final metrics snapshot so the last interval is not lost.
       auto snapshot = exec_ctx.metrics()->take_snapshot();
       exec_ctx.emit_metrics(snapshot);
+      exec_ctx.emit_profiler();
     });
   } catch (folly::OperationCancelled) {
     // TODO: ?
