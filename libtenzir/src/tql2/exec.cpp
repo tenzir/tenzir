@@ -12,6 +12,7 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/element_type.hpp"
@@ -846,8 +847,8 @@ auto build_profiler_snapshot(
   std::vector<ChannelProfile> const& channel_profiles,
   std::vector<ExecutorProfile> const& executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
-  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev,
-  time& prev_timestamp) -> profiler_snapshot;
+  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
+  -> profiler_snapshot;
 
 class TestExecCtx : public ExecCtx {
 public:
@@ -923,16 +924,15 @@ public:
     }
   }
 
-  void emit_profiler() override {
+  void emit_profiler(time timestamp) override {
     if (not profiler_fn_ or not profiling_) {
       return;
     }
     auto channels = get_channel_profiles();
     auto executors = get_executor_profiles();
     auto names = op_type_names();
-    auto now = time::clock::now();
-    auto snapshot = build_profiler_snapshot(channels, executors, names, now,
-                                            prev_snapshots_, prev_timestamp_);
+    auto snapshot = build_profiler_snapshot(channels, executors, names,
+                                            timestamp, prev_snapshots_);
     if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
       profiler_fn_(std::move(snapshot));
     }
@@ -982,7 +982,7 @@ private:
   MetricsCallback emit_fn_;
   ProfilerCallback profiler_fn_;
   std::unordered_map<std::string, OpSnapshot> prev_snapshots_;
-  time prev_timestamp_ = {};
+  time prev_timestamp_ = time::clock::now();
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
   std::vector<ExecutorProfile> executor_profiles_;
@@ -1511,8 +1511,8 @@ auto build_profiler_snapshot(
   std::vector<ChannelProfile> const& channel_profiles,
   std::vector<ExecutorProfile> const& executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
-  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev,
-  time& prev_timestamp) -> profiler_snapshot {
+  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
+  -> profiler_snapshot {
   // Collect unique operator names from channels and executors.
   auto op_names = std::vector<std::string>{};
   auto op_set = std::unordered_set<std::string>{};
@@ -1634,7 +1634,7 @@ auto build_profiler_snapshot(
   auto result = profiler_snapshot{};
   result.timestamp = timestamp;
   auto wall_interval_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            timestamp - prev_timestamp)
+                            defaults::metrics_interval)
                             .count();
   for (size_t i = 0; i < op_names.size(); ++i) {
     auto const& name = op_names[i];
@@ -1683,7 +1683,10 @@ auto build_profiler_snapshot(
       .buffer_bytes = static_cast<uint64_t>(agg.buffer_bytes),
     });
   }
-  // Drain backpressure events from all channels.
+  // Drain backpressure events from all channels to prevent unbounded memory
+  // growth. This is safe even when `write_profile` also reads backpressure
+  // events, because that code path uses the non-destructive
+  // `backpressure_events()` accessor.
   // Convert steady_clock timestamps to wall-clock time.
   auto wall_now = time::clock::now();
   auto steady_now = std::chrono::steady_clock::now();
@@ -1716,7 +1719,6 @@ auto build_profiler_snapshot(
       });
     }
   }
-  prev_timestamp = timestamp;
   return result;
 }
 

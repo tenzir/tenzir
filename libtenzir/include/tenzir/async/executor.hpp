@@ -232,7 +232,8 @@ public:
   }
 
   /// Called periodically to emit profiler table slices.
-  virtual void emit_profiler() {
+  virtual void emit_profiler(time timestamp) {
+    TENZIR_UNUSED(timestamp);
   }
 
   auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
