@@ -921,6 +921,9 @@ private:
   auto process(ExplicitAny message) -> Task<void> {
     // The task provided by the inner implementation completed.
     LOGV("got future result in {}", op_name());
+    if (is_done_ or got_shutdown_request_) {
+      co_return;
+    }
     co_await call_process_task(std::move(message.value));
     if (base_op().state() == OperatorState::done) {
       co_await handle_done();
