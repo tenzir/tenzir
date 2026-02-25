@@ -376,7 +376,12 @@ public:
       return then_ty;
     }
     if (*then_ty == *else_ty) {
-      // TODO: One can also end in void.
+      return then_ty;
+    }
+    if (then_ty->is<void>()) {
+      return else_ty;
+    }
+    if (else_ty->is<void>()) {
       return then_ty;
     }
     // TODO: Improve diagnostic.
