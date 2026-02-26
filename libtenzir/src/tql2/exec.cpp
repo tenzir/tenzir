@@ -12,6 +12,7 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/element_type.hpp"
@@ -19,6 +20,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -48,6 +50,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -580,7 +583,31 @@ struct ChannelStats {
     std::chrono::steady_clock::time_point start;
     std::chrono::steady_clock::time_point end;
   };
-  std::vector<BackpressureEvent> backpressure_events;
+
+  /// Record a backpressure event (thread-safe).
+  void record_backpressure(std::chrono::steady_clock::time_point start,
+                           std::chrono::steady_clock::time_point end) {
+    auto lock = std::scoped_lock{bp_mutex_};
+    backpressure_events_.push_back({start, end});
+  }
+
+  /// Drain all backpressure events, returning and clearing them (thread-safe).
+  auto drain_backpressure() -> std::vector<BackpressureEvent> {
+    auto lock = std::scoped_lock{bp_mutex_};
+    auto result = std::vector<BackpressureEvent>{};
+    result.swap(backpressure_events_);
+    return result;
+  }
+
+  /// Read all backpressure events under lock (thread-safe).
+  auto backpressure_events() const -> std::vector<BackpressureEvent> {
+    auto lock = std::scoped_lock{bp_mutex_};
+    return backpressure_events_;
+  }
+
+private:
+  mutable std::mutex bp_mutex_;
+  std::vector<BackpressureEvent> backpressure_events_;
 };
 
 /// Monotonic counters for profiling per-operator CPU usage.
@@ -676,7 +703,7 @@ public:
       }
       if (stats_) {
         auto bp_end = std::chrono::steady_clock::now();
-        stats_->backpressure_events.push_back({bp_start, bp_end});
+        stats_->record_backpressure(bp_start, bp_end);
       }
     }
   }
@@ -797,10 +824,40 @@ struct ExecutorProfile {
   std::shared_ptr<ExecutorStats> stats;
 };
 
+/// Per-operator snapshot of cumulative counters, used to detect which
+/// operators have changed between profiler ticks.
+struct OpSnapshot {
+  size_t bytes_in = 0;
+  size_t bytes_out = 0;
+  size_t batches_in = 0;
+  size_t batches_out = 0;
+  size_t events_in = 0;
+  size_t events_out = 0;
+  size_t signals_in = 0;
+  size_t signals_out = 0;
+  int64_t cpu_ns = 0;
+  int64_t wall_ns = 0;
+  size_t task_count = 0;
+
+  friend auto operator==(OpSnapshot const&, OpSnapshot const&) -> bool
+    = default;
+};
+
+// Forward declaration for use in TestExecCtx::emit_profiler().
+auto build_profiler_snapshot(
+  std::span<ChannelProfile const> channel_profiles,
+  std::span<ExecutorProfile const> executor_profiles,
+  std::unordered_map<std::string, std::string> const& op_type_names,
+  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
+  -> ProfilerSnapshot;
+
 class TestExecCtx : public ExecCtx {
 public:
-  explicit TestExecCtx(bool profiling = false, MetricsCallback emit_fn = {})
-    : profiling_{profiling}, emit_fn_{std::move(emit_fn)} {
+  explicit TestExecCtx(bool profiling = false, MetricsCallback emit_fn = {},
+                       ProfilerCallback profiler_fn = {})
+    : profiling_{profiling},
+      emit_fn_{std::move(emit_fn)},
+      profiler_fn_{std::move(profiler_fn)} {
   }
 
   auto get_channel_profiles() -> std::vector<ChannelProfile> {
@@ -846,7 +903,10 @@ public:
     auto demangled = folly::demangle(type);
     auto name = std::string{demangled};
     // Strip namespace prefix, keeping only the class name.
-    auto pos = name.rfind("::");
+    // Only look before '<' to avoid matching '::' inside template arguments.
+    auto tpl = name.find('<');
+    auto prefix = tpl != std::string::npos ? name.substr(0, tpl) : name;
+    auto pos = prefix.rfind("::");
     if (pos != std::string::npos) {
       name = name.substr(pos + 2);
     }
@@ -865,21 +925,32 @@ public:
     }
   }
 
+  void emit_profiler(time timestamp) override {
+    if (not profiler_fn_ or not profiling_) {
+      return;
+    }
+    auto channels = get_channel_profiles();
+    auto executors = get_executor_profiles();
+    auto names = op_type_names();
+    auto snapshot = build_profiler_snapshot(channels, executors, names,
+                                            timestamp, prev_snapshots_);
+    if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
+      profiler_fn_(std::move(snapshot));
+    }
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_profiled_channel<void>(std::move(id), void_limit,
-                                       element_type_tag{tag_v<void>});
+    return make_profiled_channel<void>(std::move(id), void_limit);
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(
-      std::move(id), events_limit, element_type_tag{tag_v<table_slice>});
+    return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit,
-                                            element_type_tag{tag_v<chunk_ptr>});
+    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
 
 private:
@@ -891,14 +962,14 @@ private:
   /// very big individual items that exceed the total capacity by themselves,
   /// as we eventually let them through since we need to transmit them.
   template <class T>
-  auto
-  make_profiled_channel(ChannelId id, size_t max_bytes, element_type_tag type)
+  auto make_profiled_channel(ChannelId id, size_t max_bytes)
     -> PushPull<OperatorMsg<T>> {
     auto stats = std::shared_ptr<ChannelStats>{};
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
       auto lock = std::scoped_lock{mutex_};
-      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes, type});
+      channel_profiles_.push_back(
+        ChannelProfile{id, stats, max_bytes, tag_v<T>});
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -907,6 +978,8 @@ private:
 
   bool profiling_;
   MetricsCallback emit_fn_;
+  ProfilerCallback profiler_fn_;
+  std::unordered_map<std::string, OpSnapshot> prev_snapshots_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
   std::vector<ExecutorProfile> executor_profiles_;
@@ -1364,7 +1437,11 @@ void write_profile(
   auto bp_pids_emitted = std::unordered_set<int>{};
   auto has_any_bp = false;
   for (auto const& prof : channel_profiles) {
-    if (not prof.stats or prof.stats->backpressure_events.empty()) {
+    if (not prof.stats) {
+      continue;
+    }
+    auto bp_events = prof.stats->backpressure_events();
+    if (bp_events.empty()) {
       continue;
     }
     // Parse channel name to get sender/receiver.
@@ -1402,7 +1479,7 @@ void write_profile(
         R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocks Upstream"}}}})pp",
         pid_totals));
     }
-    for (auto const& ev : prof.stats->backpressure_events) {
+    for (auto const& ev : bp_events) {
       auto start_us
         = std::chrono::duration_cast<std::chrono::microseconds>(ev.start - t0)
             .count();
@@ -1422,15 +1499,248 @@ void write_profile(
   f << "\n  ]\n}\n";
 }
 
-auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
+/// Aggregate channel and executor profiles into a `ProfilerSnapshot`.
+///
+/// Only includes operators whose counters changed since the previous call
+/// (tracked via `prev`). CPU usage is computed as a percentage of wall-clock
+/// time between ticks.
+auto build_profiler_snapshot(
+  std::span<ChannelProfile const> channel_profiles,
+  std::span<ExecutorProfile const> executor_profiles,
+  std::unordered_map<std::string, std::string> const& op_type_names,
+  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
+  -> ProfilerSnapshot {
+  // Collect unique operator names from channels and executors.
+  auto op_names = std::vector<std::string>{};
+  auto op_set = std::unordered_set<std::string>{};
+  auto add_op = [&](std::string const& name) {
+    if (name == "_") {
+      return;
+    }
+    if (op_set.insert(name).second) {
+      op_names.push_back(name);
+    }
+  };
+  struct ChannelEndpoints {
+    std::string sender;
+    std::string receiver;
+  };
+  auto channel_endpoints = std::unordered_map<std::string, ChannelEndpoints>{};
+  for (auto const& prof : channel_profiles) {
+    auto sep = prof.id.value.find(" -> ");
+    TENZIR_ASSERT(sep != std::string::npos);
+    auto sender = prof.id.value.substr(0, sep);
+    auto receiver = prof.id.value.substr(sep + 4);
+    add_op(sender);
+    add_op(receiver);
+    channel_endpoints[prof.id.value] = {std::move(sender), std::move(receiver)};
+  }
+  for (auto const& ex : executor_profiles) {
+    if (not ex.id.value.ends_with(" (io)")) {
+      add_op(ex.id.value);
+    }
+  }
+  // Build per-operator index.
+  auto op_index = std::unordered_map<std::string, size_t>{};
+  for (size_t i = 0; i < op_names.size(); ++i) {
+    op_index[op_names[i]] = i;
+  }
+  auto is_child_of
+    = [](std::string const& child, std::string const& parent) -> bool {
+    return child.size() > parent.size() and child.starts_with(parent)
+           and child[parent.size()] == '-';
+  };
+  // Aggregate channel stats per operator.
+  struct OpAgg {
+    size_t bytes_in = 0;
+    size_t bytes_out = 0;
+    size_t batches_in = 0;
+    size_t batches_out = 0;
+    size_t events_in = 0;
+    size_t events_out = 0;
+    size_t signals_in = 0;
+    size_t signals_out = 0;
+    size_t buffer_bytes = 0;
+  };
+  auto aggs = std::vector<OpAgg>(op_names.size());
+  for (auto const& prof : channel_profiles) {
+    if (not prof.stats) {
+      continue;
+    }
+    auto it = channel_endpoints.find(prof.id.value);
+    TENZIR_ASSERT(it != channel_endpoints.end());
+    auto const& [sender, receiver] = it->second;
+    // "In" counters go to the sender operator.
+    auto sender_target = sender;
+    if (sender != "_" and receiver != "_" and is_child_of(receiver, sender)) {
+      sender_target = sender;
+    }
+    // "Out" counters go to the receiver operator.
+    auto receiver_target = receiver;
+    if (sender != "_" and receiver != "_" and is_child_of(sender, receiver)) {
+      receiver_target = receiver;
+    }
+    auto bytes_in = prof.stats->in.bytes.load(std::memory_order::relaxed);
+    auto bytes_out = prof.stats->out.bytes.load(std::memory_order::relaxed);
+    auto batches_in = prof.stats->in.batches.load(std::memory_order::relaxed);
+    auto batches_out = prof.stats->out.batches.load(std::memory_order::relaxed);
+    auto events_in = prof.stats->in.events.load(std::memory_order::relaxed);
+    auto events_out = prof.stats->out.events.load(std::memory_order::relaxed);
+    auto signals_in = prof.stats->in.signals.load(std::memory_order::relaxed);
+    auto signals_out = prof.stats->out.signals.load(std::memory_order::relaxed);
+    auto clamp_sub = [](size_t a, size_t b) {
+      return a >= b ? a - b : 0;
+    };
+    // Channel "in" = data pushed by sender = sender's output.
+    // Channel "out" = data pulled by receiver = receiver's input.
+    if (auto si = op_index.find(sender_target); si != op_index.end()) {
+      auto& agg = aggs[si->second];
+      agg.bytes_out += bytes_in;
+      agg.batches_out += batches_in;
+      agg.events_out += events_in;
+      agg.signals_out += signals_in;
+      agg.buffer_bytes += clamp_sub(bytes_in, bytes_out);
+    }
+    if (auto ri = op_index.find(receiver_target); ri != op_index.end()) {
+      auto& agg = aggs[ri->second];
+      agg.bytes_in += bytes_out;
+      agg.batches_in += batches_out;
+      agg.events_in += events_out;
+      agg.signals_in += signals_out;
+    }
+  }
+  // Merge executor stats per operator. IO executor stats are merged into
+  // the parent operator.
+  struct ExecAgg {
+    int64_t cpu_ns = 0;
+    int64_t wall_ns = 0;
+    size_t task_count = 0;
+  };
+  auto exec_aggs = std::vector<ExecAgg>(op_names.size());
+  for (auto const& ex : executor_profiles) {
+    auto name = ex.id.value;
+    if (name.ends_with(" (io)")) {
+      name = name.substr(0, name.size() - 5);
+    }
+    if (auto it = op_index.find(name); it != op_index.end()) {
+      auto& ea = exec_aggs[it->second];
+      ea.cpu_ns += ex.stats->cpu_ns.load(std::memory_order::relaxed);
+      ea.wall_ns += ex.stats->wall_ns.load(std::memory_order::relaxed);
+      ea.task_count += ex.stats->task_count.load(std::memory_order::relaxed);
+    }
+  }
+  // Build operator entries, skipping unchanged operators.
+  auto result = ProfilerSnapshot{};
+  result.timestamp = timestamp;
+  auto wall_interval_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            defaults::metrics_interval)
+                            .count();
+  for (size_t i = 0; i < op_names.size(); ++i) {
+    auto const& name = op_names[i];
+    auto const& agg = aggs[i];
+    auto const& ea = exec_aggs[i];
+    auto cur = OpSnapshot{
+      agg.bytes_in,  agg.bytes_out,  agg.batches_in, agg.batches_out,
+      agg.events_in, agg.events_out, agg.signals_in, agg.signals_out,
+      ea.cpu_ns,     ea.wall_ns,     ea.task_count,
+    };
+    auto& prev_snap = prev[name];
+    if (cur == prev_snap) {
+      continue;
+    }
+    // Save previous snapshot before overwriting, so we can compute deltas.
+    auto old = prev_snap;
+    prev_snap = cur;
+    // Compute CPU usage as percentage of wall-clock time.
+    auto cpu_usage = 0.0;
+    if (wall_interval_ns > 0) {
+      auto delta_cpu_ns = ea.cpu_ns - old.cpu_ns;
+      cpu_usage = static_cast<double>(delta_cpu_ns)
+                  / static_cast<double>(wall_interval_ns) * 100.0;
+    }
+    // Look up operator type name.
+    auto type_name = std::string{};
+    auto base = name;
+    auto space = base.find(' ');
+    if (space != std::string::npos) {
+      base = base.substr(0, space);
+    }
+    if (auto it = op_type_names.find(base); it != op_type_names.end()) {
+      type_name = it->second;
+    }
+    // Emit deltas for all counters so that each row represents the change
+    // during this interval, not a running total.
+    auto delta = [](size_t cur, size_t prev) -> uint64_t {
+      return static_cast<uint64_t>(cur >= prev ? cur - prev : cur);
+    };
+    result.operators.push_back(OperatorProfileEntry{
+      .operator_id = name,
+      .operator_type = std::move(type_name),
+      .cpu = cpu_usage,
+      .task_count = delta(ea.task_count, old.task_count),
+      .bytes_in = delta(agg.bytes_in, old.bytes_in),
+      .bytes_out = delta(agg.bytes_out, old.bytes_out),
+      .batches_in = delta(agg.batches_in, old.batches_in),
+      .batches_out = delta(agg.batches_out, old.batches_out),
+      .events_in = delta(agg.events_in, old.events_in),
+      .events_out = delta(agg.events_out, old.events_out),
+      .signals_in = delta(agg.signals_in, old.signals_in),
+      .signals_out = delta(agg.signals_out, old.signals_out),
+      .buffer_bytes = static_cast<uint64_t>(agg.buffer_bytes),
+    });
+  }
+  // Drain backpressure events from all channels to prevent unbounded memory
+  // growth. This is incompatible with `write_profile`, which reads events via
+  // `backpressure_events()` — see the assertion in `run_plan_impl`.
+  // Convert steady_clock timestamps to wall-clock time.
+  auto wall_now = time::clock::now();
+  auto steady_now = std::chrono::steady_clock::now();
+  for (auto const& prof : channel_profiles) {
+    if (not prof.stats) {
+      continue;
+    }
+    auto bp_events = prof.stats->drain_backpressure();
+    if (bp_events.empty()) {
+      continue;
+    }
+    auto sep = prof.id.value.find(" -> ");
+    if (sep == std::string::npos) {
+      continue;
+    }
+    auto receiver = prof.id.value.substr(sep + 4);
+    if (receiver == "_") {
+      continue;
+    }
+    for (auto const& ev : bp_events) {
+      auto bp_start
+        = wall_now
+          + std::chrono::duration_cast<time::duration>(ev.start - steady_now);
+      auto bp_dur = std::chrono::duration_cast<duration>(ev.end - ev.start);
+      result.backpressure.push_back(BackpressureEntry{
+        .operator_id = receiver,
+        .channel = prof.id.value,
+        .start = bp_start,
+        .dur = bp_dur,
+      });
+    }
+  }
+  return result;
+}
+
+auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
                    DiagHandler& dh,
                    std::optional<std::string> const& profile_path,
-                   MetricsCallback emit_fn) -> Task<failure_or<void>> {
+                   MetricsCallback emit_fn, ProfilerCallback profiler_fn)
+  -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
-  auto chain = OperatorChain<void, void>::try_from(std::move(ops));
-  // TODO
-  TENZIR_ASSERT(chain);
-  auto exec_ctx = TestExecCtx{profile_path.has_value(), std::move(emit_fn)};
+  // Currently, the profile file and live profiler cannot be active at the same
+  // time because the live profiler drains backpressure events that the profile
+  // file needs. This can be lifted by accumulating drained events separately.
+  TENZIR_ASSERT(
+    not(profile_path.has_value() and static_cast<bool>(profiler_fn)));
+  auto profiling = profile_path.has_value() or static_cast<bool>(profiler_fn);
+  auto exec_ctx
+    = TestExecCtx{profiling, std::move(emit_fn), std::move(profiler_fn)};
   // Profiling: sample channel and executor stats periodically if requested.
   auto samples = std::vector<ProfileSample>{};
   auto stop_flag = std::atomic<bool>{false};
@@ -1474,7 +1784,7 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
     });
   }
   LOGW("blocking on pipeline");
-  co_await run_pipeline(std::move(chain).unwrap(), exec_ctx, sys, dh);
+  co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
   LOGW("blocking on pipeline done");
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
@@ -1517,19 +1827,20 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
+auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke(
-    [&] -> Task<AsyncResult<failure_or<void>>> {
-      co_return co_await folly::coro::co_awaitTry(
-        folly::coro::co_withCancellation(
-          cancel_source.getToken(),
-          run_plan_impl(std::move(ops), sys, diag_handler, profile_path, {})));
-    });
+  auto task
+    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+        co_return co_await folly::coro::co_awaitTry(
+          folly::coro::co_withCancellation(
+            cancel_source.getToken(),
+            run_plan_impl(std::move(chain), sys, diag_handler, profile_path, {},
+                          {})));
+      });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -1549,11 +1860,87 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
 
 } // namespace
 
-auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
+auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, std::optional<std::string> const& profile_path,
-              MetricsCallback emit_fn) -> Task<failure_or<void>> {
-  co_return co_await run_plan_impl(std::move(ops), sys, dh, profile_path,
-                                   std::move(emit_fn));
+              MetricsCallback emit_fn, ProfilerCallback profiler_fn)
+  -> Task<failure_or<void>> {
+  co_return co_await run_plan_impl(std::move(chain), sys, dh, profile_path,
+                                   std::move(emit_fn), std::move(profiler_fn));
+}
+
+auto build_profiler_slices(ProfilerSnapshot const& snapshot,
+                           std::string_view pipeline_id)
+  -> std::vector<table_slice> {
+  static auto const profile_type = type{
+    "tenzir.metrics.operator_profile",
+    record_type{
+      {"timestamp", time_type{}},
+      {"pipeline_id", string_type{}},
+      {"operator_id", string_type{}},
+      {"operator_type", string_type{}},
+      {"cpu", double_type{}},
+      {"task_count", uint64_type{}},
+      {"bytes_in", uint64_type{}},
+      {"bytes_out", uint64_type{}},
+      {"batches_in", uint64_type{}},
+      {"batches_out", uint64_type{}},
+      {"events_in", uint64_type{}},
+      {"events_out", uint64_type{}},
+      {"signals_in", uint64_type{}},
+      {"signals_out", uint64_type{}},
+      {"buffer_bytes", uint64_type{}},
+    },
+    {{"internal"}},
+  };
+  auto result = std::vector<table_slice>{};
+  if (not snapshot.operators.empty()) {
+    auto builder = series_builder{profile_type};
+    for (auto const& op : snapshot.operators) {
+      auto row = builder.record();
+      row.field("timestamp").data(snapshot.timestamp);
+      row.field("pipeline_id").data(pipeline_id);
+      row.field("operator_id").data(op.operator_id);
+      row.field("operator_type").data(op.operator_type);
+      row.field("cpu").data(op.cpu);
+      row.field("task_count").data(op.task_count);
+      row.field("bytes_in").data(op.bytes_in);
+      row.field("bytes_out").data(op.bytes_out);
+      row.field("batches_in").data(op.batches_in);
+      row.field("batches_out").data(op.batches_out);
+      row.field("events_in").data(op.events_in);
+      row.field("events_out").data(op.events_out);
+      row.field("signals_in").data(op.signals_in);
+      row.field("signals_out").data(op.signals_out);
+      row.field("buffer_bytes").data(op.buffer_bytes);
+    }
+    result.push_back(builder.finish_assert_one_slice());
+  }
+  if (not snapshot.backpressure.empty()) {
+    static auto const bp_type = type{
+      "tenzir.metrics.backpressure",
+      record_type{
+        {"timestamp", time_type{}},
+        {"pipeline_id", string_type{}},
+        {"operator_id", string_type{}},
+        {"channel", string_type{}},
+        {"start", time_type{}},
+        {"duration", duration_type{}},
+      },
+      {{"internal"}},
+    };
+    auto builder = series_builder{bp_type};
+    for (auto const& bp : snapshot.backpressure) {
+      auto row = builder.record();
+      row.field("timestamp").data(snapshot.timestamp);
+      row.field("pipeline_id").data(pipeline_id);
+      row.field("operator_id").data(bp.operator_id);
+      row.field("channel").data(bp.channel);
+      row.field("start").data(bp.start);
+      row.field("duration").data(bp.dur);
+    }
+    result.push_back(builder.finish_assert_one_slice());
+  }
+  return result;
 }
 
 namespace {
@@ -1636,8 +2023,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (ctx.has_failure()) {
     return false;
   }
+  auto chain = OperatorChain<void, void>::try_from(std::move(spawned))
+                 .expect("we already checked the type");
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(spawned), sys, ctx, cfg.profile));
+  TRY(run_plan_blocking(std::move(chain), sys, ctx, cfg.profile));
   return true;
 }
 

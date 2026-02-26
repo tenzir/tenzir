@@ -43,15 +43,15 @@ public:
   explicit(false) Result(Err<Error> err) : value_{std::move(err)} {
   }
 
-  auto expect(std::string_view msg) -> ValueRef {
-    TENZIR_UNUSED(msg);
-    if (is_err()) {
-      TENZIR_TODO();
+  auto expect(std::string_view msg) && -> Value {
+    if (auto value = try_as<VoidToUnit<Value>>(value_)) [[likely]] {
+      return unit_to_void(std::move(*value));
     }
+    panic("unexpected result error: {}", msg);
   };
 
   explicit operator bool() const {
-    return not is<Err<Error>>(value_);
+    return not is_err();
   }
 
   auto is_err() const -> bool {

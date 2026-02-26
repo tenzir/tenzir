@@ -19,6 +19,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/substitute_ctx.hpp"
+#include "tenzir/time.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
@@ -1573,14 +1574,17 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
-      // Spawn periodic metrics emission.
+      // Spawn periodic metrics emission aligned to wall-clock boundaries.
       queue.scope().spawn([&exec_ctx] -> Task<void> {
         while (true) {
+          auto now = time::clock::now();
+          auto boundary = floor(now, defaults::metrics_interval)
+                          + defaults::metrics_interval;
           co_await folly::coro::sleep(
-            std::chrono::duration_cast<folly::HighResDuration>(
-              defaults::metrics_interval));
+            std::chrono::duration_cast<folly::HighResDuration>(boundary - now));
           auto snapshot = exec_ctx.metrics()->take_snapshot();
           exec_ctx.emit_metrics(snapshot);
+          exec_ctx.emit_profiler(boundary - defaults::metrics_interval);
         }
       });
       queue.spawn([&] -> Task<std::monostate> {
@@ -1652,10 +1656,13 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
           });
       }
       queue.cancel();
-      // Emit final metrics snapshot so the last interval is not lost.
-      auto snapshot = exec_ctx.metrics()->take_snapshot();
-      exec_ctx.emit_metrics(snapshot);
     });
+    // Emit final metrics after the scope has joined all tasks, so the
+    // periodic emission coroutine is guaranteed to have finished.
+    auto snapshot = exec_ctx.metrics()->take_snapshot();
+    exec_ctx.emit_metrics(snapshot);
+    exec_ctx.emit_profiler(
+      floor(time::clock::now(), defaults::metrics_interval));
   } catch (folly::OperationCancelled) {
     // TODO: ?
     throw;

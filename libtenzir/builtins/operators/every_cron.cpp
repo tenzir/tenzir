@@ -37,7 +37,6 @@ auto sleep_until(time t) -> Task<void> {
   auto now = time::clock::now();
   // The check is needed because `-` can overflow and yield unexpected results.
   auto diff = t < now ? duration{0} : t - time::clock::now();
-  TENZIR_WARN("diff = {}", diff);
   return sleep(diff);
 }
 
@@ -56,9 +55,7 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     auto next = last_started_ + interval_;
-    TENZIR_WARN("sleeping in every until {}", next);
     co_await sleep_until(next);
-    TENZIR_WARN("waking every");
     co_return {};
   }
 
