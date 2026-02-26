@@ -315,7 +315,7 @@ private:
     message_queue_capacity,
   };
   std::unordered_map<uint64_t, OpenPipeline<chunk_ptr>> connections_;
-  uint64_t max_connections_ = std::numeric_limits<uint64_t>::max();
+  uint64_t max_connections_ = 128;
   bool done_ = false;
   mutable uint64_t next_conn_id_{0};
 };

@@ -346,7 +346,7 @@ private:
   Box<ClientQueue> client_queue_{std::in_place, client_queue_capacity};
   Option<AsyncHandle<void>> write_task_;
   Box<std::atomic<uint64_t>> active_clients_{std::in_place, uint64_t{0}};
-  uint64_t max_connections_ = std::numeric_limits<uint64_t>::max();
+  uint64_t max_connections_ = 128;
   bool done_ = false;
 };
 
