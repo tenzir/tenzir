@@ -32,9 +32,13 @@ auto cached_data_to_series(const data& x, int64_t length) -> series {
   auto& cache = the_eval_cache();
   auto it = cache.find(x);
   if (it != cache.end()) {
-    return it->second.slice(0, length);
+    if (it->second.length() >= length) {
+      return it->second.slice(0, length);
+    }
   }
-  auto result = data_to_series(x, defaults::import::table_slice_size);
+  auto const size = std::max(defaults::import::table_slice_size,
+                             detail::narrow<std::uint64_t>(length));
+  auto result = data_to_series(x, size);
   cache.insert_or_assign(x, result);
   return result.slice(0, length);
 }
