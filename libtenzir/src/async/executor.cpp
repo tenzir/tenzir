@@ -432,6 +432,84 @@ auto run_chain_fused(OperatorChain<Input, Output> chain,
                      std::move(to_control), std::move(id), fused_ctx, sys, dh);
 }
 
+/// Core execution logic for a single operator.
+///
+/// This is heavily inspired by "Asynchronous Barrier Snapshotting"[^1]. In the
+/// following, we assume familiarity with the general paper.
+//
+/// The main difference is that we allow dynamic graphs as long as they are
+/// tree-shaped, that is: Dynamically spawned parts of the graph must be owned
+/// by a single operator. Those are our subpipelines. Since the graph is
+/// dynamic, we do not use a count-based checkpoint completion detection ("all
+/// 42 operators and 5 back-edges have snapshotted"), and instead rely on the
+/// tree to propagate checkpoints. That is: We are done with checkpointing once
+/// the final sink yields a checkpoint. Each operator is responsible to only
+/// emit a checkpoint once all of its subpipelines are checkpointed.
+///
+/// Conceptually, the execution graph of a single operator looks like this:
+///                 ┌────────────┐
+///      Input      │            │     Output
+/// ───────────────>│  Operator  ├───────────────>
+///             ┌───┤            │<──┐
+///             │   └────────────┘   │
+///             │  ┌──────────────┐  │
+///             ├─>│ Subpipeline 1├──┤
+///             │  └──────────────┘  │
+///             │  ┌──────────────┐  │
+///             └─>│ Subpipeline 2├──┘
+///                └──────────────┘
+///
+/// However, when it comes to reasoning about checkpointing, it is helpful to
+/// think about it more like this:
+///                 ┌────────────┐
+///      Input      │            │   process()    ┌────────────┐     Output
+/// ───────────────>│  Operator  ├───────────────>│  Combiner  ├───────────────>
+///             ┌───┤            │<─┬─┐           └────∧─∧─────┘
+///             │   └────────────┘  │ │ finish_sub()   │ │
+///             │  ┌──────────────┐ │ │                │ │ process_sub()
+///             ├─>│ Subpipeline 1├─┴──────────────────┘ │
+///             │  └──────────────┘   │                  │
+///             │  ┌──────────────┐   │                  │
+///             └─>│ Subpipeline 2├───┴──────────────────┘
+///                └──────────────┘
+///
+/// Here, `finish_sub()` is a back-edge. We will replay those calls as
+/// explained in the paper. On the other hand, `process_sub()` is a
+/// forward-edge, which doesn't need channel snapshotting. Thus we just forward
+/// data from subpipelines. This is good because it means we don't have to
+/// capture any actual in-flight data in the snapshot, which could be quite big
+/// and changes all the time.
+///
+/// You could also make `process_sub()` a back-edge, which would be necessary to
+/// make something like `while expr { … }` work. Recording incoming messages
+/// after a snapshot might also be more efficient because you can then continue
+/// processing other messages in the meantime. This could be considered a future
+/// extension. Note that we can't do our trick above here then, since this
+/// typically would lead to follow-up messages to the subpipelines, creating an
+/// infinite cycle.
+///
+/// So checkpointing of subpipelines proceeds as follows:
+/// 1) Block the input channel of the operator itself.
+/// 2) Start recording future calls to `finish_sub()`.
+/// 3) Perform the snapshot and submit it.
+/// 4) Forward checkpoint messages to all subpipelines.
+/// 5) Block the output of a subpipeline once it returns the checkpoint.
+/// 6) Wait for all subpipelines to return their checkpoints.
+/// 7) Wait for confirmation of our snapshot.
+/// 8) Forward the checkpoint to the downstream operator.
+/// 9) Unblock all channels and continue normal execution.
+///
+/// If there are no subpipelines, this becomes:
+/// 1) Perform the snapshot and submit it.
+/// 2) Wait for confirmation of our snapshot.
+/// 3) Forward the checkpoint to the downstream operator.
+///
+/// While we are waiting for subpipeline checkpointing, we also don't process
+/// results of `await_task()` with `process_task()`, as this runs in the main
+/// loop and it could push into the subpipelines which would eventually block
+/// because we stop reading from them after a checkpoint.
+///
+/// [^1]: https://arxiv.org/pdf/1506.08603
 class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
@@ -1098,6 +1176,7 @@ private:
             co_await begin_checkpoint(checkpoint);
           });
       });
+    // FIXME: Don't pull here if we are processing a checkpoint!
     queue_.spawn(pull_upstream());
   }
 
@@ -1339,9 +1418,24 @@ private:
   /// framing is even kept alive after the operator itself finished.
   AsyncScope* operator_scope_ = nullptr;
 
-  QueueScope<variant<ExplicitAny, Option<AnyOperatorMsg>, Option<FromControl>,
-                     SubPipelineEvent>>
-    queue_;
+  /// Anything the main loop reacts to.
+  using Event = variant<
+    // Input from our upstream.
+    Option<AnyOperatorMsg>,
+    // Control message.
+    Option<FromControl>,
+    // Result of `await_task()`.
+    ExplicitAny,
+    // Anything coming from a subpipeline.
+    SubPipelineEvent>;
+
+  /// The primary queue of events.
+  QueueScope<Event> queue_;
+
+  /// We have a secondary queue where we spill over events that we are not ready
+  /// to process yet. This is because we can't safely cancel reads.
+  std::deque<Event> spill_;
+
   bool got_shutdown_request_ = false;
   bool upstream_done_ = false;
   bool is_done_ = false;

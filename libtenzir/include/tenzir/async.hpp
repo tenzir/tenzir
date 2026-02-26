@@ -116,6 +116,13 @@ public:
   virtual auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>>
     = 0;
+
+  /// Spawn a subpipeline with the given key and input type.
+  ///
+  /// The returned handle allows you to push data in. Data flowing out of the
+  /// subpipeline is routed through the `process_sub` function of the operator.
+  ///
+  /// When the pipeline completes, `finish_sub` is called.
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline>
     = 0;
