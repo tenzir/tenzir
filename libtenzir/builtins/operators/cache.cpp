@@ -190,6 +190,9 @@ private:
     if (not writer_) {
       const auto sender = self_->current_sender();
       writer_ = sender->address();
+      // Async executor requests use short-lived companion actors, so sender
+      // identity is only stable when we also monitor the writer actor.
+      enforce_writer_identity_ = monitor;
       if (monitor) {
         self_->monitor(sender, [this](const caf::error& err) {
           if (done_) {
