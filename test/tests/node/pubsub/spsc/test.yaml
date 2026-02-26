@@ -1,0 +1,3 @@
+suite:
+  name: spsc-parallel
+  mode: parallel

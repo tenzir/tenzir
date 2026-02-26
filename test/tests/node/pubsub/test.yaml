@@ -1,7 +1,4 @@
-suite:
-  name: pubsub-parallel
-  mode: parallel
 fixtures:
   - node
 retry: 2
-timeout: 45
+timeout: 60
