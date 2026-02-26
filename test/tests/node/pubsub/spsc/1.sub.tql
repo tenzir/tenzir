@@ -1,0 +1,3 @@
+subscribe "spsc"
+deduplicate
+head 1

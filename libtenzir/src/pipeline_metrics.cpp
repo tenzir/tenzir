@@ -10,40 +10,76 @@
 
 namespace tenzir {
 
-MetricsCounter::MetricsCounter(std::shared_ptr<std::atomic<uint64_t>> value)
+template <MetricsType Type>
+Metric<Type>::Metric(std::shared_ptr<std::atomic<uint64_t>> value)
   : value_{std::move(value)} {
 }
 
-void MetricsCounter::add(uint64_t bytes) {
+template <MetricsType type>
+void Metric<type>::add(uint64_t bytes) {
   if (value_) {
     value_->fetch_add(bytes, std::memory_order_relaxed);
   }
 }
 
-MetricsCounter::operator bool() const {
+template <MetricsType Type>
+void Metric<Type>::remove(uint64_t bytes)
+  requires(Type == MetricsType::gauge)
+{
+  if (value_) {
+    value_->fetch_sub(bytes, std::memory_order_relaxed);
+  }
+}
+
+template <MetricsType Type>
+void Metric<Type>::set(uint64_t bytes)
+  requires(Type == MetricsType::gauge)
+{
+  if (value_) {
+    value_->store(bytes, std::memory_order_relaxed);
+  }
+}
+
+template <MetricsType type>
+Metric<type>::operator bool() const {
   return value_ != nullptr;
 }
 
-auto PipelineMetrics::make_counter(MetricsLabel label,
-                                   MetricsDirection direction,
-                                   MetricsVisibility visibility)
-  -> MetricsCounter {
+template class Metric<MetricsType::counter>;
+
+template class Metric<MetricsType::gauge>;
+
+template <MetricsType Type>
+auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
+                           MetricsVisibility visibility) -> Metric<Type> {
   auto value = std::make_shared<std::atomic<uint64_t>>(0);
   auto lock = std::lock_guard{mutex_};
   entries_.push_back(entry{
     .label = label,
     .direction = direction,
     .visibility = visibility,
+    .type = Type,
     .value = value,
   });
-  return MetricsCounter{std::move(value)};
+  return Metric<Type>{std::move(value)};
 }
+
+template auto
+  PipelineMetrics::make<MetricsType::counter>(MetricsLabel, MetricsDirection,
+                                              MetricsVisibility)
+    -> Metric<MetricsType::counter>;
+
+template auto
+  PipelineMetrics::make<MetricsType::gauge>(MetricsLabel, MetricsDirection,
+                                            MetricsVisibility)
+    -> Metric<MetricsType::gauge>;
 
 auto PipelineMetrics::entry::snapshot() const -> MetricsSnapshotEntry {
   return MetricsSnapshotEntry{
     .label = label,
     .direction = direction,
     .visibility = visibility,
+    .type = type,
     .value = value->load(std::memory_order_relaxed),
   };
 }

@@ -1,0 +1,5 @@
+  every 10ms {
+    from {id: "mpmc-3"}
+  }
+  head 1000
+  publish "mpmc"

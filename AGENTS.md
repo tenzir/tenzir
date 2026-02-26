@@ -44,7 +44,8 @@ building modular pipelines that process structured event data.
 
 ### Configure the build
 
-A build is configured when its directory contains `CMakeCache.txt`.
+A build is configured when its directory contains `CMakeCache.txt`. A build
+directory may 3 levels down from the project root.
 
 Only when explicitly asked to configure a build, run:
 
