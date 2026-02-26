@@ -1,0 +1,4 @@
+from {
+  x: "CEF:0|V|P|1.0|1|test|5|subject=CN=foo,O=bar next_key=val",
+}
+y = x.parse_cef()
