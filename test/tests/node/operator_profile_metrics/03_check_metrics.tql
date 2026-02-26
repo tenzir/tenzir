@@ -1,12 +1,14 @@
 every 1s {
   metrics "operator_profile"
   where pipeline_id == "00000000-0000-0000-0000-000000000001"
+  // Use head's events_out as the completion condition: the pipeline
+  // emits exactly 3 events, and head always outputs exactly 3.
+  head_events_out = events_out if operator_id == "0/1" else 0
   summarize \
-    timestamps=collect(timestamp),
-    operator_ids=collect(operator_id),
+    timestamps=distinct(timestamp),
+    operator_ids=distinct(operator_id),
     total_cpu=sum(cpu),
-    total_events_in=sum(events_in),
-    total_events_out=sum(events_out),
+    total_head_events_out=sum(head_events_out),
     total_bytes_in=sum(bytes_in),
     total_bytes_out=sum(bytes_out),
     total_batches_in=sum(batches_in),
@@ -14,7 +16,7 @@ every 1s {
     total_signals_in=sum(signals_in),
     total_signals_out=sum(signals_out),
     total_task_count=sum(task_count)
-  where (total_events_in else 0) == 3
+  where total_head_events_out == 3
 }
 head 1
 operator_ids = sort(operator_ids)
@@ -22,8 +24,7 @@ unaligned = timestamps.map(t => t - t.floor(1s)).where(d => d != 0ns)
 select \
   operator_ids,
   unaligned,
-  total_events_in,
-  total_events_out,
+  total_head_events_out,
   has_cpu=(total_cpu > 0.0),
   has_bytes_in=(total_bytes_in > 0),
   has_bytes_out=(total_bytes_out > 0),

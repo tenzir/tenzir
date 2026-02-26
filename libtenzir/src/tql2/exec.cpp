@@ -1650,14 +1650,16 @@ auto build_profiler_snapshot(
     if (cur == prev_snap) {
       continue;
     }
+    // Save previous snapshot before overwriting, so we can compute deltas.
+    auto old = prev_snap;
+    prev_snap = cur;
     // Compute CPU usage as percentage of wall-clock time.
     auto cpu_usage = 0.0;
     if (wall_interval_ns > 0) {
-      auto delta_cpu_ns = ea.cpu_ns - prev_snap.cpu_ns;
+      auto delta_cpu_ns = ea.cpu_ns - old.cpu_ns;
       cpu_usage = static_cast<double>(delta_cpu_ns)
                   / static_cast<double>(wall_interval_ns) * 100.0;
     }
-    prev_snap = cur;
     // Look up operator type name.
     auto type_name = std::string{};
     auto base = name;
@@ -1668,19 +1670,24 @@ auto build_profiler_snapshot(
     if (auto it = op_type_names.find(base); it != op_type_names.end()) {
       type_name = it->second;
     }
+    // Emit deltas for all counters so that each row represents the change
+    // during this interval, not a running total.
+    auto delta = [](size_t cur, size_t prev) -> uint64_t {
+      return static_cast<uint64_t>(cur >= prev ? cur - prev : cur);
+    };
     result.operators.push_back(operator_profile_entry{
       .operator_id = name,
       .operator_type = std::move(type_name),
       .cpu = cpu_usage,
-      .task_count = static_cast<uint64_t>(ea.task_count),
-      .bytes_in = static_cast<uint64_t>(agg.bytes_in),
-      .bytes_out = static_cast<uint64_t>(agg.bytes_out),
-      .batches_in = static_cast<uint64_t>(agg.batches_in),
-      .batches_out = static_cast<uint64_t>(agg.batches_out),
-      .events_in = static_cast<uint64_t>(agg.events_in),
-      .events_out = static_cast<uint64_t>(agg.events_out),
-      .signals_in = static_cast<uint64_t>(agg.signals_in),
-      .signals_out = static_cast<uint64_t>(agg.signals_out),
+      .task_count = delta(ea.task_count, old.task_count),
+      .bytes_in = delta(agg.bytes_in, old.bytes_in),
+      .bytes_out = delta(agg.bytes_out, old.bytes_out),
+      .batches_in = delta(agg.batches_in, old.batches_in),
+      .batches_out = delta(agg.batches_out, old.batches_out),
+      .events_in = delta(agg.events_in, old.events_in),
+      .events_out = delta(agg.events_out, old.events_out),
+      .signals_in = delta(agg.signals_in, old.signals_in),
+      .signals_out = delta(agg.signals_out, old.signals_out),
       .buffer_bytes = static_cast<uint64_t>(agg.buffer_bytes),
     });
   }
