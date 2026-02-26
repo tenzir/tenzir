@@ -25,11 +25,14 @@
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/futures/Future.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
 #include <algorithm>
+#include <atomic>
+#include <limits>
 
 namespace tenzir::plugins::serve_tcp {
 
@@ -47,6 +50,7 @@ using WriteQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
 struct ServeTcpArgs {
   located<std::string> endpoint;
   std::optional<located<data>> tls;
+  std::optional<located<uint64_t>> max_connections;
   located<ir::pipeline> printer;
 };
 
@@ -64,6 +68,9 @@ public:
     if (args_.tls) {
       tls_ = tls_options{*args_.tls, {.is_server = true}};
     }
+    if (args_.max_connections) {
+      max_connections_ = args_.max_connections->inner;
+    }
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -80,8 +87,6 @@ public:
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    write_queue_ = std::make_shared<WriteQueue>(write_queue_capacity);
-    client_queue_ = std::make_shared<ClientQueue>(client_queue_capacity);
     write_task_ = ctx.spawn_task(write_loop(ctx.dh()));
     ctx.spawn_task(accept_loop(ctx.dh()));
     auto pipeline = std::move(args_.printer.inner);
@@ -126,7 +131,7 @@ public:
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (done_ or not chunk or chunk->size() == 0 or not write_queue_) {
+    if (done_ or not chunk or chunk->size() == 0) {
       co_return;
     }
     co_await write_queue_->enqueue(Option{std::move(chunk)});
@@ -139,7 +144,7 @@ public:
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     if (write_task_) {
-      if (write_queue_ and not done_) {
+      if (not done_) {
         co_await write_queue_->enqueue(None{});
       }
       co_await write_task_->join();
@@ -154,7 +159,7 @@ public:
   }
 
 private:
-  using Client = std::shared_ptr<folly::coro::Transport>;
+  using Client = Box<folly::coro::Transport>;
   using ClientQueue = folly::coro::BoundedQueue<Client>;
 
   auto request_stop() -> void {
@@ -165,13 +170,10 @@ private:
     if (server_) {
       server_->close();
     }
-    if (write_queue_) {
-      TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
-    }
+    TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
   }
 
   auto drain_new_clients(std::vector<Client>& clients) -> void {
-    TENZIR_ASSERT(client_queue_);
     while (auto client = client_queue_->try_dequeue()) {
       clients.push_back(std::move(*client));
     }
@@ -182,36 +184,47 @@ private:
     if (not chunk or chunk->size() == 0 or clients.empty()) {
       co_return;
     }
-    auto failed = std::vector<Client>{};
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    for (auto& client : clients) {
+    for (auto it = clients.begin(); it != clients.end();) {
+      auto peer = (*it)->getPeerAddress().describe();
       try {
         co_await folly::coro::timeout(
-          folly::coro::co_withExecutor(evb_, client->write(data)),
+          folly::coro::co_withExecutor(evb_, (*it)->write(data)),
           write_timeout);
+        ++it;
       } catch (folly::OperationCancelled const&) {
+        // Cancellation is part of normal shutdown.
         co_return;
-      } catch (std::exception const& ex) {
-        diagnostic::warning(
-          "serve_tcp: dropping client after write failure: {}", ex.what())
+      } catch (folly::FutureTimeout const& ex) {
+        // Slow or stalled clients are expected in production; drop only the
+        // affected connection and continue serving others.
+        diagnostic::warning("failed to write to client {}", peer)
+          .primary(args_.endpoint.source)
+          .note("reason: {}", ex.what())
+          .note(
+            "dropping this client and continuing with remaining connections")
           .emit(dh);
-        failed.push_back(client);
+        active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        it = clients.erase(it);
+      } catch (folly::AsyncSocketException const& ex) {
+        // Socket write failures are client-scoped; drop this client and keep
+        // the listener/writer running.
+        diagnostic::warning("failed to write to client {}", peer)
+          .primary(args_.endpoint.source)
+          .note("reason: {}", ex.what())
+          .note(
+            "dropping this client and continuing with remaining connections")
+          .emit(dh);
+        active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        it = clients.erase(it);
       }
     }
-    if (failed.empty()) {
-      co_return;
-    }
-    std::erase_if(clients, [&](auto const& client) {
-      return std::ranges::find(failed, client) != failed.end();
-    });
   }
 
   auto write_loop(diagnostic_handler& dh) -> Task<void> {
-    TENZIR_ASSERT(write_queue_);
-    TENZIR_ASSERT(client_queue_);
     auto clients = std::vector<Client>{};
     auto client_wait_deadline = Option<std::chrono::steady_clock::time_point>{};
     while (true) {
@@ -250,6 +263,10 @@ private:
       client_wait_deadline = None{};
       co_await write_chunk_to_clients(std::move(chunk), clients, dh);
     }
+    if (not clients.empty()) {
+      active_clients_->fetch_sub(detail::narrow<uint64_t>(clients.size()),
+                                 std::memory_order_relaxed);
+    }
     request_stop();
     co_return;
   }
@@ -258,6 +275,7 @@ private:
     TENZIR_ASSERT(server_);
     while (not done_) {
       auto accept_error = Option<std::string>{};
+      auto counted_client = false;
       try {
         auto transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
@@ -266,25 +284,48 @@ private:
         if (tls_context_) {
           co_await upgrade_transport_to_tls_server(boxed, tls_context_);
         }
-        auto client
-          = std::make_shared<folly::coro::Transport>(std::move(*boxed));
+        auto peer = boxed->getPeerAddress().describe();
+        if (active_clients_->load(std::memory_order_relaxed)
+            >= max_connections_) {
+          diagnostic::warning(
+            "connection rejected: maximum number of connections reached")
+            .primary(args_.endpoint.source)
+            .note("peer: {}", peer)
+            .note("max_connections: {}", max_connections_)
+            .hint("increase `max_connections` if this level of concurrency is "
+                  "expected")
+            .emit(dh);
+          continue;
+        }
+        auto client = std::move(boxed);
         if (done_) {
           co_return;
         }
-        if (client_queue_) {
-          co_await client_queue_->enqueue(std::move(client));
-        }
+        active_clients_->fetch_add(1, std::memory_order_relaxed);
+        counted_client = true;
+        co_await client_queue_->enqueue(std::move(client));
       } catch (folly::OperationCancelled const&) {
+        // Cancellation is part of normal shutdown.
+        if (counted_client) {
+          active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        }
         co_return;
-      } catch (std::exception const& ex) {
+      } catch (folly::AsyncSocketException const& ex) {
+        // Accept/TLS handshake failures are per-connection network errors; keep
+        // the listener alive and continue accepting new clients.
+        if (counted_client) {
+          active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        }
         if (done_) {
           co_return;
         }
         accept_error = ex.what();
       }
       if (accept_error) {
-        diagnostic::warning("serve_tcp: failed to accept connection on {}: {}",
-                            address_.describe(), *accept_error)
+        diagnostic::warning("failed to accept incoming connection")
+          .primary(args_.endpoint.source)
+          .note("endpoint: {}", address_.describe())
+          .note("reason: {}", *accept_error)
           .emit(dh);
       }
       if (done_) {
@@ -301,9 +342,11 @@ private:
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
-  std::shared_ptr<WriteQueue> write_queue_;
-  std::shared_ptr<ClientQueue> client_queue_;
+  Box<WriteQueue> write_queue_{std::in_place, write_queue_capacity};
+  Box<ClientQueue> client_queue_{std::in_place, client_queue_capacity};
   Option<AsyncHandle<void>> write_task_;
+  Box<std::atomic<uint64_t>> active_clients_{std::in_place, uint64_t{0}};
+  uint64_t max_connections_ = std::numeric_limits<uint64_t>::max();
   bool done_ = false;
 };
 
@@ -317,6 +360,8 @@ public:
     auto d = Describer<ServeTcpArgs, ServeTcp>{};
     auto endpoint_arg = d.positional("endpoint", &ServeTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &ServeTcpArgs::tls);
+    auto max_connections_arg
+      = d.named("max_connections", &ServeTcpArgs::max_connections);
     auto printer_arg = d.pipeline(&ServeTcpArgs::printer);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
@@ -332,6 +377,14 @@ public:
         if (auto valid = tls_opts.validate(ctx); not valid) {
           return {};
         }
+      }
+      if (auto max_connections = ctx.get(max_connections_arg);
+          max_connections and max_connections->inner == 0) {
+        auto loc
+          = ctx.get_location(max_connections_arg).value_or(location::unknown);
+        diagnostic::error("max_connections must be greater than 0")
+          .primary(loc)
+          .emit(ctx);
       }
       TRY(auto printer, ctx.get(printer_arg));
       auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);

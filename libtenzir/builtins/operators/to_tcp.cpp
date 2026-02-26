@@ -25,6 +25,7 @@
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/futures/Future.h>
 #include <folly/io/coro/Transport.h>
 
 #include <algorithm>
@@ -79,7 +80,6 @@ public:
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
                                       tag_v<table_slice>);
     TENZIR_UNUSED(sub);
-    write_queue_ = std::make_shared<WriteQueue>(write_queue_capacity);
     write_task_ = ctx.spawn_task(write_loop(ctx.dh()));
     co_return;
   }
@@ -111,7 +111,7 @@ public:
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (done_ or not chunk or chunk->size() == 0 or not write_queue_) {
+    if (done_ or not chunk or chunk->size() == 0) {
       co_return;
     }
     co_await write_queue_->enqueue(Option{std::move(chunk)});
@@ -123,15 +123,12 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (write_queue_) {
+    if (write_task_) {
       co_await write_queue_->enqueue(None{});
-      if (write_task_) {
-        co_await write_task_->join();
-        write_task_ = None{};
-      }
-    } else {
-      done_ = true;
+      co_await write_task_->join();
+      write_task_ = None{};
     }
+    done_ = true;
     co_return;
   }
 
@@ -155,8 +152,11 @@ private:
         reconnect_backoff_ = connect_initial_backoff;
         co_return;
       } catch (folly::OperationCancelled const&) {
+        // Cancellation is part of normal shutdown.
         co_return;
-      } catch (std::exception const& ex) {
+      } catch (folly::AsyncSocketException const& ex) {
+        // Connect/TLS handshake failures are per-attempt network errors; keep
+        // retrying with backoff instead of failing the whole operator.
         if (done_) {
           co_return;
         }
@@ -166,8 +166,10 @@ private:
         if (done_) {
           co_return;
         }
-        diagnostic::warning("to_tcp: failed to connect to {}: {}",
-                            address_.describe(), *connect_error)
+        diagnostic::warning("failed to connect to {}", address_.describe())
+          .primary(args_.endpoint.source)
+          .note("reason: {}", *connect_error)
+          .hint("ensure a TCP server is listening on this endpoint")
           .emit(dh);
       }
       auto backoff = reconnect_backoff_;
@@ -178,7 +180,6 @@ private:
   }
 
   auto write_loop(diagnostic_handler& dh) -> Task<void> {
-    TENZIR_ASSERT(write_queue_);
     while (true) {
       auto next = co_await write_queue_->dequeue();
       if (not next) {
@@ -206,13 +207,30 @@ private:
           reconnect_backoff_ = connect_initial_backoff;
           break;
         } catch (folly::OperationCancelled const&) {
+          // Cancellation is part of normal shutdown.
           co_return;
-        } catch (std::exception const& ex) {
+        } catch (folly::FutureTimeout const& ex) {
+          // Slow or stalled peers are expected in production; drop and
+          // reconnect this transport only.
           if (done_) {
             break;
           }
-          diagnostic::warning("to_tcp: failed to write to {}: {}",
-                              address_.describe(), ex.what())
+          diagnostic::warning("failed to write to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .note("dropping the current connection and retrying")
+            .emit(dh);
+          transport_ = None{};
+        } catch (folly::AsyncSocketException const& ex) {
+          // Socket write failures are connection-scoped; reconnect and
+          // continue processing queued output.
+          if (done_) {
+            break;
+          }
+          diagnostic::warning("failed to write to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .note("dropping the current connection and retrying")
             .emit(dh);
           transport_ = None{};
         }
@@ -227,9 +245,7 @@ private:
       return;
     }
     done_ = true;
-    if (write_queue_) {
-      TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
-    }
+    TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
   }
 
   ToTcpArgs args_;
@@ -241,7 +257,7 @@ private:
   folly::EventBase* evb_ = nullptr;
   Option<Box<folly::coro::Transport>> transport_;
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
-  std::shared_ptr<WriteQueue> write_queue_;
+  Box<WriteQueue> write_queue_{std::in_place, write_queue_capacity};
   Option<AsyncHandle<void>> write_task_;
   bool done_ = false;
 };

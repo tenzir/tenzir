@@ -47,7 +47,8 @@ struct FromTcpArgs {
 class FromTcpConnector final : public Operator<void, table_slice> {
 public:
   explicit FromTcpConnector(FromTcpArgs args)
-    : user_pipeline_{std::move(args.user_pipeline)},
+    : endpoint_source_{args.endpoint.source},
+      user_pipeline_{std::move(args.user_pipeline)},
       peer_let_id_{args.peer_info} {
     auto ep = to<struct endpoint>(args.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -91,16 +92,21 @@ public:
         reconnect_backoff_ = connect_initial_backoff;
         co_return Box<folly::coro::Transport>{std::move(transport)};
       } catch (const folly::OperationCancelled&) {
+        // Cancellation is part of normal shutdown.
         co_return {};
-      } catch (const std::exception& ex) {
+      } catch (folly::AsyncSocketException const& ex) {
+        // Connection attempts can fail transiently; treat this as a retriable
+        // network condition and keep the operator alive.
         connect_error = ex.what();
       }
       if (connect_error) {
         if (done_) {
           co_return {};
         }
-        diagnostic::warning("from_tcp: failed to connect to {}: {}",
-                            address_.describe(), *connect_error)
+        diagnostic::warning("failed to connect to {}", address_.describe())
+          .primary(endpoint_source_)
+          .note("reason: {}", *connect_error)
+          .hint("ensure a TCP server is listening on this endpoint")
           .emit(dh);
         auto backoff = reconnect_backoff_;
         reconnect_backoff_
@@ -124,9 +130,13 @@ public:
       try {
         co_await upgrade_transport_to_tls_client(transport, tls_context_,
                                                  host_);
-      } catch (const std::exception& ex) {
-        diagnostic::warning("TLS handshake failed with {}: {}",
-                            address_.describe(), ex.what())
+      } catch (folly::AsyncSocketException const& ex) {
+        // TLS handshake failures are peer/network errors and should not crash
+        // the operator; we reconnect on the next await_task cycle.
+        diagnostic::warning("TLS handshake with {} failed", address_.describe())
+          .primary(endpoint_source_)
+          .note("reason: {}", ex.what())
+          .hint("verify TLS settings and certificates on both sides")
           .emit(ctx);
         co_return;
       }
@@ -151,7 +161,8 @@ public:
       data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     co_await folly::coro::co_withExecutor(
-      transport_evb, read_loop(std::move(transport), open_pipeline, ctx.dh()));
+      transport_evb, read_loop(std::move(transport), open_pipeline, ctx.dh(),
+                               endpoint_source_));
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -167,7 +178,8 @@ public:
 private:
   static auto read_loop(Box<folly::coro::Transport> transport,
                         OpenPipeline<chunk_ptr> pipeline,
-                        diagnostic_handler& dh) -> Task<void> {
+                        diagnostic_handler& dh, location endpoint_source)
+    -> Task<void> {
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
@@ -176,10 +188,17 @@ private:
           buf, 1, buffer_size,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
+        // A read timeout is expected because we poll periodically for
+        // cancellation and shutdown.
         if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
           continue;
         }
-        diagnostic::warning("{}", e).emit(dh);
+        // Other socket errors are connection-scoped; log and reconnect.
+        diagnostic::warning("stopped reading from peer after socket error")
+          .primary(endpoint_source)
+          .note("peer: {}", transport->getPeerAddress().describe())
+          .note("reason: {}", e.what())
+          .emit(dh);
         co_return;
       }
       if (bytes == 0) {
@@ -200,6 +219,7 @@ private:
     co_await pipeline.close();
   }
 
+  location endpoint_source_ = location::unknown;
   folly::SocketAddress address_;
   std::string host_;
   located<ir::pipeline> user_pipeline_;
