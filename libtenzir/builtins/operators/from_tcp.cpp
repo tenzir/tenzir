@@ -109,7 +109,7 @@ public:
       co_return co_await message_queue_->dequeue();
     }
     while (not done_) {
-      TENZIR_VERBOSE("from_tcp: connecting to {}", address_.describe());
+      TENZIR_DEBUG("connecting to {}", address_.describe());
       auto connect_error = Option<std::string>{};
       try {
         auto transport = co_await folly::coro::co_withExecutor(
@@ -117,6 +117,7 @@ public:
                                                            connect_timeout));
         reconnect_backoff_ = connect_initial_backoff;
         connection_active_ = true;
+        TENZIR_DEBUG("connected to {}", address_.describe());
         co_return Message{
           Connected{Box<folly::coro::Transport>{std::move(transport)}}};
       } catch (const folly::OperationCancelled&) {

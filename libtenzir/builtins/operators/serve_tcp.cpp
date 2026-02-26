@@ -30,9 +30,7 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-#include <algorithm>
 #include <atomic>
-#include <limits>
 
 namespace tenzir::plugins::serve_tcp {
 

@@ -31,7 +31,6 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-#include <limits>
 #include <unordered_map>
 
 namespace tenzir::plugins::accept_tcp {
@@ -108,7 +107,7 @@ public:
       }
       tls_context_ = std::move(*context);
     }
-    TENZIR_VERBOSE("accept_tcp: starting listener on {}", address_.describe());
+    TENZIR_DEBUG("starting listener on {}", address_.describe());
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
@@ -179,7 +178,6 @@ public:
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     peer_addr.getAddressStr())},
           MetricsDirection::read, MetricsVisibility::external_);
-        TENZIR_DEBUG("accept_tcp: using peer_let_id_ = {}", peer_let_id_.id);
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
         auto sub_result
@@ -252,8 +250,8 @@ private:
           .emit(dh);
         continue;
       }
-      TENZIR_INFO("accept_tcp: accepted connection from {}",
-                  transport->getPeerAddress().describe());
+      TENZIR_DEBUG("accepted connection from {}",
+                   transport->getPeerAddress().describe());
       co_await message_queue_->enqueue(Accepted{
         Box<folly::coro::Transport>::from_unique_ptr(std::move(transport))});
     }
