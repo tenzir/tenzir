@@ -35,6 +35,7 @@
 
 #include <arrow/util/utf8.h>
 #include <caf/actor_from_state.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/config_value.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scheduler.hpp>
@@ -854,7 +855,7 @@ struct OpSnapshot {
     = default;
 };
 
-// Forward declaration for use in TestExecCtx::emit_profiler().
+// Forward declaration for use in TestExecCtx::emit_metrics().
 auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
   std::span<ExecutorProfile const> executor_profiles,
@@ -864,11 +865,13 @@ auto build_profiler_snapshot(
 
 class TestExecCtx : public ExecCtx {
 public:
-  explicit TestExecCtx(bool profiling = false, MetricsCallback emit_fn = {},
-                       ProfilerCallback profiler_fn = {})
+  explicit TestExecCtx(bool profiling = false,
+                       run_plan_telemetry_targets targets = {},
+                       size_t num_ops = 0)
     : profiling_{profiling},
-      emit_fn_{std::move(emit_fn)},
-      profiler_fn_{std::move(profiler_fn)} {
+      targets_{std::move(targets)},
+      num_ops_{num_ops},
+      start_time_{time::clock::now()} {
   }
 
   auto get_channel_profiles() -> std::vector<ChannelProfile> {
@@ -931,13 +934,74 @@ public:
   }
 
   void emit_metrics(time now) {
-    if (emit_fn_) {
-      emit_fn_(metrics()->take_snapshot());
-    }
-    if (profiler_fn_) {
-      if (not profiler_fn_ or not profiling_) {
-        return;
+    if (targets_.metrics) {
+      auto entries = metrics()->take_snapshot();
+      auto external_read_bytes = uint64_t{0};
+      auto external_write_bytes = uint64_t{0};
+      auto internal_read_bytes = uint64_t{0};
+      auto internal_write_bytes = uint64_t{0};
+      for (auto const& e : entries) {
+        if (e.visibility == MetricsVisibility::external_) {
+          if (e.direction == MetricsDirection::read) {
+            external_read_bytes += e.value;
+          } else {
+            external_write_bytes += e.value;
+          }
+        } else {
+          if (e.direction == MetricsDirection::read) {
+            internal_read_bytes += e.value;
+          } else {
+            internal_write_bytes += e.value;
+          }
+        }
       }
+      auto elapsed = now - start_time_;
+      if (external_read_bytes > 0) {
+        auto source_metric = operator_metric{};
+        source_metric.operator_index = 0;
+        source_metric.operator_name = "source";
+        source_metric.internal = false;
+        source_metric.outbound_measurement.unit = "bytes";
+        source_metric.outbound_measurement.num_elements = external_read_bytes;
+        source_metric.time_total = elapsed;
+        source_metric.time_running = elapsed;
+        caf::anon_mail(std::move(source_metric)).send(targets_.metrics);
+      }
+      if (internal_read_bytes > 0) {
+        auto source_metric = operator_metric{};
+        source_metric.operator_index = 0;
+        source_metric.operator_name = "source";
+        source_metric.internal = true;
+        source_metric.outbound_measurement.unit = "bytes";
+        source_metric.outbound_measurement.num_elements = internal_read_bytes;
+        source_metric.time_total = elapsed;
+        source_metric.time_running = elapsed;
+        caf::anon_mail(std::move(source_metric)).send(targets_.metrics);
+      }
+      if (num_ops_ > 0 and external_write_bytes > 0) {
+        auto sink_metric = operator_metric{};
+        sink_metric.operator_index = num_ops_ - 1;
+        sink_metric.operator_name = "sink";
+        sink_metric.internal = false;
+        sink_metric.inbound_measurement.unit = "bytes";
+        sink_metric.inbound_measurement.num_elements = external_write_bytes;
+        sink_metric.time_total = elapsed;
+        sink_metric.time_running = elapsed;
+        caf::anon_mail(std::move(sink_metric)).send(targets_.metrics);
+      }
+      if (num_ops_ > 0 and internal_write_bytes > 0) {
+        auto sink_metric = operator_metric{};
+        sink_metric.operator_index = num_ops_ - 1;
+        sink_metric.operator_name = "sink";
+        sink_metric.internal = true;
+        sink_metric.inbound_measurement.unit = "bytes";
+        sink_metric.inbound_measurement.num_elements = internal_write_bytes;
+        sink_metric.time_total = elapsed;
+        sink_metric.time_running = elapsed;
+        caf::anon_mail(std::move(sink_metric)).send(targets_.metrics);
+      }
+    }
+    if (targets_.importer and profiling_) {
       auto channels = get_channel_profiles();
       auto executors = get_executor_profiles();
       auto names = op_type_names();
@@ -945,7 +1009,10 @@ public:
       auto snapshot = build_profiler_snapshot(channels, executors, names,
                                               snapshot_time, prev_snapshots_);
       if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
-        profiler_fn_(std::move(snapshot));
+        for (auto& slice :
+             build_profiler_slices(snapshot, targets_.pipeline_id)) {
+          caf::anon_mail(std::move(slice)).send(targets_.importer);
+        }
       }
     }
   }
@@ -988,8 +1055,9 @@ private:
   }
 
   bool profiling_;
-  MetricsCallback emit_fn_;
-  ProfilerCallback profiler_fn_;
+  run_plan_telemetry_targets targets_;
+  size_t num_ops_;
+  time start_time_;
   std::unordered_map<std::string, OpSnapshot> prev_snapshots_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
@@ -997,7 +1065,6 @@ private:
   // Owns the ProfilingExecutor instances to keep them alive.
   std::vector<std::unique_ptr<ProfilingExecutor>> executors_;
   std::unordered_map<std::string, std::string> op_type_names_;
-  folly::CancellationSource metrics_loop_cancel_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -1742,18 +1809,20 @@ auto build_profiler_snapshot(
 auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
                    DiagHandler& dh,
                    std::optional<std::string> const& profile_path,
-                   MetricsCallback emit_fn, ProfilerCallback profiler_fn)
+                   run_plan_telemetry_targets targets)
   -> Task<failure_or<void>> {
-  LOGW("spawning plan with {} operators", chain.size());
+  auto num_ops = chain.size();
+  LOGW("spawning plan with {} operators", num_ops);
   // Currently, the profile file and live profiler cannot be active at the same
   // time because the live profiler drains backpressure events that the profile
   // file needs. This can be lifted by accumulating drained events separately.
   TENZIR_ASSERT(
-    not(profile_path.has_value() and static_cast<bool>(profiler_fn)));
-  auto profiling = profile_path.has_value() or static_cast<bool>(profiler_fn);
-  auto needs_metrics_loop = emit_fn or profiler_fn;
-  auto exec_ctx
-    = TestExecCtx{profiling, std::move(emit_fn), std::move(profiler_fn)};
+    not(profile_path.has_value() and static_cast<bool>(targets.importer)));
+  auto profiling
+    = profile_path.has_value() or static_cast<bool>(targets.importer);
+  auto needs_metrics_loop
+    = static_cast<bool>(targets.metrics) or static_cast<bool>(targets.importer);
+  auto exec_ctx = TestExecCtx{profiling, std::move(targets), num_ops};
   // Profiling: sample channel and executor stats periodically if requested.
   auto const t0 = std::chrono::steady_clock::now();
   auto samples = std::vector<ProfileSample>{};
@@ -1863,14 +1932,12 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   -> failure_or<void> {
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task
-    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-        co_return co_await folly::coro::co_awaitTry(
-          folly::coro::co_withCancellation(
-            cancel_source.getToken(),
-            run_plan_impl(std::move(chain), sys, diag_handler, profile_path, {},
-                          {})));
-      });
+  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+    co_return co_await folly::coro::co_awaitTry(
+      folly::coro::co_withCancellation(
+        cancel_source.getToken(),
+        run_plan_impl(std::move(chain), sys, diag_handler, profile_path, {})));
+  });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -1892,10 +1959,9 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, std::optional<std::string> const& profile_path,
-              MetricsCallback emit_fn, ProfilerCallback profiler_fn)
-  -> Task<failure_or<void>> {
+              run_plan_telemetry_targets targets) -> Task<failure_or<void>> {
   co_return co_await run_plan_impl(std::move(chain), sys, dh, profile_path,
-                                   std::move(emit_fn), std::move(profiler_fn));
+                                   std::move(targets));
 }
 
 auto build_profiler_slices(ProfilerSnapshot const& snapshot,
