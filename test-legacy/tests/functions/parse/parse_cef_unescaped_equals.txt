@@ -9,7 +9,8 @@
     name: "test",
     severity: "5",
     extension: {
-      subject: "CN=foo,O=bar next_key=val",
+      subject: "CN=foo,O=bar",
+      next_key: "val",
     },
   },
 }
