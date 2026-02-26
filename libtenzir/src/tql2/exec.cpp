@@ -42,6 +42,7 @@
 #include <caf/settings.hpp>
 #include <folly/Demangle.h>
 #include <folly/coro/BlockingWait.h>
+#include <folly/coro/Sleep.h>
 #include <tsl/robin_set.h>
 
 #include <atomic>
@@ -919,23 +920,23 @@ public:
     return op_type_names_;
   }
 
-  void emit_metrics(std::span<const MetricsSnapshotEntry> entries) override {
+  void emit_metrics(time now) {
     if (emit_fn_) {
-      emit_fn_(entries);
+      emit_fn_(metrics()->take_snapshot());
     }
-  }
-
-  void emit_profiler(time timestamp) override {
-    if (not profiler_fn_ or not profiling_) {
-      return;
-    }
-    auto channels = get_channel_profiles();
-    auto executors = get_executor_profiles();
-    auto names = op_type_names();
-    auto snapshot = build_profiler_snapshot(channels, executors, names,
-                                            timestamp, prev_snapshots_);
-    if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
-      profiler_fn_(std::move(snapshot));
+    if (profiler_fn_) {
+      if (not profiler_fn_ or not profiling_) {
+        return;
+      }
+      auto channels = get_channel_profiles();
+      auto executors = get_executor_profiles();
+      auto names = op_type_names();
+      auto snapshot_time = floor(now, defaults::metrics_interval);
+      auto snapshot = build_profiler_snapshot(channels, executors, names,
+                                              snapshot_time, prev_snapshots_);
+      if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
+        profiler_fn_(std::move(snapshot));
+      }
     }
   }
 
@@ -986,6 +987,7 @@ private:
   // Owns the ProfilingExecutor instances to keep them alive.
   std::vector<std::unique_ptr<ProfilingExecutor>> executors_;
   std::unordered_map<std::string, std::string> op_type_names_;
+  folly::CancellationSource metrics_loop_cancel_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -1739,23 +1741,39 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
   TENZIR_ASSERT(
     not(profile_path.has_value() and static_cast<bool>(profiler_fn)));
   auto profiling = profile_path.has_value() or static_cast<bool>(profiler_fn);
+  auto needs_metrics_loop = emit_fn or profiler_fn;
   auto exec_ctx
     = TestExecCtx{profiling, std::move(emit_fn), std::move(profiler_fn)};
   // Profiling: sample channel and executor stats periodically if requested.
+  auto const t0 = std::chrono::steady_clock::now();
   auto samples = std::vector<ProfileSample>{};
-  auto stop_flag = std::atomic<bool>{false};
-  auto sampler = std::optional<std::thread>{};
-  auto t0 = std::chrono::steady_clock::now();
-  if (profile_path) {
-    sampler.emplace([&] {
-      while (not stop_flag.load(std::memory_order::relaxed)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+    /// Node metrics loop
+    if (needs_metrics_loop) {
+      scope.spawn([&]() -> Task<void> {
+        while (true) {
+          auto now = time::clock::now();
+          exec_ctx.emit_metrics(now);
+          auto boundary = floor(now, defaults::metrics_interval)
+                          + defaults::metrics_interval;
+          co_await folly::coro::sleep(
+            std::chrono::duration_cast<folly::HighResDuration>(boundary - now));
+        }
+      });
+    }
+    /// CLI profile loop
+    scope.spawn([&]() -> Task<void> {
+      while (true) {
+        co_await folly::coro::sleep(
+          std::chrono::duration_cast<folly::HighResDuration>(
+            std::chrono::milliseconds{100}));
         auto channel_profiles = exec_ctx.get_channel_profiles();
         auto executor_profiles = exec_ctx.get_executor_profiles();
         if (channel_profiles.empty() and executor_profiles.empty()) {
           continue;
         }
         auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
+        sample.channels.reserve(channel_profiles.size());
         for (auto& p : channel_profiles) {
           sample.channels.push_back({
             p.id.value,
@@ -1771,6 +1789,7 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
             p.max_bytes,
           });
         }
+        sample.executors.reserve(executor_profiles.size());
         for (auto& p : executor_profiles) {
           sample.executors.push_back({
             p.id.value,
@@ -1782,15 +1801,16 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
         samples.push_back(std::move(sample));
       }
     });
-  }
-  LOGW("blocking on pipeline");
-  co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
-  LOGW("blocking on pipeline done");
-  if (sampler) {
-    stop_flag.store(true, std::memory_order::relaxed);
-    sampler->join();
+    LOGW("blocking on pipeline");
+    co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
+    LOGW("blocking on pipeline done");
+  });
+  if (profile_path) {
     write_profile(*profile_path, samples, t0, exec_ctx.op_type_names(),
                   exec_ctx.get_channel_profiles());
+  }
+  if (needs_metrics_loop) {
+    exec_ctx.emit_metrics(time::clock::now());
   }
   co_return {};
 }

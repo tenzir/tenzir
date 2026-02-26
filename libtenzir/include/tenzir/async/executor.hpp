@@ -227,15 +227,6 @@ public:
     TENZIR_UNUSED(type);
   }
 
-  /// Called periodically with metrics snapshots.
-  virtual void emit_metrics(std::span<const MetricsSnapshotEntry>) {
-  }
-
-  /// Called periodically to emit profiler table slices.
-  virtual void emit_profiler(time timestamp) {
-    TENZIR_UNUSED(timestamp);
-  }
-
   auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
     return metrics_;
   }
