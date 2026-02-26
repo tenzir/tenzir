@@ -897,7 +897,7 @@ private:
   Mutex<Locked> mutex_;
   Notify notify_send_;
   Notify notify_receive_;
-  std::atomic<bool> sender_closed_ = false;
+  Atomic<bool> sender_closed_ = false;
 };
 
 template <class T>
