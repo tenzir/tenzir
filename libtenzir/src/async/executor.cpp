@@ -15,6 +15,7 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/connect_to_node.hpp"
 #include "tenzir/connector.hpp"
@@ -431,6 +432,144 @@ auto run_chain_fused(OperatorChain<Input, Output> chain,
                      std::move(push_downstream), std::move(from_control),
                      std::move(to_control), std::move(id), fused_ctx, sys, dh);
 }
+
+template <class T>
+class SelectQueue {
+public:
+  // Activate the queue over the scope of a task.
+  template <class U>
+  auto activate(Task<U> task) -> Task<U> {
+    co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
+      scope_ = &scope;
+      auto guard = detail::scope_guard{[&] noexcept {
+        // We assume that the consumer is not interested anymore.
+        scope_->cancel();
+        scope_ = nullptr;
+      }};
+      co_return co_await std::move(task);
+    });
+  }
+
+  // Activate the queue over the scope of a function.
+  template <class F>
+  auto activate(F&& f)
+    -> Task<folly::coro::semi_await_result_t<std::invoke_result_t<F>>> {
+    return activate(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  /// Wait for the next item that satisfies the filter.
+  ///
+  /// If the no more items
+  template <class Filter>
+    requires(std::is_invocable_r_v<bool, Filter, T const&>)
+  auto next(Filter&& filter) -> Task<Option<T>> {
+    // First, inspect the existing items to see if one qualifies.
+    for (auto it = existing_.begin(); it != existing_.end(); ++it) {
+      if (std::invoke(filter, std::as_const(it->value))) {
+        auto value = std::move(it->value);
+        it->notify->notify_one();
+        existing_.erase(it);
+        co_return value;
+      }
+    }
+    // If nothing was found, wait for new items to arrive.
+    while (true) {
+      if (running_ == 0) {
+        // All tasks are done and we saw all the data. If some of it still
+        // unprocessed by now, we would deadlock.
+        if (existing_.empty()) {
+          co_return None{};
+        }
+        panic("got {} outstanding items without progress", existing_.size());
+      }
+      auto item = co_await shared_->queue.dequeue();
+      if (not item) {
+        // A task terminated.
+        running_ -= 1;
+        continue;
+      }
+      if (std::invoke(filter, std::as_const(item->value))) {
+        item->notify->notify_one();
+        co_return std::move(item->value);
+      }
+      existing_.push_back(std::move(*item));
+    }
+  }
+
+  /// Return the next item without any filter.
+  auto next() -> Task<Option<T>> {
+    return next([](T const&) {
+      return true;
+    });
+  }
+
+  template <class U>
+    requires std::constructible_from<T, U>
+  auto add(Task<U> task) -> void {
+    TENZIR_ASSERT(scope_);
+    running_ += 1;
+    scope_->spawn(
+      [shared = shared_, task = std::move(task)] mutable -> Task<void> {
+        auto value = co_await std::move(task);
+        auto notify = std::make_shared<Notify>();
+        shared->queue.enqueue(Item{std::move(value), notify});
+        co_await notify->wait();
+        shared->queue.enqueue(None{});
+      });
+  }
+
+  template <class F>
+    requires(folly::coro::is_semi_awaitable_v<std::invoke_result_t<F>>)
+  auto add(F&& f) -> void {
+    add(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  template <class U>
+    requires std::constructible_from<T, U>
+  auto add(AsyncGenerator<U> gen) -> void {
+    TENZIR_ASSERT(scope_);
+    running_ += 1;
+    scope_->spawn(
+      [shared = shared_, gen = std::move(gen)] mutable -> Task<void> {
+        while (auto value = co_await gen.next()) {
+          auto notify = std::make_shared<Notify>();
+          shared->queue.enqueue(Item{std::move(*value), notify});
+          co_await notify->wait();
+        }
+        shared->queue.enqueue(None{});
+      });
+  }
+
+  template <class F>
+    requires(
+      std::constructible_from<T, typename std::invoke_result_t<F>::value_type>)
+  auto add(F&& f) -> void {
+    add(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  // Return the async scope of the (activated) queue.
+  auto scope() -> AsyncScope& {
+    TENZIR_ASSERT(scope_);
+    return *scope_;
+  }
+
+private:
+  struct Item {
+    T value;
+    // TODO: We can get rid of that if we don't want to support generators.
+    std::shared_ptr<Notify> notify; // To let the producer know.
+  };
+
+  struct Shared {
+    // Whenever a task finishes, it will enqueue a `None`.
+    folly::coro::UnboundedQueue<Option<Item>> queue;
+  };
+
+  size_t running_ = 0;
+  std::shared_ptr<Shared> shared_ = std::make_shared<Shared>();
+  AsyncScope* scope_ = nullptr;
+  std::vector<Item> existing_;
+};
 
 /// Core execution logic for a single operator.
 ///
@@ -1256,7 +1395,7 @@ private:
 
   auto process(Option<FromControl> message) -> Task<void> {
     if (not message) {
-      // This indicates that control died. This should only happen if it is
+      // This indicates that our control died. This should only happen if it is
       // cancelled. However, we should also be cancelled by then.
       TENZIR_UNREACHABLE();
     }
@@ -1431,10 +1570,6 @@ private:
 
   /// The primary queue of events.
   QueueScope<Event> queue_;
-
-  /// We have a secondary queue where we spill over events that we are not ready
-  /// to process yet. This is because we can't safely cancel reads.
-  std::deque<Event> spill_;
 
   bool got_shutdown_request_ = false;
   bool upstream_done_ = false;
@@ -1809,20 +1944,35 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       = bounded_channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver]
       = bounded_channel<ToControl>(16);
-    auto queue = QueueScope<
-      variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
+    auto queue
+      = SelectQueue<variant<Terminated, ToControl, OperatorMsg<void>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
-      queue.spawn([&] -> Task<std::monostate> {
+      // Spawn periodic metrics emission.
+      queue.scope().spawn([&exec_ctx] -> Task<void> {
+        while (true) {
+          co_await folly::coro::sleep(
+            std::chrono::duration_cast<folly::HighResDuration>(
+              defaults::metrics_interval));
+          auto snapshot = exec_ctx.metrics()->take_snapshot();
+          exec_ctx.emit_metrics(snapshot);
+        }
+      });
+      queue.add([&] -> Task<Terminated> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
                            std::move(from_control_receiver),
                            std::move(to_control_sender), id, exec_ctx, sys, dh);
-        co_return std::monostate{};
+        co_return Terminated{};
+      });
+      queue.add([&] -> AsyncGenerator<OperatorMsg<void>> {
+        while (auto next = co_await pull_output()) {
+          co_yield std::move(*next);
+        }
       });
       // TODO: We just have this right now to simulate checkpointing.
 #if 0
-      queue.spawn([&] -> Task<std::monostate> {
+      queue.scope().spawn([&] -> Task<std::monostate> {
         while (true) {
           auto checkpoint = Checkpoint{uuid::random()};
           LOGI("injecting checkpoint {} into pipeline", checkpoint.id);
@@ -1831,27 +1981,16 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         }
       });
 #endif
-      queue.spawn(pull_output());
-      queue.spawn(to_control_receiver.recv());
-      auto chain_running = true;
-      auto control_open = true;
-      while (chain_running or control_open) {
-        auto next = co_await queue.next();
-        TENZIR_ASSERT(next);
+      queue.add(std::move(to_control_receiver).into_generator());
+      while (auto next = co_await queue.next()) {
         co_await co_match(
           std::move(*next),
-          [&](std::monostate) -> Task<void> {
+          [&](Terminated) -> Task<void> {
             // TODO: The pipeline terminated?
             LOGI("run_pipeline got info that chain terminated");
-            chain_running = false;
             co_return;
           },
-          [&](Option<ToControl> to_control) -> Task<void> {
-            if (not to_control) {
-              LOGI("outermost control channel was closed");
-              control_open = false;
-              co_return;
-            }
+          [&](ToControl to_control) -> Task<void> {
             // TODO
             TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
             LOGI("got shutdown request from outermost subpipeline");
@@ -1861,12 +2000,8 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
             {
               auto _ = std::move(push_input);
             }
-            queue.spawn(to_control_receiver.recv());
           },
           [&](Option<OperatorMsg<void>> msg) -> Task<void> {
-            if (not msg) {
-              co_return;
-            }
             co_match(*msg, [&](Signal signal) {
               co_match(
                 signal,
@@ -1877,15 +2012,13 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   LOGI("checkpoint {} is leaving pipeline", checkpoint.id);
                 });
             });
-            queue.spawn(pull_output());
             co_return;
           });
       }
-      queue.cancel();
+      // Emit final metrics snapshot so the last interval is not lost.
+      auto snapshot = exec_ctx.metrics()->take_snapshot();
+      exec_ctx.emit_metrics(snapshot);
     });
-  } catch (folly::OperationCancelled) {
-    // TODO: ?
-    throw;
   } catch (panic_exception& e) {
     dh.emit(to_diagnostic(e));
     // TODO: Return failure?
