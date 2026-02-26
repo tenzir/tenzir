@@ -420,6 +420,18 @@ public:
     if (args_.alternative) {
       TRY(else_ty, args_.alternative->pipeline.infer_type(input, dh));
     }
+    if (then_ty and then_ty->is<chunk_ptr>()) {
+      diagnostic::error("branches must not return bytes")
+        .primary(args_.if_keyword)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (args_.alternative and else_ty and else_ty->is<chunk_ptr>()) {
+      diagnostic::error("branches must not return bytes")
+        .primary(args_.alternative->else_keyword)
+        .emit(dh);
+      return failure::promise();
+    }
     if (not then_ty) {
       return else_ty;
     }
