@@ -941,19 +941,16 @@ public:
 
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_profiled_channel<void>(std::move(id), void_limit,
-                                       element_type_tag{tag_v<void>});
+    return make_profiled_channel<void>(std::move(id), void_limit);
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(
-      std::move(id), events_limit, element_type_tag{tag_v<table_slice>});
+    return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit,
-                                            element_type_tag{tag_v<chunk_ptr>});
+    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
 
 private:
@@ -965,14 +962,14 @@ private:
   /// very big individual items that exceed the total capacity by themselves,
   /// as we eventually let them through since we need to transmit them.
   template <class T>
-  auto
-  make_profiled_channel(ChannelId id, size_t max_bytes, element_type_tag type)
+  auto make_profiled_channel(ChannelId id, size_t max_bytes)
     -> PushPull<OperatorMsg<T>> {
     auto stats = std::shared_ptr<ChannelStats>{};
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
       auto lock = std::scoped_lock{mutex_};
-      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes, type});
+      channel_profiles_.push_back(
+        ChannelProfile{id, stats, max_bytes, tag_v<T>});
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -1730,15 +1727,12 @@ auto build_profiler_snapshot(
   return result;
 }
 
-auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
+auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
                    DiagHandler& dh,
                    std::optional<std::string> const& profile_path,
                    MetricsCallback emit_fn, ProfilerCallback profiler_fn)
   -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
-  auto chain = OperatorChain<void, void>::try_from(std::move(ops));
-  // TODO
-  TENZIR_ASSERT(chain);
   // Currently, the profile file and live profiler cannot be active at the same
   // time because the live profiler drains backpressure events that the profile
   // file needs. This can be lifted by accumulating drained events separately.
@@ -1790,7 +1784,7 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
     });
   }
   LOGW("blocking on pipeline");
-  co_await run_pipeline(std::move(chain).unwrap(), exec_ctx, sys, dh);
+  co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
   LOGW("blocking on pipeline done");
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
@@ -1833,17 +1827,20 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
+auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-    co_return co_await folly::coro::co_awaitTry(folly::coro::co_withCancellation(
-      cancel_source.getToken(),
-      run_plan_impl(std::move(ops), sys, diag_handler, profile_path, {}, {})));
-  });
+  auto task
+    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+        co_return co_await folly::coro::co_awaitTry(
+          folly::coro::co_withCancellation(
+            cancel_source.getToken(),
+            run_plan_impl(std::move(chain), sys, diag_handler, profile_path, {},
+                          {})));
+      });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -1863,11 +1860,11 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
 
 } // namespace
 
-auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
+auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, std::optional<std::string> const& profile_path,
               MetricsCallback emit_fn, ProfilerCallback profiler_fn)
   -> Task<failure_or<void>> {
-  co_return co_await run_plan_impl(std::move(ops), sys, dh, profile_path,
+  co_return co_await run_plan_impl(std::move(chain), sys, dh, profile_path,
                                    std::move(emit_fn), std::move(profiler_fn));
 }
 
@@ -2026,8 +2023,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (ctx.has_failure()) {
     return false;
   }
+  auto chain = OperatorChain<void, void>::try_from(std::move(spawned))
+                 .expect("we already checked the type");
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(spawned), sys, ctx, cfg.profile));
+  TRY(run_plan_blocking(std::move(chain), sys, ctx, cfg.profile));
   return true;
 }
 
