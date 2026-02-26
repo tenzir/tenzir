@@ -848,7 +848,7 @@ auto build_profiler_snapshot(
   std::vector<ExecutorProfile> const& executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
   time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
-  -> profiler_snapshot;
+  -> ProfilerSnapshot;
 
 class TestExecCtx : public ExecCtx {
 public:
@@ -1501,7 +1501,7 @@ void write_profile(
   f << "\n  ]\n}\n";
 }
 
-/// Aggregate channel and executor profiles into a `profiler_snapshot`.
+/// Aggregate channel and executor profiles into a `ProfilerSnapshot`.
 ///
 /// Only includes operators whose counters changed since the previous call
 /// (tracked via `prev`). CPU usage is computed as a percentage of wall-clock
@@ -1511,7 +1511,7 @@ auto build_profiler_snapshot(
   std::vector<ExecutorProfile> const& executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
   time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
-  -> profiler_snapshot {
+  -> ProfilerSnapshot {
   // Collect unique operator names from channels and executors.
   auto op_names = std::vector<std::string>{};
   auto op_set = std::unordered_set<std::string>{};
@@ -1632,7 +1632,7 @@ auto build_profiler_snapshot(
     }
   }
   // Build operator entries, skipping unchanged operators.
-  auto result = profiler_snapshot{};
+  auto result = ProfilerSnapshot{};
   result.timestamp = timestamp;
   auto wall_interval_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                             defaults::metrics_interval)
@@ -1675,7 +1675,7 @@ auto build_profiler_snapshot(
     auto delta = [](size_t cur, size_t prev) -> uint64_t {
       return static_cast<uint64_t>(cur >= prev ? cur - prev : cur);
     };
-    result.operators.push_back(operator_profile_entry{
+    result.operators.push_back(OperatorProfileEntry{
       .operator_id = name,
       .operator_type = std::move(type_name),
       .cpu = cpu_usage,
@@ -1718,7 +1718,7 @@ auto build_profiler_snapshot(
         = wall_now
           + std::chrono::duration_cast<time::duration>(ev.start - steady_now);
       auto bp_dur = std::chrono::duration_cast<duration>(ev.end - ev.start);
-      result.backpressure.push_back(backpressure_entry{
+      result.backpressure.push_back(BackpressureEntry{
         .operator_id = receiver,
         .channel = prof.id.value,
         .start = bp_start,
@@ -1870,8 +1870,8 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
                                    std::move(emit_fn), std::move(profiler_fn));
 }
 
-auto build_profiler_slices(profiler_snapshot const& snapshot,
-                           std::string const& pipeline_id)
+auto build_profiler_slices(ProfilerSnapshot const& snapshot,
+                           std::string_view pipeline_id)
   -> std::vector<table_slice> {
   static auto const profile_type = type{
     "tenzir.metrics.operator_profile",

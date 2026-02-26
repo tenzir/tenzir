@@ -24,7 +24,7 @@
 namespace tenzir {
 
 /// Per-operator aggregated profiling data emitted each tick.
-struct operator_profile_entry {
+struct OperatorProfileEntry {
   std::string operator_id;
   std::string operator_type;
   double cpu = 0.0;
@@ -41,7 +41,7 @@ struct operator_profile_entry {
 };
 
 /// A single backpressure event.
-struct backpressure_entry {
+struct BackpressureEntry {
   std::string operator_id;
   std::string channel;
   time start = {};
@@ -49,18 +49,18 @@ struct backpressure_entry {
 };
 
 /// Aggregated profiler snapshot emitted each tick.
-struct profiler_snapshot {
+struct ProfilerSnapshot {
   time timestamp = {};
-  std::vector<operator_profile_entry> operators;
-  std::vector<backpressure_entry> backpressure;
+  std::vector<OperatorProfileEntry> operators;
+  std::vector<BackpressureEntry> backpressure;
 };
 
 /// Callback for emitting profiler snapshots.
-using ProfilerCallback = std::function<void(profiler_snapshot)>;
+using ProfilerCallback = std::function<void(ProfilerSnapshot)>;
 
 /// Build table slices from a profiler snapshot, adding a pipeline_id field.
-auto build_profiler_slices(profiler_snapshot const& snapshot,
-                           std::string const& pipeline_id)
+auto build_profiler_slices(ProfilerSnapshot const& snapshot,
+                           std::string_view pipeline_id)
   -> std::vector<table_slice>;
 
 auto exec2(std::string_view source, diagnostic_handler& dh,
