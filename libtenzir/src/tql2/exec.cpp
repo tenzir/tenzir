@@ -50,6 +50,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -844,8 +845,8 @@ struct OpSnapshot {
 
 // Forward declaration for use in TestExecCtx::emit_profiler().
 auto build_profiler_snapshot(
-  std::vector<ChannelProfile> const& channel_profiles,
-  std::vector<ExecutorProfile> const& executor_profiles,
+  std::span<ChannelProfile const> channel_profiles,
+  std::span<ExecutorProfile const> executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
   time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
   -> ProfilerSnapshot;
@@ -1507,8 +1508,8 @@ void write_profile(
 /// (tracked via `prev`). CPU usage is computed as a percentage of wall-clock
 /// time between ticks.
 auto build_profiler_snapshot(
-  std::vector<ChannelProfile> const& channel_profiles,
-  std::vector<ExecutorProfile> const& executor_profiles,
+  std::span<ChannelProfile const> channel_profiles,
+  std::span<ExecutorProfile const> executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
   time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
   -> ProfilerSnapshot {
