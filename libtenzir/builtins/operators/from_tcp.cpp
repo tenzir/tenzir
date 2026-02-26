@@ -21,6 +21,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
@@ -36,6 +37,7 @@ constexpr auto buffer_size = size_t{65536};
 constexpr auto connect_timeout = std::chrono::seconds{5};
 constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5000};
+constexpr auto message_queue_capacity = uint32_t{1024};
 
 struct FromTcpArgs {
   located<std::string> endpoint;
@@ -46,6 +48,24 @@ struct FromTcpArgs {
 
 class FromTcpConnector final : public Operator<void, table_slice> {
 public:
+  struct Connected {
+    Box<folly::coro::Transport> transport;
+  };
+
+  struct ReadChunk {
+    chunk_ptr chunk;
+  };
+
+  struct ConnectionClosed {};
+
+  struct ConnectionError {
+    std::string error;
+  };
+
+  using Message
+    = variant<Connected, ReadChunk, ConnectionClosed, ConnectionError>;
+  using MessageQueue = folly::coro::BoundedQueue<Message>;
+
   explicit FromTcpConnector(FromTcpArgs args)
     : endpoint_source_{args.endpoint.source},
       user_pipeline_{std::move(args.user_pipeline)},
@@ -82,6 +102,12 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    if (done_) {
+      co_return {};
+    }
+    if (connection_active_) {
+      co_return co_await message_queue_->dequeue();
+    }
     while (not done_) {
       TENZIR_VERBOSE("from_tcp: connecting to {}", address_.describe());
       auto connect_error = Option<std::string>{};
@@ -90,7 +116,9 @@ public:
           evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
                                                            connect_timeout));
         reconnect_backoff_ = connect_initial_backoff;
-        co_return Box<folly::coro::Transport>{std::move(transport)};
+        connection_active_ = true;
+        co_return Message{
+          Connected{Box<folly::coro::Transport>{std::move(transport)}}};
       } catch (const folly::OperationCancelled&) {
         // Cancellation is part of normal shutdown.
         co_return {};
@@ -123,51 +151,97 @@ public:
     if (done_) {
       co_return;
     }
-    auto transport = std::move(result).as<Box<folly::coro::Transport>>();
-    auto* transport_evb = transport->getEventBase();
-    TENZIR_ASSERT(transport_evb);
-    if (tls_context_) {
-      try {
-        co_await upgrade_transport_to_tls_client(transport, tls_context_,
-                                                 host_);
-      } catch (folly::AsyncSocketException const& ex) {
-        // TLS handshake failures are peer/network errors and should not crash
-        // the operator; we reconnect on the next await_task cycle.
-        diagnostic::warning("TLS handshake with {} failed", address_.describe())
-          .primary(endpoint_source_)
-          .note("reason: {}", ex.what())
-          .hint("verify TLS settings and certificates on both sides")
-          .emit(ctx);
-        co_return;
-      }
-    }
-    auto peer_addr = transport->getPeerAddress();
-    auto peer_record = record{
-      {"ip", peer_addr.getAddressStr()},
-      {"port", int64_t{peer_addr.getPort()}},
-    };
-    auto conn_id = next_conn_id_++;
-    auto pipeline_copy = user_pipeline_.inner;
-    auto env = substitute_ctx::env_t{};
-    env[peer_let_id_] = std::move(peer_record);
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
-    auto sub_result
-      = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
-    if (not sub_result) {
+    auto* message = result.try_as<Message>();
+    if (not message) {
       co_return;
     }
-    auto sub = co_await ctx.spawn_sub(
-      data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
-    auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
-    co_await folly::coro::co_withExecutor(
-      transport_evb, read_loop(std::move(transport), open_pipeline, ctx.dh(),
-                               endpoint_source_));
+    co_await match(
+      std::move(*message),
+      [&](Connected connected) -> Task<void> {
+        auto transport = std::move(connected.transport);
+        auto* transport_evb = transport->getEventBase();
+        TENZIR_ASSERT(transport_evb);
+        if (tls_context_) {
+          try {
+            co_await upgrade_transport_to_tls_client(transport, tls_context_,
+                                                     host_);
+          } catch (folly::AsyncSocketException const& ex) {
+            // TLS handshake failures are peer/network errors and should not
+            // crash the operator; reconnect on the next await_task cycle.
+            diagnostic::warning("TLS handshake with {} failed",
+                                address_.describe())
+              .primary(endpoint_source_)
+              .note("reason: {}", ex.what())
+              .hint("verify TLS settings and certificates on both sides")
+              .emit(ctx);
+            connection_active_ = false;
+            co_return;
+          }
+        }
+        auto peer_addr = transport->getPeerAddress();
+        auto peer_record = record{
+          {"ip", peer_addr.getAddressStr()},
+          {"port", int64_t{peer_addr.getPort()}},
+        };
+        auto conn_id = next_conn_id_++;
+        auto pipeline_copy = user_pipeline_.inner;
+        auto env = substitute_ctx::env_t{};
+        env[peer_let_id_] = std::move(peer_record);
+        auto reg = global_registry();
+        auto b_ctx = base_ctx{ctx, *reg};
+        auto sub_result
+          = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
+        if (not sub_result) {
+          connection_active_ = false;
+          co_return;
+        }
+        auto sub = co_await ctx.spawn_sub(
+          data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
+        pipeline_ = as<OpenPipeline<chunk_ptr>>(sub);
+        ctx.spawn_task(folly::coro::co_withExecutor(
+          transport_evb, read_loop(std::move(transport), *message_queue_)));
+      },
+      [&](ReadChunk read_chunk) -> Task<void> {
+        if (not pipeline_) {
+          co_return;
+        }
+        if ((co_await pipeline_->push(std::move(read_chunk.chunk))).is_err()) {
+          co_await pipeline_->close();
+          pipeline_ = None{};
+          connection_active_ = false;
+          done_ = true;
+        }
+      },
+      [&](ConnectionClosed) -> Task<void> {
+        if (pipeline_) {
+          co_await pipeline_->close();
+          pipeline_ = None{};
+        }
+        connection_active_ = false;
+      },
+      [&](ConnectionError error) -> Task<void> {
+        diagnostic::warning("connection closed after read error")
+          .primary(endpoint_source_)
+          .note("endpoint: {}", address_.describe())
+          .note("reason: {}", error.error)
+          .emit(ctx);
+        if (pipeline_) {
+          co_await pipeline_->close();
+          pipeline_ = None{};
+        }
+        connection_active_ = false;
+      });
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    if (pipeline_) {
+      co_await pipeline_->close();
+      pipeline_ = None{};
+    }
+    connection_active_ = false;
     done_ = true;
+    TENZIR_UNUSED(message_queue_->try_enqueue(ConnectionClosed{}));
     co_return;
   }
 
@@ -177,16 +251,18 @@ public:
 
 private:
   static auto read_loop(Box<folly::coro::Transport> transport,
-                        OpenPipeline<chunk_ptr> pipeline,
-                        diagnostic_handler& dh, location endpoint_source)
-    -> Task<void> {
+                        MessageQueue& message_queue) -> Task<void> {
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
+      auto read_error = std::string{};
       try {
         bytes = co_await transport->read(
           buf, 1, buffer_size,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
+      } catch (const folly::OperationCancelled&) {
+        // Cancellation is part of normal shutdown.
+        co_return;
       } catch (const folly::AsyncSocketException& e) {
         // A read timeout is expected because we poll periodically for
         // cancellation and shutdown.
@@ -194,11 +270,11 @@ private:
           continue;
         }
         // Other socket errors are connection-scoped; log and reconnect.
-        diagnostic::warning("stopped reading from peer after socket error")
-          .primary(endpoint_source)
-          .note("peer: {}", transport->getPeerAddress().describe())
-          .note("reason: {}", e.what())
-          .emit(dh);
+        read_error = e.what();
+      }
+      if (not read_error.empty()) {
+        co_await message_queue.enqueue(ConnectionError{read_error});
+        co_await message_queue.enqueue(ConnectionClosed{});
         co_return;
       }
       if (bytes == 0) {
@@ -212,11 +288,9 @@ private:
         data.insert(data.end(), begin, begin + range.size());
       }
       auto chk = chunk::make(std::move(data));
-      if ((co_await pipeline.push(std::move(chk))).is_err()) {
-        co_return;
-      }
+      co_await message_queue.enqueue(ReadChunk{std::move(chk)});
     }
-    co_await pipeline.close();
+    co_await message_queue.enqueue(ConnectionClosed{});
   }
 
   location endpoint_source_ = location::unknown;
@@ -227,7 +301,11 @@ private:
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
+  mutable Box<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  Option<OpenPipeline<chunk_ptr>> pipeline_;
   bool done_ = false;
+  mutable bool connection_active_ = false;
   mutable std::chrono::milliseconds reconnect_backoff_{connect_initial_backoff};
   mutable uint64_t next_conn_id_{0};
 };
