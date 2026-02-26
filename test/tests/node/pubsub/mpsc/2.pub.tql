@@ -1,5 +1,5 @@
   every 10ms {
     from {id: "mpsc-2"}
   }
-  head 100
+  head 1000
   publish "mpsc"
