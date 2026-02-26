@@ -25,7 +25,6 @@
 #include <deque>
 #include <fcntl.h>
 #include <memory>
-#include <optional>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -37,7 +36,7 @@ namespace {
 constexpr auto buffer_size = size_t{1} << 20; // 1 MiB
 constexpr auto queue_capacity = uint32_t{16};
 
-using ChunkQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+using ChunkQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
 struct FromStdinArgs {
   located<ir::pipeline> pipe;
@@ -111,7 +110,7 @@ public:
     if (stdin_closed_) {
       // Wait for the sub-pipeline to flush all remaining output.
       co_await sub_finished_->wait();
-      co_return std::optional<chunk_ptr>{std::nullopt};
+      co_return chunk_ptr{};
     }
     co_return co_await chunk_queue_->dequeue();
   }
@@ -124,7 +123,7 @@ public:
       done_ = true;
       co_return;
     }
-    auto chunk = std::move(result).as<std::optional<chunk_ptr>>();
+    auto chunk = std::move(result).as<chunk_ptr>();
     if (not chunk) {
       if (stdin_closed_) {
         // Sub-pipeline finished flushing.
@@ -137,7 +136,7 @@ public:
       co_return;
     }
     auto pipeline = as<OpenPipeline<chunk_ptr>>(*sub);
-    auto push_result = co_await pipeline.push(chunk.value());
+    auto push_result = co_await pipeline.push(std::move(chunk));
     if (push_result.is_err()) {
       done_ = true;
       co_return;
@@ -155,51 +154,18 @@ public:
   }
 
 private:
-  struct ProducerSink {
-    explicit ProducerSink(std::shared_ptr<ChunkQueue> queue)
-      : queue_{std::move(queue)} {
-    }
-
-    auto try_push(std::optional<chunk_ptr>& item) -> bool {
-      return queue_->try_enqueue(std::move(item));
-    }
-
-    auto push(std::optional<chunk_ptr> item) -> Task<void> {
-      co_await queue_->enqueue(std::move(item));
-    }
-
-    auto finish_once() -> Task<void> {
-      if (finished_) {
-        co_return;
-      }
-      finished_ = true;
-      co_await queue_->enqueue(std::nullopt);
-    }
-
-    template <class EmitFn>
-    auto fail_once(EmitFn&& emit) -> Task<void> {
-      if (failed_) {
-        co_return;
-      }
-      failed_ = true;
-      std::forward<EmitFn>(emit)();
-      co_await finish_once();
-    }
-
-  private:
-    std::shared_ptr<ChunkQueue> queue_;
-    bool finished_ = false;
-    bool failed_ = false;
-  };
-
-  static auto read_stdin_eventable(ProducerSink& sink, diagnostic_handler& dh)
-    -> Task<void> {
+  static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
+                         diagnostic_handler& dh) -> Task<void> {
+    const auto fail = [&](auto&& emit) -> Task<void> {
+      emit();
+      co_await queue->enqueue(chunk_ptr{});
+    };
     // Set stdin to non-blocking for event-driven IO.
     auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
     if (orig_flags < 0) {
       auto err = errno;
-      co_await sink.fail_once([&] {
-        diagnostic::error("from_stdin: failed to get stdin flags")
+      co_await fail([&] {
+        diagnostic::error("failed to get stdin flags")
           .note("errno {}: {}", err, std::strerror(err))
           .emit(dh);
       });
@@ -208,8 +174,8 @@ private:
     auto rc = ::fcntl(STDIN_FILENO, F_SETFL, orig_flags | O_NONBLOCK);
     if (rc < 0) {
       auto err = errno;
-      co_await sink.fail_once([&] {
-        diagnostic::error("from_stdin: failed to enable non-blocking mode")
+      co_await fail([&] {
+        diagnostic::error("failed to enable non-blocking mode")
           .note("errno {}: {}", err, std::strerror(err))
           .emit(dh);
       });
@@ -227,8 +193,8 @@ private:
     reader->setReadCB(&cb);
     if (not reader->isHandlerRegistered()) {
       reader->setReadCB(nullptr);
-      co_await sink.fail_once([&] {
-        diagnostic::error("from_stdin: stdin is not eventable")
+      co_await fail([&] {
+        diagnostic::error("stdin is not eventable")
           .note("from_stdin requires eventable stdin")
           .emit(dh);
       });
@@ -241,26 +207,24 @@ private:
     });
     while (true) {
       while (not cb.chunks.empty()) {
-        auto item = std::optional{std::move(cb.chunks.front())};
+        auto item = std::move(cb.chunks.front());
         cb.chunks.pop_front();
-        if (not sink.try_push(item)) {
+        if (not queue->try_enqueue(std::move(item))) {
           // Queue is full — pause the reader to apply backpressure.
           reader->setReadCB(nullptr);
-          co_await sink.push(std::move(item));
+          co_await queue->enqueue(std::move(item));
           reader->setReadCB(&cb);
           if (not reader->isHandlerRegistered()) {
             reader->setReadCB(nullptr);
-            co_await sink.fail_once([&] {
-              diagnostic::error(
-                "from_stdin: async stdin re-registration failed")
-                .emit(dh);
+            co_await fail([&] {
+              diagnostic::error("async stdin re-registration failed").emit(dh);
             });
             co_return;
           }
         }
       }
       if (cb.done) {
-        co_return;
+        break;
       }
       // Check again to avoid waiting if callback pushed while processing.
       if (cb.done or not cb.chunks.empty()) {
@@ -268,13 +232,7 @@ private:
       }
       co_await cb.notify.wait();
     }
-  }
-
-  static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
-                         diagnostic_handler& dh) -> Task<void> {
-    auto sink = std::make_shared<ProducerSink>(std::move(queue));
-    co_await read_stdin_eventable(*sink, dh);
-    co_await sink->finish_once();
+    co_await queue->enqueue(chunk_ptr{});
   }
 
   FromStdinArgs args_;
