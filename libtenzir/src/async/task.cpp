@@ -17,7 +17,7 @@ auto wait_forever() -> Task<void> {
   // We want to stop this when cancellation occurs, but `Baton` is not
   // cancelable by default.
   auto baton = folly::coro::Baton{};
-  auto token = co_await folly::coro::co_current_cancellation_token;
+  auto& token = co_await folly::coro::co_current_cancellation_token;
   auto callback = folly::CancellationCallback{token, [&]() noexcept {
                                                 baton.post();
                                               }};
