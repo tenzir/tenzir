@@ -42,7 +42,7 @@ use `co_match` instead of `match`:
 #include <tenzir/co_match.hpp>
 
 co_await co_match(
-  std::move(msg),
+  msg,
   [&](ScanComplete& scan) -> Task<void> {
     // async handler…
     co_return;
