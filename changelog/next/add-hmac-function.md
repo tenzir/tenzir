@@ -1,7 +1,7 @@
 ---
 title: "Add `hmac` function"
 type: feature
-author: codex
+author: [mavam, codex]
 created: 2026-02-27T00:00:00Z
 pr: 5846
 ---
