@@ -555,7 +555,8 @@ struct exec_node_state {
       },
       [this](atom::push, table_slice& events) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        auto name_guard = exec_node_name_guard(op_name);
+        auto name_guard
+          = exec_node_name_guard{op_name, exec_node_name_guard::type::actor};
         if constexpr (std::is_same_v<Input, table_slice>) {
           return push(std::move(events));
         } else {
@@ -566,7 +567,8 @@ struct exec_node_state {
       },
       [this](atom::push, chunk_ptr& bytes) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        auto name_guard = exec_node_name_guard(op_name);
+        auto name_guard
+          = exec_node_name_guard{op_name, exec_node_name_guard::type::actor};
         if constexpr (std::is_same_v<Input, chunk_ptr>) {
           return push(std::move(bytes));
         } else {
@@ -578,7 +580,8 @@ struct exec_node_state {
       [this](atom::pull, exec_node_sink_actor& sink, uint64_t elements,
              uint64_t batches) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        auto name_guard = exec_node_name_guard(op_name);
+        auto name_guard
+          = exec_node_name_guard{op_name, exec_node_name_guard::type::actor};
         if constexpr (not std::is_same_v<Output, std::monostate>) {
           return pull(std::move(sink), elements, batches);
         } else {
@@ -1328,13 +1331,13 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   };
 };
 
-exec_node_name_guard::exec_node_name_guard(const name_type& name) {
+exec_node_name_guard::exec_node_name_guard(const name_type& name, type t) {
   operator_name = name;
+  operator_type = t;
 }
 
 exec_node_name_guard::~exec_node_name_guard() {
-  // Currently a noop as we dont really care about resetting this. We know the
-  // metrics are the only user, and they only use this
+  operator_type = type::none;
 }
 
 } // namespace tenzir

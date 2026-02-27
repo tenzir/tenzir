@@ -17,6 +17,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/exec_pipeline.hpp"
+#include "tenzir/execution_node_name_guard.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
@@ -620,16 +621,25 @@ struct ExecutorStats {
 };
 
 /// Executor wrapper that forwards tasks to an inner executor while measuring
-/// wall-clock time, thread CPU time, and task count.
+/// wall-clock time, thread CPU time, and task count. Also sets the
+/// exec_node_name_guard thread-local for each continuation so that
+/// per-operator tracking (e.g. allocator tagging) works in the async path.
 class ProfilingExecutor : public folly::Executor {
 public:
   ProfilingExecutor(folly::Executor::KeepAlive<> inner,
-                    std::shared_ptr<ExecutorStats> stats)
-    : inner_{std::move(inner)}, stats_{std::move(stats)} {
+                    std::shared_ptr<ExecutorStats> stats,
+                    exec_node_name_guard::name_type name)
+    : inner_{std::move(inner)}, stats_{std::move(stats)}, name_{name} {
   }
 
   void add(folly::Func f) override {
-    inner_->add([stats = stats_, f = std::move(f)]() mutable {
+    inner_->add([stats = stats_, name = name_, f = std::move(f)]() mutable {
+      auto guard
+        = exec_node_name_guard{name, exec_node_name_guard::type::folly};
+      if (not stats) {
+        f();
+        return;
+      }
       auto wall_start = std::chrono::steady_clock::now();
       struct timespec cpu_start = {};
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start);
@@ -663,6 +673,7 @@ public:
 private:
   folly::Executor::KeepAlive<> inner_;
   std::shared_ptr<ExecutorStats> stats_;
+  exec_node_name_guard::name_type name_;
 };
 
 /// Data channel between two operators.
@@ -875,30 +886,34 @@ public:
   }
 
   auto make_executor(OpId id) -> folly::Executor::KeepAlive<> override {
-    if (not profiling_) {
-      return folly::getGlobalCPUExecutor();
-    }
-    auto stats = std::make_shared<ExecutorStats>();
+    auto name = exec_node_name_guard::name_type{};
+    std::copy_n(id.value.begin(), std::min(id.value.size(), name.size()),
+                name.begin());
+    auto stats = profiling_ ? std::make_shared<ExecutorStats>() : nullptr;
     auto exec = std::make_unique<ProfilingExecutor>(
-      folly::getGlobalCPUExecutor(), stats);
+      folly::getGlobalCPUExecutor(), stats, name);
     auto keep_alive = folly::Executor::getKeepAliveToken(exec.get());
     auto lock = std::scoped_lock{mutex_};
-    executor_profiles_.push_back(ExecutorProfile{id, std::move(stats)});
+    if (stats) {
+      executor_profiles_.push_back(ExecutorProfile{id, std::move(stats)});
+    }
     executors_.push_back(std::move(exec));
     return keep_alive;
   }
 
   auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> override {
-    if (not profiling_) {
-      return folly::getGlobalIOExecutor();
-    }
-    auto stats = std::make_shared<ExecutorStats>();
+    auto name = exec_node_name_guard::name_type{};
+    std::copy_n(id.value.begin(), std::min(id.value.size(), name.size()),
+                name.begin());
+    auto stats = profiling_ ? std::make_shared<ExecutorStats>() : nullptr;
     auto exec = std::make_unique<ProfilingExecutor>(
-      folly::getGlobalIOExecutor(), stats);
+      folly::getGlobalIOExecutor(), stats, name);
     auto ka = folly::Executor::getKeepAliveToken(exec.get());
     auto lock = std::scoped_lock{mutex_};
-    auto io_id = OpId{fmt::format("{} (io)", id.value)};
-    executor_profiles_.push_back(ExecutorProfile{io_id, std::move(stats)});
+    if (stats) {
+      auto io_id = OpId{fmt::format("{} (io)", id.value)};
+      executor_profiles_.push_back(ExecutorProfile{io_id, std::move(stats)});
+    }
     executors_.push_back(std::move(exec));
     return ka;
   }
