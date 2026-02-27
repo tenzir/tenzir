@@ -15,13 +15,13 @@ arguments cannot be secrets yet. We plan to change this in the future.
 
 ```tql
 from {
-  signature: "hello world" | hmac("my-secret-key"),
+  signature: hmac("hello world", "my-secret-key"),
 }
 ```
 
 ```tql
 {
-  signature: "734cc62f32841568f45f6ab251e234e7f6e35f2a584c0e55c0b8b68012baed33",
+  signature: "90eb182d8396f16d4341d582047f45c0a97d73388c5377d9ced478a2212295ad",
 }
 ```
 
@@ -29,6 +29,6 @@ Specify a different algorithm with the `algorithm` parameter:
 
 ```tql
 from {
-  signature: "hello world" | hmac("my-secret-key", algorithm="sha512"),
+  signature: hmac("hello world", "my-secret-key", algorithm="sha512"),
 }
 ```

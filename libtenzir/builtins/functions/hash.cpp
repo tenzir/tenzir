@@ -271,25 +271,24 @@ class fun : public virtual function_plugin {
 TENZIR_ENUM(hmac_algorithm, sha256, sha512, sha384, sha1, md5);
 
 template <class Hmac>
-auto hmac_digest(const data_view& data, std::span<const std::byte> key)
+auto hmac_digest(data_view const& data, std::span<std::byte const> key)
   -> std::string {
   auto mac = Hmac{key};
-  auto f = detail::overload{
+  match(
+    data,
     [&](std::string_view str) {
       mac.add(as_bytes(str));
     },
     [&](blob_view blob) {
       mac.add(blob);
     },
-    [&](const auto& value) {
+    [&](auto const& value) {
       hash_append(mac, value);
-    },
-  };
-  match(data, f);
+    });
   return detail::hexify(as_bytes(mac.finish()));
 }
 
-auto compute_hmac(const data_view& data, std::span<const std::byte> key,
+auto compute_hmac(data_view const& data, std::span<std::byte const> key,
                   hmac_algorithm algorithm) -> std::string {
   switch (algorithm) {
     case hmac_algorithm::sha256:
@@ -343,9 +342,10 @@ public:
           TENZIR_ASSERT(data_values.length() == key_values.length());
           auto builder = arrow::StringBuilder{tenzir::arrow_memory_pool()};
           check(builder.Reserve(data_values.length()));
-          auto f = detail::overload{
-            [&]<class DataArray>(const DataArray& data_array,
-                                 const arrow::StringArray& key_array) {
+          match(
+            std::tie(*data_values.array, *key_values.array),
+            [&]<class DataArray>(DataArray const& data_array,
+                                 arrow::StringArray const& key_array) {
               for (auto i = int64_t{0}; i < data_array.length(); ++i) {
                 if (key_array.IsNull(i)) {
                   check(builder.AppendNull());
@@ -353,7 +353,7 @@ public:
                 }
                 auto value
                   = value_at(data_values.type,
-                             static_cast<const arrow::Array&>(data_array), i);
+                             static_cast<arrow::Array const&>(data_array), i);
                 if (is<caf::none_t>(value)) {
                   check(builder.AppendNull());
                   continue;
@@ -363,12 +363,12 @@ public:
                 check(builder.Append(digest));
               }
             },
-            [&]<class DataArray>(const DataArray& data_array,
-                                 const arrow::NullArray&) {
+            [&]<class DataArray>(DataArray const& data_array,
+                                 arrow::NullArray const&) {
               check(builder.AppendNulls(data_array.length()));
             },
-            [&]<class DataArray, class KeyArray>(const DataArray& data_array,
-                                                 const KeyArray&) -> void {
+            [&]<class DataArray, class KeyArray>(DataArray const& data_array,
+                                                 KeyArray const&) -> void {
               if constexpr (not detail::is_any_v<KeyArray, arrow::NullArray>) {
                 diagnostic::warning("expected `string`, but got `{}`",
                                     key_values.type.kind())
@@ -376,9 +376,7 @@ public:
                   .emit(ctx);
               }
               check(builder.AppendNulls(data_array.length()));
-            },
-          };
-          match(std::tie(*data_values.array, *key_values.array), f);
+            });
           return series{string_type{}, finish(builder)};
         });
     });
