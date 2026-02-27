@@ -268,33 +268,7 @@ class fun : public virtual function_plugin {
   }
 };
 
-enum class hmac_algorithm {
-  sha256,
-  sha512,
-  sha384,
-  sha1,
-  md5,
-};
-
-auto parse_hmac_algorithm(std::string_view algorithm)
-  -> std::optional<hmac_algorithm> {
-  if (algorithm == "sha256") {
-    return hmac_algorithm::sha256;
-  }
-  if (algorithm == "sha512") {
-    return hmac_algorithm::sha512;
-  }
-  if (algorithm == "sha384") {
-    return hmac_algorithm::sha384;
-  }
-  if (algorithm == "sha1") {
-    return hmac_algorithm::sha1;
-  }
-  if (algorithm == "md5") {
-    return hmac_algorithm::md5;
-  }
-  return std::nullopt;
-}
+TENZIR_ENUM(hmac_algorithm, sha256, sha512, sha384, sha1, md5);
 
 template <class Hmac>
 auto hmac_digest(const data_view& data, std::span<const std::byte> key)
@@ -352,7 +326,7 @@ public:
           .positional("key", key, "string")
           .named_optional("algorithm", algorithm)
           .parse(inv, ctx));
-    auto parsed_algorithm = parse_hmac_algorithm(algorithm.inner);
+    auto parsed_algorithm = from_string<hmac_algorithm>(algorithm.inner);
     if (not parsed_algorithm) {
       diagnostic::error("`algorithm` must be one of "
                         "`sha256`, `sha512`, `sha384`, `sha1`, `md5`")
