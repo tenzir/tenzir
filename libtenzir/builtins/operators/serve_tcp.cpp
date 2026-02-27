@@ -34,8 +34,6 @@
 
 #include <atomic>
 #include <memory>
-#include <ranges>
-
 namespace tenzir::plugins::serve_tcp {
 
 namespace {
@@ -135,35 +133,30 @@ public:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    auto write_tasks = std::vector<Task<Option<diagnostic>>>{};
-    write_tasks.reserve(clients_.size());
-    for (auto& client : clients_) {
-      write_tasks.push_back(write_to_client(client, data));
-    }
     auto diagnostics = std::vector<Option<diagnostic>>{};
+    diagnostics.resize(clients_.size());
+    auto write_tasks = std::vector<Task<void>>{};
+    write_tasks.reserve(clients_.size());
+    for (size_t i = 0; i < clients_.size(); ++i) {
+      write_tasks.push_back(write_to_client(clients_[i], data, diagnostics[i]));
+    }
     try {
-      diagnostics
-        = co_await folly::coro::collectAllRange(std::move(write_tasks));
+      co_await folly::coro::collectAllRange(std::move(write_tasks));
     } catch (folly::OperationCancelled const&) {
       co_return; // Cancellation is part of normal shutdown.
     }
     TENZIR_ASSERT(diagnostics.size() == clients_.size());
-    auto current = clients_.begin();
-    auto keep = clients_.begin();
-    for (auto&& [client, diagnostic] : std::views::zip(clients_, diagnostics)) {
-      TENZIR_ASSERT(current != clients_.end());
-      if (diagnostic) {
-        ctx.dh().emit(std::move(*diagnostic));
+    auto client_it = clients_.begin();
+    for (size_t i = 0; i < diagnostics.size(); ++i) {
+      TENZIR_ASSERT(client_it != clients_.end());
+      auto& maybe_diagnostic = diagnostics[i];
+      if (maybe_diagnostic) {
+        ctx.dh().emit(std::move(*maybe_diagnostic));
+        client_it = clients_.erase(client_it);
       } else {
-        if (keep != current) {
-          *keep = std::move(client);
-        }
-        ++keep;
+        ++client_it;
       }
-      ++current;
     }
-    TENZIR_ASSERT(current == clients_.end());
-    clients_.erase(keep, clients_.end());
     co_return;
   }
 
@@ -237,28 +230,33 @@ private:
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
   }
 
-  auto write_to_client(Client& client, folly::ByteRange data)
-    -> Task<Option<diagnostic>> {
+  auto write_to_client(Client& client, folly::ByteRange data,
+                       Option<diagnostic>& maybe_diagnostic) -> Task<void> {
     try {
       co_await folly::coro::timeout(
         folly::coro::co_withExecutor(evb_, client->write(data)), write_timeout);
-      co_return None{};
+      maybe_diagnostic = None{};
+      co_return;
     } catch (folly::FutureTimeout const& ex) {
       auto peer = client->getPeerAddress().describe();
-      co_return Option{diagnostic::warning("failed to write to client {}", peer)
-                         .primary(args_.endpoint.source)
-                         .note("reason: {}", ex.what())
-                         .note("dropping this client and continuing with "
-                               "remaining connections")
-                         .done()};
+      maybe_diagnostic
+        = Option{diagnostic::warning("failed to write to client {}", peer)
+                   .primary(args_.endpoint.source)
+                   .note("reason: {}", ex.what())
+                   .note("dropping this client and continuing with "
+                         "remaining connections")
+                   .done()};
+      co_return;
     } catch (folly::AsyncSocketException const& ex) {
       auto peer = client->getPeerAddress().describe();
-      co_return Option{diagnostic::warning("failed to write to client {}", peer)
-                         .primary(args_.endpoint.source)
-                         .note("reason: {}", ex.what())
-                         .note("dropping this client and continuing with "
-                               "remaining connections")
-                         .done()};
+      maybe_diagnostic
+        = Option{diagnostic::warning("failed to write to client {}", peer)
+                   .primary(args_.endpoint.source)
+                   .note("reason: {}", ex.what())
+                   .note("dropping this client and continuing with "
+                         "remaining connections")
+                   .done()};
+      co_return;
     }
   }
 

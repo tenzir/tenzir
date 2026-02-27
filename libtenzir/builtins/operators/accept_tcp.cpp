@@ -22,6 +22,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <folly/ScopeGuard.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/AsyncScope.h>
 #include <folly/coro/BoundedQueue.h>
@@ -32,6 +33,7 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
+#include <atomic>
 #include <limits>
 #include <unordered_set>
 
@@ -134,20 +136,15 @@ public:
       std::move(message),
       [&](Accepted accepted) -> Task<void> {
         auto transport = std::move(accepted.transport);
+        auto keep_connection_slot = false;
+        auto release_connection_slot_guard = folly::makeGuard([&] {
+          if (not keep_connection_slot) {
+            release_connection_slot();
+          }
+        });
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
         auto peer_addr = transport->getPeerAddress();
-        if (active_connections_.size() >= max_connections_) {
-          diagnostic::warning(
-            "connection rejected: maximum number of connections reached")
-            .primary(endpoint_source_)
-            .note("peer: {}", peer_addr.describe())
-            .note("max_connections: {}", max_connections_)
-            .hint("increase `max_connections` if this level of concurrency is "
-                  "expected")
-            .emit(ctx);
-          co_return;
-        }
         if (tls_context_) {
           try {
             co_await upgrade_transport_to_tls_server(transport, tls_context_);
@@ -187,6 +184,7 @@ public:
           std::move(key), std::move(pipeline_copy), tag_v<chunk_ptr>);
         auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
         active_connections_.emplace(conn_id);
+        keep_connection_slot = true;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
           read_loop(conn_id, std::move(transport), std::move(open_pipeline),
@@ -195,6 +193,7 @@ public:
       [&](ConnectionClosed closed) -> Task<void> {
         if (active_connections_.erase(closed.conn_id) == 1) {
           co_await close_subpipeline(closed.conn_id, ctx);
+          release_connection_slot();
         }
         co_return;
       },
@@ -206,6 +205,7 @@ public:
           .emit(ctx);
         if (active_connections_.erase(error.conn_id) == 1) {
           co_await close_subpipeline(error.conn_id, ctx);
+          release_connection_slot();
         }
         co_return;
       });
@@ -254,11 +254,46 @@ private:
           .emit(dh);
         continue;
       }
+      if (not try_acquire_connection_slot()) {
+        auto peer = transport->getPeerAddress();
+        diagnostic::warning(
+          "connection rejected: maximum number of connections reached")
+          .primary(endpoint_source_)
+          .note("peer: {}", peer.describe())
+          .note("max_connections: {}", max_connections_)
+          .hint("increase `max_connections` if this level of concurrency is "
+                "expected")
+          .emit(dh);
+        continue;
+      }
       TENZIR_DEBUG("accepted connection from {}",
                    transport->getPeerAddress().describe());
-      co_await message_queue_->enqueue(Accepted{
-        Box<folly::coro::Transport>::from_unique_ptr(std::move(transport))});
+      try {
+        co_await message_queue_->enqueue(Accepted{
+          Box<folly::coro::Transport>::from_unique_ptr(std::move(transport))});
+      } catch (folly::OperationCancelled const&) {
+        // Cancellation is part of normal shutdown.
+        release_connection_slot();
+        co_return;
+      }
     }
+  }
+
+  auto try_acquire_connection_slot() -> bool {
+    auto current = reserved_connections_->load(std::memory_order_relaxed);
+    while (current < max_connections_) {
+      if (reserved_connections_->compare_exchange_weak(
+            current, current + 1, std::memory_order_relaxed)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  auto release_connection_slot() -> void {
+    auto previous
+      = reserved_connections_->fetch_sub(1, std::memory_order_relaxed);
+    TENZIR_ASSERT(previous > 0);
   }
 
   static auto
@@ -323,6 +358,7 @@ private:
     message_queue_capacity,
   };
   std::unordered_set<uint64_t> active_connections_;
+  Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
   uint64_t max_connections_ = 128;
   bool done_ = false;
   mutable uint64_t next_conn_id_{0};

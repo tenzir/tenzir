@@ -333,8 +333,8 @@ public:
     auto d = Describer<FromTcpArgs, FromTcpConnector>{};
     auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &FromTcpArgs::tls);
-    d.pipeline(&FromTcpArgs::user_pipeline,
-               {{"peer", &FromTcpArgs::peer_info}});
+    auto pipeline_arg = d.pipeline(&FromTcpArgs::user_pipeline,
+                                   {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<struct endpoint>(ep_str.inner);
@@ -351,6 +351,16 @@ public:
         if (auto valid = tls_opts.validate(ctx); not valid) {
           return {};
         }
+      }
+      TRY(auto pipeline, ctx.get(pipeline_arg));
+      auto output = pipeline.inner.infer_type(tag_v<chunk_ptr>, ctx);
+      if (output.is_error()) {
+        return {};
+      }
+      if (not *output or (*output)->is_not<table_slice>()) {
+        diagnostic::error("pipeline must return events")
+          .primary(pipeline.source.subloc(0, 1))
+          .emit(ctx);
       }
       return {};
     });
