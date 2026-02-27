@@ -1,0 +1,31 @@
+---
+title: "Add `hmac` function"
+type: feature
+author: codex
+created: 2026-02-27T00:00:00Z
+pr: 5846
+---
+
+The new `hmac` function computes Hash-based Message Authentication Codes
+(HMAC) for strings and blobs. It supports SHA-256 (default), SHA-512,
+SHA-384, SHA-1, and MD5 algorithms.
+
+```tql
+from {
+  signature: "hello world" | hmac("my-secret-key"),
+}
+```
+
+```tql
+{
+  signature: "734cc62f32841568f45f6ab251e234e7f6e35f2a584c0e55c0b8b68012baed33",
+}
+```
+
+Specify a different algorithm with the `algorithm` parameter:
+
+```tql
+from {
+  signature: "hello world" | hmac("my-secret-key", algorithm="sha512"),
+}
+```
