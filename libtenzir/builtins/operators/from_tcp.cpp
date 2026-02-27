@@ -276,7 +276,6 @@ private:
       }
       if (not read_error.empty()) {
         co_await message_queue.enqueue(ConnectionError{read_error});
-        co_await message_queue.enqueue(ConnectionClosed{});
         co_return;
       }
       if (bytes == 0) {

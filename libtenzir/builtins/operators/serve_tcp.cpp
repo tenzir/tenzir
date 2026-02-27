@@ -30,6 +30,8 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
+#include <atomic>
+
 namespace tenzir::plugins::serve_tcp {
 
 namespace {
@@ -37,7 +39,9 @@ namespace {
 constexpr auto listen_backlog = uint32_t{128};
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 constexpr auto wait_for_client_retry_delay = std::chrono::milliseconds{10};
-constexpr auto wait_for_client_timeout = std::chrono::seconds{2};
+constexpr auto wait_for_client_timeout = std::chrono::seconds{5};
+constexpr auto client_probe_interval = std::chrono::seconds{1};
+constexpr auto client_probe_timeout = std::chrono::milliseconds{1};
 constexpr auto write_timeout = std::chrono::seconds{5};
 constexpr auto write_queue_capacity = uint32_t{256};
 constexpr auto client_queue_capacity = uint32_t{256};
@@ -169,21 +173,8 @@ private:
     TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
   }
 
-  auto drain_new_clients(std::vector<Client>& clients, diagnostic_handler& dh)
-    -> void {
+  auto drain_new_clients(std::vector<Client>& clients) -> void {
     while (auto client = client_queue_->try_dequeue()) {
-      auto peer = (*client)->getPeerAddress().describe();
-      if (clients.size() >= max_connections_) {
-        diagnostic::warning(
-          "connection rejected: maximum number of connections reached")
-          .primary(args_.endpoint.source)
-          .note("peer: {}", peer)
-          .note("max_connections: {}", max_connections_)
-          .hint("increase `max_connections` if this level of concurrency is "
-                "expected")
-          .emit(dh);
-        continue;
-      }
       clients.push_back(std::move(*client));
     }
   }
@@ -216,6 +207,7 @@ private:
           .note(
             "dropping this client and continuing with remaining connections")
           .emit(dh);
+        active_clients_->fetch_sub(1, std::memory_order_relaxed);
         it = clients.erase(it);
       } catch (folly::AsyncSocketException const& ex) {
         // Socket write failures are client-scoped; drop this client and keep
@@ -226,7 +218,38 @@ private:
           .note(
             "dropping this client and continuing with remaining connections")
           .emit(dh);
+        active_clients_->fetch_sub(1, std::memory_order_relaxed);
         it = clients.erase(it);
+      }
+    }
+  }
+
+  auto probe_clients(std::vector<Client>& clients) -> Task<void> {
+    for (auto it = clients.begin(); it != clients.end();) {
+      auto peer = (*it)->getPeerAddress().describe();
+      auto disconnected = false;
+      try {
+        folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
+        auto bytes = co_await (*it)->read(buf, 1, 1, client_probe_timeout);
+        disconnected = bytes == 0;
+      } catch (folly::OperationCancelled const&) {
+        // Cancellation is part of normal shutdown.
+        co_return;
+      } catch (folly::AsyncSocketException const& ex) {
+        if (ex.getType() == folly::AsyncSocketException::TIMED_OUT) {
+          ++it;
+          continue;
+        }
+        TENZIR_DEBUG("dropping client {} after probe error: {}", peer,
+                     ex.what());
+        disconnected = true;
+      }
+      if (disconnected) {
+        TENZIR_DEBUG("dropping disconnected client {}", peer);
+        active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        it = clients.erase(it);
+      } else {
+        ++it;
       }
     }
   }
@@ -234,8 +257,34 @@ private:
   auto write_loop(diagnostic_handler& dh) -> Task<void> {
     auto clients = std::vector<Client>{};
     auto client_wait_deadline = Option<std::chrono::steady_clock::time_point>{};
+    auto next_client_probe_at
+      = std::chrono::steady_clock::now() + client_probe_interval;
     while (true) {
-      auto next = co_await write_queue_->dequeue();
+      auto next = Option<chunk_ptr>{};
+      auto now = std::chrono::steady_clock::now();
+      auto wait_for_input
+        = std::max(std::chrono::milliseconds{0},
+                   std::chrono::duration_cast<std::chrono::milliseconds>(
+                     next_client_probe_at - now));
+      if (wait_for_input == std::chrono::milliseconds{0}) {
+        co_await probe_clients(clients);
+        next_client_probe_at
+          = std::chrono::steady_clock::now() + client_probe_interval;
+        continue;
+      }
+      auto probe_due = false;
+      try {
+        next = co_await folly::coro::timeout(write_queue_->dequeue(),
+                                             wait_for_input);
+      } catch (folly::FutureTimeout const&) {
+        probe_due = true;
+      }
+      if (probe_due) {
+        co_await probe_clients(clients);
+        next_client_probe_at
+          = std::chrono::steady_clock::now() + client_probe_interval;
+        continue;
+      }
       if (done_ or not next) {
         break;
       }
@@ -243,14 +292,14 @@ private:
       if (not chunk or chunk->size() == 0) {
         continue;
       }
-      drain_new_clients(clients, dh);
+      drain_new_clients(clients);
       if (clients.empty()) {
         if (not client_wait_deadline) {
           client_wait_deadline
             = std::chrono::steady_clock::now() + wait_for_client_timeout;
         }
         while (clients.empty() and not done_) {
-          drain_new_clients(clients, dh);
+          drain_new_clients(clients);
           if (not clients.empty()) {
             client_wait_deadline = None{};
             break;
@@ -269,6 +318,12 @@ private:
       }
       client_wait_deadline = None{};
       co_await write_chunk_to_clients(std::move(chunk), clients, dh);
+      next_client_probe_at
+        = std::chrono::steady_clock::now() + client_probe_interval;
+    }
+    if (not clients.empty()) {
+      active_clients_->fetch_sub(detail::narrow<uint64_t>(clients.size()),
+                                 std::memory_order_relaxed);
     }
     request_stop();
     co_return;
@@ -278,6 +333,7 @@ private:
     TENZIR_ASSERT(server_);
     while (not done_) {
       auto accept_error = Option<std::string>{};
+      auto counted_client = false;
       try {
         auto transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
@@ -286,17 +342,39 @@ private:
         if (tls_context_) {
           co_await upgrade_transport_to_tls_server(boxed, tls_context_);
         }
+        auto peer = boxed->getPeerAddress().describe();
+        if (active_clients_->load(std::memory_order_relaxed)
+            >= max_connections_) {
+          diagnostic::warning(
+            "connection rejected: maximum number of connections reached")
+            .primary(args_.endpoint.source)
+            .note("peer: {}", peer)
+            .note("max_connections: {}", max_connections_)
+            .hint("increase `max_connections` if this level of concurrency is "
+                  "expected")
+            .emit(dh);
+          continue;
+        }
         auto client = std::move(boxed);
         if (done_) {
           co_return;
         }
+        active_clients_->fetch_add(1, std::memory_order_relaxed);
+        counted_client = true;
         co_await client_queue_->enqueue(std::move(client));
+        continue;
       } catch (folly::OperationCancelled const&) {
         // Cancellation is part of normal shutdown.
+        if (counted_client) {
+          active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        }
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
         // Accept/TLS handshake failures are per-connection network errors; keep
         // the listener alive and continue accepting new clients.
+        if (counted_client) {
+          active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        }
         if (done_) {
           co_return;
         }
@@ -308,11 +386,11 @@ private:
           .note("endpoint: {}", address_.describe())
           .note("reason: {}", *accept_error)
           .emit(dh);
+        co_await folly::coro::sleep(accept_retry_delay);
       }
       if (done_) {
         co_return;
       }
-      co_await folly::coro::sleep(accept_retry_delay);
     }
   }
 
@@ -326,6 +404,7 @@ private:
   Box<WriteQueue> write_queue_{std::in_place, write_queue_capacity};
   Box<ClientQueue> client_queue_{std::in_place, client_queue_capacity};
   Option<AsyncHandle<void>> write_task_;
+  Box<std::atomic<uint64_t>> active_clients_{std::in_place, uint64_t{0}};
   uint64_t max_connections_ = 128;
   bool done_ = false;
 };
