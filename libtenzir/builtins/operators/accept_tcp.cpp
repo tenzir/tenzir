@@ -340,8 +340,8 @@ public:
     auto tls_arg = d.named("tls", &AcceptTcpArgs::tls);
     auto max_connections_arg
       = d.named("max_connections", &AcceptTcpArgs::max_connections);
-    d.pipeline(&AcceptTcpArgs::user_pipeline,
-               {{"peer", &AcceptTcpArgs::peer_info}});
+    auto pipeline_arg = d.pipeline(&AcceptTcpArgs::user_pipeline,
+                                   {{"peer", &AcceptTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<struct endpoint>(ep_str.inner);
@@ -363,6 +363,16 @@ public:
           = ctx.get_location(max_connections_arg).value_or(location::unknown);
         diagnostic::error("max_connections must be greater than 0")
           .primary(loc)
+          .emit(ctx);
+      }
+      TRY(auto pipeline, ctx.get(pipeline_arg));
+      auto output = pipeline.inner.infer_type(tag_v<chunk_ptr>, ctx);
+      if (output.is_error()) {
+        return {};
+      }
+      if (not *output or (*output)->is_not<table_slice>()) {
+        diagnostic::error("pipeline must return events")
+          .primary(pipeline.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};

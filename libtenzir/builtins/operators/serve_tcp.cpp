@@ -32,6 +32,8 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
+#include <atomic>
+#include <memory>
 #include <ranges>
 
 namespace tenzir::plugins::serve_tcp {
@@ -108,7 +110,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
@@ -126,7 +128,7 @@ public:
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
     auto guard = co_await clients_mutex_->lock();
-    if (done_ or not chunk or chunk->size() == 0 or clients_.empty()) {
+    if (done_->load() or not chunk or chunk->size() == 0 or clients_.empty()) {
       co_return;
     }
     auto data = folly::ByteRange{
@@ -167,14 +169,14 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (done_) {
+    if (done_->load()) {
       co_return {};
     }
     co_return co_await message_queue_->dequeue();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     auto* message_ptr = result.try_as<Message>();
@@ -202,11 +204,12 @@ public:
       }
       co_return FinalizeBehavior::continue_;
     }
-    co_return done_ ? FinalizeBehavior::done : FinalizeBehavior::continue_;
+    co_return done_->load() ? FinalizeBehavior::done
+                            : FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     co_await message_queue_->enqueue(SubpipelineFinished{});
@@ -220,15 +223,14 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return done_->load() ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
   auto request_stop() -> void {
-    if (done_) {
+    if (done_->exchange(true)) {
       return;
     }
-    done_ = true;
     if (server_) {
       server_->close();
     }
@@ -281,7 +283,7 @@ private:
     };
     {
       auto guard = co_await clients_mutex_->lock();
-      if (done_) {
+      if (done_->load()) {
         co_return;
       }
       if (clients_.size() >= max_connections_) {
@@ -307,7 +309,7 @@ private:
       }
     }
     auto guard = co_await clients_mutex_->lock();
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     if (clients_.size() >= max_connections_) {
@@ -322,14 +324,14 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
-    while (not done_) {
+    while (not done_->load()) {
       auto accept_error = Option<std::string>{};
       try {
         auto transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
         auto client
           = Box<folly::coro::Transport>::from_unique_ptr(std::move(transport));
-        if (done_) {
+        if (done_->load()) {
           co_return;
         }
         TENZIR_DEBUG("serve_tcp: accepted {}",
@@ -342,7 +344,7 @@ private:
       } catch (folly::AsyncSocketException const& ex) {
         // Accept failures are per-connection network errors; keep the listener
         // alive and continue accepting new clients.
-        if (done_) {
+        if (done_->load()) {
           co_return;
         }
         accept_error = ex.what();
@@ -355,7 +357,7 @@ private:
           .emit(dh);
         co_await folly::coro::sleep(accept_retry_delay);
       }
-      if (done_) {
+      if (done_->load()) {
         co_return;
       }
     }
@@ -375,7 +377,7 @@ private:
   uint64_t max_connections_ = 128;
   bool finalize_started_ = false;
   bool subpipeline_finished_ = false;
-  bool done_ = false;
+  Box<std::atomic_bool> done_{std::in_place, false};
 };
 
 class ServeTcpPlugin final : public OperatorPlugin {

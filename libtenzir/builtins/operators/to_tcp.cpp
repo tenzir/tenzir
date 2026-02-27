@@ -287,10 +287,8 @@ private:
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
   mutable Box<MessageQueue> control_queue_{std::in_place,
                                            control_queue_capacity};
-  std::shared_ptr<std::atomic_bool> connect_scheduled_
-    = std::make_shared<std::atomic_bool>(false);
-  std::shared_ptr<std::atomic_bool> done_
-    = std::make_shared<std::atomic_bool>(false);
+  Box<std::atomic_bool> connect_scheduled_{std::in_place, false};
+  Box<std::atomic_bool> done_{std::in_place, false};
 };
 
 class ToTcpPlugin final : public OperatorPlugin {
