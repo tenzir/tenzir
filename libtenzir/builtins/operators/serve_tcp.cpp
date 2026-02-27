@@ -40,6 +40,8 @@ constexpr auto listen_backlog = uint32_t{128};
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 constexpr auto wait_for_client_retry_delay = std::chrono::milliseconds{10};
 constexpr auto wait_for_client_timeout = std::chrono::seconds{2};
+constexpr auto client_probe_interval = std::chrono::seconds{1};
+constexpr auto client_probe_timeout = std::chrono::milliseconds{1};
 constexpr auto write_timeout = std::chrono::seconds{5};
 constexpr auto write_queue_capacity = uint32_t{256};
 constexpr auto client_queue_capacity = uint32_t{256};
@@ -222,11 +224,67 @@ private:
     }
   }
 
+  auto probe_clients(std::vector<Client>& clients) -> Task<void> {
+    for (auto it = clients.begin(); it != clients.end();) {
+      auto peer = (*it)->getPeerAddress().describe();
+      auto disconnected = false;
+      try {
+        folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
+        auto bytes = co_await (*it)->read(buf, 1, 1, client_probe_timeout);
+        disconnected = bytes == 0;
+      } catch (folly::OperationCancelled const&) {
+        // Cancellation is part of normal shutdown.
+        co_return;
+      } catch (folly::AsyncSocketException const& ex) {
+        if (ex.getType() == folly::AsyncSocketException::TIMED_OUT) {
+          ++it;
+          continue;
+        }
+        TENZIR_DEBUG("dropping client {} after probe error: {}", peer,
+                     ex.what());
+        disconnected = true;
+      }
+      if (disconnected) {
+        TENZIR_DEBUG("dropping disconnected client {}", peer);
+        active_clients_->fetch_sub(1, std::memory_order_relaxed);
+        it = clients.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
   auto write_loop(diagnostic_handler& dh) -> Task<void> {
     auto clients = std::vector<Client>{};
     auto client_wait_deadline = Option<std::chrono::steady_clock::time_point>{};
+    auto next_client_probe_at
+      = std::chrono::steady_clock::now() + client_probe_interval;
     while (true) {
-      auto next = co_await write_queue_->dequeue();
+      auto next = Option<chunk_ptr>{};
+      auto now = std::chrono::steady_clock::now();
+      auto wait_for_input
+        = std::max(std::chrono::milliseconds{0},
+                   std::chrono::duration_cast<std::chrono::milliseconds>(
+                     next_client_probe_at - now));
+      if (wait_for_input == std::chrono::milliseconds{0}) {
+        co_await probe_clients(clients);
+        next_client_probe_at
+          = std::chrono::steady_clock::now() + client_probe_interval;
+        continue;
+      }
+      auto probe_due = false;
+      try {
+        next = co_await folly::coro::timeout(write_queue_->dequeue(),
+                                             wait_for_input);
+      } catch (folly::FutureTimeout const&) {
+        probe_due = true;
+      }
+      if (probe_due) {
+        co_await probe_clients(clients);
+        next_client_probe_at
+          = std::chrono::steady_clock::now() + client_probe_interval;
+        continue;
+      }
       if (done_ or not next) {
         break;
       }
@@ -260,6 +318,8 @@ private:
       }
       client_wait_deadline = None{};
       co_await write_chunk_to_clients(std::move(chunk), clients, dh);
+      next_client_probe_at
+        = std::chrono::steady_clock::now() + client_probe_interval;
     }
     if (not clients.empty()) {
       active_clients_->fetch_sub(detail::narrow<uint64_t>(clients.size()),
