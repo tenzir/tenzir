@@ -1,0 +1,6 @@
+{
+  outer: {
+    "outer.new": 1,
+    keep: 2,
+  },
+}

@@ -1,0 +1,7 @@
+from {
+  outer: {
+    old: 1,
+    keep: 2,
+  },
+}
+rename outer.new=outer.old
