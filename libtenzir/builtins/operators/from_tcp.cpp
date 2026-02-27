@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/tls.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -156,7 +157,7 @@ public:
     if (not message) {
       co_return;
     }
-    co_await match(
+    co_await co_match(
       std::move(*message),
       [&](Connected connected) -> Task<void> {
         auto transport = std::move(connected.transport);
