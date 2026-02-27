@@ -38,8 +38,7 @@ constexpr auto connect_timeout = std::chrono::seconds{5};
 constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5000};
 constexpr auto write_timeout = std::chrono::seconds{5};
-constexpr auto write_queue_capacity = uint32_t{256};
-using WriteQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
+constexpr auto control_queue_capacity = uint32_t{64};
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -49,6 +48,11 @@ struct ToTcpArgs {
 
 class ToTcp final : public Operator<table_slice, void> {
 public:
+  struct EnsureConnected {};
+  struct Wakeup {};
+  using Message = variant<EnsureConnected, Wakeup>;
+  using MessageQueue = folly::coro::BoundedQueue<Message>;
+
   explicit ToTcp(ToTcpArgs args) : args_{std::move(args)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -80,7 +84,7 @@ public:
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
                                       tag_v<table_slice>);
     TENZIR_UNUSED(sub);
-    write_task_ = ctx.spawn_task(write_loop(ctx.dh()));
+    co_await ensure_connected(ctx.dh());
     co_return;
   }
 
@@ -100,21 +104,76 @@ public:
     }
   }
 
-  auto process_sub(SubKeyView, table_slice, OpCtx& ctx) -> Task<void> override {
-    diagnostic::error("subpipeline for `to_tcp` must return bytes")
-      .primary(args_.printer.source.subloc(0, 1))
-      .emit(ctx);
-    request_stop();
-    co_return;
-  }
-
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(ctx);
     if (done_ or not chunk or chunk->size() == 0) {
       co_return;
     }
-    co_await write_queue_->enqueue(Option{std::move(chunk)});
+    auto data = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(chunk->data()),
+      chunk->size(),
+    };
+    if (not transport_) {
+      request_connect();
+      co_return;
+    }
+    try {
+      co_await folly::coro::timeout(
+        folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
+        write_timeout);
+      reconnect_backoff_ = connect_initial_backoff;
+      co_return;
+    } catch (folly::OperationCancelled const&) {
+      // Cancellation is part of normal shutdown.
+      co_return;
+    } catch (folly::FutureTimeout const& ex) {
+      if (done_) {
+        co_return;
+      }
+      diagnostic::warning("failed to write to {}", address_.describe())
+        .primary(args_.endpoint.source)
+        .note("reason: {}", ex.what())
+        .note("dropping the current connection and retrying")
+        .emit(ctx);
+      transport_ = None{};
+      request_connect();
+      co_return;
+    } catch (folly::AsyncSocketException const& ex) {
+      if (done_) {
+        co_return;
+      }
+      diagnostic::warning("failed to write to {}", address_.describe())
+        .primary(args_.endpoint.source)
+        .note("reason: {}", ex.what())
+        .note("dropping the current connection and retrying")
+        .emit(ctx);
+      transport_ = None{};
+      request_connect();
+      co_return;
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_) {
+      co_return {};
+    }
+    co_return co_await control_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    if (done_) {
+      co_return;
+    }
+    auto* message = result.try_as<Message>();
+    if (not message) {
+      co_return;
+    }
+    if (std::holds_alternative<EnsureConnected>(*message)) {
+      connect_scheduled_ = false;
+      co_await ensure_connected(ctx.dh());
+    }
+    co_return;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -123,12 +182,13 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (write_task_) {
-      co_await write_queue_->enqueue(None{});
-      co_await write_task_->join();
-      write_task_ = None{};
-    }
-    done_ = true;
+    request_stop();
+    co_return;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    request_stop();
     co_return;
   }
 
@@ -137,8 +197,11 @@ public:
   }
 
 private:
-  auto connect(diagnostic_handler& dh) -> Task<void> {
+  auto ensure_connected(diagnostic_handler& dh) -> Task<void> {
     while (not done_) {
+      if (transport_) {
+        co_return;
+      }
       auto connect_error = Option<std::string>{};
       try {
         auto transport = co_await folly::coro::co_withExecutor(
@@ -148,8 +211,13 @@ private:
         if (tls_context_) {
           co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
         }
-        transport_ = std::move(boxed);
-        reconnect_backoff_ = connect_initial_backoff;
+        if (done_) {
+          co_return;
+        }
+        if (not transport_) {
+          transport_ = std::move(boxed);
+          reconnect_backoff_ = connect_initial_backoff;
+        }
         co_return;
       } catch (folly::OperationCancelled const&) {
         // Cancellation is part of normal shutdown.
@@ -179,73 +247,20 @@ private:
     }
   }
 
-  auto write_loop(diagnostic_handler& dh) -> Task<void> {
-    while (true) {
-      auto next = co_await write_queue_->dequeue();
-      if (not next) {
-        break;
-      }
-      auto chunk = std::move(*next);
-      if (not chunk or chunk->size() == 0) {
-        continue;
-      }
-      while (not done_) {
-        if (not transport_) {
-          co_await connect(dh);
-          if (done_ or not transport_) {
-            break;
-          }
-        }
-        auto data = folly::ByteRange{
-          reinterpret_cast<unsigned char const*>(chunk->data()),
-          chunk->size(),
-        };
-        try {
-          co_await folly::coro::timeout(
-            folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
-            write_timeout);
-          reconnect_backoff_ = connect_initial_backoff;
-          break;
-        } catch (folly::OperationCancelled const&) {
-          // Cancellation is part of normal shutdown.
-          co_return;
-        } catch (folly::FutureTimeout const& ex) {
-          // Slow or stalled peers are expected in production; drop and
-          // reconnect this transport only.
-          if (done_) {
-            break;
-          }
-          diagnostic::warning("failed to write to {}", address_.describe())
-            .primary(args_.endpoint.source)
-            .note("reason: {}", ex.what())
-            .note("dropping the current connection and retrying")
-            .emit(dh);
-          transport_ = None{};
-        } catch (folly::AsyncSocketException const& ex) {
-          // Socket write failures are connection-scoped; reconnect and
-          // continue processing queued output.
-          if (done_) {
-            break;
-          }
-          diagnostic::warning("failed to write to {}", address_.describe())
-            .primary(args_.endpoint.source)
-            .note("reason: {}", ex.what())
-            .note("dropping the current connection and retrying")
-            .emit(dh);
-          transport_ = None{};
-        }
-      }
-    }
-    transport_ = None{};
-    done_ = true;
-  }
-
   auto request_stop() -> void {
     if (done_) {
       return;
     }
     done_ = true;
-    TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
+    TENZIR_UNUSED(control_queue_->try_enqueue(Wakeup{}));
+  }
+
+  auto request_connect() -> void {
+    if (done_ or transport_ or connect_scheduled_) {
+      return;
+    }
+    connect_scheduled_ = true;
+    TENZIR_UNUSED(control_queue_->try_enqueue(EnsureConnected{}));
   }
 
   ToTcpArgs args_;
@@ -257,8 +272,9 @@ private:
   folly::EventBase* evb_ = nullptr;
   Option<Box<folly::coro::Transport>> transport_;
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
-  Box<WriteQueue> write_queue_{std::in_place, write_queue_capacity};
-  Option<AsyncHandle<void>> write_task_;
+  mutable Box<MessageQueue> control_queue_{std::in_place,
+                                           control_queue_capacity};
+  bool connect_scheduled_ = false;
   bool done_ = false;
 };
 

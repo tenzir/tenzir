@@ -32,7 +32,8 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-#include <unordered_map>
+#include <limits>
+#include <unordered_set>
 
 namespace tenzir::plugins::accept_tcp {
 
@@ -56,10 +57,6 @@ public:
   struct Accepted {
     Box<folly::coro::Transport> transport;
   };
-  struct ReadChunk {
-    uint64_t conn_id;
-    chunk_ptr chunk;
-  };
   struct ConnectionClosed {
     uint64_t conn_id;
   };
@@ -67,8 +64,7 @@ public:
     uint64_t conn_id;
     std::string error;
   };
-  using Message
-    = variant<Accepted, ReadChunk, ConnectionClosed, ConnectionError>;
+  using Message = variant<Accepted, ConnectionClosed, ConnectionError>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   AcceptTcpListener(AcceptTcpArgs args)
@@ -141,7 +137,7 @@ public:
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
         auto peer_addr = transport->getPeerAddress();
-        if (connections_.size() >= max_connections_) {
+        if (active_connections_.size() >= max_connections_) {
           diagnostic::warning(
             "connection rejected: maximum number of connections reached")
             .primary(endpoint_source_)
@@ -186,28 +182,21 @@ public:
         if (not sub_result) {
           co_return;
         }
+        auto key = sub_key_for(conn_id);
         auto sub = co_await ctx.spawn_sub(
-          data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
+          std::move(key), std::move(pipeline_copy), tag_v<chunk_ptr>);
         auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
-        connections_.emplace(conn_id, std::move(open_pipeline));
+        active_connections_.emplace(conn_id);
         ctx.spawn_task(folly::coro::co_withExecutor(
-          transport_evb, read_loop(conn_id, std::move(transport),
-                                   *message_queue_, std::move(bytes_read))));
-      },
-      [&](ReadChunk read_chunk) -> Task<void> {
-        if (auto it = connections_.find(read_chunk.conn_id);
-            it != connections_.end()) {
-          if ((co_await it->second.push(std::move(read_chunk.chunk))).is_err()) {
-            connections_.erase(it);
-          }
-        }
+          transport_evb,
+          read_loop(conn_id, std::move(transport), std::move(open_pipeline),
+                    *message_queue_, std::move(bytes_read))));
       },
       [&](ConnectionClosed closed) -> Task<void> {
-        if (auto it = connections_.find(closed.conn_id);
-            it != connections_.end()) {
-          co_await it->second.close();
-          connections_.erase(it);
+        if (active_connections_.erase(closed.conn_id) == 1) {
+          co_await close_subpipeline(closed.conn_id, ctx);
         }
+        co_return;
       },
       [&](ConnectionError error) -> Task<void> {
         diagnostic::warning("connection closed after read error")
@@ -215,11 +204,10 @@ public:
           .note("connection id: {}", error.conn_id)
           .note("reason: {}", error.error)
           .emit(ctx);
-        if (auto it = connections_.find(error.conn_id);
-            it != connections_.end()) {
-          co_await it->second.close();
-          connections_.erase(it);
+        if (active_connections_.erase(error.conn_id) == 1) {
+          co_await close_subpipeline(error.conn_id, ctx);
         }
+        co_return;
       });
   }
 
@@ -228,6 +216,21 @@ public:
   }
 
 private:
+  static auto sub_key_for(uint64_t conn_id) -> data {
+    TENZIR_ASSERT(
+      conn_id <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
+    return data{int64_t{static_cast<int64_t>(conn_id)}};
+  }
+
+  static auto close_subpipeline(uint64_t conn_id, OpCtx& ctx) -> Task<void> {
+    auto key = sub_key_for(conn_id);
+    if (auto sub = ctx.get_sub(make_view(key))) {
+      auto pipeline = as<OpenPipeline<chunk_ptr>>(*sub);
+      co_await pipeline.close();
+    }
+    co_return;
+  }
+
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
@@ -258,13 +261,14 @@ private:
     }
   }
 
-  static auto read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
-                        MessageQueue& message_queue,
-                        MetricsCounter bytes_counter) -> Task<void> {
+  static auto
+  read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
+            OpenPipeline<chunk_ptr> pipeline, MessageQueue& message_queue,
+            MetricsCounter bytes_counter) -> Task<void> {
+    auto read_error = Option<std::string>{};
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
-      auto read_error = std::string{};
       try {
         bytes = co_await transport->read(
           buf, 1, buffer_size,
@@ -279,10 +283,8 @@ private:
         }
         read_error = e.what();
       }
-      if (not read_error.empty()) {
-        co_await message_queue.enqueue(ConnectionError{conn_id, read_error});
-        co_await message_queue.enqueue(ConnectionClosed{conn_id});
-        co_return;
+      if (read_error) {
+        break;
       }
       if (bytes == 0) {
         break;
@@ -297,7 +299,13 @@ private:
         data.insert(data.end(), begin, begin + range.size());
       }
       auto chk = chunk::make(std::move(data));
-      co_await message_queue.enqueue(ReadChunk{conn_id, std::move(chk)});
+      if ((co_await pipeline.push(std::move(chk))).is_err()) {
+        read_error = "subpipeline input was closed unexpectedly";
+        break;
+      }
+    }
+    if (read_error) {
+      co_await message_queue.enqueue(ConnectionError{conn_id, *read_error});
     }
     co_await message_queue.enqueue(ConnectionClosed{conn_id});
   }
@@ -314,7 +322,7 @@ private:
     std::in_place,
     message_queue_capacity,
   };
-  std::unordered_map<uint64_t, OpenPipeline<chunk_ptr>> connections_;
+  std::unordered_set<uint64_t> active_connections_;
   uint64_t max_connections_ = 128;
   bool done_ = false;
   mutable uint64_t next_conn_id_{0};
