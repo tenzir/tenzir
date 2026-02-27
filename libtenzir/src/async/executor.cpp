@@ -434,6 +434,10 @@ private:
     return exec_ctx_.metrics();
   }
 
+  auto metrics_receiver() const -> metrics_receiver_actor override {
+    return exec_ctx_.metrics_receiver();
+  }
+
   auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>> override {
     // All secrets that must be resolved by the node/platform.

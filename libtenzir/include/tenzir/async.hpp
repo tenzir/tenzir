@@ -41,6 +41,7 @@
 
 #pragma once
 
+#include "tenzir/actors.hpp"
 #include "tenzir/any.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
@@ -152,6 +153,11 @@ public:
   virtual auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
     static auto empty = std::shared_ptr<PipelineMetrics>{};
     return empty;
+  }
+
+  /// Returns the metrics receiver actor handle, if available.
+  virtual auto metrics_receiver() const -> metrics_receiver_actor {
+    return {};
   }
 };
 
