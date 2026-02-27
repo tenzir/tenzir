@@ -29,6 +29,8 @@
 #include <folly/io/coro/Transport.h>
 
 #include <algorithm>
+#include <atomic>
+#include <memory>
 
 namespace tenzir::plugins::to_tcp {
 
@@ -89,7 +91,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
@@ -106,7 +108,7 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (done_ or not chunk or chunk->size() == 0) {
+    if (done_->load() or not chunk or chunk->size() == 0) {
       co_return;
     }
     auto data = folly::ByteRange{
@@ -114,7 +116,13 @@ public:
       chunk->size(),
     };
     if (not transport_) {
-      request_connect();
+      diagnostic::warning("connection to {} is not established",
+                          address_.describe())
+        .primary(args_.endpoint.source)
+        .note("stopping to avoid dropping output bytes")
+        .hint("restart once the TCP endpoint is reachable")
+        .emit(ctx);
+      request_stop();
       co_return;
     }
     try {
@@ -127,42 +135,42 @@ public:
       // Cancellation is part of normal shutdown.
       co_return;
     } catch (folly::FutureTimeout const& ex) {
-      if (done_) {
+      if (done_->load()) {
         co_return;
       }
       diagnostic::warning("failed to write to {}", address_.describe())
         .primary(args_.endpoint.source)
         .note("reason: {}", ex.what())
-        .note("dropping the current connection and retrying")
+        .note("stopping to avoid dropping output bytes")
         .emit(ctx);
       transport_ = None{};
-      request_connect();
+      request_stop();
       co_return;
     } catch (folly::AsyncSocketException const& ex) {
-      if (done_) {
+      if (done_->load()) {
         co_return;
       }
       diagnostic::warning("failed to write to {}", address_.describe())
         .primary(args_.endpoint.source)
         .note("reason: {}", ex.what())
-        .note("dropping the current connection and retrying")
+        .note("stopping to avoid dropping output bytes")
         .emit(ctx);
       transport_ = None{};
-      request_connect();
+      request_stop();
       co_return;
     }
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (done_) {
+    if (done_->load()) {
       co_return {};
     }
     co_return co_await control_queue_->dequeue();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     auto* message = result.try_as<Message>();
@@ -170,7 +178,7 @@ public:
       co_return;
     }
     if (std::holds_alternative<EnsureConnected>(*message)) {
-      connect_scheduled_ = false;
+      connect_scheduled_->store(false);
       co_await ensure_connected(ctx.dh());
     }
     co_return;
@@ -193,12 +201,12 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return done_->load() ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
   auto ensure_connected(diagnostic_handler& dh) -> Task<void> {
-    while (not done_) {
+    while (not done_->load()) {
       if (transport_) {
         co_return;
       }
@@ -211,7 +219,7 @@ private:
         if (tls_context_) {
           co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
         }
-        if (done_) {
+        if (done_->load()) {
           co_return;
         }
         if (not transport_) {
@@ -225,13 +233,13 @@ private:
       } catch (folly::AsyncSocketException const& ex) {
         // Connect/TLS handshake failures are per-attempt network errors; keep
         // retrying with backoff instead of failing the whole operator.
-        if (done_) {
+        if (done_->load()) {
           co_return;
         }
         connect_error = ex.what();
       }
       if (connect_error) {
-        if (done_) {
+        if (done_->load()) {
           co_return;
         }
         diagnostic::warning("failed to connect to {}", address_.describe())
@@ -248,19 +256,24 @@ private:
   }
 
   auto request_stop() -> void {
-    if (done_) {
+    if (done_->exchange(true)) {
       return;
     }
-    done_ = true;
+    connect_scheduled_->store(false);
     TENZIR_UNUSED(control_queue_->try_enqueue(Wakeup{}));
   }
 
   auto request_connect() -> void {
-    if (done_ or transport_ or connect_scheduled_) {
+    if (done_->load() or transport_) {
       return;
     }
-    connect_scheduled_ = true;
-    TENZIR_UNUSED(control_queue_->try_enqueue(EnsureConnected{}));
+    auto expected = false;
+    if (not connect_scheduled_->compare_exchange_strong(expected, true)) {
+      return;
+    }
+    if (not control_queue_->try_enqueue(EnsureConnected{})) {
+      connect_scheduled_->store(false);
+    }
   }
 
   ToTcpArgs args_;
@@ -274,8 +287,10 @@ private:
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
   mutable Box<MessageQueue> control_queue_{std::in_place,
                                            control_queue_capacity};
-  bool connect_scheduled_ = false;
-  bool done_ = false;
+  std::shared_ptr<std::atomic_bool> connect_scheduled_
+    = std::make_shared<std::atomic_bool>(false);
+  std::shared_ptr<std::atomic_bool> done_
+    = std::make_shared<std::atomic_bool>(false);
 };
 
 class ToTcpPlugin final : public OperatorPlugin {

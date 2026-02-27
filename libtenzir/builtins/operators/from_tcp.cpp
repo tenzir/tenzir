@@ -163,6 +163,7 @@ public:
         auto transport = std::move(connected.transport);
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
+        auto tls_backoff = Option<std::chrono::milliseconds>{};
         if (tls_context_) {
           try {
             co_await upgrade_transport_to_tls_client(transport, tls_context_,
@@ -177,8 +178,19 @@ public:
               .hint("verify TLS settings and certificates on both sides")
               .emit(ctx);
             connection_active_ = false;
+            tls_backoff = reconnect_backoff_;
+            reconnect_backoff_
+              = std::min(reconnect_backoff_ * 2, connect_max_backoff);
+          }
+        }
+        if (tls_backoff) {
+          try {
+            co_await folly::coro::sleep(*tls_backoff);
+          } catch (const folly::OperationCancelled&) {
+            // Cancellation is part of normal shutdown.
             co_return;
           }
+          co_return;
         }
         auto peer_addr = transport->getPeerAddress();
         auto peer_record = record{

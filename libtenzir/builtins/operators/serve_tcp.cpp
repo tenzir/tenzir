@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
@@ -124,6 +125,7 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
+    auto guard = co_await clients_mutex_->lock();
     if (done_ or not chunk or chunk->size() == 0 or clients_.empty()) {
       co_return;
     }
@@ -230,7 +232,6 @@ private:
     if (server_) {
       server_->close();
     }
-    clients_.clear();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
   }
 
@@ -267,8 +268,8 @@ private:
   }
 
   auto add_client(Client client, diagnostic_handler& dh) -> Task<void> {
-    if (clients_.size() >= max_connections_) {
-      auto peer = client->getPeerAddress().describe();
+    auto peer = client->getPeerAddress().describe();
+    auto reject_max_connections = [&]() {
       diagnostic::warning(
         "connection rejected: maximum number of connections reached")
         .primary(args_.endpoint.source)
@@ -277,7 +278,16 @@ private:
         .hint("increase `max_connections` if this level of concurrency is "
               "expected")
         .emit(dh);
-      co_return;
+    };
+    {
+      auto guard = co_await clients_mutex_->lock();
+      if (done_) {
+        co_return;
+      }
+      if (clients_.size() >= max_connections_) {
+        reject_max_connections();
+        co_return;
+      }
     }
     if (tls_context_) {
       try {
@@ -295,6 +305,14 @@ private:
           .emit(dh);
         co_return;
       }
+    }
+    auto guard = co_await clients_mutex_->lock();
+    if (done_) {
+      co_return;
+    }
+    if (clients_.size() >= max_connections_) {
+      reject_max_connections();
+      co_return;
     }
     TENZIR_DEBUG("accepted client {}", client->getPeerAddress().describe());
     clients_.push_back(std::move(client));
@@ -352,6 +370,7 @@ private:
   std::unique_ptr<folly::coro::ServerSocket> server_;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
+  std::shared_ptr<RawMutex> clients_mutex_ = std::make_shared<RawMutex>();
   std::vector<Client> clients_;
   uint64_t max_connections_ = 128;
   bool finalize_started_ = false;
