@@ -22,6 +22,7 @@
 
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
@@ -29,6 +30,8 @@
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
+
+#include <ranges>
 
 namespace tenzir::plugins::serve_tcp {
 
@@ -119,14 +122,6 @@ public:
     }
   }
 
-  auto process_sub(SubKeyView, table_slice, OpCtx& ctx) -> Task<void> override {
-    diagnostic::error("subpipeline for `serve_tcp` must return bytes")
-      .primary(args_.printer.source.subloc(0, 1))
-      .emit(ctx);
-    request_stop();
-    co_return;
-  }
-
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
     if (done_ or not chunk or chunk->size() == 0 or clients_.empty()) {
@@ -136,39 +131,35 @@ public:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    for (auto it = clients_.begin(); it != clients_.end();) {
-      try {
-        co_await folly::coro::timeout(
-          folly::coro::co_withExecutor(evb_, (*it)->write(data)),
-          write_timeout);
-        ++it;
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        co_return;
-      } catch (folly::FutureTimeout const& ex) {
-        // Slow or stalled clients are expected in production; drop only the
-        // affected connection and continue serving others.
-        auto peer = (*it)->getPeerAddress().describe();
-        diagnostic::warning("failed to write to client {}", peer)
-          .primary(args_.endpoint.source)
-          .note("reason: {}", ex.what())
-          .note(
-            "dropping this client and continuing with remaining connections")
-          .emit(ctx);
-        it = clients_.erase(it);
-      } catch (folly::AsyncSocketException const& ex) {
-        // Socket write failures are client-scoped; drop this client and keep
-        // the listener/writer running.
-        auto peer = (*it)->getPeerAddress().describe();
-        diagnostic::warning("failed to write to client {}", peer)
-          .primary(args_.endpoint.source)
-          .note("reason: {}", ex.what())
-          .note(
-            "dropping this client and continuing with remaining connections")
-          .emit(ctx);
-        it = clients_.erase(it);
-      }
+    auto write_tasks = std::vector<Task<Option<diagnostic>>>{};
+    write_tasks.reserve(clients_.size());
+    for (auto& client : clients_) {
+      write_tasks.push_back(write_to_client(client, data));
     }
+    auto diagnostics = std::vector<Option<diagnostic>>{};
+    try {
+      diagnostics
+        = co_await folly::coro::collectAllRange(std::move(write_tasks));
+    } catch (folly::OperationCancelled const&) {
+      co_return; // Cancellation is part of normal shutdown.
+    }
+    TENZIR_ASSERT(diagnostics.size() == clients_.size());
+    auto current = clients_.begin();
+    auto keep = clients_.begin();
+    for (auto&& [client, diagnostic] : std::views::zip(clients_, diagnostics)) {
+      TENZIR_ASSERT(current != clients_.end());
+      if (diagnostic) {
+        ctx.dh().emit(std::move(*diagnostic));
+      } else {
+        if (keep != current) {
+          *keep = std::move(client);
+        }
+        ++keep;
+      }
+      ++current;
+    }
+    TENZIR_ASSERT(current == clients_.end());
+    clients_.erase(keep, clients_.end());
     co_return;
   }
 
@@ -241,6 +232,31 @@ private:
     }
     clients_.clear();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+  }
+
+  auto write_to_client(Client& client, folly::ByteRange data)
+    -> Task<Option<diagnostic>> {
+    try {
+      co_await folly::coro::timeout(
+        folly::coro::co_withExecutor(evb_, client->write(data)), write_timeout);
+      co_return None{};
+    } catch (folly::FutureTimeout const& ex) {
+      auto peer = client->getPeerAddress().describe();
+      co_return Option{diagnostic::warning("failed to write to client {}", peer)
+                         .primary(args_.endpoint.source)
+                         .note("reason: {}", ex.what())
+                         .note("dropping this client and continuing with "
+                               "remaining connections")
+                         .done()};
+    } catch (folly::AsyncSocketException const& ex) {
+      auto peer = client->getPeerAddress().describe();
+      co_return Option{diagnostic::warning("failed to write to client {}", peer)
+                         .primary(args_.endpoint.source)
+                         .note("reason: {}", ex.what())
+                         .note("dropping this client and continuing with "
+                               "remaining connections")
+                         .done()};
+    }
   }
 
   auto maybe_finish() -> void {
