@@ -46,6 +46,10 @@ you need to define a destructor because no RAII type is easily available, make
 sure to `= delete` the copy operations and `= default` the move operations of the
 operator class.
 
+### Variant Dispatch in Coroutines
+
+Use `co_match` instead of `match` — see `variant-access.md`.
+
 ## Patterns
 
 ### Streaming (head, filter)

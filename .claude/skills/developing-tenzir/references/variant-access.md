@@ -33,6 +33,30 @@ auto result = match(
 );
 ```
 
+## `co_match` for Async Dispatch
+
+When variant dispatch happens inside a coroutine and handlers return `Task<>`,
+use `co_match` instead of `match`:
+
+```cpp
+#include <tenzir/co_match.hpp>
+
+co_await co_match(
+  std::move(msg),
+  [&](ScanComplete& scan) -> Task<void> {
+    // async handler…
+    co_return;
+  },
+  [&](ReadComplete& read) -> Task<void> {
+    // async handler…
+    co_return;
+  },
+);
+```
+
+Use `co_match` when handlers return `Task<>` (async) and `match` for pure value
+transforms (sync). Never `co_await match(...)`.
+
 ## Applicable Types
 
 Types with `variant_traits` that support `is`, `as`, `try_as`, and `match`:
