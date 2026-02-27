@@ -1108,6 +1108,9 @@ private:
           co_return;
         }
         co_await it->second.handle.send(Shutdown{});
+        // Ensure the subpipeline runner can observe upstream closure and
+        // actually terminate after handling Shutdown.
+        it->second.handle.close_push();
         co_return;
       },
       [&](SubPipelineTerminated) -> Task<void> {
