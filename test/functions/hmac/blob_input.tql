@@ -1,0 +1,2 @@
+from {payload: decode_hex("68656c6c6f"), key: "secret"}
+select digest = hmac(payload, key)

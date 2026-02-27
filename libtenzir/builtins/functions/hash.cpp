@@ -20,6 +20,7 @@
 #include <tenzir/detail/coding.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/type_traits.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/concepts.hpp>
 #include <tenzir/hash/hash_append.hpp>
@@ -33,6 +34,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/array/array_binary.h>
 #include <arrow/scalar.h>
 #include <fmt/format.h>
 
@@ -266,9 +268,153 @@ class fun : public virtual function_plugin {
   }
 };
 
+enum class hmac_algorithm {
+  sha256,
+  sha512,
+  sha384,
+  sha1,
+  md5,
+};
+
+auto parse_hmac_algorithm(std::string_view algorithm)
+  -> std::optional<hmac_algorithm> {
+  if (algorithm == "sha256") {
+    return hmac_algorithm::sha256;
+  }
+  if (algorithm == "sha512") {
+    return hmac_algorithm::sha512;
+  }
+  if (algorithm == "sha384") {
+    return hmac_algorithm::sha384;
+  }
+  if (algorithm == "sha1") {
+    return hmac_algorithm::sha1;
+  }
+  if (algorithm == "md5") {
+    return hmac_algorithm::md5;
+  }
+  return std::nullopt;
+}
+
+template <class Hmac>
+auto hmac_digest(const data_view& data, std::span<const std::byte> key)
+  -> std::string {
+  auto mac = Hmac{key};
+  auto f = detail::overload{
+    [&](std::string_view str) {
+      mac.add(as_bytes(str));
+    },
+    [&](blob_view blob) {
+      mac.add(blob);
+    },
+    [&](const auto& value) {
+      hash_append(mac, value);
+    },
+  };
+  match(data, f);
+  return detail::hexify(as_bytes(mac.finish()));
+}
+
+auto compute_hmac(const data_view& data, std::span<const std::byte> key,
+                  hmac_algorithm algorithm) -> std::string {
+  switch (algorithm) {
+    case hmac_algorithm::sha256:
+      return hmac_digest<tenzir::hmac_sha256>(data, key);
+    case hmac_algorithm::sha512:
+      return hmac_digest<tenzir::hmac_sha512>(data, key);
+    case hmac_algorithm::sha384:
+      return hmac_digest<tenzir::hmac_sha384>(data, key);
+    case hmac_algorithm::sha1:
+      return hmac_digest<tenzir::hmac_sha1>(data, key);
+    case hmac_algorithm::md5:
+      return hmac_digest<tenzir::hmac_md5>(data, key);
+  }
+  TENZIR_UNREACHABLE();
+}
+
+class hmac final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "hmac";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto data = ast::expression{};
+    auto key = ast::expression{};
+    auto algorithm = located<std::string>{"sha256", location::unknown};
+    TRY(argument_parser2::function(name())
+          .positional("data", data, "any")
+          .positional("key", key, "string")
+          .named_optional("algorithm", algorithm)
+          .parse(inv, ctx));
+    auto parsed_algorithm = parse_hmac_algorithm(algorithm.inner);
+    if (not parsed_algorithm) {
+      diagnostic::error("`algorithm` must be one of "
+                        "`sha256`, `sha512`, `sha384`, `sha1`, `md5`")
+        .primary(algorithm)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make(
+      [data = std::move(data), key = std::move(key),
+       algorithm = *parsed_algorithm](evaluator eval, session ctx) {
+        return map_series(eval(data), eval(key), [&](series data_values,
+                                                     series key_values)
+                            -> multi_series {
+          TENZIR_ASSERT(data_values.length() == key_values.length());
+          auto builder = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+          check(builder.Reserve(data_values.length()));
+          auto f = detail::overload{
+            [&]<class DataArray>(const DataArray& data_array,
+                                 const arrow::StringArray& key_array) {
+              for (auto i = int64_t{0}; i < data_array.length(); ++i) {
+                if (key_array.IsNull(i)) {
+                  check(builder.AppendNull());
+                  continue;
+                }
+                auto value = value_at(data_values.type,
+                                      static_cast<const arrow::Array&>(data_array), i);
+                if (is<caf::none_t>(value)) {
+                  check(builder.AppendNull());
+                  continue;
+                }
+                auto digest = compute_hmac(value, as_bytes(key_array.GetView(i)),
+                                           algorithm);
+                check(builder.Append(digest));
+              }
+            },
+            [&]<class DataArray>(const DataArray& data_array,
+                                 const arrow::NullArray&) {
+              check(builder.AppendNulls(data_array.length()));
+            },
+            [&]<class DataArray, class KeyArray>(
+              const DataArray& data_array,
+              const KeyArray&) -> void {
+              if constexpr (not detail::is_any_v<KeyArray, arrow::NullArray>) {
+                diagnostic::warning("expected `string`, but got `{}`",
+                                    key_values.type.kind())
+                  .primary(key)
+                  .emit(ctx);
+              }
+              check(builder.AppendNulls(data_array.length()));
+            },
+          };
+          match(std::tie(*data_values.array, *key_values.array), f);
+          return series{string_type{}, finish(builder)};
+        });
+      });
+  }
+};
+
 } // namespace tenzir::plugins::hash
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::hmac)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::md5, "md5">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha1, "sha1">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha224, "sha224">)
