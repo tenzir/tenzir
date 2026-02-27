@@ -227,6 +227,11 @@ public:
     TENZIR_UNUSED(type);
   }
 
+  /// Returns the metrics receiver actor handle, if available.
+  virtual auto metrics_receiver() const -> metrics_receiver_actor {
+    return {};
+  }
+
   auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
     return metrics_;
   }

@@ -923,6 +923,10 @@ public:
     return op_type_names_;
   }
 
+  auto metrics_receiver() const -> metrics_receiver_actor override {
+    return targets_.metrics;
+  }
+
   void emit_metrics(time now) {
     if (targets_.metrics) {
       auto entries = metrics()->take_snapshot();
