@@ -19,6 +19,8 @@ from ._utils import find_free_port, generate_self_signed_cert
 _HOST = "127.0.0.1"
 _COMMON_NAME = "tenzir-node.example.org"
 _CLIENT_RETRY_DELAY = 0.01
+_ASSERTION_WAIT_TIMEOUT = 2.0
+_ASSERTION_WAIT_INTERVAL = 0.01
 
 
 @dataclass(frozen=True)
@@ -130,28 +132,46 @@ def tcp() -> FixtureHandle:
     ) -> None:
         if isinstance(assertions, dict):
             assertions = TcpAssertions(**assertions)
-        with state.lock:
-            server_received = state.server_received.decode("utf-8", errors="replace")
-            client_received = state.client_received.decode("utf-8", errors="replace")
-            server_sent = state.server_sent.decode("utf-8", errors="replace")
-        if assertions.server_received_contains is not None:
-            if assertions.server_received_contains not in server_received:
-                raise AssertionError(
+        deadline = time.monotonic() + _ASSERTION_WAIT_TIMEOUT
+        while True:
+            with state.lock:
+                server_received = state.server_received.decode(
+                    "utf-8", errors="replace"
+                )
+                client_received = state.client_received.decode(
+                    "utf-8", errors="replace"
+                )
+                server_sent = state.server_sent.decode("utf-8", errors="replace")
+            missing_message = None
+            if (
+                assertions.server_received_contains is not None
+                and assertions.server_received_contains not in server_received
+            ):
+                missing_message = (
                     f"{test.name}: expected fixture server capture to contain "
                     f"{assertions.server_received_contains!r}, got {server_received!r}"
                 )
-        if assertions.client_received_contains is not None:
-            if assertions.client_received_contains not in client_received:
-                raise AssertionError(
+            elif (
+                assertions.client_received_contains is not None
+                and assertions.client_received_contains not in client_received
+            ):
+                missing_message = (
                     f"{test.name}: expected fixture client capture to contain "
                     f"{assertions.client_received_contains!r}, got {client_received!r}"
                 )
-        if assertions.server_sent_contains is not None:
-            if assertions.server_sent_contains not in server_sent:
-                raise AssertionError(
+            elif (
+                assertions.server_sent_contains is not None
+                and assertions.server_sent_contains not in server_sent
+            ):
+                missing_message = (
                     f"{test.name}: expected fixture server send buffer to contain "
                     f"{assertions.server_sent_contains!r}, got {server_sent!r}"
                 )
+            if missing_message is None:
+                return
+            if time.monotonic() >= deadline:
+                raise AssertionError(missing_message)
+            time.sleep(_ASSERTION_WAIT_INTERVAL)
 
     def _teardown() -> None:
         stop_event.set()
