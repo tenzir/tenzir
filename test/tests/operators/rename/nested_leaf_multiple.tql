@@ -1,0 +1,8 @@
+from {
+  outer: {
+    left: 1,
+    right: 2,
+  },
+  top: 3,
+}
+rename first=outer.left, second=outer.right

@@ -1,0 +1,6 @@
+from {
+  outer: {
+    present: 1,
+  },
+}
+rename renamed=outer.missing

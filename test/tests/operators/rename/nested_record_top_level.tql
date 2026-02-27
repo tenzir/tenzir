@@ -1,0 +1,7 @@
+from {
+  payload: {
+    x: 1,
+  },
+  id: 42,
+}
+rename envelope=payload

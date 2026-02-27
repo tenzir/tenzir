@@ -1,0 +1,9 @@
+from {
+  a: {
+    value: 1,
+  },
+  b: {
+    value: 2,
+  },
+}
+rename renamed=a.value

@@ -1,0 +1,7 @@
+{
+  outer: {
+    first: 1,
+    second: 2,
+  },
+  top: 3,
+}

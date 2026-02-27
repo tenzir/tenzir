@@ -1,0 +1,6 @@
+{
+  outer: {
+    nested: 1,
+    keep: 2,
+  },
+}
