@@ -30,22 +30,14 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-#include <atomic>
-
 namespace tenzir::plugins::serve_tcp {
 
 namespace {
 
 constexpr auto listen_backlog = uint32_t{128};
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
-constexpr auto wait_for_client_retry_delay = std::chrono::milliseconds{10};
-constexpr auto wait_for_client_timeout = std::chrono::seconds{5};
-constexpr auto client_probe_interval = std::chrono::seconds{1};
-constexpr auto client_probe_timeout = std::chrono::milliseconds{1};
 constexpr auto write_timeout = std::chrono::seconds{5};
-constexpr auto write_queue_capacity = uint32_t{256};
-constexpr auto client_queue_capacity = uint32_t{256};
-using WriteQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
+constexpr auto message_queue_capacity = uint32_t{512};
 
 struct ServeTcpArgs {
   located<std::string> endpoint;
@@ -56,6 +48,18 @@ struct ServeTcpArgs {
 
 class ServeTcp final : public Operator<table_slice, void> {
 public:
+  using Client = Box<folly::coro::Transport>;
+
+  struct Accepted {
+    Client client;
+  };
+
+  struct SubpipelineFinished {};
+  struct Wakeup {};
+
+  using Message = variant<Accepted, SubpipelineFinished, Wakeup>;
+  using MessageQueue = folly::coro::BoundedQueue<Message>;
+
   explicit ServeTcp(ServeTcpArgs args) : args_{std::move(args)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -87,15 +91,10 @@ public:
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    write_task_ = ctx.spawn_task(write_loop(ctx.dh()));
     ctx.spawn_task(accept_loop(ctx.dh()));
     auto pipeline = std::move(args_.printer.inner);
     if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       request_stop();
-      if (write_task_) {
-        co_await write_task_->join();
-        write_task_ = None{};
-      }
       co_return;
     }
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
@@ -130,66 +129,14 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (done_ or not chunk or chunk->size() == 0) {
-      co_return;
-    }
-    co_await write_queue_->enqueue(Option{std::move(chunk)});
-  }
-
-  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    co_return FinalizeBehavior::done;
-  }
-
-  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (write_task_) {
-      if (not done_) {
-        co_await write_queue_->enqueue(None{});
-      }
-      co_await write_task_->join();
-      write_task_ = None{};
-    }
-    request_stop();
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
-  }
-
-private:
-  using Client = Box<folly::coro::Transport>;
-  using ClientQueue = folly::coro::BoundedQueue<Client>;
-
-  auto request_stop() -> void {
-    if (done_) {
-      return;
-    }
-    done_ = true;
-    if (server_) {
-      server_->close();
-    }
-    TENZIR_UNUSED(write_queue_->try_enqueue(None{}));
-  }
-
-  auto drain_new_clients(std::vector<Client>& clients) -> void {
-    while (auto client = client_queue_->try_dequeue()) {
-      clients.push_back(std::move(*client));
-    }
-  }
-
-  auto write_chunk_to_clients(chunk_ptr chunk, std::vector<Client>& clients,
-                              diagnostic_handler& dh) -> Task<void> {
-    if (not chunk or chunk->size() == 0 or clients.empty()) {
+    if (done_ or not chunk or chunk->size() == 0 or clients_.empty()) {
       co_return;
     }
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    for (auto it = clients.begin(); it != clients.end();) {
-      auto peer = (*it)->getPeerAddress().describe();
+    for (auto it = clients_.begin(); it != clients_.end();) {
       try {
         co_await folly::coro::timeout(
           folly::coro::co_withExecutor(evb_, (*it)->write(data)),
@@ -201,180 +148,166 @@ private:
       } catch (folly::FutureTimeout const& ex) {
         // Slow or stalled clients are expected in production; drop only the
         // affected connection and continue serving others.
+        auto peer = (*it)->getPeerAddress().describe();
         diagnostic::warning("failed to write to client {}", peer)
           .primary(args_.endpoint.source)
           .note("reason: {}", ex.what())
           .note(
             "dropping this client and continuing with remaining connections")
-          .emit(dh);
-        active_clients_->fetch_sub(1, std::memory_order_relaxed);
-        it = clients.erase(it);
+          .emit(ctx);
+        it = clients_.erase(it);
       } catch (folly::AsyncSocketException const& ex) {
         // Socket write failures are client-scoped; drop this client and keep
         // the listener/writer running.
+        auto peer = (*it)->getPeerAddress().describe();
         diagnostic::warning("failed to write to client {}", peer)
           .primary(args_.endpoint.source)
           .note("reason: {}", ex.what())
           .note(
             "dropping this client and continuing with remaining connections")
-          .emit(dh);
-        active_clients_->fetch_sub(1, std::memory_order_relaxed);
-        it = clients.erase(it);
+          .emit(ctx);
+        it = clients_.erase(it);
       }
     }
+    co_return;
   }
 
-  auto probe_clients(std::vector<Client>& clients) -> Task<void> {
-    for (auto it = clients.begin(); it != clients.end();) {
-      auto peer = (*it)->getPeerAddress().describe();
-      auto disconnected = false;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_) {
+      co_return {};
+    }
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    if (done_) {
+      co_return;
+    }
+    auto* message_ptr = result.try_as<Message>();
+    if (not message_ptr) {
+      co_return;
+    }
+    auto message = std::move(*message_ptr);
+    if (auto* accepted = std::get_if<Accepted>(&message)) {
+      co_await add_client(std::move(accepted->client), ctx.dh());
+      co_return;
+    }
+    if (std::holds_alternative<SubpipelineFinished>(message)) {
+      subpipeline_finished_ = true;
+      maybe_finish();
+    }
+    co_return;
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (not finalize_started_) {
+      finalize_started_ = true;
+      if (auto sub = ctx.get_sub(make_view(sub_key_))) {
+        auto pipeline = as<OpenPipeline<table_slice>>(*sub);
+        co_await pipeline.close();
+      }
+      co_return FinalizeBehavior::continue_;
+    }
+    co_return done_ ? FinalizeBehavior::done : FinalizeBehavior::continue_;
+  }
+
+  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
+    if (done_) {
+      co_return;
+    }
+    co_await message_queue_->enqueue(SubpipelineFinished{});
+    co_return;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    request_stop();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  auto request_stop() -> void {
+    if (done_) {
+      return;
+    }
+    done_ = true;
+    if (server_) {
+      server_->close();
+    }
+    clients_.clear();
+    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+  }
+
+  auto maybe_finish() -> void {
+    if (not subpipeline_finished_) {
+      return;
+    }
+    request_stop();
+  }
+
+  auto add_client(Client client, diagnostic_handler& dh) -> Task<void> {
+    if (clients_.size() >= max_connections_) {
+      auto peer = client->getPeerAddress().describe();
+      diagnostic::warning(
+        "connection rejected: maximum number of connections reached")
+        .primary(args_.endpoint.source)
+        .note("peer: {}", peer)
+        .note("max_connections: {}", max_connections_)
+        .hint("increase `max_connections` if this level of concurrency is "
+              "expected")
+        .emit(dh);
+      co_return;
+    }
+    if (tls_context_) {
       try {
-        folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
-        auto bytes = co_await (*it)->read(buf, 1, 1, client_probe_timeout);
-        disconnected = bytes == 0;
+        co_await upgrade_transport_to_tls_server(client, tls_context_);
       } catch (folly::OperationCancelled const&) {
         // Cancellation is part of normal shutdown.
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
-        if (ex.getType() == folly::AsyncSocketException::TIMED_OUT) {
-          ++it;
-          continue;
-        }
-        TENZIR_DEBUG("dropping client {} after probe error: {}", peer,
-                     ex.what());
-        disconnected = true;
-      }
-      if (disconnected) {
-        TENZIR_DEBUG("dropping disconnected client {}", peer);
-        active_clients_->fetch_sub(1, std::memory_order_relaxed);
-        it = clients.erase(it);
-      } else {
-        ++it;
+        auto peer = client->getPeerAddress().describe();
+        diagnostic::warning("TLS handshake failed")
+          .primary(args_.endpoint.source)
+          .note("peer: {}", peer)
+          .note("reason: {}", ex.what())
+          .hint("verify TLS settings and certificates on both sides")
+          .emit(dh);
+        co_return;
       }
     }
-  }
-
-  auto write_loop(diagnostic_handler& dh) -> Task<void> {
-    auto clients = std::vector<Client>{};
-    auto client_wait_deadline = Option<std::chrono::steady_clock::time_point>{};
-    auto next_client_probe_at
-      = std::chrono::steady_clock::now() + client_probe_interval;
-    while (true) {
-      auto next = Option<chunk_ptr>{};
-      auto now = std::chrono::steady_clock::now();
-      auto wait_for_input
-        = std::max(std::chrono::milliseconds{0},
-                   std::chrono::duration_cast<std::chrono::milliseconds>(
-                     next_client_probe_at - now));
-      if (wait_for_input == std::chrono::milliseconds{0}) {
-        co_await probe_clients(clients);
-        next_client_probe_at
-          = std::chrono::steady_clock::now() + client_probe_interval;
-        continue;
-      }
-      auto probe_due = false;
-      try {
-        next = co_await folly::coro::timeout(write_queue_->dequeue(),
-                                             wait_for_input);
-      } catch (folly::FutureTimeout const&) {
-        probe_due = true;
-      }
-      if (probe_due) {
-        co_await probe_clients(clients);
-        next_client_probe_at
-          = std::chrono::steady_clock::now() + client_probe_interval;
-        continue;
-      }
-      if (done_ or not next) {
-        break;
-      }
-      auto chunk = std::move(*next);
-      if (not chunk or chunk->size() == 0) {
-        continue;
-      }
-      drain_new_clients(clients);
-      if (clients.empty()) {
-        if (not client_wait_deadline) {
-          client_wait_deadline
-            = std::chrono::steady_clock::now() + wait_for_client_timeout;
-        }
-        while (clients.empty() and not done_) {
-          drain_new_clients(clients);
-          if (not clients.empty()) {
-            client_wait_deadline = None{};
-            break;
-          }
-          if (client_wait_deadline
-              and std::chrono::steady_clock::now() >= *client_wait_deadline) {
-            break;
-          }
-          co_await folly::coro::sleep(wait_for_client_retry_delay);
-        }
-      } else {
-        client_wait_deadline = None{};
-      }
-      if (clients.empty()) {
-        continue;
-      }
-      client_wait_deadline = None{};
-      co_await write_chunk_to_clients(std::move(chunk), clients, dh);
-      next_client_probe_at
-        = std::chrono::steady_clock::now() + client_probe_interval;
-    }
-    if (not clients.empty()) {
-      active_clients_->fetch_sub(detail::narrow<uint64_t>(clients.size()),
-                                 std::memory_order_relaxed);
-    }
-    request_stop();
+    TENZIR_DEBUG("accepted client {}", client->getPeerAddress().describe());
+    clients_.push_back(std::move(client));
     co_return;
   }
 
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
+    TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
     while (not done_) {
       auto accept_error = Option<std::string>{};
-      auto counted_client = false;
       try {
         auto transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-        auto boxed
+        auto client
           = Box<folly::coro::Transport>::from_unique_ptr(std::move(transport));
-        if (tls_context_) {
-          co_await upgrade_transport_to_tls_server(boxed, tls_context_);
-        }
-        auto peer = boxed->getPeerAddress().describe();
-        if (active_clients_->load(std::memory_order_relaxed)
-            >= max_connections_) {
-          diagnostic::warning(
-            "connection rejected: maximum number of connections reached")
-            .primary(args_.endpoint.source)
-            .note("peer: {}", peer)
-            .note("max_connections: {}", max_connections_)
-            .hint("increase `max_connections` if this level of concurrency is "
-                  "expected")
-            .emit(dh);
-          continue;
-        }
-        auto client = std::move(boxed);
         if (done_) {
           co_return;
         }
-        active_clients_->fetch_add(1, std::memory_order_relaxed);
-        counted_client = true;
-        co_await client_queue_->enqueue(std::move(client));
+        TENZIR_DEBUG("serve_tcp: accepted {}",
+                     client->getPeerAddress().describe());
+        co_await message_queue_->enqueue(Accepted{std::move(client)});
         continue;
       } catch (folly::OperationCancelled const&) {
         // Cancellation is part of normal shutdown.
-        if (counted_client) {
-          active_clients_->fetch_sub(1, std::memory_order_relaxed);
-        }
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
-        // Accept/TLS handshake failures are per-connection network errors; keep
-        // the listener alive and continue accepting new clients.
-        if (counted_client) {
-          active_clients_->fetch_sub(1, std::memory_order_relaxed);
-        }
+        // Accept failures are per-connection network errors; keep the listener
+        // alive and continue accepting new clients.
         if (done_) {
           co_return;
         }
@@ -401,11 +334,12 @@ private:
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
-  Box<WriteQueue> write_queue_{std::in_place, write_queue_capacity};
-  Box<ClientQueue> client_queue_{std::in_place, client_queue_capacity};
-  Option<AsyncHandle<void>> write_task_;
-  Box<std::atomic<uint64_t>> active_clients_{std::in_place, uint64_t{0}};
+  mutable Box<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  std::vector<Client> clients_;
   uint64_t max_connections_ = 128;
+  bool finalize_started_ = false;
+  bool subpipeline_finished_ = false;
   bool done_ = false;
 };
 

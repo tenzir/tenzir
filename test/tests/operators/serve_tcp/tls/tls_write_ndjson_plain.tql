@@ -16,9 +16,12 @@ let $tls = {
   skip_peer_verification: true,
 }
 
-from {
-  line: "hello-from-serve_tcp-tls"
+every 50ms {
+  from {
+    line: "hello-from-serve_tcp-tls"
+  }
 }
+head 20
 serve_tcp env("TCP_ENDPOINT"), tls=$tls {
   write_ndjson
 }

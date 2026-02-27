@@ -9,9 +9,12 @@ assertions:
 timeout: 60
 ---
 
-from {
-  line: "hello-from-serve_tcp"
+every 50ms {
+  from {
+    line: "hello-from-serve_tcp"
+  }
 }
+head 20
 serve_tcp env("TCP_ENDPOINT") {
   write_ndjson
 }

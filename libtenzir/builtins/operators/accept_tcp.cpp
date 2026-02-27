@@ -274,9 +274,10 @@ private:
         co_return;
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
-        if (e.getType() != folly::AsyncSocketException::TIMED_OUT) {
-          read_error = e.what();
+        if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
+          continue;
         }
+        read_error = e.what();
       }
       if (not read_error.empty()) {
         co_await message_queue.enqueue(ConnectionError{conn_id, read_error});
