@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+fork { write_json }
