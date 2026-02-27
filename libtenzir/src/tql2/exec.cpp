@@ -856,13 +856,19 @@ struct OpSnapshot {
     = default;
 };
 
+/// Wraps OpSnapshot with a last-seen timestamp for TTL-based eviction.
+struct TrackedOpSnapshot {
+  OpSnapshot snap;
+  time last_seen;
+};
+
 // Forward declaration for use in TestExecCtx::emit_metrics().
 auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
   std::span<ExecutorProfile const> executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
-  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
-  -> ProfilerSnapshot;
+  time timestamp, std::unordered_map<std::string, TrackedOpSnapshot>& prev,
+  bool do_cleanup) -> ProfilerSnapshot;
 
 class TestExecCtx : public ExecCtx {
 public:
@@ -1015,8 +1021,10 @@ public:
       auto executors = get_executor_profiles();
       auto names = op_type_names();
       auto snapshot_time = floor(now, defaults::metrics_interval);
-      auto snapshot = build_profiler_snapshot(channels, executors, names,
-                                              snapshot_time, prev_snapshots_);
+      auto snapshot
+        = build_profiler_snapshot(channels, executors, names, snapshot_time,
+                                  prev_snapshots_,
+                                  ++metrics_tick_ % cleanup_interval == 0);
       if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
         for (auto& slice :
              build_profiler_slices(snapshot, targets_.pipeline_id)) {
@@ -1067,7 +1075,9 @@ private:
   run_plan_telemetry_targets targets_;
   size_t num_ops_;
   time start_time_;
-  std::unordered_map<std::string, OpSnapshot> prev_snapshots_;
+  std::unordered_map<std::string, TrackedOpSnapshot> prev_snapshots_;
+  size_t metrics_tick_ = 0;
+  static constexpr size_t cleanup_interval = 60;
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
   std::vector<ExecutorProfile> executor_profiles_;
@@ -1596,8 +1606,8 @@ auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
   std::span<ExecutorProfile const> executor_profiles,
   std::unordered_map<std::string, std::string> const& op_type_names,
-  time timestamp, std::unordered_map<std::string, OpSnapshot>& prev)
-  -> ProfilerSnapshot {
+  time timestamp, std::unordered_map<std::string, TrackedOpSnapshot>& prev,
+  bool do_cleanup) -> ProfilerSnapshot {
   // Collect unique operator names from channels and executors.
   auto op_names = std::vector<std::string>{};
   auto op_set = std::unordered_set<std::string>{};
@@ -1732,13 +1742,14 @@ auto build_profiler_snapshot(
       agg.events_in, agg.events_out, agg.signals_in, agg.signals_out,
       ea.cpu_ns,     ea.wall_ns,     ea.task_count,
     };
-    auto& prev_snap = prev[name];
-    if (cur == prev_snap) {
+    auto& tracked = prev[name];
+    tracked.last_seen = timestamp;
+    if (cur == tracked.snap) {
       continue;
     }
     // Save previous snapshot before overwriting, so we can compute deltas.
-    auto old = prev_snap;
-    prev_snap = cur;
+    auto old = tracked.snap;
+    tracked.snap = cur;
     // Compute CPU usage as percentage of wall-clock time.
     auto cpu_usage = 0.0;
     if (wall_interval_ns > 0) {
@@ -1812,6 +1823,12 @@ auto build_profiler_snapshot(
       });
     }
   }
+  if (do_cleanup) {
+    static constexpr auto snapshot_ttl = 10 * defaults::metrics_interval;
+    std::erase_if(prev, [&](auto const& kv) {
+      return timestamp - kv.second.last_seen > snapshot_ttl;
+    });
+  }
   return result;
 }
 
@@ -1850,45 +1867,47 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
       });
     }
     /// CLI profile loop
-    scope.spawn([&]() -> Task<void> {
-      while (true) {
-        co_await folly::coro::sleep(
-          std::chrono::duration_cast<folly::HighResDuration>(
-            std::chrono::milliseconds{100}));
-        auto channel_profiles = exec_ctx.get_channel_profiles();
-        auto executor_profiles = exec_ctx.get_executor_profiles();
-        if (channel_profiles.empty() and executor_profiles.empty()) {
-          continue;
+    if (profile_path) {
+      scope.spawn([&]() -> Task<void> {
+        while (true) {
+          co_await folly::coro::sleep(
+            std::chrono::duration_cast<folly::HighResDuration>(
+              std::chrono::milliseconds{100}));
+          auto channel_profiles = exec_ctx.get_channel_profiles();
+          auto executor_profiles = exec_ctx.get_executor_profiles();
+          if (channel_profiles.empty() and executor_profiles.empty()) {
+            continue;
+          }
+          auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
+          sample.channels.reserve(channel_profiles.size());
+          for (auto& p : channel_profiles) {
+            sample.channels.push_back({
+              p.id.value,
+              p.type,
+              p.stats->in.bytes.load(std::memory_order::relaxed),
+              p.stats->out.bytes.load(std::memory_order::relaxed),
+              p.stats->in.batches.load(std::memory_order::relaxed),
+              p.stats->out.batches.load(std::memory_order::relaxed),
+              p.stats->in.events.load(std::memory_order::relaxed),
+              p.stats->out.events.load(std::memory_order::relaxed),
+              p.stats->in.signals.load(std::memory_order::relaxed),
+              p.stats->out.signals.load(std::memory_order::relaxed),
+              p.max_bytes,
+            });
+          }
+          sample.executors.reserve(executor_profiles.size());
+          for (auto& p : executor_profiles) {
+            sample.executors.push_back({
+              p.id.value,
+              p.stats->wall_ns.load(std::memory_order::relaxed),
+              p.stats->cpu_ns.load(std::memory_order::relaxed),
+              p.stats->task_count.load(std::memory_order::relaxed),
+            });
+          }
+          samples.push_back(std::move(sample));
         }
-        auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
-        sample.channels.reserve(channel_profiles.size());
-        for (auto& p : channel_profiles) {
-          sample.channels.push_back({
-            p.id.value,
-            p.type,
-            p.stats->in.bytes.load(std::memory_order::relaxed),
-            p.stats->out.bytes.load(std::memory_order::relaxed),
-            p.stats->in.batches.load(std::memory_order::relaxed),
-            p.stats->out.batches.load(std::memory_order::relaxed),
-            p.stats->in.events.load(std::memory_order::relaxed),
-            p.stats->out.events.load(std::memory_order::relaxed),
-            p.stats->in.signals.load(std::memory_order::relaxed),
-            p.stats->out.signals.load(std::memory_order::relaxed),
-            p.max_bytes,
-          });
-        }
-        sample.executors.reserve(executor_profiles.size());
-        for (auto& p : executor_profiles) {
-          sample.executors.push_back({
-            p.id.value,
-            p.stats->wall_ns.load(std::memory_order::relaxed),
-            p.stats->cpu_ns.load(std::memory_order::relaxed),
-            p.stats->task_count.load(std::memory_order::relaxed),
-          });
-        }
-        samples.push_back(std::move(sample));
-      }
-    });
+      });
+    }
     LOGW("blocking on pipeline");
     co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
     LOGW("blocking on pipeline done");
