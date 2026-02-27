@@ -360,12 +360,12 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    return function_use::make(
-      [data = std::move(data), key = std::move(key),
-       algorithm = *parsed_algorithm](evaluator eval, session ctx) {
-        return map_series(eval(data), eval(key), [&](series data_values,
-                                                     series key_values)
-                            -> multi_series {
+    return function_use::make([data = std::move(data), key = std::move(key),
+                               algorithm = *parsed_algorithm](evaluator eval,
+                                                              session ctx) {
+      return map_series(
+        eval(data), eval(key),
+        [&](series data_values, series key_values) -> multi_series {
           TENZIR_ASSERT(data_values.length() == key_values.length());
           auto builder = arrow::StringBuilder{tenzir::arrow_memory_pool()};
           check(builder.Reserve(data_values.length()));
@@ -377,14 +377,15 @@ public:
                   check(builder.AppendNull());
                   continue;
                 }
-                auto value = value_at(data_values.type,
-                                      static_cast<const arrow::Array&>(data_array), i);
+                auto value
+                  = value_at(data_values.type,
+                             static_cast<const arrow::Array&>(data_array), i);
                 if (is<caf::none_t>(value)) {
                   check(builder.AppendNull());
                   continue;
                 }
-                auto digest = compute_hmac(value, as_bytes(key_array.GetView(i)),
-                                           algorithm);
+                auto digest = compute_hmac(
+                  value, as_bytes(key_array.GetView(i)), algorithm);
                 check(builder.Append(digest));
               }
             },
@@ -392,9 +393,8 @@ public:
                                  const arrow::NullArray&) {
               check(builder.AppendNulls(data_array.length()));
             },
-            [&]<class DataArray, class KeyArray>(
-              const DataArray& data_array,
-              const KeyArray&) -> void {
+            [&]<class DataArray, class KeyArray>(const DataArray& data_array,
+                                                 const KeyArray&) -> void {
               if constexpr (not detail::is_any_v<KeyArray, arrow::NullArray>) {
                 diagnostic::warning("expected `string`, but got `{}`",
                                     key_values.type.kind())
@@ -407,7 +407,7 @@ public:
           match(std::tie(*data_values.array, *key_values.array), f);
           return series{string_type{}, finish(builder)};
         });
-      });
+    });
   }
 };
 
