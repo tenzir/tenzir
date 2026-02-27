@@ -1911,6 +1911,7 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
     LOGW("blocking on pipeline");
     co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
     LOGW("blocking on pipeline done");
+    scope.cancel();
   });
   if (profile_path) {
     write_profile(*profile_path, samples, t0, exec_ctx.op_type_names(),
