@@ -944,6 +944,11 @@ public:
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    // `start()` can fail before `cache_` is assigned; in that case we already
+    // emitted diagnostics and must not send requests to an invalid actor.
+    if (not cache_) {
+      co_return FinalizeBehavior::done;
+    }
     if (not announced_) {
       auto announce_result
         = co_await async_mail(atom::announce_v, false).request(cache_);
