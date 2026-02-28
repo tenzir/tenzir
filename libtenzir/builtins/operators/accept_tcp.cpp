@@ -71,8 +71,9 @@ public:
   struct ConnectionReadTimeout {
     uint64_t conn_id;
   };
+  struct Wakeup {};
   using Message = variant<Accepted, ConnectionClosed, ConnectionError,
-                          ConnectionReadTimeout>;
+                          ConnectionReadTimeout, Wakeup>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   AcceptTcpListener(AcceptTcpArgs args)
@@ -107,7 +108,7 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        done_ = true;
+        request_stop();
         co_return;
       }
       tls_context_ = std::move(*context);
@@ -238,7 +239,16 @@ public:
           release_connection_slot();
         }
         co_return;
+      },
+      [&](Wakeup) -> Task<void> {
+        co_return;
       });
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    request_stop();
+    co_return;
   }
 
   auto state() -> OperatorState override {
@@ -246,6 +256,20 @@ public:
   }
 
 private:
+  auto request_stop() -> void {
+    if (done_) {
+      return;
+    }
+    done_ = true;
+    if (server_) {
+      server_->close();
+    }
+    for (auto& [_, cancellation_source] : read_cancellation_sources_) {
+      cancellation_source->requestCancellation();
+    }
+    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+  }
+
   static auto sub_key_for(uint64_t conn_id) -> data {
     TENZIR_ASSERT(
       conn_id <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
@@ -264,7 +288,7 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    while (true) {
+    while (not done_) {
       std::unique_ptr<folly::coro::Transport> transport;
       try {
         co_await folly::coro::co_safe_point;
@@ -277,6 +301,9 @@ private:
       } catch (folly::AsyncSocketException const& ex) {
         // Accept can fail transiently (e.g., client abort/reset). Keep the
         // listener alive and continue with the next accept attempt.
+        if (done_) {
+          co_return;
+        }
         diagnostic::warning("failed to accept incoming connection")
           .primary(endpoint_source_)
           .note("endpoint: {}", address_.describe())
