@@ -362,11 +362,11 @@ public:
   template <class U>
     requires(not std::same_as<std::remove_cvref_t<U>, None>
              and not std::same_as<std::remove_cvref_t<U>, Option>
-             and requires(Value const& a, U const& b) {
-               { a == b } -> std::convertible_to<bool>;
+             and requires(U const& b, Value const& a) {
+               { b == a } -> std::convertible_to<bool>;
              })
   friend auto operator==(Option const& lhs, U const& rhs) -> bool {
-    return lhs.is_some() and *lhs == rhs;
+    return lhs.is_some() and rhs == *lhs;
   }
 
   /// Orders two options. None is less than any Some.
