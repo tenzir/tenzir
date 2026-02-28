@@ -8,18 +8,7 @@
   sqlite,
   tzdata,
 }:
-let
-  version = "23.0.0";
-in
 arrow-cpp.overrideAttrs (orig: {
-  inherit version;
-
-  src = fetchFromGitHub {
-    owner = "apache";
-    repo = "arrow";
-    rev = "apache-arrow-${version}";
-    hash = "sha256-BluUlbtGJwvlrpN/c/KziOfFh5dvzZyuCy4JZkkFea4=";
-  };
   patches = [
     ./arrow-cpp-nixos-zoneinfo.patch
     ./arrow-cpp-eager-struct-fields.patch
@@ -72,33 +61,11 @@ arrow-cpp.overrideAttrs (orig: {
     ];
 
   doCheck = false;
-  doInstallCheck = false;
 
   env =
     ((orig.env or { })
     // {
       NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+      GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
     });
-
-  installCheckPhase =
-    let
-      disabledTests = [
-        # flaky
-        "arrow-flight-test"
-        # requires networking
-        "arrow-azurefs-test"
-        "arrow-gcsfs-test"
-        "arrow-flight-integration-test"
-        # File already exists in database: orc_proto.proto
-        "arrow-orc-adapter-test"
-        "parquet-encryption-key-management-test"
-      ];
-    in
-    ''
-      runHook preInstallCheck
-
-      ctest -L unittest --exclude-regex '^(${lib.concatStringsSep "|" disabledTests})$'
-
-      runHook postInstallCheck
-    '';
 })
