@@ -35,6 +35,8 @@
 
 #include <atomic>
 #include <limits>
+#include <memory>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace tenzir::plugins::accept_tcp {
@@ -66,7 +68,11 @@ public:
     uint64_t conn_id;
     std::string error;
   };
-  using Message = variant<Accepted, ConnectionClosed, ConnectionError>;
+  struct ConnectionReadTimeout {
+    uint64_t conn_id;
+  };
+  using Message = variant<Accepted, ConnectionClosed, ConnectionError,
+                          ConnectionReadTimeout>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   AcceptTcpListener(AcceptTcpArgs args)
@@ -184,13 +190,18 @@ public:
           std::move(key), std::move(pipeline_copy), tag_v<chunk_ptr>);
         auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
         active_connections_.emplace(conn_id);
+        auto [it, inserted] = read_cancellation_sources_.emplace(
+          conn_id, std::make_shared<folly::CancellationSource>());
+        TENZIR_ASSERT(inserted);
         keep_connection_slot = true;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
           read_loop(conn_id, std::move(transport), std::move(open_pipeline),
-                    *message_queue_, std::move(bytes_read))));
+                    *message_queue_, std::move(bytes_read),
+                    it->second->getToken())));
       },
       [&](ConnectionClosed closed) -> Task<void> {
+        read_cancellation_sources_.erase(closed.conn_id);
         if (active_connections_.erase(closed.conn_id) == 1) {
           co_await close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
@@ -203,8 +214,27 @@ public:
           .note("connection id: {}", error.conn_id)
           .note("reason: {}", error.error)
           .emit(ctx);
+        read_cancellation_sources_.erase(error.conn_id);
         if (active_connections_.erase(error.conn_id) == 1) {
           co_await close_subpipeline(error.conn_id, ctx);
+          release_connection_slot();
+        }
+        co_return;
+      },
+      [&](ConnectionReadTimeout timeout) -> Task<void> {
+        if (not active_connections_.contains(timeout.conn_id)) {
+          co_return;
+        }
+        auto key = sub_key_for(timeout.conn_id);
+        if (ctx.get_sub(make_view(key))) {
+          co_return;
+        }
+        if (auto it = read_cancellation_sources_.find(timeout.conn_id);
+            it != read_cancellation_sources_.end()) {
+          it->second->requestCancellation();
+          read_cancellation_sources_.erase(it);
+        }
+        if (active_connections_.erase(timeout.conn_id) == 1) {
           release_connection_slot();
         }
         co_return;
@@ -299,21 +329,26 @@ private:
   static auto
   read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
             OpenPipeline<chunk_ptr> pipeline, MessageQueue& message_queue,
-            MetricsCounter bytes_counter) -> Task<void> {
+            MetricsCounter bytes_counter, folly::CancellationToken cancel_token)
+    -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
       try {
-        bytes = co_await transport->read(
-          buf, 1, buffer_size,
-          std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
+        bytes = co_await folly::coro::co_withCancellation(
+          cancel_token,
+          transport->read(buf, 1, buffer_size,
+                          std::chrono::duration_cast<std::chrono::milliseconds>(
+                            read_timeout)));
       } catch (folly::OperationCancelled const&) {
         // Cancellation is part of normal shutdown.
-        co_return;
+        break;
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
         if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
+          TENZIR_UNUSED(
+            message_queue.try_enqueue(ConnectionReadTimeout{conn_id}));
           continue;
         }
         read_error = e.what();
@@ -358,6 +393,8 @@ private:
     message_queue_capacity,
   };
   std::unordered_set<uint64_t> active_connections_;
+  std::unordered_map<uint64_t, std::shared_ptr<folly::CancellationSource>>
+    read_cancellation_sources_;
   Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
   uint64_t max_connections_ = 128;
   bool done_ = false;

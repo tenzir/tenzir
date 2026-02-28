@@ -116,7 +116,6 @@ public:
         auto transport = co_await folly::coro::co_withExecutor(
           evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
                                                            connect_timeout));
-        reconnect_backoff_ = connect_initial_backoff;
         connection_active_ = true;
         TENZIR_DEBUG("connected to {}", address_.describe());
         co_return Message{
@@ -192,6 +191,7 @@ public:
           }
           co_return;
         }
+        reconnect_backoff_ = connect_initial_backoff;
         auto peer_addr = transport->getPeerAddress();
         auto peer_record = record{
           {"ip", peer_addr.getAddressStr()},
