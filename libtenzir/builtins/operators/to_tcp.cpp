@@ -86,7 +86,7 @@ public:
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
                                       tag_v<table_slice>);
     TENZIR_UNUSED(sub);
-    co_await ensure_connected(ctx.dh());
+    request_connect();
     co_return;
   }
 
@@ -179,7 +179,7 @@ public:
     }
     if (std::holds_alternative<EnsureConnected>(*message)) {
       connect_scheduled_->store(false);
-      co_await ensure_connected(ctx.dh());
+      co_await ensure_connected(ctx);
     }
     co_return;
   }
@@ -205,53 +205,59 @@ public:
   }
 
 private:
-  auto ensure_connected(diagnostic_handler& dh) -> Task<void> {
-    while (not done_->load()) {
-      if (transport_) {
+  auto ensure_connected(OpCtx& ctx) -> Task<void> {
+    if (done_->load() or transport_) {
+      co_return;
+    }
+    auto connect_error = Option<std::string>{};
+    try {
+      auto transport = co_await folly::coro::co_withExecutor(
+        evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
+                                                         connect_timeout));
+      auto boxed = Box<folly::coro::Transport>{std::move(transport)};
+      if (tls_context_) {
+        co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
+      }
+      if (done_->load()) {
         co_return;
       }
-      auto connect_error = Option<std::string>{};
-      try {
-        auto transport = co_await folly::coro::co_withExecutor(
-          evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
-                                                           connect_timeout));
-        auto boxed = Box<folly::coro::Transport>{std::move(transport)};
-        if (tls_context_) {
-          co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
-        }
-        if (done_->load()) {
-          co_return;
-        }
-        if (not transport_) {
-          transport_ = std::move(boxed);
-          reconnect_backoff_ = connect_initial_backoff;
-        }
-        co_return;
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        co_return;
-      } catch (folly::AsyncSocketException const& ex) {
-        // Connect/TLS handshake failures are per-attempt network errors; keep
-        // retrying with backoff instead of failing the whole operator.
-        if (done_->load()) {
-          co_return;
-        }
-        connect_error = ex.what();
+      if (not transport_) {
+        transport_ = std::move(boxed);
+        reconnect_backoff_ = connect_initial_backoff;
       }
-      if (connect_error) {
-        if (done_->load()) {
-          co_return;
-        }
-        diagnostic::warning("failed to connect to {}", address_.describe())
-          .primary(args_.endpoint.source)
-          .note("reason: {}", *connect_error)
-          .hint("ensure a TCP server is listening on this endpoint")
-          .emit(dh);
+      co_return;
+    } catch (folly::OperationCancelled const&) {
+      // Cancellation is part of normal shutdown.
+      co_return;
+    } catch (folly::AsyncSocketException const& ex) {
+      // Connect/TLS handshake failures are per-attempt network errors; retry
+      // asynchronously with backoff instead of blocking this task forever.
+      if (done_->load()) {
+        co_return;
       }
+      connect_error = ex.what();
+    }
+    if (connect_error) {
+      if (done_->load()) {
+        co_return;
+      }
+      diagnostic::warning("failed to connect to {}", address_.describe())
+        .primary(args_.endpoint.source)
+        .note("reason: {}", *connect_error)
+        .hint("ensure a TCP server is listening on this endpoint")
+        .emit(ctx);
       auto backoff = reconnect_backoff_;
       reconnect_backoff_
         = std::min(reconnect_backoff_ * 2, connect_max_backoff);
-      co_await folly::coro::sleep(backoff);
+      ctx.spawn_task([this, backoff]() -> Task<void> {
+        try {
+          co_await folly::coro::sleep(backoff);
+        } catch (folly::OperationCancelled const&) {
+          // Cancellation is part of normal shutdown.
+          co_return;
+        }
+        request_connect();
+      }());
     }
   }
 

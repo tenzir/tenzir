@@ -183,12 +183,7 @@ public:
           }
         }
         if (tls_backoff) {
-          try {
-            co_await folly::coro::sleep(*tls_backoff);
-          } catch (const folly::OperationCancelled&) {
-            // Cancellation is part of normal shutdown.
-            co_return;
-          }
+          co_await folly::coro::sleep(*tls_backoff);
           co_return;
         }
         reconnect_backoff_ = connect_initial_backoff;
