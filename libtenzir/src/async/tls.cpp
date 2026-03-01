@@ -12,6 +12,8 @@
 
 #include <folly/coro/Invoke.h>
 #include <folly/coro/Task.h>
+#include <folly/coro/Timeout.h>
+#include <folly/futures/Future.h>
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/coro/Transport.h>
 #include <folly/io/coro/TransportCallbackBase.h>
@@ -20,6 +22,8 @@
 namespace tenzir {
 
 namespace {
+
+constexpr auto tls_handshake_timeout = std::chrono::seconds{5};
 
 /// Coroutine-friendly callback for SSL/TLS handshake completion.
 class client_ssl_handshake_callback
@@ -128,7 +132,12 @@ auto upgrade_transport_to_tls_client(
       // Perform the TLS handshake.
       auto cb = client_ssl_handshake_callback{*ssl_ptr, std::move(hostname)};
       ssl_ptr->sslConn(&cb);
-      co_await cb.wait();
+      try {
+        co_await folly::coro::timeout(cb.wait(), tls_handshake_timeout);
+      } catch (const folly::FutureTimeout&) {
+        throw folly::AsyncSocketException{
+          folly::AsyncSocketException::TIMED_OUT, "TLS handshake timed out"};
+      }
       // Re-throw handshake errors captured in the callback.
       if (cb.error()) {
         cb.error().throw_exception();
@@ -160,7 +169,12 @@ auto upgrade_transport_to_tls_server(
           folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
         auto cb = server_ssl_handshake_callback{*ssl_ptr};
         ssl_ptr->sslAccept(&cb);
-        co_await cb.wait();
+        try {
+          co_await folly::coro::timeout(cb.wait(), tls_handshake_timeout);
+        } catch (const folly::FutureTimeout&) {
+          throw folly::AsyncSocketException{
+            folly::AsyncSocketException::TIMED_OUT, "TLS handshake timed out"};
+        }
         if (cb.error()) {
           cb.error().throw_exception();
         }
