@@ -126,7 +126,7 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (done_) {
+    if (done_->load()) {
       co_return {};
     }
     co_return co_await message_queue_->dequeue();
@@ -135,7 +135,7 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    if (done_) {
+    if (done_->load()) {
       co_return;
     }
     auto message = std::move(result).as<Message>();
@@ -252,15 +252,14 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return done_->load() ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
   auto request_stop() -> void {
-    if (done_) {
+    if (done_->exchange(true)) {
       return;
     }
-    done_ = true;
     if (server_) {
       server_->close();
     }
@@ -288,7 +287,7 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    while (not done_) {
+    while (not done_->load()) {
       std::unique_ptr<folly::coro::Transport> transport;
       try {
         co_await folly::coro::co_safe_point;
@@ -301,7 +300,7 @@ private:
       } catch (folly::AsyncSocketException const& ex) {
         // Accept can fail transiently (e.g., client abort/reset). Keep the
         // listener alive and continue with the next accept attempt.
-        if (done_) {
+        if (done_->load()) {
           co_return;
         }
         diagnostic::warning("failed to accept incoming connection")
@@ -424,7 +423,7 @@ private:
     read_cancellation_sources_;
   Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
   uint64_t max_connections_ = 128;
-  bool done_ = false;
+  Box<std::atomic_bool> done_{std::in_place, false};
   mutable uint64_t next_conn_id_{0};
 };
 
