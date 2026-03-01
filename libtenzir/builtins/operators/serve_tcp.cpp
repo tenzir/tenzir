@@ -133,7 +133,7 @@ public:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    auto diagnostics = std::vector<Option<diagnostic>>{};
+    auto diagnostics = std::vector<std::optional<diagnostic>>{};
     diagnostics.resize(clients_.size());
     auto write_tasks = std::vector<Task<void>>{};
     write_tasks.reserve(clients_.size());
@@ -231,31 +231,32 @@ private:
   }
 
   auto write_to_client(Client& client, folly::ByteRange data,
-                       Option<diagnostic>& maybe_diagnostic) -> Task<void> {
+                       std::optional<diagnostic>& maybe_diagnostic)
+    -> Task<void> {
     try {
       co_await folly::coro::timeout(
         folly::coro::co_withExecutor(evb_, client->write(data)), write_timeout);
-      maybe_diagnostic = None{};
+      maybe_diagnostic.reset();
       co_return;
     } catch (folly::FutureTimeout const& ex) {
       auto peer = client->getPeerAddress().describe();
       maybe_diagnostic
-        = Option{diagnostic::warning("failed to write to client {}", peer)
-                   .primary(args_.endpoint.source)
-                   .note("reason: {}", ex.what())
-                   .note("dropping this client and continuing with "
-                         "remaining connections")
-                   .done()};
+        = diagnostic::warning("failed to write to client {}", peer)
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .note("dropping this client and continuing with "
+                  "remaining connections")
+            .done();
       co_return;
     } catch (folly::AsyncSocketException const& ex) {
       auto peer = client->getPeerAddress().describe();
       maybe_diagnostic
-        = Option{diagnostic::warning("failed to write to client {}", peer)
-                   .primary(args_.endpoint.source)
-                   .note("reason: {}", ex.what())
-                   .note("dropping this client and continuing with "
-                         "remaining connections")
-                   .done()};
+        = diagnostic::warning("failed to write to client {}", peer)
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .note("dropping this client and continuing with "
+                  "remaining connections")
+            .done();
       co_return;
     }
   }

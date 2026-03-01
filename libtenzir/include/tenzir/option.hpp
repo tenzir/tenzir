@@ -359,7 +359,13 @@ public:
   }
 
   /// An option equals a value iff it is Some and the values are equal.
-  friend auto operator==(Option const& lhs, Value const& rhs) -> bool {
+  template <class U>
+    requires(not std::same_as<std::remove_cvref_t<U>, None>
+             and not std::same_as<std::remove_cvref_t<U>, Option>
+             and requires(Value const& a, U const& b) {
+               { a == b } -> std::convertible_to<bool>;
+             })
+  friend auto operator==(Option const& lhs, U const& rhs) -> bool {
     return lhs.is_some() and *lhs == rhs;
   }
 
@@ -381,7 +387,13 @@ public:
   }
 
   /// Compares directly against a value. None is less than any value.
-  friend auto operator<=>(Option const& lhs, Value const& rhs) {
+  template <class U>
+    requires(not std::same_as<std::remove_cvref_t<U>, None>
+             and not std::same_as<std::remove_cvref_t<U>, Option>
+             and requires(Value const& a, U const& b) {
+               { a <=> b };
+             })
+  friend auto operator<=>(Option const& lhs, U const& rhs) {
     if (lhs.is_some()) {
       return *lhs <=> rhs;
     }
