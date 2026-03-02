@@ -428,16 +428,12 @@ private:
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
                     MetricsVisibility visibility) -> MetricsCounter override {
-    return exec_ctx_.metrics()->make_counter(label, direction, visibility);
+    return exec_ctx_.make_counter(label, direction, visibility);
   }
 
   auto make_gauge(MetricsLabel label, MetricsDirection direction,
                   MetricsVisibility visibility) -> MetricsGauge override {
-    return exec_ctx_.metrics()->make_gauge(label, direction, visibility);
-  }
-
-  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& override {
-    return exec_ctx_.metrics();
+    return exec_ctx_.make_gauge(label, direction, visibility);
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {

@@ -136,30 +136,17 @@ public:
   }
 
   /// Create a throughput counter with the given label.
-  /// Returns a null counter if metrics collection is disabled.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility) -> MetricsCounter {
-    TENZIR_UNUSED(label, direction, visibility);
-    return {};
-  }
+                            MetricsVisibility visibility) -> MetricsCounter
+    = 0;
 
-  /// Create a throughput counter with the given label.
-  /// Returns a null counter if metrics collection is disabled.
+  /// Create a throughput gauge with the given label.
   virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                          MetricsVisibility visibility) -> MetricsGauge {
-    TENZIR_UNUSED(label, direction, visibility);
-    return {};
-  }
-
-  virtual auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
-    static auto empty = std::shared_ptr<PipelineMetrics>{};
-    return empty;
-  }
+                          MetricsVisibility visibility) -> MetricsGauge
+    = 0;
 
   /// Returns the metrics receiver actor handle, if available.
-  virtual auto metrics_receiver() const -> metrics_receiver_actor {
-    return {};
-  }
+  virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
 };
 
 enum class OperatorState {
