@@ -1041,19 +1041,18 @@ public:
         caf::anon_mail(std::move(sink_metric)).send(targets_.metrics);
       }
     }
-    auto* importer = targets_.profiler.is_some()
-                       ? try_as<importer_actor>(*targets_.profiler)
-                       : nullptr;
-    if (importer) {
+    auto* live = targets_.profiler.is_some()
+                   ? try_as<LiveProfiler>(*targets_.profiler)
+                   : nullptr;
+    if (live) {
       auto channels = get_channel_profiles();
       auto executors = get_executor_profiles();
       auto snapshot_time = floor(now, defaults::metrics_interval);
       auto snapshot = build_profiler_snapshot(channels, executors,
                                               snapshot_time, prev_snapshots_);
       if (not snapshot.operators.empty()) {
-        for (auto& slice :
-             build_profiler_slices(snapshot, targets_.pipeline_id)) {
-          caf::anon_mail(std::move(slice)).send(*importer);
+        for (auto& slice : build_profiler_slices(snapshot, live->pipeline_id)) {
+          caf::anon_mail(std::move(slice)).send(live->importer);
         }
       }
     }
