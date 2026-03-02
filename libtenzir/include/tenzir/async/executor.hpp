@@ -213,7 +213,7 @@ public:
   }
 
   /// Returns a per-operator CPU executor.
-  virtual auto make_executor(OpId id, std::string name = {})
+  virtual auto make_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<>
     = 0;
 
