@@ -12,19 +12,18 @@
 namespace tenzir {
 
 template <class Input>
-OpenPipeline<Input>::OpenPipeline(Push<OperatorMsg<Input>>& push)
-  : push_{push} {
-}
-
-template <class Input>
 template <std::same_as<Input> In>
 auto OpenPipeline<Input>::push(In input) -> Task<Result<void, In>> {
-  if constexpr (std::same_as<Input, table_slice>) {
-    LOGW("pushing {} rows to subpipeline", input.rows());
+  if (push_) {
+    if constexpr (std::same_as<Input, table_slice>) {
+      LOGW("pushing {} rows to subpipeline", input.rows());
+    } else {
+      LOGW("pushing {} bytes to subpipeline", input ? input->size() : 0);
+    }
+    co_await (*push_)(std::move(input));
   } else {
-    LOGW("pushing {} bytes to subpipeline", input ? input->size() : 0);
+    LOGW("discarding {} rows due to closed subpipeline");
   }
-  co_await push_(std::move(input));
   co_return {};
 }
 
@@ -32,7 +31,12 @@ template <class Input>
 auto OpenPipeline<Input>::close() -> Task<void>
   requires(not std::same_as<Input, void>)
 {
-  co_await push_(EndOfData{});
+  if (push_) {
+    LOGW("pushing end-of-data to subpipeline", input.rows());
+    co_await (*push_)(EndOfData{});
+  } else {
+    LOGW("discarding end-of-data due to closed subpipeline");
+  }
 }
 
 template class OpenPipeline<void>;
