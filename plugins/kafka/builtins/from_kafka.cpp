@@ -734,7 +734,7 @@ private:
     }
     auto source_consumer = SourceConsumer{
       .consumer_cfg = std::move(source_cfg),
-      .consumer = Box<RdKafka::KafkaConsumer>::from_unique_ptr(
+      .consumer = Box<RdKafka::KafkaConsumer>::from_non_null(
         std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}),
     };
     if (source_consumer.consumer_cfg.oauth_callback) {

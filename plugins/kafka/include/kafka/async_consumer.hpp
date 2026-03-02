@@ -326,7 +326,7 @@ public:
       return Err{std::move(fds).unwrap_err()};
     }
     auto wakeup_fd = std::move(fds).unwrap();
-    auto result = Box<AsyncConsumerQueue>::from_unique_ptr(
+    auto result = Box<AsyncConsumerQueue>::from_non_null(
       std::unique_ptr<AsyncConsumerQueue>{
         new AsyncConsumerQueue(event_base, queue.release(), wakeup_fd)});
     return result;

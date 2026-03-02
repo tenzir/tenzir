@@ -395,7 +395,7 @@ public:
         co_return;
       }
       producer_.emplace(args_.topic, args_.message, auth_, std::move(*cfg),
-                        Box<RdKafka::Producer>::from_unique_ptr(
+                        Box<RdKafka::Producer>::from_non_null(
                           std::unique_ptr<RdKafka::Producer>{raw_producer}),
                         write_bytes_counter_);
       co_return;
@@ -418,7 +418,7 @@ public:
       }
       worker_handles_.push_back(ctx.spawn_task(worker_loop(AsyncKafkaProducer{
         args_.topic, args_.message, auth_, std::move(worker_cfg),
-        Box<RdKafka::Producer>::from_unique_ptr(
+        Box<RdKafka::Producer>::from_non_null(
           std::unique_ptr<RdKafka::Producer>{raw_producer}),
         write_bytes_counter_})));
     }

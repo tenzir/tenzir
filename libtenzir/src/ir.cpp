@@ -719,7 +719,7 @@ auto ir::Operator::copy() const -> Box<Operator> {
                  g.get_error());
     TENZIR_ASSERT(false);
   }
-  return Box<Operator>::from_unique_ptr(std::move(copy));
+  return Box<Operator>::from_non_null(std::move(copy));
 }
 
 auto ir::Operator::move() && -> Box<Operator> {
