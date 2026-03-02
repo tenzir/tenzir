@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <atomic>
+#include <concepts>
 
 namespace tenzir {
 
@@ -19,7 +20,10 @@ public:
 
   constexpr Atomic() noexcept = default;
 
-  constexpr explicit Atomic(T desired) noexcept : data_{desired} {
+  template <class U>
+    requires std::constructible_from<T, U>
+  constexpr explicit Atomic(U desired) noexcept
+    : data_{static_cast<T>(desired)} {
   }
 
   constexpr Atomic(const Atomic& other) noexcept

@@ -10,6 +10,7 @@
 
 #include "tenzir/async/executor.hpp"
 #include "tenzir/async/mutex.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
@@ -620,16 +621,29 @@ struct ExecutorStats {
   std::atomic<size_t> task_count{0};
 };
 
+/// Wrap an existing `folly::Executor` to support keep-alive.
+template <class Executor>
+class KeepAliveExecutor final : public Executor {
+public:
+  explicit KeepAliveExecutor(Box<Executor> inner) : inner_{std::move(inner)} {
+  }
+
+private:
+  Executor inner_;
+};
+
 /// Executor wrapper that forwards tasks to an inner executor while measuring
 /// wall-clock time, thread CPU time, and task count. Also sets the
 /// exec_node_name_guard thread-local for each continuation so that
 /// per-operator tracking (e.g. allocator tagging) works in the async path.
-class ProfilingExecutor : public folly::Executor {
+class ProfilingExecutor final : public folly::Executor {
 public:
-  ProfilingExecutor(folly::Executor::KeepAlive<> inner,
-                    std::shared_ptr<ExecutorStats> stats,
-                    exec_node_name_guard::name_type name)
-    : inner_{std::move(inner)}, stats_{std::move(stats)}, name_{name} {
+  static auto
+  make(folly::Executor::KeepAlive<> inner, std::shared_ptr<ExecutorStats> stats,
+       exec_node_name_guard::name_type name) -> folly::Executor::KeepAlive<> {
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    return folly::Executor::makeKeepAlive(new ProfilingExecutor{
+      std::move(inner), std::move(stats), std::move(name)});
   }
 
   void add(folly::Func f) override {
@@ -670,9 +684,34 @@ public:
     });
   }
 
+  auto keepAliveAcquire() noexcept -> bool override {
+    auto previous = refs_.fetch_add(1, std::memory_order::relaxed);
+    if (previous == 0) {
+      TENZIR_ERROR("unexpected acquire of executor keep-alive");
+    }
+    return true;
+  }
+
+  auto keepAliveRelease() noexcept -> void override {
+    auto previous = refs_.fetch_sub(1, std::memory_order::release);
+    if (previous == 0) {
+      TENZIR_ERROR("unexpected release of executor keep-alive");
+    } else if (previous == 1) {
+      std::atomic_thread_fence(std::memory_order::acquire);
+      delete this;
+    }
+  }
+
 private:
+  ProfilingExecutor(folly::Executor::KeepAlive<> inner,
+                    std::shared_ptr<ExecutorStats> stats,
+                    exec_node_name_guard::name_type name)
+    : inner_{std::move(inner)}, stats_{std::move(stats)}, name_{name} {
+  }
+
   folly::Executor::KeepAlive<> inner_;
   std::shared_ptr<ExecutorStats> stats_;
+  Atomic<size_t> refs_{1};
   exec_node_name_guard::name_type name_;
 };
 
@@ -689,9 +728,7 @@ public:
   }
 
   auto send(OperatorMsg<T> x) -> Task<void> {
-    auto lock = co_await mutex_.lock();
     auto bytes = count_bytes(x);
-    lock->current_bytes += bytes;
     // Update profiling counters.
     if (stats_) {
       stats_->in.bytes.fetch_add(bytes, std::memory_order::relaxed);
@@ -703,6 +740,8 @@ public:
                                     std::memory_order::relaxed);
       }
     }
+    auto lock = co_await mutex_.lock();
+    lock->current_bytes += bytes;
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
     // Block sender if buffer exceeds capacity. Large messages may temporarily
@@ -743,6 +782,7 @@ public:
     lock->queue.pop_front();
     auto bytes = count_bytes(result);
     lock->current_bytes -= bytes;
+    lock.unlock();
     // Update profiling counters.
     if (stats_) {
       stats_->out.bytes.fetch_add(bytes, std::memory_order::relaxed);
@@ -837,7 +877,6 @@ private:
 struct ChannelProfile {
   ChannelId id;
   std::shared_ptr<ChannelStats> stats;
-  size_t max_bytes;
   element_type_tag type;
 };
 
@@ -880,7 +919,7 @@ auto build_profiler_snapshot(
   time timestamp, std::unordered_map<std::string, TrackedOpSnapshot>& prev,
   bool do_cleanup) -> ProfilerSnapshot;
 
-class TestExecCtx : public ExecCtx {
+class TestExecCtx final : public ExecCtx {
 public:
   explicit TestExecCtx(bool profiling = false,
                        run_plan_telemetry_targets targets = {},
@@ -891,47 +930,48 @@ public:
       start_time_{time::clock::now()} {
   }
 
+  /// Return the current set of channel profiles.
+  ///
+  /// Once a channel is deleted, its information will be returned from this
+  /// function one final time before it gets erased. Thus, it is important to
+  /// actually call this function if `profiling` is enabled.
   auto get_channel_profiles() -> std::vector<ChannelProfile> {
     auto lock = std::scoped_lock{mutex_};
-    return channel_profiles_;
+    // We first determine what to delete, then clone the information, and then
+    // delete. This is because we need to ensure that we get the latest state.
+    auto removed
+      = std::ranges::remove_if(channels_, [](ChannelProfile const& c) {
+          return c.stats.use_count() == 1;
+        });
+    auto copy = channels_;
+    channels_.erase(removed.begin(), removed.end());
+    return copy;
   }
 
+  /// Return the current set of executor profiles.
+  ///
+  /// Once an executor is deleted, its information will be returned from this
+  /// function one final time before it gets erased. Thus, it is important to
+  /// actually call this function if `profiling` is enabled.
   auto get_executor_profiles() -> std::vector<ExecutorProfile> {
     auto lock = std::scoped_lock{mutex_};
-    return executor_profiles_;
+    // We first determine what to delete, then clone the information, and then
+    // delete. This is because we need to ensure that we get the latest state.
+    auto removed
+      = std::ranges::remove_if(executors_, [](ExecutorProfile const& e) {
+          return e.stats.use_count() == 1;
+        });
+    auto copy = executors_;
+    executors_.erase(removed.begin(), removed.end());
+    return copy;
   }
 
   auto make_executor(OpId id) -> folly::Executor::KeepAlive<> override {
-    auto name = exec_node_name_guard::name_type{};
-    std::copy_n(id.value.begin(), std::min(id.value.size(), name.size()),
-                name.begin());
-    auto stats = profiling_ ? std::make_shared<ExecutorStats>() : nullptr;
-    auto exec = std::make_unique<ProfilingExecutor>(
-      folly::getGlobalCPUExecutor(), stats, name);
-    auto keep_alive = folly::Executor::getKeepAliveToken(exec.get());
-    auto lock = std::scoped_lock{mutex_};
-    if (stats) {
-      executor_profiles_.push_back(ExecutorProfile{id, std::move(stats)});
-    }
-    executors_.push_back(std::move(exec));
-    return keep_alive;
+    return wrap_executor(std::move(id), folly::getGlobalCPUExecutor());
   }
 
   auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> override {
-    auto name = exec_node_name_guard::name_type{};
-    std::copy_n(id.value.begin(), std::min(id.value.size(), name.size()),
-                name.begin());
-    auto stats = profiling_ ? std::make_shared<ExecutorStats>() : nullptr;
-    auto exec = std::make_unique<ProfilingExecutor>(
-      folly::getGlobalIOExecutor(), stats, name);
-    auto ka = folly::Executor::getKeepAliveToken(exec.get());
-    auto lock = std::scoped_lock{mutex_};
-    if (stats) {
-      auto io_id = OpId{fmt::format("{} (io)", id.value)};
-      executor_profiles_.push_back(ExecutorProfile{io_id, std::move(stats)});
-    }
-    executors_.push_back(std::move(exec));
-    return ka;
+    return wrap_executor(std::move(id), folly::getGlobalIOExecutor());
   }
 
   auto register_op_name(OpId id, std::type_info const& type) -> void override {
@@ -1059,6 +1099,33 @@ protected:
   }
 
 private:
+  /// Wraps an executor to contribute to the stats of the given operator.
+  auto wrap_executor(OpId id, folly::Executor::KeepAlive<> inner)
+    -> folly::Executor::KeepAlive<> {
+    auto name = exec_node_name_guard::name_type{};
+    std::copy_n(id.value.begin(), std::min(id.value.size(), name.size()),
+                name.begin());
+    auto stats = std::shared_ptr<ExecutorStats>{};
+    auto lock = std::scoped_lock{mutex_};
+    if (profiling_) {
+      // Look for an existing executor with the same ID to share stats with.
+      for (auto& e : executors_) {
+        if (e.id == id) {
+          stats = e.stats;
+          break;
+        }
+      }
+      if (not stats) {
+        stats = std::make_shared<ExecutorStats>();
+      }
+    }
+    auto executor = ProfilingExecutor::make(std::move(inner), stats, name);
+    if (stats) {
+      executors_.push_back(ExecutorProfile{id, std::move(stats)});
+    }
+    return executor;
+  }
+
   /// Create an operator channel with the specified memory limit and collect
   /// its profile.
   ///
@@ -1073,8 +1140,7 @@ private:
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
       auto lock = std::scoped_lock{mutex_};
-      channel_profiles_.push_back(
-        ChannelProfile{id, stats, max_bytes, tag_v<T>});
+      channels_.push_back(ChannelProfile{id, stats, tag_v<T>});
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -1089,10 +1155,8 @@ private:
   size_t metrics_tick_ = 0;
   static constexpr size_t cleanup_interval = 60;
   std::mutex mutex_;
-  std::vector<ChannelProfile> channel_profiles_;
-  std::vector<ExecutorProfile> executor_profiles_;
-  // Owns the ProfilingExecutor instances to keep them alive.
-  std::vector<std::unique_ptr<ProfilingExecutor>> executors_;
+  std::vector<ChannelProfile> channels_;
+  std::vector<ExecutorProfile> executors_;
   std::unordered_map<std::string, std::string> op_type_names_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
@@ -1120,7 +1184,6 @@ struct ProfileSample {
     size_t events_out;
     size_t signals_in;
     size_t signals_out;
-    size_t max_bytes;
   };
   std::vector<Channel> channels;
   struct Executor {
@@ -1902,7 +1965,6 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
               p.stats->out.events.load(std::memory_order::relaxed),
               p.stats->in.signals.load(std::memory_order::relaxed),
               p.stats->out.signals.load(std::memory_order::relaxed),
-              p.max_bytes,
             });
           }
           sample.executors.reserve(executor_profiles.size());

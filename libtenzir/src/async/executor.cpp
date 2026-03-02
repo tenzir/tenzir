@@ -610,9 +610,9 @@ private:
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
         auto [push_downstream, pull_downstream]
-          = exec_ctx_.make<Out>(id_.to(sub_id.op(0)));
+          = exec_ctx_.make_channel<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
-          = exec_ctx_.make<In>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<In>(sub_id.op(chain.size() - 1).to(id_));
         auto output_is_void = std::same_as<Out, void>;
         queue_.scope().spawn(
           [this, key, end_of_data, output_is_void,
@@ -1306,7 +1306,7 @@ private:
             return std::move(as<Box<Push<OperatorMsg<Out>>>>(push_downstream_));
           }
           auto [sender, receiver]
-            = exec_ctx_.make<Out>(id_.op(index).to(id_.op(index + 1)));
+            = exec_ctx_.make_channel<Out>(id_.op(index).to(id_.op(index + 1)));
           next_input = std::move(receiver);
           return std::move(sender);
         }();
@@ -1574,9 +1574,9 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
-    = exec_ctx.make<void>(ChannelId::first(id.op(0)));
+    = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
-    = exec_ctx.make<void>(ChannelId::last(id.op(pipeline.size() - 1)));
+    = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
   try {
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);
