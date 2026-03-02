@@ -9,7 +9,7 @@
     process_id: "10024",
     message_id: null,
     structured_data: {
-      "checkpoint@2620": {
+      checkpoint_2620: {
         action: "Accept",
         conn_direction: "Incoming",
         flags: 8667398,
@@ -29,7 +29,7 @@
     process_id: "10024",
     message_id: null,
     structured_data: {
-      "checkpoint@2620": {
+      checkpoint_2620: {
         action: "Accept",
         conn_direction: "Incoming",
         flags: 8667398,
