@@ -884,6 +884,7 @@ struct ChannelProfile {
 struct ExecutorProfile {
   OpId id;
   std::shared_ptr<ExecutorStats> stats;
+  std::string name;
 };
 
 /// Per-operator snapshot of cumulative counters, used to detect which
@@ -914,10 +915,9 @@ struct TrackedOpSnapshot {
 // Forward declaration for use in TestExecCtx::emit_metrics().
 auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
-  std::span<ExecutorProfile const> executor_profiles,
-  std::unordered_map<std::string, std::string> const& op_type_names,
-  time timestamp, std::unordered_map<std::string, TrackedOpSnapshot>& prev,
-  bool do_cleanup) -> ProfilerSnapshot;
+  std::span<ExecutorProfile const> executor_profiles, time timestamp,
+  std::unordered_map<std::string, TrackedOpSnapshot>& prev, bool do_cleanup)
+  -> ProfilerSnapshot;
 
 class TestExecCtx final : public ExecCtx {
 public:
@@ -966,32 +966,14 @@ public:
     return copy;
   }
 
-  auto make_executor(OpId id) -> folly::Executor::KeepAlive<> override {
-    return wrap_executor(std::move(id), folly::getGlobalCPUExecutor());
+  auto make_executor(OpId id, std::string name = {})
+    -> folly::Executor::KeepAlive<> override {
+    return wrap_executor(std::move(id), folly::getGlobalCPUExecutor(),
+                         std::move(name));
   }
 
   auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> override {
     return wrap_executor(std::move(id), folly::getGlobalIOExecutor());
-  }
-
-  auto register_op_name(OpId id, std::type_info const& type) -> void override {
-    auto demangled = folly::demangle(type);
-    auto name = std::string{demangled};
-    // Strip namespace prefix, keeping only the class name.
-    // Only look before '<' to avoid matching '::' inside template arguments.
-    auto tpl = name.find('<');
-    auto prefix = tpl != std::string::npos ? name.substr(0, tpl) : name;
-    auto pos = prefix.rfind("::");
-    if (pos != std::string::npos) {
-      name = name.substr(pos + 2);
-    }
-    auto lock = std::scoped_lock{mutex_};
-    op_type_names_[id.value] = std::move(name);
-  }
-
-  auto op_type_names() -> std::unordered_map<std::string, std::string> {
-    auto lock = std::scoped_lock{mutex_};
-    return op_type_names_;
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
@@ -1069,10 +1051,9 @@ public:
     if (targets_.importer and profiling_) {
       auto channels = get_channel_profiles();
       auto executors = get_executor_profiles();
-      auto names = op_type_names();
       auto snapshot_time = floor(now, defaults::metrics_interval);
       auto snapshot
-        = build_profiler_snapshot(channels, executors, names, snapshot_time,
+        = build_profiler_snapshot(channels, executors, snapshot_time,
                                   prev_snapshots_,
                                   ++metrics_tick_ % cleanup_interval == 0);
       if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
@@ -1100,11 +1081,11 @@ protected:
 
 private:
   /// Wraps an executor to contribute to the stats of the given operator.
-  auto wrap_executor(OpId id, folly::Executor::KeepAlive<> inner)
-    -> folly::Executor::KeepAlive<> {
-    auto name = exec_node_name_guard::name_type{};
-    std::copy_n(id.value.begin(), std::min(id.value.size(), name.size()),
-                name.begin());
+  auto wrap_executor(OpId id, folly::Executor::KeepAlive<> inner,
+                     std::string op_name = {}) -> folly::Executor::KeepAlive<> {
+    auto node_name = exec_node_name_guard::name_type{};
+    std::copy_n(id.value.begin(), std::min(id.value.size(), node_name.size()),
+                node_name.begin());
     auto stats = std::shared_ptr<ExecutorStats>{};
     auto lock = std::scoped_lock{mutex_};
     if (profiling_) {
@@ -1119,9 +1100,10 @@ private:
         stats = std::make_shared<ExecutorStats>();
       }
     }
-    auto executor = ProfilingExecutor::make(std::move(inner), stats, name);
+    auto executor = ProfilingExecutor::make(std::move(inner), stats, node_name);
     if (stats) {
-      executors_.push_back(ExecutorProfile{id, std::move(stats)});
+      executors_.push_back(
+        ExecutorProfile{id, std::move(stats), std::move(op_name)});
     }
     return executor;
   }
@@ -1157,7 +1139,6 @@ private:
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
-  std::unordered_map<std::string, std::string> op_type_names_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -1188,6 +1169,7 @@ struct ProfileSample {
   std::vector<Channel> channels;
   struct Executor {
     std::string name;
+    std::string op_name;
     int64_t wall_ns;
     int64_t cpu_ns;
     size_t task_count;
@@ -1195,11 +1177,10 @@ struct ProfileSample {
   std::vector<Executor> executors;
 };
 
-void write_profile(
-  std::string const& path, std::vector<ProfileSample> const& samples,
-  std::chrono::steady_clock::time_point t0,
-  std::unordered_map<std::string, std::string> const& op_type_names,
-  std::vector<ChannelProfile> const& channel_profiles) {
+void write_profile(std::string const& path,
+                   std::vector<ProfileSample> const& samples,
+                   std::chrono::steady_clock::time_point t0,
+                   std::vector<ChannelProfile> const& channel_profiles) {
   auto f = std::ofstream{path};
   if (not f) {
     TENZIR_WARN("failed to open profile output file: {}", path);
@@ -1243,9 +1224,15 @@ void write_profile(
       channel_endpoints[ch.name] = {std::move(sender), std::move(receiver)};
     }
     for (auto const& ex : sample.executors) {
-      // IO executor metrics are merged into the parent operator below.
-      if (not ex.name.ends_with(" (io)")) {
-        add_op(ex.name);
+      add_op(ex.name);
+    }
+  }
+  // Build operator type name lookup from executor samples.
+  auto op_type_names = std::unordered_map<std::string, std::string>{};
+  for (auto const& sample : samples) {
+    for (auto const& ex : sample.executors) {
+      if (not ex.op_name.empty()) {
+        op_type_names.emplace(ex.name, ex.op_name);
       }
     }
   }
@@ -1349,7 +1336,7 @@ void write_profile(
       pid, sort_index));
   };
   // Look up the operator type name for a given op name. The op name may have
-  // a suffix like " (io)" or " (subs)", so we strip it to find the base ID.
+  // a suffix like " (subs)", so we strip it to find the base ID.
   auto display_name = [&](std::string const& name) -> std::string {
     auto base = name;
     auto space = base.find(' ');
@@ -1473,15 +1460,10 @@ void write_profile(
       interval_s = 0.001;
     }
     auto aggs = aggregate_channels(sample);
-    // Build per-operator executor lookup for this sample. IO executor
-    // stats are merged into the parent operator's entry.
+    // Build per-operator executor lookup for this sample.
     auto cur_execs = std::vector<PrevExec>(op_names.size());
     for (auto const& ex : sample.executors) {
-      auto name = ex.name;
-      if (name.ends_with(" (io)")) {
-        name = name.substr(0, name.size() - 5);
-      }
-      if (auto it = op_index.find(name); it != op_index.end()) {
+      if (auto it = op_index.find(ex.name); it != op_index.end()) {
         auto& entry = cur_execs[it->second];
         entry.wall_ns += ex.wall_ns;
         entry.cpu_ns += ex.cpu_ns;
@@ -1677,10 +1659,9 @@ void write_profile(
 /// time between ticks.
 auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
-  std::span<ExecutorProfile const> executor_profiles,
-  std::unordered_map<std::string, std::string> const& op_type_names,
-  time timestamp, std::unordered_map<std::string, TrackedOpSnapshot>& prev,
-  bool do_cleanup) -> ProfilerSnapshot {
+  std::span<ExecutorProfile const> executor_profiles, time timestamp,
+  std::unordered_map<std::string, TrackedOpSnapshot>& prev, bool do_cleanup)
+  -> ProfilerSnapshot {
   // Collect unique operator names from channels and executors.
   auto op_names = std::vector<std::string>{};
   auto op_set = std::unordered_set<std::string>{};
@@ -1707,8 +1688,13 @@ auto build_profiler_snapshot(
     channel_endpoints[prof.id.value] = {std::move(sender), std::move(receiver)};
   }
   for (auto const& ex : executor_profiles) {
-    if (not ex.id.value.ends_with(" (io)")) {
-      add_op(ex.id.value);
+    add_op(ex.id.value);
+  }
+  // Build operator type name lookup from executor profiles.
+  auto op_type_names = std::unordered_map<std::string, std::string>{};
+  for (auto const& ex : executor_profiles) {
+    if (not ex.name.empty()) {
+      op_type_names.emplace(ex.id.value, ex.name);
     }
   }
   // Build per-operator index.
@@ -1780,8 +1766,7 @@ auto build_profiler_snapshot(
       agg.signals_in += signals_out;
     }
   }
-  // Merge executor stats per operator. IO executor stats are merged into
-  // the parent operator.
+  // Merge executor stats per operator.
   struct ExecAgg {
     int64_t cpu_ns = 0;
     int64_t wall_ns = 0;
@@ -1789,11 +1774,7 @@ auto build_profiler_snapshot(
   };
   auto exec_aggs = std::vector<ExecAgg>(op_names.size());
   for (auto const& ex : executor_profiles) {
-    auto name = ex.id.value;
-    if (name.ends_with(" (io)")) {
-      name = name.substr(0, name.size() - 5);
-    }
-    if (auto it = op_index.find(name); it != op_index.end()) {
+    if (auto it = op_index.find(ex.id.value); it != op_index.end()) {
       auto& ea = exec_aggs[it->second];
       ea.cpu_ns += ex.stats->cpu_ns.load(std::memory_order::relaxed);
       ea.wall_ns += ex.stats->wall_ns.load(std::memory_order::relaxed);
@@ -1971,6 +1952,7 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
           for (auto& p : executor_profiles) {
             sample.executors.push_back({
               p.id.value,
+              p.name,
               p.stats->wall_ns.load(std::memory_order::relaxed),
               p.stats->cpu_ns.load(std::memory_order::relaxed),
               p.stats->task_count.load(std::memory_order::relaxed),
@@ -1986,8 +1968,7 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
     scope.cancel();
   });
   if (profile_path) {
-    write_profile(*profile_path, samples, t0, exec_ctx.op_type_names(),
-                  exec_ctx.get_channel_profiles());
+    write_profile(*profile_path, samples, t0, exec_ctx.get_channel_profiles());
   }
   if (needs_metrics_loop) {
     exec_ctx.emit_metrics(time::clock::now());
