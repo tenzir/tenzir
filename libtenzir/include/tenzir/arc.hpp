@@ -43,13 +43,12 @@ public:
     return Arc{std::move(ptr)};
   }
 
+  Arc() = delete;
   Arc(Arc const&) = default;
   auto operator=(Arc const&) -> Arc& = default;
   Arc(Arc&&) = default;
   auto operator=(Arc&&) -> Arc& = default;
   ~Arc() = default;
-
-  Arc() = default;
 
   /// Constructs an arc from a value whose `shared_ptr` is compatible with `T`.
   /// Preserves the dynamic type of `U` (no slicing for polymorphic types).
