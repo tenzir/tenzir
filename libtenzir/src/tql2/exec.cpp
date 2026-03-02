@@ -705,6 +705,14 @@ public:
         auto bp_end = std::chrono::steady_clock::now();
         stats_->record_backpressure(bp_start, bp_end);
       }
+      // Cascade: wake the next blocked sender so it can re-check its
+      // condition. This is needed when multiple senders (e.g., parallel
+      // operator pull tasks) block on the same channel. Without this,
+      // notify_one() from the receiver wakes one sender at a time, and
+      // that sender may find the condition still unmet (other senders'
+      // items remain), consuming the token without making progress.
+      // The cascade propagates until all eligible senders have exited.
+      notify_send_.notify_one();
     }
   }
 
@@ -734,6 +742,8 @@ public:
       }
     }
     notify_send_.notify_one();
+    // Cascade to the next blocked receiver (MPMC safety).
+    notify_receive_.notify_one();
     co_return result;
   }
 
@@ -1732,7 +1742,7 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
                    std::optional<std::string> const& profile_path,
                    MetricsCallback emit_fn, ProfilerCallback profiler_fn)
   -> Task<failure_or<void>> {
-  LOGW("spawning plan with {} operators", ops.size());
+  LOGW("spawning plan with {} operators", chain.size());
   // Currently, the profile file and live profiler cannot be active at the same
   // time because the live profiler drains backpressure events that the profile
   // file needs. This can be lifted by accumulating drained events separately.
