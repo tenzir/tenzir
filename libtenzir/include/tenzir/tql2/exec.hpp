@@ -36,22 +36,13 @@ struct OperatorProfileEntry {
   uint64_t events_out = 0;
   uint64_t signals_in = 0;
   uint64_t signals_out = 0;
-  uint64_t buffer_bytes = 0;
-};
-
-/// A single backpressure event.
-struct BackpressureEntry {
-  std::string operator_id;
-  std::string channel;
-  time start = {};
-  duration dur = {};
+  uint64_t input_bytes = 0;
 };
 
 /// Aggregated profiler snapshot emitted each tick.
 struct ProfilerSnapshot {
   time timestamp = {};
   std::vector<OperatorProfileEntry> operators;
-  std::vector<BackpressureEntry> backpressure;
 };
 
 struct run_plan_telemetry_targets {
