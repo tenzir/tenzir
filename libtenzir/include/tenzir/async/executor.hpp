@@ -212,30 +212,26 @@ public:
     }
   }
 
-  /// Returns a per-operator CPU executor. The default returns the global
-  /// CPU executor. Override this to wrap it for profiling.
+  /// Returns a per-operator CPU executor.
   virtual auto make_executor(OpId id, std::string name = {})
-    -> folly::Executor::KeepAlive<> {
-    TENZIR_UNUSED(id);
-    TENZIR_UNUSED(name);
-    return folly::getGlobalCPUExecutor();
-  }
+    -> folly::Executor::KeepAlive<>
+    = 0;
 
-  /// Returns a per-operator IO executor. The default returns the global
-  /// IO executor. Override this to wrap it for profiling.
-  virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> {
-    TENZIR_UNUSED(id);
-    return folly::getGlobalIOExecutor();
-  }
+  /// Returns a per-operator IO executor.
+  virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> = 0;
 
   /// Returns the metrics receiver actor handle, if available.
-  virtual auto metrics_receiver() const -> metrics_receiver_actor {
-    return {};
-  }
+  virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
 
-  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
-    return metrics_;
-  }
+  /// Create and register a new counter for the pipeline.
+  virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
+                            MetricsVisibility visibility) -> MetricsCounter
+    = 0;
+
+  /// Create and register a new gauge for the pipeline.
+  virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
+                          MetricsVisibility visibility) -> MetricsGauge
+    = 0;
 
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
@@ -244,10 +240,6 @@ protected:
     = 0;
 
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
-
-private:
-  std::shared_ptr<PipelineMetrics> metrics_
-    = std::make_shared<PipelineMetrics>();
 };
 
 /// A diagnostic handler that is guaranteed to be thread-safe.
