@@ -104,7 +104,7 @@ public:
       = co_await folly::coro::co_withExecutor(evb_, server_->accept());
     TENZIR_INFO("from_tcp: accepted connection from {}",
                 transport->getPeerAddress().describe());
-    co_return Box<folly::coro::Transport>::from_unique_ptr(
+    co_return Box<folly::coro::Transport>::from_non_null(
       std::move(transport));
   }
 

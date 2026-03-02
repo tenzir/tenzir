@@ -43,7 +43,7 @@ template <class T>
 class Box {
 public:
   /// Constructs a box from an existing non-null `unique_ptr`.
-  static auto from_unique_ptr(std::unique_ptr<T> ptr) -> Box<T> {
+  static auto from_non_null(std::unique_ptr<T> ptr) -> Box<T> {
     return Box{std::move(ptr)};
   }
 
