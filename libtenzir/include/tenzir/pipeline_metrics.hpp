@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/panic.hpp"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -133,7 +135,11 @@ public:
   /// Create and register a new counter.
   auto make_gauge(MetricsLabel label, MetricsDirection direction,
                   MetricsVisibility visibility) -> MetricsGauge {
-    return make<MetricsType::gauge>(label, direction, visibility);
+    // Gauge metrics were implemented in the past, but they were not well
+    // integrated. I kept the code in, but we eventually have to remove or
+    // properly fix this.
+    TENZIR_UNUSED(label, direction, visibility);
+    panic("gauge metrics are currently not supported");
   }
 
   /// Read all counters into plain snapshots.

@@ -887,8 +887,8 @@ struct ExecutorProfile {
   std::string name;
 };
 
-/// Per-operator snapshot of cumulative counters, used to detect which
-/// operators have changed between profiler ticks.
+/// Per-operator snapshot of cumulative counters from the previous tick,
+/// used to compute deltas.
 struct OpSnapshot {
   size_t bytes_in = 0;
   size_t bytes_out = 0;
@@ -901,23 +901,13 @@ struct OpSnapshot {
   int64_t cpu_ns = 0;
   int64_t wall_ns = 0;
   size_t task_count = 0;
-
-  friend auto operator==(OpSnapshot const&, OpSnapshot const&) -> bool
-    = default;
-};
-
-/// Wraps OpSnapshot with a last-seen timestamp for TTL-based eviction.
-struct TrackedOpSnapshot {
-  OpSnapshot snap;
-  time last_seen;
 };
 
 // Forward declaration for use in TestExecCtx::emit_metrics().
 auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
   std::span<ExecutorProfile const> executor_profiles, time timestamp,
-  std::unordered_map<std::string, TrackedOpSnapshot>& prev, bool do_cleanup)
-  -> ProfilerSnapshot;
+  std::unordered_map<OpId, OpSnapshot>& prev) -> ProfilerSnapshot;
 
 class TestExecCtx final : public ExecCtx {
 public:
@@ -988,6 +978,9 @@ public:
       auto internal_read_bytes = uint64_t{0};
       auto internal_write_bytes = uint64_t{0};
       for (auto const& e : entries) {
+        // Gauges are currently not supported (this panic is symmetric to the
+        // metrics interface exposed to operators).
+        TENZIR_ASSERT(e.type != MetricsType::gauge);
         if (e.visibility == MetricsVisibility::external_) {
           if (e.direction == MetricsDirection::read) {
             external_read_bytes += e.value;
@@ -1054,8 +1047,7 @@ public:
       auto snapshot_time = floor(now, defaults::metrics_interval);
       auto snapshot
         = build_profiler_snapshot(channels, executors, snapshot_time,
-                                  prev_snapshots_,
-                                  ++metrics_tick_ % cleanup_interval == 0);
+                                  prev_snapshots_);
       if (not snapshot.operators.empty() or not snapshot.backpressure.empty()) {
         for (auto& slice :
              build_profiler_slices(snapshot, targets_.pipeline_id)) {
@@ -1082,10 +1074,10 @@ protected:
 private:
   /// Wraps an executor to contribute to the stats of the given operator.
   auto wrap_executor(OpId id, folly::Executor::KeepAlive<> inner,
-                     std::string op_name = {}) -> folly::Executor::KeepAlive<> {
-    auto node_name = exec_node_name_guard::name_type{};
-    std::copy_n(id.value.begin(), std::min(id.value.size(), node_name.size()),
-                node_name.begin());
+                     std::string name = {}) -> folly::Executor::KeepAlive<> {
+    auto alloc_name = exec_node_name_guard::name_type{};
+    std::copy_n(id.value.begin(), std::min(id.value.size(), alloc_name.size()),
+                alloc_name.begin());
     auto stats = std::shared_ptr<ExecutorStats>{};
     auto lock = std::scoped_lock{mutex_};
     if (profiling_) {
@@ -1100,10 +1092,11 @@ private:
         stats = std::make_shared<ExecutorStats>();
       }
     }
-    auto executor = ProfilingExecutor::make(std::move(inner), stats, node_name);
+    auto executor
+      = ProfilingExecutor::make(std::move(inner), stats, alloc_name);
     if (stats) {
       executors_.push_back(
-        ExecutorProfile{id, std::move(stats), std::move(op_name)});
+        ExecutorProfile{id, std::move(stats), std::move(name)});
     }
     return executor;
   }
@@ -1133,9 +1126,7 @@ private:
   run_plan_telemetry_targets targets_;
   size_t num_ops_;
   time start_time_;
-  std::unordered_map<std::string, TrackedOpSnapshot> prev_snapshots_;
-  size_t metrics_tick_ = 0;
-  static constexpr size_t cleanup_interval = 60;
+  std::unordered_map<OpId, OpSnapshot> prev_snapshots_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
@@ -1660,52 +1651,45 @@ void write_profile(std::string const& path,
 auto build_profiler_snapshot(
   std::span<ChannelProfile const> channel_profiles,
   std::span<ExecutorProfile const> executor_profiles, time timestamp,
-  std::unordered_map<std::string, TrackedOpSnapshot>& prev, bool do_cleanup)
-  -> ProfilerSnapshot {
-  // Collect unique operator names from channels and executors.
-  auto op_names = std::vector<std::string>{};
-  auto op_set = std::unordered_set<std::string>{};
-  auto add_op = [&](std::string const& name) {
-    if (name == "_") {
+  std::unordered_map<OpId, OpSnapshot>& prev) -> ProfilerSnapshot {
+  // Collect unique operator IDs from channels and executors.
+  auto op_ids = std::vector<OpId>{};
+  auto op_set = std::unordered_set<OpId>{};
+  auto add_op = [&](OpId const& id) {
+    if (id.value == "_") {
       return;
     }
-    if (op_set.insert(name).second) {
-      op_names.push_back(name);
+    if (op_set.insert(id).second) {
+      op_ids.push_back(id);
     }
   };
   struct ChannelEndpoints {
-    std::string sender;
-    std::string receiver;
+    OpId sender;
+    OpId receiver;
   };
   auto channel_endpoints = std::unordered_map<std::string, ChannelEndpoints>{};
   for (auto const& prof : channel_profiles) {
     auto sep = prof.id.value.find(" -> ");
     TENZIR_ASSERT(sep != std::string::npos);
-    auto sender = prof.id.value.substr(0, sep);
-    auto receiver = prof.id.value.substr(sep + 4);
+    auto sender = OpId{prof.id.value.substr(0, sep)};
+    auto receiver = OpId{prof.id.value.substr(sep + 4)};
     add_op(sender);
     add_op(receiver);
-    channel_endpoints[prof.id.value] = {std::move(sender), std::move(receiver)};
+    channel_endpoints[prof.id.value]
+      = {std::move(sender), std::move(receiver)};
   }
   for (auto const& ex : executor_profiles) {
-    add_op(ex.id.value);
-  }
-  // Build operator type name lookup from executor profiles.
-  auto op_type_names = std::unordered_map<std::string, std::string>{};
-  for (auto const& ex : executor_profiles) {
-    if (not ex.name.empty()) {
-      op_type_names.emplace(ex.id.value, ex.name);
-    }
+    add_op(ex.id);
   }
   // Build per-operator index.
-  auto op_index = std::unordered_map<std::string, size_t>{};
-  for (size_t i = 0; i < op_names.size(); ++i) {
-    op_index[op_names[i]] = i;
+  auto op_index = std::unordered_map<OpId, size_t>{};
+  for (size_t i = 0; i < op_ids.size(); ++i) {
+    op_index[op_ids[i]] = i;
   }
-  auto is_child_of
-    = [](std::string const& child, std::string const& parent) -> bool {
-    return child.size() > parent.size() and child.starts_with(parent)
-           and child[parent.size()] == '-';
+  auto is_child_of = [](OpId const& child, OpId const& parent) -> bool {
+    return child.value.size() > parent.value.size()
+           and child.value.starts_with(parent.value)
+           and child.value[parent.value.size()] == '-';
   };
   // Aggregate channel stats per operator.
   struct OpAgg {
@@ -1719,7 +1703,7 @@ auto build_profiler_snapshot(
     size_t signals_out = 0;
     size_t buffer_bytes = 0;
   };
-  auto aggs = std::vector<OpAgg>(op_names.size());
+  auto aggs = std::vector<OpAgg>(op_ids.size());
   for (auto const& prof : channel_profiles) {
     if (not prof.stats) {
       continue;
@@ -1729,12 +1713,14 @@ auto build_profiler_snapshot(
     auto const& [sender, receiver] = it->second;
     // "In" counters go to the sender operator.
     auto sender_target = sender;
-    if (sender != "_" and receiver != "_" and is_child_of(receiver, sender)) {
+    if (sender.value != "_" and receiver.value != "_"
+        and is_child_of(receiver, sender)) {
       sender_target = sender;
     }
     // "Out" counters go to the receiver operator.
     auto receiver_target = receiver;
-    if (sender != "_" and receiver != "_" and is_child_of(sender, receiver)) {
+    if (sender.value != "_" and receiver.value != "_"
+        and is_child_of(sender, receiver)) {
       receiver_target = receiver;
     }
     auto bytes_in = prof.stats->in.bytes.load(std::memory_order::relaxed);
@@ -1768,14 +1754,18 @@ auto build_profiler_snapshot(
   }
   // Merge executor stats per operator.
   struct ExecAgg {
+    std::string name;
     int64_t cpu_ns = 0;
     int64_t wall_ns = 0;
     size_t task_count = 0;
   };
-  auto exec_aggs = std::vector<ExecAgg>(op_names.size());
+  auto exec_aggs = std::vector<ExecAgg>(op_ids.size());
   for (auto const& ex : executor_profiles) {
-    if (auto it = op_index.find(ex.id.value); it != op_index.end()) {
+    if (auto it = op_index.find(ex.id); it != op_index.end()) {
       auto& ea = exec_aggs[it->second];
+      if (ea.name.empty() and not ex.name.empty()) {
+        ea.name = ex.name;
+      }
       ea.cpu_ns += ex.stats->cpu_ns.load(std::memory_order::relaxed);
       ea.wall_ns += ex.stats->wall_ns.load(std::memory_order::relaxed);
       ea.task_count += ex.stats->task_count.load(std::memory_order::relaxed);
@@ -1787,8 +1777,8 @@ auto build_profiler_snapshot(
   auto wall_interval_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                             defaults::metrics_interval)
                             .count();
-  for (size_t i = 0; i < op_names.size(); ++i) {
-    auto const& name = op_names[i];
+  for (size_t i = 0; i < op_ids.size(); ++i) {
+    auto const& id = op_ids[i];
     auto const& agg = aggs[i];
     auto const& ea = exec_aggs[i];
     auto cur = OpSnapshot{
@@ -1796,14 +1786,7 @@ auto build_profiler_snapshot(
       agg.events_in, agg.events_out, agg.signals_in, agg.signals_out,
       ea.cpu_ns,     ea.wall_ns,     ea.task_count,
     };
-    auto& tracked = prev[name];
-    tracked.last_seen = timestamp;
-    if (cur == tracked.snap) {
-      continue;
-    }
-    // Save previous snapshot before overwriting, so we can compute deltas.
-    auto old = tracked.snap;
-    tracked.snap = cur;
+    auto& old = prev[id];
     // Compute CPU usage as percentage of wall-clock time.
     auto cpu_usage = 0.0;
     if (wall_interval_ns > 0) {
@@ -1811,24 +1794,14 @@ auto build_profiler_snapshot(
       cpu_usage = static_cast<double>(delta_cpu_ns)
                   / static_cast<double>(wall_interval_ns) * 100.0;
     }
-    // Look up operator type name.
-    auto type_name = std::string{};
-    auto base = name;
-    auto space = base.find(' ');
-    if (space != std::string::npos) {
-      base = base.substr(0, space);
-    }
-    if (auto it = op_type_names.find(base); it != op_type_names.end()) {
-      type_name = it->second;
-    }
     // Emit deltas for all counters so that each row represents the change
     // during this interval, not a running total.
     auto delta = [](size_t cur, size_t prev) -> uint64_t {
       return static_cast<uint64_t>(cur >= prev ? cur - prev : cur);
     };
     result.operators.push_back(OperatorProfileEntry{
-      .operator_id = name,
-      .operator_type = std::move(type_name),
+      .operator_id = id.value,
+      .operator_type = ea.name,
       .cpu = cpu_usage,
       .task_count = delta(ea.task_count, old.task_count),
       .bytes_in = delta(agg.bytes_in, old.bytes_in),
@@ -1841,7 +1814,12 @@ auto build_profiler_snapshot(
       .signals_out = delta(agg.signals_out, old.signals_out),
       .buffer_bytes = static_cast<uint64_t>(agg.buffer_bytes),
     });
+    old = cur;
   }
+  // Remove entries for operators no longer present.
+  std::erase_if(prev, [&](auto const& kv) {
+    return not op_set.contains(kv.first);
+  });
   // Drain backpressure events from all channels to prevent unbounded memory
   // growth. This is incompatible with `write_profile`, which reads events via
   // `backpressure_events()` — see the assertion in `run_plan_impl`.
@@ -1876,12 +1854,6 @@ auto build_profiler_snapshot(
         .dur = bp_dur,
       });
     }
-  }
-  if (do_cleanup) {
-    static constexpr auto snapshot_ttl = 10 * defaults::metrics_interval;
-    std::erase_if(prev, [&](auto const& kv) {
-      return timestamp - kv.second.last_seen > snapshot_ttl;
-    });
   }
   return result;
 }

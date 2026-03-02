@@ -52,8 +52,15 @@ template class Metric<MetricsType::gauge>;
 template <MetricsType Type>
 auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
                            MetricsVisibility visibility) -> Metric<Type> {
-  auto value = std::make_shared<std::atomic<uint64_t>>(0);
   auto lock = std::lock_guard{mutex_};
+  for (auto& e : entries_) {
+    // We currently ignore the labels and only store one entry per `(direction,
+    // visibility)` combination. This should be cleaned up together with gauges.
+    if (e.direction == direction and e.visibility == visibility) {
+      return Metric<Type>{e.value};
+    }
+  }
+  auto value = std::make_shared<std::atomic<uint64_t>>(0);
   entries_.push_back(entry{
     .label = label,
     .direction = direction,
