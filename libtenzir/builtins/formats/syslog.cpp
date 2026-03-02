@@ -126,6 +126,67 @@ struct parameter {
   data value;
 };
 
+// Check Point logs frequently omit the SD-ID and only emit parameters.
+// We normalize such payloads under a stable synthetic SD-ID.
+constexpr auto checkpoint_default_sdid = std::string_view{"checkpoint@2620"};
+
+template <class Iterator>
+auto parse_parameter_value(Iterator& f, const Iterator& l, data& x) -> bool {
+  using parsers::printable, parsers::ch, parsers::eoi;
+  // RFC 5424 escaping rules for PARAM-VALUE: only `]`, `\`, and `"` may be
+  // escaped with a leading backslash.
+  auto escaped = ignore(ch<'\\'>) >> (ch<']'> | ch<'\\'> | ch<'"'>);
+  // Check Point frequently emits non-RFC structured data where plain `"` may
+  // occur in values. Treat `"` as closing quote only in dialect-specific
+  // boundary positions.
+  //   - `" ` / `";`
+  //   - `"]` followed by end-of-record, whitespace, next SD element, or `;`.
+  auto checkpoint_value_terminator
+    = ch<'"'> >> (ch<' '> | ch<';'>
+                  | (ch<']'> >> (eoi | ch<' '> | ch<'\n'> | ch<'['> | ch<';'>)));
+  // Use non-consuming negative lookahead so terminator probing does not mutate
+  // parser state before `printable` consumes the actual value character.
+  auto value_char = escaped | (! checkpoint_value_terminator >> printable);
+  auto value_data = (*value_char)->*[](std::string val) {
+    data d{};
+    if (not parsers::simple_data(val, d)) {
+      return data{std::move(val)};
+    }
+    return d;
+  };
+  return value_data(f, l, x);
+}
+
+struct parameter_value_parser : parser_base<parameter_value_parser> {
+  using attribute = data;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
+    auto value = data{};
+    if (not parse_parameter_value(f, l, value)) {
+      return false;
+    }
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      x = std::move(value);
+    }
+    return true;
+  }
+};
+
+struct parameter_separator_parser : parser_base<parameter_separator_parser> {
+  using attribute = unused_type;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, const Iterator& l, Attribute&) const -> bool {
+    using parsers::ch;
+    auto spaces = ignore(+ch<' '>);
+    // Check Point commonly uses `;` as a parameter separator.
+    auto semicolon = ignore(ch<';'> >> *ch<' '>);
+    auto separator = spaces | semicolon;
+    return (+separator)(f, l, unused);
+  }
+};
+
 /// Parser for one structured data element parameter.
 /// @relates parameter
 struct parameter_parser : parser_base<parameter_parser> {
@@ -136,30 +197,40 @@ struct parameter_parser : parser_base<parameter_parser> {
     using parsers::printable, parsers::rep, parsers::ch;
     // space, =, ", and ] are not allowed in the key of the parameter.
     auto key = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
-    // \ is used to escape characters.
-    auto esc = ignore(ch<'\\'>);
-    // ], ", \ must be escaped.
-    auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
-    // We allow not escaping it in some situations to be more permissive.
-    auto can_come_after_closing_bracket = parsers::eoi | ' ' | '\n' | '[';
-    auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
-    auto not_escaped = printable - ('"' >> can_come_after_quote);
-    auto value = escaped | not_escaped;
-    auto value_data = (*value)->*[](std::string val) {
-      data d{};
-      if (not parsers::simple_data(val, d)) {
-        return data{std::move(val)};
-      }
-      return d;
+    auto checkpoint_key = key.with([](const std::string& in) {
+      return in.size() > 1 and in.back() == ':';
+    })->*[](std::string in) {
+      in.pop_back();
+      return in;
     };
-    auto p = ' ' >> key >> '=' >> '"' >> value_data >> '"';
+    auto value = parameter_value_parser{};
+    // RFC 5424 syntax: key="value".
+    auto rfc_parameter
+      = key >> ignore(ch<'='>) >> ignore(ch<'"'>) >> value >> ignore(ch<'"'>);
+    // Check Point dialect: key:"value" (colon instead of equals).
+    auto checkpoint_parameter
+      = checkpoint_key >> ignore(ch<'"'>) >> value >> ignore(ch<'"'>);
+    auto p = rfc_parameter | checkpoint_parameter;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
-    } else {
-      return p(f, l, x.key, x.value);
     }
+    return p(f, l, x.key, x.value);
   }
 };
+
+template <class Iterator, class AddParameter>
+auto parse_following_parameters(Iterator& f, const Iterator& l,
+                                AddParameter&& add_parameter) -> bool {
+  using parsers::ch;
+  auto separator = parameter_separator_parser{};
+  auto next_parameter = separator >> ! ch<']'> >> parameter_parser{};
+  auto add_next_parameter = next_parameter->*[&](parameter in) {
+    add_parameter(std::move(in));
+  };
+  auto trailing_separator = separator >> &ch<']'>;
+  auto p = *add_next_parameter >> -trailing_separator;
+  return p(f, l, unused);
+}
 
 /// All parameters of a structured data element.
 using parameters = record;
@@ -170,13 +241,17 @@ struct parameters_parser : parser_base<parameters_parser> {
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    auto param = parameter_parser{}->*[&](parameter in) {
+    auto add_parameter = [&](parameter&& in) {
       if constexpr (not std::is_same_v<Attribute, unused_type>) {
         x.emplace(std::move(in.key), data{std::move(in.value)});
       }
     };
-    auto p = +param;
-    return p(f, l, unused);
+    auto param = parameter{};
+    if (not parameter_parser{}.parse(f, l, param)) {
+      return false;
+    }
+    add_parameter(std::move(param));
+    return parse_following_parameters(f, l, add_parameter);
   }
 };
 
@@ -195,19 +270,65 @@ struct structured_data_element_parser
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using parsers::printable, parsers::rep;
-    auto is_sd_name_char = [](char in) {
-      return in != '=' && in != ' ' && in != ']' && in != '"';
-    };
-    auto sd_name = printable - ' ';
-    auto sd_name_char = sd_name.with(is_sd_name_char);
-    auto sd_id = rep(sd_name_char, 1, 32);
-    auto params = parameters_parser{};
-    auto p = '[' >> sd_id >> params >> ']';
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.id, x.params);
+    auto token_parser = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
+    auto next = f;
+    if (next == l or *next != '[') {
+      return false;
     }
+    ++next;
+    auto first_parameter_start = next;
+    auto token = std::string{};
+    if (not token_parser(next, l, token)) {
+      return false;
+    }
+    if (next == l) {
+      return false;
+    }
+    auto result = structured_data_element{};
+    if (*next == ']') {
+      result.id = std::move(token);
+      ++next;
+    } else if (*next == ' ') {
+      result.id = std::move(token);
+      if (not parameter_separator_parser{}(next, l, unused)) {
+        return false;
+      }
+      if (next == l or *next == ']') {
+        return false;
+      }
+      if (not parameters_parser{}.parse(next, l, result.params)) {
+        return false;
+      }
+      if (next == l or *next != ']') {
+        return false;
+      }
+      ++next;
+    } else {
+      auto first = parameter{};
+      auto param_start = first_parameter_start;
+      if (not parameter_parser{}.parse(param_start, l, first)) {
+        return false;
+      }
+      next = param_start;
+      result.id = std::string{checkpoint_default_sdid};
+      result.params.emplace(std::move(first.key), data{std::move(first.value)});
+      auto add_parameter = [&](parameter&& param) {
+        result.params.emplace(std::move(param.key),
+                              data{std::move(param.value)});
+      };
+      if (not parse_following_parameters(next, l, add_parameter)) {
+        return false;
+      }
+      if (next == l or *next != ']') {
+        return false;
+      }
+      ++next;
+    }
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      x = std::move(result);
+    }
+    f = next;
+    return true;
   }
 };
 
@@ -273,6 +394,78 @@ struct message_parser : parser_base<message_parser> {
     }
   }
 };
+
+template <class Iterator>
+auto parse_checkpoint_missing_sdid_structured_data(Iterator& f,
+                                                   const Iterator& l,
+                                                   structured_data& x) -> bool {
+  using parsers::printable, parsers::rep;
+  auto token_parser = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
+  if (f == l or *f != '[') {
+    return false;
+  }
+  ++f;
+  auto first_parameter_start = f;
+  auto token = std::string{};
+  if (not token_parser(f, l, token)) {
+    return false;
+  }
+  // `[` <token> `]` or `[` <sd-id> ` ...` are standard RFC 5424 forms.
+  // This fallback only handles missing SD-ID variants.
+  if (f == l or *f == ']' or *f == ' ') {
+    return false;
+  }
+  auto first = parameter{};
+  auto param_start = first_parameter_start;
+  if (not parameter_parser{}.parse(param_start, l, first)) {
+    return false;
+  }
+  f = param_start;
+  auto params = parameters{};
+  params.emplace(std::move(first.key), data{std::move(first.value)});
+  auto add_parameter = [&](parameter&& param) {
+    params.emplace(std::move(param.key), data{std::move(param.value)});
+  };
+  if (not parse_following_parameters(f, l, add_parameter)) {
+    return false;
+  }
+  if (f == l or *f != ']') {
+    return false;
+  }
+  ++f;
+  x.emplace(std::string{checkpoint_default_sdid}, data{std::move(params)});
+  return true;
+}
+
+auto parse_rfc5424_or_checkpoint_missing_sdid(std::string_view input,
+                                              message& x) -> bool {
+  auto f = input.begin();
+  if (message_parser{}.parse(f, input.end(), x)) {
+    return true;
+  }
+  x = {};
+  auto l = input.end();
+  if (not header_parser{}.parse(f, l, x.hdr)) {
+    return false;
+  }
+  if (f == l or *f != ' ') {
+    return false;
+  }
+  ++f;
+  if (not parse_checkpoint_missing_sdid_structured_data(f, l, x.data)) {
+    return false;
+  }
+  if (f != l) {
+    if (*f != ' ') {
+      return false;
+    }
+    ++f;
+    if (not message_content_parser{}.parse(f, l, x.msg)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /// A legacy (RFC 3164) Syslog message.
 struct legacy_message {
@@ -753,11 +946,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
-    const auto* f = line->begin();
-    const auto* const l = line->end();
     message msg{};
     legacy_message legacy_msg{};
-    if (auto parser = message_parser{}; parser(f, l, msg)) {
+    if (parse_rfc5424_or_checkpoint_missing_sdid(*line, msg)) {
       for (auto&& s : maybe_flush(builder_tag::syslog_builder)) {
         co_yield std::move(s);
       }
@@ -767,8 +958,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       } else {
         new_builder.add_new({std::move(msg), line_nr});
       }
-    } else if (auto legacy_parser = legacy_message_parser{};
-               legacy_parser(f, l, legacy_msg)) {
+    } else if (auto f = line->begin(), l = line->end();
+               legacy_message_parser{}(f, l, legacy_msg)) {
       for (auto&& s : maybe_flush(builder_tag::legacy_syslog_builder)) {
         co_yield std::move(s);
       }
@@ -1349,12 +1540,11 @@ public:
               const auto try_parse
                 = [&](std::string_view input, message& msg,
                       legacy_message& legacy_msg) -> builder_tag {
-                auto f = input.begin();
-                auto l = input.end();
-                if (message_parser{}.parse(f, l, msg)) {
+                if (parse_rfc5424_or_checkpoint_missing_sdid(input, msg)) {
                   return builder_tag::syslog_builder;
                 }
-                f = input.begin();
+                auto f = input.begin();
+                auto l = input.end();
                 if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
                   return builder_tag::legacy_syslog_builder;
                 }
