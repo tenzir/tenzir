@@ -248,7 +248,7 @@ struct SubPipeline {
     : push{std::move(push)}, from_control{std::move(from_control)} {
   }
 
-  Box<Push<OperatorMsg<Input>>> push;
+  Option<Box<Push<OperatorMsg<Input>>>> push;
   Sender<FromControl> from_control;
 };
 
@@ -259,7 +259,12 @@ public:
 
   auto send(Signal signal) -> Task<void> {
     return co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
-      return self.push(std::move(signal));
+      if (not self.push) {
+        return std::invoke([] -> Task<void> {
+          co_return;
+        });
+      }
+      return (*self.push)(std::move(signal));
     });
   }
 
@@ -272,7 +277,7 @@ public:
   /// Destroy the push handle to close the subpipeline's upstream channel.
   void close_push() {
     co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
-      auto _ = std::move(self.push);
+      self.push = None{};
     });
   }
 };
@@ -718,7 +723,7 @@ private:
   }
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> override {
-    // TODO: This is bad.
+    // TODO: The `materialize` is bad.
     auto it = subpipelines_.find(materialize(key));
     if (it == subpipelines_.end()) {
       return std::nullopt;
@@ -727,7 +732,11 @@ private:
     return co_match(
       sub.handle,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
-        return OpenPipeline<In>{*subpipeline.push};
+        if (subpipeline.push) {
+          return OpenPipeline<In>{*subpipeline.push};
+        }
+        // Pipeline is still alive but pushing things will be ignored.
+        return OpenPipeline<In>{None{}};
       });
   }
 
@@ -1135,7 +1144,6 @@ private:
     if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
-    // auto behavior = co_await call_finalize_behavior();
     // Then finalize the operator, which can still produce output.
     auto b = co_await call_finalize();
     if (b == FinalizeBehavior::continue_) {
@@ -1150,13 +1158,10 @@ private:
     // closed the subpipeline push handles, so skip sending EndOfData.
     if (not got_shutdown_request_) {
       for (auto& [key, sub] : subpipelines_) {
-        co_await co_match(sub.handle,
-                          []<class In>(SubPipeline<In>& sub) -> Task<void> {
-                            // TODO: What if this is a source?
-                            if constexpr (not std::same_as<In, void>) {
-                              co_await sub.push(EndOfData{});
-                            }
-                          });
+        if (not is<SubPipeline<void>>(sub.handle)) {
+          // TODO: What if this is a source?
+          co_await sub.handle.send(EndOfData{});
+        }
       }
       // Close all subpipeline upstream pushes so their first operators
       // observe None after the EndOfData, enabling orderly shutdown.

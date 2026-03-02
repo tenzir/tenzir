@@ -74,7 +74,8 @@ struct OperatorMsg;
 template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Push<OperatorMsg<Input>>& push);
+  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) : push_{push} {
+  }
 
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>>;
@@ -82,7 +83,7 @@ public:
     requires(not std::same_as<Input, void>);
 
 private:
-  Ref<Push<OperatorMsg<Input>>> push_;
+  Option<Push<OperatorMsg<Input>>&> push_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
