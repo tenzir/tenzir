@@ -310,7 +310,7 @@ struct structured_data_element_parser
         auto candidate = params_start;
         auto candidate_params = parameters{};
         if (not parameters_parser<allow_semicolon>{}.parse(candidate, l,
-                                                            candidate_params)) {
+                                                           candidate_params)) {
           return false;
         }
         if (candidate == l or *candidate != ']') {
