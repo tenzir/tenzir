@@ -104,14 +104,42 @@ auto parse_extension(std::string_view extension, auto builder,
   while (not extension.empty()) {
     auto key = unescape_string(detail::trim(extension.substr(0, kv_sep)));
     extension.remove_prefix(kv_sep + 1);
-    // Find the next not quoted, not escaped kv separator.
-    kv_sep = quoting.find_not_in_quotes(extension, '=', 0, true);
-    // Find the last whitespace before the key, determining the end of the value
-    // text. Ignoring quoting is fine for this search; the CEF spec does not
-    // discuss/specify quoted keys.
-    auto value_end = kv_sep == extension.npos
-                       ? extension.npos
-                       : extension.find_last_of(" \t", kv_sep);
+    // Find the next '=' that is an actual key-value separator rather than a
+    // literal '=' embedded in a value (e.g., DN strings like "CN=foo,O=bar").
+    // The CEF spec requires equal signs in values to be escaped as '\=', but
+    // real-world producers like Gigamon don't do this. To handle unescaped
+    // equals, we require that a separator '=' is preceded by whitespace and a
+    // valid key name. The spec says keys are alphanumeric, but producers
+    // commonly use underscores, so we also accept dots and hyphens to be
+    // extra lenient.
+    auto value_end = extension.npos;
+    kv_sep = extension.npos;
+    auto search_start = size_t{0};
+    while (search_start < extension.size()) {
+      auto eq_pos
+        = quoting.find_not_in_quotes(extension, '=', search_start, true);
+      if (eq_pos == extension.npos) {
+        break;
+      }
+      auto ws = extension.find_last_of(" \t", eq_pos);
+      if (ws != extension.npos) {
+        auto key_candidate = extension.substr(ws + 1, eq_pos - ws - 1);
+        auto valid_key = not key_candidate.empty();
+        for (auto c : key_candidate) {
+          if (not std::isalnum(static_cast<unsigned char>(c)) and c != '_'
+              and c != '.' and c != '-') {
+            valid_key = false;
+            break;
+          }
+        }
+        if (valid_key) {
+          kv_sep = eq_pos;
+          value_end = ws;
+          break;
+        }
+      }
+      search_start = eq_pos + 1;
+    }
     auto value
       = quoting.unquote_unescape(detail::trim(extension.substr(0, value_end)));
     if constexpr (detail::multi_series_builder::has_unflattened_field<
