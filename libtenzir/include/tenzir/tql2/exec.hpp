@@ -46,9 +46,11 @@ struct ProfilerSnapshot {
   std::vector<OperatorProfileEntry> operators;
 };
 
-/// Live profiler: collects operator metrics and optionally sends profiler
-/// snapshots as table slices to an importer actor.
-struct LiveProfiler {
+struct NoProfiler {};
+
+/// Collects operator metrics and optionally sends profiler snapshots as table
+/// slices to an importer actor.
+struct NodeProfiler {
   metrics_receiver_actor metrics;
   struct Importer {
     importer_actor actor;
@@ -57,12 +59,13 @@ struct LiveProfiler {
   Option<Importer> importer;
 };
 
-/// Profiler target: either a live profiler or a Perfetto trace file path.
-using profiler_target = variant<LiveProfiler, std::string>;
-
-struct run_plan_telemetry_targets {
-  Option<profiler_target> profiler;
+/// Generates a Perfetto trace file.
+struct PerfettoProfiler {
+  std::string path;
 };
+
+/// Profiler configuration for a pipeline execution.
+using Profiler = variant<NoProfiler, NodeProfiler, PerfettoProfiler>;
 
 /// Build table slices from a profiler snapshot, adding a pipeline_id field.
 auto build_profiler_slices(ProfilerSnapshot const& snapshot,
@@ -78,8 +81,7 @@ auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline>;
 
 /// Run a closed pipeline from a list of operators.
-auto run_plan(OperatorChain<void, void> ops, caf::actor_system& sys,
-              DiagHandler& dh, run_plan_telemetry_targets targets = {})
-  -> Task<failure_or<void>>;
+auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
+              DiagHandler& dh, Profiler profiler) -> Task<failure_or<void>>;
 
 } // namespace tenzir
