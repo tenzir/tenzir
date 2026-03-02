@@ -838,8 +838,10 @@ void multi_series_builder::garbage_collect_where(
   if (uses_merging_builder()) {
     return;
   }
-  for (auto it = signature_map_.begin(); it != signature_map_.end(); ++it) {
-    auto& entry = entries_[it.value()];
+  for (auto it = signature_map_.begin(); it != signature_map_.end();) {
+    auto const index = it.value();
+    TENZIR_ASSERT(index < entries_.size());
+    auto& entry = entries_[index];
     if (pred(entry)) {
       TENZIR_ASSERT(entry.builder.length() == 0,
                     "The predicate for garbage collection should be strictly "
@@ -848,7 +850,9 @@ void multi_series_builder::garbage_collect_where(
                     "events in them.");
       entry.unused = true;
       it = signature_map_.erase(it);
+      continue;
     }
+    ++it;
   }
 }
 
