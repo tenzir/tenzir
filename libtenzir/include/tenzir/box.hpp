@@ -60,6 +60,7 @@ public:
   explicit(false) Box(U x) : ptr_{std::make_unique<U>(std::move(x))} {
   }
 
+  /// Constructs a box with in-place construction of `T`.
   template <class... Args>
   explicit Box(std::in_place_t, Args&&... args)
     : ptr_{std::make_unique<T>(std::forward<Args>(args)...)} {
