@@ -173,17 +173,23 @@ struct parameter_value_parser : parser_base<parameter_value_parser> {
   }
 };
 
-struct parameter_separator_parser : parser_base<parameter_separator_parser> {
+template <bool AllowSemicolon>
+struct parameter_separator_parser
+  : parser_base<parameter_separator_parser<AllowSemicolon>> {
   using attribute = unused_type;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute&) const -> bool {
     using parsers::ch;
     auto spaces = ignore(+ch<' '>);
-    // Check Point commonly uses `;` as a parameter separator.
-    auto semicolon = ignore(ch<';'> >> *ch<' '>);
-    auto separator = spaces | semicolon;
-    return (+separator)(f, l, unused);
+    if constexpr (AllowSemicolon) {
+      // Check Point commonly uses `;` as a parameter separator.
+      auto semicolon = ignore(ch<';'> >> *ch<' '>);
+      auto separator = spaces | semicolon;
+      return (+separator)(f, l, unused);
+    } else {
+      return spaces(f, l, unused);
+    }
   }
 };
 
@@ -218,11 +224,11 @@ struct parameter_parser : parser_base<parameter_parser> {
   }
 };
 
-template <class Iterator, class AddParameter>
+template <bool AllowSemicolon, class Iterator, class AddParameter>
 auto parse_following_parameters(Iterator& f, const Iterator& l,
                                 AddParameter&& add_parameter) -> bool {
   using parsers::ch;
-  auto separator = parameter_separator_parser{};
+  auto separator = parameter_separator_parser<AllowSemicolon>{};
   auto next_parameter = separator >> ! ch<']'> >> parameter_parser{};
   auto add_next_parameter = next_parameter->*[&](parameter in) {
     add_parameter(std::move(in));
@@ -236,7 +242,8 @@ auto parse_following_parameters(Iterator& f, const Iterator& l,
 using parameters = record;
 
 /// Parser for all structured data element parameters.
-struct parameters_parser : parser_base<parameters_parser> {
+template <bool AllowSemicolon>
+struct parameters_parser : parser_base<parameters_parser<AllowSemicolon>> {
   using attribute = parameters;
 
   template <class Iterator, class Attribute>
@@ -251,7 +258,7 @@ struct parameters_parser : parser_base<parameters_parser> {
       return false;
     }
     add_parameter(std::move(param));
-    return parse_following_parameters(f, l, add_parameter);
+    return parse_following_parameters<AllowSemicolon>(f, l, add_parameter);
   }
 };
 
@@ -290,19 +297,36 @@ struct structured_data_element_parser
       ++next;
     } else if (*next == ' ') {
       result.id = std::move(token);
-      if (not parameter_separator_parser{}(next, l, unused)) {
+      if (not parameter_separator_parser<false>{}(next, l, unused)) {
         return false;
       }
       if (next == l or *next == ']') {
         return false;
       }
-      if (not parameters_parser{}.parse(next, l, result.params)) {
-        return false;
+      auto params_start = next;
+      auto parsed_params = parameters{};
+      auto parse_parameters = [&](auto allow_semicolon_tag) {
+        constexpr auto allow_semicolon = decltype(allow_semicolon_tag)::value;
+        auto candidate = params_start;
+        auto candidate_params = parameters{};
+        if (not parameters_parser<allow_semicolon>{}.parse(candidate, l,
+                                                            candidate_params)) {
+          return false;
+        }
+        if (candidate == l or *candidate != ']') {
+          return false;
+        }
+        ++candidate;
+        next = candidate;
+        parsed_params = std::move(candidate_params);
+        return true;
+      };
+      if (not parse_parameters(std::false_type{})) {
+        if (not parse_parameters(std::true_type{})) {
+          return false;
+        }
       }
-      if (next == l or *next != ']') {
-        return false;
-      }
-      ++next;
+      result.params = std::move(parsed_params);
     } else {
       auto first = parameter{};
       auto param_start = first_parameter_start;
@@ -316,7 +340,7 @@ struct structured_data_element_parser
         result.params.emplace(std::move(param.key),
                               data{std::move(param.value)});
       };
-      if (not parse_following_parameters(next, l, add_parameter)) {
+      if (not parse_following_parameters<true>(next, l, add_parameter)) {
         return false;
       }
       if (next == l or *next != ']') {
@@ -426,7 +450,7 @@ auto parse_checkpoint_missing_sdid_structured_data(Iterator& f,
   auto add_parameter = [&](parameter&& param) {
     params.emplace(std::move(param.key), data{std::move(param.value)});
   };
-  if (not parse_following_parameters(f, l, add_parameter)) {
+  if (not parse_following_parameters<true>(f, l, add_parameter)) {
     return false;
   }
   if (f == l or *f != ']') {
