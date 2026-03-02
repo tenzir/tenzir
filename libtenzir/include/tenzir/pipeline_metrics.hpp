@@ -122,31 +122,30 @@ using MetricsCallback
 /// `take_snapshot()` from the timer coroutine.
 class PipelineMetrics {
 public:
-  template <MetricsType Type>
-  auto make(MetricsLabel label, MetricsDirection direction,
-            MetricsVisibility visibility) -> Metric<Type>;
-
   /// Create and register a new counter.
   auto make_counter(MetricsLabel label, MetricsDirection direction,
                     MetricsVisibility visibility) -> MetricsCounter {
     return make<MetricsType::counter>(label, direction, visibility);
   }
 
-  /// Create and register a new counter.
+  /// Create and register a new gauge.
+  ///
+  /// Currently not supported, also because it doesn't make sense together with
+  /// `direction` and `visibility`, which should probably be labels. And label
+  /// values should be set in a step that is separate from the metric creation.
   auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                  MetricsVisibility visibility) -> MetricsGauge {
-    // Gauge metrics were implemented in the past, but they were not well
-    // integrated. I kept the code in, but we eventually have to remove or
-    // properly fix this.
-    TENZIR_UNUSED(label, direction, visibility);
-    panic("gauge metrics are currently not supported");
-  }
+                  MetricsVisibility visibility) -> MetricsGauge
+    = delete;
 
   /// Read all counters into plain snapshots.
   auto take_snapshot() -> std::vector<MetricsSnapshotEntry>;
 
 private:
-  struct entry {
+  template <MetricsType Type>
+  auto make(MetricsLabel label, MetricsDirection direction,
+            MetricsVisibility visibility) -> Metric<Type>;
+
+  struct Entry {
     MetricsLabel label;
     MetricsDirection direction;
     MetricsVisibility visibility;
@@ -157,7 +156,7 @@ private:
   };
 
   std::mutex mutex_;
-  std::vector<entry> entries_;
+  std::vector<Entry> entries_;
 };
 
 } // namespace tenzir

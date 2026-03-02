@@ -143,7 +143,7 @@ public:
   /// Create a throughput gauge with the given label.
   virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
                           MetricsVisibility visibility) -> MetricsGauge
-    = 0;
+    = delete;
 
   /// Returns the metrics receiver actor handle, if available.
   virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;

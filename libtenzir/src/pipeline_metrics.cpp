@@ -61,7 +61,7 @@ auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
     }
   }
   auto value = std::make_shared<std::atomic<uint64_t>>(0);
-  entries_.push_back(entry{
+  entries_.push_back(Entry{
     .label = label,
     .direction = direction,
     .visibility = visibility,
@@ -81,7 +81,7 @@ template auto
                                             MetricsVisibility)
     -> Metric<MetricsType::gauge>;
 
-auto PipelineMetrics::entry::snapshot() const -> MetricsSnapshotEntry {
+auto PipelineMetrics::Entry::snapshot() const -> MetricsSnapshotEntry {
   return MetricsSnapshotEntry{
     .label = label,
     .direction = direction,
