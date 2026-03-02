@@ -325,7 +325,7 @@ private:
   std::mutex mut_;
 };
 
-class CensoringDiagHandler : public DiagHandler {
+class CensoringDiagHandler final : public DiagHandler {
 public:
   explicit CensoringDiagHandler(DiagHandler& dh) : dh_{dh} {
   }
@@ -610,10 +610,10 @@ private:
         -> std::pair<Task<void>, variant<Box<Push<OperatorMsg<void>>>,
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
-        auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
-          = exec_ctx_.make_channel<In>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+        auto [push_downstream, pull_downstream]
+          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
         auto output_is_void = std::same_as<Out, void>;
         queue_.scope().spawn(
           [this, key, end_of_data, output_is_void,
@@ -1503,6 +1503,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
                DiagHandler& dh) -> Task<void> {
+  TENZIR_ASSERT(chain.size() != 0);
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain).unwrap(),
