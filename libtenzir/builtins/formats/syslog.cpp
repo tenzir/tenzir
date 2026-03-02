@@ -261,16 +261,38 @@ struct message {
 struct message_parser : parser_base<message_parser> {
   using attribute = message;
 
+  template <class StructuredDataParser, class Iterator>
+  static auto parse_tail(Iterator& f, const Iterator& l, structured_data& data,
+                         std::optional<message_content>& msg) -> bool {
+    auto p = StructuredDataParser{} >> -(' ' >> message_content_parser{});
+    return p(f, l, data, msg);
+  }
+
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parsers;
-    auto p = header_parser{} >> ' ' >> structured_data_parser{}
-             >> -(' ' >> message_content_parser{});
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.hdr, x.data, x.msg);
+    auto save = f;
+    auto hdr = header{};
+    auto data = structured_data{};
+    auto msg = std::optional<message_content>{};
+    if (not header_parser{}.parse(f, l, hdr)) {
+      f = save;
+      return false;
     }
+    if (f == l or *f != ' ') {
+      f = save;
+      return false;
+    }
+    ++f;
+    if (not parse_tail<structured_data_parser>(f, l, data, msg)) {
+      f = save;
+      return false;
+    }
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      x.hdr = std::move(hdr);
+      x.data = std::move(data);
+      x.msg = std::move(msg);
+    }
+    return true;
   }
 };
 
@@ -511,14 +533,6 @@ struct checkpoint_structured_data_parser
   }
 };
 
-template <class StructuredDataParser, class Iterator>
-auto parse_rfc5424_message_tail(StructuredDataParser parser, Iterator& f,
-                                const Iterator& l, structured_data& data,
-                                std::optional<message_content>& msg) -> bool {
-  auto p = parser >> -(' ' >> message_content_parser{});
-  return p(f, l, data, msg);
-}
-
 auto parse_rfc5424_or_checkpoint(std::string_view input, message& x) -> bool {
   auto f = input.begin();
   auto l = input.end();
@@ -532,15 +546,14 @@ auto parse_rfc5424_or_checkpoint(std::string_view input, message& x) -> bool {
   auto structured_data_begin = f;
   x.data = {};
   x.msg.reset();
-  if (parse_rfc5424_message_tail(structured_data_parser{}, f, l, x.data,
-                                 x.msg)) {
+  if (message_parser::parse_tail<structured_data_parser>(f, l, x.data, x.msg)) {
     return true;
   }
   f = structured_data_begin;
   x.data = {};
   x.msg.reset();
-  if (parse_rfc5424_message_tail(checkpoint_structured_data_parser{}, f, l,
-                                 x.data, x.msg)) {
+  if (message_parser::parse_tail<checkpoint_structured_data_parser>(
+        f, l, x.data, x.msg)) {
     return true;
   }
   x = {};
