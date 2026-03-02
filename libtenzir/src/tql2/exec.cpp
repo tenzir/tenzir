@@ -11,6 +11,7 @@
 #include "tenzir/async/executor.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/atomic.hpp"
+#include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
@@ -910,14 +911,12 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 
 class TestExecCtx final : public ExecCtx {
 public:
-  explicit TestExecCtx(bool profiling = false, bool record_backpressure = false,
-                       run_plan_telemetry_targets targets = {},
-                       size_t num_ops = 0)
-    : profiling_{profiling},
-      record_backpressure_{record_backpressure},
-      targets_{std::move(targets)},
-      num_ops_{num_ops},
-      start_time_{time::clock::now()} {
+  explicit TestExecCtx(Profiler const& profiler)
+    : profiling_{not is<NoProfiler>(profiler)},
+      record_backpressure_{is<PerfettoProfiler>(profiler)},
+      metrics_receiver_{try_as<NodeProfiler>(profiler)
+                          ? try_as<NodeProfiler>(profiler)->metrics
+                          : metrics_receiver_actor{}} {
   }
 
   /// Return the current set of channel profiles.
@@ -967,99 +966,7 @@ public:
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
-    auto* live = targets_.profiler.is_some()
-                   ? try_as<LiveProfiler>(*targets_.profiler)
-                   : nullptr;
-    return live ? live->metrics : metrics_receiver_actor{};
-  }
-
-  void emit_metrics(time now) {
-    auto* live = targets_.profiler.is_some()
-                   ? try_as<LiveProfiler>(*targets_.profiler)
-                   : nullptr;
-    if (live) {
-      auto entries = metrics()->take_snapshot();
-      auto external_read_bytes = uint64_t{0};
-      auto external_write_bytes = uint64_t{0};
-      auto internal_read_bytes = uint64_t{0};
-      auto internal_write_bytes = uint64_t{0};
-      for (auto const& e : entries) {
-        // Gauges are currently not supported (this panic is symmetric to the
-        // metrics interface exposed to operators).
-        TENZIR_ASSERT(e.type != MetricsType::gauge);
-        if (e.visibility == MetricsVisibility::external_) {
-          if (e.direction == MetricsDirection::read) {
-            external_read_bytes += e.value;
-          } else {
-            external_write_bytes += e.value;
-          }
-        } else {
-          if (e.direction == MetricsDirection::read) {
-            internal_read_bytes += e.value;
-          } else {
-            internal_write_bytes += e.value;
-          }
-        }
-      }
-      auto elapsed = now - start_time_;
-      if (external_read_bytes > 0) {
-        auto source_metric = operator_metric{};
-        source_metric.operator_index = 0;
-        source_metric.operator_name = "source";
-        source_metric.internal = false;
-        source_metric.outbound_measurement.unit = "bytes";
-        source_metric.outbound_measurement.num_elements = external_read_bytes;
-        source_metric.time_total = elapsed;
-        source_metric.time_running = elapsed;
-        caf::anon_mail(std::move(source_metric)).send(live->metrics);
-      }
-      if (internal_read_bytes > 0) {
-        auto source_metric = operator_metric{};
-        source_metric.operator_index = 0;
-        source_metric.operator_name = "source";
-        source_metric.internal = true;
-        source_metric.outbound_measurement.unit = "bytes";
-        source_metric.outbound_measurement.num_elements = internal_read_bytes;
-        source_metric.time_total = elapsed;
-        source_metric.time_running = elapsed;
-        caf::anon_mail(std::move(source_metric)).send(live->metrics);
-      }
-      if (num_ops_ > 0 and external_write_bytes > 0) {
-        auto sink_metric = operator_metric{};
-        sink_metric.operator_index = num_ops_ - 1;
-        sink_metric.operator_name = "sink";
-        sink_metric.internal = false;
-        sink_metric.inbound_measurement.unit = "bytes";
-        sink_metric.inbound_measurement.num_elements = external_write_bytes;
-        sink_metric.time_total = elapsed;
-        sink_metric.time_running = elapsed;
-        caf::anon_mail(std::move(sink_metric)).send(live->metrics);
-      }
-      if (num_ops_ > 0 and internal_write_bytes > 0) {
-        auto sink_metric = operator_metric{};
-        sink_metric.operator_index = num_ops_ - 1;
-        sink_metric.operator_name = "sink";
-        sink_metric.internal = true;
-        sink_metric.inbound_measurement.unit = "bytes";
-        sink_metric.inbound_measurement.num_elements = internal_write_bytes;
-        sink_metric.time_total = elapsed;
-        sink_metric.time_running = elapsed;
-        caf::anon_mail(std::move(sink_metric)).send(live->metrics);
-      }
-      if (live->importer.is_some()) {
-        auto channels = get_channel_profiles();
-        auto executors = get_executor_profiles();
-        auto snapshot_time = floor(now, defaults::metrics_interval);
-        auto snapshot = build_profiler_snapshot(channels, executors,
-                                                snapshot_time, prev_snapshots_);
-        if (not snapshot.operators.empty()) {
-          for (auto& slice :
-               build_profiler_slices(snapshot, live->importer->pipeline_id)) {
-            caf::anon_mail(std::move(slice)).send(live->importer->actor);
-          }
-        }
-      }
-    }
+    return metrics_receiver_;
   }
 
 protected:
@@ -1127,10 +1034,7 @@ private:
 
   bool profiling_;
   bool record_backpressure_;
-  run_plan_telemetry_targets targets_;
-  size_t num_ops_;
-  time start_time_;
-  std::unordered_map<OpId, OpSnapshot> prev_snapshots_;
+  metrics_receiver_actor metrics_receiver_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
@@ -1787,41 +1691,123 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
   return result;
 }
 
-auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
-                   DiagHandler& dh, run_plan_telemetry_targets targets)
-  -> Task<failure_or<void>> {
-  auto num_ops = chain.size();
-  LOGW("spawning plan with {} operators", num_ops);
-  auto* profile_path = targets.profiler.is_some()
-                         ? try_as<std::string>(*targets.profiler)
-                         : nullptr;
-  auto* live_profiler = targets.profiler.is_some()
-                          ? try_as<LiveProfiler>(*targets.profiler)
-                          : nullptr;
-  auto profiling = profile_path or live_profiler;
-  auto needs_metrics_loop = live_profiler != nullptr;
-  auto exec_ctx = TestExecCtx{profiling, profile_path != nullptr,
-                              std::move(targets), num_ops};
-  // Profiling: sample channel and executor stats periodically if requested.
-  auto const t0 = std::chrono::steady_clock::now();
-  auto samples = std::vector<ProfileSample>{};
-  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
-    /// Node metrics loop
-    if (needs_metrics_loop) {
-      scope.spawn([&]() -> Task<void> {
+/// Emit operator_metric messages and profiler snapshots for a NodeProfiler.
+void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
+                       size_t num_ops, time start_time, time now,
+                       std::unordered_map<OpId, OpSnapshot>& prev_snapshots) {
+  auto entries = exec_ctx.metrics()->take_snapshot();
+  auto external_read_bytes = uint64_t{0};
+  auto external_write_bytes = uint64_t{0};
+  auto internal_read_bytes = uint64_t{0};
+  auto internal_write_bytes = uint64_t{0};
+  for (auto const& e : entries) {
+    TENZIR_ASSERT(e.type != MetricsType::gauge);
+    if (e.visibility == MetricsVisibility::external_) {
+      if (e.direction == MetricsDirection::read) {
+        external_read_bytes += e.value;
+      } else {
+        external_write_bytes += e.value;
+      }
+    } else {
+      if (e.direction == MetricsDirection::read) {
+        internal_read_bytes += e.value;
+      } else {
+        internal_write_bytes += e.value;
+      }
+    }
+  }
+  auto elapsed = now - start_time;
+  if (external_read_bytes > 0) {
+    auto m = operator_metric{};
+    m.operator_index = 0;
+    m.operator_name = "source";
+    m.internal = false;
+    m.outbound_measurement.unit = "bytes";
+    m.outbound_measurement.num_elements = external_read_bytes;
+    m.time_total = elapsed;
+    m.time_running = elapsed;
+    caf::anon_mail(std::move(m)).send(node.metrics);
+  }
+  if (internal_read_bytes > 0) {
+    auto m = operator_metric{};
+    m.operator_index = 0;
+    m.operator_name = "source";
+    m.internal = true;
+    m.outbound_measurement.unit = "bytes";
+    m.outbound_measurement.num_elements = internal_read_bytes;
+    m.time_total = elapsed;
+    m.time_running = elapsed;
+    caf::anon_mail(std::move(m)).send(node.metrics);
+  }
+  if (num_ops > 0 and external_write_bytes > 0) {
+    auto m = operator_metric{};
+    m.operator_index = num_ops - 1;
+    m.operator_name = "sink";
+    m.internal = false;
+    m.inbound_measurement.unit = "bytes";
+    m.inbound_measurement.num_elements = external_write_bytes;
+    m.time_total = elapsed;
+    m.time_running = elapsed;
+    caf::anon_mail(std::move(m)).send(node.metrics);
+  }
+  if (num_ops > 0 and internal_write_bytes > 0) {
+    auto m = operator_metric{};
+    m.operator_index = num_ops - 1;
+    m.operator_name = "sink";
+    m.internal = true;
+    m.inbound_measurement.unit = "bytes";
+    m.inbound_measurement.num_elements = internal_write_bytes;
+    m.time_total = elapsed;
+    m.time_running = elapsed;
+    caf::anon_mail(std::move(m)).send(node.metrics);
+  }
+  if (node.importer.is_some()) {
+    auto channels = exec_ctx.get_channel_profiles();
+    auto executors = exec_ctx.get_executor_profiles();
+    auto snapshot_time = floor(now, defaults::metrics_interval);
+    auto snapshot = build_profiler_snapshot(channels, executors, snapshot_time,
+                                            prev_snapshots);
+    if (not snapshot.operators.empty()) {
+      for (auto& slice :
+           build_profiler_slices(snapshot, node.importer->pipeline_id)) {
+        caf::anon_mail(std::move(slice)).send(node.importer->actor);
+      }
+    }
+  }
+}
+
+/// Run the profiling side-task for the given profiler configuration.
+/// Handles cooperative shutdown: performs a final emit/write on cancellation.
+auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
+                  size_t num_ops) -> Task<void> {
+  co_return co_await co_match(
+    profiler,
+    [](NoProfiler const&) -> Task<void> {
+      co_return;
+    },
+    [&](NodeProfiler const& node) -> Task<void> {
+      auto start_time = time::clock::now();
+      auto prev_snapshots = std::unordered_map<OpId, OpSnapshot>{};
+      try {
         while (true) {
           auto now = time::clock::now();
-          exec_ctx.emit_metrics(now);
+          emit_node_metrics(node, exec_ctx, num_ops, start_time, now,
+                            prev_snapshots);
           auto boundary = floor(now, defaults::metrics_interval)
                           + defaults::metrics_interval;
           co_await folly::coro::sleep(
             std::chrono::duration_cast<folly::HighResDuration>(boundary - now));
         }
-      });
-    }
-    /// CLI profile loop
-    if (profile_path) {
-      scope.spawn([&]() -> Task<void> {
+      } catch (folly::OperationCancelled const&) {
+        emit_node_metrics(node, exec_ctx, num_ops, start_time,
+                          time::clock::now(), prev_snapshots);
+        throw;
+      }
+    },
+    [&](PerfettoProfiler const& perfetto) -> Task<void> {
+      auto samples = std::vector<ProfileSample>{};
+      auto const t0 = std::chrono::steady_clock::now();
+      try {
         while (true) {
           co_await folly::coro::sleep(
             std::chrono::duration_cast<folly::HighResDuration>(
@@ -1859,21 +1845,32 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
           }
           samples.push_back(std::move(sample));
         }
-      });
-    }
+      } catch (folly::OperationCancelled const&) {
+        write_profile(perfetto.path, samples, t0,
+                      exec_ctx.get_channel_profiles());
+        throw;
+      }
+    });
+}
+
+} // namespace
+
+auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
+              DiagHandler& dh, Profiler profiler) -> Task<failure_or<void>> {
+  auto num_ops = chain.size();
+  LOGW("spawning plan with {} operators", num_ops);
+  auto exec_ctx = TestExecCtx{profiler};
+  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+    scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
     co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
     LOGW("blocking on pipeline done");
     scope.cancel();
   });
-  if (profile_path) {
-    write_profile(*profile_path, samples, t0, exec_ctx.get_channel_profiles());
-  }
-  if (needs_metrics_loop) {
-    exec_ctx.emit_metrics(time::clock::now());
-  }
   co_return {};
 }
+
+namespace {
 
 /// Wraps a legacy `diagnostic_handler` into a `DiagHandler`.
 class ExecDiagHandler final : public DiagHandler {
@@ -1911,20 +1908,19 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
-  auto targets = run_plan_telemetry_targets{};
+  auto profiler = Profiler{};
   if (profile_path) {
-    targets.profiler = profiler_target{*profile_path};
+    profiler = PerfettoProfiler{*profile_path};
   }
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task
-    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-        co_return co_await folly::coro::co_awaitTry(
-          folly::coro::co_withCancellation(cancel_source.getToken(),
-                                           run_plan_impl(std::move(chain), sys,
-                                                         diag_handler,
-                                                         std::move(targets))));
-      });
+  auto task = folly::coro::co_invoke(
+    [&] -> Task<AsyncResult<failure_or<void>>> {
+      co_return co_await folly::coro::co_awaitTry(
+        folly::coro::co_withCancellation(
+          cancel_source.getToken(),
+          run_plan(std::move(chain), sys, diag_handler, std::move(profiler))));
+    });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -1943,13 +1939,6 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
 }
 
 } // namespace
-
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, run_plan_telemetry_targets targets)
-  -> Task<failure_or<void>> {
-  co_return co_await run_plan_impl(std::move(chain), sys, dh,
-                                   std::move(targets));
-}
 
 auto build_profiler_slices(ProfilerSnapshot const& snapshot,
                            std::string_view pipeline_id)
