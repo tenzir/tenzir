@@ -538,19 +538,22 @@ auto multi_series_builder::make_events_available_on_timeout(
     }
     return timeout;
   }
-  auto res = duration::max();
+  auto res = settings_.timeout;
   for (auto& entry : entries_) {
-    if (detail::narrow<std::size_t>(entry.builder.length())
-        > settings_.desired_batch_size) {
+    auto length = detail::narrow<std::size_t>(entry.builder.length());
+    if (length == 0) {
+      continue;
+    }
+    if (length >= settings_.desired_batch_size) {
       append_ready_events(entry.flush(now));
       continue;
     }
     auto const waiting = now - entry.oldest_event;
-    if (waiting > timeout) {
+    if (waiting >= timeout) {
       append_ready_events(entry.flush(now));
       continue;
     }
-    res = std::min(res, waiting);
+    res = std::min(res, timeout - waiting);
   }
   garbage_collect_where([now, timeout](entry_data const& e) {
     if (e.builder.length() != 0) {
