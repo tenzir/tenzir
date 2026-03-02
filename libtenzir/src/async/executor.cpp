@@ -23,6 +23,7 @@
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
+#include <folly/Demangle.h>
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
@@ -1256,6 +1257,21 @@ auto run_operator(Box<Operator<Input, Output>> op,
     .run_to_completion();
 }
 
+/// Demangle a C++ type name and strip the namespace prefix.
+auto demangle_op_type(std::type_info const& type) -> std::string {
+  auto demangled = folly::demangle(type);
+  auto result = std::string{demangled};
+  // Strip namespace prefix, keeping only the class name.
+  // Only look before '<' to avoid matching '::' inside template arguments.
+  auto tpl = result.find('<');
+  auto prefix = tpl != std::string::npos ? result.substr(0, tpl) : result;
+  auto pos = prefix.rfind("::");
+  if (pos != std::string::npos) {
+    result = result.substr(pos + 2);
+  }
+  return result;
+}
+
 } // namespace
 
 class ChainRunner {
@@ -1298,7 +1314,6 @@ private:
       auto index = detail::narrow<size_t>(&op - operators_.data());
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         LOGI("got {}", typeid(*op).name());
-        exec_ctx_.register_op_name(id_.op(index), typeid(*op));
         auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(next_input));
         auto last = index == operators_.size() - 1;
         auto output_sender = [&]() -> Box<Push<OperatorMsg<Out>>> {
@@ -1320,7 +1335,8 @@ private:
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), id_.op(index),
                                  exec_ctx_, sys_, dh_);
-        auto executor = exec_ctx_.make_executor(id_.op(index));
+        auto executor = exec_ctx_.make_executor(id_.op(index),
+                                                demangle_op_type(typeid(*op)));
         LOGI("spawning operator task");
         queue_.spawn([task = std::move(task), index,
                       executor = std::move(executor)] mutable

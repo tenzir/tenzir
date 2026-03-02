@@ -214,8 +214,10 @@ public:
 
   /// Returns a per-operator CPU executor. The default returns the global
   /// CPU executor. Override this to wrap it for profiling.
-  virtual auto make_executor(OpId id) -> folly::Executor::KeepAlive<> {
+  virtual auto make_executor(OpId id, std::string name = {})
+    -> folly::Executor::KeepAlive<> {
     TENZIR_UNUSED(id);
+    TENZIR_UNUSED(name);
     return folly::getGlobalCPUExecutor();
   }
 
@@ -224,13 +226,6 @@ public:
   virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> {
     TENZIR_UNUSED(id);
     return folly::getGlobalIOExecutor();
-  }
-
-  /// Registers the C++ type name for an operator. The default is a no-op.
-  /// Override this to collect operator type names for profiling output.
-  virtual auto register_op_name(OpId id, std::type_info const& type) -> void {
-    TENZIR_UNUSED(id);
-    TENZIR_UNUSED(type);
   }
 
   /// Returns the metrics receiver actor handle, if available.
