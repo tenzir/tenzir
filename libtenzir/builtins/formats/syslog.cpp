@@ -511,33 +511,40 @@ struct checkpoint_structured_data_parser
   }
 };
 
-/// Parser for Check Point RFC 5424-like Syslog messages.
-/// @relates message
-struct checkpoint_message_parser : parser_base<checkpoint_message_parser> {
-  using attribute = message;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parsers;
-    auto p = header_parser{} >> ' ' >> checkpoint_structured_data_parser{}
-             >> -(' ' >> message_content_parser{});
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.hdr, x.data, x.msg);
-    }
-  }
-};
+template <class StructuredDataParser, class Iterator>
+auto parse_rfc5424_message_tail(StructuredDataParser parser, Iterator& f,
+                                const Iterator& l, structured_data& data,
+                                std::optional<message_content>& msg) -> bool {
+  auto p = parser >> -(' ' >> message_content_parser{});
+  return p(f, l, data, msg);
+}
 
 auto parse_rfc5424_or_checkpoint(std::string_view input, message& x) -> bool {
   auto f = input.begin();
   auto l = input.end();
-  if (message_parser{}.parse(f, l, x)) {
+  if (not header_parser{}.parse(f, l, x.hdr)) {
+    return false;
+  }
+  if (f == l or *f != ' ') {
+    return false;
+  }
+  ++f;
+  auto structured_data_begin = f;
+  x.data = {};
+  x.msg.reset();
+  if (parse_rfc5424_message_tail(structured_data_parser{}, f, l, x.data,
+                                 x.msg)) {
+    return true;
+  }
+  f = structured_data_begin;
+  x.data = {};
+  x.msg.reset();
+  if (parse_rfc5424_message_tail(checkpoint_structured_data_parser{}, f, l,
+                                 x.data, x.msg)) {
     return true;
   }
   x = {};
-  f = input.begin();
-  return checkpoint_message_parser{}.parse(f, l, x);
+  return false;
 }
 
 /// A legacy (RFC 3164) Syslog message.
