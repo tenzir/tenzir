@@ -967,11 +967,17 @@ public:
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
-    return targets_.metrics;
+    auto* live = targets_.profiler.is_some()
+                   ? try_as<LiveProfiler>(*targets_.profiler)
+                   : nullptr;
+    return live ? live->metrics : metrics_receiver_actor{};
   }
 
   void emit_metrics(time now) {
-    if (targets_.metrics) {
+    auto* live = targets_.profiler.is_some()
+                   ? try_as<LiveProfiler>(*targets_.profiler)
+                   : nullptr;
+    if (live) {
       auto entries = metrics()->take_snapshot();
       auto external_read_bytes = uint64_t{0};
       auto external_write_bytes = uint64_t{0};
@@ -1005,7 +1011,7 @@ public:
         source_metric.outbound_measurement.num_elements = external_read_bytes;
         source_metric.time_total = elapsed;
         source_metric.time_running = elapsed;
-        caf::anon_mail(std::move(source_metric)).send(targets_.metrics);
+        caf::anon_mail(std::move(source_metric)).send(live->metrics);
       }
       if (internal_read_bytes > 0) {
         auto source_metric = operator_metric{};
@@ -1016,7 +1022,7 @@ public:
         source_metric.outbound_measurement.num_elements = internal_read_bytes;
         source_metric.time_total = elapsed;
         source_metric.time_running = elapsed;
-        caf::anon_mail(std::move(source_metric)).send(targets_.metrics);
+        caf::anon_mail(std::move(source_metric)).send(live->metrics);
       }
       if (num_ops_ > 0 and external_write_bytes > 0) {
         auto sink_metric = operator_metric{};
@@ -1027,7 +1033,7 @@ public:
         sink_metric.inbound_measurement.num_elements = external_write_bytes;
         sink_metric.time_total = elapsed;
         sink_metric.time_running = elapsed;
-        caf::anon_mail(std::move(sink_metric)).send(targets_.metrics);
+        caf::anon_mail(std::move(sink_metric)).send(live->metrics);
       }
       if (num_ops_ > 0 and internal_write_bytes > 0) {
         auto sink_metric = operator_metric{};
@@ -1038,21 +1044,19 @@ public:
         sink_metric.inbound_measurement.num_elements = internal_write_bytes;
         sink_metric.time_total = elapsed;
         sink_metric.time_running = elapsed;
-        caf::anon_mail(std::move(sink_metric)).send(targets_.metrics);
+        caf::anon_mail(std::move(sink_metric)).send(live->metrics);
       }
-    }
-    auto* live = targets_.profiler.is_some()
-                   ? try_as<LiveProfiler>(*targets_.profiler)
-                   : nullptr;
-    if (live) {
-      auto channels = get_channel_profiles();
-      auto executors = get_executor_profiles();
-      auto snapshot_time = floor(now, defaults::metrics_interval);
-      auto snapshot = build_profiler_snapshot(channels, executors,
-                                              snapshot_time, prev_snapshots_);
-      if (not snapshot.operators.empty()) {
-        for (auto& slice : build_profiler_slices(snapshot, live->pipeline_id)) {
-          caf::anon_mail(std::move(slice)).send(live->importer);
+      if (live->importer.is_some()) {
+        auto channels = get_channel_profiles();
+        auto executors = get_executor_profiles();
+        auto snapshot_time = floor(now, defaults::metrics_interval);
+        auto snapshot = build_profiler_snapshot(channels, executors,
+                                                snapshot_time, prev_snapshots_);
+        if (not snapshot.operators.empty()) {
+          for (auto& slice :
+               build_profiler_slices(snapshot, live->importer->pipeline_id)) {
+            caf::anon_mail(std::move(slice)).send(live->importer->actor);
+          }
         }
       }
     }
@@ -1788,11 +1792,14 @@ auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
   -> Task<failure_or<void>> {
   auto num_ops = chain.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto profiling = targets.profiler.is_some();
-  auto* profile_path
-    = profiling ? try_as<std::string>(*targets.profiler) : nullptr;
-  auto has_importer = profiling and not profile_path;
-  auto needs_metrics_loop = static_cast<bool>(targets.metrics) or has_importer;
+  auto* profile_path = targets.profiler.is_some()
+                         ? try_as<std::string>(*targets.profiler)
+                         : nullptr;
+  auto* live_profiler = targets.profiler.is_some()
+                          ? try_as<LiveProfiler>(*targets.profiler)
+                          : nullptr;
+  auto profiling = profile_path or live_profiler;
+  auto needs_metrics_loop = live_profiler != nullptr;
   auto exec_ctx = TestExecCtx{profiling, profile_path != nullptr,
                               std::move(targets), num_ops};
   // Profiling: sample channel and executor stats periodically if requested.
