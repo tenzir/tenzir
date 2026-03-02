@@ -147,6 +147,8 @@ struct OpId {
   friend auto format_as(OpId const& self) -> std::string_view {
     return self.value;
   }
+
+  auto operator<=>(OpId const& other) const = default;
 };
 
 struct PipeId {
@@ -159,6 +161,8 @@ struct PipeId {
   friend auto format_as(PipeId const& self) -> std::string_view {
     return self.value;
   }
+
+  auto operator<=>(PipeId const& other) const = default;
 };
 
 struct ChannelId {
@@ -175,6 +179,8 @@ struct ChannelId {
   friend auto format_as(ChannelId const& self) -> std::string_view {
     return self.value;
   }
+
+  auto operator<=>(ChannelId const& other) const = default;
 };
 
 inline auto OpId::sub(size_t index) const -> PipeId {
@@ -194,7 +200,7 @@ public:
   virtual ~ExecCtx() = default;
 
   template <class T>
-  auto make(ChannelId id) -> PushPull<OperatorMsg<T>> {
+  auto make_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
     if constexpr (std::same_as<T, void>) {
       return make_void(std::move(id));
     } else if constexpr (std::same_as<T, table_slice>) {
