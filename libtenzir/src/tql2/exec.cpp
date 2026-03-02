@@ -956,7 +956,7 @@ public:
     return copy;
   }
 
-  auto make_executor(OpId id, std::string name = {})
+  auto make_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<> override {
     return wrap_executor(std::move(id), folly::getGlobalCPUExecutor(),
                          std::move(name));
