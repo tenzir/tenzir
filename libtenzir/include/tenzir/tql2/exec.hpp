@@ -46,17 +46,21 @@ struct ProfilerSnapshot {
   std::vector<OperatorProfileEntry> operators;
 };
 
-/// Live profiler: sends table slices to an importer actor.
+/// Live profiler: collects operator metrics and optionally sends profiler
+/// snapshots as table slices to an importer actor.
 struct LiveProfiler {
-  importer_actor importer;
-  std::string pipeline_id;
+  metrics_receiver_actor metrics;
+  struct Importer {
+    importer_actor actor;
+    std::string pipeline_id;
+  };
+  Option<Importer> importer;
 };
 
-/// Profiler target: either a live importer or a Perfetto trace file path.
+/// Profiler target: either a live profiler or a Perfetto trace file path.
 using profiler_target = variant<LiveProfiler, std::string>;
 
 struct run_plan_telemetry_targets {
-  metrics_receiver_actor metrics;
   Option<profiler_target> profiler;
 };
 
