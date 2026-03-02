@@ -12,10 +12,11 @@
 #include "tenzir/async/executor.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant.hpp"
 
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -45,9 +46,12 @@ struct ProfilerSnapshot {
   std::vector<OperatorProfileEntry> operators;
 };
 
+/// Profiler target: either a live importer or a Perfetto trace file path.
+using profiler_target = variant<importer_actor, std::string>;
+
 struct run_plan_telemetry_targets {
   metrics_receiver_actor metrics = {};
-  importer_actor importer = {};
+  Option<profiler_target> profiler;
   std::string pipeline_id = {};
 };
 
@@ -66,8 +70,7 @@ auto parse_and_compile(std::string_view source, session ctx)
 
 /// Run a closed pipeline from a list of operators.
 auto run_plan(OperatorChain<void, void> ops, caf::actor_system& sys,
-              DiagHandler& dh, std::optional<std::string> const& profile_path,
-              run_plan_telemetry_targets targets = {})
+              DiagHandler& dh, run_plan_telemetry_targets targets = {})
   -> Task<failure_or<void>>;
 
 } // namespace tenzir

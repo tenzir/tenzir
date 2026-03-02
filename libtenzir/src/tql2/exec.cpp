@@ -588,9 +588,15 @@ struct ChannelStats {
     std::chrono::steady_clock::time_point end;
   };
 
-  /// Record a backpressure event (thread-safe).
-  void record_backpressure(std::chrono::steady_clock::time_point start,
-                           std::chrono::steady_clock::time_point end) {
+  bool record_backpressure = false;
+
+  /// Record a backpressure event (thread-safe). No-op unless
+  /// `record_backpressure` is set.
+  void add_backpressure(std::chrono::steady_clock::time_point start,
+                        std::chrono::steady_clock::time_point end) {
+    if (not record_backpressure) {
+      return;
+    }
     auto lock = std::scoped_lock{bp_mutex_};
     backpressure_events_.push_back({start, end});
   }
@@ -747,7 +753,7 @@ public:
       }
       if (stats_) {
         auto bp_end = std::chrono::steady_clock::now();
-        stats_->record_backpressure(bp_start, bp_end);
+        stats_->add_backpressure(bp_start, bp_end);
       }
       // Cascade: wake the next blocked sender so it can re-check its
       // condition. This is needed when multiple senders (e.g., parallel
@@ -904,10 +910,11 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 
 class TestExecCtx final : public ExecCtx {
 public:
-  explicit TestExecCtx(bool profiling = false,
+  explicit TestExecCtx(bool profiling = false, bool record_backpressure = false,
                        run_plan_telemetry_targets targets = {},
                        size_t num_ops = 0)
     : profiling_{profiling},
+      record_backpressure_{record_backpressure},
       targets_{std::move(targets)},
       num_ops_{num_ops},
       start_time_{time::clock::now()} {
@@ -1034,7 +1041,10 @@ public:
         caf::anon_mail(std::move(sink_metric)).send(targets_.metrics);
       }
     }
-    if (targets_.importer and profiling_) {
+    auto* importer = targets_.profiler.is_some()
+                       ? try_as<importer_actor>(*targets_.profiler)
+                       : nullptr;
+    if (importer) {
       auto channels = get_channel_profiles();
       auto executors = get_executor_profiles();
       auto snapshot_time = floor(now, defaults::metrics_interval);
@@ -1043,7 +1053,7 @@ public:
       if (not snapshot.operators.empty()) {
         for (auto& slice :
              build_profiler_slices(snapshot, targets_.pipeline_id)) {
-          caf::anon_mail(std::move(slice)).send(targets_.importer);
+          caf::anon_mail(std::move(slice)).send(*importer);
         }
       }
     }
@@ -1103,6 +1113,7 @@ private:
     auto stats = std::shared_ptr<ChannelStats>{};
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
+      stats->record_backpressure = record_backpressure_;
       auto lock = std::scoped_lock{mutex_};
       channels_.push_back(ChannelProfile{id, stats, tag_v<T>});
     }
@@ -1112,6 +1123,7 @@ private:
   }
 
   bool profiling_;
+  bool record_backpressure_;
   run_plan_telemetry_targets targets_;
   size_t num_ops_;
   time start_time_;
@@ -1773,17 +1785,17 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 }
 
 auto run_plan_impl(OperatorChain<void, void> chain, caf::actor_system& sys,
-                   DiagHandler& dh,
-                   std::optional<std::string> const& profile_path,
-                   run_plan_telemetry_targets targets)
+                   DiagHandler& dh, run_plan_telemetry_targets targets)
   -> Task<failure_or<void>> {
   auto num_ops = chain.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto profiling
-    = profile_path.has_value() or static_cast<bool>(targets.importer);
-  auto needs_metrics_loop
-    = static_cast<bool>(targets.metrics) or static_cast<bool>(targets.importer);
-  auto exec_ctx = TestExecCtx{profiling, std::move(targets), num_ops};
+  auto profiling = targets.profiler.is_some();
+  auto* profile_path
+    = profiling ? try_as<std::string>(*targets.profiler) : nullptr;
+  auto has_importer = profiling and not profile_path;
+  auto needs_metrics_loop = static_cast<bool>(targets.metrics) or has_importer;
+  auto exec_ctx = TestExecCtx{profiling, profile_path != nullptr,
+                              std::move(targets), num_ops};
   // Profiling: sample channel and executor stats periodically if requested.
   auto const t0 = std::chrono::steady_clock::now();
   auto samples = std::vector<ProfileSample>{};
@@ -1893,14 +1905,20 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
+  auto targets = run_plan_telemetry_targets{};
+  if (profile_path) {
+    targets.profiler = profiler_target{*profile_path};
+  }
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-    co_return co_await folly::coro::co_awaitTry(
-      folly::coro::co_withCancellation(
-        cancel_source.getToken(),
-        run_plan_impl(std::move(chain), sys, diag_handler, profile_path, {})));
-  });
+  auto task
+    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+        co_return co_await folly::coro::co_awaitTry(
+          folly::coro::co_withCancellation(cancel_source.getToken(),
+                                           run_plan_impl(std::move(chain), sys,
+                                                         diag_handler,
+                                                         std::move(targets))));
+      });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -1921,9 +1939,9 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
 } // namespace
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, std::optional<std::string> const& profile_path,
-              run_plan_telemetry_targets targets) -> Task<failure_or<void>> {
-  co_return co_await run_plan_impl(std::move(chain), sys, dh, profile_path,
+              DiagHandler& dh, run_plan_telemetry_targets targets)
+  -> Task<failure_or<void>> {
+  co_return co_await run_plan_impl(std::move(chain), sys, dh,
                                    std::move(targets));
 }
 
