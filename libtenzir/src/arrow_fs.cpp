@@ -15,7 +15,6 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/glob.hpp"
-#include "tenzir/secret_resolution.hpp"
 #include "tenzir/tql2/eval.hpp"
 
 #include <arrow/filesystem/filesystem.h>
@@ -118,10 +117,11 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
       co_return;
     },
     [this, &ctx](FileOpen& open) -> Task<void> {
-      TENZIR_ASSERT(open.slot < max_jobs);
-      TENZIR_ASSERT(processing_[open.slot]);
+      auto slot = find_slot_by_job(open.job_id);
+      TENZIR_ASSERT(slot);
+      auto& file_state = *processing_[*slot];
       if (not open.file.ok()) {
-        diagnostic::error("failed to open `{}`", processing_[open.slot]->path)
+        diagnostic::error("failed to open `{}`", file_state.path)
           .primary(base_args_.url)
           .note(open.file.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
@@ -129,36 +129,36 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
                                  : std::move(x);
           })
           .emit(ctx);
-        processing_[open.slot].reset();
-        start_job_in_slot(open.slot, ctx);
+        processing_[*slot].reset();
+        start_job_in_slot(*slot, ctx);
         co_return;
       }
-      processing_[open.slot]->file = open.file.MoveValueUnsafe();
-      const auto key = static_cast<int64_t>(open.slot);
-      co_await ctx.spawn_sub<chunk_ptr>(key, base_args_.pipe.inner);
+      file_state.file = open.file.MoveValueUnsafe();
+      co_await ctx.spawn_sub<chunk_ptr>(open.job_id, base_args_.pipe.inner);
       // Queue the first read.
-      auto file = processing_[open.slot]->file;
-      auto offset = processing_[open.slot]->offset;
       enqueue_task(
         ctx,
-        [slot = open.slot, file = std::move(file),
-         offset] -> Task<AwaitResult> {
+        [job_id = open.job_id, file = file_state.file,
+         offset = file_state.offset] -> Task<AwaitResult> {
           co_return ReadProgress{
-            slot,
+            job_id,
             co_await arrow_future_to_task(file->ReadAsync(offset, read_size)),
           };
         });
     },
     [this, &ctx](ReadProgress& read) -> Task<void> {
-      TENZIR_ASSERT(read.slot < max_jobs);
-      TENZIR_ASSERT(processing_[read.slot]);
-      const auto key = static_cast<int64_t>(read.slot);
-      auto sub = ctx.get_sub(key);
-      TENZIR_ASSERT(sub);
+      // The subpipeline can be torn down while a read is in-flight.
+      // If it no longer exists, this read is stale.
+      auto sub = ctx.get_sub(read.job_id);
+      if (not sub) {
+        co_return;
+      }
       auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
+      auto slot = find_slot_by_job(read.job_id);
+      TENZIR_ASSERT(slot);
+      auto& file_state = *processing_[*slot];
       if (not read.result.ok()) {
-        diagnostic::error("failed to read from `{}`",
-                          processing_[read.slot]->path)
+        diagnostic::error("failed to read from `{}`", file_state.path)
           .primary(base_args_.url)
           .note(read.result.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
@@ -180,37 +180,34 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
         co_await pipe.close();
         co_return;
       }
-      processing_[read.slot]->offset += detail::narrow<int64_t>(bytes);
+      file_state.offset += detail::narrow<int64_t>(bytes);
       if (detail::narrow<size_t>(bytes) < read_size) {
         co_await pipe.close();
         co_return;
       }
-      auto file = processing_[read.slot]->file;
-      auto offset = processing_[read.slot]->offset;
       enqueue_task(
         ctx,
-        [slot = read.slot, file = std::move(file),
-         offset] -> Task<AwaitResult> {
+        [job_id = read.job_id, file = file_state.file,
+         offset = file_state.offset] -> Task<AwaitResult> {
           co_return ReadProgress{
-            slot,
+            job_id,
             co_await arrow_future_to_task(file->ReadAsync(offset, read_size)),
           };
         });
     },
     [this, &ctx](SubFinished& sub) -> Task<void> {
-      TENZIR_ASSERT(sub.slot < max_jobs);
-      TENZIR_ASSERT(processing_[sub.slot]);
-      cleanup_pending_.push_back(std::move(processing_[sub.slot]->path));
-      processing_[sub.slot].reset();
-      start_job_in_slot(sub.slot, ctx);
+      auto slot = find_slot_by_job(sub.job_id);
+      TENZIR_ASSERT(slot);
+      cleanup_pending_.push_back(std::move(processing_[*slot]->path));
+      processing_[*slot].reset();
+      start_job_in_slot(*slot, ctx);
       co_return;
     });
 }
 
 auto ArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
   -> Task<void> {
-  auto slot = static_cast<size_t>(as<int64_t>(key));
-  co_await results_->enqueue(SubFinished{slot});
+  co_await results_->enqueue(SubFinished{as<uint64_t>(key)});
 }
 
 auto ArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
@@ -241,6 +238,7 @@ auto ArrowFsOperator::snapshot(Serde& serde) -> void {
   serde("scan_complete_", scan_complete_);
   serde("pending_", pending_);
   serde("processing_", processing_);
+  serde("next_job_id_", next_job_id_);
   serde("cleanup_pending_", cleanup_pending_);
   serde("previous_", previous_);
 }
@@ -484,19 +482,30 @@ auto ArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
     return;
   }
   processing_[slot] = std::move(pending_.front());
+  processing_[slot]->job_id = ++next_job_id_;
   pending_.pop_front();
   enqueue_task(
     ctx,
-    [this, slot, path = processing_[slot]->path] mutable -> Task<AwaitResult> {
+    [this, job_id = processing_[slot]->job_id,
+     path = processing_[slot]->path] mutable -> Task<AwaitResult> {
       auto result
         = co_await arrow_future_to_task(fs_->OpenInputFileAsync(path));
-      co_return FileOpen{slot, std::move(result)};
+      co_return FileOpen{job_id, std::move(result)};
     });
 }
 
-auto ArrowFsOperator::find_free_slot() const -> std::optional<size_t> {
+auto ArrowFsOperator::find_free_slot() const -> Option<size_t> {
   for (auto i = size_t{0}; i < max_jobs; ++i) {
     if (not processing_[i]) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
+auto ArrowFsOperator::find_slot_by_job(uint64_t job_id) const -> Option<size_t> {
+  for (auto i = size_t{0}; i < max_jobs; ++i) {
+    if (processing_[i] and processing_[i]->job_id == job_id) {
       return i;
     }
   }
