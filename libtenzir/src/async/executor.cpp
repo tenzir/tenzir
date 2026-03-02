@@ -431,11 +431,6 @@ private:
     return exec_ctx_.make_counter(label, direction, visibility);
   }
 
-  auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                  MetricsVisibility visibility) -> MetricsGauge override {
-    return exec_ctx_.make_gauge(label, direction, visibility);
-  }
-
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return exec_ctx_.metrics_receiver();
   }

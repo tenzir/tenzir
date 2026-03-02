@@ -971,11 +971,6 @@ public:
     return metrics_->make_counter(label, direction, visibility);
   }
 
-  auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                  MetricsVisibility visibility) -> MetricsGauge override {
-    return metrics_->make_gauge(label, direction, visibility);
-  }
-
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return metrics_receiver_;
   }

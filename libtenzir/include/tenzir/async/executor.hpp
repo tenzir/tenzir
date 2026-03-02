@@ -228,11 +228,6 @@ public:
                             MetricsVisibility visibility) -> MetricsCounter
     = 0;
 
-  /// Create and register a new gauge for the pipeline.
-  virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                          MetricsVisibility visibility) -> MetricsGauge
-    = 0;
-
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
