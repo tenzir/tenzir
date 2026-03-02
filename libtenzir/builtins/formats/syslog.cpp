@@ -276,7 +276,7 @@ struct structured_data_element_parser
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::printable, parsers::rep;
+    using parsers::printable, parsers::rep, parsers::ch;
     auto token_parser = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
     auto next = f;
     if (next == l or *next != '[') {
@@ -303,30 +303,17 @@ struct structured_data_element_parser
       if (next == l or *next == ']') {
         return false;
       }
-      auto params_start = next;
-      auto parsed_params = parameters{};
-      auto parse_parameters = [&](auto allow_semicolon_tag) {
-        constexpr auto allow_semicolon = decltype(allow_semicolon_tag)::value;
-        auto candidate = params_start;
-        auto candidate_params = parameters{};
-        if (not parameters_parser<allow_semicolon>{}.parse(candidate, l,
-                                                           candidate_params)) {
-          return false;
-        }
-        if (candidate == l or *candidate != ']') {
-          return false;
-        }
-        ++candidate;
-        next = candidate;
-        parsed_params = std::move(candidate_params);
-        return true;
-      };
-      if (not parse_parameters(std::false_type{})) {
-        if (not parse_parameters(std::true_type{})) {
-          return false;
-        }
+      auto parse_rfc_parameters = parameters_parser<false>{} >> &ch<']'>;
+      auto parse_checkpoint_parameters = parameters_parser<true>{} >> &ch<']'>;
+      auto parse_parameters
+        = parse_rfc_parameters | parse_checkpoint_parameters;
+      if (not parse_parameters(next, l, result.params)) {
+        return false;
       }
-      result.params = std::move(parsed_params);
+      if (next == l or *next != ']') {
+        return false;
+      }
+      ++next;
     } else {
       auto first = parameter{};
       auto param_start = first_parameter_start;
@@ -468,6 +455,7 @@ auto parse_rfc5424_or_checkpoint_missing_sdid(std::string_view input,
     return true;
   }
   x = {};
+  f = input.begin();
   auto l = input.end();
   if (not header_parser{}.parse(f, l, x.hdr)) {
     return false;
