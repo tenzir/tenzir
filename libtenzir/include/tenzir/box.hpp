@@ -43,7 +43,7 @@ template <class T>
 class Box {
 public:
   /// Constructs a box from an existing non-null `unique_ptr`.
-  static auto from_unique_ptr(std::unique_ptr<T> ptr) -> Box<T> {
+  static auto from_non_null(std::unique_ptr<T> ptr) -> Box<T> {
     return Box{std::move(ptr)};
   }
 
@@ -60,6 +60,7 @@ public:
   explicit(false) Box(U x) : ptr_{std::make_unique<U>(std::move(x))} {
   }
 
+  /// Constructs a box with in-place construction of `T`.
   template <class... Args>
   explicit Box(std::in_place_t, Args&&... args)
     : ptr_{std::make_unique<T>(std::forward<Args>(args)...)} {

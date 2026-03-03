@@ -41,6 +41,7 @@
 
 #pragma once
 
+#include "tenzir/actors.hpp"
 #include "tenzir/any.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
@@ -73,7 +74,8 @@ struct OperatorMsg;
 template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Push<OperatorMsg<Input>>& push);
+  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) : push_{push} {
+  }
 
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>>;
@@ -81,7 +83,7 @@ public:
     requires(not std::same_as<Input, void>);
 
 private:
-  Ref<Push<OperatorMsg<Input>>> push_;
+  Option<Push<OperatorMsg<Input>>&> push_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
@@ -134,25 +136,17 @@ public:
   }
 
   /// Create a throughput counter with the given label.
-  /// Returns a null counter if metrics collection is disabled.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility) -> MetricsCounter {
-    TENZIR_UNUSED(label, direction, visibility);
-    return {};
-  }
+                            MetricsVisibility visibility) -> MetricsCounter
+    = 0;
 
-  /// Create a throughput counter with the given label.
-  /// Returns a null counter if metrics collection is disabled.
+  /// Create a throughput gauge with the given label.
   virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                          MetricsVisibility visibility) -> MetricsGauge {
-    TENZIR_UNUSED(label, direction, visibility);
-    return {};
-  }
+                          MetricsVisibility visibility) -> MetricsGauge
+    = delete;
 
-  virtual auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
-    static auto empty = std::shared_ptr<PipelineMetrics>{};
-    return empty;
-  }
+  /// Returns the metrics receiver actor handle, if available.
+  virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
 };
 
 enum class OperatorState {

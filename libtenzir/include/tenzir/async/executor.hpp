@@ -147,6 +147,8 @@ struct OpId {
   friend auto format_as(OpId const& self) -> std::string_view {
     return self.value;
   }
+
+  auto operator<=>(OpId const& other) const = default;
 };
 
 struct PipeId {
@@ -159,6 +161,8 @@ struct PipeId {
   friend auto format_as(PipeId const& self) -> std::string_view {
     return self.value;
   }
+
+  auto operator<=>(PipeId const& other) const = default;
 };
 
 struct ChannelId {
@@ -175,6 +179,8 @@ struct ChannelId {
   friend auto format_as(ChannelId const& self) -> std::string_view {
     return self.value;
   }
+
+  auto operator<=>(ChannelId const& other) const = default;
 };
 
 inline auto OpId::sub(size_t index) const -> PipeId {
@@ -194,7 +200,7 @@ public:
   virtual ~ExecCtx() = default;
 
   template <class T>
-  auto make(ChannelId id) -> PushPull<OperatorMsg<T>> {
+  auto make_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
     if constexpr (std::same_as<T, void>) {
       return make_void(std::move(id));
     } else if constexpr (std::same_as<T, table_slice>) {
@@ -206,39 +212,21 @@ public:
     }
   }
 
-  /// Returns a per-operator CPU executor. The default returns the global
-  /// CPU executor. Override this to wrap it for profiling.
-  virtual auto make_executor(OpId id) -> folly::Executor::KeepAlive<> {
-    TENZIR_UNUSED(id);
-    return folly::getGlobalCPUExecutor();
-  }
+  /// Returns a per-operator CPU executor.
+  virtual auto make_executor(OpId id, std::string name)
+    -> folly::Executor::KeepAlive<>
+    = 0;
 
-  /// Returns a per-operator IO executor. The default returns the global
-  /// IO executor. Override this to wrap it for profiling.
-  virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> {
-    TENZIR_UNUSED(id);
-    return folly::getGlobalIOExecutor();
-  }
+  /// Returns a per-operator IO executor.
+  virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> = 0;
 
-  /// Registers the C++ type name for an operator. The default is a no-op.
-  /// Override this to collect operator type names for profiling output.
-  virtual auto register_op_name(OpId id, std::type_info const& type) -> void {
-    TENZIR_UNUSED(id);
-    TENZIR_UNUSED(type);
-  }
+  /// Returns the metrics receiver actor handle, if available.
+  virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
 
-  /// Called periodically with metrics snapshots.
-  virtual void emit_metrics(std::span<const MetricsSnapshotEntry>) {
-  }
-
-  /// Called periodically to emit profiler table slices.
-  virtual void emit_profiler(time timestamp) {
-    TENZIR_UNUSED(timestamp);
-  }
-
-  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
-    return metrics_;
-  }
+  /// Create and register a new counter for the pipeline.
+  virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
+                            MetricsVisibility visibility) -> MetricsCounter
+    = 0;
 
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
@@ -247,10 +235,6 @@ protected:
     = 0;
 
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
-
-private:
-  std::shared_ptr<PipelineMetrics> metrics_
-    = std::make_shared<PipelineMetrics>();
 };
 
 /// A diagnostic handler that is guaranteed to be thread-safe.
@@ -287,3 +271,10 @@ auto run_chain(OperatorChain<Input, Output> chain,
                DiagHandler& dh) -> Task<void>;
 
 } // namespace tenzir
+
+template <>
+struct std::hash<tenzir::OpId> {
+  auto operator()(tenzir::OpId const& id) const -> size_t {
+    return std::hash<std::string>{}(id.value);
+  }
+};

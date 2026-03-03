@@ -23,6 +23,7 @@
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
+#include <folly/Demangle.h>
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
@@ -248,7 +249,7 @@ struct SubPipeline {
     : push{std::move(push)}, from_control{std::move(from_control)} {
   }
 
-  Box<Push<OperatorMsg<Input>>> push;
+  Option<Box<Push<OperatorMsg<Input>>>> push;
   Sender<FromControl> from_control;
 };
 
@@ -259,7 +260,12 @@ public:
 
   auto send(Signal signal) -> Task<void> {
     return co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
-      return self.push(std::move(signal));
+      if (not self.push) {
+        return std::invoke([] -> Task<void> {
+          co_return;
+        });
+      }
+      return (*self.push)(std::move(signal));
     });
   }
 
@@ -272,7 +278,7 @@ public:
   /// Destroy the push handle to close the subpipeline's upstream channel.
   void close_push() {
     co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
-      auto _ = std::move(self.push);
+      self.push = None{};
     });
   }
 };
@@ -319,7 +325,7 @@ private:
   std::mutex mut_;
 };
 
-class CensoringDiagHandler : public DiagHandler {
+class CensoringDiagHandler final : public DiagHandler {
 public:
   explicit CensoringDiagHandler(DiagHandler& dh) : dh_{dh} {
   }
@@ -422,16 +428,11 @@ private:
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
                     MetricsVisibility visibility) -> MetricsCounter override {
-    return exec_ctx_.metrics()->make_counter(label, direction, visibility);
+    return exec_ctx_.make_counter(label, direction, visibility);
   }
 
-  auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                  MetricsVisibility visibility) -> MetricsGauge override {
-    return exec_ctx_.metrics()->make_gauge(label, direction, visibility);
-  }
-
-  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& override {
-    return exec_ctx_.metrics();
+  auto metrics_receiver() const -> metrics_receiver_actor override {
+    return exec_ctx_.metrics_receiver();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)
@@ -600,10 +601,10 @@ private:
         -> std::pair<Task<void>, variant<Box<Push<OperatorMsg<void>>>,
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
-        auto [push_downstream, pull_downstream]
-          = exec_ctx_.make<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
-          = exec_ctx_.make<In>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+        auto [push_downstream, pull_downstream]
+          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
         auto output_is_void = std::same_as<Out, void>;
         queue_.scope().spawn(
           [this, key, end_of_data, output_is_void,
@@ -714,7 +715,7 @@ private:
   }
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> override {
-    // TODO: This is bad.
+    // TODO: The `materialize` is bad.
     auto it = subpipelines_.find(materialize(key));
     if (it == subpipelines_.end()) {
       return std::nullopt;
@@ -723,7 +724,11 @@ private:
     return co_match(
       sub.handle,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
-        return OpenPipeline<In>{*subpipeline.push};
+        if (subpipeline.push) {
+          return OpenPipeline<In>{*subpipeline.push};
+        }
+        // Pipeline is still alive but pushing things will be ignored.
+        return OpenPipeline<In>{None{}};
       });
   }
 
@@ -1104,6 +1109,9 @@ private:
           co_return;
         }
         co_await it->second.handle.send(Shutdown{});
+        // Ensure the subpipeline runner can observe upstream closure and
+        // actually terminate after handling Shutdown.
+        it->second.handle.close_push();
         co_return;
       },
       [&](SubPipelineTerminated) -> Task<void> {
@@ -1128,7 +1136,6 @@ private:
     if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
-    // auto behavior = co_await call_finalize_behavior();
     // Then finalize the operator, which can still produce output.
     auto b = co_await call_finalize();
     if (b == FinalizeBehavior::continue_) {
@@ -1143,13 +1150,10 @@ private:
     // closed the subpipeline push handles, so skip sending EndOfData.
     if (not got_shutdown_request_) {
       for (auto& [key, sub] : subpipelines_) {
-        co_await co_match(sub.handle,
-                          []<class In>(SubPipeline<In>& sub) -> Task<void> {
-                            // TODO: What if this is a source?
-                            if constexpr (not std::same_as<In, void>) {
-                              co_await sub.push(EndOfData{});
-                            }
-                          });
+        if (not is<SubPipeline<void>>(sub.handle)) {
+          // TODO: What if this is a source?
+          co_await sub.handle.send(EndOfData{});
+        }
       }
       // Close all subpipeline upstream pushes so their first operators
       // observe None after the EndOfData, enabling orderly shutdown.
@@ -1244,6 +1248,21 @@ auto run_operator(Box<Operator<Input, Output>> op,
     .run_to_completion();
 }
 
+/// Demangle a C++ type name and strip the namespace prefix.
+auto demangle_op_type(std::type_info const& type) -> std::string {
+  auto demangled = folly::demangle(type);
+  auto result = std::string{demangled};
+  // Strip namespace prefix, keeping only the class name.
+  // Only look before '<' to avoid matching '::' inside template arguments.
+  auto tpl = result.find('<');
+  auto prefix = tpl != std::string::npos ? result.substr(0, tpl) : result;
+  auto pos = prefix.rfind("::");
+  if (pos != std::string::npos) {
+    result = result.substr(pos + 2);
+  }
+  return result;
+}
+
 } // namespace
 
 class ChainRunner {
@@ -1286,7 +1305,6 @@ private:
       auto index = detail::narrow<size_t>(&op - operators_.data());
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         LOGI("got {}", typeid(*op).name());
-        exec_ctx_.register_op_name(id_.op(index), typeid(*op));
         auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(next_input));
         auto last = index == operators_.size() - 1;
         auto output_sender = [&]() -> Box<Push<OperatorMsg<Out>>> {
@@ -1294,7 +1312,7 @@ private:
             return std::move(as<Box<Push<OperatorMsg<Out>>>>(push_downstream_));
           }
           auto [sender, receiver]
-            = exec_ctx_.make<Out>(id_.op(index).to(id_.op(index + 1)));
+            = exec_ctx_.make_channel<Out>(id_.op(index).to(id_.op(index + 1)));
           next_input = std::move(receiver);
           return std::move(sender);
         }();
@@ -1303,12 +1321,13 @@ private:
         auto [to_control_sender, to_control_receiver]
           = bounded_channel<ToControl>(16);
         operator_ctrl_.push_back(std::move(from_control_sender));
+        auto executor = exec_ctx_.make_executor(id_.op(index),
+                                                demangle_op_type(typeid(*op)));
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), id_.op(index),
                                  exec_ctx_, sys_, dh_);
-        auto executor = exec_ctx_.make_executor(id_.op(index));
         LOGI("spawning operator task");
         queue_.spawn([task = std::move(task), index,
                       executor = std::move(executor)] mutable
@@ -1475,6 +1494,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
                DiagHandler& dh) -> Task<void> {
+  TENZIR_ASSERT(chain.size() != 0);
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain).unwrap(),
@@ -1562,9 +1582,9 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
-    = exec_ctx.make<void>(ChannelId::first(id.op(0)));
+    = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
-    = exec_ctx.make<void>(ChannelId::last(id.op(pipeline.size() - 1)));
+    = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
   try {
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);
@@ -1574,19 +1594,6 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
-      // Spawn periodic metrics emission aligned to wall-clock boundaries.
-      queue.scope().spawn([&exec_ctx] -> Task<void> {
-        while (true) {
-          auto now = time::clock::now();
-          auto boundary = floor(now, defaults::metrics_interval)
-                          + defaults::metrics_interval;
-          co_await folly::coro::sleep(
-            std::chrono::duration_cast<folly::HighResDuration>(boundary - now));
-          auto snapshot = exec_ctx.metrics()->take_snapshot();
-          exec_ctx.emit_metrics(snapshot);
-          exec_ctx.emit_profiler(boundary - defaults::metrics_interval);
-        }
-      });
       queue.spawn([&] -> Task<std::monostate> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
@@ -1657,12 +1664,6 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       }
       queue.cancel();
     });
-    // Emit final metrics after the scope has joined all tasks, so the
-    // periodic emission coroutine is guaranteed to have finished.
-    auto snapshot = exec_ctx.metrics()->take_snapshot();
-    exec_ctx.emit_metrics(snapshot);
-    exec_ctx.emit_profiler(
-      floor(time::clock::now(), defaults::metrics_interval));
   } catch (folly::OperationCancelled) {
     // TODO: ?
     throw;
