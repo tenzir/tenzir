@@ -190,6 +190,8 @@ private:
     if (not writer_) {
       const auto sender = self_->current_sender();
       writer_ = sender->address();
+      // Async executor requests use short-lived companion actors, so sender
+      // identity is only stable when we also monitor the writer actor.
       enforce_writer_identity_ = monitor;
       if (monitor) {
         self_->monitor(sender, [this](const caf::error& err) {
@@ -897,10 +899,12 @@ public:
                             read_timeout, write_timeout)
           .request(cache_manager);
     if (not result) {
+      done_ = true;
       diagnostic::error(result.error()).note("failed to create cache").emit(ctx);
       co_return;
     }
     if (not *result) {
+      done_ = true;
       diagnostic::error("cache `{}` already has a writer", args_.id).emit(ctx);
       co_return;
     }
@@ -940,6 +944,11 @@ public:
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    // `start()` can fail before `cache_` is assigned; in that case we already
+    // emitted diagnostics and must not send requests to an invalid actor.
+    if (not cache_) {
+      co_return FinalizeBehavior::done;
+    }
     if (not announced_) {
       auto announce_result
         = co_await async_mail(atom::announce_v, false).request(cache_);

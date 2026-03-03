@@ -1,0 +1,3 @@
+neo-launch-compile-diagnostics: ok
+neo-launch-sink-id-escaping: ok
+update-accepts-legacy-and-neo-definitions: ok

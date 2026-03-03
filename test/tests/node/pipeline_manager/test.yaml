@@ -1,0 +1,5 @@
+suite: pipeline-manager
+runner: python
+fixtures:
+  - node
+timeout: 120
