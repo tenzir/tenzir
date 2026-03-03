@@ -8,6 +8,8 @@ from {
   line: r#"<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [Fields@1 foo:bar="baz"]"#,
 }, {
   line: r#"<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [Fields@1 ;foo="bar"]"#,
+}, {
+  line: r#"<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [action:"Applic\"ation"; path:"C:\\test"; term:"a\]b"]"#,
 }
 write_lines
 read_syslog

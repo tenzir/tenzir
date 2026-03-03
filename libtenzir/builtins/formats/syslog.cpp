@@ -219,7 +219,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     auto key_char = printable - '='_p - ' '_p - ']'_p - '"'_p;
     auto key = rep(key_char, 1, 32);
     auto checkpoint_key_char = key_char - ':'_p;
-    auto non_terminal_colon = ch<':'> >> !'"'_p;
+    auto non_terminal_colon = ch<':'> >> ! '"'_p;
     auto checkpoint_key
       = rep(checkpoint_key_char | non_terminal_colon, 1, 31) >> ':'_p;
     // \ is used to escape characters.
@@ -281,7 +281,7 @@ struct checkpoint_structured_data_element_parser
     using namespace parser_literals;
     using parsers::printable, parsers::rep, parsers::ch;
     auto sd_id = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
-    auto opt_sd_id = -(sd_id >> +' '_p) ->* [](std::optional<std::string> id) {
+    auto opt_sd_id = -(sd_id >> +' '_p)->*[](std::optional<std::string> id) {
       return id ? std::move(*id) : checkpoint_default_sdid;
     };
     auto params = checkpoint_params{};

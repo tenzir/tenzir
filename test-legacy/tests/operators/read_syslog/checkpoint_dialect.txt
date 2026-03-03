@@ -84,3 +84,21 @@
   },
   message: null,
 }
+{
+  facility: 16,
+  severity: 6,
+  version: 1,
+  timestamp: 2026-02-25T08:14:51Z,
+  hostname: "fwmgt",
+  app_name: "CheckPoint",
+  process_id: "10024",
+  message_id: null,
+  structured_data: {
+    checkpoint_2620: {
+      action: "Applic\"ation",
+      path: "C:\\test",
+      term: "a]b",
+    },
+  },
+  message: null,
+}
