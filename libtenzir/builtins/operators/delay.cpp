@@ -8,6 +8,8 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -15,10 +17,16 @@
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
+#include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::delay {
 
 namespace {
+using std::chrono::duration_cast;
+
+auto sleep_for(duration d) -> Task<void> {
+  return folly::coro::sleep(duration_cast<folly::HighResDuration>(d));
+}
 
 class delay_operator final : public crtp_operator<delay_operator> {
 public:
@@ -221,7 +229,87 @@ public:
 private:
   ast::expression expr_;
   double speed_ = 1.0;
-  std::optional<time> start_ = {};
+  std::optional<time> start_;
+};
+
+struct DelayArgs {
+  ast::expression expr;
+  double speed = 1.0;
+  std::optional<time> start;
+};
+
+class Delay final : public Operator<table_slice, table_slice> {
+public:
+  explicit Delay(DelayArgs args)
+    : expr_{std::move(args.expr)}, speed_{args.speed}, start_{args.start} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
+    if (not start_time_) {
+      start_time_ = std::chrono::steady_clock::now().time_since_epoch();
+    }
+    auto times_series = eval(expr_, input, ctx.dh());
+    size_t begin = 0;
+    size_t end = 0;
+    for (auto& ser : times_series) {
+      // validate type
+      auto* times = try_as<arrow::TimestampArray>(ser.array.get());
+      if (not times) {
+        if (ser.type.kind().is_not<null_type>()) {
+          diagnostic::warning("expected `time`, got `{}`", ser.type.kind())
+            .primary(expr_)
+            .emit(ctx.dh());
+        }
+        // include this series in the selected range
+        end += ser.length();
+        continue;
+      }
+      for (const auto& time : values3(*times)) {
+        if (not time) {
+          ++end;
+          continue;
+        }
+        if (not start_) [[unlikely]] {
+          start_ = *time;
+        }
+        TENZIR_ASSERT(start_time_);
+        // compute needed delay
+        const auto elapsed
+          = std::chrono::steady_clock::now().time_since_epoch() - *start_time_;
+        const auto anchor = *start_ + duration_cast<duration>(elapsed * speed_);
+        const auto delay = duration_cast<duration>(
+          duration_cast<std::chrono::duration<double>>(*time - anchor)
+          / speed_);
+        // if needed, push & sleep
+        if (delay > duration::zero()) {
+          if (end > begin) {
+            // emit data points before current
+            co_await push(subslice(input, begin, end));
+            begin = end;
+          }
+          co_await sleep_for(delay);
+        }
+        // advance
+        ++end;
+      }
+    }
+    co_await push(subslice(input, begin, end));
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("start", start_);
+    serde("start_time", start_time_);
+  }
+
+private:
+  ast::expression expr_;
+  double speed_;
+  std::optional<time> start_;
+  std::optional<std::chrono::steady_clock::duration> start_time_;
 };
 
 class plugin final : public virtual operator_plugin<delay_operator> {
@@ -250,7 +338,8 @@ public:
   }
 };
 
-class plugin2 final : public virtual operator_plugin2<delay_operator2> {
+class plugin2 final : public virtual operator_plugin2<delay_operator2>,
+                      public virtual OperatorPlugin {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
@@ -270,6 +359,23 @@ class plugin2 final : public virtual operator_plugin2<delay_operator2> {
     }
     return std::make_unique<delay_operator2>(std::move(expr),
                                              speed ? speed->inner : 1.0, start);
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<DelayArgs, Delay>{};
+    d.positional("by", &DelayArgs::expr, "time");
+    auto speed = d.named_optional("speed", &DelayArgs::speed);
+    d.named("start", &DelayArgs::start);
+    d.validate([speed](DescribeCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(speed));
+      if (value <= 0.0) {
+        diagnostic::error("`speed` must be greater than 0")
+          .primary(ctx.get_location(speed).value())
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 };
 
