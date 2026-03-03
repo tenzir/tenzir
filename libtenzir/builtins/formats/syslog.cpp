@@ -121,10 +121,7 @@ struct header_parser : parser_base<header_parser> {
 };
 
 /// A parameter of a structured data element.
-struct parameter {
-  std::string key;
-  data value;
-};
+using parameter = std::pair<std::string, data>;
 
 /// Parser for one structured data element parameter.
 /// @relates parameter
@@ -156,34 +153,15 @@ struct parameter_parser : parser_base<parameter_parser> {
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
-      return p(f, l, x.key, x.value);
+      return p(f, l, x.first, x.second);
     }
-  }
-};
-
-/// All parameters of a structured data element.
-using parameters = record;
-
-/// Parser for all structured data element parameters.
-struct parameters_parser : parser_base<parameters_parser> {
-  using attribute = parameters;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    auto param = parameter_parser{}->*[&](parameter in) {
-      if constexpr (not std::is_same_v<Attribute, unused_type>) {
-        x.emplace(std::move(in.key), data{std::move(in.value)});
-      }
-    };
-    auto p = +param;
-    return p(f, l, unused);
   }
 };
 
 /// A structured data element.
 struct structured_data_element {
   std::string id;
-  parameters params;
+  record params;
 };
 
 /// Parser for structured data elements.
@@ -194,36 +172,139 @@ struct structured_data_element_parser
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::printable, parsers::rep;
-    auto is_sd_name_char = [](char in) {
-      return in != '=' && in != ' ' && in != ']' && in != '"';
-    };
-    auto sd_name = printable - ' ';
-    auto sd_name_char = sd_name.with(is_sd_name_char);
-    auto sd_id = rep(sd_name_char, 1, 32);
-    auto params = parameters_parser{};
-    auto p = '[' >> sd_id >> params >> ']';
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.id, x.params);
-    }
+    auto sd_id = +(parsers::printable - ' ' - '=' - ']' - '"');
+    auto p = '[' >> sd_id >> +parameter_parser{} >> ']';
+    return p(f, l, x.id, x.params);
   }
 };
 
 /// Structured data of a Syslog message.
-using structured_data = record;
-
 /// Parser for structured data of a Syslog message.
 /// @relates structured_data
 struct structured_data_parser : parser_base<structured_data_parser> {
-  using attribute = structured_data;
+  using attribute = record;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
     auto sd
       = structured_data_element_parser{}->*[&](structured_data_element in) {
+          if constexpr (not std::is_same_v<Attribute, unused_type>) {
+            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
+          }
+        };
+    auto p = maybe_null(+sd);
+    return p(f, l, unused);
+  }
+};
+
+// Check Point logs frequently omit the SD-ID and only emit parameters.
+// We normalize such payloads under a stable synthetic SD-ID.
+auto checkpoint_default_sdid = std::string{"checkpoint_2620"};
+
+/// Parser for one Check Point structured data element parameter.
+///
+/// Examples:
+/// - `action="Accept"`
+/// - `action:"Accept"`
+/// @relates parameter
+struct checkpoint_param : parser_base<checkpoint_param> {
+  using attribute = parameter;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    using parsers::printable, parsers::rep, parsers::ch;
+    using namespace parser_literals;
+    // space, =, ", and ] are not allowed in the key of the parameter.
+    auto key_char = printable - '='_p - ' '_p - ']'_p - '"'_p;
+    auto key = rep(key_char, 1, 32);
+    auto checkpoint_key_char = key_char - ':'_p;
+    auto non_terminal_colon = ch<':'> >> !'"'_p;
+    auto checkpoint_key
+      = rep(checkpoint_key_char | non_terminal_colon, 1, 31) >> ':'_p;
+    // \ is used to escape characters.
+    auto esc = '\\'_p;
+    // ], ", \ must be escaped.
+    auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
+    // We allow not escaping `"` in some situations to be more permissive.
+    auto can_come_after_closing_bracket
+      = parsers::eoi | ' '_p | '\n'_p | '['_p | ';'_p;
+    auto value_terminator
+      = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
+    auto value_char = escaped | (! value_terminator >> printable);
+    auto value_data = (*value_char)->*[](std::string val) {
+      data d{};
+      if (not parsers::simple_data(val, d)) {
+        return data{std::move(val)};
+      }
+      return d;
+    };
+    auto rfc_parameter = key >> '='_p >> '"'_p >> value_data >> '"'_p;
+    auto checkpoint_parameter = checkpoint_key >> '"'_p >> value_data >> '"'_p;
+    auto p = rfc_parameter | checkpoint_parameter;
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return p(f, l, unused);
+    } else {
+      return p(f, l, x.first, x.second);
+    }
+  }
+};
+
+/// Parser for all Check Point structured data element parameters.
+///
+/// Example:
+/// - `action:"Accept"; conn_direction:"Incoming"; flags:"8667398"`
+struct checkpoint_params : parser_base<checkpoint_params> {
+  using attribute = record;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
+    using namespace parser_literals;
+    auto sep = +' '_p | (';'_p >> *' '_p);
+    auto p = checkpoint_param{} % sep;
+    return p(f, l, x);
+  }
+};
+
+/// Parser for Check Point structured data elements.
+///
+/// Examples:
+/// - `[Fields@1 action:"Accept"; conn_direction:"Incoming"]`
+/// - `[action:"Accept"; conn_direction:"Incoming"]`
+/// @relates structured_data_element
+struct checkpoint_structured_data_element_parser
+  : parser_base<checkpoint_structured_data_element_parser> {
+  using attribute = structured_data_element;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    using namespace parser_literals;
+    using parsers::printable, parsers::rep, parsers::ch;
+    auto sd_id = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
+    auto opt_sd_id = -(sd_id >> +' '_p) ->* [](std::optional<std::string> id) {
+      return id ? std::move(*id) : checkpoint_default_sdid;
+    };
+    auto params = checkpoint_params{};
+    auto p = '[' >> opt_sd_id >> params >> ']';
+    return p(f, l, x.id, x.params);
+  }
+};
+
+/// Parser for Check Point structured data of a Syslog message.
+///
+/// Example:
+/// - `[action:"Accept"; conn_direction:"Incoming"][origin="gw1"]`
+/// @relates structured_data
+struct checkpoint_structured_data_parser
+  : parser_base<checkpoint_structured_data_parser> {
+  using attribute = record;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
+    using namespace parsers;
+    auto sd
+      = checkpoint_structured_data_element_parser{}->*
+        [&](structured_data_element in) {
           if constexpr (not std::is_same_v<Attribute, unused_type>) {
             x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
           }
@@ -252,7 +333,7 @@ struct message_content_parser : parser_base<message_content_parser> {
 /// A Syslog message.
 struct message {
   header hdr;
-  structured_data data;
+  record data;
   std::optional<message_content> msg;
 };
 
@@ -261,304 +342,19 @@ struct message {
 struct message_parser : parser_base<message_parser> {
   using attribute = message;
 
-  template <class StructuredDataParser, class Iterator>
-  static auto parse_tail(Iterator& f, const Iterator& l, structured_data& data,
-                         std::optional<message_content>& msg) -> bool {
-    auto p = StructuredDataParser{} >> -(' ' >> message_content_parser{});
-    return p(f, l, data, msg);
-  }
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    auto save = f;
-    auto hdr = header{};
-    auto data = structured_data{};
-    auto msg = std::optional<message_content>{};
-    if (not header_parser{}.parse(f, l, hdr)) {
-      f = save;
-      return false;
-    }
-    if (f == l or *f != ' ') {
-      f = save;
-      return false;
-    }
-    ++f;
-    if (not parse_tail<structured_data_parser>(f, l, data, msg)) {
-      f = save;
-      return false;
-    }
-    if constexpr (not std::is_same_v<Attribute, unused_type>) {
-      x.hdr = std::move(hdr);
-      x.data = std::move(data);
-      x.msg = std::move(msg);
-    }
-    return true;
-  }
-};
-
-// Check Point logs frequently omit the SD-ID and only emit parameters.
-// We normalize such payloads under a stable synthetic SD-ID.
-constexpr auto checkpoint_default_sdid = std::string_view{"checkpoint_2620"};
-
-template <class Iterator>
-auto parse_checkpoint_parameter_value(Iterator& f, const Iterator& l, data& x)
-  -> bool {
-  using parsers::printable, parsers::ch, parsers::eoi;
-  // RFC 5424 escaping rules for PARAM-VALUE: only `]`, `\`, and `"` may be
-  // escaped with a leading backslash.
-  auto escaped = ignore(ch<'\\'>) >> (ch<']'> | ch<'\\'> | ch<'"'>);
-  // Check Point frequently emits non-RFC structured data where plain `"` may
-  // occur in values. Treat `"` as closing quote only in dialect-specific
-  // boundary positions.
-  //   - `" ` / `";`
-  //   - `"]` followed by end-of-record, whitespace, next SD element, or `;`.
-  auto checkpoint_value_terminator
-    = ch<'"'> >> (ch<' '> | ch<';'>
-                  | (ch<']'> >> (eoi | ch<' '> | ch<'\n'> | ch<'['> | ch<';'>)));
-  // Use non-consuming negative lookahead so terminator probing does not mutate
-  // parser state before `printable` consumes the actual value character.
-  auto value_char = escaped | (! checkpoint_value_terminator >> printable);
-  auto value_data = (*value_char)->*[](std::string val) {
-    data d{};
-    if (not parsers::simple_data(val, d)) {
-      return data{std::move(val)};
-    }
-    return d;
-  };
-  return value_data(f, l, x);
-}
-
-struct checkpoint_parameter_value_parser
-  : parser_base<checkpoint_parameter_value_parser> {
-  using attribute = data;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    auto value = data{};
-    if (not parse_checkpoint_parameter_value(f, l, value)) {
-      return false;
-    }
-    if constexpr (not std::is_same_v<Attribute, unused_type>) {
-      x = std::move(value);
-    }
-    return true;
-  }
-};
-
-template <bool AllowSemicolon>
-struct checkpoint_parameter_separator_parser
-  : parser_base<checkpoint_parameter_separator_parser<AllowSemicolon>> {
-  using attribute = unused_type;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute&) const -> bool {
-    using parsers::ch;
-    auto spaces = ignore(+ch<' '>);
-    if constexpr (AllowSemicolon) {
-      // Check Point commonly uses `;` as a parameter separator.
-      auto semicolon = ignore(ch<';'> >> *ch<' '>);
-      auto separator = spaces | semicolon;
-      return (+separator)(f, l, unused);
-    } else {
-      return spaces(f, l, unused);
-    }
-  }
-};
-
-/// Parser for one Check Point structured data element parameter.
-/// @relates parameter
-struct checkpoint_parameter_parser : parser_base<checkpoint_parameter_parser> {
-  using attribute = parameter;
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::printable, parsers::rep, parsers::ch;
-    // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
-    auto checkpoint_key = key.with([](const std::string& in) {
-      return in.size() > 1 and in.back() == ':';
-    })->*[](std::string in) {
-      in.pop_back();
-      return in;
-    };
-    auto value = checkpoint_parameter_value_parser{};
-    // RFC 5424 syntax: key="value".
-    auto rfc_parameter
-      = key >> ignore(ch<'='>) >> ignore(ch<'"'>) >> value >> ignore(ch<'"'>);
-    // Check Point dialect: key:"value" (colon instead of equals).
-    auto checkpoint_parameter
-      = checkpoint_key >> ignore(ch<'"'>) >> value >> ignore(ch<'"'>);
-    auto p = rfc_parameter | checkpoint_parameter;
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    }
-    return p(f, l, x.key, x.value);
-  }
-};
-
-template <bool AllowSemicolon, class Iterator, class AddParameter>
-auto parse_checkpoint_following_parameters(Iterator& f, const Iterator& l,
-                                           AddParameter&& add_parameter)
-  -> bool {
-  using parsers::ch;
-  auto separator = checkpoint_parameter_separator_parser<AllowSemicolon>{};
-  auto next_parameter = separator >> ! ch<']'> >> checkpoint_parameter_parser{};
-  auto add_next_parameter = next_parameter->*[&](parameter in) {
-    add_parameter(std::move(in));
-  };
-  auto trailing_separator = separator >> &ch<']'>;
-  auto p = *add_next_parameter >> -trailing_separator;
-  return p(f, l, unused);
-}
-
-/// Parser for all Check Point structured data element parameters.
-template <bool AllowSemicolon>
-struct checkpoint_parameters_parser
-  : parser_base<checkpoint_parameters_parser<AllowSemicolon>> {
-  using attribute = parameters;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    auto add_parameter = [&](parameter&& in) {
-      if constexpr (not std::is_same_v<Attribute, unused_type>) {
-        x.emplace(std::move(in.key), data{std::move(in.value)});
-      }
-    };
-    auto param = parameter{};
-    if (not checkpoint_parameter_parser{}.parse(f, l, param)) {
-      return false;
-    }
-    add_parameter(std::move(param));
-    return parse_checkpoint_following_parameters<AllowSemicolon>(f, l,
-                                                                 add_parameter);
-  }
-};
-
-/// Parser for Check Point structured data elements.
-/// @relates structured_data_element
-struct checkpoint_structured_data_element_parser
-  : parser_base<checkpoint_structured_data_element_parser> {
-  using attribute = structured_data_element;
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::printable, parsers::rep, parsers::ch;
-    auto token_parser = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
-    auto next = f;
-    if (next == l or *next != '[') {
-      return false;
-    }
-    ++next;
-    auto first_parameter_start = next;
-    auto token = std::string{};
-    if (not token_parser(next, l, token)) {
-      return false;
-    }
-    if (next == l) {
-      return false;
-    }
-    auto result = structured_data_element{};
-    if (*next == ']') {
-      result.id = std::move(token);
-      ++next;
-    } else if (*next == ' ') {
-      result.id = std::move(token);
-      if (not checkpoint_parameter_separator_parser<false>{}(next, l, unused)) {
-        return false;
-      }
-      if (next == l or *next == ']') {
-        return false;
-      }
-      auto parse_rfc_parameters
-        = checkpoint_parameters_parser<false>{} >> &ch<']'>;
-      auto parse_checkpoint_parameters
-        = checkpoint_parameters_parser<true>{} >> &ch<']'>;
-      auto parse_parameters
-        = parse_rfc_parameters | parse_checkpoint_parameters;
-      if (not parse_parameters(next, l, result.params)) {
-        return false;
-      }
-      if (next == l or *next != ']') {
-        return false;
-      }
-      ++next;
-    } else {
-      auto first = parameter{};
-      auto param_start = first_parameter_start;
-      if (not checkpoint_parameter_parser{}.parse(param_start, l, first)) {
-        return false;
-      }
-      next = param_start;
-      result.id = std::string{checkpoint_default_sdid};
-      result.params.emplace(std::move(first.key), data{std::move(first.value)});
-      auto add_parameter = [&](parameter&& param) {
-        result.params.emplace(std::move(param.key),
-                              data{std::move(param.value)});
-      };
-      if (not parse_checkpoint_following_parameters<true>(next, l,
-                                                          add_parameter)) {
-        return false;
-      }
-      if (next == l or *next != ']') {
-        return false;
-      }
-      ++next;
-    }
-    if constexpr (not std::is_same_v<Attribute, unused_type>) {
-      x = std::move(result);
-    }
-    f = next;
-    return true;
-  }
-};
-
-/// Parser for Check Point structured data of a Syslog message.
-/// @relates structured_data
-struct checkpoint_structured_data_parser
-  : parser_base<checkpoint_structured_data_parser> {
-  using attribute = structured_data;
-
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
-    auto sd
-      = checkpoint_structured_data_element_parser{}->*
-        [&](structured_data_element in) {
-          if constexpr (not std::is_same_v<Attribute, unused_type>) {
-            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
-          }
-        };
-    auto p = maybe_null(+sd);
-    return p(f, l, unused);
+    auto p = header_parser{} >> ' '
+             >> (structured_data_parser{} | checkpoint_structured_data_parser{})
+             >> -(' ' >> message_content_parser{});
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return p(f, l, unused);
+    } else {
+      return p(f, l, x.hdr, x.data, x.msg);
+    }
   }
 };
-
-auto parse_rfc5424_or_checkpoint(std::string_view input, message& x) -> bool {
-  auto f = input.begin();
-  auto l = input.end();
-  if (not header_parser{}.parse(f, l, x.hdr)) {
-    return false;
-  }
-  if (f == l or *f != ' ') {
-    return false;
-  }
-  ++f;
-  auto structured_data_begin = f;
-  x.data = {};
-  x.msg.reset();
-  if (message_parser::parse_tail<structured_data_parser>(f, l, x.data, x.msg)) {
-    return true;
-  }
-  f = structured_data_begin;
-  x.data = {};
-  x.msg.reset();
-  if (message_parser::parse_tail<checkpoint_structured_data_parser>(
-        f, l, x.data, x.msg)) {
-    return true;
-  }
-  x = {};
-  return false;
-}
 
 /// A legacy (RFC 3164) Syslog message.
 struct legacy_message {
@@ -1039,9 +835,11 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
+    const auto* f = line->begin();
+    const auto* const l = line->end();
     message msg{};
     legacy_message legacy_msg{};
-    if (parse_rfc5424_or_checkpoint(*line, msg)) {
+    if (auto parser = message_parser{}; parser(f, l, msg)) {
       for (auto&& s : maybe_flush(builder_tag::syslog_builder)) {
         co_yield std::move(s);
       }
@@ -1051,8 +849,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       } else {
         new_builder.add_new({std::move(msg), line_nr});
       }
-    } else if (auto f = line->begin(), l = line->end();
-               legacy_message_parser{}(f, l, legacy_msg)) {
+    } else if (auto legacy_parser = legacy_message_parser{};
+               legacy_parser(f, l, legacy_msg)) {
       for (auto&& s : maybe_flush(builder_tag::legacy_syslog_builder)) {
         co_yield std::move(s);
       }
@@ -1633,11 +1431,12 @@ public:
               const auto try_parse
                 = [&](std::string_view input, message& msg,
                       legacy_message& legacy_msg) -> builder_tag {
-                if (parse_rfc5424_or_checkpoint(input, msg)) {
-                  return builder_tag::syslog_builder;
-                }
                 auto f = input.begin();
                 auto l = input.end();
+                if (message_parser{}.parse(f, l, msg)) {
+                  return builder_tag::syslog_builder;
+                }
+                f = input.begin();
                 if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
                   return builder_tag::legacy_syslog_builder;
                 }
