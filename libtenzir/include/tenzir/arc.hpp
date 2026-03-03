@@ -8,6 +8,7 @@
 
 #include "tenzir/detail/assert.hpp"
 
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
