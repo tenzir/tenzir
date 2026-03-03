@@ -155,10 +155,16 @@ auto data_builder::emit_or_throw(tenzir::diagnostic_builder&& builder) -> void {
 
 auto data_builder::emit_mismatch_warning(const type_kind& value_type,
                                          const type& seed_type,
-                                         const value_path& path) -> void {
-  emit_or_throw(diagnostic::warning("parsed field `{}` contains `{}`, but the "
-                                    "schema expects `{}`",
-                                    path, value_type, seed_type.kind()));
+                                         const value_path& path,
+                                         bool is_repeat_key_list) -> void {
+  auto diag = diagnostic::warning("parsed field `{}` contains `{}`, but the "
+                                  "schema expects `{}`",
+                                  path, value_type, seed_type.kind());
+  if (is_repeat_key_list) {
+    diag = std::move(diag).note(
+      "the field appeared multiple times and was interpreted as a list");
+  }
+  emit_or_throw(std::move(diag));
 }
 
 namespace {
@@ -814,10 +820,13 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
   }
   // This is matching on (current_value, desired_tenzir_type)
   const auto visitor2 = detail::overload{
-    [&rb, seed, &path]<non_structured_data_type T, typename S>(const T&,
-                                                               const S&) {
+    [&rb, seed, &path,
+     is_repeat_key_list
+     = this->is_repeat_key_list]<non_structured_data_type T, typename S>(
+      const T&, const S&) {
       if constexpr (not std::same_as<data_to_type_t<T>, S>) {
-        rb.emit_mismatch_warning(tag_v<data_to_type_t<T>>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<data_to_type_t<T>>, *seed, path,
+                                 is_repeat_key_list);
       }
     },
     // generic fallback
@@ -935,7 +944,8 @@ auto node_object::append_to_signature(signature_type& sig,
     [&sig, &rb, seed, this, &path](node_list& v) {
       const auto* ls = try_as<list_type>(seed);
       if (seed and not ls) {
-        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path,
+                                 is_repeat_key_list);
         if (rb.settings_.schema_only) {
           null(true);
           return false;
@@ -949,7 +959,8 @@ auto node_object::append_to_signature(signature_type& sig,
     [&sig, &rb, seed, this, &path](node_record& v) {
       const auto* rs = try_as<record_type>(seed);
       if (seed and not rs) {
-        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path,
+                                 is_repeat_key_list);
         if (rb.settings_.schema_only) {
           null(true);
           return false;
@@ -1017,11 +1028,9 @@ auto node_object::append_to_signature(signature_type& sig,
 auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
                             const tenzir::type* seed, value_path path,
                             bool mark_dead) -> void {
-  if (mark_dead) {
-    is_repeat_key_list = false;
-  }
   if (rb.settings_.schema_only and not seed) {
     if (mark_dead) {
+      is_repeat_key_list = false;
       mark_this_dead();
       value_state_ = value_state_type::null;
     }
@@ -1030,6 +1039,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
   if (value_state_ == value_state_type::null) {
     builder.null();
     if (mark_dead) {
+      is_repeat_key_list = false;
       mark_this_dead();
     }
     return;
@@ -1037,13 +1047,15 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
   parse(rb, seed, path);
   try_resolve_nonstructural_field_mismatch(rb, seed, path);
   const auto visitor = detail::overload{
-    [&builder, &rb, seed, mark_dead, &path](node_list& v) {
+    [&builder, &rb, seed, mark_dead, &path,
+     is_repeat_key_list = this->is_repeat_key_list](node_list& v) {
       if (v.is_dead()) {
         return;
       }
       const auto ls = try_as<tenzir::list_type>(seed);
       if (not ls and seed) {
-        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path,
+                                 is_repeat_key_list);
         builder.null();
         v.mark_this_dead();
         return;
@@ -1053,13 +1065,15 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       auto l = builder.list();
       v.commit_to(std::move(l), rb, ls, path, mark_dead);
     },
-    [&builder, &rb, seed, mark_dead, &path](node_record& v) {
+    [&builder, &rb, seed, mark_dead, &path,
+     is_repeat_key_list = this->is_repeat_key_list](node_record& v) {
       if (v.is_dead()) {
         return;
       }
       const auto rs = try_as<tenzir::record_type>(seed);
       if (not rs and seed) {
-        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path,
+                                 is_repeat_key_list);
         builder.null();
         v.mark_this_dead();
         return;
@@ -1069,12 +1083,15 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       auto r = builder.record();
       v.commit_to(std::move(r), rb, rs, path, mark_dead);
     },
-    [&builder, seed, &rb, &path]<non_structured_data_type T>(T& v) {
+    [&builder, seed, &rb, &path,
+     is_repeat_key_list
+     = this->is_repeat_key_list]<non_structured_data_type T>(T& v) {
       auto res = builder.try_data(v);
       if (not res) {
         const auto& err = res.error();
         if (tenzir::ec{err.code()} == ec::type_clash) {
-          rb.emit_mismatch_warning(tag_v<data_to_type_t<T>>, *seed, path);
+          rb.emit_mismatch_warning(tag_v<data_to_type_t<T>>, *seed, path,
+                                   is_repeat_key_list);
         } else {
           rb.emit_or_throw(
             diagnostic::warning("issue writing data into builder")
@@ -1090,6 +1107,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
   std::visit(visitor, data_);
   if (mark_dead) {
     mark_this_dead();
+    is_repeat_key_list = false;
     value_state_ = value_state_type::null;
   }
 }
@@ -1097,12 +1115,10 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
 auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
                             const tenzir::type* seed, value_path path,
                             bool mark_dead) -> void {
-  if (mark_dead) {
-    is_repeat_key_list = false;
-  }
   if (rb.settings_.schema_only and not seed) {
     if (mark_dead) {
       mark_this_dead();
+      is_repeat_key_list = false;
       value_state_ = value_state_type::null;
     }
     return;
@@ -1110,6 +1126,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
   if (value_state_ == value_state_type::null) {
     r = caf::none;
     if (mark_dead) {
+      is_repeat_key_list = false;
       mark_this_dead();
     }
     return;
@@ -1117,13 +1134,15 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
   parse(rb, seed, path);
   try_resolve_nonstructural_field_mismatch(rb, seed, path);
   const auto visitor = detail::overload{
-    [&r, &rb, seed, mark_dead, &path](node_list& v) {
+    [&r, &rb, seed, mark_dead, &path,
+     is_repeat_key_list = this->is_repeat_key_list](node_list& v) {
       if (v.is_dead()) {
         return;
       }
       const auto ls = try_as<tenzir::list_type>(seed);
       if (not ls and seed) {
-        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path,
+                                 is_repeat_key_list);
         r = caf::none;
         v.mark_this_dead();
         return;
@@ -1131,13 +1150,15 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
       r = tenzir::list{};
       v.commit_to(as<tenzir::list>(r), rb, ls, path, mark_dead);
     },
-    [&r, &rb, seed, mark_dead, &path](node_record& v) {
+    [&r, &rb, seed, mark_dead, &path,
+     is_repeat_key_list = this->is_repeat_key_list](node_record& v) {
       if (v.is_dead()) {
         return;
       }
       const auto rs = try_as<tenzir::record_type>(seed);
       if (not rs and seed) {
-        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
+        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path,
+                                 is_repeat_key_list);
         r = caf::none;
         v.mark_this_dead();
         return;
@@ -1159,6 +1180,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
   std::visit(visitor, data_);
   if (mark_dead) {
     mark_this_dead();
+    is_repeat_key_list = false;
     value_state_ = value_state_type::null;
   }
 }
