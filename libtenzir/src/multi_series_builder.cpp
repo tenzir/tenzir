@@ -538,19 +538,22 @@ auto multi_series_builder::make_events_available_on_timeout(
     }
     return timeout;
   }
-  auto res = duration::max();
+  auto res = settings_.timeout;
   for (auto& entry : entries_) {
-    if (detail::narrow<std::size_t>(entry.builder.length())
-        > settings_.desired_batch_size) {
+    auto length = detail::narrow<std::size_t>(entry.builder.length());
+    if (length == 0) {
+      continue;
+    }
+    if (length >= settings_.desired_batch_size) {
       append_ready_events(entry.flush(now));
       continue;
     }
     auto const waiting = now - entry.oldest_event;
-    if (waiting > timeout) {
+    if (waiting >= timeout) {
       append_ready_events(entry.flush(now));
       continue;
     }
-    res = std::min(res, waiting);
+    res = std::min(res, timeout - waiting);
   }
   garbage_collect_where([now, timeout](entry_data const& e) {
     if (e.builder.length() != 0) {
@@ -838,8 +841,10 @@ void multi_series_builder::garbage_collect_where(
   if (uses_merging_builder()) {
     return;
   }
-  for (auto it = signature_map_.begin(); it != signature_map_.end(); ++it) {
-    auto& entry = entries_[it.value()];
+  for (auto it = signature_map_.begin(); it != signature_map_.end();) {
+    auto const index = it.value();
+    TENZIR_ASSERT(index < entries_.size());
+    auto& entry = entries_[index];
     if (pred(entry)) {
       TENZIR_ASSERT(entry.builder.length() == 0,
                     "The predicate for garbage collection should be strictly "
@@ -848,7 +853,9 @@ void multi_series_builder::garbage_collect_where(
                     "events in them.");
       entry.unused = true;
       it = signature_map_.erase(it);
+      continue;
     }
+    ++it;
   }
 }
 
