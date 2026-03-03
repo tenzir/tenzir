@@ -621,17 +621,6 @@ struct ExecutorStats {
   std::atomic<size_t> task_count{0};
 };
 
-/// Wrap an existing `folly::Executor` to support keep-alive.
-template <class Executor>
-class KeepAliveExecutor final : public Executor {
-public:
-  explicit KeepAliveExecutor(Box<Executor> inner) : inner_{std::move(inner)} {
-  }
-
-private:
-  Executor inner_;
-};
-
 /// Executor wrapper that forwards tasks to an inner executor while measuring
 /// wall-clock time, thread CPU time, and task count. Also sets the
 /// exec_node_name_guard thread-local for each continuation so that
