@@ -7,10 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/async.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -100,7 +102,7 @@ public:
     auto counter = uint64_t{};
     for (auto&& chunk : input) {
       const auto now = std::chrono::steady_clock::now();
-      if (!chunk || chunk->size() == 0) {
+      if (! chunk || chunk->size() == 0) {
         if (builder.length() > 0
             and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
@@ -152,8 +154,147 @@ private:
   schema schema_ = {};
 };
 
+struct MeasureArgs {
+  uint64_t batch_size = 0;
+  bool real_time = false;
+  bool cumulative = false;
+  bool definition = false;
+  bool exact_definition = false;
+};
+
+class MeasureTableSlice final : public Operator<table_slice, table_slice> {
+public:
+  explicit MeasureTableSlice(MeasureArgs args)
+    : args_{args},
+      last_finish_{std::chrono::steady_clock::now().time_since_epoch()} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    if (input.rows() == 0) {
+      if (builder_.length() > 0
+          and last_finish_ + defaults::import::batch_timeout < now) {
+        last_finish_ = now;
+        co_await push(
+          builder_.finish_assert_one_slice("tenzir.measure.events"));
+      }
+      co_return;
+    }
+    auto& events = counters_[input.schema()];
+    const auto is_new = events == 0;
+    events = args_.cumulative ? events + input.rows() : input.rows();
+    auto metric = builder_.record();
+    metric.field("timestamp", time::clock::now());
+    metric.field("events", events);
+    metric.field("schema_id", input.schema().make_fingerprint());
+    if (args_.exact_definition) {
+      metric.field("schema",
+                   is_new ? data{input.schema().to_definition()} : data{});
+    } else if (args_.definition) {
+      metric.field("schema", is_new
+                               ? data{input.schema().to_legacy_definition()}
+                               : data{});
+    } else {
+      metric.field("schema", input.schema().name());
+    }
+    if (args_.real_time
+        or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
+        or last_finish_ + defaults::import::batch_timeout < now) {
+      last_finish_ = now;
+      co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("counters", counters_);
+    serde("last_finish", last_finish_);
+  }
+
+private:
+  MeasureArgs args_;
+  series_builder builder_;
+  std::unordered_map<type, uint64_t> counters_;
+  std::chrono::steady_clock::duration last_finish_;
+};
+
+class MeasureChunk final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit MeasureChunk(MeasureArgs args)
+    : args_{args},
+      builder_{schema()},
+      last_finish_{std::chrono::steady_clock::now().time_since_epoch()} {
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    if (not input or input->size() == 0) {
+      if (builder_.length() > 0
+          and last_finish_ + defaults::import::batch_timeout < now) {
+        last_finish_ = now;
+        co_await push(builder_.finish_assert_one_slice());
+      }
+      co_return;
+    }
+    counter_ = args_.cumulative ? counter_ + input->size() : input->size();
+    auto metric = builder_.record();
+    metric.field("timestamp", time::clock::now());
+    metric.field("bytes", counter_);
+    if (args_.real_time
+        or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
+        or last_finish_ + defaults::import::batch_timeout < now) {
+      last_finish_ = now;
+      co_await push(builder_.finish_assert_one_slice());
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice());
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("counter", counter_);
+    serde("last_finish", last_finish_);
+  }
+
+private:
+  static auto schema() -> const type& {
+    static const auto result = type{
+      "tenzir.measure.bytes",
+      record_type{
+        {"timestamp", time_type{}},
+        {"bytes", uint64_type{}},
+      },
+    };
+    return result;
+  }
+
+  MeasureArgs args_;
+  series_builder builder_;
+  uint64_t counter_ = 0;
+  std::chrono::steady_clock::duration last_finish_;
+};
+
 class plugin final : public virtual operator_plugin<measure_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -189,6 +330,16 @@ public:
                                               exact_definition ? schema::exact
                                               : definition     ? schema::legacy
                                                            : schema::name_only);
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk>{
+      MeasureArgs{.batch_size = batch_size_}};
+    d.named("real_time", &MeasureArgs::real_time);
+    d.named("cumulative", &MeasureArgs::cumulative);
+    d.named("_definition", &MeasureArgs::definition);
+    d.named("_exact_definition", &MeasureArgs::exact_definition);
+    return d.without_optimize();
   }
 
 private:
