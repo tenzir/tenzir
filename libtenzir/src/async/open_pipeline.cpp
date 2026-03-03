@@ -22,7 +22,12 @@ auto OpenPipeline<Input>::push(In input) -> Task<Result<void, In>> {
     }
     co_await (*push_)(std::move(input));
   } else {
-    LOGW("discarding {} rows due to closed subpipeline");
+    if constexpr (std::same_as<Input, table_slice>) {
+      LOGW("discarding {} rows due to closed subpipeline", input.rows());
+    } else {
+      LOGW("discarding {} bytes due to closed subpipeline",
+           input ? input->size() : 0);
+    }
   }
   co_return {};
 }
@@ -32,7 +37,7 @@ auto OpenPipeline<Input>::close() -> Task<void>
   requires(not std::same_as<Input, void>)
 {
   if (push_) {
-    LOGW("pushing end-of-data to subpipeline", input.rows());
+    LOGW("pushing end-of-data to subpipeline");
     co_await (*push_)(EndOfData{});
   } else {
     LOGW("discarding end-of-data due to closed subpipeline");
