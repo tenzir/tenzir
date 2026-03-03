@@ -1565,6 +1565,7 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
   // fields is written exactly once via `set()`.
   struct OpStats {
     std::string name;
+    Option<size_t> input_bytes;
     Option<size_t> bytes_in;
     Option<size_t> bytes_out;
     Option<size_t> batches_in;
@@ -1573,7 +1574,6 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
     Option<size_t> events_out;
     Option<size_t> signals_in;
     Option<size_t> signals_out;
-    Option<size_t> input_bytes;
     Option<int64_t> cpu_ns;
     Option<int64_t> wall_ns;
     Option<size_t> task_count;
@@ -1667,7 +1667,8 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
     }
     result.operators.push_back(OperatorProfileEntry{
       .operator_id = id.value,
-      .operator_type = s.name,
+      .name = s.name,
+      .input_bytes = static_cast<uint64_t>(get(s.input_bytes)),
       .cpu = cpu_usage,
       .task_count = delta(get(s.task_count), old.task_count),
       .bytes_in = delta(get(s.bytes_in), old.bytes_in),
@@ -1678,7 +1679,6 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
       .events_out = delta(get(s.events_out), old.events_out),
       .signals_in = delta(get(s.signals_in), old.signals_in),
       .signals_out = delta(get(s.signals_out), old.signals_out),
-      .input_bytes = static_cast<uint64_t>(get(s.input_bytes)),
     });
     old = cur;
   }
@@ -1967,7 +1967,8 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
       {"timestamp", time_type{}},
       {"pipeline_id", string_type{}},
       {"operator_id", string_type{}},
-      {"operator_type", string_type{}},
+      {"name", string_type{}},
+      {"input_bytes", uint64_type{}},
       {"cpu", double_type{}},
       {"task_count", uint64_type{}},
       {"bytes_in", uint64_type{}},
@@ -1978,7 +1979,6 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
       {"events_out", uint64_type{}},
       {"signals_in", uint64_type{}},
       {"signals_out", uint64_type{}},
-      {"input_bytes", uint64_type{}},
     },
     {{"internal"}},
   };
@@ -1990,7 +1990,8 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
       row.field("timestamp").data(snapshot.timestamp);
       row.field("pipeline_id").data(pipeline_id);
       row.field("operator_id").data(op.operator_id);
-      row.field("operator_type").data(op.operator_type);
+      row.field("name").data(op.name);
+      row.field("input_bytes").data(op.input_bytes);
       row.field("cpu").data(op.cpu);
       row.field("task_count").data(op.task_count);
       row.field("bytes_in").data(op.bytes_in);
@@ -2001,7 +2002,6 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
       row.field("events_out").data(op.events_out);
       row.field("signals_in").data(op.signals_in);
       row.field("signals_out").data(op.signals_out);
-      row.field("input_bytes").data(op.input_bytes);
     }
     result.push_back(builder.finish_assert_one_slice());
   }

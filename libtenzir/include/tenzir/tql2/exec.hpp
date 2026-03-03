@@ -26,7 +26,8 @@ namespace tenzir {
 /// Per-operator aggregated profiling data emitted each tick.
 struct OperatorProfileEntry {
   std::string operator_id;
-  std::string operator_type;
+  std::string name;
+  uint64_t input_bytes = 0;
   double cpu = 0.0;
   uint64_t task_count = 0;
   uint64_t bytes_in = 0;
@@ -37,7 +38,6 @@ struct OperatorProfileEntry {
   uint64_t events_out = 0;
   uint64_t signals_in = 0;
   uint64_t signals_out = 0;
-  uint64_t input_bytes = 0;
 };
 
 /// Aggregated profiler snapshot emitted each tick.
