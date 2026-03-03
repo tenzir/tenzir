@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
+#include "tenzir/operator_plugin.hpp"
+
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -275,8 +278,43 @@ private:
   located<pipeline> pipe_;
 };
 
-class fork_plugin final : public virtual operator_plugin2<fork_operator> {
+struct ForkArgs {
+  located<ir::pipeline> pipe;
+};
+
+class Fork final : public Operator<table_slice, table_slice> {
 public:
+  explicit Fork(ForkArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (not started_) {
+      co_await ctx.spawn_sub(int64_t{0}, args_.pipe.inner, tag_v<table_slice>);
+      started_ = true;
+    }
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (auto sub = ctx.get_sub(int64_t{0})) {
+      auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+      std::ignore = co_await pipe.push(input);
+    }
+    co_await push(std::move(input));
+  }
+
+private:
+  ForkArgs args_;
+  bool started_ = false;
+};
+
+class fork_plugin final : public virtual operator_plugin2<fork_operator>,
+                          public virtual OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.fork";
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};
@@ -284,6 +322,25 @@ public:
           .positional("{ … }", pipe)
           .parse(inv, ctx));
     return std::make_unique<fork_operator>(std::move(pipe));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ForkArgs, Fork>{};
+    auto pipe = d.pipeline(&ForkArgs::pipe);
+    d.validate([pipe](DescribeCtx& ctx) -> Empty {
+      TRY(auto p, ctx.get(pipe));
+      auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
+      if (output.is_error() or not output->has_value()) {
+        return {};
+      }
+      if (output->value().is_not<void>()) {
+        diagnostic::error("subpipeline must end in a sink")
+          .primary(p.source)
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 };
 

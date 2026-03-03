@@ -1,0 +1,2 @@
+from {x: 42, y: "abc"}
+select digest = hmac(this, "secret")

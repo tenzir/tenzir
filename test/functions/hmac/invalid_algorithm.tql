@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {payload: "payload", key: "my_key"}
+select digest = hmac(payload, key, algorithm="sha3_256")

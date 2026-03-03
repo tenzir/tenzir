@@ -1,0 +1,2 @@
+from {value: "The quick brown fox jumps over the lazy dog", key: "key"}
+select digest = hmac(value, key)
