@@ -603,10 +603,10 @@ struct ChannelStats {
     backpressure_events_.push_back({start, end});
   }
 
-  /// Read all backpressure events under lock (thread-safe).
-  auto backpressure_events() const -> std::vector<BackpressureEvent> {
+  /// Return and clear all backpressure events under lock (thread-safe).
+  auto drain_backpressure_events() -> std::vector<BackpressureEvent> {
     auto lock = std::scoped_lock{bp_mutex_};
-    return backpressure_events_;
+    return std::exchange(backpressure_events_, {});
   }
 
 private:
@@ -927,15 +927,11 @@ public:
   /// actually call this function if `profiling` is enabled.
   auto get_channel_profiles() -> std::vector<ChannelProfile> {
     auto lock = std::scoped_lock{mutex_};
-    // We first determine what to delete, then clone the information, and then
-    // delete. This is because we need to ensure that we get the latest state.
-    auto removed
-      = std::ranges::remove_if(channels_, [](ChannelProfile const& c) {
-          return c.stats.strong_count() == 1;
-        });
-    auto copy = channels_;
-    channels_.erase(removed.begin(), removed.end());
-    return copy;
+    auto alive = channels_ | std::views::filter([](auto const& c) {
+                   return c.stats.strong_count() > 1;
+                 })
+                 | std::ranges::to<std::vector>();
+    return std::exchange(channels_, std::move(alive));
   }
 
   /// Return the current set of executor profiles.
@@ -945,15 +941,11 @@ public:
   /// actually call this function if `profiling` is enabled.
   auto get_executor_profiles() -> std::vector<ExecutorProfile> {
     auto lock = std::scoped_lock{mutex_};
-    // We first determine what to delete, then clone the information, and then
-    // delete. This is because we need to ensure that we get the latest state.
-    auto removed
-      = std::ranges::remove_if(executors_, [](ExecutorProfile const& e) {
-          return e.stats.strong_count() == 1;
-        });
-    auto copy = executors_;
-    executors_.erase(removed.begin(), removed.end());
-    return copy;
+    auto alive = executors_ | std::views::filter([](auto const& e) {
+                   return e.stats.strong_count() > 1;
+                 })
+                 | std::ranges::to<std::vector>();
+    return std::exchange(executors_, std::move(alive));
   }
 
   auto make_executor(OpId id, std::string name)
@@ -1087,10 +1079,12 @@ struct ProfileSample {
   std::vector<Executor> executors;
 };
 
-void write_profile(std::string const& path,
-                   std::vector<ProfileSample> const& samples,
-                   std::chrono::steady_clock::time_point t0,
-                   std::vector<ChannelProfile> const& channel_profiles) {
+void write_profile(
+  std::string const& path, std::vector<ProfileSample> const& samples,
+  std::chrono::steady_clock::time_point t0,
+  std::unordered_map<std::string,
+                     std::vector<ChannelStats::BackpressureEvent>> const&
+    backpressure_events) {
   auto f = std::ofstream{path};
   if (not f) {
     TENZIR_WARN("failed to open profile output file: {}", path);
@@ -1499,18 +1493,17 @@ void write_profile(std::string const& path,
   // input buffer filled up), using the same routing as "Out" metrics.
   auto bp_pids_emitted = std::unordered_set<int>{};
   auto has_any_bp = false;
-  for (auto const& prof : channel_profiles) {
-    auto bp_events = prof.stats->backpressure_events();
+  for (auto const& [channel_name, bp_events] : backpressure_events) {
     if (bp_events.empty()) {
       continue;
     }
     // Parse channel name to get sender/receiver.
-    auto sep = prof.id.value.find(" -> ");
+    auto sep = channel_name.find(" -> ");
     if (sep == std::string::npos) {
       continue;
     }
-    auto sender = prof.id.value.substr(0, sep);
-    auto receiver = prof.id.value.substr(sep + 4);
+    auto sender = channel_name.substr(0, sep);
+    auto receiver = channel_name.substr(sep + 4);
     if (receiver == "_") {
       continue;
     }
@@ -1766,9 +1759,13 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
   }
+  // Always drain profiles to prune dead channels/executors, even when there
+  // is no importer to send snapshots to. Without this, the profile vectors
+  // would grow unboundedly for long-running pipelines with dynamic
+  // subpipelines.
+  auto channels = exec_ctx.get_channel_profiles();
+  auto executors = exec_ctx.get_executor_profiles();
   if (node.importer.is_some()) {
-    auto channels = exec_ctx.get_channel_profiles();
-    auto executors = exec_ctx.get_executor_profiles();
     auto snapshot_time = floor(now, defaults::metrics_interval);
     auto snapshot = build_profiler_snapshot(channels, executors, snapshot_time,
                                             prev_snapshots);
@@ -1811,48 +1808,64 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     },
     [&](PerfettoProfiler const& perfetto) -> Task<void> {
       auto samples = std::vector<ProfileSample>{};
+      auto bp_events
+        = std::unordered_map<std::string,
+                             std::vector<ChannelStats::BackpressureEvent>>{};
       auto const t0 = std::chrono::steady_clock::now();
+      // Snapshot current profiles into `samples` and drain backpressure
+      // events. Called every tick and once more on cancellation.
+      auto take_sample = [&] {
+        auto channel_profiles = exec_ctx.get_channel_profiles();
+        auto executor_profiles = exec_ctx.get_executor_profiles();
+        for (auto& p : channel_profiles) {
+          auto drained = p.stats->drain_backpressure_events();
+          if (not drained.empty()) {
+            auto& dest = bp_events[p.id.value];
+            dest.insert(dest.end(), std::make_move_iterator(drained.begin()),
+                        std::make_move_iterator(drained.end()));
+          }
+        }
+        if (channel_profiles.empty() and executor_profiles.empty()) {
+          return;
+        }
+        auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
+        sample.channels.reserve(channel_profiles.size());
+        for (auto& p : channel_profiles) {
+          sample.channels.push_back({
+            p.id.value,
+            p.type,
+            p.stats->in.bytes.load(std::memory_order::relaxed),
+            p.stats->out.bytes.load(std::memory_order::relaxed),
+            p.stats->in.batches.load(std::memory_order::relaxed),
+            p.stats->out.batches.load(std::memory_order::relaxed),
+            p.stats->in.events.load(std::memory_order::relaxed),
+            p.stats->out.events.load(std::memory_order::relaxed),
+            p.stats->in.signals.load(std::memory_order::relaxed),
+            p.stats->out.signals.load(std::memory_order::relaxed),
+          });
+        }
+        sample.executors.reserve(executor_profiles.size());
+        for (auto& p : executor_profiles) {
+          sample.executors.push_back({
+            p.id.value,
+            p.name,
+            p.stats->wall_ns.load(std::memory_order::relaxed),
+            p.stats->cpu_ns.load(std::memory_order::relaxed),
+            p.stats->task_count.load(std::memory_order::relaxed),
+          });
+        }
+        samples.push_back(std::move(sample));
+      };
       try {
         while (true) {
           co_await folly::coro::sleep(
             std::chrono::duration_cast<folly::HighResDuration>(
               std::chrono::milliseconds{100}));
-          auto channel_profiles = exec_ctx.get_channel_profiles();
-          auto executor_profiles = exec_ctx.get_executor_profiles();
-          if (channel_profiles.empty() and executor_profiles.empty()) {
-            continue;
-          }
-          auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
-          sample.channels.reserve(channel_profiles.size());
-          for (auto& p : channel_profiles) {
-            sample.channels.push_back({
-              p.id.value,
-              p.type,
-              p.stats->in.bytes.load(std::memory_order::relaxed),
-              p.stats->out.bytes.load(std::memory_order::relaxed),
-              p.stats->in.batches.load(std::memory_order::relaxed),
-              p.stats->out.batches.load(std::memory_order::relaxed),
-              p.stats->in.events.load(std::memory_order::relaxed),
-              p.stats->out.events.load(std::memory_order::relaxed),
-              p.stats->in.signals.load(std::memory_order::relaxed),
-              p.stats->out.signals.load(std::memory_order::relaxed),
-            });
-          }
-          sample.executors.reserve(executor_profiles.size());
-          for (auto& p : executor_profiles) {
-            sample.executors.push_back({
-              p.id.value,
-              p.name,
-              p.stats->wall_ns.load(std::memory_order::relaxed),
-              p.stats->cpu_ns.load(std::memory_order::relaxed),
-              p.stats->task_count.load(std::memory_order::relaxed),
-            });
-          }
-          samples.push_back(std::move(sample));
+          take_sample();
         }
       } catch (folly::OperationCancelled const&) {
-        write_profile(perfetto.path, samples, t0,
-                      exec_ctx.get_channel_profiles());
+        take_sample();
+        write_profile(perfetto.path, samples, t0, bp_events);
         throw;
       }
     });

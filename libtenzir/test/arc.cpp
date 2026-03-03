@@ -17,9 +17,9 @@ namespace tenzir {
 
 // -- static assertions --------------------------------------------------------
 
+static_assert(not std::is_default_constructible_v<Arc<int>>);
 static_assert(std::is_copy_constructible_v<Arc<int>>);
 static_assert(std::is_move_constructible_v<Arc<int>>);
-static_assert(std::is_default_constructible_v<Arc<int>>);
 static_assert(std::is_copy_constructible_v<Arc<std::string>>);
 
 // -- construction -------------------------------------------------------------
