@@ -1321,13 +1321,13 @@ private:
         auto [to_control_sender, to_control_receiver]
           = bounded_channel<ToControl>(16);
         operator_ctrl_.push_back(std::move(from_control_sender));
+        auto executor = exec_ctx_.make_executor(id_.op(index),
+                                                demangle_op_type(typeid(*op)));
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), id_.op(index),
                                  exec_ctx_, sys_, dh_);
-        auto executor = exec_ctx_.make_executor(id_.op(index),
-                                                demangle_op_type(typeid(*op)));
         LOGI("spawning operator task");
         queue_.spawn([task = std::move(task), index,
                       executor = std::move(executor)] mutable
