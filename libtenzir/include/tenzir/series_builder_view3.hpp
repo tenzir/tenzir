@@ -21,7 +21,7 @@ auto try_add_to_builder(builder_ref b, data_view3 v) -> caf::expected<void>;
 
 template <data_view3_type T>
 auto try_add_to_builder(builder_ref b, T v) -> caf::expected<void> {
-  return b.try_data(v);
+  return b.try_data(data_view3{v});
 }
 
 inline auto try_add_to_builder(builder_ref b, view3<record> r)

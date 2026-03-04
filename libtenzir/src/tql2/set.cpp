@@ -130,8 +130,7 @@ auto assign(const ast::meta& left, const series& right,
     static_assert(basic_type<ty>);
     TENZIR_ASSERT(array.length() > 0);
     auto get_value = [&](int64_t i) {
-      return array.IsValid(i) ? std::optional{value_at(ty{}, array, i)}
-                              : std::nullopt;
+      return view_at<ty>(array, i);
     };
     auto result = std::vector<table_slice>{};
     auto begin = int64_t{0};

@@ -130,14 +130,17 @@ private:
 // -- utility functions -------------------------------------------------------
 
 /// Access a Tenzir data view for a given row in an Arrow Array.
+[[deprecated("Use `view_at(arr,row)` instead")]]
 auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> data_view;
 
 template <concrete_type Type>
+[[deprecated("Use `view_at<Type>(arr,row)` instead")]]
 auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> view<type_to_data_t<Type>>;
 
 template <concrete_type Type>
+[[deprecated("Use `view_at<Type>(arr,row)` instead")]]
 auto value_at([[maybe_unused]] const Type& type,
               const type_to_arrow_array_storage_t<Type>& arr, int64_t row)
   -> view<type_to_data_t<Type>> {
@@ -294,12 +297,14 @@ auto value_at([[maybe_unused]] const Type& type,
 }
 
 template <extension_type Type>
-auto value_at(const Type& type, const type_to_arrow_array_t<Type>& arr,
-              int64_t row) -> view<type_to_data_t<Type>> {
+[[deprecated("Use `view_at<Type>(arr,row)` instead")]] auto
+value_at(const Type& type, const type_to_arrow_array_t<Type>& arr, int64_t row)
+  -> view<type_to_data_t<Type>> {
   return value_at(type, *arr.storage(), row);
 }
 
 template <concrete_type Type>
+[[deprecated("Use `view_at<Type>(arr,row)` instead")]]
 auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> view<type_to_data_t<Type>> {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
@@ -311,6 +316,7 @@ auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
   }
 }
 
+[[deprecated("Use `view_at(arr,row)` instead")]]
 auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> data_view {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());

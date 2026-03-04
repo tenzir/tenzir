@@ -42,14 +42,14 @@ struct derive_data_view {
   static constexpr auto value = not concepts::one_of<T, pattern, map>;
 };
 
-using data_view_types
-  = detail::tl_map_t<detail::tl_filter_t<data::types, derive_data_view>,
-                     view_trait3>;
+using data_view3_owning_types
+  = detail::tl_filter_t<data::types, derive_data_view>;
 
-using data_view3 = detail::tl_apply_t<data_view_types, variant>;
+using data_view_viewing_types
+  = detail::tl_map_t<data_view3_owning_types, view_trait3>;
 
 template <typename T>
-concept data_view3_type = detail::tl_contains_v<data_view_types, T>;
+concept data_view3_type = detail::tl_contains_v<data_view_viewing_types, T>;
 
 /// There is two relations for `data_view3`: Partial and Weak, with generally
 /// shared sematics. Weak ordering only exists to be able to use it for sorting,
@@ -70,11 +70,13 @@ concept data_view3_type = detail::tl_contains_v<data_view_types, T>;
 /// * Objects of unrelated types are sorted by their type index.
 
 /// Establishes a partial ordering on data. See above for details.
-auto partial_order(const data_view3 l, const data_view3 r)
-  -> std::partial_ordering;
+auto partial_order(data_view3 l, const data& r) -> std::partial_ordering;
+auto partial_order(data_view3 l, data_view3 r) -> std::partial_ordering;
+
 /// Establishes a weak ordering, suitable for usage with sorting algorithms. See
 /// above for details.
-auto weak_order(const data_view3 l, const data_view3 r) -> std::weak_ordering;
+auto weak_order(data_view3 l, data_view3 r) -> std::weak_ordering;
+auto weak_order(data_view3 l, const data& r) -> std::weak_ordering;
 
 template <>
 struct view_trait3<data> {
@@ -128,13 +130,15 @@ public:
   }
 
   template <typename Ordering>
-  friend auto order_impl(const record_view3 l, const record_view3 r)
-    -> Ordering;
+  friend auto order_impl(record_view3 l, record_view3 r) -> Ordering;
 
-  friend auto partial_order(const record_view3 l, const record_view3 r)
+  friend auto partial_order(record_view3 l, record_view3 r)
     -> std::partial_ordering;
-  friend auto weak_order(const record_view3 l, const record_view3 r)
-    -> std::weak_ordering;
+  friend auto weak_order(record_view3 l, record_view3 r) -> std::weak_ordering;
+
+  friend auto partial_order(record_view3 l, const record& r)
+    -> std::partial_ordering;
+  friend auto weak_order(record_view3 l, const record& r) -> std::weak_ordering;
 
 private:
   record_view3(const arrow::StructArray& array, int64_t index)
@@ -179,6 +183,8 @@ public:
     }
   };
 
+  auto at(int64_t index) const -> data_view3;
+
   static auto from_valid(const arrow::ListArray& array, int64_t index)
     -> list_view3 {
     return list_view3{array, index};
@@ -199,10 +205,13 @@ public:
     return array_.value_length(index_);
   }
 
-  friend auto partial_order(const list_view3 l, const list_view3 r)
+  friend auto partial_order(list_view3 l, list_view3 r)
     -> std::partial_ordering;
-  friend auto weak_order(const list_view3 l, const list_view3 r)
-    -> std::weak_ordering;
+  friend auto weak_order(list_view3 l, list_view3 r) -> std::weak_ordering;
+
+  friend auto partial_order(list_view3 l, const list& r)
+    -> std::partial_ordering;
+  friend auto weak_order(list_view3 l, const list& r) -> std::weak_ordering;
 
 private:
   list_view3(const arrow::ListArray& array, int64_t index)
@@ -213,6 +222,24 @@ private:
   const arrow::ListArray& array_;
   int64_t index_;
 };
+
+using data_view3_base = detail::tl_apply_t<data_view_viewing_types, variant>;
+
+class data_view3 : public data_view3_base {
+  using data_view3_base::data_view3_base;
+};
+
+inline auto operator==(data_view3 l, data_view3 r) -> bool {
+  return partial_order(l, r) == std::partial_ordering::equivalent;
+}
+
+inline auto operator==(data_view3 l, const data& r) -> bool {
+  return partial_order(l, r) == std::partial_ordering::equivalent;
+}
+
+inline auto operator==(const data& l, data_view3 r) -> bool {
+  return partial_order(r, l) == std::partial_ordering::equivalent;
+}
 
 template <std::derived_from<arrow::Array> T>
 auto view_at(const T& x, int64_t i)
@@ -293,6 +320,24 @@ auto view_at(const T& x, int64_t i)
   }
 }
 
+template <class DataType>
+  requires detail::tl_contains_v<data_view3_owning_types, DataType>
+inline auto view_at(const arrow::Array& x, int64_t i) {
+  using Tenzir_Type = data_to_type_t<DataType>;
+  auto const* arr = dynamic_cast<type_to_arrow_array_t<Tenzir_Type> const*>(&x);
+  TENZIR_ASSERT(arr);
+  return view_at(*arr, i);
+}
+
+template <concrete_type TenzirType>
+inline auto view_at(const arrow::Array& x, int64_t i) {
+  static_assert(
+    detail::tl_contains_v<data_view3_owning_types, type_to_data_t<TenzirType>>);
+  auto const* arr = dynamic_cast<type_to_arrow_array_t<TenzirType> const*>(&x);
+  TENZIR_ASSERT(arr);
+  return view_at(*arr, i);
+}
+
 inline auto view_at(const arrow::Array& x, int64_t i) -> data_view3 {
   return match(
     x,
@@ -312,6 +357,14 @@ inline auto list_view3::iterator::operator*() const -> data_view3 {
   TENZIR_ASSERT(offset < array->value_offset(index + 1));
   return view_at(*array->values(), offset);
 }
+
+inline auto list_view3::at(int64_t index) const -> data_view3 {
+  auto const start = array_.value_offset(index_);
+  auto const end = array_.value_offset(index_ + 1);
+  TENZIR_ASSERT(index >= 0);
+  TENZIR_ASSERT_LT(index, end - start);
+  return view_at(*array_.values(), start + index);
+};
 
 inline auto record_view3::iterator::operator*() const
   -> std::pair<std::string_view, data_view3> {
@@ -376,14 +429,70 @@ private:
 
 auto make_view_wrapper(data_view2 x) -> view_wrapper;
 
+inline auto legacy_data_view_hash_type_tag(data_view3 v) noexcept -> uint8_t {
+  return match(v, [](auto value) -> uint8_t {
+    using T = std::decay_t<decltype(value)>;
+    if constexpr (std::same_as<T, caf::none_t>) {
+      return 0;
+    } else if constexpr (std::same_as<T, bool>) {
+      return 1;
+    } else if constexpr (std::same_as<T, int64_t>) {
+      return 2;
+    } else if constexpr (std::same_as<T, uint64_t>) {
+      return 3;
+    } else if constexpr (std::same_as<T, double>) {
+      return 4;
+    } else if constexpr (std::same_as<T, duration>) {
+      return 5;
+    } else if constexpr (std::same_as<T, time>) {
+      return 6;
+    } else if constexpr (std::same_as<T, std::string_view>) {
+      return 7;
+    } else if constexpr (std::same_as<T, ip>) {
+      return 9;
+    } else if constexpr (std::same_as<T, subnet>) {
+      return 10;
+    } else if constexpr (std::same_as<T, enumeration>) {
+      return 11;
+    } else if constexpr (std::same_as<T, list_view3>) {
+      return 12;
+    } else if constexpr (std::same_as<T, record_view3>) {
+      return 14;
+    } else if constexpr (std::same_as<T, blob_view>) {
+      return 15;
+    } else if constexpr (std::same_as<T, secret_view>) {
+      return 16;
+    } else {
+      static_assert(detail::always_false_v<T>, "unexpected data_view3 type");
+    }
+  });
+}
+
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, list_view3 l) noexcept {
-  hash_append(h, materialize(l));
+  for (auto value : l) {
+    hash_append(h, value);
+  }
+  hash_append(h, l.size());
 }
 
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, record_view3 r) noexcept {
-  hash_append(h, materialize(r));
+  auto size = size_t{0};
+  for (auto [name, value] : r) {
+    hash_append(h, name, value);
+    ++size;
+  }
+  hash_append(h, size);
+}
+
+template <class HashAlgorithm>
+void hash_append(HashAlgorithm& h, data_view3 v) noexcept {
+  auto type_tag = legacy_data_view_hash_type_tag(v);
+  hash_append(h, type_tag);
+  match(v, [&](auto value) {
+    hash_append(h, value);
+  });
 }
 
 } // namespace tenzir
@@ -393,7 +502,7 @@ namespace std {
 template <>
 struct hash<::tenzir::list_view3> {
   auto operator()(::tenzir::list_view3 v) const -> std::size_t {
-    return operator()(materialize(v));
+    return std::hash<::tenzir::data_view>{}(v);
   }
 
   auto operator()(const ::tenzir::list& v) const -> std::size_t {
@@ -404,7 +513,7 @@ struct hash<::tenzir::list_view3> {
 template <>
 struct hash<::tenzir::record_view3> {
   auto operator()(::tenzir::record_view3 v) const -> std::size_t {
-    return operator()(materialize(v));
+    return std::hash<::tenzir::data_view>{}(v);
   }
 
   auto operator()(const ::tenzir::record& v) const -> std::size_t {
@@ -413,15 +522,7 @@ struct hash<::tenzir::record_view3> {
 };
 
 template <>
-struct hash<::tenzir::data_view3> {
-  auto operator()(::tenzir::data_view3 v) const -> std::size_t {
-    return operator()(materialize(v));
-  }
-
-  auto operator()(const ::tenzir::data& d) const -> std::size_t {
-    return std::hash<::tenzir::data>{}(d);
-  }
-};
+struct hash<tenzir::data_view3> : hash<tenzir::data_view> {};
 } // namespace std
 
 namespace fmt {

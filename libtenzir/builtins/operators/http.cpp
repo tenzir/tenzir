@@ -597,7 +597,7 @@ auto next_url_from_lambda(const std::optional<pagination_spec>& paginate,
     return std::nullopt;
   }
   const auto ms = eval(*lambda, series{slice}, dh);
-  const auto val = ms.value_at(0);
+  const auto val = ms.view3_at(0);
   return match(
     val,
     [](const caf::none_t&) -> std::optional<std::string> {
@@ -2012,7 +2012,7 @@ public:
     auto pagination_queue = std::vector<pagination_request>{};
     auto hdr_warned = false;
     const auto handle_response
-      = [&](view<record> og, caf::uri uri,
+      = [&](view3<record> og, caf::uri uri,
             std::unordered_map<std::string, std::string> hdrs) {
           return [&, hdrs = std::move(hdrs), uri = std::move(uri),
                   og = materialize(std::move(og))](const http::response& r) {

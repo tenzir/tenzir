@@ -421,8 +421,7 @@ auto make_where_function(function_invocation inv, session ctx)
                     list_builder.null();
                     continue;
                   }
-                  list_builder.data(
-                    value_at(list_values_type, *list_values.array, j));
+                  list_builder.data(view_at(*list_values.array, j));
                 }
               }
             });

@@ -911,7 +911,7 @@ TEST("pruning removes lookup entries at limit") {
   auto rec = safe_as_record(b.materialize());
   auto it = rec.find(tail_key);
   REQUIRE(it != rec.end());
-  CHECK_EQUAL(it->second, uint64_t{42});
+  CHECK_EQUAL(it->second, data{uint64_t{42}});
   CHECK(not b.has_elements());
 }
 } // namespace

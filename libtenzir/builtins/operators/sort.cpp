@@ -94,7 +94,7 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
     }
     return false;
   }
-  auto value = materialize(result.value_at(0));
+  auto value = materialize(result.view3_at(0));
   if (auto* boolean = try_as<bool>(&value)) {
     return *boolean;
   }
