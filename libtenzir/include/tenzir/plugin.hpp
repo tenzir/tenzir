@@ -8,6 +8,8 @@
 
 #pragma once
 
+#define TENZIR_PLUGIN_HPP
+
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
@@ -19,6 +21,7 @@
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/inspect.hpp" // Included BEFORE namespace to avoid nesting
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
 
@@ -181,6 +184,8 @@ public:
 };
 
 // -- serialization plugin -----------------------------------------------------
+// Free functions (plugin_serialize, plugin_inspect) are in plugin/inspect.hpp
+// (included at the top of this file before namespace block)
 
 /// This plugin interface can be used to serialize and deserialize classes
 /// derived from `Base`. To this end, the base class provides a virtual
@@ -196,57 +201,6 @@ public:
   /// @post `!x || x->name() == name()`
   virtual void deserialize(deserializer f, std::unique_ptr<Base>& x) const = 0;
 };
-
-template <class Inspector, class Base>
-auto plugin_serialize(Inspector& f, const Base& x) -> bool {
-  static_assert(not Inspector::is_loading);
-  auto name = x.name();
-  auto const* p = plugins::find<serialization_plugin<Base>>(name);
-  if (auto dbg = as_debug_writer(f)) {
-    if (not dbg->prepend("{} ", name)) {
-      return false;
-    }
-    // Workaround for debug formatting non-serializable plugins. In that case we
-    // only print the name instead of throwing an exception.
-    if (not p) {
-      return dbg->fmt_value("<no serialization plugin>");
-    }
-  } else {
-    if (not f.apply(name)) {
-      return false;
-    }
-  }
-  TENZIR_ASSERT(p,
-                fmt::format("serialization plugin `{}` for `{}` not found",
-                            name, caf::detail::pretty_type_name(typeid(Base))));
-  return p->serialize(std::ref(f), x);
-}
-
-/// Inspects a polymorphic object `x` by using the serialization plugin with the
-/// name that matches `x->name()`.
-template <class Inspector, class Base>
-auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
-  if constexpr (Inspector::is_loading) {
-    auto name = std::string{};
-    if (not f.apply(name)) {
-      return false;
-    }
-    auto const* p = plugins::find<serialization_plugin<Base>>(name);
-    TENZIR_ASSERT(p, fmt::format("serialization plugin `{}` for `{}` not found",
-                                 name,
-                                 caf::detail::pretty_type_name(typeid(Base))));
-    p->deserialize(f, x);
-    return x != nullptr;
-  } else {
-    if (auto dbg = as_debug_writer(f)) {
-      if (not x) {
-        return dbg->fmt_value("<invalid>");
-      }
-    }
-    TENZIR_ASSERT(x);
-    return plugin_serialize(f, *x);
-  }
-}
 
 /// Implements `serialization_plugin` for a concrete class derived from `Base`
 /// by using its `inspect()` overload. Also provides a default implemenetation
