@@ -48,6 +48,9 @@ using data_view_types
 
 using data_view3 = detail::tl_apply_t<data_view_types, variant>;
 
+template <typename T>
+concept data_view3_type = detail::tl_contains_v<data_view_types, T>;
+
 /// There is two relations for `data_view3`: Partial and Weak, with generally
 /// shared sematics. Weak ordering only exists to be able to use it for sorting,
 /// which requires weak ordering.
@@ -349,6 +352,13 @@ auto values3(const T& array)
 class table_slice;
 auto values3(const table_slice& x) -> generator<record_view3>;
 
+auto materialize(record_view3 v) -> record;
+auto materialize(list_view3 v) -> list;
+auto materialize(data_view3 v) -> data;
+
+template <class T>
+auto materialize(view3<T> v) -> T;
+
 class view_wrapper {
 public:
   explicit view_wrapper(std::shared_ptr<arrow::Array> array)
@@ -366,7 +376,53 @@ private:
 
 auto make_view_wrapper(data_view2 x) -> view_wrapper;
 
+template <class HashAlgorithm>
+void hash_append(HashAlgorithm& h, list_view3 l) noexcept {
+  hash_append(h, materialize(l));
+}
+
+template <class HashAlgorithm>
+void hash_append(HashAlgorithm& h, record_view3 r) noexcept {
+  hash_append(h, materialize(r));
+}
+
 } // namespace tenzir
+
+namespace std {
+
+template <>
+struct hash<::tenzir::list_view3> {
+  auto operator()(::tenzir::list_view3 v) const -> std::size_t {
+    return operator()(materialize(v));
+  }
+
+  auto operator()(const ::tenzir::list& v) const -> std::size_t {
+    return std::hash<::tenzir::data_view>{}(v);
+  }
+};
+
+template <>
+struct hash<::tenzir::record_view3> {
+  auto operator()(::tenzir::record_view3 v) const -> std::size_t {
+    return operator()(materialize(v));
+  }
+
+  auto operator()(const ::tenzir::record& v) const -> std::size_t {
+    return std::hash<::tenzir::data_view>{}(v);
+  }
+};
+
+template <>
+struct hash<::tenzir::data_view3> {
+  auto operator()(::tenzir::data_view3 v) const -> std::size_t {
+    return operator()(materialize(v));
+  }
+
+  auto operator()(const ::tenzir::data& d) const -> std::size_t {
+    return std::hash<::tenzir::data>{}(d);
+  }
+};
+} // namespace std
 
 namespace fmt {
 

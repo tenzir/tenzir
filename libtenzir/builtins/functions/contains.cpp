@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"

@@ -14,6 +14,7 @@
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -182,10 +183,17 @@ public:
   // -- data access ------------------------------------------------------------
 
   /// Get all values in the slice, iterating row-wise.
-  auto values() const -> generator<view<record>>;
+  [[deprecated("Use values3")]] auto values() const -> generator<view<record>>;
 
   /// Get all values for the given path.
-  auto values(const struct offset& path) const -> generator<view<data>>;
+  [[deprecated("Use values3")]] auto values(const struct offset& path) const
+    -> generator<view<data>>;
+
+  /// Get all values in the slice, iterating row-wise.
+  auto values3() const -> generator<view3<record>>;
+
+  /// Get all values for the given path.
+  auto values3(const struct offset& path) const -> generator<data_view3>;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
