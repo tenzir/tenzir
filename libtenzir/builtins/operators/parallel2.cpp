@@ -152,8 +152,8 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy),
-                             tag_v<table_slice>);
+      co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
+                                   tag_v<table_slice>);
     }
   }
 
@@ -240,7 +240,8 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy), tag_v<void>);
+      co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
+                                   tag_v<void>);
     }
   }
 

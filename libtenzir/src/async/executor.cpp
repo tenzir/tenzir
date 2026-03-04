@@ -8,8 +8,10 @@
 
 #include "tenzir/async/executor.hpp"
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
@@ -347,6 +349,185 @@ private:
   secret_censor censor_;
 };
 
+// -- Fused execution mode -----------------------------------------------------
+
+/// A fused channel. Unlike `OpChannel` (buffered queue with backpressure),
+/// this stores at most one item and blocks the sender until the receiver has
+/// finished processing the item and calls `receive()` again.
+template <class T>
+struct FusedChannel {
+  auto send(OperatorMsg<T> x) -> Task<void> {
+    auto lock = co_await mutex_.lock();
+    lock->item = std::move(x);
+    notify_receive_.notify_one();
+    lock.unlock();
+    // Block until receiver signals readiness for next item.
+    co_await notify_consumer_ready_.wait();
+  }
+
+  auto receive() -> Task<Option<OperatorMsg<T>>> {
+    // Unblock the previous send() — but not on the first call (no
+    // pending send yet). Without this guard the first receive() would
+    // post a spurious semaphore token that the first send() consumes
+    // immediately, returning without blocking.
+    if (not first_receive_) {
+      notify_consumer_ready_.notify_one();
+    }
+    first_receive_ = false;
+    auto lock = co_await mutex_.lock();
+    while (lock->item.is_none()) {
+      if (sender_closed_.load(std::memory_order::acquire)) {
+        co_return None{};
+      }
+      lock.unlock();
+      co_await notify_receive_.wait();
+      lock = co_await mutex_.lock();
+    }
+    auto result = std::move(*lock->item);
+    lock->item = None{};
+    co_return result;
+  }
+
+  void close_sender() {
+    sender_closed_.store(true, std::memory_order::release);
+    notify_receive_.notify_one();
+    // Unblock a pending send().
+    notify_consumer_ready_.notify_one();
+  }
+
+private:
+  struct Locked {
+    Option<OperatorMsg<T>> item;
+  };
+  Mutex<Locked> mutex_{Locked{}};
+  bool first_receive_ = true;
+  Notify notify_receive_;
+  Notify notify_consumer_ready_;
+  std::atomic<bool> sender_closed_ = false;
+};
+
+template <class T>
+class FusedPush final : public Push<OperatorMsg<T>> {
+public:
+  explicit FusedPush(Arc<FusedChannel<T>> shared) : shared_{std::move(shared)} {
+  }
+
+  ~FusedPush() override {
+    if (shared_) {
+      (*shared_)->close_sender();
+    }
+  }
+
+  FusedPush(FusedPush&&) = default;
+  FusedPush& operator=(FusedPush&&) = default;
+  FusedPush(FusedPush const&) = delete;
+  FusedPush& operator=(FusedPush const&) = delete;
+
+  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+    TENZIR_ASSERT(shared_);
+    return (*shared_)->send(std::move(x));
+  }
+
+private:
+  Option<Arc<FusedChannel<T>>> shared_;
+};
+
+template <class T>
+class FusedPull final : public Pull<OperatorMsg<T>> {
+public:
+  explicit FusedPull(Arc<FusedChannel<T>> shared) : shared_{std::move(shared)} {
+  }
+
+  ~FusedPull() override = default;
+
+  FusedPull(FusedPull&&) = default;
+  FusedPull& operator=(FusedPull&&) = default;
+  FusedPull(FusedPull const&) = delete;
+  FusedPull& operator=(FusedPull const&) = delete;
+
+  auto operator()() -> Task<Option<OperatorMsg<T>>> override {
+    TENZIR_ASSERT(shared_);
+    return (*shared_)->receive();
+  }
+
+private:
+  Option<Arc<FusedChannel<T>>> shared_;
+};
+
+/// Decorator over any `ExecCtx` that produces fused channels and shares a
+/// single executor across all operators. This gives run-to-completion
+/// semantics per slice: a push blocks until the downstream operator has
+/// finished processing the item and is ready for the next.
+class FusedExecCtx final : public ExecCtx {
+public:
+  explicit FusedExecCtx(ExecCtx& inner, PipeId pipe_id)
+    : inner_{inner},
+      executor_{inner.make_executor(pipe_id.op(0), "Fused")},
+      io_executor_{inner.make_io_executor(pipe_id.op(0))} {
+  }
+
+  auto make_executor(OpId, std::string)
+    -> folly::Executor::KeepAlive<> override {
+    return executor_;
+  }
+
+  auto make_io_executor(OpId) -> folly::Executor::KeepAlive<> override {
+    return io_executor_;
+  }
+
+  auto metrics_receiver() const -> metrics_receiver_actor override {
+    return inner_.metrics_receiver();
+  }
+
+  auto make_counter(MetricsLabel label, MetricsDirection direction,
+                    MetricsVisibility visibility) -> MetricsCounter override {
+    return inner_.make_counter(label, direction, visibility);
+  }
+
+protected:
+  auto make_void(ChannelId) -> PushPull<OperatorMsg<void>> override {
+    return make_fused<void>();
+  }
+
+  auto make_events(ChannelId) -> PushPull<OperatorMsg<table_slice>> override {
+    return make_fused<table_slice>();
+  }
+
+  auto make_bytes(ChannelId) -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return make_fused<chunk_ptr>();
+  }
+
+private:
+  template <class T>
+  auto make_fused() -> PushPull<OperatorMsg<T>> {
+    auto shared = Arc<FusedChannel<T>>{};
+    return {FusedPush<T>{shared}, FusedPull<T>{std::move(shared)}};
+  }
+  ExecCtx& inner_;
+  folly::Executor::KeepAlive<> executor_;
+  folly::Executor::KeepAlive<> io_executor_;
+};
+
+/// Run a pipeline with fused (run-to-completion) semantics.
+///
+/// Each input slice is fully processed through the entire operator chain
+/// before the next input is pulled. Internally creates a `FusedExecCtx` that
+/// replaces buffered channels with fused channels.
+template <class Input, class Output>
+auto run_chain_fused(OperatorChain<Input, Output> chain,
+                     Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                     Box<Push<OperatorMsg<Output>>> push_downstream,
+                     Receiver<FromControl> from_control,
+                     Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                     caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+  auto fused_ctx = FusedExecCtx{exec_ctx, id};
+  co_await run_chain(std::move(chain), std::move(pull_upstream),
+                     std::move(push_downstream), std::move(from_control),
+                     std::move(to_control), std::move(id), fused_ctx, sys, dh);
+}
+
+// -----------------------------------------------------------------------------
+
 class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
@@ -548,6 +729,16 @@ private:
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, false);
+  }
+
+  auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline> override {
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, true);
+  }
+
+  auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
+                      bool fused) -> Task<AnyOpenPipeline> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     next_subpipeline_id_ += 1;
     // Instantiate for the case where it was not instantiated yet.
@@ -649,14 +840,18 @@ private:
             }
             end_of_data->notify_one();
           });
-        return {
-          run_chain(std::move(chain), std::move(pull_upstream),
-                    std::move(push_downstream),
-                    std::move(from_control_receiver),
-                    std::move(to_control_sender), std::move(sub_id), exec_ctx_,
-                    sys_, dh_),
-          std::move(push_upstream),
-        };
+        auto runner_task
+          = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
+                                    std::move(push_downstream),
+                                    std::move(from_control_receiver),
+                                    std::move(to_control_sender),
+                                    std::move(sub_id), exec_ctx_, sys_, dh_)
+                  : run_chain(std::move(chain), std::move(pull_upstream),
+                              std::move(push_downstream),
+                              std::move(from_control_receiver),
+                              std::move(to_control_sender), std::move(sub_id),
+                              exec_ctx_, sys_, dh_);
+        return {std::move(runner_task), std::move(push_upstream)};
       });
     // TODO: Should this even be a concurrent task?
     auto control_handle

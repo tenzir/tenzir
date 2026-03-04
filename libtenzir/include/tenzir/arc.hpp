@@ -44,7 +44,11 @@ public:
     return Arc{std::move(ptr)};
   }
 
-  Arc() = delete;
+  Arc()
+    requires std::default_initializable<T>
+    : ptr_{std::make_shared<T>()} {
+  }
+
   Arc(Arc const&) = default;
   auto operator=(Arc const&) -> Arc& = default;
   Arc(Arc&&) = default;
