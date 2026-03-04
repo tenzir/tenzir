@@ -7,10 +7,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/async/fetch_node.hpp>
+#include <tenzir/async/mail.hpp>
+#include <tenzir/atoms.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -20,6 +25,84 @@
 namespace tenzir::plugins::import {
 
 namespace {
+
+struct ImportArgs {
+  // No arguments.
+};
+
+class Import final : public Operator<table_slice, void> {
+public:
+  explicit Import(ImportArgs /*args*/) {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
+    if (not node) {
+      co_return;
+    }
+    auto components = co_await async_mail(atom::get_v, atom::label_v,
+                                          std::vector<std::string>{"importer"})
+                        .request(*node);
+    if (not components) {
+      diagnostic::error(components.error())
+        .note("failed to retrieve importer component")
+        .emit(ctx);
+      co_return;
+    }
+    if (components->size() != 1) {
+      diagnostic::error("expected exactly one importer component, got {}",
+                        components->size())
+        .emit(ctx);
+      co_return;
+    }
+    auto importer = caf::actor_cast<importer_actor>(components->front());
+    if (not importer) {
+      diagnostic::error("failed to cast importer component").emit(ctx);
+      co_return;
+    }
+    importer_ = std::move(importer);
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
+    auto has_secrets = false;
+    std::tie(has_secrets, input) = replace_secrets(std::move(input));
+    if (has_secrets) {
+      diagnostic::warning("`secret` cannot imported as secrets")
+        .note("fields will be `\"***\"`")
+        .emit(ctx.dh());
+    }
+    // The current catalog assumes that all events have at least one field.
+    // This check guards against that. We should remove it once we get to
+    // rewriting our catalog.
+    if (as<record_type>(input.schema()).num_fields() == 0) {
+      co_return;
+    }
+    if (not importer_) {
+      co_return;
+    }
+    auto result = co_await async_mail(std::move(input)).request(importer_);
+    if (not result) {
+      diagnostic::error(result.error()).note("failed to import events").emit(ctx);
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (not importer_) {
+      co_return FinalizeBehavior::done;
+    }
+    auto result = co_await async_mail(atom::flush_v).request(importer_);
+    if (not result) {
+      diagnostic::error(result.error()).note("failed to flush import").emit(ctx);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  importer_actor importer_;
+};
 
 class import_operator final : public crtp_operator<import_operator> {
 public:
@@ -140,10 +223,16 @@ public:
 };
 
 class plugin final : public virtual operator_plugin<import_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ImportArgs, Import>{};
+    return d.without_optimize();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
