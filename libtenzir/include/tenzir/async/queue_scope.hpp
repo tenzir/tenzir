@@ -66,8 +66,9 @@ public:
     TENZIR_ASSERT(scope_);
     remaining_ += 1;
     scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
-      co_await results_.enqueue(
-        co_await folly::coro::co_awaitTry(std::move(task)));
+      auto item = Option<AsyncResult<T>>{
+        AsyncResult<T>{co_await folly::coro::co_awaitTry(std::move(task))}};
+      co_await results_.enqueue(std::move(item));
     });
   }
 
@@ -101,8 +102,9 @@ public:
     TENZIR_ASSERT(scope_);
     remaining_ += 1;
     scope_->spawn([this, f = std::forward<F>(f)] mutable -> Task<void> {
-      co_await results_.enqueue(
-        co_await folly::coro::co_awaitTry(std::invoke(std::move(f))));
+      auto item = Option<AsyncResult<T>>{AsyncResult<T>{
+        co_await folly::coro::co_awaitTry(std::invoke(std::move(f)))}};
+      co_await results_.enqueue(std::move(item));
     });
   }
 
