@@ -70,7 +70,7 @@ public:
     auto has_secrets = false;
     std::tie(has_secrets, input) = replace_secrets(std::move(input));
     if (has_secrets) {
-      diagnostic::warning("`secret` cannot imported as secrets")
+      diagnostic::warning("`secret` cannot be imported as secrets")
         .note("fields will be `\"***\"`")
         .emit(ctx.dh());
     }
