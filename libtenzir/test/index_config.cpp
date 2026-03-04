@@ -8,7 +8,6 @@
 
 #include "tenzir/index_config.hpp"
 
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/test/test.hpp"
@@ -99,4 +98,25 @@ TEST("should_create_partition_index will will use create_partition_index from "
   CHECK_EQUAL(should_create_partition_index(in_x, rules_y), true);
   CHECK_EQUAL(should_create_partition_index(in_y, rules_x), true);
   CHECK_EQUAL(should_create_partition_index(in_y, rules_y), true);
+}
+
+TEST("convert fails for non-record input") {
+  index_config config;
+  // Pass a string instead of a record
+  auto result = convert(tenzir::data{"not a record"}, config);
+  CHECK_FAILURE(result);
+  // Pass a list instead of a record
+  result = convert(tenzir::data{tenzir::list{}}, config);
+  CHECK_FAILURE(result);
+}
+
+TEST("convert fails for rule with non-record entry") {
+  auto yaml_str = R"__(
+rules:
+  - "not a record"
+)__";
+  const auto yaml = unbox(from_yaml(yaml_str));
+  index_config config;
+  auto result = convert(yaml, config);
+  CHECK_FAILURE(result);
 }

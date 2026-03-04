@@ -8,12 +8,10 @@
 
 #include "tenzir/module.hpp"
 
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/concept/parseable/parse.hpp"
 #include "tenzir/concept/parseable/tenzir/schema.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/data.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/filter_dir.hpp"
 #include "tenzir/detail/installdirs.hpp"
@@ -235,8 +233,7 @@ auto load_taxonomies(const caf::actor_system_config& cfg)
     }
     for (auto& [file, yaml] : *yamls) {
       TENZIR_DEBUG("extracting taxonomies from {}", file.string());
-      if (auto err = convert(yaml, concepts, concepts_data_schema);
-          err.valid()) {
+      if (auto err = convert(yaml, concepts); err.valid()) {
         return caf::make_error(ec::parse_error,
                                "failed to extract concepts from file",
                                file.string(), err.context());

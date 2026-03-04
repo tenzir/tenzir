@@ -11,7 +11,6 @@
 #include "web/generate_token_command.hpp"
 #include "web/server_command.hpp"
 
-#include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/connect_to_node.hpp>

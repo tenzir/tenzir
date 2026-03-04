@@ -8,6 +8,8 @@
 
 #include "tenzir/index_config.hpp"
 
+#include "tenzir/data.hpp"
+#include "tenzir/error.hpp"
 #include "tenzir/qualified_record_field.hpp"
 
 #include <fmt/format.h>
@@ -26,7 +28,7 @@ bool is_target_applicable(const qualified_record_field& index_qf,
   // This is unnecessarily complicated for now, but we don't currently have a
   // better API for it.
   const auto is_type_extractor = extractor.starts_with(':');
-  if (!is_type_extractor) {
+  if (! is_type_extractor) {
     return index_qf.name() == extractor;
   }
   const auto type_name = extractor.substr(1);
@@ -66,6 +68,72 @@ bool should_create_partition_index(
     }
   }
   return true;
+}
+
+namespace {
+
+auto convert_rule(const data& src, index_config::rule& dst) -> caf::error {
+  const auto* rec = try_as<record>(&src);
+  if (not rec) {
+    return caf::make_error(ec::convert_error, "expected record for rule");
+  }
+  if (auto targets_entry = descend(rec, "targets")) {
+    if (*targets_entry) {
+      const auto* targets = try_as<list>(*targets_entry);
+      if (not targets) {
+        return caf::make_error(ec::convert_error,
+                               "expected 'targets' to be a list");
+      }
+      for (const auto& elem : *targets) {
+        if (const auto* str = try_as<std::string>(&elem)) {
+          dst.targets.push_back(*str);
+        } else {
+          return caf::make_error(ec::convert_error,
+                                 "expected string in 'targets' list");
+        }
+      }
+    }
+  } else {
+    return std::move(targets_entry.error());
+  }
+  if (auto fp_rate = try_get<double>(*rec, "fp-rate")) {
+    if (*fp_rate) {
+      dst.fp_rate = **fp_rate;
+    }
+  } else {
+    return std::move(fp_rate.error());
+  }
+  dst.create_partition_index
+    = get_or(*rec, "partition-index", dst.create_partition_index);
+  return caf::none;
+}
+
+} // namespace
+
+caf::error convert(const data& src, index_config& dst) {
+  const auto* rec = try_as<record>(&src);
+  if (! rec) {
+    return caf::make_error(ec::convert_error,
+                           "expected record for index_config conversion");
+  }
+  if (auto default_fp_rate = try_get<double>(*rec, "default-fp-rate")) {
+    if (*default_fp_rate) {
+      dst.default_fp_rate = **default_fp_rate;
+    }
+  } else {
+    return std::move(default_fp_rate.error());
+  }
+  if (const auto* rules_list = get_if<list>(rec, "rules")) {
+    dst.rules.clear();
+    for (const auto& rule_data : *rules_list) {
+      index_config::rule rule;
+      if (auto err = convert_rule(rule_data, rule); err) {
+        return err;
+      }
+      dst.rules.push_back(std::move(rule));
+    }
+  }
+  return caf::none;
 }
 
 } // namespace tenzir

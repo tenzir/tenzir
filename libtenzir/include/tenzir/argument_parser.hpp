@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/concept/parseable/to.hpp"

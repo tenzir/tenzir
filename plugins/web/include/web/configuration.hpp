@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include <tenzir/fwd.hpp>
 #include <tenzir/type.hpp>
+
+#include <caf/error.hpp>
 
 #include <string>
 
@@ -102,5 +105,12 @@ public:
 
 /// Validate that the user-provided configuration makes sense.
 caf::expected<server_config> convert_and_validate(configuration);
+
+/// Converts data (record from YAML/config) to web::configuration.
+/// Uses explicit field extraction for efficient deserialization.
+/// @param src The source data, expected to be a record.
+/// @param dst The destination configuration to populate.
+/// @returns An error if conversion fails, or caf::none on success.
+caf::error convert(const tenzir::data& src, configuration& dst);
 
 } // namespace tenzir::plugins::web

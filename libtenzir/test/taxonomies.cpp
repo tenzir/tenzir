@@ -2,9 +2,9 @@
 
 #include "tenzir/taxonomies.hpp"
 
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/to.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -19,7 +19,7 @@ TEST("concepts - convert from data") {
   auto ref = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                            {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
   concepts_map test;
-  CHECK_EQUAL(convert(x, test, concepts_data_schema), caf::error{});
+  CHECK_EQUAL(convert(x, test), caf::error{});
   CHECK_EQUAL(test, ref);
 }
 
@@ -76,4 +76,38 @@ TEST("concepts - cyclic definition") {
                                   "a.bar == 1 || b.baR == 1"));
   auto result = resolve(t, exp);
   CHECK_EQUAL(result, ref);
+}
+
+TEST("concepts - convert fails for non-list input") {
+  concepts_map test;
+  // Pass a string instead of a list
+  auto result = convert(data{"not a list"}, test);
+  CHECK_FAILURE(result);
+  // Pass a record instead of a list
+  result = convert(data{record{}}, test);
+  CHECK_FAILURE(result);
+}
+
+TEST("concepts - convert fails for list with non-record items") {
+  concepts_map test;
+  auto x = data{list{"string item", "another string"}};
+  auto result = convert(x, test);
+  CHECK_FAILURE(result);
+}
+
+TEST("concepts - convert fails for record without concept field") {
+  concepts_map test;
+  // Record missing the 'concept' field
+  auto x = data{list{record{{"other_field", "value"}}}};
+  auto result = convert(x, test);
+  CHECK_FAILURE(result);
+}
+
+TEST("concepts - convert fails for concept without name field") {
+  concepts_map test;
+  // Concept record missing the 'name' field
+  auto x = data{
+    list{record{{"concept", record{{"fields", list{"a.foo", "b.bar"}}}}}}};
+  auto result = convert(x, test);
+  CHECK_FAILURE(result);
 }

@@ -8,7 +8,6 @@
 
 #include "web/configuration.hpp"
 
-#include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -106,4 +105,14 @@ web:
   )_");
   auto invalid_config = tenzir::plugins::web::configuration{};
   CHECK_SUCCESS(convert(invalid_data, invalid_config));
+}
+
+TEST("convert fails for non-record input") {
+  auto config = tenzir::plugins::web::configuration{};
+  // Pass a string instead of a record
+  auto result = convert(tenzir::data{"not a record"}, config);
+  CHECK_FAILURE(result);
+  // Pass a list instead of a record
+  result = convert(tenzir::data{tenzir::list{}}, config);
+  CHECK_FAILURE(result);
 }
