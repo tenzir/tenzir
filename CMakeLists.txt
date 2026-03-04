@@ -340,6 +340,24 @@ if (TENZIR_ENABLE_TIME_TRACE)
   target_compile_options(libtenzir_internal INTERFACE "-ftime-trace")
 endif ()
 
+option(TENZIR_ENABLE_IWYU "Enable include-what-you-use analysis" OFF)
+if (TENZIR_ENABLE_IWYU)
+  find_program(IWYU_EXECUTABLE NAMES include-what-you-use iwyu REQUIRED)
+  if (IWYU_EXECUTABLE)
+    message(STATUS "Found include-what-you-use: ${IWYU_EXECUTABLE}")
+    # Set up IWYU with mappings file if it exists
+    set(TENZIR_IWYU_COMMAND "${IWYU_EXECUTABLE}")
+    if (EXISTS "${CMAKE_SOURCE_DIR}/.iwyu_mappings.imp")
+      list(APPEND TENZIR_IWYU_COMMAND "-Xiwyu" "--mapping_file=${CMAKE_SOURCE_DIR}/.iwyu_mappings.imp")
+      message(STATUS "Using IWYU mappings file: ${CMAKE_SOURCE_DIR}/.iwyu_mappings.imp")
+    endif ()
+    # TENZIR_IWYU_COMMAND will be applied to targets in libtenzir/CMakeLists.txt
+  else ()
+    message(WARNING "include-what-you-use not found, disabling TENZIR_ENABLE_IWYU")
+    set(TENZIR_ENABLE_IWYU OFF CACHE BOOL "" FORCE)
+  endif ()
+endif ()
+
 # -- assertions ----------------------------------------------------------------
 
 if (CMAKE_BUILD_TYPE STREQUAL Release)

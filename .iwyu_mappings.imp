@@ -1,0 +1,116 @@
+[
+  # IWYU (Include What You Use) mappings for Tenzir
+  # This file configures how IWYU handles includes in the Tenzir codebase.
+  # 
+  # Documentation: https://github.com/include-what-you-use/include-what-you-use/blob/master/docs/IWYUMappings.md
+  
+  # ============================================================================
+  # Standard Library Mappings
+  # ============================================================================
+  
+  # Forward declarations for standard types
+  { include: ["<bits/std_function.h>", "private", "<functional>", "public"] },
+  { include: ["<bits/stl_vector.h>", "private", "<vector>", "public"] },
+  { include: ["<bits/stl_map.h>", "private", "<map>", "public"] },
+  { include: ["<bits/stl_pair.h>", "private", "<utility>", "public"] },
+  { include: ["<bits/shared_ptr.h>", "private", "<memory>", "public"] },
+  { include: ["<bits/unique_ptr.h>", "private", "<memory>", "public"] },
+  { include: ["<bits/basic_string.h>", "private", "<string>", "public"] },
+  { include: ["<bits/basic_string.tcc>", "private", "<string>", "public"] },
+  { include: ["<bits/chrono.h>", "private", "<chrono>", "public"] },
+  { include: ["<bits/exception_ptr.h>", "private", "<exception>", "public"] },
+  
+  # ============================================================================
+  # Tenzir Core Type Mappings
+  # ============================================================================
+  
+  # data.hpp and its related headers - keep these headers as they're intentionally public
+  # Commenting out to avoid conflicts - these headers are meant to be included directly
+  
+  # When forward declaration is sufficient, suggest fwd.hpp
+  # Note: This is aspirational - fwd.hpp files don't exist yet but should be created
+  # { symbol: ["tenzir::data", "private", "\"tenzir/data_fwd.hpp\"", "public"] },
+  # { symbol: ["tenzir::plugin", "private", "\"tenzir/plugin_fwd.hpp\"", "public"] },
+  # { symbol: ["tenzir::type", "private", "\"tenzir/type_fwd.hpp\"", "public"] },
+  
+  # ============================================================================
+  # CAF (C++ Actor Framework) Mappings
+  # ============================================================================
+  
+  # CAF internal headers should map to public headers
+  { include: ["<caf/detail/type_list.hpp>", "private", "<caf/fwd.hpp>", "public"] },
+  { include: ["<caf/detail/scope_guard.hpp>", "private", "<caf/all.hpp>", "public"] },
+  
+  # ============================================================================
+  # Third-Party Library Mappings
+  # ============================================================================
+  
+  # FlatBuffers - generated headers
+  { include: ["@<flatbuffers/.*>", "private", "\"tenzir/fbs/*.hpp\"", "public"] },
+  
+  # Arrow - complex include structure
+  { include: ["<arrow/util/string_view.h>", "private", "<string_view>", "public"] },
+  
+  # simdjson
+  { include: ["<simdjson/simdjson.h>", "public", "<simdjson.h>", "public"] },
+  
+  # ============================================================================
+  # Tenzir Concept Headers
+  # ============================================================================
+  
+  # Printable concepts - suggest including specific headers
+  { include: ["\"tenzir/concept/printable/core.hpp\"", "private", "\"tenzir/concept/printable/print.hpp\"", "public"] },
+  { include: ["\"tenzir/concept/printable/numeric.hpp\"", "private", "\"tenzir/concept/printable/print.hpp\"", "public"] },
+  
+  # Parseable concepts
+  { include: ["\"tenzir/concept/parseable/core.hpp\"", "private", "\"tenzir/concept/parseable/to.hpp\"", "public"] },
+  
+  # Convertible concepts - commented out to avoid visibility conflicts
+  # { include: ["\"tenzir/concept/convertible/to.hpp\"", "private", "\"tenzir/concept/convertible/data.hpp\"", "public"] },
+  
+  # ============================================================================
+  # Tenzir Detail Headers (Internal Implementation)
+  # ============================================================================
+  
+  # Detail headers should generally not be included directly
+  # Map them to their public interfaces when possible
+  { include: ["\"tenzir/detail/string.hpp\"", "private", "<string>", "public"] },
+  { include: ["\"tenzir/detail/assert.hpp\"", "private", "\"tenzir/error.hpp\"", "public"] },
+  
+  # ============================================================================
+  # Plugin System Mappings
+  # ============================================================================
+  
+  # Once plugin.hpp is split, these mappings will help guide includes
+  # Currently commented out as the split hasn't happened yet
+  
+  # { include: ["\"tenzir/plugin.hpp\"", "public", "\"tenzir/plugin/operator.hpp\"", "public"] },
+  # { include: ["\"tenzir/plugin.hpp\"", "public", "\"tenzir/plugin/parser.hpp\"", "public"] },
+  # { include: ["\"tenzir/plugin.hpp\"", "public", "\"tenzir/plugin/printer.hpp\"", "public"] },
+  
+  # ============================================================================
+  # Keep Specific Includes
+  # ============================================================================
+  
+  # Headers that should always be kept even if IWYU thinks they're unused
+  { include: ["\"tenzir/config.hpp\"", "public", "\"tenzir/config.hpp\"", "public"] },
+  { include: ["\"tenzir/fwd.hpp\"", "public", "\"tenzir/fwd.hpp\"", "public"] },
+  
+  # ============================================================================
+  # Symbol-to-Header Mappings
+  # ============================================================================
+  
+  # Core Tenzir types
+  { symbol: ["tenzir::data", "private", "\"tenzir/data.hpp\"", "public"] },
+  { symbol: ["tenzir::type", "private", "\"tenzir/type.hpp\"", "public"] },
+  { symbol: ["tenzir::table_slice", "private", "\"tenzir/table_slice.hpp\"", "public"] },
+  { symbol: ["tenzir::plugin", "private", "\"tenzir/plugin.hpp\"", "public"] },
+  { symbol: ["tenzir::record", "private", "\"tenzir/data.hpp\"", "public"] },
+  { symbol: ["tenzir::list", "private", "\"tenzir/data.hpp\"", "public"] },
+  
+  # Standard library symbols that might be ambiguous
+  { symbol: ["std::string_view", "private", "<string_view>", "public"] },
+  { symbol: ["std::optional", "private", "<optional>", "public"] },
+  { symbol: ["std::variant", "private", "<variant>", "public"] },
+  { symbol: ["std::filesystem::path", "private", "<filesystem>", "public"] },
+]

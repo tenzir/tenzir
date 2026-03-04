@@ -42,6 +42,7 @@ pkgs.mkShell (
           ]
         ))
         pkgs.clangbuildanalyzer
+        pkgs.include-what-you-use
       ]
       ++ package.tenzir-integration-test-deps
       ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
@@ -69,7 +70,8 @@ pkgs.mkShell (
       # uv is provided in the nativeBuildInputs above.
       export TENZIR_ENABLE_BUNDLED_UV=OFF
       export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$PWD/python"
-    '' + lib.optionalString (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") ''
+    ''
+    + lib.optionalString (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") ''
       export LDFLAGS="-fuse-ld=mold"
     '';
   }

@@ -276,6 +276,12 @@ target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
+# Apply include-what-you-use if enabled
+if (TENZIR_ENABLE_IWYU AND DEFINED TENZIR_IWYU_COMMAND)
+  set_property(TARGET libtenzir PROPERTY CXX_INCLUDE_WHAT_YOU_USE "${TENZIR_IWYU_COMMAND}")
+  set_property(TARGET libtenzir_builtins PROPERTY CXX_INCLUDE_WHAT_YOU_USE "${TENZIR_IWYU_COMMAND}")
+endif ()
+
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
