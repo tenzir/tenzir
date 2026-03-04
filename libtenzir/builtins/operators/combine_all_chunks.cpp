@@ -8,7 +8,6 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/plugin.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 namespace tenzir::plugins::combine_all_chunks {

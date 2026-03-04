@@ -21,7 +21,6 @@
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/tls_options.hpp"

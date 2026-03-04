@@ -17,7 +17,6 @@
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/parser_interface.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql/basic.hpp"
