@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "tenzir/arrow_table_slice.hpp"
-#include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -108,7 +107,7 @@ public:
     }
 
     auto operator!=(iterator other) const -> bool {
-      return !(*this == other);
+      return ! (*this == other);
     }
   };
 
@@ -173,7 +172,7 @@ public:
     }
 
     auto operator!=(iterator other) const -> bool {
-      return !(*this == other);
+      return ! (*this == other);
     }
   };
 
@@ -222,16 +221,72 @@ auto view_at(const T& x, int64_t i)
   if (x.IsNull(i)) {
     return std::nullopt;
   }
-  if constexpr (std::same_as<T, arrow::StructArray>) {
+  if constexpr (std::same_as<T, arrow::NullArray>) {
+    TENZIR_UNREACHABLE();
+    return std::nullopt;
+  } else if constexpr (std::same_as<T, arrow::BooleanArray>) {
+    return x.GetView(i);
+  } else if constexpr (std::same_as<T, arrow::Int64Array>) {
+    return int64_t{x.GetView(i)};
+  } else if constexpr (std::same_as<T, arrow::UInt64Array>) {
+    return x.GetView(i);
+  } else if constexpr (std::same_as<T, arrow::DoubleArray>) {
+    return x.GetView(i);
+  } else if constexpr (std::same_as<T, arrow::DurationArray>) {
+    TENZIR_ASSERT_EXPENSIVE(
+      as<type_to_arrow_type_t<duration_type>>(*x.type()).unit()
+      == arrow::TimeUnit::NANO);
+    return duration{x.GetView(i)};
+  } else if constexpr (std::same_as<T, arrow::TimestampArray>) {
+    TENZIR_ASSERT_EXPENSIVE(
+      as<type_to_arrow_type_t<time_type>>(*x.type()).unit()
+      == arrow::TimeUnit::NANO);
+    return time{} + duration{x.GetView(i)};
+  } else if constexpr (std::same_as<T, arrow::StringArray>) {
+    const auto str = x.GetView(i);
+    return std::string_view{str.data(), str.size()};
+  } else if constexpr (std::same_as<T, ip_type::array_type>) {
+    auto storage = x.storage();
+    TENZIR_ASSERT_EXPENSIVE(storage->byte_width() == 16);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    const auto* bytes = storage->raw_values() + (i * 16);
+    return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
+  } else if constexpr (std::same_as<T, subnet_type::array_type>) {
+    auto storage = x.storage();
+    TENZIR_ASSERT_EXPENSIVE(storage->num_fields() == 2);
+    auto network
+      = view_at(as<type_to_arrow_array_t<ip_type>>(*storage->field(0)), i);
+    TENZIR_ASSERT_EXPENSIVE(network);
+    auto length
+      = static_cast<const arrow::UInt8Array&>(*storage->field(1)).GetView(i);
+    return subnet{*network, length};
+  } else if constexpr (std::same_as<T, enumeration_type::array_type>) {
+    return detail::narrow_cast<view<type_to_data_t<enumeration_type>>>(
+      x.storage()->GetValueIndex(i));
+  } else if constexpr (std::same_as<T, arrow::StructArray>) {
     return record_view3::from_valid(x, i);
   } else if constexpr (std::same_as<T, arrow::ListArray>) {
     return list_view3::from_valid(x, i);
+  } else if constexpr (std::same_as<T, arrow::BinaryArray>) {
+    const auto str = x.GetView(i);
+    return blob_view{reinterpret_cast<const std::byte*>(str.data()),
+                     str.size()};
+  } else if constexpr (std::same_as<T, secret_type::array_type>) {
+    auto storage = x.storage();
+    TENZIR_ASSERT_EXPENSIVE(storage->num_fields() == 1);
+    const auto& bin_array = as<arrow::BinaryArray>(*storage->field(0));
+    auto chunk
+      = chunk::make(bin_array.value_data())
+          ->slice(bin_array.value_offset(i), bin_array.value_length(i));
+    auto fbs = detail::secrets::owning_root_fbs_buffer::make(std::move(chunk));
+    TENZIR_ASSERT(fbs);
+    return secret_view{std::move(*fbs).as_child()};
   } else if constexpr (std::same_as<T, arrow::MapArray>) {
     // TODO: Once we actually get rid of Maps...
     TENZIR_UNREACHABLE();
     return std::nullopt;
   } else {
-    return value_at(type_from_arrow_t<T>{}, x, i);
+    static_assert(detail::always_false_v<T>, "unhandled type");
   }
 }
 
