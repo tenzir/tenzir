@@ -276,6 +276,24 @@ target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
+target_precompile_headers(
+  libtenzir
+  PRIVATE include/tenzir/error.hpp
+          include/tenzir/data.hpp
+          include/tenzir/type.hpp)
+
+target_precompile_headers(
+  libtenzir_builtins
+  PRIVATE include/tenzir/plugin.hpp
+          include/tenzir/tql2/plugin.hpp
+          include/tenzir/series_builder.hpp
+          include/tenzir/arrow_utils.hpp
+          include/tenzir/pipeline.hpp
+          include/tenzir/error.hpp
+          include/tenzir/data.hpp
+          include/tenzir/type.hpp
+          include/tenzir/table_slice.hpp)
+
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
