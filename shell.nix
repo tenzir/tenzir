@@ -42,6 +42,7 @@ pkgs.mkShell (
             python-box
           ]
         ))
+        pkgs.clangbuildanalyzer
       ]
       ++ package.tenzir-integration-test-deps
       ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
