@@ -6,87 +6,99 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
-#include <tenzir/concept/parseable/tenzir/option_set.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/detail/escapers.hpp>
+#include <tenzir/concepts.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/pipeline.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
-#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/type.h>
-#include <arrow/type_fwd.h>
+
+#include <type_traits>
+#include <utility>
 
 namespace tenzir::plugins::enumerate {
 
 namespace {
 
-struct enumerate_args {
-  ast::field_path out;
+auto default_output_field() -> ast::field_path {
+  auto out = ast::field_path::try_from(
+    ast::root_field{ast::identifier{"#", location::unknown}});
+  TENZIR_ASSERT(out);
+  return std::move(*out);
+}
+
+struct EnumerateArgs {
+  ast::field_path out = default_output_field();
   std::optional<ast::expression> group;
 
-  friend auto inspect(auto& f, enumerate_args& x) -> bool {
+  friend auto inspect(auto& f, EnumerateArgs& x) -> bool {
     return f.object(x).fields(f.field("out", x.out), f.field("group", x.group));
   }
 };
+
+using GroupMap = tsl::robin_map<data, int64_t>;
+
+auto find_group(GroupMap& groups, data_view const value) -> GroupMap::iterator {
+  auto key = materialize(value);
+  auto it = groups.find(key);
+  match(
+    value,
+    [&]<class T>(T const& x)
+      requires concepts::integer<T>
+    {
+      using OtherType
+        = std::conditional_t<std::same_as<T, int64_t>, uint64_t, int64_t>;
+      if (it == groups.end() and std::in_range<OtherType>(x)) {
+        it = groups.find(data_view{static_cast<OtherType>(x)});
+      }
+    },
+    [](auto const&) {});
+  if (it == groups.end()) {
+    it = groups.emplace_hint(it, std::move(key), int64_t{0});
+  }
+  return it;
+}
 
 class enumerate_operator final : public crtp_operator<enumerate_operator> {
 public:
   enumerate_operator() = default;
 
-  explicit enumerate_operator(enumerate_args args) : args_{std::move(args)} {
+  explicit enumerate_operator(EnumerateArgs args) : args_{std::move(args)} {
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto& dh = ctrl.diagnostics();
-    auto idx = int64_t{};
-    auto groups = tsl::robin_map<data, int64_t>{};
+    auto next_id = int64_t{0};
+    auto groups = GroupMap{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      auto b = int64_type::make_arrow_builder(arrow_memory_pool());
-      check(b->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
+      auto builder = int64_type::make_arrow_builder(arrow_memory_pool());
+      check(builder->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
       if (args_.group) {
-        for (const auto& s : eval(args_.group.value(), slice, dh)) {
-          for (const auto& val : s.values()) {
-            auto it = groups.find(materialize(val));
-            match(
-              val,
-              [&]<typename T>(const T& x)
-                requires concepts::integer<T>
-              {
-                using to_type = std::conditional_t<std::same_as<int64_t, T>,
-                                                   uint64_t, int64_t>;
-                if (it == groups.end() and std::in_range<to_type>(x)) {
-                  it = groups.find(data_view{static_cast<to_type>(x)});
-                }
-              },
-              [](const auto&) {});
-            if (it == groups.end()) {
-              it = groups.emplace_hint(it, materialize(val), 0);
-            }
-            check(b->Append(it.value()++));
+        for (auto const& result : eval(*args_.group, slice, dh)) {
+          for (auto const& value : result.values()) {
+            auto it = find_group(groups, value);
+            check(builder->Append(it.value()++));
           }
         }
       } else {
-        for (auto i = int64_t{}; i < detail::narrow<int64_t>(slice.rows());
+        for (auto i = int64_t{0}; i < detail::narrow<int64_t>(slice.rows());
              ++i) {
-          check(b->Append(idx++));
+          check(builder->Append(next_id++));
         }
       }
-      co_yield assign(args_.out, series{int64_type{}, finish(*b)}, slice, dh,
-                      assign_position::front);
+      co_yield assign(args_.out, series{int64_type{}, finish(*builder)}, slice,
+                      dh, assign_position::front);
     }
   }
 
@@ -104,23 +116,72 @@ private:
     return f.apply(x.args_);
   }
 
-  enumerate_args args_;
+  EnumerateArgs args_;
 };
 
-class plugin final : public operator_plugin2<enumerate_operator> {
+class Enumerate final : public Operator<table_slice, table_slice> {
+public:
+  explicit Enumerate(EnumerateArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
+    auto builder = int64_type::make_arrow_builder(arrow_memory_pool());
+    check(builder->Reserve(detail::narrow_cast<int64_t>(input.rows())));
+    if (args_.group) {
+      for (auto const& result : eval(*args_.group, input, ctx)) {
+        for (auto const& value : result.values()) {
+          auto it = find_group(groups_, value);
+          check(builder->Append(it.value()++));
+        }
+      }
+    } else {
+      for (auto i = int64_t{0}; i < detail::narrow<int64_t>(input.rows());
+           ++i) {
+        check(builder->Append(next_id_++));
+      }
+    }
+    auto output = assign(args_.out, series{int64_type{}, finish(*builder)},
+                         input, ctx, assign_position::front);
+    co_await push(std::move(output));
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("next_id", next_id_);
+    serde("groups", groups_);
+  }
+
+private:
+  EnumerateArgs args_;
+  int64_t next_id_ = 0;
+  GroupMap groups_;
+};
+
+class Plugin final : public virtual operator_plugin2<enumerate_operator>,
+                     public virtual OperatorPlugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto args = enumerate_args{};
+    auto args = EnumerateArgs{};
     auto out = ast::field_path::try_from(
       ast::root_field{ast::identifier{"#", inv.self.get_location()}});
-    TENZIR_ASSERT(out.has_value());
+    TENZIR_ASSERT(out);
     TRY(argument_parser2::operator_("enumerate")
           .positional("out", out)
           .named("group", args.group, "any")
           .parse(inv, ctx));
-    args.out = std::move(out).value();
+    args.out = std::move(*out);
     return std::make_unique<enumerate_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<EnumerateArgs, Enumerate>{};
+    d.optional_positional("out", &EnumerateArgs::out);
+    d.named("group", &EnumerateArgs::group, "any");
+    return d.without_optimize();
   }
 };
 
@@ -128,4 +189,4 @@ public:
 
 } // namespace tenzir::plugins::enumerate
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::enumerate::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::enumerate::Plugin)

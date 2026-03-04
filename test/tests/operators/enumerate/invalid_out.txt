@@ -1,0 +1,6 @@
+error: expected a field path
+ --> tests/operators/enumerate/invalid_out.tql:6:11
+  |
+6 | enumerate 1
+  |           ^ 
+  |
