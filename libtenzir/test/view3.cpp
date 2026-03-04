@@ -20,7 +20,7 @@ namespace {
 template <concrete_type Type, class Value>
 auto make_singleton_array(const Type& type, Value&& value)
   -> std::shared_ptr<type_to_arrow_array_t<Type>> {
-  auto builder = series_builder{type};
+  auto builder = series_builder{tenzir::type{type}};
   builder.data(std::forward<Value>(value));
   auto result = builder.finish_assert_one_array();
   auto typed_result = result.as<Type>();
@@ -31,7 +31,7 @@ auto make_singleton_array(const Type& type, Value&& value)
 template <concrete_type Type>
 auto make_null_array(const Type& type)
   -> std::shared_ptr<type_to_arrow_array_t<Type>> {
-  auto builder = series_builder{type};
+  auto builder = series_builder{tenzir::type{type}};
   builder.null();
   auto result = builder.finish_assert_one_array();
   auto typed_result = result.as<Type>();

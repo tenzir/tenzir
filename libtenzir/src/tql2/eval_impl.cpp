@@ -191,7 +191,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
         // TODO: This is not very performant.
         result.match(
           [&](const series& s) {
-            l.data(value_at(s.type, *s.array, row));
+            l.data(view_at(*s.array, row));
           },
           [&](const basic_series<list_type>& s) {
             const auto& values = s.array->values();
@@ -199,7 +199,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
             auto begin = s.array->value_offset(row);
             auto end = s.array->value_offset(row + 1);
             for (auto i = begin; i < end; ++i) {
-              l.data(value_at(value_ty, *values, i));
+              l.data(view_at(*values, i));
             }
           });
       }
@@ -382,7 +382,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             b.null();
             continue;
           }
-          auto name = value_at(string_type{}, *str->array, i);
+          auto name = *view_at<string_type>(*str->array, i);
           if (auto it = field_map.find(name); it != field_map.end()) {
             const auto& field = it->second;
             if (field.type.kind().is_not<null_type>()
@@ -392,7 +392,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
               }
               last_type = field.type;
             }
-            auto v = value_at(field.type, *field.array, i);
+            auto v = view_at(*field.array, i);
             b.data(v);
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
@@ -681,7 +681,7 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
           add_column_to_row(s);
         },
         [this, &add_column_to_row, i](const multi_series& ms) {
-          const auto v = ms.value_at(i);
+          const auto v = ms.view3_at(i);
           if (const auto* sec = try_as<view<secret>>(v)) {
             add_column_to_row(*sec);
             return;

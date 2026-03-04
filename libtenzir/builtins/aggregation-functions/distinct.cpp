@@ -71,7 +71,7 @@ public:
         if (arg.array->IsNull(i)) {
           continue;
         }
-        const auto& view = value_at(arg.type, *arg.array, i);
+        const auto view = view_at(*arg.array, i);
         const auto it = distinct_.find(view);
         if (it != distinct_.end()) {
           continue;

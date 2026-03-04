@@ -829,24 +829,7 @@ bool table_slice::is_serialized() const noexcept {
 
 // -- data access --------------------------------------------------------------
 
-auto table_slice::values() const -> generator<view<record>> {
-  auto path = tenzir::offset{};
-  auto [type, array] = path.get(*this);
-  const auto as_series = series{std::move(type), std::move(array)};
-  for (auto&& value : as_series.values<record_type>()) {
-    TENZIR_ASSERT_EXPENSIVE(value);
-    co_yield std::move(*value);
-  }
-}
-
-auto table_slice::values(const struct offset& path) const
-  -> generator<view<data>> {
-  auto [type, array] = path.get(*this);
-  const auto as_series = series{std::move(type), std::move(array)};
-  return as_series.values();
-}
-
-auto table_slice::values3() const -> generator<view3<record>> {
+auto table_slice::values() const -> generator<view3<record>> {
   auto path = tenzir::offset{};
   auto [type, array] = path.get(*this);
   const auto as_series = series{std::move(type), std::move(array)};
@@ -856,7 +839,7 @@ auto table_slice::values3() const -> generator<view3<record>> {
   }
 }
 
-auto table_slice::values3(const struct offset& path) const
+auto table_slice::values(const struct offset& path) const
   -> generator<view3<data>> {
   auto [type, array] = path.get(*this);
   const auto as_series = series{std::move(type), std::move(array)};

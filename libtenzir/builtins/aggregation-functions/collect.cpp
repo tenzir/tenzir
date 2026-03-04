@@ -32,7 +32,7 @@ public:
         if (arg.array->IsNull(i)) {
           continue;
         }
-        result_.push_back(materialize(value_at(arg.type, *arg.array, i)));
+        result_.push_back(materialize(view_at(*arg.array, i)));
       }
     }
   }

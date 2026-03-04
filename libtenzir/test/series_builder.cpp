@@ -415,9 +415,9 @@ TEST("to table slice") {
   REQUIRE_EQUAL(slices.size(), size_t{1});
   auto& slice = slices[0];
   REQUIRE_EQUAL(slice.rows(), uint64_t{2});
-  CHECK_EQUAL(materialize(slice.at(0, 0)), int64_t{42});
-  CHECK_EQUAL(materialize(slice.at(0, 1)), caf::none);
-  CHECK_EQUAL(materialize(slice.at(1, 0)), caf::none);
+  CHECK_EQUAL(materialize(slice.at(0, 0)), data{int64_t{42}});
+  CHECK_EQUAL(materialize(slice.at(0, 1)), data{});
+  CHECK_EQUAL(materialize(slice.at(1, 0)), data{caf::none});
   CHECK_EQUAL(materialize(slice.at(1, 1)), list{ip});
 }
 
