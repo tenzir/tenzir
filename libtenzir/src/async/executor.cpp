@@ -21,6 +21,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/time.hpp"
 

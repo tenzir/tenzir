@@ -10,12 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/error.hpp"
-#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/inspect.hpp"
-
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
 
 #include <string>
 #include <string_view>
@@ -25,6 +20,7 @@ namespace tenzir {
 
 class plugin;
 class parser_interface;
+struct operator_signature;
 
 // -- operator plugin ----------------------------------------------------------
 
@@ -51,11 +47,7 @@ public:
   }
 
   virtual auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> {
-    return {pipeline,
-            caf::make_error(ec::unspecified, "this operator does not support "
-                                             "the legacy parsing API")};
-  }
+    -> std::pair<std::string_view, caf::expected<operator_ptr>>;
 };
 
 using operator_serialization_plugin = serialization_plugin<operator_base>;
