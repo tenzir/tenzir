@@ -10,6 +10,11 @@ let
 in
 fizz.overrideAttrs (orig: {
   version = facebookNetworkStack.release;
+  outputs = [
+    # Removed "bin" because we're not building examples.
+    "out"
+    "dev"
+  ];
   src = fetchFromGitHub {
     inherit (facebookNetworkStack.fizz)
       owner
@@ -18,6 +23,8 @@ fizz.overrideAttrs (orig: {
       hash
       ;
   };
+  patches =
+    (builtins.filter (x: (builtins.match ".*-glog-0\.7\.patch$" "${x}") == null) orig.patches);
   env =
     let
       origEnv = orig.env or { };
@@ -29,6 +36,8 @@ fizz.overrideAttrs (orig: {
         + lib.optionalString stdenv.hostPlatform.isStatic " -L${xz.out}/lib -llzma";
     };
   cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
+    # Missing target_link_libraries in to the granular folly targets in CMakeLists.txt.
+    (lib.cmakeBool "BUILD_EXAMPLES" false)
     (lib.cmakeBool "BUILD_TESTS" false)
   ];
   preConfigure =

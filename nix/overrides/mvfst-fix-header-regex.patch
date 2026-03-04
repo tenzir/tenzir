@@ -1,0 +1,13 @@
+diff --git i/CMakeLists.txt w/CMakeLists.txt
+index 5dcc25874..a3a5ceebd 100644
+--- i/CMakeLists.txt
++++ w/CMakeLists.txt
+@@ -157,7 +157,7 @@ file(GLOB_RECURSE MVFST_HEADERS
+ )
+ list(FILTER MVFST_HEADERS EXCLUDE REGEX "/test/")
+ list(FILTER MVFST_HEADERS EXCLUDE REGEX "/facebook/")
+-list(FILTER MVFST_HEADERS EXCLUDE REGEX "/build/")
++list(FILTER MVFST_HEADERS EXCLUDE REGEX "/mvfst/build/")
+ 
+ # Install headers preserving directory structure
+ mvfst_install_headers(quic ${CMAKE_CURRENT_SOURCE_DIR}/quic ${MVFST_HEADERS})

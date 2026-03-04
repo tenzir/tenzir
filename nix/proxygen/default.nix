@@ -58,7 +58,7 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   cmakeFlags = [
-    (lib.cmakeBool "BUILD_SHARED_LIBS" (!stdenv.hostPlatform.isStatic))
+    (lib.cmakeBool "BUILD_SHARED_LIBS" false)
     (lib.cmakeBool "BUILD_TESTS" false)
     (lib.cmakeBool "BUILD_SAMPLES" false)
     (lib.cmakeFeature "LIB_INSTALL_DIR" "${placeholder "out"}/lib")
