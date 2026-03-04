@@ -40,13 +40,6 @@
 
 namespace tenzir {
 
-// The plugin base class must be defined before this header is included.
-// If it's not defined, you're including this header incorrectly.
-#ifndef TENZIR_PLUGIN_HPP
-// Note: plugin.hpp defines TENZIR_PLUGIN_HPP before including this file
-class plugin; // Forward declare for templates below
-#endif
-
 // Type aliases for serializer/deserializer variants (also defined in
 // pipeline.hpp)
 using serializer

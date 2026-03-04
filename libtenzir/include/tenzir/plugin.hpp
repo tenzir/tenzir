@@ -8,35 +8,21 @@
 
 #pragma once
 
-#define TENZIR_PLUGIN_HPP
-
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/actors.hpp"
-#include "tenzir/command.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/pp.hpp"
-#include "tenzir/http_api.hpp"
-#include "tenzir/operator_control_plane.hpp"
-#include "tenzir/pipeline.hpp"
-#include "tenzir/plugin/inspect.hpp" // Included BEFORE namespace to avoid nesting
-#include "tenzir/series.hpp"
-#include "tenzir/type.hpp"
+#include "tenzir/generator.hpp"
+#include "tenzir/plugin/inspect.hpp"
 
-#include <caf/detail/pretty_type_name.hpp>
 #include <caf/error.hpp>
 #include <caf/init_global_meta_objects.hpp>
-#include <caf/stream.hpp>
-#include <caf/typed_actor.hpp>
 
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <optional>
-#include <span>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -143,26 +129,16 @@ public:
 // Extracted to plugin/component.hpp
 #include "tenzir/plugin/component.hpp"
 
-namespace tenzir {
-
 // -- command plugin -----------------------------------------------------------
+#include "tenzir/plugin/command.hpp"
 
-/// A base class for plugins that add commands.
-/// @relates plugin
-class command_plugin : public virtual plugin {
-public:
-  /// Creates additional commands.
-  /// @note Tenzir calls this function before initializing the plugin, which
-  /// means that this function cannot depend on any plugin state. The logger
-  /// is unavailable when this function is called.
-  [[nodiscard]] virtual auto make_command() const
-    -> std::pair<std::unique_ptr<command>, command::factory>
-    = 0;
-};
+namespace tenzir {
 
 // -- serialization plugin -----------------------------------------------------
 // Free functions (plugin_serialize, plugin_inspect) are in plugin/inspect.hpp
-// (included at the top of this file before namespace block)
+// (included at the top of this file before namespace block).
+// serialization_plugin and inspection_plugin class templates are defined here
+// because they need the full plugin base class.
 
 /// This plugin interface can be used to serialize and deserialize classes
 /// derived from `Base`. To this end, the base class provides a virtual
@@ -223,421 +199,36 @@ public:
   }
 };
 
+} // namespace tenzir
+
 // -- operator plugin ----------------------------------------------------------
-
-/// Deriving from this plugin will add an operator with the name of this plugin
-/// to the pipeline parser. Derive from this class when you want to introduce an
-/// alias to existing operators. This plugin itself does not add a new operator,
-/// but only a parser for it. For most use cases: @see operator_plugin
-class operator_parser_plugin : public virtual plugin {
-public:
-  /// @returns the name of the operator
-  virtual auto operator_name() const -> std::string {
-    return name();
-  }
-
-  /// @returns the signature of the operator.
-  virtual auto signature() const -> operator_signature = 0;
-
-  /// @throws diagnostic
-  virtual auto parse_operator(parser_interface& p) const -> operator_ptr {
-    // TODO: Remove this default implementation and adjust `parser.cpp`
-    // accordingly when all operators are converted.
-    (void)p;
-    return nullptr;
-  }
-
-  virtual auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> {
-    return {pipeline,
-            caf::make_error(ec::unspecified, "this operator does not support "
-                                             "the legacy parsing API")};
-  }
-};
-
-using operator_serialization_plugin = serialization_plugin<operator_base>;
-
-template <class Operator>
-using operator_inspection_plugin = inspection_plugin<operator_base, Operator>;
-
-/// This plugin adds a new operator with the name `Operator::name()` and
-/// internal systems. Most operator plugins should use this class, but if you
-/// only want to add an alias to existing operators, use
-/// `operator_parser_plugin` instead.
-template <class Operator>
-class operator_plugin : public virtual operator_inspection_plugin<Operator>,
-                        public virtual operator_parser_plugin {};
+#include "tenzir/plugin/operator.hpp"
 
 // -- loader plugin -----------------------------------------------------------
-
-class plugin_loader {
-public:
-  virtual ~plugin_loader() = default;
-
-  virtual auto name() const -> std::string = 0;
-
-  virtual auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>>
-    = 0;
-
-  virtual auto default_parser() const -> std::string {
-    return "json";
-  }
-
-  virtual auto internal() const -> bool {
-    return false;
-  }
-};
-
-/// @see operator_parser_plugin
-class loader_parser_plugin : public virtual plugin {
-public:
-  virtual auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader>
-    = 0;
-
-  virtual auto supported_uri_schemes() const -> std::vector<std::string>;
-};
-
-using loader_serialization_plugin = serialization_plugin<plugin_loader>;
-
-template <class Loader>
-using loader_inspection_plugin = inspection_plugin<plugin_loader, Loader>;
-
-/// @see operator_plugin
-template <class Loader>
-class loader_plugin : public virtual loader_inspection_plugin<Loader>,
-                      public virtual loader_parser_plugin {};
+#include "tenzir/plugin/loader.hpp"
 
 // -- parser plugin -----------------------------------------------------------
-
-class plugin_parser {
-public:
-  virtual ~plugin_parser() = default;
-
-  virtual auto name() const -> std::string = 0;
-
-  virtual auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>>
-    = 0;
-
-  /// Apply the parser to an array of strings.
-  ///
-  /// The default implementation of creates a new parser with `instantiate()`
-  /// for every single string.
-  ///
-  /// @post `input->length() == result_array->length()`
-  virtual auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                             operator_control_plane& ctrl) const
-    -> std::vector<series>;
-
-  /// Implement ordering optimization for parsers. See
-  /// `operator_base::optimize(...)` for details. The default implementation
-  /// does not optimize.
-  virtual auto optimize(event_order order) -> std::unique_ptr<plugin_parser> {
-    (void)order;
-    return nullptr;
-  }
-
-  virtual auto idle_after() const -> duration {
-    return duration::zero();
-  }
-
-  virtual auto detached() const -> bool {
-    return false;
-  }
-};
-
-/// @see operator_parser_plugin
-class parser_parser_plugin : public virtual plugin {
-public:
-  virtual auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser>
-    = 0;
-};
-
-using parser_serialization_plugin = serialization_plugin<plugin_parser>;
-
-template <class Parser>
-using parser_inspection_plugin = inspection_plugin<plugin_parser, Parser>;
-
-/// @see operator_plugin
-template <class Parser>
-class parser_plugin : public virtual parser_parser_plugin,
-                      public virtual parser_inspection_plugin<Parser> {};
+#include "tenzir/plugin/parser.hpp"
 
 // -- printer plugin ----------------------------------------------------------
-
-class printer_instance {
-public:
-  virtual ~printer_instance() = default;
-
-  virtual auto process(table_slice slice) -> generator<chunk_ptr> = 0;
-
-  virtual auto finish() -> generator<chunk_ptr> {
-    return {};
-  }
-
-  template <class F>
-  static auto make(F f) -> std::unique_ptr<printer_instance> {
-    class func_printer : public printer_instance {
-    public:
-      explicit func_printer(F f) : f_{std::move(f)} {
-      }
-
-      auto process(table_slice slice) -> generator<chunk_ptr> override {
-        return f_(std::move(slice));
-      }
-
-    private:
-      F f_;
-    };
-    return std::make_unique<func_printer>(std::move(f));
-  }
-};
-
-class plugin_printer {
-public:
-  virtual ~plugin_printer() = default;
-
-  virtual auto name() const -> std::string = 0;
-
-  /// Returns a printer for a specified schema. If `allows_joining()`,
-  /// then `input_schema`can also be `type{}`, which means that the printer
-  /// should expect a heterogeneous input instead.
-  virtual auto
-  instantiate(type input_schema, operator_control_plane& ctrl) const
-    -> caf::expected<std::unique_ptr<printer_instance>>
-    = 0;
-
-  /// Returns whether the printer allows for joining output streams into a
-  /// single saver.
-  virtual auto allows_joining() const -> bool = 0;
-
-  /// Returns whether it is safe to assume that the printer returns text that is
-  /// encoded as UTF8.
-  virtual auto prints_utf8() const -> bool = 0;
-};
-
-/// @see operator_parser_plugin
-class printer_parser_plugin : public virtual plugin {
-public:
-  virtual auto parse_printer(parser_interface& p) const
-    -> std::unique_ptr<plugin_printer>
-    = 0;
-};
-
-using printer_serialization_plugin = serialization_plugin<plugin_printer>;
-
-template <class Printer>
-using printer_inspection_plugin = inspection_plugin<plugin_printer, Printer>;
-
-/// @see operator_plugin
-template <class Printer>
-class printer_plugin : public virtual printer_inspection_plugin<Printer>,
-                       public virtual printer_parser_plugin {};
+#include "tenzir/plugin/printer.hpp"
 
 // -- saver plugin ------------------------------------------------------------
-
-struct printer_info {
-  type input_schema;
-  std::string format;
-};
-
-class plugin_saver {
-public:
-  virtual ~plugin_saver() = default;
-
-  virtual auto name() const -> std::string = 0;
-
-  virtual auto
-  instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
-    -> caf::expected<std::function<void(chunk_ptr)>>
-    = 0;
-
-  /// Returns true if the saver joins the output from its preceding printer. If
-  /// so, `instantiate()` will only be called once.
-  virtual auto is_joining() const -> bool = 0;
-
-  virtual auto default_printer() const -> std::string {
-    return "json";
-  }
-
-  virtual auto internal() const -> bool {
-    return false;
-  }
-};
-
-/// @see operator_parser_plugin
-class saver_parser_plugin : public virtual plugin {
-public:
-  virtual auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver>
-    = 0;
-
-  virtual auto supported_uri_schemes() const -> std::vector<std::string>;
-};
-
-using saver_serialization_plugin = serialization_plugin<plugin_saver>;
-
-template <class Saver>
-using saver_inspection_plugin = inspection_plugin<plugin_saver, Saver>;
-
-/// @see operator_plugin
-template <class Saver>
-class saver_plugin : public virtual saver_inspection_plugin<Saver>,
-                     public virtual saver_parser_plugin {};
+#include "tenzir/plugin/saver.hpp"
 
 // -- rest endpoint plugin -----------------------------------------------------
-
-// A rest endpoint plugin declares a set of routes on which it can respond
-// to HTTP requests, together with a `handler` actor that is responsible
-// for doing that. A server (usually the `web` plugin) can then accept
-// incoming requests and dispatch them to the correct handler according to the
-// request path.
-class rest_endpoint_plugin : public virtual plugin {
-public:
-  /// OpenAPI description of the plugin endpoints.
-  /// @returns A record containing entries for the `paths` element of an
-  ///          OpenAPI spec.
-  [[nodiscard]] virtual auto
-  openapi_endpoints(api_version version = api_version::latest) const -> record
-    = 0;
-
-  /// OpenAPI description of the schemas used by the plugin endpoints, if any.
-  /// @returns A record containing entries for the `schemas` element of an
-  ///          OpenAPI spec. The record may be empty if the plugin defines
-  ///          no custom schemas.
-  [[nodiscard]] virtual auto
-  openapi_schemas(api_version /*version*/ = api_version::latest) const
-    -> record {
-    return record{};
-  }
-
-  /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual auto rest_endpoints() const
-    -> const std::vector<rest_endpoint>& = 0;
-
-  /// Actor that will handle this endpoint.
-  //  TODO: This should get some integration with component_plugin so that
-  //  the component can be used to answer requests directly.
-  [[nodiscard]] virtual auto
-  handler(caf::actor_system& system, node_actor node) const
-    -> rest_handler_actor
-    = 0;
-};
+#include "tenzir/plugin/rest_endpoint.hpp"
 
 // -- store plugin ------------------------------------------------------------
-
-/// A base class for plugins that add new store backends.
-/// @note Consider using the simler `store_plugin` instead, which abstracts
-/// the actor system logic away with a default implementation, which usually
-/// suffices for most store backends.
-class store_actor_plugin : public virtual plugin {
-public:
-  /// A store_builder actor and a chunk called the "header". The contents of
-  /// the header will be persisted on disk, and should allow the plugin to
-  /// retrieve the correct store actor when `make_store()` below is called.
-  struct builder_and_header {
-    store_builder_actor store_builder;
-    chunk_ptr header;
-  };
-
-  /// Create a store builder actor that accepts incoming table slices.
-  /// The store builder is required to keep a reference to itself alive
-  /// as long as its input stream is live, and persist itself and exit as
-  /// soon as the input stream terminates.
-  /// @param fs The actor handle of a filesystem.
-  /// @param id The partition id for which we want to create a store. Can be
-  /// used as a unique key by the implementation.
-  /// @param origin The origin of the data: "ingest", "rebuild", or
-  /// "compaction".
-  /// @returns A handle to the store builder actor to add events to, and a
-  /// header that uniquely identifies this store for later use in `make_store`.
-  [[nodiscard]] virtual auto
-  make_store_builder(filesystem_actor fs, const tenzir::uuid& id,
-                     std::string origin = "ingest") const
-    -> caf::expected<builder_and_header>
-    = 0;
-
-  /// Create a store actor from the given header. Called when deserializing a
-  /// partition that uses this partition as a store backend.
-  /// @param fs The actor handle of a filesystem.
-  /// @param header The store header as found in the partition flatbuffer.
-  /// @returns A new store actor.
-  [[nodiscard]] virtual auto
-  make_store(filesystem_actor fs, std::span<const std::byte> header) const
-    -> caf::expected<store_actor>
-    = 0;
-};
-
-/// A base class for plugins that add new store backends.
-class store_plugin : public virtual store_actor_plugin {
-public:
-  /// Create a store for passive partitions.
-  [[nodiscard]] virtual auto make_passive_store() const
-    -> caf::expected<std::unique_ptr<passive_store>>
-    = 0;
-
-  /// Create a store for active partitions.
-  /// @param tenzir_config The tenzir node configuration.
-  [[nodiscard]] virtual auto make_active_store() const
-    -> caf::expected<std::unique_ptr<active_store>>
-    = 0;
-
-private:
-  [[nodiscard]] auto
-  make_store_builder(filesystem_actor fs, const tenzir::uuid& id,
-                     std::string origin) const
-    -> caf::expected<builder_and_header> final;
-
-  [[nodiscard]] auto
-  make_store(filesystem_actor fs, std::span<const std::byte> header) const
-    -> caf::expected<store_actor> final;
-};
+#include "tenzir/plugin/store.hpp"
 
 // -- metrics plugin ----------------------------------------------------------
-
-class metrics_plugin : public virtual plugin {
-public:
-  using collector = std::function<caf::expected<record>()>;
-
-  /// The name under which this metric should be displayed.
-  [[nodiscard]] virtual auto metric_name() const -> std::string {
-    return name();
-  }
-
-  /// The format in which metrics will be reported by this plugin.
-  [[nodiscard]] virtual auto metric_layout() const -> record_type = 0;
-
-  /// Create a metrics collector.
-  /// Plugins may return an error if the collector is not supported on the
-  /// platform the node is currently running on.
-  [[nodiscard]] virtual auto make_collector(caf::actor_system& system) const
-    -> caf::expected<collector>
-    = 0;
-
-  /// Returns the frequency for collecting the metrics, expressed as the
-  /// interval between calls to the collector.
-  [[nodiscard]] virtual auto metric_frequency() const -> duration {
-    return std::chrono::seconds{1};
-  }
-};
+#include "tenzir/plugin/metrics.hpp"
 
 // -- aspect plugin ------------------------------------------------------------
+#include "tenzir/plugin/aspect.hpp"
 
-class aspect_plugin : public virtual plugin {
-public:
-  /// The name of the aspect that enables `show aspect`.
-  /// @note defaults to `plugin::name()`.
-  virtual auto aspect_name() const -> std::string;
-
-  /// Produces the data to show.
-  virtual auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice>
-    = 0;
-};
+namespace tenzir {
 
 // -- plugin_ptr ---------------------------------------------------------------
 

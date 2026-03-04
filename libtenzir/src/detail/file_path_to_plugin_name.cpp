@@ -8,7 +8,7 @@
 
 #include "tenzir/detail/file_path_to_plugin_name.hpp"
 
-#include "tenzir/plugin.hpp"
+#include "tenzir/detail/assert.hpp"
 
 #include <array>
 #include <span>
@@ -33,8 +33,9 @@ auto find_map_entry(std::span<const map_entry> map, std::string_view key)
                                   [](const auto& pair) {
                                     return pair.first;
                                   });
-      it != map.end())
+      it != map.end()) {
     return std::string{it->second};
+  }
   return std::nullopt;
 }
 } // namespace
@@ -42,13 +43,16 @@ auto find_map_entry(std::span<const map_entry> map, std::string_view key)
 auto file_path_to_plugin_name(const std::filesystem::path& path)
   -> std::optional<std::string> {
   if (auto name
-      = find_map_entry(filename_to_plugin_map, path.filename().string()))
+      = find_map_entry(filename_to_plugin_map, path.filename().string())) {
     return name;
+  }
   auto ext = path.extension().string();
-  if (ext.size() <= 1)
+  if (ext.size() <= 1) {
     return std::nullopt;
-  if (auto result = find_map_entry(extension_to_plugin_map, ext))
+  }
+  if (auto result = find_map_entry(extension_to_plugin_map, ext)) {
     return result;
+  }
   TENZIR_ASSERT(ext.size() > 1 && ext.front() == '.');
   return ext.substr(1);
 }
