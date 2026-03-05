@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/table_slice.hpp"
@@ -16,8 +16,6 @@
 #include <string>
 
 namespace tenzir {
-
-class plugin;
 
 // -- aspect plugin ------------------------------------------------------------
 

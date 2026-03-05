@@ -10,7 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/plugin/inspect.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include <string>
 #include <string_view>
@@ -18,7 +18,6 @@
 
 namespace tenzir {
 
-class plugin;
 class parser_interface;
 struct operator_signature;
 

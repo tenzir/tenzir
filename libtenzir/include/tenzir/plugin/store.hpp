@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include "tenzir/actors.hpp"
 #include "tenzir/uuid.hpp"
@@ -20,8 +20,6 @@
 #include <span>
 
 namespace tenzir {
-
-class plugin;
 
 // -- store plugin ------------------------------------------------------------
 

@@ -15,7 +15,7 @@
 
 namespace tenzir {
 
-// -- base classes (plugin.hpp) ------------------------------------------------
+// -- base classes (plugin/base.hpp) -------------------------------------------
 
 class plugin;
 class plugin_ptr;

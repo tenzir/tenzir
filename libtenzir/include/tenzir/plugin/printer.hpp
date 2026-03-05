@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
-
 #include "tenzir/generator.hpp"
-#include "tenzir/plugin/inspect.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/expected.hpp>
@@ -21,7 +19,6 @@
 
 namespace tenzir {
 
-class plugin;
 struct operator_control_plane;
 class parser_interface;
 

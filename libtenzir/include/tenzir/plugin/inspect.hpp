@@ -15,8 +15,8 @@
 //   - pipeline.hpp needs plugin_serialize/plugin_inspect
 //   - plugin.hpp needs pipeline.hpp for operator_signature, operator_ptr, etc.
 //
-// The serialization_plugin and inspection_plugin class templates remain in
-// plugin.hpp (which includes this header after defining the plugin base class).
+// The serialization_plugin and inspection_plugin class templates are defined in
+// plugin/base.hpp, which includes this header.
 
 #include "tenzir/fwd.hpp"
 
@@ -51,7 +51,7 @@ using deserializer
   = std::variant<std::reference_wrapper<caf::deserializer>,
                  std::reference_wrapper<caf::binary_deserializer>>;
 
-// Forward declaration of serialization_plugin (fully defined in plugin.hpp)
+// Forward declaration of serialization_plugin (fully defined in plugin/base.hpp)
 template <class Base>
 class serialization_plugin;
 

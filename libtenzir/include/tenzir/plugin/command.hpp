@@ -8,14 +8,13 @@
 
 #pragma once
 
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/command.hpp"
 
 #include <memory>
 #include <utility>
 
 namespace tenzir {
-
-class plugin;
 
 // -- command plugin -----------------------------------------------------------
 

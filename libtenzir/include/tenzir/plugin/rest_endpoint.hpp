@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include "tenzir/actors.hpp"
 #include "tenzir/data.hpp"
@@ -18,8 +18,6 @@
 #include <vector>
 
 namespace tenzir {
-
-class plugin;
 
 // -- rest endpoint plugin -----------------------------------------------------
 

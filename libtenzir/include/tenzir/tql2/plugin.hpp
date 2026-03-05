@@ -11,7 +11,8 @@
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin/operator.hpp"
+#include "tenzir/plugin/printer.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 

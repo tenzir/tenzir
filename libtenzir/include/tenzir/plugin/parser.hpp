@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
-
 #include "tenzir/generator.hpp"
-#include "tenzir/plugin/inspect.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/series.hpp"
 
 #include <arrow/type_fwd.h>
@@ -23,7 +21,6 @@
 
 namespace tenzir {
 
-class plugin;
 struct operator_control_plane;
 class parser_interface;
 enum class event_order;

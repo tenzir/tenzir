@@ -8,11 +8,7 @@
 
 #pragma once
 
-// This header contains the component_plugin class, which is used by plugins
-// that spawn NODE components. It must be included after plugin.hpp defines
-// the base plugin class.
-
-#include "tenzir/fwd.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include "tenzir/actors.hpp"
 
@@ -20,9 +16,6 @@
 #include <vector>
 
 namespace tenzir {
-
-// Forward declaration - plugin base class defined in plugin.hpp
-class plugin;
 
 // -- component plugin --------------------------------------------------------
 

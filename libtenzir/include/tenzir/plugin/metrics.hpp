@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include "tenzir/data.hpp"
 #include "tenzir/type.hpp"
@@ -21,8 +21,6 @@
 #include <string>
 
 namespace tenzir {
-
-class plugin;
 
 // -- metrics plugin ----------------------------------------------------------
 
