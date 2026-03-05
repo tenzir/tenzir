@@ -621,56 +621,88 @@ struct ExecutorStats {
   std::atomic<size_t> task_count{0};
 };
 
+/// Base class for `ProfilingExecutor` that holds the inner executor handle.
+/// The specialization for `folly::IOExecutor` additionally forwards
+/// `getEventBase()`.
+template <class Handle>
+class ProfilingExecutorBase : public Handle {
+protected:
+  explicit ProfilingExecutorBase(folly::Executor::KeepAlive<Handle> inner)
+    : inner_{std::move(inner)} {
+  }
+  folly::Executor::KeepAlive<Handle> inner_;
+};
+
+template <>
+class ProfilingExecutorBase<folly::IOExecutor> : public folly::IOExecutor {
+public:
+  auto getEventBase() -> folly::EventBase* override {
+    return inner_->getEventBase();
+  }
+
+protected:
+  explicit ProfilingExecutorBase(
+    folly::Executor::KeepAlive<folly::IOExecutor> inner)
+    : inner_{std::move(inner)} {
+  }
+  folly::Executor::KeepAlive<folly::IOExecutor> inner_;
+};
+
 /// Executor wrapper that forwards tasks to an inner executor while measuring
 /// wall-clock time, thread CPU time, and task count. Also sets the
 /// exec_node_name_guard thread-local for each continuation so that
 /// per-operator tracking (e.g. allocator tagging) works in the async path.
-class ProfilingExecutor final : public folly::Executor {
+template <class Handle = folly::Executor>
+class ProfilingExecutor final : public ProfilingExecutorBase<Handle> {
 public:
   static auto
-  make(folly::Executor::KeepAlive<> inner, Option<Arc<ExecutorStats>> stats,
-       exec_node_name_guard::name_type name) -> folly::Executor::KeepAlive<> {
+  make(folly::Executor::KeepAlive<Handle> inner,
+       Option<Arc<ExecutorStats>> stats, exec_node_name_guard::name_type name)
+    -> folly::Executor::KeepAlive<Handle> {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-    return folly::Executor::makeKeepAlive(new ProfilingExecutor{
-      std::move(inner), std::move(stats), std::move(name)});
+    auto* ptr = new ProfilingExecutor{std::move(inner), std::move(stats),
+                                      std::move(name)};
+    return folly::Executor::makeKeepAlive(static_cast<Handle*>(ptr));
   }
 
   void add(folly::Func f) override {
-    inner_->add([stats = stats_, name = name_, f = std::move(f)]() mutable {
-      auto guard
-        = exec_node_name_guard{name, exec_node_name_guard::type::folly};
-      if (stats.is_none()) {
+    this->inner_->add(
+      [stats = stats_, name = name_, f = std::move(f)]() mutable {
+        auto guard
+          = exec_node_name_guard{name, exec_node_name_guard::type::folly};
+        if (stats.is_none()) {
+          f();
+          return;
+        }
+        auto wall_start = std::chrono::steady_clock::now();
+        struct timespec cpu_start = {};
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start);
         f();
-        return;
-      }
-      auto wall_start = std::chrono::steady_clock::now();
-      struct timespec cpu_start = {};
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start);
-      f();
-      auto wall_end = std::chrono::steady_clock::now();
-      struct timespec cpu_end = {};
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
-      auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
-                          wall_end - wall_start)
-                          .count();
-      auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
-                       + (cpu_end.tv_nsec - cpu_start.tv_nsec);
-      if (wall_delta > 1'000'000) {
-        TENZIR_VERBOSE(
-          "add(): wall={}us cpu={}ns total_cpu={}ns "
-          "tasks={}",
-          wall_delta, cpu_delta,
-          (*stats)->cpu_ns.load(std::memory_order::relaxed) + cpu_delta,
-          (*stats)->task_count.load(std::memory_order::relaxed) + 1);
-      }
-      (*stats)->wall_ns.fetch_add(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
-                                                             - wall_start)
-          .count(),
-        std::memory_order::relaxed);
-      (*stats)->cpu_ns.fetch_add(cpu_delta, std::memory_order::relaxed);
-      (*stats)->task_count.fetch_add(1, std::memory_order::relaxed);
-    });
+        auto wall_end = std::chrono::steady_clock::now();
+        struct timespec cpu_end = {};
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
+        auto wall_delta
+          = std::chrono::duration_cast<std::chrono::microseconds>(wall_end
+                                                                  - wall_start)
+              .count();
+        auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
+                         + (cpu_end.tv_nsec - cpu_start.tv_nsec);
+        if (wall_delta > 1'000'000) {
+          TENZIR_VERBOSE(
+            "add(): wall={}us cpu={}ns total_cpu={}ns "
+            "tasks={}",
+            wall_delta, cpu_delta,
+            (*stats)->cpu_ns.load(std::memory_order::relaxed) + cpu_delta,
+            (*stats)->task_count.load(std::memory_order::relaxed) + 1);
+        }
+        (*stats)->wall_ns.fetch_add(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
+                                                               - wall_start)
+            .count(),
+          std::memory_order::relaxed);
+        (*stats)->cpu_ns.fetch_add(cpu_delta, std::memory_order::relaxed);
+        (*stats)->task_count.fetch_add(1, std::memory_order::relaxed);
+      });
   }
 
   auto keepAliveAcquire() noexcept -> bool override {
@@ -692,13 +724,13 @@ public:
   }
 
 private:
-  ProfilingExecutor(folly::Executor::KeepAlive<> inner,
+  ProfilingExecutor(folly::Executor::KeepAlive<Handle> inner,
                     Option<Arc<ExecutorStats>> stats,
                     exec_node_name_guard::name_type name)
-    : inner_{std::move(inner)}, stats_{std::move(stats)}, name_{name} {
+    : ProfilingExecutorBase<Handle>{std::move(inner)},
+      stats_{std::move(stats)},
+      name_{name} {
   }
-
-  folly::Executor::KeepAlive<> inner_;
   Option<Arc<ExecutorStats>> stats_;
   Atomic<size_t> refs_{1};
   exec_node_name_guard::name_type name_;
@@ -943,8 +975,10 @@ public:
                          std::move(name));
   }
 
-  auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> override {
-    return wrap_executor(std::move(id), folly::getGlobalIOExecutor());
+  auto make_io_executor(OpId id)
+    -> folly::Executor::KeepAlive<folly::IOExecutor> override {
+    return wrap_executor<folly::IOExecutor>(std::move(id),
+                                             folly::getGlobalIOExecutor());
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -976,8 +1010,10 @@ protected:
 
 private:
   /// Wraps an executor to contribute to the stats of the given operator.
-  auto wrap_executor(OpId id, folly::Executor::KeepAlive<> inner,
-                     std::string name = {}) -> folly::Executor::KeepAlive<> {
+  template <class Handle = folly::Executor>
+  auto wrap_executor(OpId id, folly::Executor::KeepAlive<Handle> inner,
+                     std::string name = {})
+    -> folly::Executor::KeepAlive<Handle> {
     auto alloc_name = exec_node_name_guard::name_type{};
     std::copy_n(id.value.begin(), std::min(id.value.size(), alloc_name.size()),
                 alloc_name.begin());
@@ -996,9 +1032,8 @@ private:
         executors_.push_back(ExecutorProfile{id, *stats, std::move(name)});
       }
     }
-    auto executor
-      = ProfilingExecutor::make(std::move(inner), std::move(stats), alloc_name);
-    return executor;
+    return ProfilingExecutor<Handle>::make(std::move(inner), std::move(stats),
+                                           alloc_name);
   }
 
   /// Create an operator channel with the specified memory limit and collect
