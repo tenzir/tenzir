@@ -26,6 +26,7 @@ constexpr auto fairness_factor = 2.0;
 struct ParallelArgs {
   std::optional<located<uint64_t>> jobs;
   std::optional<ast::expression> route_by;
+  bool fuse = true;
   located<ir::pipeline> pipe;
 };
 
@@ -141,6 +142,7 @@ public:
               : std::max(uint64_t{1}, static_cast<uint64_t>(
                                         std::thread::hardware_concurrency()))},
       route_by_{std::move(args.route_by)},
+      fuse_{args.fuse},
       pipe_{std::move(args.pipe.inner)} {
   }
 
@@ -152,8 +154,13 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
-                                   tag_v<table_slice>);
+      if (fuse_) {
+        co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
+                                     tag_v<table_slice>);
+      } else {
+        co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy),
+                               tag_v<table_slice>);
+      }
     }
   }
 
@@ -218,6 +225,7 @@ private:
 
   uint64_t jobs_;
   std::optional<ast::expression> route_by_;
+  bool fuse_;
   ir::pipeline pipe_;
   std::vector<uint64_t> rows_assigned_;
 };
@@ -230,6 +238,7 @@ public:
               ? args.jobs->inner
               : std::max(uint64_t{1}, static_cast<uint64_t>(
                                         std::thread::hardware_concurrency()))},
+      fuse_{args.fuse},
       pipe_{std::move(args.pipe.inner)} {
   }
 
@@ -240,13 +249,18 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
-                                   tag_v<void>);
+      if (fuse_) {
+        co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
+                                     tag_v<void>);
+      } else {
+        co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy), tag_v<void>);
+      }
     }
   }
 
 private:
   uint64_t jobs_;
+  bool fuse_;
   ir::pipeline pipe_;
 };
 
@@ -365,6 +379,7 @@ public:
     auto d = Describer<ParallelArgs>{};
     auto jobs = d.positional("jobs", &ParallelArgs::jobs);
     auto route_by = d.named("route_by", &ParallelArgs::route_by, "any");
+    d.named_optional("_fuse", &ParallelArgs::fuse);
     auto pipe = d.pipeline(&ParallelArgs::pipe);
     d.validate([jobs](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and j->inner == 0) {
