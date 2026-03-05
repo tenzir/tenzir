@@ -10,10 +10,9 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async/push_pull.hpp"
+#include "tenzir/async/semaphore.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/option.hpp"
-
-#include <folly/fibers/Semaphore.h>
 
 namespace tenzir {
 
@@ -21,8 +20,8 @@ namespace tenzir {
 template <class T>
 struct FusedState {
   Option<T> item;
-  folly::fibers::Semaphore ack{0};
-  folly::fibers::Semaphore item_ready{0};
+  Semaphore ack{0};
+  Semaphore item_ready{0};
 };
 
 /// The sender half of a fused channel.
@@ -53,14 +52,14 @@ public:
     if (awaiting_ack_) {
       // If we were cancelled while waiting for an ack, we continue waiting
       // here since the item is not consumed yet.
-      co_await state_->ack.co_wait();
+      co_await state_->ack.acquire();
       awaiting_ack_ = false;
     }
     TENZIR_ASSERT(not state_->item);
     state_->item = std::move(x);
     state_->item_ready.signal();
     awaiting_ack_ = true;
-    co_await state_->ack.co_wait();
+    co_await state_->ack.acquire();
     awaiting_ack_ = false;
   }
 
@@ -95,7 +94,7 @@ public:
       state_->ack.signal();
       ack_next_ = false;
     }
-    co_await state_->item_ready.co_wait();
+    co_await state_->item_ready.acquire();
     if (state_->item.is_none()) {
       // Ensure that subsequent `receive()` calls return immediately.
       state_->item_ready.signal();

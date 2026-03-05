@@ -3,15 +3,16 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
 #include "tenzir/async/task.hpp"
-#include "tenzir/detail/assert.hpp"
 
 #include <folly/fibers/Semaphore.h>
+
+#include <memory>
 
 namespace tenzir {
 
@@ -28,19 +29,10 @@ public:
   }
   auto operator=(Semaphore&& other) noexcept -> Semaphore& {
     // This assumes exclusive ownership over both semaphores.
-    auto target = other.impl_.getAvailableTokens();
-    auto current = impl_.getAvailableTokens();
-    while (current < target) {
-      impl_.signal();
-      current += 1;
+    if (this != &other) {
+      std::destroy_at(&impl_);
+      std::construct_at(&impl_, other.impl_.getAvailableTokens());
     }
-    while (current > target) {
-      // This is noexcept, but we still want to sanity check.
-      TENZIR_ASSERT(impl_.try_wait());
-      current -= 1;
-    }
-    TENZIR_ASSERT(impl_.getAvailableTokens()
-                  == other.impl_.getAvailableTokens());
     return *this;
   }
 
