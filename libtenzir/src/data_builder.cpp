@@ -1030,17 +1030,14 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
                             bool mark_dead) -> void {
   if (rb.settings_.schema_only and not seed) {
     if (mark_dead) {
-      is_repeat_key_list = false;
-      mark_this_dead();
-      value_state_ = value_state_type::null;
+      clear();
     }
     return;
   }
   if (value_state_ == value_state_type::null) {
     builder.null();
     if (mark_dead) {
-      is_repeat_key_list = false;
-      mark_this_dead();
+      clear();
     }
     return;
   }
@@ -1057,7 +1054,11 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
         rb.emit_mismatch_warning(tag_v<list_type>, *seed, path,
                                  is_repeat_key_list);
         builder.null();
-        v.mark_this_dead();
+        if (mark_dead) {
+          v.clear();
+        } else {
+          v.mark_this_dead();
+        }
         return;
       }
       // Because we ensured that the seed matches above, we can now safely
@@ -1075,7 +1076,11 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
         rb.emit_mismatch_warning(tag_v<record_type>, *seed, path,
                                  is_repeat_key_list);
         builder.null();
-        v.mark_this_dead();
+        if (mark_dead) {
+          v.clear();
+        } else {
+          v.mark_this_dead();
+        }
         return;
       }
       // Because we ensured that the seed matches above, we can now safely
@@ -1117,17 +1122,14 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
                             bool mark_dead) -> void {
   if (rb.settings_.schema_only and not seed) {
     if (mark_dead) {
-      mark_this_dead();
-      is_repeat_key_list = false;
-      value_state_ = value_state_type::null;
+      clear();
     }
     return;
   }
   if (value_state_ == value_state_type::null) {
     r = caf::none;
     if (mark_dead) {
-      is_repeat_key_list = false;
-      mark_this_dead();
+      clear();
     }
     return;
   }
@@ -1144,7 +1146,11 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         rb.emit_mismatch_warning(tag_v<list_type>, *seed, path,
                                  is_repeat_key_list);
         r = caf::none;
-        v.mark_this_dead();
+        if (mark_dead) {
+          v.clear();
+        } else {
+          v.mark_this_dead();
+        }
         return;
       }
       r = tenzir::list{};
@@ -1160,7 +1166,11 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         rb.emit_mismatch_warning(tag_v<record_type>, *seed, path,
                                  is_repeat_key_list);
         r = caf::none;
-        v.mark_this_dead();
+        if (mark_dead) {
+          v.clear();
+        } else {
+          v.mark_this_dead();
+        }
         return;
       }
       r = tenzir::record{};
