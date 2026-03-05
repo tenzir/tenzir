@@ -383,15 +383,15 @@ public:
 
 protected:
   auto make_void(ChannelId) -> PushPull<OperatorMsg<void>> override {
-    return fused_channel<OperatorMsg<void>>();
+    return fused_channel<OperatorMsg<void>>().into_push_pull();
   }
 
   auto make_events(ChannelId) -> PushPull<OperatorMsg<table_slice>> override {
-    return fused_channel<OperatorMsg<table_slice>>();
+    return fused_channel<OperatorMsg<table_slice>>().into_push_pull();
   }
 
   auto make_bytes(ChannelId) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return fused_channel<OperatorMsg<chunk_ptr>>();
+    return fused_channel<OperatorMsg<chunk_ptr>>().into_push_pull();
   }
 
 private:

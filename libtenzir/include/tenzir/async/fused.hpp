@@ -148,8 +148,11 @@ struct FusedSenderReceiver {
   FusedSender<T> sender;
   FusedReceiver<T> receiver;
 
-  explicit(false) operator PushPull<T>() && {
-    return {std::move(sender), std::move(receiver)};
+  auto into_push_pull() && -> PushPull<T> {
+    return {
+      FusedPush<T>{std::move(sender)},
+      FusedPull<T>{std::move(receiver)},
+    };
   }
 };
 
@@ -169,7 +172,7 @@ struct FusedSenderReceiver {
 /// but since B will block until C receives again, A effectively waits for C.
 template <class T>
 auto fused_channel() -> FusedSenderReceiver<T> {
-  auto state = Arc<FusedState<T>>{};
+  auto state = Arc<FusedState<T>>{std::in_place};
   return {
     FusedSender<T>{state},
     FusedReceiver<T>{std::move(state)},
