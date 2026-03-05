@@ -367,7 +367,8 @@ public:
     return executor_;
   }
 
-  auto make_io_executor(OpId) -> folly::Executor::KeepAlive<> override {
+  auto make_io_executor(OpId)
+    -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     return io_executor_;
   }
 
@@ -396,7 +397,7 @@ protected:
 private:
   ExecCtx& inner_;
   folly::Executor::KeepAlive<> executor_;
-  folly::Executor::KeepAlive<> io_executor_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
 };
 
 /// Run a pipeline with fused (run-to-completion) semantics.
