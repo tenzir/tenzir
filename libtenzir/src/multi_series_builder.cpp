@@ -780,14 +780,16 @@ void multi_series_builder::complete_last_event(time_point now) {
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(
     std::move(signature_raw_), free_index.value_or(entries_.size()));
+  const auto new_index = it->second;
   if (inserted) { // the signature wasn't in the map yet
     if (not free_index) {
       entries_.emplace_back(builder_schema_);
     } else {
-      entries_[it->second].unused = false;
+      auto& entry = entries_[new_index];
+      entry.unused = false;
+      entry.builder = series_builder{builder_schema_};
     }
   }
-  const auto new_index = it->second;
   if (settings_.ordered and new_index != active_index_) {
     // Because it's the ordered mode, we know that that only this single
     // series builder can be active and hold elements. Since the active
