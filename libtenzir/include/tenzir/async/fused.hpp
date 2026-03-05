@@ -39,10 +39,10 @@ public:
     }
   }
 
-  FusedSender(FusedSender&&) = default;
-  auto operator=(FusedSender&&) -> FusedSender& = default;
   FusedSender(FusedSender const&) = delete;
   auto operator=(FusedSender const&) -> FusedSender& = delete;
+  FusedSender(FusedSender&&) = default;
+  auto operator=(FusedSender&&) -> FusedSender& = default;
 
   /// Sends a message, waiting for the receiver to request the one after that.
   ///
@@ -76,17 +76,16 @@ public:
   explicit FusedReceiver(Arc<FusedState<T>> state) : state_{std::move(state)} {
   }
 
-  ~FusedReceiver() {
-    if (state_.not_moved_from()) {
-      // Unblock any sender that may be waiting for an ack.
-      state_->ack.signal();
-    }
-  }
+  /// The destructor does not notify the sender. While we could acknowledge the
+  /// last item, this would be inconsistent with the implementations of the
+  /// other channels. In any case, once the sender sends another item, they will
+  /// have to wait for cancellation anyway.
+  ~FusedReceiver() = default;
 
-  FusedReceiver(FusedReceiver&&) = default;
-  FusedReceiver& operator=(FusedReceiver&&) = default;
   FusedReceiver(FusedReceiver const&) = delete;
-  FusedReceiver& operator=(FusedReceiver const&) = delete;
+  auto operator=(FusedReceiver const&) -> FusedReceiver& = delete;
+  FusedReceiver(FusedReceiver&&) = default;
+  auto operator=(FusedReceiver&&) -> FusedReceiver& = default;
 
   /// Receives the next message, or `None` if the sender was destroyed.
   ///
