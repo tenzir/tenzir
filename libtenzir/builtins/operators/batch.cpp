@@ -187,9 +187,7 @@ public:
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
+  auto flush(Push<table_slice>& push) -> Task<void> {
     // collect into a single vector
     std::vector<buffer_entry> remaining;
     remaining.reserve(buffers_.size());
@@ -203,11 +201,23 @@ public:
     for (auto& entry : remaining) {
       co_await push(concatenate(std::move(entry.events)));
     }
-    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
   }
 
   auto snapshot(Serde& serde) -> void override {
     serde("buffers", buffers_);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+    co_return FinalizeBehavior::done;
   }
 
 private:

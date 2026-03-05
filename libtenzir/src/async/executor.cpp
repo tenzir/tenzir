@@ -809,6 +809,19 @@ private:
       });
   }
 
+  auto call_prepare_snapshot() -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->prepare_snapshot(*this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->prepare_snapshot(wrapper, *this);
+        }
+      });
+  }
+
   auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
@@ -1023,6 +1036,7 @@ private:
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
     LOGI("got checkpoint {} in {}", checkpoint.id, op_name());
     co_await to_control_.send(ToControl::checkpoint_begin);
+    co_await call_prepare_snapshot();
     {
       auto buffer = caf::byte_buffer{};
       auto f = caf::binary_serializer{buffer};
