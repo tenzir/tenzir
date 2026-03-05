@@ -684,8 +684,12 @@ private:
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+        // When fused, all operators in the sub-pipeline share a single
+        // executor identity at op(0), so we must attribute the downstream
+        // channel to op(0) as well.
+        auto last_op = fused ? sub_id.op(0) : sub_id.op(chain.size() - 1);
         auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<Out>(last_op.to(id_));
         auto output_is_void = std::same_as<Out, void>;
         queue_.scope().spawn(
           [this, key, end_of_data, output_is_void,
