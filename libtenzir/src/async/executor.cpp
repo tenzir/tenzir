@@ -10,6 +10,7 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/mail.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
@@ -349,111 +350,6 @@ private:
   secret_censor censor_;
 };
 
-// -- Fused execution mode -----------------------------------------------------
-
-/// A fused channel. Unlike `OpChannel` (buffered queue with backpressure),
-/// this stores at most one item and blocks the sender until the receiver has
-/// finished processing the item and calls `receive()` again.
-template <class T>
-struct FusedChannel {
-  auto send(OperatorMsg<T> x) -> Task<void> {
-    auto lock = co_await mutex_.lock();
-    lock->item = std::move(x);
-    notify_receive_.notify_one();
-    lock.unlock();
-    // Block until receiver signals readiness for next item.
-    co_await notify_consumer_ready_.wait();
-  }
-
-  auto receive() -> Task<Option<OperatorMsg<T>>> {
-    // Unblock the previous send() — but not on the first call (no
-    // pending send yet). Without this guard the first receive() would
-    // post a spurious semaphore token that the first send() consumes
-    // immediately, returning without blocking.
-    if (not first_receive_) {
-      notify_consumer_ready_.notify_one();
-    }
-    first_receive_ = false;
-    auto lock = co_await mutex_.lock();
-    while (lock->item.is_none()) {
-      if (sender_closed_.load(std::memory_order::acquire)) {
-        co_return None{};
-      }
-      lock.unlock();
-      co_await notify_receive_.wait();
-      lock = co_await mutex_.lock();
-    }
-    auto result = std::move(*lock->item);
-    lock->item = None{};
-    co_return result;
-  }
-
-  void close_sender() {
-    sender_closed_.store(true, std::memory_order::release);
-    notify_receive_.notify_one();
-    // Unblock a pending send().
-    notify_consumer_ready_.notify_one();
-  }
-
-private:
-  struct Locked {
-    Option<OperatorMsg<T>> item;
-  };
-  Mutex<Locked> mutex_{Locked{}};
-  bool first_receive_ = true;
-  Notify notify_receive_;
-  Notify notify_consumer_ready_;
-  std::atomic<bool> sender_closed_ = false;
-};
-
-template <class T>
-class FusedPush final : public Push<OperatorMsg<T>> {
-public:
-  explicit FusedPush(Arc<FusedChannel<T>> shared) : shared_{std::move(shared)} {
-  }
-
-  ~FusedPush() override {
-    if (shared_) {
-      (*shared_)->close_sender();
-    }
-  }
-
-  FusedPush(FusedPush&&) = default;
-  FusedPush& operator=(FusedPush&&) = default;
-  FusedPush(FusedPush const&) = delete;
-  FusedPush& operator=(FusedPush const&) = delete;
-
-  auto operator()(OperatorMsg<T> x) -> Task<void> override {
-    TENZIR_ASSERT(shared_);
-    return (*shared_)->send(std::move(x));
-  }
-
-private:
-  Option<Arc<FusedChannel<T>>> shared_;
-};
-
-template <class T>
-class FusedPull final : public Pull<OperatorMsg<T>> {
-public:
-  explicit FusedPull(Arc<FusedChannel<T>> shared) : shared_{std::move(shared)} {
-  }
-
-  ~FusedPull() override = default;
-
-  FusedPull(FusedPull&&) = default;
-  FusedPull& operator=(FusedPull&&) = default;
-  FusedPull(FusedPull const&) = delete;
-  FusedPull& operator=(FusedPull const&) = delete;
-
-  auto operator()() -> Task<Option<OperatorMsg<T>>> override {
-    TENZIR_ASSERT(shared_);
-    return (*shared_)->receive();
-  }
-
-private:
-  Option<Arc<FusedChannel<T>>> shared_;
-};
-
 /// Decorator over any `ExecCtx` that produces fused channels and shares a
 /// single executor across all operators. This gives run-to-completion
 /// semantics per slice: a push blocks until the downstream operator has
@@ -486,23 +382,18 @@ public:
 
 protected:
   auto make_void(ChannelId) -> PushPull<OperatorMsg<void>> override {
-    return make_fused<void>();
+    return fused_channel<OperatorMsg<void>>();
   }
 
   auto make_events(ChannelId) -> PushPull<OperatorMsg<table_slice>> override {
-    return make_fused<table_slice>();
+    return fused_channel<OperatorMsg<table_slice>>();
   }
 
   auto make_bytes(ChannelId) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_fused<chunk_ptr>();
+    return fused_channel<OperatorMsg<chunk_ptr>>();
   }
 
 private:
-  template <class T>
-  auto make_fused() -> PushPull<OperatorMsg<T>> {
-    auto shared = Arc<FusedChannel<T>>{};
-    return {FusedPush<T>{shared}, FusedPull<T>{std::move(shared)}};
-  }
   ExecCtx& inner_;
   folly::Executor::KeepAlive<> executor_;
   folly::Executor::KeepAlive<> io_executor_;
