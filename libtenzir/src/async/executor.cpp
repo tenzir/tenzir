@@ -418,8 +418,6 @@ auto run_chain_fused(OperatorChain<Input, Output> chain,
                      std::move(to_control), std::move(id), fused_ctx, sys, dh);
 }
 
-// -----------------------------------------------------------------------------
-
 class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
