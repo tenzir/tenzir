@@ -135,7 +135,7 @@ public:
   /// Only use this sparingly, for example in destructors to check whether
   /// additional cleanup logic should run.
   auto not_moved_from() const -> bool {
-    return ptr_ == nullptr;
+    return ptr_ != nullptr;
   }
 
 private:
