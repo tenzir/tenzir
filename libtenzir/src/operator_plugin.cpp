@@ -79,6 +79,17 @@ private:
 
 namespace {
 
+auto display_names(const Named& named) -> std::string {
+  return fmt::format("{}", fmt::join(named.names, "|"));
+}
+
+auto primary_name(const Named& named) -> std::string_view {
+  if (named.names.empty()) {
+    return "<unnamed>";
+  }
+  return named.names.front();
+}
+
 auto setter_to_type_string(const AnySetter& setter) -> std::string {
   return match(
     setter,
@@ -147,7 +158,7 @@ auto get_usage(const Description& desc) -> std::string {
     } else {
       result += ' ';
     }
-    result += named.name;
+    result += display_names(named);
     result += '=';
     result
       += named.type.empty() ? setter_to_type_string(named.setter) : named.type;
@@ -166,7 +177,7 @@ auto get_usage(const Description& desc) -> std::string {
       result += '[';
       in_brackets = true;
     }
-    result += named.name;
+    result += display_names(named);
     result += '=';
     result
       += named.type.empty() ? setter_to_type_string(named.setter) : named.type;
@@ -218,7 +229,7 @@ public:
         }
         auto& name = sel->path()[0].id.name;
         auto it = std::ranges::find_if(desc->named, [&](const Named& named) {
-          return named.name == name;
+          return std::ranges::find(named.names, name) != named.names.end();
         });
         if (it == desc->named.end()) {
           emit(diagnostic::error("named argument `{}` does not exist", name)
@@ -297,7 +308,7 @@ public:
     for (auto [idx, named] : detail::enumerate(desc->named)) {
       if (named.required and not named_found[idx]) {
         emit(diagnostic::error("required argument `{}` was not provided",
-                               named.name)
+                               primary_name(named))
                .primary(result.op_));
       }
     }

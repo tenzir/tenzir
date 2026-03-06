@@ -228,7 +228,7 @@ struct ChartArgs {
     return plugins;
   }
 
-  static auto make_bucket(const plugins_map& plugins, session ctx)  -> bucket {
+  static auto make_bucket(const plugins_map& plugins, session ctx) -> bucket {
     auto b = bucket{};
     for (const auto& [plugin, arg] : plugins) {
       auto inv = aggregation_plugin::invocation{arg};
@@ -1012,8 +1012,8 @@ auto describe_chart_bar() -> tenzir::Description {
   auto d
     = tenzir::Describer<RawArgs<chart_type::bar>, Chart<chart_type::bar>>{};
 
-  d.named("x|label", &RawArgs<chart_type::bar>::x);
-  d.named("y|value", &RawArgs<chart_type::bar>::y, "any");
+  d.named({"x", "label"}, &RawArgs<chart_type::bar>::x);
+  d.named({"y", "value"}, &RawArgs<chart_type::bar>::y, "any");
 
   d.named("x_min", &RawArgs<chart_type::bar>::x_min);
   d.named("x_max", &RawArgs<chart_type::bar>::x_max);
@@ -1058,8 +1058,8 @@ auto describe_chart_pie() -> tenzir::Description {
   auto d
     = tenzir::Describer<RawArgs<chart_type::pie>, Chart<chart_type::pie>>{};
 
-  d.named("x|label", &RawArgs<chart_type::pie>::x);
-  d.named("y|value", &RawArgs<chart_type::pie>::y, "any");
+  d.named({"x", "label"}, &RawArgs<chart_type::pie>::x);
+  d.named({"y", "value"}, &RawArgs<chart_type::pie>::y, "any");
 
   d.named("group", &RawArgs<chart_type::pie>::group, "any");
   d.named_optional("_limit", &RawArgs<chart_type::pie>::limit);
