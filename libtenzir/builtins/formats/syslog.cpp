@@ -323,10 +323,19 @@ struct message_content_parser : parser_base<message_content_parser> {
   using attribute = message_content;
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parser_literals;
-    auto bom = "\xEF\xBB\xBF"_p;
-    auto p = (bom >> +parsers::any) | +parsers::any | parsers::eoi;
-    return p(f, l, x);
+    auto remaining = std::string_view{&*f, static_cast<size_t>(l - f)};
+    auto bom = std::string_view{"\xEF\xBB\xBF"};
+    if (remaining.starts_with(bom)) {
+      remaining.remove_prefix(bom.size());
+    }
+    if (remaining.empty()) {
+      return false;
+    }
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      x = std::string{remaining};
+    }
+    f = l;
+    return true;
   }
 };
 
