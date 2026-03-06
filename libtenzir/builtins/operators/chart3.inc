@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "chart3.hpp"
-
 #include "tenzir/arrow_time_utils.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/async.hpp"
@@ -27,18 +25,38 @@ namespace tenzir::plugins::chart {
 
 namespace {
 
+TENZIR_ENUM(chart_type, area, bar, line, pie);
+
+auto to_double(data d) -> data {
+  return match(
+    d,
+    [](concepts::integer auto& value) -> data {
+      return static_cast<double>(value);
+    },
+    [](auto& value) -> data {
+      return std::move(value);
+    });
+}
+
+auto jsonify_limit(const data& d) -> std::string {
+  auto result = std::string{};
+  const auto printer = tenzir::json_printer{tenzir::json_printer_options{
+    .tql = true,
+    .numeric_durations = true,
+  }};
+  auto it = std::back_inserter(result);
+  TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
+  return result;
+}
+
 using bucket = std::vector<std::unique_ptr<aggregation_instance>>;
+// Will point to valid strings, as `std::unordered_set` does not invalidate
+// pointers on insertion
 using grouped_bucket = detail::stable_map<std::string_view, bucket>;
 using group_map = std::map<data, grouped_bucket>;
 using call_map = detail::stable_map<std::string, ast::function_call>;
 using plugins_map
   = std::vector<std::pair<const aggregation_plugin*, ast::function_call>>;
-
-struct xlimit {
-  located<data> value;
-  data rounded;
-  ast::expression expr;
-};
 
 template <chart_type Ty>
 struct RawArgs {
@@ -60,7 +78,21 @@ struct RawArgs {
   located<std::string> position{"grouped", location::unknown};
 };
 
-struct ChartArgs {
+struct xlimit {
+  located<data> value;
+  data rounded;
+  expression legacy_expr;
+  ast::expression expr;
+
+  friend auto inspect(auto& f, xlimit& x) -> bool {
+    return f.object(x).fields(f.field("value", x.value),
+                              f.field("rounded", x.rounded),
+                              f.field("legacy_expr", x.legacy_expr),
+                              f.field("expr", x.expr));
+  }
+};
+
+struct chart_args {
   chart_type ty;
   ast::field_path x;
   call_map y;
@@ -75,7 +107,22 @@ struct ChartArgs {
   std::optional<location> y_log;
   located<uint64_t> limit{100'000, location::unknown};
   located<std::string> position{"grouped", location::unknown};
-  location y_loc = location::unknown;
+  expression filter{trivially_true_expression()};
+  location y_loc;
+  location op_loc;
+
+  friend auto inspect(auto& f, chart_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("chart_args")
+      .fields(f.field("ty", x.ty), f.field("x", x.x), f.field("y", x.y),
+              f.field("group", x.group), f.field("x_min", x.x_min),
+              f.field("x_max", x.x_max), f.field("y_min", x.y_min),
+              f.field("y_max", x.y_max), f.field("res", x.res),
+              f.field("fill", x.fill), f.field("x_log", x.x_log),
+              f.field("y_log", x.y_log), f.field("limit", x.limit),
+              f.field("filter", x.filter), f.field("position", x.position),
+              f.field("y_loc", x.y_loc), f.field("op_loc", x.op_loc));
+  }
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
     if (position.inner != "stacked" and position.inner != "grouped") {
@@ -240,22 +287,20 @@ struct ChartArgs {
   }
 };
 
-template <chart_type Ty>
-auto handle_y(ChartArgs& args, ast::expression& y, session ctx,
+auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
               std::string_view operator_name) -> failure_or<void> {
   auto ident = ast::identifier{"once", location::unknown};
   const auto entity = ast::entity{std::vector{std::move(ident)}};
+  args.ty = ty;
   args.y_loc = y.get_location();
   return match(
     y,
     [&](ast::record& rec) -> failure_or<void> {
-      if constexpr (Ty == chart_type::pie) {
-        if (rec.items.size() != 1) {
-          diagnostic::error("`{}` requires exactly one value", operator_name)
-            .primary(y)
-            .emit(ctx);
-          return failure::promise();
-        }
+      if (args.ty == chart_type::pie and rec.items.size() != 1) {
+        diagnostic::error("`{}` requires exactly one value", operator_name)
+          .primary(y)
+          .emit(ctx);
+        return failure::promise();
       }
       if (rec.items.empty()) {
         diagnostic::error("`{}` requires at least one value", operator_name)
@@ -294,11 +339,7 @@ auto handle_y(ChartArgs& args, ast::expression& y, session ctx,
       return {};
     },
     [&](ast::function_call& call) -> failure_or<void> {
-      if constexpr (Ty == chart_type::pie) {
-        args.y["value"] = std::move(call);
-      } else {
-        args.y["y"] = std::move(call);
-      }
+      args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(call);
       return {};
     },
     [&](auto&) -> failure_or<void> {
@@ -318,7 +359,7 @@ auto handle_y(ChartArgs& args, ast::expression& y, session ctx,
                                                  &ast::identifier::name),
                                              "."));
         }
-        if constexpr (Ty == chart_type::pie) {
+        if (args.ty == chart_type::pie) {
           return "value";
         }
         return "y";
@@ -331,7 +372,7 @@ auto handle_y(ChartArgs& args, ast::expression& y, session ctx,
     });
 }
 
-auto handle_xlimit(const ChartArgs& args, ast::binary_op op,
+auto handle_xlimit(const chart_args& args, ast::binary_op op,
                    located<data> limit, diagnostic_handler& dh)
   -> failure_or<xlimit> {
   const auto& loc = limit.source;
@@ -383,7 +424,13 @@ auto handle_xlimit(const ChartArgs& args, ast::binary_op op,
     });
   TRY(auto c, result);
   auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
-  return xlimit{std::move(limit), c.as_data(), std::move(expr)};
+  auto&& [legacy, remainder] = split_legacy_expression(expr);
+  return xlimit{
+    std::move(limit),
+    c.as_data(),
+    std::move(legacy),
+    std::move(remainder),
+  };
 }
 
 template <chart_type Ty>
@@ -430,7 +477,7 @@ private:
     }
     auto sp = session_provider::make(ctx.dh());
     auto s = sp.as_session();
-    auto args = ChartArgs{};
+    auto args = chart_args{};
     args.ty = Ty;
     args.x = std::move(raw_.x);
     args.group = std::move(raw_.group);
@@ -442,7 +489,7 @@ private:
     args.y_log = std::move(raw_.y_log);
     args.limit = std::move(raw_.limit);
     args.position = std::move(raw_.position);
-    if (auto result = handle_y<Ty>(args, raw_.y, s, name()); not result) {
+    if (auto result = handle_y(args, raw_.y, s, Ty, name()); not result) {
       return false;
     }
     if (raw_.x_min) {
@@ -976,7 +1023,7 @@ private:
   }
 
   RawArgs<Ty> raw_;
-  std::optional<ChartArgs> args_;
+  std::optional<chart_args> args_;
   std::optional<plugins_map> plugins_;
   std::optional<type> xty_;
   group_map groups_;
@@ -1064,28 +1111,6 @@ auto describe_chart_pie() -> tenzir::Description {
   d.named("group", &RawArgs<chart_type::pie>::group, "any");
   d.named_optional("_limit", &RawArgs<chart_type::pie>::limit);
   return d.without_optimize();
-}
-
-auto to_double(data d) -> data {
-  return match(
-    d,
-    [](concepts::integer auto& value) -> data {
-      return static_cast<double>(value);
-    },
-    [](auto& value) -> data {
-      return std::move(value);
-    });
-}
-
-auto jsonify_limit(const data& d) -> std::string {
-  auto result = std::string{};
-  const auto printer = tenzir::json_printer{tenzir::json_printer_options{
-    .tql = true,
-    .numeric_durations = true,
-  }};
-  auto it = std::back_inserter(result);
-  TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
-  return result;
 }
 
 } // namespace tenzir::plugins::chart
