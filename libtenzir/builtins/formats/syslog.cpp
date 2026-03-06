@@ -121,7 +121,7 @@ struct header_parser : parser_base<header_parser> {
 };
 
 /// A parameter of a structured data element.
-using parameter = std::pair<std::string, data>;
+using parameter = std::pair<std::string, std::string>;
 
 /// Parser for one structured data element parameter.
 /// @relates parameter
@@ -142,14 +142,7 @@ struct parameter_parser : parser_base<parameter_parser> {
     auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
     auto not_escaped = printable - ('"' >> can_come_after_quote);
     auto value = escaped | not_escaped;
-    auto value_data = (*value)->*[](std::string val) {
-      data d{};
-      if (not parsers::simple_data(val, d)) {
-        return data{std::move(val)};
-      }
-      return d;
-    };
-    auto p = ' ' >> key >> '=' >> '"' >> value_data >> '"';
+    auto p = ' ' >> key >> '=' >> '"' >> *value >> '"';
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
@@ -161,7 +154,7 @@ struct parameter_parser : parser_base<parameter_parser> {
 /// A structured data element.
 struct structured_data_element {
   std::string id;
-  record params;
+  std::vector<parameter> params;
 };
 
 /// Parser for structured data elements.
@@ -182,19 +175,13 @@ struct structured_data_element_parser
 /// Parser for structured data of a Syslog message.
 /// @relates structured_data
 struct structured_data_parser : parser_base<structured_data_parser> {
-  using attribute = record;
+  using attribute = std::vector<structured_data_element>;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
-    auto sd
-      = structured_data_element_parser{}->*[&](structured_data_element in) {
-          if constexpr (not std::is_same_v<Attribute, unused_type>) {
-            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
-          }
-        };
-    auto p = maybe_null(+sd);
-    return p(f, l, unused);
+    auto p = maybe_null(+structured_data_element_parser{});
+    return p(f, l, x);
   }
 };
 
@@ -232,15 +219,8 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     auto value_terminator
       = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
     auto value_char = escaped | (! value_terminator >> printable);
-    auto value_data = (*value_char)->*[](std::string val) {
-      data d{};
-      if (not parsers::simple_data(val, d)) {
-        return data{std::move(val)};
-      }
-      return d;
-    };
-    auto rfc_parameter = key >> '='_p >> '"'_p >> value_data >> '"'_p;
-    auto checkpoint_parameter = checkpoint_key >> '"'_p >> value_data >> '"'_p;
+    auto rfc_parameter = key >> '='_p >> '"'_p >> *value_char >> '"'_p;
+    auto checkpoint_parameter = checkpoint_key >> '"'_p >> *value_char >> '"'_p;
     auto p = rfc_parameter | checkpoint_parameter;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
@@ -255,7 +235,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
 /// Example:
 /// - `action:"Accept"; conn_direction:"Incoming"; flags:"8667398"`
 struct checkpoint_params : parser_base<checkpoint_params> {
-  using attribute = record;
+  using attribute = std::vector<parameter>;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
@@ -297,20 +277,13 @@ struct checkpoint_structured_data_element_parser
 /// @relates structured_data
 struct checkpoint_structured_data_parser
   : parser_base<checkpoint_structured_data_parser> {
-  using attribute = record;
+  using attribute = std::vector<structured_data_element>;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
-    auto sd
-      = checkpoint_structured_data_element_parser{}->*
-        [&](structured_data_element in) {
-          if constexpr (not std::is_same_v<Attribute, unused_type>) {
-            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
-          }
-        };
-    auto p = maybe_null(+sd);
-    return p(f, l, unused);
+    auto p = maybe_null(+checkpoint_structured_data_element_parser{});
+    return p(f, l, x);
   }
 };
 
@@ -342,7 +315,7 @@ struct message_content_parser : parser_base<message_content_parser> {
 /// A Syslog message.
 struct message {
   header hdr;
-  record data;
+  std::vector<structured_data_element> data;
   std::optional<message_content> msg;
 };
 
@@ -620,6 +593,26 @@ public:
     return builder.finalize();
   }
 
+  // noinline helpers for profiling structured data builder paths.
+  [[gnu::noinline]] static auto
+  sd_get_outer_record(detail::multi_series_builder::record_generator& r)
+    -> detail::multi_series_builder::record_generator {
+    return r.exact_field("structured_data").record();
+  }
+
+  [[gnu::noinline]] static auto
+  sd_get_element_record(detail::multi_series_builder::record_generator& sd,
+                        std::string& id)
+    -> detail::multi_series_builder::record_generator {
+    return sd.field(id).record();
+  }
+
+  [[gnu::noinline]] static auto
+  sd_set_param(detail::multi_series_builder::record_generator& elem_rec,
+               std::string& key, std::string& value) -> void {
+    elem_rec.field(key).data_unparsed(std::move(value));
+  }
+
   auto finish_last() -> void {
     TENZIR_ASSERT(last_message);
     auto r = builder.record();
@@ -632,7 +625,15 @@ public:
     r.exact_field("app_name").data(std::move(row.hdr.app_name));
     r.exact_field("process_id").data(std::move(row.hdr.process_id));
     r.exact_field("message_id").data(std::move(row.hdr.msg_id));
-    r.exact_field("structured_data").data(std::move(row.data));
+    if (not row.data.empty()) {
+      auto sd = sd_get_outer_record(r);
+      for (auto& elem : row.data) {
+        auto elem_rec = sd_get_element_record(sd, elem.id);
+        for (auto& [k, v] : elem.params) {
+          sd_set_param(elem_rec, k, v);
+        }
+      }
+    }
     r.exact_field("message").data(std::move(row.msg));
     if (raw_message_field_) {
       r.field(*raw_message_field_).data(std::move(last_message->raw_message));
