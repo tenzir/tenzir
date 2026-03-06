@@ -298,7 +298,9 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
     // unambiguous, i.e., when the referenced range would otherwise extend past
     // `values.length()`. In-bounds offsets are ambiguous and may already be
     // valid relative to the sliced child array, so rebasing them would change
-    // the data semantics.
+    // the data semantics. Arrow validates list offsets against the sliced
+    // child's logical length, so the comparison to `values.length()` is
+    // intentional here.
     const auto rebase_value_offsets
       = values.offset() > 0 && array.value_offset(end) > values.length();
     const auto value_offset_base

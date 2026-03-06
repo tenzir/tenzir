@@ -77,5 +77,37 @@ TEST("append_array preserves valid list offsets for sliced child arrays") {
   CHECK_EQUAL(result_values->Value(1), int64_t{60});
 }
 
+TEST("append_array preserves distinct valid sliced-child list semantics") {
+  auto rebased
+    = make_int64_list_array({10, 20, 30, 40, 50, 60, 70}, 2, 5, {0, 1, 2});
+  auto in_bounds
+    = make_int64_list_array({10, 20, 30, 40, 50, 60, 70}, 2, 5, {2, 3, 4});
+  REQUIRE(rebased->ValidateFull().ok());
+  REQUIRE(in_bounds->ValidateFull().ok());
+
+  auto ty = list_type{int64_type{}};
+
+  auto rebased_builder = ty.make_arrow_builder(arrow_memory_pool());
+  ::tenzir::check(append_array(*rebased_builder, ty, *rebased));
+  auto rebased_result = finish(*rebased_builder);
+  auto rebased_values
+    = std::static_pointer_cast<arrow::Int64Array>(rebased_result->values());
+
+  auto in_bounds_builder = ty.make_arrow_builder(arrow_memory_pool());
+  ::tenzir::check(append_array(*in_bounds_builder, ty, *in_bounds));
+  auto in_bounds_result = finish(*in_bounds_builder);
+  auto in_bounds_values
+    = std::static_pointer_cast<arrow::Int64Array>(in_bounds_result->values());
+
+  REQUIRE(rebased_result->ValidateFull().ok());
+  REQUIRE(in_bounds_result->ValidateFull().ok());
+  REQUIRE_EQUAL(rebased_values->length(), int64_t{2});
+  REQUIRE_EQUAL(in_bounds_values->length(), int64_t{2});
+  CHECK_EQUAL(rebased_values->Value(0), int64_t{30});
+  CHECK_EQUAL(rebased_values->Value(1), int64_t{40});
+  CHECK_EQUAL(in_bounds_values->Value(0), int64_t{50});
+  CHECK_EQUAL(in_bounds_values->Value(1), int64_t{60});
+}
+
 } // namespace
 } // namespace tenzir
