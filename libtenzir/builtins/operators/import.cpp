@@ -15,12 +15,15 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/metric_handler.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 #include <caf/actor_registry.hpp>
+
+#include <deque>
 
 namespace tenzir::plugins::import {
 
@@ -36,6 +39,19 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if (auto metrics_receiver = ctx.metrics_receiver(); metrics_receiver) {
+      metric_handler_.emplace(
+        metrics_receiver,
+        0,
+        type{
+          "tenzir.metrics.import",
+          record_type{
+            {"schema", string_type{}},
+            {"schema_id", string_type{}},
+            {"events", uint64_type{}},
+          },
+        });
+    }
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -83,15 +99,40 @@ public:
     if (not importer_) {
       co_return;
     }
-    auto result = co_await async_mail(std::move(input)).request(importer_);
-    if (not result) {
-      diagnostic::error(result.error()).note("failed to import events").emit(ctx);
+    if (metric_handler_
+        and not input.schema().attribute("internal").has_value()) {
+      metric_handler_->emit({
+        {"schema", std::string{input.schema().name()}},
+        {"schema_id", input.schema().make_fingerprint()},
+        {"events", input.rows()},
+      });
+    }
+    auto* diagnostics = &ctx.dh();
+    inflight_.push_back(
+      ctx.spawn_task([importer = importer_, slice = std::move(input),
+                      diagnostics]() mutable -> Task<void> {
+        auto result = co_await async_mail(std::move(slice)).request(importer);
+        if (not result) {
+          diagnostic::error(result.error())
+            .note("failed to import events")
+            .emit(*diagnostics);
+        }
+      }));
+    if (inflight_.size() >= max_inflight_batches) {
+      auto handle = std::move(inflight_.front());
+      inflight_.pop_front();
+      co_await handle.join();
     }
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (not importer_) {
       co_return FinalizeBehavior::done;
+    }
+    while (not inflight_.empty()) {
+      auto handle = std::move(inflight_.front());
+      inflight_.pop_front();
+      co_await handle.join();
     }
     auto result = co_await async_mail(atom::flush_v).request(importer_);
     if (not result) {
@@ -101,7 +142,11 @@ public:
   }
 
 private:
+  static constexpr auto max_inflight_batches = size_t{20};
+
   importer_actor importer_;
+  std::optional<metric_handler> metric_handler_ = std::nullopt;
+  std::deque<AsyncHandle<void>> inflight_ = {};
 };
 
 class import_operator final : public crtp_operator<import_operator> {
@@ -130,7 +175,7 @@ public:
       auto has_secrets = false;
       std::tie(has_secrets, slice) = replace_secrets(std::move(slice));
       if (has_secrets) {
-        diagnostic::warning("`secret` cannot imported as secrets")
+        diagnostic::warning("`secret` cannot be imported as secrets")
           .note("fields will be `\"***\"`")
           .emit(ctrl.diagnostics());
       }
