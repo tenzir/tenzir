@@ -42,7 +42,7 @@ run_build() {
   echo "==> ${scenario} build"
   if ! {
     TIMEFORMAT='%R'
-    time cmake --build --preset "$preset" --target "$target" > "$log_file" 2>&1
+    time cmake --build --preset "$preset" --target "$target" >"$log_file" 2>&1
   } 2>"$time_file"; then
     echo "error: build failed for scenario '${scenario}'" >&2
     echo "log: ${log_file}" >&2
@@ -51,7 +51,7 @@ run_build() {
   local seconds
   seconds="$(tr -d '[:space:]' <"$time_file")"
 
-  printf "%s\t%s\t%s\n" "$scenario" "$seconds" "$file" >> "$results_tsv"
+  printf "%s\t%s\t%s\n" "$scenario" "$seconds" "$file" >>"$results_tsv"
   echo "  ${seconds}s"
 }
 
