@@ -737,7 +737,8 @@ private:
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
   auto emit_or_throw(tenzir::diagnostic_builder&& builder) -> void;
   auto emit_mismatch_warning(const type_kind& value_type, const type& seed_type,
-                             const value_path& path) -> void;
+                             const value_path& path,
+                             bool is_repeat_key_list = false) -> void;
 };
 
 namespace detail::data_builder {

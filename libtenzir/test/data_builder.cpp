@@ -832,6 +832,41 @@ TEST("signature record seeding numeric mismatch") {
   CHECK(compare_signatures(expected, sig));
 }
 
+TEST("materialize clears structural state after seeded list mismatch") {
+  auto dh = test_diagnostic_handler{};
+  auto b = data_builder{
+    {.schema_only = true},
+    detail::data_builder::basic_parser,
+    &dh,
+  };
+  auto seed = tenzir::type{
+    record_type{
+      {"x", int64_type{}},
+    },
+  };
+  auto list_seed = tenzir::type{
+    record_type{
+      {"x", list_type{int64_type{}}},
+    },
+  };
+
+  // First event: structural mismatch (`list` vs seeded `int64`).
+  auto* first = b.record();
+  first->field("x")->list()->data(int64_t{1});
+  auto first_rec = safe_as_record(b.materialize(true, &seed));
+  CHECK_EQUAL(first_rec.at("x"), tenzir::data{caf::none});
+
+  // Second event: switch to a schema where `x` is a list.
+  // This must not reuse stale list elements from the previous event.
+  auto* second = b.record();
+  second->field("x")->list()->data(int64_t{2});
+  auto second_rec = safe_as_record(b.materialize(true, &list_seed));
+  CHECK_EQUAL(second_rec.at("x"), tenzir::data{tenzir::list{int64_t{2}}});
+
+  CHECK_EQUAL(dh.errors, size_t{0});
+  CHECK_EQUAL(dh.warnings, size_t{1});
+}
+
 TEST("pruning removes lookup entries at limit") {
   // Keep in sync with `structured_element_limit` in data_builder.cpp.
   constexpr auto structured_element_limit = size_t{20'000};
