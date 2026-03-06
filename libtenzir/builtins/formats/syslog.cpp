@@ -593,26 +593,6 @@ public:
     return builder.finalize();
   }
 
-  // noinline helpers for profiling structured data builder paths.
-  [[gnu::noinline]] static auto
-  sd_get_outer_record(detail::multi_series_builder::record_generator& r)
-    -> detail::multi_series_builder::record_generator {
-    return r.exact_field("structured_data").record();
-  }
-
-  [[gnu::noinline]] static auto
-  sd_get_element_record(detail::multi_series_builder::record_generator& sd,
-                        std::string& id)
-    -> detail::multi_series_builder::record_generator {
-    return sd.field(id).record();
-  }
-
-  [[gnu::noinline]] static auto
-  sd_set_param(detail::multi_series_builder::record_generator& elem_rec,
-               std::string& key, std::string& value) -> void {
-    elem_rec.field(key).data_unparsed(std::move(value));
-  }
-
   auto finish_last() -> void {
     TENZIR_ASSERT(last_message);
     auto r = builder.record();
@@ -626,11 +606,39 @@ public:
     r.exact_field("process_id").data(std::move(row.hdr.process_id));
     r.exact_field("message_id").data(std::move(row.hdr.msg_id));
     if (not row.data.empty()) {
-      auto sd = sd_get_outer_record(r);
+      // Merge duplicate SD element IDs to avoid expensive builder resizes.
+      // Typically 0-3 elements, so linear scan is optimal.
+      for (auto i = row.data.size(); i-- > 1;) {
+        for (size_t j = 0; j < i; ++j) {
+          if (row.data[j].id == row.data[i].id) {
+            auto& target = row.data[j].params;
+            auto& source = row.data[i].params;
+            // Deduplicate param keys (last value wins) to avoid
+            // writing the same field twice to the builder.
+            for (auto& [sk, sv] : source) {
+              auto found = false;
+              for (auto& [tk, tv] : target) {
+                if (tk == sk) {
+                  tv = std::move(sv);
+                  found = true;
+                  break;
+                }
+              }
+              if (not found) {
+                target.emplace_back(std::move(sk), std::move(sv));
+              }
+            }
+            row.data.erase(row.data.begin()
+                           + detail::narrow_cast<ptrdiff_t>(i));
+            break;
+          }
+        }
+      }
+      auto sd = r.exact_field("structured_data").record();
       for (auto& elem : row.data) {
-        auto elem_rec = sd_get_element_record(sd, elem.id);
+        auto elem_rec = sd.field(elem.id).record();
         for (auto& [k, v] : elem.params) {
-          sd_set_param(elem_rec, k, v);
+          elem_rec.field(k).data_unparsed(std::move(v));
         }
       }
     }
