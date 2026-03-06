@@ -25,6 +25,8 @@
 /// - `await_task()` - Returns Task<Any> the executor awaits. Sources use
 ///   this to produce data; non-sources typically sleep forever (the default).
 /// - `process_task(result, push, ctx)` - Called when `await_task()` completes.
+/// - `prepare_snapshot(push, ctx)` - Called when checkpointing to let
+///   operators push buffered output before state serialization.
 /// - `finalize(push, ctx)` - Called exactly once when upstream signals
 ///   end-of-data. Use for buffering operators (tail, sort, aggregations) that
 ///   must see all input before producing output.
@@ -212,6 +214,14 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  /// Called when checkpointing starts, before serializing operator state.
+  ///
+  /// Operators can emit buffered output here to keep snapshots small.
+  virtual auto prepare_snapshot(Push<Output>& push, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(push, ctx);
+    co_return;
+  }
+
   /// Process the result of a spawned subpipeline in a *thread-safe* way.
   ///
   /// Note that, unlike all other functions in the operator interface, this one
@@ -250,6 +260,11 @@ public:
   virtual auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
     TENZIR_UNUSED(ctx);
     co_return FinalizeBehavior::done;
+  }
+
+  virtual auto prepare_snapshot(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
+    co_return;
   }
 
   virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)

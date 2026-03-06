@@ -7,11 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/async.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
@@ -26,8 +28,14 @@ namespace {
 struct buffer_entry {
   std::vector<table_slice> events;
   uint64_t num_buffered = {};
-  std::chrono::steady_clock::time_point last_yield
-    = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::duration last_yield
+    = std::chrono::steady_clock::now().time_since_epoch();
+
+  friend auto inspect(auto& f, buffer_entry& x) -> bool {
+    return f.object(x).fields(f.field("events", x.events),
+                              f.field("num_buffered", x.num_buffered),
+                              f.field("last_yield", x.last_yield));
+  }
 };
 
 class batch_operator final : public crtp_operator<batch_operator> {
@@ -43,7 +51,7 @@ public:
     -> generator<table_slice> {
     std::unordered_map<type, buffer_entry> buffers;
     for (auto&& slice : input) {
-      const auto now = std::chrono::steady_clock::now();
+      const auto now = std::chrono::steady_clock::now().time_since_epoch();
       // Check all current buffers to see if we have hit a timeout.
       for (auto it = buffers.begin(); it != buffers.end(); ++it) {
         auto& entry = it->second;
@@ -123,8 +131,105 @@ private:
   event_order order_ = event_order::ordered;
 };
 
+struct BatchArgs {
+  uint64_t limit = defaults::import::table_slice_size;
+  duration timeout = duration::max();
+};
+
+class Batch final : public Operator<table_slice, table_slice> {
+public:
+  explicit Batch(BatchArgs args) : limit_{args.limit}, timeout_{args.timeout} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    // push any stale buffers
+    for (auto it = buffers_.begin(); it != buffers_.end();) {
+      auto& entry = it->second;
+      if (now - entry.last_yield > timeout_) {
+        TENZIR_ASSERT(entry.num_buffered < limit_);
+        co_await push(concatenate(std::exchange(entry.events, {})));
+        it = buffers_.erase(it);
+        continue;
+      }
+      ++it;
+    }
+    if (input.rows() == 0) {
+      co_return;
+    }
+    // for ordered batching, on schema change, push the current buffer
+    if (order_ == event_order::ordered and not buffers_.empty()
+        and buffers_.begin()->first != input.schema()) {
+      TENZIR_ASSERT(buffers_.size() == 1);
+      auto& entry = buffers_.begin()->second;
+      TENZIR_ASSERT(entry.num_buffered < limit_);
+      co_await push(concatenate(std::move(entry.events)));
+      buffers_.clear();
+    }
+    // get buffer and append
+    auto [it, _] = buffers_.try_emplace(input.schema());
+    auto& entry = it->second;
+    entry.num_buffered += input.rows();
+    entry.events.push_back(std::move(input));
+    // if the buffer hit the limit, push until its below again
+    while (entry.num_buffered >= limit_) {
+      auto [lhs, rhs] = split(entry.events, limit_);
+      auto result = concatenate(std::move(lhs));
+      entry.num_buffered -= result.rows();
+      entry.last_yield = now;
+      co_await push(std::move(result));
+      entry.events = std::move(rhs);
+    }
+    if (entry.num_buffered == 0) {
+      buffers_.erase(it);
+    }
+  }
+
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    // collect into a single vector
+    std::vector<buffer_entry> remaining;
+    remaining.reserve(buffers_.size());
+    for (auto& [_, entry] : buffers_) {
+      remaining.emplace_back(std::move(entry));
+    }
+    buffers_.clear();
+    // sort by last yield for consistency
+    std::ranges::sort(remaining, {}, &buffer_entry::last_yield);
+    // push each
+    for (auto& entry : remaining) {
+      co_await push(concatenate(std::move(entry.events)));
+    }
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffers", buffers_);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  uint64_t limit_;
+  duration timeout_;
+  event_order order_ = event_order::ordered;
+  std::unordered_map<type, buffer_entry> buffers_;
+};
+
 class plugin final : public virtual operator_plugin<batch_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -182,8 +287,31 @@ public:
       limit ? limit->inner : defaults::import::table_slice_size,
       timeout ? timeout->inner : duration::max(), event_order::ordered);
   }
-};
 
+  auto describe() const -> Description override {
+    auto d = Describer<BatchArgs, Batch>{};
+    auto limit = d.optional_positional("limit", &BatchArgs::limit);
+    auto timeout = d.named_optional("timeout", &BatchArgs::timeout);
+    d.validate([limit, timeout](DescribeCtx& ctx) -> Empty {
+      if (auto value = ctx.get(limit)) {
+        if (*value == 0) {
+          diagnostic::error("batch size must not be 0")
+            .primary(ctx.get_location(limit).value())
+            .emit(ctx);
+        }
+      }
+      if (auto value = ctx.get(timeout)) {
+        if (*value <= duration::zero()) {
+          diagnostic::error("timeout must be a positive duration")
+            .primary(ctx.get_location(timeout).value())
+            .emit(ctx);
+        }
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+};
 } // namespace
 
 } // namespace tenzir::plugins::batch
