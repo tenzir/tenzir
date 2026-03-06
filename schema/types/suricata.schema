@@ -341,11 +341,6 @@ type suricata.enip_request_cip_multiple_item = record {
   service: string
 }
 
-type suricata.enip_request_cip_path_item = record {
-  segment_type: string,
-  value: uint64
-}
-
 type suricata.enip_response_cip_multiple_item = record {
   service: string,
   status: string,
@@ -364,7 +359,7 @@ type suricata.enip = suricata.component.common + record {
       cip: record {
         class_name: string,
         multiple: list<suricata.enip_request_cip_multiple_item>,
-        path: list<suricata.enip_request_cip_path_item>,
+        path: list<suricata.path_item>,
         service: string
       },
       command: string,
