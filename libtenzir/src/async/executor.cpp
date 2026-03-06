@@ -691,49 +691,48 @@ private:
         auto [push_downstream, pull_downstream]
           = exec_ctx_.make_channel<Out>(last_op.to(id_));
         auto output_is_void = std::same_as<Out, void>;
-        queue_.scope().spawn(
-          [this, key, end_of_data, output_is_void,
-           pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
-            // Pulling from the subpipeline needs to happen independently from
-            // the main operator logic. This is because we might block when
-            // pushing to the subpipeline due to backpressure, but in order to
-            // alleviate the backpressure, we need to pull from it.
-            auto saw_end_of_data = false;
-            while (true) {
-              auto output = co_await pull_downstream();
-              if (not output) {
-                break;
-              }
-              co_await co_match(
-                std::move(*output),
-                [&](table_slice output) -> Task<void> {
-                  co_await call_process_sub(make_view(key), std::move(output));
-                },
-                [&](Signal signal) -> Task<void> {
-                  co_await co_match(
-                    signal,
-                    [&](EndOfData) -> Task<void> {
-                      saw_end_of_data = true;
-                      co_await queue_.insert(
-                        SubPipelineEvent{key, SubPipelineFinished{}});
-                      // TODO: Can we do this?
-                      end_of_data->notify_one();
-                    },
-                    [&](Checkpoint) -> Task<void> {
-                      // TODO: Handle checkpoint.
-                      co_return;
-                    });
-                });
+        queue_.scope().spawn([this, key, end_of_data, output_is_void,
+                              pull_downstream = std::move(
+                                pull_downstream)] mutable -> Task<void> {
+          // Pulling from the subpipeline needs to happen independently from
+          // the main operator logic. This is because we might block when
+          // pushing to the subpipeline due to backpressure, but in order to
+          // alleviate the backpressure, we need to pull from it.
+          auto saw_end_of_data = false;
+          while (true) {
+            auto output = co_await pull_downstream();
+            if (not output) {
+              break;
             }
-            if (not saw_end_of_data) {
-              if (not output_is_void) {
-                LOGW("subpipeline channel closed without EndOfData");
-              }
-              co_await queue_.insert(
-                SubPipelineEvent{key, SubPipelineFinished{}});
+            co_await co_match(
+              std::move(*output),
+              [&](table_slice output) -> Task<void> {
+                co_await call_process_sub(make_view(key), std::move(output));
+              },
+              [&](Signal signal) -> Task<void> {
+                co_await co_match(
+                  signal,
+                  [&](EndOfData) -> Task<void> {
+                    saw_end_of_data = true;
+                    queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
+                    // TODO: Can we do this?
+                    end_of_data->notify_one();
+                    co_return;
+                  },
+                  [&](Checkpoint) -> Task<void> {
+                    // TODO: Handle checkpoint.
+                    co_return;
+                  });
+              });
+          }
+          if (not saw_end_of_data) {
+            if (not output_is_void) {
+              LOGW("subpipeline channel closed without EndOfData");
             }
-            end_of_data->notify_one();
-          });
+            queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
+          }
+          end_of_data->notify_one();
+        });
         auto runner_task
           = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
                                     std::move(push_downstream),
@@ -764,7 +763,7 @@ private:
                 // doesn't want anymore input?
                 continue;
               case ToControl::ready_for_shutdown:
-                co_await queue_.insert(
+                queue_.insert(
                   SubPipelineEvent{key, SubPipelineReadyForShutdown{}});
                 co_return;
               case ToControl::checkpoint_begin:

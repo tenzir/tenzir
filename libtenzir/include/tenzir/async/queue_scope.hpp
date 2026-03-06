@@ -128,12 +128,11 @@ public:
     });
   }
 
-  /// Directly insert something into the queue without a task.
-  ///
-  /// Use this if you need to ensure that some item is ordered before others.
-  auto insert(T x) -> Task<void> {
-    remaining_ += 1;
-    co_await results_.enqueue(std::move(x));
+  /// Insert a value into the queue without blocking the caller.
+  void insert(T x) {
+    spawn([x = std::move(x)]() mutable -> Task<T> {
+      co_return std::move(x);
+    });
   }
 
   /// Cancel all remaining tasks.
