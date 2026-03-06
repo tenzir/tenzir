@@ -40,17 +40,15 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (auto metrics_receiver = ctx.metrics_receiver(); metrics_receiver) {
-      metric_handler_.emplace(
-        metrics_receiver,
-        0,
-        type{
-          "tenzir.metrics.import",
-          record_type{
-            {"schema", string_type{}},
-            {"schema_id", string_type{}},
-            {"events", uint64_type{}},
-          },
-        });
+      metric_handler_.emplace(metrics_receiver, ctx.operator_index(),
+                              type{
+                                "tenzir.metrics.import",
+                                record_type{
+                                  {"schema", string_type{}},
+                                  {"schema_id", string_type{}},
+                                  {"events", uint64_type{}},
+                                },
+                              });
     }
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {

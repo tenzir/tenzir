@@ -34,6 +34,8 @@
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
+#include <charconv>
+
 // TODO: Why does this not report line numbers correctly?
 #undef TENZIR_UNREACHABLE
 #define TENZIR_UNREACHABLE()                                                   \
@@ -504,6 +506,22 @@ private:
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return exec_ctx_.metrics_receiver();
+  }
+
+  auto operator_index() const -> uint64_t override {
+    auto value = std::string_view{id_.value};
+    auto slash = value.rfind('/');
+    if (slash == std::string_view::npos) {
+      return 0;
+    }
+    value.remove_prefix(slash + 1);
+    auto result = uint64_t{};
+    auto [ptr, ec]
+      = std::from_chars(value.data(), value.data() + value.size(), result);
+    if (ec != std::errc{} or ptr != value.data() + value.size()) {
+      return 0;
+    }
+    return result;
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)

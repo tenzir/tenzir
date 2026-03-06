@@ -59,6 +59,8 @@
 #include <folly/Executor.h>
 #include <folly/executors/IOExecutor.h>
 
+#include <cstdint>
+
 namespace tenzir {
 
 class base_ctx;
@@ -155,6 +157,8 @@ public:
 
   /// Returns the metrics receiver actor handle, if available.
   virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
+  /// Returns the legacy-style numeric operator index, if available.
+  virtual auto operator_index() const -> uint64_t = 0;
 };
 
 enum class OperatorState {
