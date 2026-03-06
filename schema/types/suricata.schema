@@ -82,6 +82,21 @@ type suricata.component.tcp = record {
   urg: bool
 }
 
+type suricata.pop3 = suricata.component.common + record {
+  pop3: record {
+    request: record {
+      args: list<string>,
+      command: string
+    },
+    response: record {
+      data: list<string>,
+      header: string,
+      status: string,
+      success: bool
+    }
+  }
+}
+
 type suricata.quic = suricata.component.common + record {
   quic: record {
     version: string,
@@ -89,6 +104,8 @@ type suricata.quic = suricata.component.common + record {
     ua: string,
     ja3: suricata.component.ja3,
     ja3s: suricata.component.ja3,
+    ja4: string,
+    ja4s: string,
     cyu: list<suricata.component.ja3>,
     extensions: list<suricata.component.quic_extensions>,
   }
@@ -136,6 +153,56 @@ type suricata.anomaly = suricata.component.common + record {
   }
 }
 
+type suricata.arp = suricata.component.common + record {
+  arp: record {
+    dest_ip: ip,
+    dest_mac: string,
+    hw_type: string,
+    opcode: string,
+    proto_type: string,
+    src_ip: ip,
+    src_mac: string
+  }
+}
+
+type suricata.bittorrent_dht_node = record {
+  ip: ip,
+  port: uint64
+}
+
+type suricata.bittorrent_dht_value = record {
+  ip: ip,
+  port: uint64
+}
+
+type suricata.bittorrent_dht = suricata.component.common + record {
+  bittorrent_dht: record {
+    client_version: string,
+    error: record {
+      msg: string,
+      num: uint64
+    },
+    request: record {
+      id: string,
+      implied_port: uint64,
+      info_hash: string,
+      port: uint64,
+      target: string,
+      token: string
+    },
+    request_type: string,
+    response: record {
+      id: string,
+      nodes: list<suricata.bittorrent_dht_node>,
+      nodes6: list<suricata.bittorrent_dht_node>,
+      token: string,
+      values: list<suricata.bittorrent_dht_value>
+    },
+    transaction_id: string
+  }
+}
+
+
 type suricata.dcerpc_interface = record {
   uuid: string #index=hash,
   version: string,
@@ -171,6 +238,7 @@ type suricata.dhcp = suricata.component.common + record {
     client_mac: string #index=hash,
     assigned_ip: ip,
     client_ip: ip,
+    vendor_class_identifier: string,
     dhcp_type: enum {
       discover,
       offer,
@@ -264,6 +332,79 @@ type suricata.dns = suricata.component.common + record {
       SRV: list<suricata.srv_record>
     },
     answers: list<suricata.dns_answer_detail>
+  }
+}
+
+type suricata.enip_request_cip_multiple_item = record {
+  class_name: string,
+  path: list<suricata.path_item>,
+  service: string
+}
+
+type suricata.enip_request_cip_path_item = record {
+  segment_type: string,
+  value: uint64
+}
+
+type suricata.enip_response_cip_multiple_item = record {
+  service: string,
+  status: string,
+  status_extended: string,
+  status_extended_meaning: string
+}
+
+type suricata.path_item = record {
+  segment_type: string,
+  value: uint64
+}
+
+type suricata.enip = suricata.component.common + record {
+  enip: record {
+    request: record {
+      cip: record {
+        class_name: string,
+        multiple: list<suricata.enip_request_cip_multiple_item>,
+        path: list<suricata.enip_request_cip_path_item>,
+        service: string
+      },
+      command: string,
+      register_session: record {
+        options: uint64,
+        protocol_version: uint64
+      },
+      status: string
+    },
+    response: record {
+      cip: record {
+        multiple: list<suricata.enip_response_cip_multiple_item>,
+        service: string,
+        status: string,
+        status_extended: string,
+        status_extended_meaning: string
+      },
+      command: string,
+      identity: record {
+        device_type: string,
+        product_code: uint64,
+        product_name: string,
+        protocol_version: uint64,
+        revision: string,
+        serial: uint64,
+        state: uint64,
+        status: uint64,
+        vendor_id: string
+      },
+      list_services: record {
+        capabilities: uint64,
+        protocol_version: uint64,
+        service_name: string
+      },
+      register_session: record {
+        options: uint64,
+        protocol_version: uint64
+      },
+      status: string
+    }
   }
 }
 
@@ -362,9 +503,50 @@ type suricata.krb5 = suricata.component.common + record {
     weak_encryption: bool,
     realm: string,
     failed_request: string,
-    sname: string
+    sname: string,
+    ticket_encryption: string,
+    ticket_weak_encryption: bool
   },
   host: string
+}
+
+type suricata.mdns_additionals_item = record {
+  ptr: string,
+  rrname: string,
+  rrname_truncated: bool,
+  txt: list<string>
+}
+
+type suricata.mdns_answers_item = record {
+  ptr: string,
+  rrname: string,
+  rrname_truncated: bool,
+  txt: list<string>
+}
+
+type suricata.mdns_authorities_item = record {
+  rrname: string,
+  rrname_truncated: bool
+}
+
+type suricata.mdns_queries_item = record {
+  rrname: string,
+  rrname_truncated: bool,
+  rrtype: string
+}
+
+type suricata.mdns = suricata.component.common + record {
+  mdns: record {
+    additionals: list<suricata.mdns_additionals_item>,
+    answers: list<suricata.mdns_answers_item>,
+    authorities: list<suricata.mdns_authorities_item>,
+    flags: list<string>,
+    id: uint64,
+    opcode: uint64,
+    queries: list<suricata.mdns_queries_item>,
+    rcode: uint64,
+    type: string
+  }
 }
 
 type suricata.topicitem = record {
@@ -647,15 +829,45 @@ type suricata.rfb = suricata.component.common + record {
   }
 }
 
+type suricata.sip_sdp_media_descriptions_item = record {
+  attributes: list<string>,
+  bandwidths: list<string>,
+  connection_data: string,
+  encryption_key: string,
+  media: string,
+  media_info: string
+}
+
+type suricata.sip_sdp_time_descriptions_item = record {
+  repeat_time: string,
+  time: string
+}
+
 type suricata.sip = suricata.component.common + record {
   sip: record {
+    code: string,
     method: string,
-    uri: string,
-    version: string,
+    reason: string,
     request_line: string,
     response_line: string,
-    code: string,
-    reason: string
+    sdp: record {
+      attributes: list<string>,
+      bandwidths: list<string>,
+      connection_data: string,
+      email: string,
+      encryption_key: string,
+      media_descriptions: list<suricata.sip_sdp_media_descriptions_item>,
+      origin: string,
+      phone_number: string,
+      session_info: string,
+      session_name: string,
+      time_descriptions: list<suricata.sip_sdp_time_descriptions_item>,
+      timezone: string,
+      uri: string,
+      version: uint64
+    },
+    uri: string,
+    version: string
   }
 }
 
@@ -720,10 +932,18 @@ type suricata.smb = suricata.component.common + record {
 type suricata.ssh = suricata.component.common + record {
   ssh: record {
     client: record {
+      hassh: record {
+        hash: string,
+        string: string
+      },
       software_version: string,
       proto_version: string
     },
     server: record {
+      hassh: record {
+        hash: string,
+        string: string
+      },
       software_version: string,
       proto_version: string
     }
@@ -752,6 +972,7 @@ type suricata.snmp = suricata.component.common + record {
   snmp: record {
     version: uint64,
     pdu_type: string,
+    usm: string,
     vars: list<string>,
     community: string
   }
@@ -768,14 +989,44 @@ type suricata.tftp = suricata.component.common + record {
 
 type suricata.tls = suricata.component.common + record {
   tls: record {
+    certificate: string,
+    chain: list<string>,
+    client: record {
+      certificate: string,
+      chain: list<string>,
+      fingerprint: string,
+      issuerdn: string,
+      notafter: string,
+      notbefore: string,
+      serial: string,
+      subject: string,
+      subjectaltname: list<string>
+    },
+    client_alpns: list<string>,
+    client_handshake: record {
+      ciphers: list<uint64>,
+      exts: list<uint64>,
+      sig_algs: list<uint64>,
+      version: string
+    },
+    from_proto: string,
     sni: string,
     session_resumed: bool,
     subject: string,
+    subjectaltname: list<string>,
     issuerdn: string,
     serial: string,
     fingerprint: string,
     ja3: suricata.component.ja3,
     ja3s: suricata.component.ja3,
+    ja4: string,
+    ja4s: string,
+    server_alpns: list<string>,
+    server_handshake: record {
+      cipher: uint64,
+      exts: list<uint64>,
+      version: string
+    },
     notbefore: time,
     notafter: time
   }
@@ -783,4 +1034,14 @@ type suricata.tls = suricata.component.common + record {
 
 type suricata.stats = record {
   timestamp: time
+}
+
+type suricata.websocket = suricata.component.common + record {
+  websocket: record {
+    fin: bool,
+    mask: uint64,
+    opcode: string,
+    payload_base64: string,
+    payload_printable: string
+  }
 }
