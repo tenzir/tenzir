@@ -290,15 +290,27 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
                              count));
     }
   } else if constexpr (std::same_as<Ty, list_type>) {
+    const auto& values = *array.values();
+    // `value_offset(...)` is expected to be relative to `values()`. However,
+    // Arrow also allows constructing list arrays from a sliced child array
+    // without rebasing the offsets. In that case, the offsets still refer to
+    // the child's backing storage, while `values()` is already sliced. When we
+    // recursively append the list elements, we must compensate for the child's
+    // logical offset to avoid passing out-of-bounds indices to the child array.
+    auto value_offset_base = int64_t{0};
+    if (array.value_offset(end) > values.length()) {
+      value_offset_base = values.offset();
+    }
     for (auto row = begin; row < end; ++row) {
       auto valid = array.IsValid(row);
       TRY(builder.Append(valid));
       if (valid) {
-        auto list_begin = array.value_offset(row);
-        auto list_end = array.value_offset(row + 1);
+        auto list_begin = array.value_offset(row) - value_offset_base;
+        auto list_end = array.value_offset(row + 1) - value_offset_base;
+        TENZIR_ASSERT(0 <= list_begin);
+        TENZIR_ASSERT(list_begin <= list_end);
         TRY(append_array_slice(*builder.value_builder(), ty.value_type(),
-                               *array.values(), list_begin,
-                               list_end - list_begin));
+                               values, list_begin, list_end - list_begin));
       }
     }
   } else if constexpr (std::same_as<Ty, map_type>) {
