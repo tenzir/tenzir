@@ -8,8 +8,11 @@
 
 #include "tenzir/async/executor.hpp"
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
@@ -347,6 +350,74 @@ private:
   secret_censor censor_;
 };
 
+/// Decorator over any `ExecCtx` that produces fused channels and shares a
+/// single executor across all operators. This gives run-to-completion
+/// semantics per slice: a push blocks until the downstream operator has
+/// finished processing the item and is ready for the next.
+class FusedExecCtx final : public ExecCtx {
+public:
+  explicit FusedExecCtx(ExecCtx& inner, PipeId pipe_id)
+    : inner_{inner},
+      executor_{inner.make_executor(pipe_id.op(0), "Fused")},
+      io_executor_{inner.make_io_executor(pipe_id.op(0))} {
+  }
+
+  auto make_executor(OpId, std::string)
+    -> folly::Executor::KeepAlive<> override {
+    return executor_;
+  }
+
+  auto make_io_executor(OpId)
+    -> folly::Executor::KeepAlive<folly::IOExecutor> override {
+    return io_executor_;
+  }
+
+  auto metrics_receiver() const -> metrics_receiver_actor override {
+    return inner_.metrics_receiver();
+  }
+
+  auto make_counter(MetricsLabel label, MetricsDirection direction,
+                    MetricsVisibility visibility) -> MetricsCounter override {
+    return inner_.make_counter(label, direction, visibility);
+  }
+
+protected:
+  auto make_void(ChannelId) -> PushPull<OperatorMsg<void>> override {
+    return fused_channel<OperatorMsg<void>>().into_push_pull();
+  }
+
+  auto make_events(ChannelId) -> PushPull<OperatorMsg<table_slice>> override {
+    return fused_channel<OperatorMsg<table_slice>>().into_push_pull();
+  }
+
+  auto make_bytes(ChannelId) -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return fused_channel<OperatorMsg<chunk_ptr>>().into_push_pull();
+  }
+
+private:
+  ExecCtx& inner_;
+  folly::Executor::KeepAlive<> executor_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+};
+
+/// Run a pipeline with fused (run-to-completion) semantics.
+///
+/// Each input slice is fully processed through the entire operator chain
+/// before the next input is pulled. Internally creates a `FusedExecCtx` that
+/// replaces buffered channels with fused channels.
+template <class Input, class Output>
+auto run_chain_fused(OperatorChain<Input, Output> chain,
+                     Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                     Box<Push<OperatorMsg<Output>>> push_downstream,
+                     Receiver<FromControl> from_control,
+                     Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                     caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+  auto fused_ctx = FusedExecCtx{exec_ctx, id};
+  co_await run_chain(std::move(chain), std::move(pull_upstream),
+                     std::move(push_downstream), std::move(from_control),
+                     std::move(to_control), std::move(id), fused_ctx, sys, dh);
+}
+
 class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
@@ -548,6 +619,16 @@ private:
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, false);
+  }
+
+  auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline> override {
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, true);
+  }
+
+  auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
+                      bool fused) -> Task<AnyOpenPipeline> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     next_subpipeline_id_ += 1;
     // Instantiate for the case where it was not instantiated yet.
@@ -603,60 +684,67 @@ private:
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+        // When fused, all operators in the sub-pipeline share a single
+        // executor identity at op(0), so we must attribute the downstream
+        // channel to op(0) as well.
+        auto last_op = fused ? sub_id.op(0) : sub_id.op(chain.size() - 1);
         auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<Out>(last_op.to(id_));
         auto output_is_void = std::same_as<Out, void>;
-        queue_.scope().spawn(
-          [this, key, end_of_data, output_is_void,
-           pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
-            // Pulling from the subpipeline needs to happen independently from
-            // the main operator logic. This is because we might block when
-            // pushing to the subpipeline due to backpressure, but in order to
-            // alleviate the backpressure, we need to pull from it.
-            auto saw_end_of_data = false;
-            while (true) {
-              auto output = co_await pull_downstream();
-              if (not output) {
-                break;
-              }
-              co_await co_match(
-                std::move(*output),
-                [&](table_slice output) -> Task<void> {
-                  co_await call_process_sub(make_view(key), std::move(output));
-                },
-                [&](Signal signal) -> Task<void> {
-                  co_await co_match(
-                    signal,
-                    [&](EndOfData) -> Task<void> {
-                      saw_end_of_data = true;
-                      co_await queue_.insert(
-                        SubPipelineEvent{key, SubPipelineFinished{}});
-                      // TODO: Can we do this?
-                      end_of_data->notify_one();
-                    },
-                    [&](Checkpoint) -> Task<void> {
-                      // TODO: Handle checkpoint.
-                      co_return;
-                    });
-                });
+        queue_.scope().spawn([this, key, end_of_data, output_is_void,
+                              pull_downstream = std::move(
+                                pull_downstream)] mutable -> Task<void> {
+          // Pulling from the subpipeline needs to happen independently from
+          // the main operator logic. This is because we might block when
+          // pushing to the subpipeline due to backpressure, but in order to
+          // alleviate the backpressure, we need to pull from it.
+          auto saw_end_of_data = false;
+          while (true) {
+            auto output = co_await pull_downstream();
+            if (not output) {
+              break;
             }
-            if (not saw_end_of_data) {
-              if (not output_is_void) {
-                LOGW("subpipeline channel closed without EndOfData");
-              }
-              co_await queue_.insert(
-                SubPipelineEvent{key, SubPipelineFinished{}});
+            co_await co_match(
+              std::move(*output),
+              [&](table_slice output) -> Task<void> {
+                co_await call_process_sub(make_view(key), std::move(output));
+              },
+              [&](Signal signal) -> Task<void> {
+                co_await co_match(
+                  signal,
+                  [&](EndOfData) -> Task<void> {
+                    saw_end_of_data = true;
+                    queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
+                    // TODO: Can we do this?
+                    end_of_data->notify_one();
+                    co_return;
+                  },
+                  [&](Checkpoint) -> Task<void> {
+                    // TODO: Handle checkpoint.
+                    co_return;
+                  });
+              });
+          }
+          if (not saw_end_of_data) {
+            if (not output_is_void) {
+              LOGW("subpipeline channel closed without EndOfData");
             }
-            end_of_data->notify_one();
-          });
-        return {
-          run_chain(std::move(chain), std::move(pull_upstream),
-                    std::move(push_downstream),
-                    std::move(from_control_receiver),
-                    std::move(to_control_sender), std::move(sub_id), exec_ctx_,
-                    sys_, dh_),
-          std::move(push_upstream),
-        };
+            queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
+          }
+          end_of_data->notify_one();
+        });
+        auto runner_task
+          = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
+                                    std::move(push_downstream),
+                                    std::move(from_control_receiver),
+                                    std::move(to_control_sender),
+                                    std::move(sub_id), exec_ctx_, sys_, dh_)
+                  : run_chain(std::move(chain), std::move(pull_upstream),
+                              std::move(push_downstream),
+                              std::move(from_control_receiver),
+                              std::move(to_control_sender), std::move(sub_id),
+                              exec_ctx_, sys_, dh_);
+        return {std::move(runner_task), std::move(push_upstream)};
       });
     // TODO: Should this even be a concurrent task?
     auto control_handle
@@ -675,7 +763,7 @@ private:
                 // doesn't want anymore input?
                 continue;
               case ToControl::ready_for_shutdown:
-                co_await queue_.insert(
+                queue_.insert(
                   SubPipelineEvent{key, SubPipelineReadyForShutdown{}});
                 co_return;
               case ToControl::checkpoint_begin:

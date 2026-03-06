@@ -1739,6 +1739,9 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     }
   }
   auto elapsed = now - start_time;
+  // FIXME: This doesn't work if a pipeline mixes internal and external ingress
+  // or egress. The diff that will be maintained in the pipeline manager will
+  // mix up the two values.
   if (external_read_bytes > 0) {
     auto m = operator_metric{};
     m.operator_index = 0;
@@ -1763,7 +1766,10 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
   }
   if (num_ops > 0 and external_write_bytes > 0) {
     auto m = operator_metric{};
-    m.operator_index = num_ops - 1;
+    // We use operator index 1 such that a pipeline with a single operator will
+    // still use two different operator indices for ingress and egress. The code
+    // in the pipeline manager cannot handle the case where it's the same.
+    m.operator_index = 1;
     m.operator_name = "sink";
     m.internal = false;
     m.inbound_measurement.unit = "bytes";
@@ -1774,7 +1780,7 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
   }
   if (num_ops > 0 and internal_write_bytes > 0) {
     auto m = operator_metric{};
-    m.operator_index = num_ops - 1;
+    m.operator_index = 1;
     m.operator_name = "sink";
     m.internal = true;
     m.inbound_measurement.unit = "bytes";

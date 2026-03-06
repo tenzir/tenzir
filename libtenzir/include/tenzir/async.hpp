@@ -113,6 +113,10 @@ public:
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline>
     = 0;
+  virtual auto
+  spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline>
+    = 0;
   virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
   /// Returns a profiling-wrapped IO executor for this operator.
   virtual auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor>

@@ -45,6 +45,7 @@ public:
   }
 
   Arc() = delete;
+
   Arc(Arc const&) = default;
   auto operator=(Arc const&) -> Arc& = default;
   Arc(Arc&&) = default;
@@ -124,6 +125,14 @@ public:
   /// Returns the number of `Arc` instances sharing ownership.
   auto strong_count() const -> size_t {
     return static_cast<size_t>(ptr_.use_count());
+  }
+
+  /// Returns `true` if the `Arc` is still valid.
+  ///
+  /// Only use this sparingly, for example in destructors to check whether
+  /// additional cleanup logic should run.
+  auto not_moved_from() const -> bool {
+    return ptr_ != nullptr;
   }
 
 private:
