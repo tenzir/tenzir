@@ -118,9 +118,12 @@ template <>
 inline constexpr auto enable_default_formatter<diagnostic_note> = true;
 
 /// A structured representation of a compiler diagnostic.
-struct [[nodiscard]] diagnostic {
+/// We inherit from `std::exception` here. This allows us to rely on
+/// libstdc++/libc++ to also print the `what()` if a terminate happens.
+/// DO NOT THROW A DIAGNOSTIC BY HAND.
+struct [[nodiscard]] diagnostic : std::exception {
   /// The severity of the diagnostic.
-  enum severity severity;
+  enum severity severity = {};
 
   /// Description of the diagnostic, should not be empty.
   std::string message;
@@ -130,6 +133,17 @@ struct [[nodiscard]] diagnostic {
 
   /// Additional notes which have their own message.
   std::vector<diagnostic_note> notes;
+
+  diagnostic() = default;
+
+  diagnostic(enum severity severity, std::string message,
+             std::vector<diagnostic_annotation> annotations = {},
+             std::vector<diagnostic_note> notes = {})
+    : severity{severity},
+      message{std::move(message)},
+      annotations{std::move(annotations)},
+      notes{std::move(notes)} {
+  }
 
   template <class... Ts>
   static auto
@@ -167,6 +181,11 @@ struct [[nodiscard]] diagnostic {
     return caf::make_error(ec::diagnostic, std::move(*this));
   }
 
+  /// Override std::exception::what to get the message from terminate handlers.
+  auto what() const noexcept -> const char* override {
+    return message.c_str();
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, diagnostic& x) -> bool {
     return f.object(x)
@@ -186,7 +205,7 @@ public:
   }
 
   diagnostic_builder(enum severity severity, std::string message)
-    : result_{severity, std::move(message), {}, {}} {
+    : result_{severity, std::move(message)} {
   }
 
   /// Calls a function on the diagnostic builder. This is useful for
@@ -605,6 +624,16 @@ struct fmt::formatter<tenzir::severity> {
                             }
                             TENZIR_UNREACHABLE();
                           }));
+  }
+};
+
+template <>
+struct fmt::formatter<tenzir::diagnostic>
+  : fmt::formatter<tenzir::use_default_formatter<tenzir::diagnostic>> {
+  auto format(const tenzir::diagnostic& x, fmt::format_context& ctx) const {
+    auto wrapper = tenzir::use_default_formatter<tenzir::diagnostic>{x};
+    return fmt::formatter<
+      tenzir::use_default_formatter<tenzir::diagnostic>>::format(wrapper, ctx);
   }
 };
 
