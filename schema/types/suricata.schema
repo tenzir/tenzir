@@ -991,8 +991,8 @@ type suricata.tls = suricata.component.common + record {
       chain: list<string>,
       fingerprint: string,
       issuerdn: string,
-      notafter: string,
-      notbefore: string,
+      notafter: time,
+      notbefore: time,
       serial: string,
       subject: string,
       subjectaltname: list<string>
