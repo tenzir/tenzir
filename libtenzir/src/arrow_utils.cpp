@@ -291,14 +291,16 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
     }
   } else if constexpr (std::same_as<Ty, list_type>) {
     const auto& values = *array.values();
-    // `value_offset(...)` is expected to be relative to `values()`. However,
-    // Arrow also allows constructing list arrays from a sliced child array
-    // without rebasing the offsets. In that case, the offsets still refer to
-    // the child's backing storage, while `values()` is already sliced. When we
-    // recursively append the list elements, we must compensate for the child's
-    // logical offset to avoid passing out-of-bounds indices to the child array.
+    // `value_offset(...)` is expected to be relative to `values()`. Some code
+    // still constructs list arrays from a sliced child array without rebasing
+    // the offsets first, so the offsets continue to refer to the child's
+    // backing storage instead. We only compensate for that case when it is
+    // unambiguous, i.e., when the referenced range would otherwise extend past
+    // `values.length()`. In-bounds offsets are ambiguous and may already be
+    // valid relative to the sliced child array, so rebasing them would change
+    // the data semantics.
     auto value_offset_base = int64_t{0};
-    if (array.value_offset(end) > values.length()) {
+    if (values.offset() > 0 && array.value_offset(end) > values.length()) {
       value_offset_base = values.offset();
     }
     for (auto row = begin; row < end; ++row) {
