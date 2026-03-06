@@ -299,10 +299,10 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
     // `values.length()`. In-bounds offsets are ambiguous and may already be
     // valid relative to the sliced child array, so rebasing them would change
     // the data semantics.
-    auto value_offset_base = int64_t{0};
-    if (values.offset() > 0 && array.value_offset(end) > values.length()) {
-      value_offset_base = values.offset();
-    }
+    const auto rebase_value_offsets
+      = values.offset() > 0 && array.value_offset(end) > values.length();
+    const auto value_offset_base
+      = rebase_value_offsets ? values.offset() : int64_t{0};
     for (auto row = begin; row < end; ++row) {
       auto valid = array.IsValid(row);
       TRY(builder.Append(valid));
