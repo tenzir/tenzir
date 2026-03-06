@@ -15,7 +15,6 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/metric_handler.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -39,17 +38,12 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (auto metrics_receiver = ctx.metrics_receiver(); metrics_receiver) {
-      metric_handler_.emplace(metrics_receiver, ctx.operator_index(),
-                              type{
-                                "tenzir.metrics.import",
-                                record_type{
-                                  {"schema", string_type{}},
-                                  {"schema_id", string_type{}},
-                                  {"events", uint64_type{}},
-                                },
-                              });
-    }
+    write_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "import",
+      },
+      MetricsDirection::write, MetricsVisibility::internal_);
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -97,14 +91,7 @@ public:
     if (not importer_) {
       co_return;
     }
-    if (metric_handler_
-        and not input.schema().attribute("internal").has_value()) {
-      metric_handler_->emit({
-        {"schema", std::string{input.schema().name()}},
-        {"schema_id", input.schema().make_fingerprint()},
-        {"events", input.rows()},
-      });
-    }
+    write_bytes_counter_.add(input.approx_bytes());
     auto* diagnostics = &ctx.dh();
     inflight_.push_back(
       ctx.spawn_task([importer = importer_, slice = std::move(input),
@@ -143,7 +130,7 @@ private:
   static constexpr auto max_inflight_batches = size_t{20};
 
   importer_actor importer_;
-  std::optional<metric_handler> metric_handler_ = std::nullopt;
+  MetricsCounter write_bytes_counter_ = {};
   std::deque<AsyncHandle<void>> inflight_ = {};
 };
 
