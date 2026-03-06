@@ -94,27 +94,44 @@ jobs:
       - name: Configure
         id: configure
         run: |
-          # Create a matrix with Tenzir versions greater or equal than
-          # limit_version. If the version does not exist yet (e.g., because of
-          # an intentional break), only check latest. We usually set this to the
-          # minimum supported version.
-          limit_version=v5.16.0
-          if git rev-parse "${limit_version}" --; then
-            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
-            dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
-            # We filter out versions older than limit_version.
-            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v5.20.2')
-            version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
-          else
-            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
-          fi
-          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
           version="v$(jq -r '."tenzir-version"' version.json)"
           id_sha="${{ github.sha }}"
           release_version="${version}"
           build_version="${version}+g${id_sha:0:10}"
+
+          # Create a matrix with Tenzir versions greater or equal than
+          # limit_version. We derive limit_version from the current release by
+          # going back 5 minor versions.
+          major_minor_patch="${version#v}"
+          major="${major_minor_patch%%.*}"
+          minor_patch="${major_minor_patch#*.}"
+          minor="${minor_patch%%.*}"
+          limit_minor=$((minor - 5))
+          if ((limit_minor < 0)); then
+            limit_minor=0
+          fi
+          limit_version="v${major}.${limit_minor}.0"
+          if git rev-parse "${limit_version}" -- >/dev/null 2>&1; then
+            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
+            dated_limit_version=$(printf "%s\n" "$dated_versions" | awk -F# -v version="$limit_version" '$2==version{print; exit}')
+            # We filter out versions older than limit_version and known bad
+            # versions that should not run in regression tests.
+            known_bad_versions=(
+              "v5.27.3"
+            )
+            filtered_versions=$(printf "%s\n" "$dated_versions" | awk -F# -v limit="$dated_limit_version" '$0>=limit{print$2}')
+            for bad_version in "${known_bad_versions[@]}"; do
+              filtered_versions=$(printf "%s\n" "$filtered_versions" | grep -Fvx "$bad_version" || true)
+            done
+            version_matrix="$(printf "%s\n" "$filtered_versions" latest | sed '/^$/d' | jq -R | jq -sc 'map({version: .})')"
+          else
+            # If the computed limit does not exist (e.g., because of an
+            # intentional break), only check latest.
+            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
+          fi
+          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
