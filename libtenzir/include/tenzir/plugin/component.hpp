@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "tenzir/plugin/base.hpp"
-
 #include "tenzir/actors.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include <string>
 #include <vector>

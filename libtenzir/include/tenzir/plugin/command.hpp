@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "tenzir/plugin/base.hpp"
 #include "tenzir/command.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include <memory>
 #include <utility>

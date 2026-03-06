@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "tenzir/plugin/base.hpp"
-
 #include "tenzir/data.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/expected.hpp>

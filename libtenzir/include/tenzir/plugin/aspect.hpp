@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "tenzir/plugin/base.hpp"
-
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <string>

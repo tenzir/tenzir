@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "tenzir/plugin/base.hpp"
-
 #include "tenzir/actors.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/http_api.hpp"
+#include "tenzir/plugin/base.hpp"
 
 #include <string>
 #include <vector>
