@@ -35,7 +35,6 @@
 #include <algorithm>
 #include <ranges>
 #include <utility>
-#include <variant>
 
 namespace tenzir::plugins::summarize {
 

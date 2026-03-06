@@ -9,9 +9,9 @@
 #include "tenzir/arrow_time_utils.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
-#include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -21,9 +21,9 @@
 
 #include <ranges>
 
-namespace tenzir::plugins::chart {
+#include "chart3.hpp"
 
-TENZIR_ENUM(chart_type, area, bar, line, pie);
+namespace tenzir::plugins::chart {
 
 namespace {
 
@@ -248,17 +248,6 @@ struct chart_args {
     return b;
   }
 };
-
-auto to_double(data d) -> data {
-  return match(
-    d,
-    [](concepts::integer auto& d) -> data {
-      return static_cast<double>(d);
-    },
-    [](auto& v) -> data {
-      return std::move(v);
-    });
-}
 
 class chart_operator2 final : public crtp_operator<chart_operator2> {
 public:
@@ -515,17 +504,6 @@ public:
       }
       co_yield {};
     }
-  }
-
-  static auto jsonify_limit(const data& d) -> std::string {
-    auto result = std::string{};
-    const auto printer = json_printer{json_printer_options{
-      .tql = true,
-      .numeric_durations = true,
-    }};
-    auto it = std::back_inserter(result);
-    TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
-    return result;
   }
 
   auto get_group_strings(const table_slice& slice, diagnostic_handler& dh) const
@@ -845,8 +823,155 @@ private:
   chart_args args_;
 };
 
+auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
+              std::string_view operator_name) -> failure_or<void> {
+  auto ident = ast::identifier{"once", location::unknown};
+  const auto entity = ast::entity{std::vector{std::move(ident)}};
+  args.ty = ty;
+  args.y_loc = y.get_location();
+  return match(
+    y,
+    [&](ast::record& rec) -> failure_or<void> {
+      if (args.ty == chart_type::pie and rec.items.size() != 1) {
+        diagnostic::error("`{}` requires exactly one value", operator_name)
+          .primary(y)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (rec.items.empty()) {
+        diagnostic::error("`{}` requires at least one value", operator_name)
+          .primary(y)
+          .emit(ctx);
+        return failure::promise();
+      }
+      for (auto& i : rec.items) {
+        auto* field = try_as<ast::record::field>(i);
+        if (not field) {
+          diagnostic::error("cannot use `...` here").primary(y).emit(ctx);
+          return failure::promise();
+        }
+        const auto loc = field->expr.get_location();
+        TRY(match(
+          field->expr,
+          [&](ast::function_call& call) -> failure_or<void> {
+            args.y[field->name.name] = std::move(call);
+            return {};
+          },
+          [&](auto& expr) -> failure_or<void> {
+            if (args.res) {
+              diagnostic::error("an aggregation function is required if "
+                                "`resolution` is specified")
+                .primary(field->expr)
+                .emit(ctx);
+              return failure::promise();
+            }
+            auto result
+              = ast::function_call{entity, {std::move(expr)}, loc, false};
+            TENZIR_ASSERT(resolve_entities(result, ctx));
+            args.y[field->name.name] = std::move(result);
+            return {};
+          }));
+      }
+      return {};
+    },
+    [&](ast::function_call& call) -> failure_or<void> {
+      args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(call);
+      return {};
+    },
+    [&](auto&) -> failure_or<void> {
+      if (args.res) {
+        diagnostic::error(
+          "an aggregation function is required if resolution is specified")
+          .primary(y)
+          .emit(ctx);
+        return failure::promise();
+      }
+      const auto yname = std::invoke([&]() -> std::string {
+        if (auto ss = ast::field_path::try_from(y)) {
+          return fmt::format("{}", fmt::join(ss->path()
+                                               | std::ranges::views::transform(
+                                                 &ast::field_path::segment::id)
+                                               | std::ranges::views::transform(
+                                                 &ast::identifier::name),
+                                             "."));
+        }
+        if (args.ty == chart_type::pie) {
+          return "value";
+        }
+        return "y";
+      });
+      const auto loc = y.get_location();
+      auto result = ast::function_call{entity, {std::move(y)}, loc, false};
+      TENZIR_ASSERT(resolve_entities(result, ctx));
+      args.y[yname] = std::move(result);
+      return {};
+    });
+}
+
+auto handle_xlimit(const chart_args& args, ast::binary_op op,
+                   located<data> limit, diagnostic_handler& dh)
+  -> failure_or<xlimit> {
+  const auto& loc = limit.source;
+  auto result = match(
+    limit.inner,
+    [&](const caf::none_t&) -> failure_or<ast::constant> {
+      diagnostic::error("limit cannot be `null`").primary(limit).emit(dh);
+      return failure::promise();
+    },
+    [&](const pattern&) -> failure_or<ast::constant> {
+      diagnostic::error("limit cannot be a pattern").primary(limit).emit(dh);
+      return failure::promise();
+    },
+    [&](const duration& d) -> failure_or<ast::constant> {
+      if (args.res) {
+        const auto val = d.count();
+        const auto count = std::abs(args.res->inner.count());
+        const auto rem = std::abs(val % count);
+        if (rem) {
+          const auto ceil = val >= 0 ? count - rem : rem;
+          const auto floor = val >= 0 ? -rem : rem - count;
+          return ast::constant{
+            duration{val + (op == ast::binary_op::geq ? floor : ceil)},
+            loc,
+          };
+        }
+      }
+      return ast::constant{d, loc};
+    },
+    [&](const time& t) -> failure_or<ast::constant> {
+      if (not args.res) {
+        return ast::constant{t, loc};
+      }
+      auto b = time_type::make_arrow_builder(arrow_memory_pool());
+      check(append_builder(time_type{}, *b, t));
+      auto array = finish(*b);
+      auto opts = make_round_temporal_options(args.res->inner);
+      auto result
+        = op == ast::binary_op::geq
+            ? check(arrow::compute::FloorTemporal(array, std::move(opts)))
+                .array_as<arrow::TimestampArray>()
+            : check(arrow::compute::CeilTemporal(array, std::move(opts)))
+                .array_as<arrow::TimestampArray>();
+      TENZIR_ASSERT(result->length() == 1);
+      return ast::constant{value_at(time_type{}, *result, 0), loc};
+    },
+    [&](const auto& d) -> failure_or<ast::constant> {
+      return ast::constant{d, loc};
+    });
+  TRY(auto c, result);
+  auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
+  auto&& [legacy, remainder] = split_legacy_expression(expr);
+  return xlimit{
+    std::move(limit),
+    c.as_data(),
+    std::move(legacy),
+    std::move(remainder),
+  };
+}
+
 template <chart_type Ty>
-class chart_plugin : public virtual operator_factory_plugin {
+class chart_plugin : public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return fmt::format("chart_{}", to_string(Ty));
   }
@@ -886,7 +1011,7 @@ class chart_plugin : public virtual operator_factory_plugin {
     }
     p.named_optional("_limit", args.limit);
     TRY(p.parse(inv, ctx));
-    TRY(handle_y(args, y, ctx));
+    TRY(handle_y(args, y, ctx, Ty, name()));
     if (x_min) {
       TRY(args.x_min,
           handle_xlimit(args, ast::binary_op::geq, std::move(*x_min), ctx));
@@ -908,150 +1033,17 @@ class chart_plugin : public virtual operator_factory_plugin {
     return std::make_unique<chart_operator2>(std::move(args));
   }
 
-  auto handle_y(chart_args& args, ast::expression& y, session ctx) const
-    -> failure_or<void> {
-    auto ident = ast::identifier{"once", location::unknown};
-    const auto entity = ast::entity{std::vector{std::move(ident)}};
-    args.y_loc = y.get_location();
-    return match(
-      y,
-      [&](ast::record& rec) -> failure_or<void> {
-        if (args.ty == chart_type::pie and rec.items.size() != 1) {
-          diagnostic::error("`{}` requires exactly one value", name())
-            .primary(y)
-            .emit(ctx);
-          return failure::promise();
-        }
-        if (rec.items.empty()) {
-          diagnostic::error("`{}` requires at least one value", name())
-            .primary(y)
-            .emit(ctx);
-          return failure::promise();
-        }
-        for (auto& i : rec.items) {
-          auto* field = try_as<ast::record::field>(i);
-          if (not field) {
-            diagnostic::error("cannot use `...` here").primary(y).emit(ctx);
-            return failure::promise();
-          }
-          const auto loc = field->expr.get_location();
-          TRY(match(
-            field->expr,
-            [&](ast::function_call& call) -> failure_or<void> {
-              args.y[field->name.name] = std::move(call);
-              return {};
-            },
-            [&](auto& expr) -> failure_or<void> {
-              if (args.res) {
-                diagnostic::error("an aggregation function is required if "
-                                  "`resolution` is specified")
-                  .primary(field->expr)
-                  .emit(ctx);
-                return failure::promise();
-              }
-              auto result
-                = ast::function_call{entity, {std::move(expr)}, loc, false};
-              TENZIR_ASSERT(resolve_entities(result, ctx));
-              args.y[field->name.name] = std::move(result);
-              return {};
-            }));
-        }
-        return {};
-      },
-      [&](ast::function_call& call) -> failure_or<void> {
-        args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(call);
-        return {};
-      },
-      [&](auto&) -> failure_or<void> {
-        if (args.res) {
-          diagnostic::error(
-            "an aggregation function is required if resolution is specified")
-            .primary(y)
-            .emit(ctx);
-          return failure::promise();
-        }
-        const auto yname = std::invoke([&]() -> std::string {
-          if (auto ss = ast::field_path::try_from(y)) {
-            return fmt::format(
-              "{}",
-              fmt::join(
-                ss->path()
-                  | std::ranges::views::transform(&ast::field_path::segment::id)
-                  | std::ranges::views::transform(&ast::identifier::name),
-                "."));
-          }
-          if (args.ty == chart_type::pie) {
-            return "value";
-          }
-          return "y";
-        });
-        const auto loc = y.get_location();
-        auto result = ast::function_call{entity, {std::move(y)}, loc, false};
-        TENZIR_ASSERT(resolve_entities(result, ctx));
-        args.y[yname] = std::move(result);
-        return {};
-      });
-  }
-
-  auto handle_xlimit(const chart_args& args, ast::binary_op op,
-                     located<data> limit, diagnostic_handler& dh) const
-    -> failure_or<xlimit> {
-    const auto& loc = limit.source;
-    auto result = match(
-      limit.inner,
-      [&](const caf::none_t&) -> failure_or<ast::constant> {
-        diagnostic::error("limit cannot be `null`").primary(limit).emit(dh);
-        return failure::promise();
-      },
-      [&](const pattern&) -> failure_or<ast::constant> {
-        diagnostic::error("limit cannot be a pattern").primary(limit).emit(dh);
-        return failure::promise();
-      },
-      [&](const duration& d) -> failure_or<ast::constant> {
-        if (args.res) {
-          const auto val = d.count();
-          const auto count = std::abs(args.res->inner.count());
-          const auto rem = std::abs(val % count);
-          if (rem) {
-            const auto ceil = val >= 0 ? count - rem : rem;
-            const auto floor = val >= 0 ? -rem : rem - count;
-            return ast::constant{
-              duration{val + (op == ast::binary_op::geq ? floor : ceil)},
-              loc,
-            };
-          }
-        }
-        return ast::constant{d, loc};
-      },
-      [&](const time& t) -> failure_or<ast::constant> {
-        if (not args.res) {
-          return ast::constant{t, loc};
-        }
-        auto b = time_type::make_arrow_builder(arrow_memory_pool());
-        check(append_builder(time_type{}, *b, t));
-        auto array = finish(*b);
-        auto opts = make_round_temporal_options(args.res->inner);
-        auto result
-          = op == ast::binary_op::geq
-              ? check(arrow::compute::FloorTemporal(array, std::move(opts)))
-                  .array_as<arrow::TimestampArray>()
-              : check(arrow::compute::CeilTemporal(array, std::move(opts)))
-                  .array_as<arrow::TimestampArray>();
-        TENZIR_ASSERT(result->length() == 1);
-        return ast::constant{value_at(time_type{}, *result, 0), loc};
-      },
-      [&](const auto& d) -> failure_or<ast::constant> {
-        return ast::constant{d, loc};
-      });
-    TRY(auto c, result);
-    auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
-    auto&& [legacy, remainder] = split_legacy_expression(expr);
-    return xlimit{
-      std::move(limit),
-      c.as_data(),
-      std::move(legacy),
-      std::move(remainder),
-    };
+  auto describe() const -> Description override {
+    if constexpr (Ty == chart_type::area) {
+      return describe_chart_area();
+    } else if constexpr (Ty == chart_type::bar) {
+      return describe_chart_bar();
+    } else if constexpr (Ty == chart_type::line) {
+      return describe_chart_line();
+    } else {
+      static_assert(Ty == chart_type::pie);
+      return describe_chart_pie();
+    }
   }
 };
 
