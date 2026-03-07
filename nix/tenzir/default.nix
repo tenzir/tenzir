@@ -302,8 +302,14 @@ let
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
-            UV_PYTHON="${lib.getBin py3.python}/bin/python3";
-            NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv";
+            UV_PYTHON = "${lib.getBin py3.python}/bin/python3";
+            NIX_LDFLAGS =
+              lib.optionalString (
+                stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
+              ) "-L${lib.getDev iconv}/lib -liconv"
+              + lib.optionalString (
+                stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isStatic && stdenv.cc.isGNU
+              ) "-spec ${./static-pie.spec}";
           };
           cmakeFlags =
             [
@@ -387,7 +393,6 @@ let
           hardeningDisable =
             lib.optionals isStatic [
               "fortify"
-              "pic"
             ];
 
           preBuild =

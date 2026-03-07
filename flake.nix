@@ -59,19 +59,40 @@
       system:
       let
         overlay = import ./nix/overlay.nix;
-        pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+        lib = pkgs.lib;
+        pkgsStaticPie = import nixpkgs {
+          inherit system;
+          overlays = [ overlay ];
+          crossSystem = {
+            config = lib.systems.parse.tripleFromSystem (
+              if pkgs.stdenv.hostPlatform.isLinux then
+                lib.systems.parse.mkMuslSystem pkgs.stdenv.hostPlatform.parsed
+              else
+                pkgs.stdenv.hostPlatform.parsed
+            );
+            isStatic = true;
+          };
+          crossOverlays = [
+            (finalPkgs: prevPkgs: {
+              stdenv = prevPkgs.stdenvAdapters.withCFlags [ "-fPIE" ] prevPkgs.stdenv;
+            })
+          ];
+        };
+        pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [
+          overlay
+        ];
         tenzirPythonPkgs = pkgs.callPackage ./python {
           inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
         };
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
-          inherit tenzirPythonPkgs;
+          inherit pkgsStaticPie tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
-          inherit tenzirPythonPkgs;
+          inherit pkgsStaticPie tenzirPythonPkgs;
           forceClang = true;
         };
       in

@@ -3,6 +3,7 @@
   nix2container,
   lib,
   pkgs,
+  pkgsStaticPie,
   tenzirPythonPkgs,
   forceClang ? false,
 }:
@@ -159,6 +160,6 @@ rec {
       x // { unchecked = x; };
   tenzir-de = toChecked (unchecked pkgs).tenzir-de;
   tenzir = toChecked (unchecked pkgs).tenzir;
-  tenzir-de-static = toChecked (unchecked pkgs.pkgsStatic).tenzir-de;
-  tenzir-static = toChecked (unchecked pkgs.pkgsStatic).tenzir;
+  tenzir-de-static = toChecked (unchecked pkgsStaticPie).tenzir-de;
+  tenzir-static = toChecked (unchecked pkgsStaticPie).tenzir;
 }

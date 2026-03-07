@@ -1,0 +1,2 @@
+*startfile:
+%{!mandroid|tno-android-ld:%{shared:; pg|p|profile:%{static-pie:grcrt1.o%s;:gcrt1.o%s}; static-pie:rcrt1.o%s; static:crt1.o%s; pie:Scrt1.o%s; :crt1.o%s} crti.o%s %{static-pie:crtbeginS.o%s; static:crtbeginT.o%s; shared|pie:crtbeginS.o%s; :crtbegin.o%s} %{fvtable-verify=none:%s; fvtable-verify=preinit:vtv_start_preinit.o%s; fvtable-verify=std:vtv_start.o%s} ;:%{shared: crtbegin_so%O%s;: %{static: crtbegin_static%O%s;: crtbegin_dynamic%O%s}}}
