@@ -798,7 +798,7 @@ private:
                            panic("already have a subpipeline for that key");
                          }
                          auto& subpipe = as<SubPipeline<In>>(it->second.handle);
-                         return OpenPipeline<In>{*subpipe.push};
+                         return OpenPipeline<In>{subpipe.push};
                        });
   }
 
@@ -813,7 +813,7 @@ private:
       sub.handle,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
         if (subpipeline.push) {
-          return OpenPipeline<In>{*subpipeline.push};
+          return OpenPipeline<In>{subpipeline.push};
         }
         // Pipeline is still alive but pushing things will be ignored.
         return OpenPipeline<In>{None{}};

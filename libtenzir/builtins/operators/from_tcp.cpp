@@ -163,7 +163,6 @@ public:
   }
 
 private:
-  // TODO: Make OpenPipeline thread safe.
   static auto read_loop(Box<folly::coro::Transport> transport,
                         OpenPipeline<chunk_ptr> pipeline,
                         diagnostic_handler& dh, MetricsCounter bytes_counter)
