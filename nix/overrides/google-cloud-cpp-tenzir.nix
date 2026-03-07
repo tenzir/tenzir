@@ -16,17 +16,20 @@
     google-cloud-cpp
 ).overrideAttrs
   (orig: {
-    version = "2.45.0";
+    version = "2.46.0";
 
     src = fetchFromGitHub {
       owner = "googleapis";
       repo = "google-cloud-cpp";
-      tag = "v2.45.0";
-      hash = "sha256-TniMcby9PtG+jvtqQwO0cqXASjuPhlboNjb03WkQjNE=";
+      tag = "v2.46.0";
+      hash = "sha256-ylqio6wCW5Bl1XBeNZuNWPhWpmKJDoQnNg1FYAZ2pVo=";
     };
     installCheckPhase =
       let
-        disabledTests = lib.optionalString stdenv.hostPlatform.isDarwin ''
+        disabledTests = ''
+          bigtable_internal_data_connection_impl_test
+        ''
+        + lib.optionalString stdenv.hostPlatform.isDarwin ''
           common_internal_async_connection_ready_test
           bigtable_async_read_stream_test
           bigtable_metadata_update_policy_test

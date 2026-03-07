@@ -89,7 +89,8 @@ rec {
     linkPkgs:
     let
       baseStdenv = if forceClang then linkPkgs.clangStdenv else linkPkgs.stdenv;
-      canUseMold = linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
+      # Temporarily disabled until https://nixpk.gs/pr-tracker.html?pr=498046 hits master.
+      canUseMold = false; # linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
       linkAdapter  = if canUseMold then linkPkgs.stdenvAdapters.useMoldLinker else lib.trivial.id;
       tenzirStdenv = linkAdapter baseStdenv;
       tenzir-de = linkPkgs.callPackage ./tenzir {
