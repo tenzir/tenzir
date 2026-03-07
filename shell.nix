@@ -19,7 +19,6 @@ pkgs.mkShell (
         pkgs.ccache
         pkgs.clang-tools
         pkgs.cmake-format
-        pkgs.gperf
         pkgs.nixfmt
         pkgs.speeve
         pkgs.libsodium

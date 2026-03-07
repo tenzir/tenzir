@@ -17,11 +17,5 @@ jemalloc.overrideAttrs (orig: {
       "--without-export"
     ];
 
-  env =
-    (orig.env or { })
-    // {
-      EXTRA_CFLAGS = " -fno-omit-frame-pointer";
-    };
-
   doCheck = orig.doCheck && (!stdenv.hostPlatform.isDarwin);
 })

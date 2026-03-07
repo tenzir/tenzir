@@ -10,7 +10,7 @@
 
   inputs = {
     isReleaseBuild.url = "github:boolean-option/false";
-    nixpkgs.url = "github:tobim/nixpkgs/feb094c7b636764a305a6486998805dcb6db7b79";
+    nixpkgs.url = "github:nixos/nixpkgs/05a293da4d2983134d3ad4651d8ddb261f56891f";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
