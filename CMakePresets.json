@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 10,
   "configurePresets": [
     {
       "name": "nix-base",
@@ -232,6 +232,9 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "/opt/homebrew/opt/llvm/bin/clang",
         "CMAKE_CXX_COMPILER": "/opt/homebrew/opt/llvm/bin/clang++",
+        "$comment": "Homebrew LLVM ar & ranlib create broken archives",
+        "CMAKE_AR": "/usr/bin/ar",
+        "CMAKE_RANLIB": "/usr/bin/ranlib",
         "CMAKE_CXX_FLAGS": "-nostdinc++ -isystem /opt/homebrew/opt/llvm/include/c++/v1 -include stdlib.h",
         "CMAKE_EXE_LINKER_FLAGS": "-L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++",
         "CMAKE_SHARED_LINKER_FLAGS": "-L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++",
