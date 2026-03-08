@@ -65,6 +65,7 @@ set(CPACK_VERBATIM_VARIABLES ON)
 
 # productbuild requires HTML files for welcome, readme, and license.
 if (APPLE)
+  set(CPACK_PRODUCTBUILD_IDENTIFIER "com.tenzir.tenzir")
   set(CPACK_RESOURCE_FILE_WELCOME
       "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/welcome.html")
   set(CPACK_RESOURCE_FILE_README

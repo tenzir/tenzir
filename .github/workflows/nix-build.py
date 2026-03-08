@@ -105,7 +105,7 @@ def set_distribution_pkg_identifier(distribution_path: Path, identifier: str) ->
     tree = ET.parse(distribution_path)
     root = tree.getroot()
     for elem in root.iter():
-        if elem.get("id"):
+        if elem.tag == "pkg-ref" and elem.get("id"):
             elem.set("id", identifier)
     tree.write(distribution_path, encoding="utf-8", xml_declaration=True)
 
@@ -117,7 +117,11 @@ def verify_distribution_pkg_identifier(
     """Ensure all pkg-ref identifiers in Distribution match the expected id."""
     tree = ET.parse(distribution_path)
     root = tree.getroot()
-    ids = {elem.get("id") for elem in root.iter() if elem.get("id")}
+    ids = {
+        elem.get("id")
+        for elem in root.iter()
+        if elem.tag == "pkg-ref" and elem.get("id")
+    }
     if ids != {expected_identifier}:
         raise RuntimeError(
             "distribution identifier mismatch for "
