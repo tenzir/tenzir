@@ -766,6 +766,59 @@ jobs:
         run: |
           uv publish --publish-url https://test.pypi.org/legacy/ --token "${{ secrets.TEST_PYPI_TOKEN }}" dist/*
 
+  update-homebrew-tap:
+    needs:
+      - configure
+      - tenzir-static-arm64-darwin
+    if: github.event_name == 'release'
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Download signed package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: tenzir-signed-pkg-arm64-darwin
+          path: ${{ runner.temp }}/signed-pkg
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: homebrew-tenzir
+      - name: Update tap repo
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          PKGUTIL_IDENTIFIER: com.tenzir.tenzir.runtime
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TAP_REPO: tenzir/homebrew-tenzir
+        run: |
+          pkg_path="$(ls "${{ runner.temp }}/signed-pkg/"*.pkg)"
+          sha256="$(shasum -a 256 "$pkg_path" | awk '{print $1}')"
+          version="${RELEASE_TAG#v}"
+          tap_dir="${{ runner.temp }}/homebrew-tenzir"
+
+          git config --global user.name "tenzir-bot"
+          git config --global user.email "engineering@tenzir.com"
+
+          git clone "https://x-access-token:${APP_TOKEN}@github.com/${TAP_REPO}.git" "$tap_dir"
+
+          python3 scripts/update-homebrew-cask.py \
+            --cask "$tap_dir/Casks/tenzir.rb" \
+            --version "$version" \
+            --sha256 "$sha256" \
+            --pkgutil-identifier "$PKGUTIL_IDENTIFIER"
+
+          if git -C "$tap_dir" diff --quiet -- Casks/tenzir.rb; then
+            echo "Homebrew cask is already up to date"
+            exit 0
+          fi
+
+          git -C "$tap_dir" add Casks/tenzir.rb
+          git -C "$tap_dir" commit -m "Update tenzir cask to ${RELEASE_TAG}"
+          git -C "$tap_dir" push origin HEAD
+
   pass-branch-protections:
     needs:
       - configure
@@ -773,6 +826,7 @@ jobs:
       - policy-enforcement
       - python
       - python-package
+      - update-homebrew-tap
       # TODO: Re-enable this after v4.26 was released.
       # - regression-tests
       # TODO: Re-enable this when homebrew is fixed (aws-sdk-cpp issue).
