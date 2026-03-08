@@ -787,37 +787,57 @@ jobs:
           app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
           private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
           repositories: homebrew-tenzir
-      - name: Update tap repo
+      - name: Prepare tap update
         env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
-          PKGUTIL_IDENTIFIER: com.tenzir.tenzir.runtime
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-          TAP_REPO: tenzir/homebrew-tenzir
         run: |
           pkg_path="$(ls "${{ runner.temp }}/signed-pkg/"*.pkg)"
           sha256="$(shasum -a 256 "$pkg_path" | awk '{print $1}')"
           version="${RELEASE_TAG#v}"
-          tap_dir="${{ runner.temp }}/homebrew-tenzir"
+          {
+            echo "HOMEBREW_TAP_SHA256=$sha256"
+            echo "HOMEBREW_TAP_VERSION=$version"
+            echo "HOMEBREW_TAP_DIR=${{ runner.temp }}/homebrew-tenzir"
+            echo "HOMEBREW_TAP_REPO=tenzir/homebrew-tenzir"
+            echo "HOMEBREW_PKGUTIL_IDENTIFIER=com.tenzir.tenzir.runtime"
+          } >> "$GITHUB_ENV"
 
+      - name: Clone tap repo
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAP_REPO: ${{ env.HOMEBREW_TAP_REPO }}
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+        run: |
           git config --global user.name "tenzir-bot"
           git config --global user.email "engineering@tenzir.com"
+          git clone "https://x-access-token:${APP_TOKEN}@github.com/${TAP_REPO}.git" "$TAP_DIR"
 
-          git clone "https://x-access-token:${APP_TOKEN}@github.com/${TAP_REPO}.git" "$tap_dir"
-
+      - name: Render Homebrew cask
+        env:
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+          VERSION: ${{ env.HOMEBREW_TAP_VERSION }}
+          SHA256: ${{ env.HOMEBREW_TAP_SHA256 }}
+          PKGUTIL_IDENTIFIER: ${{ env.HOMEBREW_PKGUTIL_IDENTIFIER }}
+        run: |
           python3 scripts/update-homebrew-cask.py \
-            --cask "$tap_dir/Casks/tenzir.rb" \
-            --version "$version" \
-            --sha256 "$sha256" \
+            --cask "$TAP_DIR/Casks/tenzir.rb" \
+            --version "$VERSION" \
+            --sha256 "$SHA256" \
             --pkgutil-identifier "$PKGUTIL_IDENTIFIER"
 
-          if git -C "$tap_dir" diff --quiet -- Casks/tenzir.rb; then
+      - name: Commit tap update
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+        run: |
+          if git -C "$TAP_DIR" diff --quiet -- Casks/tenzir.rb; then
             echo "Homebrew cask is already up to date"
             exit 0
           fi
 
-          git -C "$tap_dir" add Casks/tenzir.rb
-          git -C "$tap_dir" commit -m "Update tenzir cask to ${RELEASE_TAG}"
-          git -C "$tap_dir" push origin HEAD
+          git -C "$TAP_DIR" add Casks/tenzir.rb
+          git -C "$TAP_DIR" commit -m "Update tenzir cask to ${RELEASE_TAG}"
+          git -C "$TAP_DIR" push origin HEAD
 
   pass-branch-protections:
     needs:
