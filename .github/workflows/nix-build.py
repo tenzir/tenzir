@@ -101,7 +101,11 @@ def verify_pkg_identifier(package_info_path: Path, expected_identifier: str) -> 
 
 
 def set_distribution_pkg_identifier(distribution_path: Path, identifier: str) -> None:
-    """Rewrite pkg-ref identifiers in the Distribution manifest."""
+    """Rewrite only pkg-ref identifiers in the Distribution manifest.
+
+    Choice ids and their references must remain unchanged, otherwise the
+    installer's choice graph becomes inconsistent.
+    """
     tree = ET.parse(distribution_path)
     root = tree.getroot()
     for elem in root.iter():
@@ -811,6 +815,8 @@ def cmd_sign(args: argparse.Namespace) -> int:
                     set_pkg_identifier(
                         package_info_path, TENZIR_MACOS_PKGUTIL_IDENTIFIER
                     )
+                    # Only pkg-ref ids should be normalized here. Distribution
+                    # also contains choice ids that are referenced separately.
                     set_distribution_pkg_identifier(
                         distribution_path, TENZIR_MACOS_PKGUTIL_IDENTIFIER
                     )
