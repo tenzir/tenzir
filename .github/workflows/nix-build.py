@@ -1109,6 +1109,12 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_print_pkgutil_identifier(_: argparse.Namespace) -> int:
+    """Print the macOS pkgutil identifier for workflow consumers."""
+    print(TENZIR_MACOS_PKGUTIL_IDENTIFIER)
+    return 0
+
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -1246,6 +1252,13 @@ def main() -> int:
         help="Build images in release mode",
     )
     push_parser.set_defaults(func=cmd_push)
+
+    # --- print-pkgutil-identifier subcommand ---
+    print_pkgutil_identifier_parser = subparsers.add_parser(
+        "print-pkgutil-identifier",
+        help="Print the macOS pkgutil identifier",
+    )
+    print_pkgutil_identifier_parser.set_defaults(func=cmd_print_pkgutil_identifier)
 
     args = parser.parse_args()
     return args.func(args)

@@ -794,12 +794,13 @@ jobs:
           pkg_path="$(ls "${{ runner.temp }}/signed-pkg/"*.pkg)"
           sha256="$(shasum -a 256 "$pkg_path" | awk '{print $1}')"
           version="${RELEASE_TAG#v}"
+          pkgutil_identifier="$(python3 .github/workflows/nix-build.py print-pkgutil-identifier)"
           {
             echo "HOMEBREW_TAP_SHA256=$sha256"
             echo "HOMEBREW_TAP_VERSION=$version"
             echo "HOMEBREW_TAP_DIR=${{ runner.temp }}/homebrew-tenzir"
             echo "HOMEBREW_TAP_REPO=tenzir/homebrew-tenzir"
-            echo "HOMEBREW_PKGUTIL_IDENTIFIER=com.tenzir.tenzir.runtime"
+            echo "HOMEBREW_PKGUTIL_IDENTIFIER=$pkgutil_identifier"
           } >> "$GITHUB_ENV"
 
       - name: Clone tap repo
