@@ -215,10 +215,12 @@ add_subdirectory(proxygen SYSTEM)
 # <glog/logging.h>. Proxygen source files use raw DEFINE_int32/DEFINE_bool
 # macros without explicitly including gflags. Force-include the header.
 target_compile_options(proxygen PRIVATE -include gflags/gflags.h)
-TenzirSystemizeTarget(proxygenhttpserver)
-if (NOT TARGET proxygen::proxygenhttpserver)
-  add_library(proxygen::proxygenhttpserver ALIAS proxygenhttpserver)
-endif ()
+TenzirSystemizeTarget(proxygen_coro_client)
+# proxygen_utils_trace calls getTraceEventTypeString/getTraceFieldTypeString
+# from proxygen_utils_trace_event_types but does not declare the dependency.
+# Patch it here so the linker sees the archives in the correct order.
+target_link_libraries(proxygen_utils_trace
+  PUBLIC proxygen_utils_trace_event_types)
 dependency_summary("proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/proxygen"
                    "Dependencies")
 
