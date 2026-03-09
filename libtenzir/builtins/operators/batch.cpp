@@ -133,7 +133,7 @@ private:
 
 struct BatchArgs {
   uint64_t limit = defaults::import::table_slice_size;
-  duration timeout = duration::max();
+  duration timeout = std::chrono::minutes{1};
 };
 
 class Batch final : public Operator<table_slice, table_slice> {
@@ -255,7 +255,7 @@ public:
     }
     return std::make_unique<batch_operator>(
       limit ? limit->inner : defaults::import::table_slice_size,
-      timeout ? timeout->inner : duration::max(), event_order::ordered);
+      timeout ? timeout->inner : std::chrono::minutes{1}, event_order::ordered);
   }
 
   auto make(invocation inv, session ctx) const
@@ -285,7 +285,7 @@ public:
     }
     return std::make_unique<batch_operator>(
       limit ? limit->inner : defaults::import::table_slice_size,
-      timeout ? timeout->inner : duration::max(), event_order::ordered);
+      timeout ? timeout->inner : std::chrono::minutes{1}, event_order::ordered);
   }
 
   auto describe() const -> Description override {
