@@ -64,6 +64,16 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(result, push);
     sleep_done_ = true;
+    // For transformation sub-pipelines, close the current one so it
+    // finishes and triggers finish_sub.
+    if constexpr (not std::same_as<Input, void>) {
+      TENZIR_ASSERT(next_ > 0);
+      auto sub = ctx.get_sub(int64_t{next_ - 1});
+      if (sub) {
+        auto& pipe = as<OpenPipeline<Input>>(*sub);
+        co_await pipe.close();
+      }
+    }
     co_await maybe_respawn(ctx);
   }
 
