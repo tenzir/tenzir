@@ -1165,4 +1165,3 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::chart::PluginArea)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::chart::PluginBar)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::chart::PluginLine)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::chart::PluginPie)
-
