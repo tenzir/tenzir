@@ -1,0 +1,12 @@
+from {
+  value: 1,
+  category: "a",
+}, {
+  value: 2,
+  category: "b",
+}, {
+  value: 3,
+  category: "c",
+}
+import
+

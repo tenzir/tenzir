@@ -1,0 +1,4 @@
+export
+where value >= 2
+sort value
+
