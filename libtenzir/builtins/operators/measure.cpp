@@ -176,9 +176,7 @@ public:
     if (input.rows() == 0) {
       if (builder_.length() > 0
           and last_finish_ + defaults::import::batch_timeout < now) {
-        last_finish_ = now;
-        co_await push(
-          builder_.finish_assert_one_slice("tenzir.measure.events"));
+        co_await flush(push, now);
       }
       co_return;
     }
@@ -202,8 +200,7 @@ public:
     if (args_.real_time
         or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
         or last_finish_ + defaults::import::batch_timeout < now) {
-      last_finish_ = now;
-      co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
+      co_await flush(push, now);
     }
   }
 
@@ -211,9 +208,19 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
+      auto now = std::chrono::steady_clock::now().time_since_epoch();
+      co_await flush(push, now);
     }
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (builder_.length() > 0) {
+      auto now = std::chrono::steady_clock::now().time_since_epoch();
+      co_await flush(push, now);
+    }
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -222,6 +229,12 @@ public:
   }
 
 private:
+  auto flush(Push<table_slice>& push, std::chrono::steady_clock::duration now)
+    -> Task<void> {
+    last_finish_ = now;
+    co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
+  }
+
   MeasureArgs args_;
   series_builder builder_;
   std::unordered_map<type, uint64_t> counters_;
@@ -243,8 +256,7 @@ public:
     if (not input or input->size() == 0) {
       if (builder_.length() > 0
           and last_finish_ + defaults::import::batch_timeout < now) {
-        last_finish_ = now;
-        co_await push(builder_.finish_assert_one_slice());
+        co_await flush(push, now);
       }
       co_return;
     }
@@ -255,8 +267,7 @@ public:
     if (args_.real_time
         or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
         or last_finish_ + defaults::import::batch_timeout < now) {
-      last_finish_ = now;
-      co_await push(builder_.finish_assert_one_slice());
+      co_await flush(push, now);
     }
   }
 
@@ -264,9 +275,19 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice());
+      auto now = std::chrono::steady_clock::now().time_since_epoch();
+      co_await flush(push, now);
     }
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (builder_.length() > 0) {
+      auto now = std::chrono::steady_clock::now().time_since_epoch();
+      co_await flush(push, now);
+    }
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -284,6 +305,12 @@ private:
       },
     };
     return result;
+  }
+
+  auto flush(Push<table_slice>& push, std::chrono::steady_clock::duration now)
+    -> Task<void> {
+    last_finish_ = now;
+    co_await push(builder_.finish_assert_one_slice());
   }
 
   MeasureArgs args_;
