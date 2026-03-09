@@ -49,6 +49,39 @@ auto jsonify_limit(const data& d) -> std::string {
   return result;
 }
 
+/// Extracts contiguous runs of `true` values from a boolean array and returns
+/// the corresponding subslices.
+auto split_contiguous_true_runs(const arrow::BooleanArray& array,
+                                 const table_slice& slice, int64_t offset = 0)
+  -> std::vector<table_slice> {
+  const auto len = array.length();
+  // Fast path: no true values
+  if (array.true_count() == 0) {
+    return {};
+  }
+  // Fast path: all true values
+  if (array.true_count() == len) {
+    return {subslice(slice, offset, offset + len)};
+  }
+  // Extract contiguous runs of true values
+  auto results = std::vector<table_slice>{};
+  auto curr = array.Value(0);
+  auto begin = int64_t{0};
+  // We add an artificial `false` at index `length` to flush.
+  for (auto i = int64_t{1}; i < len + 1; ++i) {
+    const auto next = i != len && array.IsValid(i) && array.Value(i);
+    if (curr == next) {
+      continue;
+    }
+    if (curr) {
+      results.push_back(subslice(slice, offset + begin, offset + i));
+    }
+    curr = next;
+    begin = i;
+  }
+  return results;
+}
+
 using bucket = std::vector<std::unique_ptr<aggregation_instance>>;
 // Will point to valid strings, as `std::unordered_set` does not invalidate
 // pointers on insertion
@@ -424,12 +457,12 @@ auto handle_xlimit(const chart_args& args, ast::binary_op op,
     });
   TRY(auto c, result);
   auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
-  auto&& [legacy, remainder] = split_legacy_expression(expr);
+  auto&& [legacy, _] = split_legacy_expression(expr);
   return xlimit{
     std::move(limit),
     c.as_data(),
     std::move(legacy),
-    std::move(remainder),
+    std::move(expr),
   };
 }
 
@@ -817,9 +850,11 @@ private:
 
   auto filter_input(table_slice slice, diagnostic_handler& dh)
     -> std::vector<table_slice> {
+    // Early exit: no limits set
     if (not args_->x_min and not args_->x_max) {
       return {std::move(slice)};
     }
+    // Build combined expression from x_min and x_max
     const auto expr = std::invoke([&]() -> ast::expression {
       if (args_->x_min and args_->x_max) {
         return ast::binary_expr{
@@ -834,31 +869,19 @@ private:
       TENZIR_ASSERT(args_->x_max);
       return args_->x_max->expr;
     });
+    // Evaluate expression and extract filtered slices
     auto results = std::vector<table_slice>{};
-    for (auto&& s : eval(expr, slice, dh)) {
-      const auto* array = try_as<arrow::BooleanArray>(&*s.array);
+    auto offset = int64_t{0};
+    for (auto& filter : eval(expr, slice, dh)) {
+      const auto* array = try_as<arrow::BooleanArray>(&*filter.array);
       TENZIR_ASSERT(array);
       const auto len = array->length();
-      if (array->true_count() == 0) {
-        continue;
-      }
-      if (array->true_count() == len) {
-        results.push_back(slice);
-        continue;
-      }
-      auto curr = array->Value(0);
-      auto begin = int64_t{0};
-      for (auto i = int64_t{1}; i < len + 1; ++i) {
-        const auto next = i != len && array->IsValid(i) && array->Value(i);
-        if (curr == next) {
-          continue;
-        }
-        if (curr) {
-          results.push_back(subslice(slice, begin, i));
-        }
-        curr = next;
-        begin = i;
-      }
+      // Use shared helper to extract contiguous runs
+      auto subslices = split_contiguous_true_runs(*array, slice, offset);
+      results.insert(results.end(),
+                     std::make_move_iterator(subslices.begin()),
+                     std::make_move_iterator(subslices.end()));
+      offset += len;
     }
     return results;
   }

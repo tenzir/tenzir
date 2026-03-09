@@ -276,7 +276,7 @@ public:
   auto get_group_strings(const table_slice& slice, diagnostic_handler& dh) const
     -> series {
     if (not args_.group) {
-      return series::null(string_type{}, slice.rows());
+      return series::null(string_type{}, detail::narrow<int64_t>(slice.rows()));
     }
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
     auto gss = eval(args_.group.value(), slice, dh);
@@ -384,13 +384,13 @@ public:
         co_yield {};
         continue;
       }
-      const auto fs = eval(expr, slice, dh);
       // Modified from `where`
       auto offset = int64_t{0};
       for (auto& filter : eval(expr, slice, dh)) {
         const auto* array = try_as<arrow::BooleanArray>(&*filter.array);
         TENZIR_ASSERT(array);
         const auto len = array->length();
+        // Fast paths for co_yield
         if (array->true_count() == 0) {
           co_yield {};
           offset += len;
@@ -401,22 +401,9 @@ public:
           offset += len;
           continue;
         }
-        auto curr = array->Value(0);
-        auto begin = int64_t{0};
-        // We add an artificial `false` at index `length` to flush.
-        auto results = std::vector<table_slice>{};
-        for (auto i = int64_t{1}; i < len + 1; ++i) {
-          const auto next = i != len && array->IsValid(i) && array->Value(i);
-          if (curr == next) {
-            continue;
-          }
-          if (curr) {
-            results.push_back(subslice(slice, offset + begin, offset + i));
-          }
-          curr = next;
-          begin = i;
-        }
-        co_yield concatenate(std::move(results));
+        // Use shared helper for mixed true/false runs
+        auto subslices = split_contiguous_true_runs(*array, slice, offset);
+        co_yield concatenate(std::move(subslices));
         offset += len;
       }
     }
