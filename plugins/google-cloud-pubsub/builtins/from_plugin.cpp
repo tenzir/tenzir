@@ -119,8 +119,6 @@ public:
         }
         std::move(h).ack();
       });
-    auto session_status = std::optional<google::cloud::Status>{};
-    auto report_from_guard = true;
     auto shared_diagnostics = ctrl.shared_diagnostics();
     auto session_guard = detail::scope_guard{[&]() noexcept {
       if (not session.valid()) {
@@ -133,11 +131,11 @@ public:
       // Always wait for the session to fully stop. This is critical to ensure
       // that gRPC background threads are no longer accessing captured locals
       // (builder_mut, msb, args_) before they are destroyed.
-      session_status = session.get();
-      if (report_from_guard and session_status and not session_status->ok()
-          and session_status->code() != google::cloud::StatusCode::kCancelled) {
+      const auto session_status = session.get();
+      if (not session_status.ok()
+          and session_status.code() != google::cloud::StatusCode::kCancelled) {
         diagnostic::error("google-cloud-subscriber: {}",
-                          session_status->message())
+                          session_status.message())
           .primary(args_.operator_location)
           .emit(shared_diagnostics);
       }
@@ -162,15 +160,7 @@ public:
         co_yield {};
       }
     }
-    report_from_guard = false;
     session_guard.trigger();
-    if (session_status and not session_status->ok()
-        and session_status->code() != google::cloud::StatusCode::kCancelled) {
-      diagnostic::error("google-cloud-subscriber: {}",
-                        session_status->message())
-        .primary(args_.operator_location)
-        .emit(ctrl.diagnostics());
-    }
     for (auto&& s : msb.finalize_as_table_slice()) {
       co_yield std::move(s);
     }
