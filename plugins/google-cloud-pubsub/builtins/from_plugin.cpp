@@ -119,6 +119,7 @@ public:
         }
         std::move(h).ack();
       });
+    auto shared_diagnostics = ctrl.shared_diagnostics();
     auto session_guard = detail::scope_guard{[&]() noexcept {
       if (not session.valid()) {
         return;
@@ -130,12 +131,13 @@ public:
       // Always wait for the session to fully stop. This is critical to ensure
       // that gRPC background threads are no longer accessing captured locals
       // (builder_mut, msb, args_) before they are destroyed.
-      auto status = session.get();
-      if (not status.ok()
-          and status.code() != google::cloud::StatusCode::kCancelled) {
-        diagnostic::error("google-cloud-subscriber: {}", status.message())
+      const auto session_status = session.get();
+      if (not session_status.ok()
+          and session_status.code() != google::cloud::StatusCode::kCancelled) {
+        diagnostic::error("google-cloud-subscriber: {}",
+                          session_status.message())
           .primary(args_.operator_location)
-          .emit(ctrl.diagnostics());
+          .emit(shared_diagnostics);
       }
     }};
     while (session.valid()) {
