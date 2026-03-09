@@ -9,6 +9,7 @@
 #include "tenzir/multi_series_builder.hpp"
 
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -118,9 +119,10 @@ public:
         }
         std::move(h).ack();
       });
-    auto stop_session = [&]() -> std::optional<google::cloud::Status> {
+    auto session_status = std::optional<google::cloud::Status>{};
+    auto session_guard = detail::scope_guard{[&]() noexcept {
       if (not session.valid()) {
-        return std::nullopt;
+        return;
       }
       if (not session.is_ready()) {
         // Initiate cancellation of the subscription.
@@ -129,8 +131,8 @@ public:
       // Always wait for the session to fully stop. This is critical to ensure
       // that gRPC background threads are no longer accessing captured locals
       // (builder_mut, msb, args_) before they are destroyed.
-      return session.get();
-    };
+      session_status = session.get();
+    }};
     while (session.valid()) {
       if (session.is_ready()) {
         break;
@@ -151,13 +153,13 @@ public:
         co_yield {};
       }
     }
-    if (auto status = stop_session()) {
-      if (not status->ok()
-          and status->code() != google::cloud::StatusCode::kCancelled) {
-        diagnostic::error("google-cloud-subscriber: {}", status->message())
+    session_guard.trigger();
+    if (session_status and not session_status->ok()
+        and session_status->code() != google::cloud::StatusCode::kCancelled) {
+      diagnostic::error("google-cloud-subscriber: {}",
+                        session_status->message())
           .primary(args_.operator_location)
           .emit(ctrl.diagnostics());
-      }
     }
     for (auto&& s : msb.finalize_as_table_slice()) {
       co_yield std::move(s);
