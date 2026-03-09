@@ -133,6 +133,8 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(push);
     TENZIR_ASSERT(this->next_ > 0);
+    // TODO: This can drop events at the boundary between closing the old
+    // sub-pipeline and spawning the new one.
     auto sub = ctx.get_sub(int64_t{this->next_ - 1});
     if (not sub) {
       co_return;

@@ -1,10 +1,10 @@
 let $parent = now()
-every 500ms {
+every 750ms {
   from {x: 1}
 }
-every 2s {
+every 1s {
   let $started = now()
   x = ($started - $parent).round(1s)
   y = (now() - $parent).round(1s)
 }
-head 5
+head 4
