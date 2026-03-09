@@ -48,12 +48,13 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    // TODO: Do we directly want to spawn one here? What if we restore?
-    // (co_await spawn_new(ctx)).ignore();
-    co_return;
+    if (not ctx.get_sub(int64_t{next_})) {
+      co_await spawn_new(ctx);
+    }
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
     auto next = last_started_ + interval_;
     co_await sleep_until(next);
     co_return {};
@@ -61,32 +62,24 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    last_started_ = time::clock::now();
-    if (next_ > 0) {
-      auto last_pipe = ctx.get_sub(next_ - 1);
-      if (last_pipe) {
-        if constexpr (not std::same_as<Input, void>) {
-          auto pipe = as<OpenPipeline<Input>>(*last_pipe);
-          // TODO: Does this get rid of it?
-          co_await pipe.close();
-        }
-      } else {
-        // FIXME
-      }
-    }
-    auto spawn_result = co_await spawn_new(ctx);
-    spawn_result.ignore();
+    TENZIR_UNUSED(result, push);
+    sleep_done_ = true;
+    co_await maybe_respawn(ctx);
   }
 
-  auto spawn_new(OpCtx& ctx) -> Task<failure_or<AnyOpenPipeline>> {
-    auto copy = ir_;
-    // FIXME: Don't do this.
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
-    CO_TRY(copy.substitute(substitute_ctx{b_ctx, nullptr}, true));
-    auto id = next_;
-    next_ += 1;
-    co_return co_await ctx.spawn_sub(id, std::move(copy), tag_v<Input>);
+  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(key, push);
+    sub_finished_ = true;
+    co_await maybe_respawn(ctx);
+  }
+
+  // TODO: Clean this up with the upcoming subpipelines PR.
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    done_ = true;
+    co_return FinalizeBehavior::done;
   }
 
   auto snapshot(Serde& s) -> void override {
@@ -95,11 +88,27 @@ public:
   }
 
 protected:
+  auto spawn_new(OpCtx& ctx) -> Task<void> {
+    last_started_ = time::clock::now();
+    sleep_done_ = false;
+    sub_finished_ = false;
+    co_await ctx.spawn_sub(int64_t{next_}, ir_, tag_v<Input>);
+    ++next_;
+  }
+
+  auto maybe_respawn(OpCtx& ctx) -> Task<void> {
+    if (sleep_done_ and sub_finished_ and not done_) {
+      co_await spawn_new(ctx);
+    }
+  }
+
   duration interval_;
   ir::pipeline ir_;
-
   time last_started_ = time::min();
-  size_t next_ = 0;
+  int64_t next_ = 0;
+  bool sleep_done_ = false;
+  bool sub_finished_ = false;
+  bool done_ = false;
 };
 
 template <class Input>
@@ -112,13 +121,14 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_ERROR("got input in every: {}", input.rows());
     TENZIR_UNUSED(push);
-    // TODO: Do we know that we have a subpipeline running?
     TENZIR_ASSERT(this->next_ > 0);
-    auto sub
-      = as<OpenPipeline<table_slice>>(check(ctx.get_sub(this->next_ - 1)));
-    (co_await sub.push(std::move(input))).expect("not closed?");
+    auto sub = ctx.get_sub(int64_t{this->next_ - 1});
+    if (not sub) {
+      co_return;
+    }
+    auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+    std::ignore = co_await pipe.push(std::move(input));
   }
 };
 
