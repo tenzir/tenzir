@@ -623,7 +623,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
 auto plugin_ptr::make_dynamic(const char* filename) noexcept
   -> caf::expected<plugin_ptr> {
   TENZIR_DISABLE_LEAK_SANITIZER();
-  auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY | RTLD_NODELETE);
   TENZIR_ENABLE_LEAK_SANITIZER();
   if (not library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
