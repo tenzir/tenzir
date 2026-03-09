@@ -681,10 +681,9 @@ public:
         auto wall_end = std::chrono::steady_clock::now();
         struct timespec cpu_end = {};
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
-        auto wall_delta
-          = std::chrono::duration_cast<std::chrono::microseconds>(wall_end
-                                                                  - wall_start)
-              .count();
+        auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+                            wall_end - wall_start)
+                            .count();
         auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
                          + (cpu_end.tv_nsec - cpu_start.tv_nsec);
         if (wall_delta > 1'000'000) {
@@ -978,7 +977,7 @@ public:
   auto make_io_executor(OpId id)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     return wrap_executor<folly::IOExecutor>(std::move(id),
-                                             folly::getGlobalIOExecutor());
+                                            folly::getGlobalIOExecutor());
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -1048,10 +1047,19 @@ private:
     -> PushPull<OperatorMsg<T>> {
     auto stats = Option<Arc<ChannelStats>>{};
     if (profiling_) {
-      stats = Arc<ChannelStats>{std::in_place};
-      (*stats)->record_backpressure = record_backpressure_;
       auto lock = std::scoped_lock{mutex_};
-      channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
+      // Look for an existing channel with the same ID to share stats with.
+      for (auto& c : channels_) {
+        if (c.id == id) {
+          stats = c.stats;
+          break;
+        }
+      }
+      if (stats.is_none()) {
+        stats = Arc<ChannelStats>{std::in_place};
+        (*stats)->record_backpressure = record_backpressure_;
+        channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
+      }
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));

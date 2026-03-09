@@ -356,20 +356,17 @@ private:
 /// finished processing the item and is ready for the next.
 class FusedExecCtx final : public ExecCtx {
 public:
-  explicit FusedExecCtx(ExecCtx& inner, PipeId pipe_id)
-    : inner_{inner},
-      executor_{inner.make_executor(pipe_id.op(0), "Fused")},
-      io_executor_{inner.make_io_executor(pipe_id.op(0))} {
+  explicit FusedExecCtx(ExecCtx& inner) : inner_{inner} {
   }
 
-  auto make_executor(OpId, std::string)
+  auto make_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<> override {
-    return executor_;
+    return inner_.make_executor(std::move(id), std::move(name));
   }
 
-  auto make_io_executor(OpId)
+  auto make_io_executor(OpId id)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
-    return io_executor_;
+    return inner_.make_io_executor(std::move(id));
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
@@ -412,7 +409,7 @@ auto run_chain_fused(OperatorChain<Input, Output> chain,
                      Receiver<FromControl> from_control,
                      Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
                      caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
-  auto fused_ctx = FusedExecCtx{exec_ctx, id};
+  auto fused_ctx = FusedExecCtx{exec_ctx};
   co_await run_chain(std::move(chain), std::move(pull_upstream),
                      std::move(push_downstream), std::move(from_control),
                      std::move(to_control), std::move(id), fused_ctx, sys, dh);
@@ -630,7 +627,12 @@ private:
   auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
                       bool fused) -> Task<AnyOpenPipeline> {
     auto sub_id = id_.sub(next_subpipeline_id_);
-    next_subpipeline_id_ += 1;
+    if (not fused) {
+      // For the parallel operator, which is currently the only user of the
+      // fused execution mode, we want to associate all subpipelines with the
+      // same executor such that all legs contribute to the same metrics.
+      next_subpipeline_id_ += 1;
+    }
     // Instantiate for the case where it was not instantiated yet.
     if (not pipe.substitute(substitute_ctx{base_ctx{dh_, *reg_}, nullptr},
                             true)) {
@@ -682,12 +684,12 @@ private:
         -> std::pair<Task<void>, variant<Box<Push<OperatorMsg<void>>>,
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
+        // Empty chains are currently not supported by `run_chain`. We should
+        // eventually support it there and then remove this assertion.
+        TENZIR_ASSERT(chain.size() > 0);
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
-        // When fused, all operators in the sub-pipeline share a single
-        // executor identity at op(0), so we must attribute the downstream
-        // channel to op(0) as well.
-        auto last_op = fused ? sub_id.op(0) : sub_id.op(chain.size() - 1);
+        auto last_op = sub_id.op(chain.size() - 1);
         auto [push_downstream, pull_downstream]
           = exec_ctx_.make_channel<Out>(last_op.to(id_));
         auto output_is_void = std::same_as<Out, void>;
