@@ -133,7 +133,7 @@ private:
 
 struct BatchArgs {
   uint64_t limit = defaults::import::table_slice_size;
-  duration timeout = duration::max();
+  duration timeout = std::chrono::minutes{1};
 };
 
 class Batch final : public Operator<table_slice, table_slice> {
