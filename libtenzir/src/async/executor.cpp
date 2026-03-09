@@ -381,6 +381,10 @@ public:
     return inner_.make_counter(label, direction, visibility);
   }
 
+  auto is_hidden() const -> bool override {
+    return inner_.is_hidden();
+  }
+
 protected:
   auto make_void(ChannelId) -> PushPull<OperatorMsg<void>> override {
     return fused_channel<OperatorMsg<void>>().into_push_pull();
@@ -504,6 +508,10 @@ private:
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return exec_ctx_.metrics_receiver();
+  }
+
+  auto is_hidden() const -> bool override {
+    return exec_ctx_.is_hidden();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)

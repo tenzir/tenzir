@@ -681,10 +681,9 @@ public:
         auto wall_end = std::chrono::steady_clock::now();
         struct timespec cpu_end = {};
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
-        auto wall_delta
-          = std::chrono::duration_cast<std::chrono::microseconds>(wall_end
-                                                                  - wall_start)
-              .count();
+        auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+                            wall_end - wall_start)
+                            .count();
         auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
                          + (cpu_end.tv_nsec - cpu_start.tv_nsec);
         if (wall_delta > 1'000'000) {
@@ -933,12 +932,13 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 
 class TestExecCtx final : public ExecCtx {
 public:
-  explicit TestExecCtx(Profiler const& profiler)
+  explicit TestExecCtx(Profiler const& profiler, bool is_hidden = false)
     : profiling_{not is<NoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
       metrics_receiver_{try_as<NodeProfiler>(profiler)
                           ? try_as<NodeProfiler>(profiler)->metrics
-                          : metrics_receiver_actor{}} {
+                          : metrics_receiver_actor{}},
+      is_hidden_{is_hidden} {
   }
 
   /// Return the current set of channel profiles.
@@ -978,7 +978,7 @@ public:
   auto make_io_executor(OpId id)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     return wrap_executor<folly::IOExecutor>(std::move(id),
-                                             folly::getGlobalIOExecutor());
+                                            folly::getGlobalIOExecutor());
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -988,6 +988,10 @@ public:
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return metrics_receiver_;
+  }
+
+  auto is_hidden() const -> bool override {
+    return is_hidden_;
   }
 
   auto take_metrics_snapshot() -> std::vector<MetricsSnapshotEntry> {
@@ -1062,6 +1066,7 @@ private:
   bool profiling_;
   bool record_backpressure_;
   metrics_receiver_actor metrics_receiver_;
+  bool is_hidden_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
@@ -1904,10 +1909,11 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
 } // namespace
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler) -> Task<failure_or<void>> {
+              DiagHandler& dh, Profiler profiler, bool is_hidden)
+  -> Task<failure_or<void>> {
   auto num_ops = chain.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto exec_ctx = TestExecCtx{profiler};
+  auto exec_ctx = TestExecCtx{profiler, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
@@ -1962,13 +1968,12 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   }
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke(
-    [&] -> Task<AsyncResult<failure_or<void>>> {
-      co_return co_await folly::coro::co_awaitTry(
-        folly::coro::co_withCancellation(
-          cancel_source.getToken(),
-          run_plan(std::move(chain), sys, diag_handler, std::move(profiler))));
-    });
+  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+    co_return co_await folly::coro::co_awaitTry(
+      folly::coro::co_withCancellation(
+        cancel_source.getToken(), run_plan(std::move(chain), sys, diag_handler,
+                                           std::move(profiler), false)));
+  });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));

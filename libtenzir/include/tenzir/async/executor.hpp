@@ -230,6 +230,9 @@ public:
                             MetricsVisibility visibility) -> MetricsCounter
     = 0;
 
+  /// Returns whether the pipeline is hidden.
+  virtual auto is_hidden() const -> bool = 0;
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
