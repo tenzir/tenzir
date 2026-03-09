@@ -134,9 +134,9 @@ public:
   }
 
 private:
-  located<std::string> field_ = {};
+  located<std::string> field_;
   double speed_ = 1.0;
-  std::optional<time> start_ = {};
+  std::optional<time> start_;
 };
 
 class delay_operator2 final : public crtp_operator<delay_operator2> {
@@ -250,7 +250,7 @@ public:
       co_return;
     }
     if (not start_time_) {
-      start_time_ = std::chrono::steady_clock::now().time_since_epoch();
+      start_time_ = std::chrono::steady_clock::now();
     }
     auto times_series = eval(expr_, input, ctx.dh());
     size_t begin = 0;
@@ -278,8 +278,7 @@ public:
         }
         TENZIR_ASSERT(start_time_);
         // compute needed delay
-        const auto elapsed
-          = std::chrono::steady_clock::now().time_since_epoch() - *start_time_;
+        const auto elapsed = std::chrono::steady_clock::now() - *start_time_;
         const auto anchor = *start_ + duration_cast<duration>(elapsed * speed_);
         const auto delay = duration_cast<duration>(
           duration_cast<std::chrono::duration<double>>(*time - anchor)
@@ -301,15 +300,20 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
-    serde("start", start_);
-    serde("start_time", start_time_);
+    TENZIR_UNUSED(serde);
+    // start and start_time are not stored in the snapshot, which can leads to
+    // confusing results when this operator is restored from snapshot.
+    // This is because we have no easy way to carry the steady_clock time point
+    // between potentially different machines or just machine reboots.
+    // Also, this operator is more for demonstration purposes and does not need
+    // such amount of snapshot rigidity.
   }
 
 private:
   ast::expression expr_;
   double speed_;
   std::optional<time> start_;
-  std::optional<std::chrono::steady_clock::duration> start_time_;
+  std::optional<std::chrono::steady_clock::time_point> start_time_;
 };
 
 class plugin final : public virtual operator_plugin<delay_operator> {
