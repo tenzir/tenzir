@@ -6,15 +6,259 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/operator_plugin.hpp"
+#include "tenzir/arrow_time_utils.hpp"
+#include "tenzir/arrow_utils.hpp"
+#include "tenzir/cast.hpp"
+#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/enumerate.hpp"
+#include "tenzir/series_builder.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/resolve.hpp"
 
-#include "chart3.inc"
+#include <ranges>
 
 namespace tenzir::plugins::chart {
 
+TENZIR_ENUM(chart_type, area, bar, line, pie);
+
 namespace {
+
+using bucket = std::vector<std::unique_ptr<aggregation_instance>>;
+// Will point to valid strings, as `std::unordered_set` does not invalidate
+// pointers on insertion
+using grouped_bucket = detail::stable_map<std::string_view, bucket>;
+using group_map = std::map<data, grouped_bucket>;
+using call_map = detail::stable_map<std::string, ast::function_call>;
+using plugins_map
+  = std::vector<std::pair<const aggregation_plugin*, ast::function_call>>;
+
+struct xlimit {
+  located<data> value;
+  data rounded;
+  expression legacy_expr;
+  ast::expression expr;
+
+  friend auto inspect(auto& f, xlimit& x) -> bool {
+    return f.object(x).fields(f.field("value", x.value),
+                              f.field("rounded", x.rounded),
+                              f.field("legacy_expr", x.legacy_expr),
+                              f.field("expr", x.expr));
+  }
+};
+
+struct chart_args {
+  chart_type ty;
+  ast::field_path x;
+  call_map y;
+  std::optional<ast::expression> group;
+  std::optional<xlimit> x_min;
+  std::optional<xlimit> x_max;
+  std::optional<located<data>> y_min;
+  std::optional<located<data>> y_max;
+  std::optional<located<duration>> res;
+  std::optional<located<data>> fill;
+  std::optional<location> x_log;
+  std::optional<location> y_log;
+  located<uint64_t> limit{100'000, location::unknown};
+  located<std::string> position{"grouped", location::unknown};
+  expression filter{trivially_true_expression()};
+  location y_loc;
+  location op_loc;
+
+  friend auto inspect(auto& f, chart_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("chart_args")
+      .fields(f.field("ty", x.ty), f.field("x", x.x), f.field("y", x.y),
+              f.field("group", x.group), f.field("x_min", x.x_min),
+              f.field("x_max", x.x_max), f.field("y_min", x.y_min),
+              f.field("y_max", x.y_max), f.field("res", x.res),
+              f.field("fill", x.fill), f.field("x_log", x.x_log),
+              f.field("y_log", x.y_log), f.field("limit", x.limit),
+              f.field("filter", x.filter), f.field("position", x.position),
+              f.field("y_loc", x.y_loc), f.field("op_loc", x.op_loc));
+  }
+
+  auto validate(diagnostic_handler& dh) const -> failure_or<void> {
+    if (position.inner != "stacked" and position.inner != "grouped") {
+      diagnostic::error("unsupported `position`")
+        .primary(position)
+        .hint("available positions: `grouped` (default) or `stacked`")
+        .emit(dh);
+      return failure::promise();
+    }
+    if (x_min) {
+      TRY(validate_xtype(x_min->value, dh));
+    }
+    if (x_max) {
+      TRY(validate_xtype(x_max->value, dh));
+    }
+    if (x_min and x_max) {
+      const auto min_idx = x_min->value.inner.get_data().index();
+      const auto max_idx = x_max->value.inner.get_data().index();
+      if (min_idx != max_idx) {
+        diagnostic::error("`x_min` and `x_max` must have the same type")
+          .primary(x_min->value.source)
+          .primary(x_max->value.source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (x_min->value.inner >= x_max->value.inner) {
+        diagnostic::error("`x_min` must be less than `x_max`")
+          .primary(x_min->value.source)
+          .primary(x_max->value.source)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (y_min) {
+      TRY(validate_ytype(*y_min, dh));
+    }
+    if (y_max) {
+      TRY(validate_ytype(*y_max, dh));
+    }
+    if (y_min and y_max) {
+      if (y_min->inner.get_data().index() != y_max->inner.get_data().index()) {
+        diagnostic::error("`y_min` and `y_max` must have the same type")
+          .primary(*y_min)
+          .primary(*y_max)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (y_min->inner >= y_max->inner) {
+        diagnostic::error("`y_min` must be less than `y_max`")
+          .primary(*y_min)
+          .primary(*y_max)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (fill) {
+      if (not res) {
+        diagnostic::error("`fill` cannot be specified without `resolution`")
+          .primary(fill->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      TRY(validate_ytype(*fill, dh));
+      if (y_min or y_max) {
+        const auto& type_idx = y_min ? y_min->inner.get_data().index()
+                                     : y_max->inner.get_data().index();
+        if (type_idx != fill->inner.get_data().index()) {
+          diagnostic::error("`fill` has a different type from `{}`",
+                            y_min ? "y_min" : "y_max")
+            .primary(fill->source)
+            .primary(y_min ? y_min->source : y_max->source)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+    }
+    if (limit.inner > 100'000) {
+      diagnostic::error("`limit` must be less than 100k")
+        .primary(limit)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (limit.inner == 0) {
+      diagnostic::error("`limit` must be positive").primary(limit).emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
+  auto validate_xtype(const located<data>& d, diagnostic_handler& dh) const
+    -> failure_or<void> {
+    const auto t = type::infer(d.inner);
+    if (not t) {
+      diagnostic::error("failed to infer type of option").primary(d).emit(dh);
+      return failure::promise();
+    }
+    auto valid = t->kind()
+                   .is_any<int64_type, uint64_type, double_type, duration_type,
+                           time_type>();
+    // if (ty == chart_type::bar or ty == chart_type::pie) {
+    //   valid |= t->kind().is_any<null_type, ip_type, subnet_type,
+    //   string_type>();
+    // }
+    if (not valid) {
+      diagnostic::warning("limit cannot have type `{}`", t->kind())
+        .primary(d)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (res and not t->kind().is_any<time_type, duration_type>()) {
+      diagnostic::warning("cannot group type `{}` with resolution", t->kind())
+        .primary(d)
+        .primary(res->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
+  auto validate_ytype(const located<data>& d, diagnostic_handler& dh) const
+    -> failure_or<void> {
+    const auto t = type::infer(d.inner);
+    if (not t) {
+      diagnostic::error("failed to infer type of option").primary(d).emit(dh);
+      return failure::promise();
+    }
+    if (not t->kind()
+              .is_any<int64_type, uint64_type, double_type, duration_type>()) {
+      diagnostic::error("y-axis cannot have type `{}`", t->kind())
+        .primary(d)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
+  auto find_plugins(session ctx) const -> plugins_map {
+    auto plugins = plugins_map{};
+    auto ident = ast::identifier{"once", location::unknown};
+    const auto entity = ast::entity{std::vector{std::move(ident)}};
+    for (const auto& [_, call] : y) {
+      if (const auto* ptr
+          = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call))) {
+        plugins.emplace_back(ptr, call);
+        continue;
+      }
+      auto wrapped_call = ast::function_call{entity, {call}, call.rpar, false};
+      TENZIR_ASSERT(resolve_entities(wrapped_call, ctx));
+      const auto* ptr
+        = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(wrapped_call));
+      TENZIR_ASSERT(ptr);
+      plugins.emplace_back(ptr, std::move(wrapped_call));
+    }
+    return plugins;
+  }
+
+  auto make_bucket(const plugins_map& plugins, session ctx) const -> bucket {
+    auto b = bucket{};
+    for (const auto& [plugin, arg] : plugins) {
+      auto inv = aggregation_plugin::invocation{arg};
+      auto instance = plugin->make_aggregation(std::move(inv), ctx);
+      TENZIR_ASSERT(instance);
+      b.push_back(std::move(instance).unwrap());
+    }
+    return b;
+  }
+};
+
+auto to_double(data d) -> data {
+  return match(
+    d,
+    [](concepts::integer auto& d) -> data {
+      return static_cast<double>(d);
+    },
+    [](auto& v) -> data {
+      return std::move(v);
+    });
+}
 
 class chart_operator2 final : public crtp_operator<chart_operator2> {
 public:
@@ -273,10 +517,21 @@ public:
     }
   }
 
+  static auto jsonify_limit(const data& d) -> std::string {
+    auto result = std::string{};
+    const auto printer = json_printer{json_printer_options{
+      .tql = true,
+      .numeric_durations = true,
+    }};
+    auto it = std::back_inserter(result);
+    TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
+    return result;
+  }
+
   auto get_group_strings(const table_slice& slice, diagnostic_handler& dh) const
     -> series {
     if (not args_.group) {
-      return series::null(string_type{}, detail::narrow<int64_t>(slice.rows()));
+      return series::null(string_type{}, slice.rows());
     }
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
     auto gss = eval(args_.group.value(), slice, dh);
@@ -384,13 +639,13 @@ public:
         co_yield {};
         continue;
       }
+      const auto fs = eval(expr, slice, dh);
       // Modified from `where`
       auto offset = int64_t{0};
       for (auto& filter : eval(expr, slice, dh)) {
         const auto* array = try_as<arrow::BooleanArray>(&*filter.array);
         TENZIR_ASSERT(array);
         const auto len = array->length();
-        // Fast paths for co_yield
         if (array->true_count() == 0) {
           co_yield {};
           offset += len;
@@ -401,9 +656,22 @@ public:
           offset += len;
           continue;
         }
-        // Use shared helper for mixed true/false runs
-        auto subslices = split_contiguous_true_runs(*array, slice, offset);
-        co_yield concatenate(std::move(subslices));
+        auto curr = array->Value(0);
+        auto begin = int64_t{0};
+        // We add an artificial `false` at index `length` to flush.
+        auto results = std::vector<table_slice>{};
+        for (auto i = int64_t{1}; i < len + 1; ++i) {
+          const auto next = i != len && array->IsValid(i) && array->Value(i);
+          if (curr == next) {
+            continue;
+          }
+          if (curr) {
+            results.push_back(subslice(slice, offset + begin, offset + i));
+          }
+          curr = next;
+          begin = i;
+        }
+        co_yield concatenate(std::move(results));
         offset += len;
       }
     }
@@ -578,8 +846,7 @@ private:
 };
 
 template <chart_type Ty>
-class chart_plugin : public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class chart_plugin : public virtual operator_factory_plugin {
   auto name() const -> std::string override {
     return fmt::format("chart_{}", to_string(Ty));
   }
@@ -619,7 +886,7 @@ class chart_plugin : public virtual operator_factory_plugin,
     }
     p.named_optional("_limit", args.limit);
     TRY(p.parse(inv, ctx));
-    TRY(handle_y(args, y, ctx, Ty, name()));
+    TRY(handle_y(args, y, ctx));
     if (x_min) {
       TRY(args.x_min,
           handle_xlimit(args, ast::binary_op::geq, std::move(*x_min), ctx));
@@ -641,17 +908,150 @@ class chart_plugin : public virtual operator_factory_plugin,
     return std::make_unique<chart_operator2>(std::move(args));
   }
 
-  auto describe() const -> Description override {
-    if constexpr (Ty == chart_type::area) {
-      return describe_chart_area();
-    } else if constexpr (Ty == chart_type::bar) {
-      return describe_chart_bar();
-    } else if constexpr (Ty == chart_type::line) {
-      return describe_chart_line();
-    } else {
-      static_assert(Ty == chart_type::pie);
-      return describe_chart_pie();
-    }
+  auto handle_y(chart_args& args, ast::expression& y, session ctx) const
+    -> failure_or<void> {
+    auto ident = ast::identifier{"once", location::unknown};
+    const auto entity = ast::entity{std::vector{std::move(ident)}};
+    args.y_loc = y.get_location();
+    return match(
+      y,
+      [&](ast::record& rec) -> failure_or<void> {
+        if (args.ty == chart_type::pie and rec.items.size() != 1) {
+          diagnostic::error("`{}` requires exactly one value", name())
+            .primary(y)
+            .emit(ctx);
+          return failure::promise();
+        }
+        if (rec.items.empty()) {
+          diagnostic::error("`{}` requires at least one value", name())
+            .primary(y)
+            .emit(ctx);
+          return failure::promise();
+        }
+        for (auto& i : rec.items) {
+          auto* field = try_as<ast::record::field>(i);
+          if (not field) {
+            diagnostic::error("cannot use `...` here").primary(y).emit(ctx);
+            return failure::promise();
+          }
+          const auto loc = field->expr.get_location();
+          TRY(match(
+            field->expr,
+            [&](ast::function_call& call) -> failure_or<void> {
+              args.y[field->name.name] = std::move(call);
+              return {};
+            },
+            [&](auto& expr) -> failure_or<void> {
+              if (args.res) {
+                diagnostic::error("an aggregation function is required if "
+                                  "`resolution` is specified")
+                  .primary(field->expr)
+                  .emit(ctx);
+                return failure::promise();
+              }
+              auto result
+                = ast::function_call{entity, {std::move(expr)}, loc, false};
+              TENZIR_ASSERT(resolve_entities(result, ctx));
+              args.y[field->name.name] = std::move(result);
+              return {};
+            }));
+        }
+        return {};
+      },
+      [&](ast::function_call& call) -> failure_or<void> {
+        args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(call);
+        return {};
+      },
+      [&](auto&) -> failure_or<void> {
+        if (args.res) {
+          diagnostic::error(
+            "an aggregation function is required if resolution is specified")
+            .primary(y)
+            .emit(ctx);
+          return failure::promise();
+        }
+        const auto yname = std::invoke([&]() -> std::string {
+          if (auto ss = ast::field_path::try_from(y)) {
+            return fmt::format(
+              "{}",
+              fmt::join(
+                ss->path()
+                  | std::ranges::views::transform(&ast::field_path::segment::id)
+                  | std::ranges::views::transform(&ast::identifier::name),
+                "."));
+          }
+          if (args.ty == chart_type::pie) {
+            return "value";
+          }
+          return "y";
+        });
+        const auto loc = y.get_location();
+        auto result = ast::function_call{entity, {std::move(y)}, loc, false};
+        TENZIR_ASSERT(resolve_entities(result, ctx));
+        args.y[yname] = std::move(result);
+        return {};
+      });
+  }
+
+  auto handle_xlimit(const chart_args& args, ast::binary_op op,
+                     located<data> limit, diagnostic_handler& dh) const
+    -> failure_or<xlimit> {
+    const auto& loc = limit.source;
+    auto result = match(
+      limit.inner,
+      [&](const caf::none_t&) -> failure_or<ast::constant> {
+        diagnostic::error("limit cannot be `null`").primary(limit).emit(dh);
+        return failure::promise();
+      },
+      [&](const pattern&) -> failure_or<ast::constant> {
+        diagnostic::error("limit cannot be a pattern").primary(limit).emit(dh);
+        return failure::promise();
+      },
+      [&](const duration& d) -> failure_or<ast::constant> {
+        if (args.res) {
+          const auto val = d.count();
+          const auto count = std::abs(args.res->inner.count());
+          const auto rem = std::abs(val % count);
+          if (rem) {
+            const auto ceil = val >= 0 ? count - rem : rem;
+            const auto floor = val >= 0 ? -rem : rem - count;
+            return ast::constant{
+              duration{val + (op == ast::binary_op::geq ? floor : ceil)},
+              loc,
+            };
+          }
+        }
+        return ast::constant{d, loc};
+      },
+      [&](const time& t) -> failure_or<ast::constant> {
+        if (not args.res) {
+          return ast::constant{t, loc};
+        }
+        auto b = time_type::make_arrow_builder(arrow_memory_pool());
+        check(append_builder(time_type{}, *b, t));
+        auto array = finish(*b);
+        auto opts = make_round_temporal_options(args.res->inner);
+        auto result
+          = op == ast::binary_op::geq
+              ? check(arrow::compute::FloorTemporal(array, std::move(opts)))
+                  .array_as<arrow::TimestampArray>()
+              : check(arrow::compute::CeilTemporal(array, std::move(opts)))
+                  .array_as<arrow::TimestampArray>();
+        TENZIR_ASSERT(result->length() == 1);
+        return ast::constant{value_at(time_type{}, *result, 0), loc};
+      },
+      [&](const auto& d) -> failure_or<ast::constant> {
+        return ast::constant{d, loc};
+      });
+    TRY(auto c, result);
+    auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
+    auto&& [legacy, remainder] = split_legacy_expression(expr);
+    return xlimit{
+      std::move(limit),
+      c.as_data(),
+      std::move(legacy),
+      std::move(remainder),
+    };
   }
 };
 
