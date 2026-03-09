@@ -155,6 +155,9 @@ public:
 
   /// Returns the metrics receiver actor handle, if available.
   virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
+
+  /// Returns whether the pipeline is hidden.
+  virtual auto is_hidden() const -> bool = 0;
 };
 
 enum class OperatorState {
