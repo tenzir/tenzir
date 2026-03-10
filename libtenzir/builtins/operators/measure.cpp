@@ -165,18 +165,17 @@ struct MeasureArgs {
 class MeasureTableSlice final : public Operator<table_slice, table_slice> {
 public:
   explicit MeasureTableSlice(MeasureArgs args)
-    : args_{args},
-      last_finish_{std::chrono::steady_clock::now().time_since_epoch()} {
+    : args_{args}, last_finish_{std::chrono::steady_clock::time_point::min()} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const auto now = std::chrono::steady_clock::now();
     if (input.rows() == 0) {
       if (builder_.length() > 0
           and last_finish_ + defaults::import::batch_timeout < now) {
-        co_await flush(push, now);
+        co_await flush(push);
       }
       co_return;
     }
@@ -200,7 +199,7 @@ public:
     if (args_.real_time
         or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
         or last_finish_ + defaults::import::batch_timeout < now) {
-      co_await flush(push, now);
+      co_await flush(push);
     }
   }
 
@@ -208,8 +207,7 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (builder_.length() > 0) {
-      auto now = std::chrono::steady_clock::now().time_since_epoch();
-      co_await flush(push, now);
+      co_await flush(push);
     }
     co_return FinalizeBehavior::done;
   }
@@ -218,27 +216,24 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (builder_.length() > 0) {
-      auto now = std::chrono::steady_clock::now().time_since_epoch();
-      co_await flush(push, now);
+      co_await flush(push);
     }
   }
 
   auto snapshot(Serde& serde) -> void override {
     serde("counters", counters_);
-    serde("last_finish", last_finish_);
   }
 
 private:
-  auto flush(Push<table_slice>& push, std::chrono::steady_clock::duration now)
-    -> Task<void> {
-    last_finish_ = now;
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    last_finish_ = std::chrono::steady_clock::now();
     co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
   }
 
   MeasureArgs args_;
-  series_builder builder_;
   std::unordered_map<type, uint64_t> counters_;
-  std::chrono::steady_clock::duration last_finish_;
+  series_builder builder_;
+  std::chrono::steady_clock::time_point last_finish_;
 };
 
 class MeasureChunk final : public Operator<chunk_ptr, table_slice> {
@@ -246,17 +241,17 @@ public:
   explicit MeasureChunk(MeasureArgs args)
     : args_{args},
       builder_{schema()},
-      last_finish_{std::chrono::steady_clock::now().time_since_epoch()} {
+      last_finish_{std::chrono::steady_clock::time_point::min()} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const auto now = std::chrono::steady_clock::now();
     if (not input or input->size() == 0) {
       if (builder_.length() > 0
           and last_finish_ + defaults::import::batch_timeout < now) {
-        co_await flush(push, now);
+        co_await flush(push);
       }
       co_return;
     }
@@ -267,7 +262,7 @@ public:
     if (args_.real_time
         or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
         or last_finish_ + defaults::import::batch_timeout < now) {
-      co_await flush(push, now);
+      co_await flush(push);
     }
   }
 
@@ -275,8 +270,7 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (builder_.length() > 0) {
-      auto now = std::chrono::steady_clock::now().time_since_epoch();
-      co_await flush(push, now);
+      co_await flush(push);
     }
     co_return FinalizeBehavior::done;
   }
@@ -285,14 +279,12 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (builder_.length() > 0) {
-      auto now = std::chrono::steady_clock::now().time_since_epoch();
-      co_await flush(push, now);
+      co_await flush(push);
     }
   }
 
   auto snapshot(Serde& serde) -> void override {
     serde("counter", counter_);
-    serde("last_finish", last_finish_);
   }
 
 private:
@@ -307,16 +299,15 @@ private:
     return result;
   }
 
-  auto flush(Push<table_slice>& push, std::chrono::steady_clock::duration now)
-    -> Task<void> {
-    last_finish_ = now;
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    last_finish_ = std::chrono::steady_clock::now();
     co_await push(builder_.finish_assert_one_slice());
   }
 
   MeasureArgs args_;
-  series_builder builder_;
   uint64_t counter_ = 0;
-  std::chrono::steady_clock::duration last_finish_;
+  series_builder builder_;
+  std::chrono::steady_clock::time_point last_finish_;
 };
 
 class plugin final : public virtual operator_plugin<measure_operator>,
