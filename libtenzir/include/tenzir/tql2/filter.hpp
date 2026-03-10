@@ -38,7 +38,7 @@ inline auto filter2(const table_slice& slice, const ast::expression& expr,
       warned = true;
     }
     for (auto i = int64_t{0}; i < array->length(); ++i) {
-      check(mask_builder.Append(array->Value(i)));
+      check(mask_builder.Append(array->IsValid(i) and array->Value(i)));
     }
   }
   return filter(slice, *finish(mask_builder));
