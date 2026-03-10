@@ -614,7 +614,8 @@ public:
       // builder resizes. Deduplicate param keys (last value wins) to avoid
       // writing the same field twice to the builder.
       // Typically 0-3 elements, so linear scan is optimal.
-      for (auto i = row.data.size(); i-- > 1;) {
+      for (size_t i = 1; i < row.data.size();) {
+        auto merged = false;
         for (size_t j = 0; j < i; ++j) {
           if (row.data[j].id == row.data[i].id) {
             auto& target = row.data[j].params;
@@ -634,8 +635,12 @@ public:
             }
             row.data.erase(row.data.begin()
                            + detail::narrow_cast<ptrdiff_t>(i));
+            merged = true;
             break;
           }
+        }
+        if (not merged) {
+          ++i;
         }
       }
     }
