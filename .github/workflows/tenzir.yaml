@@ -424,7 +424,10 @@ jobs:
   push-manifest-slim:
     name: Push tenzir-slim docker manifest
     needs: [configure, tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
-    if: needs.configure.outputs.trusted-ci == 'true'
+    if: >-
+      needs.configure.outputs.trusted-ci == 'true' &&
+      needs.tenzir-static-aarch64-linux.result == 'success' &&
+      needs.tenzir-static-x86_64-linux.result == 'success'
     uses: ./.github/workflows/push-manifest.yaml
     with:
       source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
