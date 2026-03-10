@@ -111,40 +111,37 @@ When changing existing behavior or adding user-facing functionality, update
 Skip this process for internal refactorings that do not affect the user-facing
 TQL surface or command line tools.
 
-## Developing Tenzir
+## C++ development
 
-Tenzir-specific idioms, APIs, and abstractions for C++ development. You MUST
-read the relevant references before writing any C++ code. NEVER assume patterns
-based on surrounding code alone.
+Read the relevant references below before writing or planning any C++ code.
+Do not assume patterns from surrounding code—older code may deviate from
+current conventions.
 
-### Core Principle
+### Core principle
 
-Work on **columns**, not rows. Tenzir uses Apache Arrow for columnar data
-processing. Evaluate expressions once per series or slice, then iterate if
-row-wise access is needed.
+Tenzir processes data in columns via Apache Arrow. Evaluate expressions per
+series or slice first, then iterate only when row-wise access is necessary.
 
-### C++ Style
+### Style
 
-You MUST read these before writing any C++ or plans that contain C++:
+- [coding-conventions.md](.agents/references/coding-conventions.md): Formatting, structure, and idioms
+- [naming-conventions.md](.agents/references/naming-conventions.md): Naming patterns
 
-- [coding-conventions.md](.agents/references/coding-conventions.md): Formatting, style, and structure
-- [naming-conventions.md](.agents/references/naming-conventions.md): Naming patterns and conventions
-
-### APIs and Patterns
+### APIs
 
 - [data-access.md](.agents/references/data-access.md): Reading and iterating columnar data
 - [data-building.md](.agents/references/data-building.md): Constructing series and table slices
-- [data-conversion.md](.agents/references/data-conversion.md): Converting between types
-- [variant-access.md](.agents/references/variant-access.md): Working with variants and match
-- [error-handling.md](.agents/references/error-handling.md): TRY, check, and expected patterns
-- [functions.md](.agents/references/functions.md): Implementing TQL functions
-- [operators.md](.agents/references/operators.md): Implementing TQL operators (incl. secrets)
-- [executor.md](.agents/references/executor.md): Executor for operators and pipeline execution
+- [data-conversion.md](.agents/references/data-conversion.md): Type-to-type conversion
+- [variant-access.md](.agents/references/variant-access.md): Variants and match dispatch
+- [error-handling.md](.agents/references/error-handling.md): TRY, check, and failure_or
+- [functions.md](.agents/references/functions.md): TQL function plugins
+- [operators.md](.agents/references/operators.md): TQL operator plugins and secrets
+- [executor.md](.agents/references/executor.md): Executor and pipeline execution
 
-### Tooling and Conventions
+### Tooling
 
-- [external-files.md](.agents/references/external-files.md): Third-party code scaffold
-- [utilities.md](.agents/references/utilities.md): Generic utilities in tenzir::detail
+- [external-files.md](.agents/references/external-files.md): Third-party code integration
+- [utilities.md](.agents/references/utilities.md): Helpers in tenzir::detail
 - [hashing.md](.agents/references/hashing.md): Hashing infrastructure
 - [parser-combinators.md](.agents/references/parser-combinators.md): Parser combinator framework
-- [common-types.md](.agents/references/common-types.md): Reusable common types
+- [common-types.md](.agents/references/common-types.md): Reusable types and abstractions
