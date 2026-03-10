@@ -401,6 +401,13 @@ filter(const table_slice& slice, const expression& expr);
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
 
+/// Filters a table slice by a boolean mask, keeping only rows where the mask
+/// value bit is true. The null bitmap of the mask is ignored. Returns an empty
+/// table slice if no rows are kept.
+/// @pre `slice.rows() == mask.length()`
+[[nodiscard]] auto filter(const table_slice& slice,
+                          const arrow::BooleanArray& mask) -> table_slice;
+
 /// Resolves all enumeration columns in a table slice to string columns. Note
 /// that this does not go into records inside lists or maps.
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);

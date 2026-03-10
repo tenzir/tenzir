@@ -12,7 +12,6 @@
 #include <tenzir/async.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/null_bitmap.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
@@ -365,8 +364,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
                        duration cleanup_duration,
                        tsl::robin_map<data, State>& states, int64_t& row,
                        std::chrono::steady_clock::time_point& last_cleanup_time,
-                       diagnostic_handler& dh) -> std::vector<table_slice> {
-  auto output = std::vector<table_slice>{};
+                       diagnostic_handler& dh) -> table_slice {
   const auto now = std::chrono::steady_clock::now();
   if (now > last_cleanup_time + cleanup_duration) {
     last_cleanup_time = now;
@@ -382,12 +380,12 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
     }
   }
   if (slice.rows() == 0) {
-    output.push_back({});
-    return output;
+    return {};
   }
   auto keys = eval(cfg.keys, slice, dh);
   auto offset = int64_t{};
-  auto ids = null_bitmap{};
+  auto mask_builder = arrow::BooleanBuilder{arrow_memory_pool()};
+  check(mask_builder.Reserve(detail::narrow_cast<int64_t>(slice.rows())));
   auto count_builder = std::shared_ptr<arrow::Int64Builder>{};
   if (cfg.count_field) {
     count_builder = std::make_shared<arrow::Int64Builder>(arrow_memory_pool());
@@ -403,7 +401,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
       states.emplace_hint(it, std::move(k), State{})
         .value()
         .reset(current_row, now);
-      ids.append_bit(true);
+      check(mask_builder.Append(true));
       if (count_builder) {
         check(count_builder->Append(0));
       }
@@ -421,44 +419,31 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
         }
       }
       it.value().reset(current_row, now);
-      ids.append_bit(true);
+      check(mask_builder.Append(true));
       continue;
     }
     it.value().read_at = now;
     it.value().last_row = current_row;
     it.value().count += 1;
     if (it->second.count > cfg.limit.inner) {
-      ids.append_bit(false);
+      check(mask_builder.Append(false));
       continue;
     }
     it.value().written_at = now;
-    ids.append_bit(true);
+    check(mask_builder.Append(true));
     if (count_builder) {
       check(count_builder->Append(0));
     }
   }
   row += keys.length();
+  auto mask = finish(mask_builder);
+  auto filtered = filter(slice, *mask);
   if (cfg.count_field) {
     auto count_series = series{int64_type{}, finish(*count_builder)};
-    // Track count offset separately. The count array only has required
-    // entries, so all entries must be used, i.e. count_series.length() !=
-    // slice.rows() necessarily and cannot be sliced alongside.
-    auto count_offset = int64_t{};
-    for (auto [begin, end] : select_runs(ids)) {
-      auto output_slice = subslice(slice, begin, end);
-      const auto delta = end - begin;
-      auto count_slice = count_series.slice(count_offset, count_offset + delta);
-      count_offset += delta;
-      output.push_back(assign(cfg.count_field.value(), count_slice,
-                              output_slice, dh, assign_position::back));
-    }
-    TENZIR_ASSERT(count_offset == count_series.length());
-  } else {
-    for (auto [begin, end] : select_runs(ids)) {
-      output.push_back(subslice(slice, begin, end));
-    }
+    return assign(cfg.count_field.value(), count_series, filtered, dh,
+                  assign_position::back);
   }
-  return output;
+  return filtered;
 }
 
 class deduplicate_operator final : public crtp_operator<deduplicate_operator> {
@@ -476,12 +461,8 @@ public:
     const auto cleanup_duration = cfg_.cleanup_duration();
     auto last_cleanup_time = std::chrono::steady_clock::now();
     for (const auto& slice : input) {
-      auto output
-        = deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
-                            last_cleanup_time, ctrl.diagnostics());
-      for (auto& x : output) {
-        co_yield std::move(x);
-      }
+      co_yield deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
+                                 last_cleanup_time, ctrl.diagnostics());
     }
   }
 
@@ -531,8 +512,8 @@ public:
     -> Task<void> override {
     auto output = deduplicate_slice(input, cfg_, cleanup_duration_, states_,
                                     row_, last_cleanup_time_, ctx);
-    for (auto& slice : output) {
-      co_await push(std::move(slice));
+    if (output.rows() > 0) {
+      co_await push(std::move(output));
     }
   }
 
