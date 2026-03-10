@@ -460,13 +460,11 @@ public:
     auto row = int64_t{};
     const auto cleanup_duration = cfg_.cleanup_duration();
     auto last_cleanup_time = std::chrono::steady_clock::now();
-    for (const auto& slice : input) {
+    for (auto&& slice : input) {
       auto output
         = deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
                             last_cleanup_time, ctrl.diagnostics());
-      if (output.rows() > 0) {
-        co_yield std::move(output);
-      }
+      co_yield std::move(output);
     }
   }
 
