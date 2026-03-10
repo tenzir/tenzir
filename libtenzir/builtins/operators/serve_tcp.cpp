@@ -21,6 +21,8 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
@@ -34,6 +36,7 @@
 
 #include <atomic>
 #include <memory>
+
 namespace tenzir::plugins::serve_tcp {
 
 namespace {
@@ -62,6 +65,12 @@ public:
 
   using Message = variant<Accepted, Wakeup>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
+
+  enum class Lifecycle {
+    running,
+    draining,
+    done,
+  };
 
   explicit ServeTcp(ServeTcpArgs args) : args_{std::move(args)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
@@ -94,7 +103,8 @@ public:
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    ctx.spawn_task(accept_loop(ctx.dh()));
+    ctx.spawn_task(folly::coro::co_withCancellation(accept_cancel_->getToken(),
+                                                    accept_loop(ctx.dh())));
     auto pipeline = std::move(args_.printer.inner);
     if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       request_stop();
@@ -107,7 +117,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_->load()) {
+    if (lifecycle_->load() != Lifecycle::running) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
@@ -125,7 +135,8 @@ public:
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
     auto guard = co_await clients_mutex_->lock();
-    if (done_->load() or not chunk or chunk->size() == 0 or clients_.empty()) {
+    if (lifecycle_->load() == Lifecycle::done or not chunk or chunk->size() == 0
+        or clients_.empty()) {
       co_return;
     }
     auto data = folly::ByteRange{
@@ -157,14 +168,14 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (done_->load()) {
+    if (lifecycle_->load() == Lifecycle::done) {
       co_return {};
     }
     co_return co_await message_queue_->dequeue();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (done_->load()) {
+    if (lifecycle_->load() == Lifecycle::done) {
       co_return;
     }
     auto* message_ptr = result.try_as<Message>();
@@ -173,30 +184,40 @@ public:
     }
     auto message = std::move(*message_ptr);
     if (auto* accepted = std::get_if<Accepted>(&message)) {
+      if (lifecycle_->load() != Lifecycle::running) {
+        accepted->client->close();
+        co_return;
+      }
       co_await add_client(std::move(accepted->client), ctx.dh());
     }
     co_return;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    if (not finalize_started_) {
-      finalize_started_ = true;
+    auto lifecycle = lifecycle_->load();
+    if (lifecycle == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    if (lifecycle == Lifecycle::running) {
+      lifecycle_->store(Lifecycle::draining);
+      stop_accepting();
       if (auto sub = ctx.get_sub(make_view(sub_key_))) {
         auto pipeline = as<OpenPipeline<table_slice>>(*sub);
         co_await pipeline.close();
+      } else {
+        request_stop();
       }
-      co_return FinalizeBehavior::continue_;
     }
-    co_return done_->load() ? FinalizeBehavior::done
-                            : FinalizeBehavior::continue_;
+    co_return lifecycle_->load() == Lifecycle::done
+      ? FinalizeBehavior::done
+      : FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (done_->load()) {
+    if (lifecycle_->load() == Lifecycle::done) {
       co_return;
     }
-    subpipeline_finished_ = true;
-    maybe_finish();
+    request_stop();
     co_return;
   }
 
@@ -207,17 +228,27 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_->load() ? OperatorState::done : OperatorState::unspecified;
+    return lifecycle_->load() == Lifecycle::done ? OperatorState::done
+                                                 : OperatorState::unspecified;
   }
 
 private:
+  auto stop_accepting() -> void {
+    accept_cancel_->requestCancellation();
+    if (server_ and evb_) {
+      evb_->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
+        if (server_) {
+          server_->close();
+        }
+      });
+    }
+  }
+
   auto request_stop() -> void {
-    if (done_->exchange(true)) {
+    if (lifecycle_->exchange(Lifecycle::done) == Lifecycle::done) {
       return;
     }
-    if (server_) {
-      server_->close();
-    }
+    stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
   }
 
@@ -252,13 +283,6 @@ private:
     }
   }
 
-  auto maybe_finish() -> void {
-    if (not subpipeline_finished_) {
-      return;
-    }
-    request_stop();
-  }
-
   auto add_client(Client client, diagnostic_handler& dh) -> Task<void> {
     auto peer = client->getPeerAddress().describe();
     auto reject_max_connections = [&]() {
@@ -270,10 +294,12 @@ private:
         .hint("increase `max_connections` if this level of concurrency is "
               "expected")
         .emit(dh);
+      client->close();
     };
     {
       auto guard = co_await clients_mutex_->lock();
-      if (done_->load()) {
+      if (lifecycle_->load() != Lifecycle::running) {
+        client->close();
         co_return;
       }
       if (clients_.size() >= max_connections_) {
@@ -292,11 +318,13 @@ private:
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
+        client->close();
         co_return;
       }
     }
     auto guard = co_await clients_mutex_->lock();
-    if (done_->load()) {
+    if (lifecycle_->load() != Lifecycle::running) {
+      client->close();
       co_return;
     }
     if (clients_.size() >= max_connections_) {
@@ -311,39 +339,44 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
-    while (not done_->load()) {
-      auto accept_error = Option<std::string>{};
-      try {
-        auto transport
-          = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-        auto client
-          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-        if (done_->load()) {
+    try {
+      while (lifecycle_->load() == Lifecycle::running) {
+        auto accept_error = Option<std::string>{};
+        try {
+          auto transport
+            = co_await folly::coro::co_withExecutor(evb_, server_->accept());
+          auto client
+            = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+          if (lifecycle_->load() != Lifecycle::running) {
+            client->close();
+            co_return;
+          }
+          TENZIR_DEBUG("serve_tcp: accepted {}",
+                       client->getPeerAddress().describe());
+          co_await message_queue_->enqueue(Accepted{std::move(client)});
+          continue;
+        } catch (folly::AsyncSocketException const& ex) {
+          // Accept failures are per-connection network errors; keep the
+          // listener alive and continue accepting new clients.
+          if (lifecycle_->load() != Lifecycle::running) {
+            co_return;
+          }
+          accept_error = ex.what();
+        }
+        if (accept_error) {
+          diagnostic::warning("failed to accept incoming connection")
+            .primary(args_.endpoint.source)
+            .note("endpoint: {}", address_.describe())
+            .note("reason: {}", *accept_error)
+            .emit(dh);
+          co_await folly::coro::sleep(accept_retry_delay);
+        }
+        if (lifecycle_->load() != Lifecycle::running) {
           co_return;
         }
-        TENZIR_DEBUG("serve_tcp: accepted {}",
-                     client->getPeerAddress().describe());
-        co_await message_queue_->enqueue(Accepted{std::move(client)});
-        continue;
-      } catch (folly::AsyncSocketException const& ex) {
-        // Accept failures are per-connection network errors; keep the listener
-        // alive and continue accepting new clients.
-        if (done_->load()) {
-          co_return;
-        }
-        accept_error = ex.what();
       }
-      if (accept_error) {
-        diagnostic::warning("failed to accept incoming connection")
-          .primary(args_.endpoint.source)
-          .note("endpoint: {}", address_.describe())
-          .note("reason: {}", *accept_error)
-          .emit(dh);
-        co_await folly::coro::sleep(accept_retry_delay);
-      }
-      if (done_->load()) {
-        co_return;
-      }
+    } catch (folly::OperationCancelled const&) {
+      co_return;
     }
   }
 
@@ -356,12 +389,11 @@ private:
   std::unique_ptr<folly::coro::ServerSocket> server_;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  std::shared_ptr<RawMutex> clients_mutex_ = std::make_shared<RawMutex>();
+  Box<folly::CancellationSource> accept_cancel_{std::in_place};
+  Box<RawMutex> clients_mutex_{std::in_place};
   std::vector<Client> clients_;
   uint64_t max_connections_ = 128;
-  bool finalize_started_ = false;
-  bool subpipeline_finished_ = false;
-  Box<std::atomic_bool> done_{std::in_place, false};
+  Box<std::atomic<Lifecycle>> lifecycle_{std::in_place, Lifecycle::running};
 };
 
 class ServeTcpPlugin final : public OperatorPlugin {

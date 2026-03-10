@@ -23,6 +23,8 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/ScopeGuard.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
@@ -127,7 +129,8 @@ public:
     // Let ServerSocket handle bind/listen setup
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    ctx.spawn_task(accept_loop(ctx.dh()));
+    ctx.spawn_task(folly::coro::co_withCancellation(accept_cancel_->getToken(),
+                                                    accept_loop(ctx.dh())));
     co_return;
   }
 
@@ -244,9 +247,7 @@ public:
       co_return FinalizeBehavior::done;
     }
     lifecycle_->store(Lifecycle::draining);
-    if (server_) {
-      server_->close();
-    }
+    stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     if (outstanding_connections() == 0) {
       lifecycle_->store(Lifecycle::done);
@@ -261,9 +262,7 @@ public:
       co_return;
     }
     lifecycle_->store(Lifecycle::draining);
-    if (server_) {
-      server_->close();
-    }
+    stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     if (outstanding_connections() == 0) {
       lifecycle_->store(Lifecycle::done);
@@ -287,14 +286,23 @@ private:
     done,
   };
 
+  auto stop_accepting() -> void {
+    accept_cancel_->requestCancellation();
+    if (server_ and evb_) {
+      evb_->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
+        if (server_) {
+          server_->close();
+        }
+      });
+    }
+  }
+
   auto request_abort() -> void {
     if (lifecycle_->load() == Lifecycle::done) {
       return;
     }
     lifecycle_->store(Lifecycle::done);
-    if (server_) {
-      server_->close();
-    }
+    stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     for (auto& [_, connection] : connections_) {
       connection->transport->close();
@@ -327,75 +335,79 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    while (lifecycle_->load() == Lifecycle::running) {
-      std::unique_ptr<folly::coro::Transport> transport;
-      auto accept_error = Option<std::string>{};
-      try {
-        co_await folly::coro::co_safe_point;
-        // `await_task` is now queue-based, so accepting runs in this task.
-        transport
-          = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-      } catch (folly::AsyncSocketException const& ex) {
-        // Accept can fail transiently (e.g., client abort/reset). Keep the
-        // listener alive and continue with the next accept attempt.
+    try {
+      while (lifecycle_->load() == Lifecycle::running) {
+        std::unique_ptr<folly::coro::Transport> transport;
+        auto accept_error = Option<std::string>{};
+        try {
+          co_await folly::coro::co_safe_point;
+          // `await_task` is now queue-based, so accepting runs in this task.
+          transport
+            = co_await folly::coro::co_withExecutor(evb_, server_->accept());
+        } catch (folly::AsyncSocketException const& ex) {
+          // Accept can fail transiently (e.g., client abort/reset). Keep the
+          // listener alive and continue with the next accept attempt.
+          if (lifecycle_->load() != Lifecycle::running) {
+            co_return;
+          }
+          accept_error = ex.what();
+        }
+        if (accept_error) {
+          diagnostic::warning("failed to accept incoming connection")
+            .primary(endpoint_source_)
+            .note("endpoint: {}", address_.describe())
+            .note("reason: {}", *accept_error)
+            .emit(dh);
+          co_await folly::coro::sleep(accept_retry_delay);
+          continue;
+        }
         if (lifecycle_->load() != Lifecycle::running) {
           co_return;
         }
-        accept_error = ex.what();
-      }
-      if (accept_error) {
-        diagnostic::warning("failed to accept incoming connection")
-          .primary(endpoint_source_)
-          .note("endpoint: {}", address_.describe())
-          .note("reason: {}", *accept_error)
-          .emit(dh);
-        co_await folly::coro::sleep(accept_retry_delay);
-        continue;
-      }
-      if (lifecycle_->load() != Lifecycle::running) {
-        co_return;
-      }
-      auto peer = transport->getPeerAddress();
-      if (not try_acquire_connection_slot()) {
-        diagnostic::warning(
-          "connection rejected: maximum number of connections reached")
-          .primary(endpoint_source_)
-          .note("peer: {}", peer.describe())
-          .note("max_connections: {}", max_connections_)
-          .hint("increase `max_connections` if this level of concurrency is "
-                "expected")
-          .emit(dh);
-        continue;
-      }
-      auto keep_connection_slot = false;
-      auto release_connection_slot_guard = folly::makeGuard([&] {
-        if (not keep_connection_slot) {
-          release_connection_slot();
-        }
-      });
-      auto boxed
-        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-      if (tls_context_) {
-        try {
-          co_await upgrade_transport_to_tls_server(boxed, tls_context_);
-        } catch (folly::AsyncSocketException const& ex) {
-          // Peer-driven TLS failures are expected at runtime; keep serving
-          // other connections instead of failing the whole operator.
-          diagnostic::warning("TLS handshake failed")
+        auto peer = transport->getPeerAddress();
+        if (not try_acquire_connection_slot()) {
+          diagnostic::warning(
+            "connection rejected: maximum number of connections reached")
             .primary(endpoint_source_)
-            .note("TLS handshake with peer {} failed", peer.describe())
-            .note("reason: {}", ex.what())
-            .hint("verify TLS settings and certificates on both sides")
+            .note("peer: {}", peer.describe())
+            .note("max_connections: {}", max_connections_)
+            .hint("increase `max_connections` if this level of concurrency is "
+                  "expected")
             .emit(dh);
           continue;
         }
+        auto keep_connection_slot = false;
+        auto release_connection_slot_guard = folly::makeGuard([&] {
+          if (not keep_connection_slot) {
+            release_connection_slot();
+          }
+        });
+        auto boxed
+          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+        if (tls_context_) {
+          try {
+            co_await upgrade_transport_to_tls_server(boxed, tls_context_);
+          } catch (folly::AsyncSocketException const& ex) {
+            // Peer-driven TLS failures are expected at runtime; keep serving
+            // other connections instead of failing the whole operator.
+            diagnostic::warning("TLS handshake failed")
+              .primary(endpoint_source_)
+              .note("TLS handshake with peer {} failed", peer.describe())
+              .note("reason: {}", ex.what())
+              .hint("verify TLS settings and certificates on both sides")
+              .emit(dh);
+            continue;
+          }
+        }
+        if (lifecycle_->load() != Lifecycle::running) {
+          co_return;
+        }
+        TENZIR_DEBUG("accepted connection from {}", peer.describe());
+        co_await message_queue_->enqueue(Accepted{std::move(boxed)});
+        keep_connection_slot = true;
       }
-      if (lifecycle_->load() != Lifecycle::running) {
-        co_return;
-      }
-      TENZIR_DEBUG("accepted connection from {}", peer.describe());
-      co_await message_queue_->enqueue(Accepted{std::move(boxed)});
-      keep_connection_slot = true;
+    } catch (folly::OperationCancelled const&) {
+      co_return;
     }
   }
 
@@ -424,6 +436,7 @@ private:
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
+      auto read_timed_out = false;
       try {
         bytes = co_await connection->transport->read(
           buf, 1, buffer_size,
@@ -431,11 +444,14 @@ private:
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
         if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
-          TENZIR_UNUSED(
-            message_queue.try_enqueue(ConnectionReadTimeout{conn_id}));
-          continue;
+          read_timed_out = true;
+        } else {
+          read_error = e.what();
         }
-        read_error = e.what();
+      }
+      if (read_timed_out) {
+        co_await message_queue.enqueue(ConnectionReadTimeout{conn_id});
+        continue;
       }
       if (read_error) {
         break;
@@ -475,6 +491,7 @@ private:
     message_queue_capacity,
   };
   std::unordered_map<uint64_t, Arc<ConnectionHandle>> connections_;
+  Box<folly::CancellationSource> accept_cancel_{std::in_place};
   Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
   uint64_t max_connections_ = 128;
   Box<std::atomic<Lifecycle>> lifecycle_{std::in_place, Lifecycle::running};
