@@ -38,9 +38,9 @@ auto to_double(data d) -> data {
     });
 }
 
-auto jsonify_limit(const data& d) -> std::string {
+auto jsonify_limit(data const& d) -> std::string {
   auto result = std::string{};
-  const auto printer = tenzir::json_printer{tenzir::json_printer_options{
+  auto const printer = tenzir::json_printer{tenzir::json_printer_options{
     .tql = true,
     .numeric_durations = true,
   }};
@@ -51,10 +51,10 @@ auto jsonify_limit(const data& d) -> std::string {
 
 /// Extracts contiguous runs of `true` values from a boolean array and returns
 /// the corresponding subslices.
-auto split_contiguous_true_runs(const arrow::BooleanArray& array,
-                                const table_slice& slice, int64_t offset = 0)
+auto split_contiguous_true_runs(arrow::BooleanArray const& array,
+                                table_slice const& slice, int64_t offset = 0)
   -> std::vector<table_slice> {
-  const auto len = array.length();
+  auto const len = array.length();
   // Fast path: no true values
   if (array.true_count() == 0) {
     return {};
@@ -69,7 +69,7 @@ auto split_contiguous_true_runs(const arrow::BooleanArray& array,
   auto begin = int64_t{0};
   // We add an artificial `false` at index `length` to flush.
   for (auto i = int64_t{1}; i < len + 1; ++i) {
-    const auto next = i != len && array.IsValid(i) && array.Value(i);
+    auto const next = i != len and array.IsValid(i) and array.Value(i);
     if (curr == next) {
       continue;
     }
@@ -89,7 +89,7 @@ using grouped_bucket = detail::stable_map<std::string_view, bucket>;
 using group_map = std::map<data, grouped_bucket>;
 using call_map = detail::stable_map<std::string, ast::function_call>;
 using plugins_map
-  = std::vector<std::pair<const aggregation_plugin*, ast::function_call>>;
+  = std::vector<std::pair<aggregation_plugin const*, ast::function_call>>;
 
 template <chart_type Ty>
 struct RawArgs {
@@ -172,8 +172,8 @@ struct chart_args {
       TRY(validate_xtype(x_max->value, dh));
     }
     if (x_min and x_max) {
-      const auto min_idx = x_min->value.inner.get_data().index();
-      const auto max_idx = x_max->value.inner.get_data().index();
+      auto const min_idx = x_min->value.inner.get_data().index();
+      auto const max_idx = x_max->value.inner.get_data().index();
       if (min_idx != max_idx) {
         diagnostic::error("`x_min` and `x_max` must have the same type")
           .primary(x_min->value.source)
@@ -220,7 +220,7 @@ struct chart_args {
       }
       TRY(validate_ytype(*fill, dh));
       if (y_min or y_max) {
-        const auto& type_idx = y_min ? y_min->inner.get_data().index()
+        auto const& type_idx = y_min ? y_min->inner.get_data().index()
                                      : y_max->inner.get_data().index();
         if (type_idx != fill->inner.get_data().index()) {
           diagnostic::error("`fill` has a different type from `{}`",
@@ -245,9 +245,9 @@ struct chart_args {
     return {};
   }
 
-  auto validate_xtype(const located<data>& d, diagnostic_handler& dh) const
+  auto validate_xtype(located<data> const& d, diagnostic_handler& dh) const
     -> failure_or<void> {
-    const auto t = type::infer(d.inner);
+    auto const t = type::infer(d.inner);
     if (not t) {
       diagnostic::error("failed to infer type of option").primary(d).emit(dh);
       return failure::promise();
@@ -271,9 +271,9 @@ struct chart_args {
     return {};
   }
 
-  static auto validate_ytype(const located<data>& d, diagnostic_handler& dh)
+  static auto validate_ytype(located<data> const& d, diagnostic_handler& dh)
     -> failure_or<void> {
-    const auto t = type::infer(d.inner);
+    auto const t = type::infer(d.inner);
     if (not t) {
       diagnostic::error("failed to infer type of option").primary(d).emit(dh);
       return failure::promise();
@@ -291,26 +291,26 @@ struct chart_args {
   auto find_plugins(session ctx) const -> plugins_map {
     auto plugins = plugins_map{};
     auto ident = ast::identifier{"once", location::unknown};
-    const auto entity = ast::entity{std::vector{std::move(ident)}};
-    for (const auto& [_, call] : y) {
-      if (const auto* ptr
-          = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call))) {
+    auto const entity = ast::entity{std::vector{std::move(ident)}};
+    for (auto const& [_, call] : y) {
+      if (auto const* ptr
+          = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(call))) {
         plugins.emplace_back(ptr, call);
         continue;
       }
       auto wrapped_call = ast::function_call{entity, {call}, call.rpar, false};
       TENZIR_ASSERT(resolve_entities(wrapped_call, ctx));
-      const auto* ptr
-        = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(wrapped_call));
+      auto const* ptr
+        = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(wrapped_call));
       TENZIR_ASSERT(ptr);
       plugins.emplace_back(ptr, std::move(wrapped_call));
     }
     return plugins;
   }
 
-  static auto make_bucket(const plugins_map& plugins, session ctx) -> bucket {
+  static auto make_bucket(plugins_map const& plugins, session ctx) -> bucket {
     auto b = bucket{};
-    for (const auto& [plugin, arg] : plugins) {
+    for (auto const& [plugin, arg] : plugins) {
       auto inv = aggregation_plugin::invocation{arg};
       auto instance = plugin->make_aggregation(std::move(inv), ctx);
       TENZIR_ASSERT(instance);
@@ -323,7 +323,7 @@ struct chart_args {
 auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
               std::string_view operator_name) -> failure_or<void> {
   auto ident = ast::identifier{"once", location::unknown};
-  const auto entity = ast::entity{std::vector{std::move(ident)}};
+  auto const entity = ast::entity{std::vector{std::move(ident)}};
   args.ty = ty;
   args.y_loc = y.get_location();
   return match(
@@ -347,7 +347,7 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
           diagnostic::error("cannot use `...` here").primary(y).emit(ctx);
           return failure::promise();
         }
-        const auto loc = field->expr.get_location();
+        auto const loc = field->expr.get_location();
         TRY(match(
           field->expr,
           [&](ast::function_call& call) -> failure_or<void> {
@@ -383,7 +383,7 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
           .emit(ctx);
         return failure::promise();
       }
-      const auto yname = std::invoke([&]() -> std::string {
+      auto const yname = std::invoke([&]() -> std::string {
         if (auto ss = ast::field_path::try_from(y)) {
           return fmt::format("{}", fmt::join(ss->path()
                                                | std::ranges::views::transform(
@@ -397,7 +397,7 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
         }
         return "y";
       });
-      const auto loc = y.get_location();
+      auto const loc = y.get_location();
       auto result = ast::function_call{entity, {std::move(y)}, loc, false};
       TENZIR_ASSERT(resolve_entities(result, ctx));
       args.y[yname] = std::move(result);
@@ -405,28 +405,28 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
     });
 }
 
-auto handle_xlimit(const chart_args& args, ast::binary_op op,
+auto handle_xlimit(chart_args const& args, ast::binary_op op,
                    located<data> limit, diagnostic_handler& dh)
   -> failure_or<xlimit> {
-  const auto& loc = limit.source;
+  auto const& loc = limit.source;
   auto result = match(
     limit.inner,
     [&](const caf::none_t&) -> failure_or<ast::constant> {
       diagnostic::error("limit cannot be `null`").primary(limit).emit(dh);
       return failure::promise();
     },
-    [&](const pattern&) -> failure_or<ast::constant> {
+    [&](pattern const&) -> failure_or<ast::constant> {
       diagnostic::error("limit cannot be a pattern").primary(limit).emit(dh);
       return failure::promise();
     },
-    [&](const duration& d) -> failure_or<ast::constant> {
+    [&](duration const& d) -> failure_or<ast::constant> {
       if (args.res) {
-        const auto val = d.count();
-        const auto count = std::abs(args.res->inner.count());
-        const auto rem = std::abs(val % count);
+        auto const val = d.count();
+        auto const count = std::abs(args.res->inner.count());
+        auto const rem = std::abs(val % count);
         if (rem) {
-          const auto ceil = val >= 0 ? count - rem : rem;
-          const auto floor = val >= 0 ? -rem : rem - count;
+          auto const ceil = val >= 0 ? count - rem : rem;
+          auto const floor = val >= 0 ? -rem : rem - count;
           return ast::constant{
             duration{val + (op == ast::binary_op::geq ? floor : ceil)},
             loc,
@@ -435,7 +435,7 @@ auto handle_xlimit(const chart_args& args, ast::binary_op op,
       }
       return ast::constant{d, loc};
     },
-    [&](const time& t) -> failure_or<ast::constant> {
+    [&](time const& t) -> failure_or<ast::constant> {
       if (not args.res) {
         return ast::constant{t, loc};
       }
@@ -452,7 +452,7 @@ auto handle_xlimit(const chart_args& args, ast::binary_op op,
       TENZIR_ASSERT(result->length() == 1);
       return ast::constant{value_at(time_type{}, *result, 0), loc};
     },
-    [&](const auto& d) -> failure_or<ast::constant> {
+    [&](auto const& d) -> failure_or<ast::constant> {
       return ast::constant{d, loc};
     });
   TRY(auto c, result);
@@ -562,7 +562,7 @@ private:
     return fmt::format("chart_{}", to_string(Ty));
   }
 
-  auto process_slice(const table_slice& slice, session ctx) -> void {
+  auto process_slice(table_slice const& slice, session ctx) -> void {
     auto& dh = ctx.dh();
     auto xpath = args_->x.path()[0].id.name;
     for (auto i = size_t{1}; i < args_->x.path().size(); ++i) {
@@ -599,7 +599,7 @@ private:
     bucket* b = nullptr;
     for (auto i = size_t{};
          auto&& [idx, x] : detail::enumerate<int64_t>(xs.values())) {
-      const auto group_name = std::invoke([&]() -> std::string_view {
+      auto const group_name = std::invoke([&]() -> std::string_view {
         if (gs.array->IsNull(idx)) {
           if (args_->group) {
             diagnostic::warning("got group name `null`")
@@ -654,7 +654,7 @@ private:
     }
     auto ynames = detail::stable_map<std::string, bool>{};
     auto b = series_builder{};
-    const auto make_yname = [&](std::string_view group, std::string_view y) {
+    auto const make_yname = [&](std::string_view group, std::string_view y) {
       if (not args_->group) {
         return std::string{y};
       }
@@ -663,35 +663,35 @@ private:
       }
       return fmt::format("{}_{}", group, y);
     };
-    const auto add_y = [&](std::string_view group, std::string_view y,
-                           bool valid) -> const std::string& {
+    auto const add_y = [&](std::string_view group, std::string_view y,
+                           bool valid) -> std::string const& {
       auto [it, _] = ynames.try_emplace(make_yname(group, y), valid);
       it->second &= valid;
       return it->first;
     };
-    const auto fill_value = args_->fill ? args_->fill->inner : data{};
-    const auto fill_at = [&](const data& x) {
+    auto const fill_value = args_->fill ? args_->fill->inner : data{};
+    auto const fill_at = [&](data const& x) {
       auto r = b.record();
       r.field(xpath).data(x);
-      for (const auto& gname : gnames_) {
-        for (const auto& [y, _] : args_->y) {
+      for (auto const& gname : gnames_) {
+        for (auto const& [y, _] : args_->y) {
           r.field(make_yname(gname, y)).data(fill_value);
         }
       }
     };
-    const auto insert = [&](const data& x, const grouped_bucket& groups) {
+    auto const insert = [&](data const& x, grouped_bucket const& groups) {
       auto r = b.record();
       r.field(xpath).data(x);
       if (args_->fill) {
-        for (const auto& gname : gnames_) {
-          for (const auto& [y, _] : args_->y) {
+        for (auto const& gname : gnames_) {
+          for (auto const& [y, _] : args_->y) {
             r.field(make_yname(gname, y)).data(fill_value);
           }
         }
       }
-      for (const auto& [name, bucket] : groups) {
+      for (auto const& [name, bucket] : groups) {
         TENZIR_ASSERT(args_->y.size() == bucket.size());
-        for (const auto& [y, instance] : std::views::zip(args_->y, bucket)) {
+        for (auto const& [y, instance] : std::views::zip(args_->y, bucket)) {
           auto value = to_double(instance->get());
           if (args_->fill and is<caf::none_t>(value)) {
             continue;
@@ -705,7 +705,7 @@ private:
     if (args_->x_min and args_->res) {
       TENZIR_ASSERT(not groups_.empty());
       auto min = std::optional{args_->x_min->rounded};
-      const auto& first = groups_.begin()->first;
+      auto const& first = groups_.begin()->first;
       if (*min != first) {
         fill_at(*min);
       }
@@ -715,7 +715,7 @@ private:
       }
     }
     for (auto prev = std::optional<data>{};
-         const auto& [x, gb] : groups_ | std::views::take(args_->limit.inner)) {
+         auto const& [x, gb] : groups_ | std::views::take(args_->limit.inner)) {
       if (args_->res) {
         while (auto gap = find_gap(prev, x)) {
           prev = gap.value();
@@ -728,7 +728,7 @@ private:
     if (args_->x_max and args_->res) {
       TENZIR_ASSERT(not groups_.empty());
       auto last = std::optional{groups_.rbegin()->first};
-      const auto& max = args_->x_max->rounded;
+      auto const& max = args_->x_max->rounded;
       while (auto gap = find_gap(last, max)) {
         last = gap.value();
         fill_at(std::move(gap).value());
@@ -743,14 +743,14 @@ private:
         .primary(args_->x)
         .emit(dh);
     }
-    const auto limits = detail::stable_map<std::string_view, std::string>{
+    auto const limits = detail::stable_map<std::string_view, std::string>{
       {"x_min", args_->x_min ? jsonify_limit(args_->x_min->value.inner) : ""},
       {"x_max", args_->x_max ? jsonify_limit(args_->x_max->value.inner) : ""},
       {"y_min", args_->y_min ? jsonify_limit(args_->y_min->inner) : ""},
       {"y_max", args_->y_max ? jsonify_limit(args_->y_max->inner) : ""},
     };
     auto ynums = std::deque<std::string>{"y"};
-    const auto attrs = make_attributes(xpath, ynums, ynames, limits);
+    auto const attrs = make_attributes(xpath, ynums, ynames, limits);
     auto result = std::vector<table_slice>{};
     for (auto&& slice : slices) {
       auto schema = type{slice.schema(), std::vector{attrs}};
@@ -759,7 +759,7 @@ private:
     return result;
   }
 
-  auto get_group_strings(const table_slice& slice, diagnostic_handler& dh) const
+  auto get_group_strings(table_slice const& slice, diagnostic_handler& dh) const
     -> series {
     if (not args_->group) {
       return series::null(string_type{}, detail::narrow<int64_t>(slice.rows()));
@@ -792,14 +792,14 @@ private:
           check(b->AppendNull());
           continue;
         }
-        const auto f = detail::overload{
-          [&](const enumeration& x) {
+        auto const f = detail::overload{
+          [&](enumeration const& x) {
             return std::string{as<enumeration_type>(gs.type).field(x)};
           },
-          [&](const int64_t& x) {
+          [&](int64_t const& x) {
             return fmt::to_string(x);
           },
-          [&](const auto&) {
+          [&](auto const&) {
             return fmt::to_string(value);
           },
         };
@@ -809,9 +809,9 @@ private:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(group_map& map, const data_view& x, session ctx) const
+  auto get_groups(group_map& map, data_view const& x, session ctx) const
     -> grouped_bucket* {
-    const auto xv = materialize(x);
+    auto const xv = materialize(x);
     if (auto it = map.find(xv); it != map.end()) {
       return &it->second;
     }
@@ -827,8 +827,8 @@ private:
     return &map[xv];
   }
 
-  auto get_bucket(group_map& map, const data_view& x,
-                  const std::string_view group, session ctx) const
+  auto get_bucket(group_map& map, data_view const& x,
+                  std::string_view const group, session ctx) const
     -> std::pair<bucket*, bool> {
     if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {
       if (is<caf::none_t>(x)) {
@@ -855,7 +855,7 @@ private:
       return {std::move(slice)};
     }
     // Build combined expression from x_min and x_max
-    const auto expr = std::invoke([&]() -> ast::expression {
+    auto const expr = std::invoke([&]() -> ast::expression {
       if (args_->x_min and args_->x_max) {
         return ast::binary_expr{
           args_->x_min->expr,
@@ -873,9 +873,9 @@ private:
     auto results = std::vector<table_slice>{};
     auto offset = int64_t{0};
     for (auto& filter : eval(expr, slice, dh)) {
-      const auto* array = try_as<arrow::BooleanArray>(&*filter.array);
+      auto const* array = try_as<arrow::BooleanArray>(&*filter.array);
       TENZIR_ASSERT(array);
-      const auto len = array->length();
+      auto const len = array->length();
       // Use shared helper to extract contiguous runs
       auto subslices = split_contiguous_true_runs(*array, slice, offset);
       results.insert(results.end(), std::make_move_iterator(subslices.begin()),
@@ -885,7 +885,7 @@ private:
     return results;
   }
 
-  auto find_gap(std::optional<data>& prev, const data& curr) const
+  auto find_gap(std::optional<data>& prev, data const& curr) const
     -> std::optional<data> {
     if (not prev) {
       prev = curr;
@@ -896,28 +896,28 @@ private:
     }
     auto result = match(
       std::tie(curr, *prev),
-      [&](const duration& c, const duration& p) -> std::optional<data> {
+      [&](duration const& c, duration const& p) -> std::optional<data> {
         if (c - p > args_->res->inner) {
           return p + args_->res->inner;
         }
         return std::nullopt;
       },
-      [&](const time& c, const time& p) -> std::optional<data> {
+      [&](time const& c, time const& p) -> std::optional<data> {
         if (c - p > args_->res->inner) {
           return p + args_->res->inner;
         }
         return std::nullopt;
       },
-      [](const auto&, const auto&) -> std::optional<data> {
+      [](auto const&, auto const&) -> std::optional<data> {
         TENZIR_UNREACHABLE();
       });
     return result;
   }
 
   auto make_attributes(
-    const std::string& xpath, std::deque<std::string>& ynums,
+    std::string const& xpath, std::deque<std::string>& ynums,
     detail::stable_map<std::string, bool>& ynames,
-    const detail::stable_map<std::string_view, std::string>& limits) const
+    detail::stable_map<std::string_view, std::string> const& limits) const
     -> std::vector<type::attribute_view> {
     auto attrs = std::vector<type::attribute_view>{
       {"chart", to_string(Ty)},
@@ -926,7 +926,7 @@ private:
       {"y_axis_type", args_->y_log ? "log" : "linear"},
       {"x", xpath},
     };
-    for (const auto& [name, value] : limits) {
+    for (auto const& [name, value] : limits) {
       if (not value.empty()) {
         attrs.emplace_back(name, value);
       }
@@ -937,13 +937,13 @@ private:
     auto names = std::views::filter(ynames, [](auto&& x) {
       return x.second;
     });
-    for (const auto& [num, field] : std::views::zip(ynums, names)) {
+    for (auto const& [num, field] : std::views::zip(ynums, names)) {
       attrs.emplace_back(num, field.first);
     }
     return attrs;
   }
 
-  auto validate_x(const type& ty, diagnostic_handler& dh) const -> bool {
+  auto validate_x(type const& ty, diagnostic_handler& dh) const -> bool {
     auto valid = ty.kind()
                    .is_any<int64_type, uint64_type, double_type, duration_type,
                            time_type>();
@@ -968,9 +968,9 @@ private:
     return true;
   }
 
-  auto validate_y(const data& d, std::string_view yname, tenzir::location loc,
+  auto validate_y(data const& d, std::string_view yname, tenzir::location loc,
                   diagnostic_handler& dh) const -> bool {
-    const auto ty = type::infer(d);
+    auto const ty = type::infer(d);
     if (not ty) {
       diagnostic::warning("failed to infer type of `y`")
         .primary(loc)
@@ -988,7 +988,7 @@ private:
       return false;
     }
     if (args_->y_min or args_->y_max) {
-      const auto lty = args_->y_min ? type::infer(args_->y_min->inner)
+      auto const lty = args_->y_min ? type::infer(args_->y_min->inner)
                                     : type::infer(args_->y_max->inner);
       if (not lty) {
         diagnostic::warning("failed to infer type of limit")
@@ -1010,10 +1010,10 @@ private:
     return true;
   }
 
-  auto floor(const series& xs) const -> series {
+  auto floor(series const& xs) const -> series {
     return match(
       *xs.array,
-      [&](const arrow::DurationArray& array) -> series {
+      [&](arrow::DurationArray const& array) -> series {
         auto b = duration_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(array.length()));
         for (auto i = int64_t{0}; i < array.length(); i++) {
@@ -1033,13 +1033,13 @@ private:
         }
         return {duration_type{}, finish(*b)};
       },
-      [&](const arrow::TimestampArray& array) -> series {
+      [&](arrow::TimestampArray const& array) -> series {
         auto opts = make_round_temporal_options(args_->res->inner);
         return {time_type{},
                 check(arrow::compute::FloorTemporal(array, std::move(opts)))
                   .array_as<arrow::TimestampArray>()};
       },
-      [&](const auto&) -> series {
+      [&](auto const&) -> series {
         TENZIR_UNREACHABLE();
       });
   }
@@ -1055,7 +1055,7 @@ private:
 
 } // namespace
 
-class PluginArea : public virtual OperatorPlugin {
+class PluginArea final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return fmt::format("tql2.chart_area");
   }
@@ -1083,7 +1083,7 @@ class PluginArea : public virtual OperatorPlugin {
   }
 };
 
-class PluginBar : public virtual OperatorPlugin {
+class PluginBar final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return fmt::format("tql2.chart_bar");
   }
@@ -1113,7 +1113,7 @@ class PluginBar : public virtual OperatorPlugin {
   }
 };
 
-class PluginLine : public virtual OperatorPlugin {
+class PluginLine final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return fmt::format("tql2.chart_line");
   }
@@ -1141,7 +1141,7 @@ class PluginLine : public virtual OperatorPlugin {
   }
 };
 
-class PluginPie : public virtual OperatorPlugin {
+class PluginPie final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return fmt::format("tql2.chart_pie");
   }
