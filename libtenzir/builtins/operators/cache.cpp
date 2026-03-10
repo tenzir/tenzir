@@ -102,7 +102,7 @@ public:
   }
 
   ~cache() noexcept {
-    TENZIR_WARN("cache actor destroyed, done_={}", done_);
+    TENZIR_DEBUG("cache actor destroyed, done_={}", done_);
     for (auto& [_, reader] : readers_) {
       reader.rp.deliver({});
     }
@@ -139,7 +139,7 @@ private:
     TENZIR_ASSERT(read_timeout_ > duration::zero());
     on_read_timeout_.dispose();
     on_read_timeout_ = self_->run_delayed_weak(read_timeout_, [this] {
-      TENZIR_WARN("cache: read_timeout expired, quitting");
+      TENZIR_DEBUG("cache: read_timeout expired, quitting");
       self_->quit(diagnostic::error("cache expired").to_error());
     });
   }
@@ -151,13 +151,13 @@ private:
     TENZIR_ASSERT(write_timeout_ > duration::zero());
     on_write_timeout_.dispose();
     on_write_timeout_ = self_->run_delayed_weak(write_timeout_, [this] {
-      TENZIR_WARN("cache: write_timeout expired, quitting");
+      TENZIR_DEBUG("cache: write_timeout expired, quitting");
       self_->quit(diagnostic::error("cache expired").to_error());
     });
   }
 
   auto mark_done(cache_state state) -> void {
-    TENZIR_WARN("cache: mark_done({})", state);
+    TENZIR_DEBUG("cache: mark_done({})", state);
     TENZIR_ASSERT(not done_);
     done_ = true;
     update_multicaster_.push(cache_update{
@@ -186,7 +186,7 @@ private:
   }
 
   auto announce(bool monitor) -> caf::result<void> {
-    TENZIR_WARN("cache: announce(monitor={})", monitor);
+    TENZIR_DEBUG("cache: announce(monitor={})", monitor);
     if (not writer_) {
       const auto sender = self_->current_sender();
       writer_ = sender->address();
@@ -875,14 +875,14 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    TENZIR_WARN("WriteCacheSink: entering start(), id='{}', "
-                "has_read_timeout={}, has_write_timeout={}, has_capacity={}",
-                args_.id, args_.read_timeout.has_value(),
-                args_.write_timeout.has_value(), args_.capacity.has_value());
+    TENZIR_DEBUG("WriteCacheSink: entering start(), id='{}', "
+                 "has_read_timeout={}, has_write_timeout={}, has_capacity={}",
+                 args_.id, args_.read_timeout.has_value(),
+                 args_.write_timeout.has_value(), args_.capacity.has_value());
     co_await OperatorBase::start(ctx);
     auto cache_manager = ctx.actor_system().registry().get<cache_manager_actor>(
       "tenzir.cache-manager");
-    TENZIR_WARN("WriteCacheSink: cache_manager={}", bool{cache_manager});
+    TENZIR_DEBUG("WriteCacheSink: cache_manager={}", bool{cache_manager});
     TENZIR_ASSERT(cache_manager);
     auto capacity = args_.capacity ? args_.capacity->inner
                                    : std::numeric_limits<uint64_t>::max();
@@ -892,7 +892,7 @@ public:
     auto read_timeout = args_.read_timeout->inner;
     auto write_timeout
       = args_.write_timeout ? args_.write_timeout->inner : duration::zero();
-    TENZIR_WARN("WriteCacheSink: creating cache '{}'", args_.id);
+    TENZIR_DEBUG("WriteCacheSink: creating cache '{}'", args_.id);
     auto result
       = co_await async_mail(atom::create_v, args_.id, /*exclusive=*/true,
                             shared_diagnostic_handler{}, capacity, capacity_loc,
@@ -909,7 +909,7 @@ public:
       co_return;
     }
     cache_ = caf::actor_cast<cache_actor>(*result);
-    TENZIR_WARN("WriteCacheSink: start() complete");
+    TENZIR_DEBUG("WriteCacheSink: start() complete");
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
