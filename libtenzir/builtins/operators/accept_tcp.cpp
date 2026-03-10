@@ -139,7 +139,7 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    if (lifecycle_ == Lifecycle::done) {
+    if (lifecycle_->load() == Lifecycle::done) {
       co_return;
     }
     auto message = std::move(result).as<Message>();
@@ -153,6 +153,10 @@ public:
             release_connection_slot();
           }
         });
+        if (lifecycle_->load() != Lifecycle::running) {
+          transport->close();
+          co_return;
+        }
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
         auto peer_addr = transport->getPeerAddress();
@@ -236,13 +240,16 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
-    if (lifecycle_ == Lifecycle::done) {
+    if (lifecycle_->load() == Lifecycle::done) {
       co_return FinalizeBehavior::done;
     }
-    lifecycle_ = Lifecycle::draining;
-    stop_accepting();
+    lifecycle_->store(Lifecycle::draining);
+    if (server_) {
+      server_->close();
+    }
+    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     if (outstanding_connections() == 0) {
-      lifecycle_ = Lifecycle::done;
+      lifecycle_->store(Lifecycle::done);
       co_return FinalizeBehavior::done;
     }
     co_return FinalizeBehavior::continue_;
@@ -250,23 +257,27 @@ public:
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (lifecycle_ == Lifecycle::done) {
+    if (lifecycle_->load() == Lifecycle::done) {
       co_return;
     }
-    lifecycle_ = Lifecycle::draining;
-    stop_accepting();
+    lifecycle_->store(Lifecycle::draining);
+    if (server_) {
+      server_->close();
+    }
+    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     if (outstanding_connections() == 0) {
-      lifecycle_ = Lifecycle::done;
+      lifecycle_->store(Lifecycle::done);
     }
     co_return;
   }
 
   auto state() -> OperatorState override {
-    if (lifecycle_ == Lifecycle::draining and outstanding_connections() == 0) {
-      lifecycle_ = Lifecycle::done;
+    if (lifecycle_->load() == Lifecycle::draining
+        and outstanding_connections() == 0) {
+      lifecycle_->store(Lifecycle::done);
     }
-    return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
+    return lifecycle_->load() == Lifecycle::done ? OperatorState::done
+                                                 : OperatorState::unspecified;
   }
 
 private:
@@ -277,24 +288,17 @@ private:
   };
 
   auto request_abort() -> void {
-    if (lifecycle_ == Lifecycle::done) {
+    if (lifecycle_->load() == Lifecycle::done) {
       return;
     }
-    lifecycle_ = Lifecycle::done;
-    stop_accepting();
-    for (auto& [_, connection] : connections_) {
-      connection->transport->close();
-    }
-  }
-
-  auto stop_accepting() -> void {
-    if (stop_accepting_->exchange(true)) {
-      return;
-    }
+    lifecycle_->store(Lifecycle::done);
     if (server_) {
       server_->close();
     }
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+    for (auto& [_, connection] : connections_) {
+      connection->transport->close();
+    }
   }
 
   auto outstanding_connections() const -> uint64_t {
@@ -323,7 +327,7 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    while (not stop_accepting_->load()) {
+    while (lifecycle_->load() == Lifecycle::running) {
       std::unique_ptr<folly::coro::Transport> transport;
       auto accept_error = Option<std::string>{};
       try {
@@ -334,7 +338,7 @@ private:
       } catch (folly::AsyncSocketException const& ex) {
         // Accept can fail transiently (e.g., client abort/reset). Keep the
         // listener alive and continue with the next accept attempt.
-        if (stop_accepting_->load()) {
+        if (lifecycle_->load() != Lifecycle::running) {
           co_return;
         }
         accept_error = ex.what();
@@ -348,7 +352,7 @@ private:
         co_await folly::coro::sleep(accept_retry_delay);
         continue;
       }
-      if (stop_accepting_->load()) {
+      if (lifecycle_->load() != Lifecycle::running) {
         co_return;
       }
       auto peer = transport->getPeerAddress();
@@ -386,7 +390,7 @@ private:
           continue;
         }
       }
-      if (stop_accepting_->load()) {
+      if (lifecycle_->load() != Lifecycle::running) {
         co_return;
       }
       TENZIR_DEBUG("accepted connection from {}", peer.describe());
@@ -473,8 +477,7 @@ private:
   std::unordered_map<uint64_t, Arc<ConnectionHandle>> connections_;
   Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
   uint64_t max_connections_ = 128;
-  Box<std::atomic_bool> stop_accepting_{std::in_place, false};
-  Lifecycle lifecycle_ = Lifecycle::running;
+  Box<std::atomic<Lifecycle>> lifecycle_{std::in_place, Lifecycle::running};
   mutable uint64_t next_conn_id_{0};
 };
 
