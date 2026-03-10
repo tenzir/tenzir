@@ -438,7 +438,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   row += keys.length();
   auto mask = finish(mask_builder);
   auto filtered = filter(slice, *mask);
-  if (cfg.count_field) {
+  if (cfg.count_field and filtered.rows() > 0) {
     auto count_series = series{int64_type{}, finish(*count_builder)};
     return assign(cfg.count_field.value(), count_series, filtered, dh,
                   assign_position::back);

@@ -341,14 +341,14 @@ void for_each_true_run(const arrow::BooleanArray& mask, F&& fn) {
   auto i = int64_t{0};
   auto len = mask.length();
   while (i < len) {
-    while (i < len && ! mask.Value(i)) {
+    while (i < len && not(mask.IsValid(i) and mask.Value(i))) {
       ++i;
     }
     if (i >= len) {
       break;
     }
     auto begin = i;
-    while (i < len && mask.Value(i)) {
+    while (i < len && mask.IsValid(i) && mask.Value(i)) {
       ++i;
     }
     fn(begin, i);
@@ -364,9 +364,9 @@ void for_each_run(const arrow::BooleanArray& mask, F&& fn) {
     return;
   }
   auto run_begin = int64_t{0};
-  auto run_value = mask.Value(0);
+  auto run_value = mask.IsValid(0) and mask.Value(0);
   for (auto i = int64_t{1}; i < len; ++i) {
-    auto value = mask.Value(i);
+    auto value = mask.IsValid(i) and mask.Value(i);
     if (value != run_value) {
       fn(run_begin, i, run_value);
       run_begin = i;
@@ -431,7 +431,7 @@ auto partition_array(arrow::ArrayBuilder& true_builder,
       auto& tb = as<arrow::StructBuilder>(true_builder);
       auto& fb = as<arrow::StructBuilder>(false_builder);
       for (auto i = int64_t{0}; i < mask.length(); ++i) {
-        auto& b = mask.Value(i) ? tb : fb;
+        auto& b = (mask.IsValid(i) and mask.Value(i)) ? tb : fb;
         check(b.Append(typed_array.IsValid(i)));
       }
       for (auto field = 0; field < tb.num_fields(); ++field) {
@@ -442,7 +442,7 @@ auto partition_array(arrow::ArrayBuilder& true_builder,
       auto& tb = as<arrow::ListBuilder>(true_builder);
       auto& fb = as<arrow::ListBuilder>(false_builder);
       for (auto i = int64_t{0}; i < mask.length(); ++i) {
-        auto& b = mask.Value(i) ? tb : fb;
+        auto& b = (mask.IsValid(i) and mask.Value(i)) ? tb : fb;
         auto valid = typed_array.IsValid(i);
         check(b.Append(valid));
         if (valid) {

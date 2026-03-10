@@ -1115,7 +1115,7 @@ auto filter(const table_slice& slice, const arrow::BooleanArray& mask)
   if (mask.true_count() == 0) {
     return {};
   }
-  if (mask.true_count() == mask.length()) {
+  if (mask.null_count() == 0 and mask.true_count() == mask.length()) {
     return slice;
   }
   auto schema = slice.schema();
@@ -1142,11 +1142,10 @@ auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
   -> std::pair<table_slice, table_slice> {
   TENZIR_ASSERT(detail::narrow_cast<int64_t>(slice.rows()) == mask.length());
   auto true_count = mask.true_count();
-  auto false_count = mask.length() - true_count;
   if (true_count == 0) {
     return {{}, slice};
   }
-  if (false_count == 0) {
+  if (mask.null_count() == 0 and true_count == mask.length()) {
     return {slice, {}};
   }
   auto schema = slice.schema();
