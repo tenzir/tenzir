@@ -1,0 +1,45 @@
+diff --git i/wangle/CMakeLists.txt w/wangle/CMakeLists.txt
+index 1655b55bc..4803b170a 100644
+--- i/wangle/CMakeLists.txt
++++ w/wangle/CMakeLists.txt
+@@ -58,7 +58,8 @@ SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+-set(INCLUDE_INSTALL_DIR include CACHE STRING
++include(GNUInstallDirs)
++set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE STRING
+     "The subdirectory where header files should be installed")
+ set(LIB_INSTALL_DIR lib CACHE STRING
+     "The subdirectory where libraries should be installed")
+@@ -152,7 +153,7 @@ file(GLOB_RECURSE WANGLE_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+ # Filter out test, facebook, and other non-public directories
+ list(FILTER WANGLE_HEADERS EXCLUDE REGEX "/test/")
+ list(FILTER WANGLE_HEADERS EXCLUDE REGEX "/facebook/")
+-list(FILTER WANGLE_HEADERS EXCLUDE REGEX "/build/")
++list(FILTER WANGLE_HEADERS EXCLUDE REGEX "/wangle/build/")
+ list(FILTER WANGLE_HEADERS EXCLUDE REGEX "/example/")
+ 
+ # Collect test headers separately
+diff --git i/wangle/cmake/WangleFunctions.cmake w/wangle/cmake/WangleFunctions.cmake
+index c0e51e9ef..bb89163b9 100644
+--- i/wangle/cmake/WangleFunctions.cmake
++++ w/wangle/cmake/WangleFunctions.cmake
+@@ -30,8 +30,15 @@ function(wangle_install_headers rootName rootDir)
+     if(rIdx EQUAL 0)
+       math(EXPR filePathLength "${filePathLength} - ${rootDirLength}")
+       string(SUBSTRING "${filePath}" ${rootDirLength} ${filePathLength} fileGroup)
+-      install(FILES ${fil}
+-              DESTINATION ${INCLUDE_INSTALL_DIR}/${rootName}${fileGroup})
++      if(IS_ABSOLUTE "${INCLUDE_INSTALL_DIR}")
++        set(_wangle_header_dest "${INCLUDE_INSTALL_DIR}/${rootName}${fileGroup}")
++        install(FILES ${fil}
++                DESTINATION "${_wangle_header_dest}")
++      else()
++        set(_wangle_header_dest "${rootName}${fileGroup}")
++        install(FILES ${fil}
++                DESTINATION "${_wangle_header_dest}")
++      endif()
+     endif()
+   endforeach()
+ endfunction()

@@ -390,7 +390,7 @@ public:
         buffer_.clear();
         co_await read_input_queue_->enqueue(std::move(batch));
       }
-      co_await read_input_queue_->enqueue(std::nullopt);
+      co_await read_input_queue_->enqueue(None{});
       co_return FinalizeBehavior::continue_;
     }
     // Non-parallel: emit any remaining buffered data as the final line.
@@ -580,7 +580,7 @@ private:
         auto next = co_await read_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
-          co_await read_input_queue_->enqueue(std::nullopt);
+          co_await read_input_queue_->enqueue(None{});
           break;
         }
         auto const* begin = reinterpret_cast<char const*>((*next)->data());
@@ -623,7 +623,7 @@ private:
     read_output_queue_->enqueue(table_slice{});
   }
 
-  using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+  using ReadInputQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
   /// The output queue is unbounded to avoid a theoretical deadlock where the
   /// main thread wants to push to a full input queue while all workers want to
   /// push to a full output queue.
@@ -778,7 +778,7 @@ public:
       if (finished_workers_ >= args_.jobs) {
         co_return FinalizeBehavior::done;
       }
-      co_await write_input_queue_->enqueue(std::nullopt);
+      co_await write_input_queue_->enqueue(None{});
       co_return FinalizeBehavior::continue_;
     }
     co_return FinalizeBehavior::done;
@@ -807,7 +807,7 @@ private:
         co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await write_input_queue_->dequeue();
         if (not next) {
-          co_await write_input_queue_->enqueue(std::nullopt);
+          co_await write_input_queue_->enqueue(None{});
           break;
         }
         write_output_queue_->enqueue(print_slice(*next));
@@ -817,7 +817,7 @@ private:
     write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
+  using WriteInputQueue = folly::coro::BoundedQueue<Option<table_slice>>;
   using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
   WriteLinesArgs args_;

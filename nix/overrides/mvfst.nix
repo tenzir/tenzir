@@ -3,6 +3,7 @@
   lib,
   stdenv,
   mvfst,
+  openssl,
   xz,
 }:
 let
@@ -21,7 +22,11 @@ mvfst.overrideAttrs (orig: {
       hash
       ;
   };
-  patches = orig.patches or [ ];
+  patches =
+    (builtins.filter (x: (builtins.match ".*-glog-0\.7\.patch$" "${x}") == null) orig.patches)
+    ++ [
+      ./mvfst-fix-header-regex.patch
+    ];
   postPatch = ''
     # Keep upstream install hook, but the DSR directory does not exist in all
     # mvfst snapshots.
@@ -30,6 +35,9 @@ mvfst.overrideAttrs (orig: {
       printf 'install(TARGETS mvfst_dsr_backend)\n' >> quic/dsr/CMakeLists.txt
     fi
   '';
+  buildInputs = orig.buildInputs ++ [
+    openssl
+  ];
   postInstall = (orig.postInstall or "") + ''
     # With BUILD_TESTS=OFF, mvfst does not install any binaries. Keep the
     # declared `bin` output present so multi-output derivation checks pass.

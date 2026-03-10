@@ -77,7 +77,13 @@ struct OperatorMsg;
 template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) : push_{push} {
+  OpenPipeline() noexcept = default;
+
+  explicit OpenPipeline(Option<Box<Push<OperatorMsg<Input>>>>& push) noexcept
+    : push_{&push} {
+  }
+
+  explicit OpenPipeline(None) noexcept {
   }
 
   template <std::same_as<Input> In>
@@ -86,7 +92,7 @@ public:
     requires(not std::same_as<Input, void>);
 
 private:
-  Option<Push<OperatorMsg<Input>>&> push_;
+  Option<Box<Push<OperatorMsg<Input>>>>* push_ = nullptr;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,

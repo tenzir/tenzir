@@ -429,7 +429,7 @@ USER tenzir:tenzir
 
 FROM tenzir-ce-untested AS tenzir-ce-integration
 
-COPY test/ ./test
+COPY --chown=tenzir:tenzir test/ ./test
 RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     TENZIR_BINARY="$PREFIX/bin/tenzir" \
     TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \

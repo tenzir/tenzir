@@ -34,12 +34,16 @@ namespace detail {
 template <class T>
 class OptionStorage {
 public:
-  OptionStorage() = default;
-  explicit OptionStorage(T value) : inner_{std::move(value)} {
+  OptionStorage() noexcept = default;
+  explicit OptionStorage(T value) noexcept(
+    std::is_nothrow_move_constructible_v<T>)
+    : inner_{std::move(value)} {
   }
-  explicit OptionStorage(std::optional<T> opt) : inner_{std::move(opt)} {
+  explicit OptionStorage(std::optional<T> opt) noexcept(
+    std::is_nothrow_move_constructible_v<std::optional<T>>)
+    : inner_{std::move(opt)} {
   }
-  auto is_some() const -> bool {
+  auto is_some() const noexcept -> bool {
     return inner_.has_value();
   }
   template <class Self>
@@ -47,7 +51,7 @@ public:
   auto get(this Self&& self) -> decltype(auto) {
     return std::forward_like<Self>(*self.inner_);
   }
-  auto reset() -> void {
+  auto reset() noexcept -> void {
     inner_.reset();
   }
 
@@ -59,10 +63,10 @@ private:
 template <class T>
 class OptionStorage<T&> {
 public:
-  OptionStorage() = default;
-  explicit OptionStorage(T& ref) : ptr_{&ref} {
+  OptionStorage() noexcept = default;
+  explicit OptionStorage(T& ref) noexcept : ptr_{&ref} {
   }
-  auto is_some() const -> bool {
+  auto is_some() const noexcept -> bool {
     return ptr_ != nullptr;
   }
   template <class Self>
@@ -70,7 +74,7 @@ public:
   auto get(this Self&& self) -> decltype(auto) {
     return std::forward_like<Self>(*self.ptr_);
   }
-  auto reset() -> void {
+  auto reset() noexcept -> void {
     ptr_ = nullptr;
   }
 
@@ -92,10 +96,10 @@ public:
   // -- Construction -----------------------------------------------------------
 
   /// Constructs an empty option.
-  Option() = default;
+  Option() noexcept = default;
 
   /// Constructs an empty option from `None`.
-  explicit(false) Option(None) {
+  explicit(false) Option(None) noexcept {
   }
 
   /// Constructs from a value (non-reference `T` only).
@@ -104,30 +108,36 @@ public:
              and not std::same_as<std::remove_cvref_t<U>, None>
              and not std::same_as<std::remove_cvref_t<U>, Option>
              and not std::same_as<std::remove_cvref_t<U>, std::optional<T>>)
-  explicit(not std::convertible_to<U, T>) Option(U&& value)
+  explicit(not std::convertible_to<U, T>)
+    Option(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>
+                               and std::is_nothrow_constructible_v<Storage, T>)
     : storage_{T{std::forward<U>(value)}} {
   }
 
   /// Constructs from a reference (reference `T` only).
   template <class U = std::remove_reference_t<T>>
     requires(std::is_reference_v<T> and std::convertible_to<U&, T>)
-  explicit(false) Option(U& ref) : storage_{ref} {
+  explicit(false)
+    Option(U& ref) noexcept(std::is_nothrow_constructible_v<Storage, U&>)
+    : storage_{ref} {
   }
 
   /// Constructs from `std::nullopt`.
-  explicit(false) Option(std::nullopt_t) {
+  explicit(false) Option(std::nullopt_t) noexcept {
   }
 
   /// Constructs from a `std::optional` (non-reference `T` only).
   template <class U = T>
     requires(not std::is_reference_v<T>)
-  explicit(false) Option(std::optional<U> opt) : storage_{std::move(opt)} {
+  explicit(false) Option(std::optional<U> opt) noexcept(
+    std::is_nothrow_constructible_v<Storage, std::optional<U>>)
+    : storage_{std::move(opt)} {
   }
 
   // -- Assignment -------------------------------------------------------------
 
   /// Resets to empty.
-  auto operator=(None) -> Option& {
+  auto operator=(None) noexcept(noexcept(storage_.reset())) -> Option& {
     storage_.reset();
     return *this;
   }
@@ -135,17 +145,17 @@ public:
   // -- Observers --------------------------------------------------------------
 
   /// Returns whether the option contains a value.
-  explicit operator bool() const {
+  explicit operator bool() const noexcept {
     return is_some();
   }
 
   /// Returns whether the option contains a value.
-  auto is_some() const -> bool {
+  auto is_some() const noexcept -> bool {
     return storage_.is_some();
   }
 
   /// Returns whether the option is empty.
-  auto is_none() const -> bool {
+  auto is_none() const noexcept -> bool {
     return not is_some();
   }
 

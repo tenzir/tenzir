@@ -23,10 +23,11 @@ pkgs.mkShell (
         pkgs.nixfmt
         pkgs.speeve
         pkgs.libsodium
-        pkgs.shfmt
+        pkgs.markdownlint-cli
         pkgs.poetry
         pkgs.python3Packages.spdx-tools
         pkgs.ruff
+        pkgs.shfmt
         pkgs.uv
         (pkgs.python3.withPackages (
           ps: with ps; [
