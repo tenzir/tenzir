@@ -70,17 +70,10 @@ public:
 
   struct ConnectionClosed {
     uint64_t conn_id;
+    Option<std::string> error;
   };
 
-  struct ConnectionError {
-    uint64_t conn_id;
-    std::string error;
-  };
-
-  struct Wakeup {};
-
-  using Message
-    = variant<Connected, ReadChunk, ConnectionClosed, ConnectionError, Wakeup>;
+  using Message = variant<Connected, ReadChunk, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit FromTcpConnector(FromTcpArgs args)
@@ -236,28 +229,19 @@ public:
         TENZIR_UNUSED(push_result);
       },
       [&](ConnectionClosed closed) -> Task<void> {
+        if (closed.error) {
+          diagnostic::warning("connection closed after read error")
+            .primary(endpoint_source_)
+            .note("endpoint: {}", address_.describe())
+            .note("reason: {}", *closed.error)
+            .emit(ctx);
+        }
         connections_.erase(closed.conn_id);
         if (pipeline_) {
           co_await pipeline_->close();
           pipeline_ = None{};
         }
         connection_active_ = false;
-      },
-      [&](ConnectionError error) -> Task<void> {
-        diagnostic::warning("connection closed after read error")
-          .primary(endpoint_source_)
-          .note("endpoint: {}", address_.describe())
-          .note("reason: {}", error.error)
-          .emit(ctx);
-        connections_.erase(error.conn_id);
-        if (pipeline_) {
-          co_await pipeline_->close();
-          pipeline_ = None{};
-        }
-        connection_active_ = false;
-      },
-      [&](Wakeup) -> Task<void> {
-        co_return;
       });
   }
 
@@ -271,22 +255,6 @@ public:
     co_return;
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    for (auto& [_, connection] : connections_) {
-      connection->transport->close();
-    }
-    if (pipeline_) {
-      co_await pipeline_->close();
-      pipeline_ = None{};
-    }
-    connections_.clear();
-    connection_active_ = false;
-    done_ = true;
-    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
-    co_return;
-  }
-
   auto state() -> OperatorState override {
     return done_ ? OperatorState::done : OperatorState::unspecified;
   }
@@ -294,10 +262,10 @@ public:
 private:
   static auto read_loop(uint64_t conn_id, Arc<ConnectionHandle> connection,
                         MessageQueue& message_queue) -> Task<void> {
+    auto read_error = std::string{};
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
-      auto read_error = std::string{};
       try {
         bytes = co_await connection->transport->read(
           buf, 1, buffer_size,
@@ -312,8 +280,7 @@ private:
         read_error = e.what();
       }
       if (not read_error.empty()) {
-        co_await message_queue.enqueue(ConnectionError{conn_id, read_error});
-        co_return;
+        break;
       }
       if (bytes == 0) {
         break;
@@ -328,7 +295,11 @@ private:
       auto chk = chunk::make(std::move(data));
       co_await message_queue.enqueue(ReadChunk{std::move(chk)});
     }
-    co_await message_queue.enqueue(ConnectionClosed{conn_id});
+    co_await message_queue.enqueue(ConnectionClosed{
+      conn_id,
+      read_error.empty() ? Option<std::string>{}
+                         : Option<std::string>{std::move(read_error)},
+    });
   }
 
   location endpoint_source_ = location::unknown;

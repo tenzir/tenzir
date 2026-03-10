@@ -72,17 +72,14 @@ public:
   };
   struct ConnectionClosed {
     uint64_t conn_id;
-  };
-  struct ConnectionError {
-    uint64_t conn_id;
-    std::string error;
+    Option<std::string> error;
   };
   struct ConnectionReadTimeout {
     uint64_t conn_id;
   };
   struct Wakeup {};
-  using Message = variant<Accepted, ConnectionClosed, ConnectionError,
-                          ConnectionReadTimeout, Wakeup>;
+  using Message
+    = variant<Accepted, ConnectionClosed, ConnectionReadTimeout, Wakeup>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   AcceptTcpListener(AcceptTcpArgs args)
@@ -197,22 +194,18 @@ public:
                     *message_queue_, std::move(bytes_read))));
       },
       [&](ConnectionClosed closed) -> Task<void> {
+        if (closed.error) {
+          diagnostic::warning("connection closed after read error")
+            .primary(endpoint_source_)
+            .note("connection id: {}", closed.conn_id)
+            .note("reason: {}", *closed.error)
+            .emit(ctx);
+        }
         if (connections_.erase(closed.conn_id) == 1) {
           co_await close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
         }
-        co_return;
-      },
-      [&](ConnectionError error) -> Task<void> {
-        diagnostic::warning("connection closed after read error")
-          .primary(endpoint_source_)
-          .note("connection id: {}", error.conn_id)
-          .note("reason: {}", error.error)
-          .emit(ctx);
-        if (connections_.erase(error.conn_id) == 1) {
-          co_await close_subpipeline(error.conn_id, ctx);
-          release_connection_slot();
-        }
+        maybe_finish_draining();
         co_return;
       },
       [&](ConnectionReadTimeout timeout) -> Task<void> {
@@ -249,32 +242,12 @@ public:
     lifecycle_->store(Lifecycle::draining);
     stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
-    if (outstanding_connections() == 0) {
-      lifecycle_->store(Lifecycle::done);
-      co_return FinalizeBehavior::done;
-    }
-    co_return FinalizeBehavior::continue_;
-  }
-
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (lifecycle_->load() == Lifecycle::done) {
-      co_return;
-    }
-    lifecycle_->store(Lifecycle::draining);
-    stop_accepting();
-    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
-    if (outstanding_connections() == 0) {
-      lifecycle_->store(Lifecycle::done);
-    }
-    co_return;
+    co_return maybe_finish_draining() ? FinalizeBehavior::done
+                                      : FinalizeBehavior::continue_;
   }
 
   auto state() -> OperatorState override {
-    if (lifecycle_->load() == Lifecycle::draining
-        and outstanding_connections() == 0) {
-      lifecycle_->store(Lifecycle::done);
-    }
+    maybe_finish_draining();
     return lifecycle_->load() == Lifecycle::done ? OperatorState::done
                                                  : OperatorState::unspecified;
   }
@@ -307,6 +280,14 @@ private:
     for (auto& [_, connection] : connections_) {
       connection->transport->close();
     }
+  }
+
+  auto maybe_finish_draining() -> bool {
+    if (lifecycle_->load() == Lifecycle::draining
+        and outstanding_connections() == 0) {
+      lifecycle_->store(Lifecycle::done);
+    }
+    return lifecycle_->load() == Lifecycle::done;
   }
 
   auto outstanding_connections() const -> uint64_t {
@@ -472,10 +453,10 @@ private:
       auto push_result = co_await pipeline.push(std::move(chk));
       TENZIR_UNUSED(push_result);
     }
-    if (read_error) {
-      co_await message_queue.enqueue(ConnectionError{conn_id, *read_error});
-    }
-    co_await message_queue.enqueue(ConnectionClosed{conn_id});
+    co_await message_queue.enqueue(ConnectionClosed{
+      conn_id,
+      std::move(read_error),
+    });
   }
 
   location endpoint_source_ = location::unknown;

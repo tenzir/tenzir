@@ -196,12 +196,6 @@ public:
     co_return;
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    request_stop();
-    co_return;
-  }
-
   auto state() -> OperatorState override {
     return done_->load() ? OperatorState::done : OperatorState::unspecified;
   }
