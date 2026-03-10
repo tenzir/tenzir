@@ -166,6 +166,7 @@ type suricata.arp = suricata.component.common + record {
 }
 
 type suricata.bittorrent_dht_node = record {
+  id: string,
   ip: ip,
   port: uint64
 }
