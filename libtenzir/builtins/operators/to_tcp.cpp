@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
@@ -115,6 +116,10 @@ public:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
+    auto guard = co_await transport_mutex_->lock();
+    if (done_->load()) {
+      co_return;
+    }
     if (not transport_) {
       diagnostic::warning("connection to {} is not established",
                           address_.describe())
@@ -130,9 +135,6 @@ public:
         folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
         write_timeout);
       reconnect_backoff_ = connect_initial_backoff;
-      co_return;
-    } catch (folly::OperationCancelled const&) {
-      // Cancellation is part of normal shutdown.
       co_return;
     } catch (folly::FutureTimeout const& ex) {
       if (done_->load()) {
@@ -206,8 +208,11 @@ public:
 
 private:
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
-    if (done_->load() or transport_) {
-      co_return;
+    {
+      auto guard = co_await transport_mutex_->lock();
+      if (done_->load() or transport_) {
+        co_return;
+      }
     }
     auto connect_error = Option<std::string>{};
     try {
@@ -218,16 +223,12 @@ private:
       if (tls_context_) {
         co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
       }
-      if (done_->load()) {
+      auto guard = co_await transport_mutex_->lock();
+      if (done_->load() or transport_) {
         co_return;
       }
-      if (not transport_) {
-        transport_ = std::move(boxed);
-        reconnect_backoff_ = connect_initial_backoff;
-      }
-      co_return;
-    } catch (folly::OperationCancelled const&) {
-      // Cancellation is part of normal shutdown.
+      transport_ = std::move(boxed);
+      reconnect_backoff_ = connect_initial_backoff;
       co_return;
     } catch (folly::AsyncSocketException const& ex) {
       // Connect/TLS handshake failures are per-attempt network errors; retry
@@ -238,24 +239,23 @@ private:
       connect_error = ex.what();
     }
     if (connect_error) {
-      if (done_->load()) {
-        co_return;
+      auto backoff = connect_initial_backoff;
+      {
+        auto guard = co_await transport_mutex_->lock();
+        if (done_->load()) {
+          co_return;
+        }
+        backoff = reconnect_backoff_;
+        reconnect_backoff_
+          = std::min(reconnect_backoff_ * 2, connect_max_backoff);
       }
       diagnostic::warning("failed to connect to {}", address_.describe())
         .primary(args_.endpoint.source)
         .note("reason: {}", *connect_error)
         .hint("ensure a TCP server is listening on this endpoint")
         .emit(ctx);
-      auto backoff = reconnect_backoff_;
-      reconnect_backoff_
-        = std::min(reconnect_backoff_ * 2, connect_max_backoff);
       ctx.spawn_task([this, backoff]() -> Task<void> {
-        try {
-          co_await folly::coro::sleep(backoff);
-        } catch (folly::OperationCancelled const&) {
-          // Cancellation is part of normal shutdown.
-          co_return;
-        }
+        co_await folly::coro::sleep(backoff);
         request_connect();
       }());
     }
@@ -270,7 +270,7 @@ private:
   }
 
   auto request_connect() -> void {
-    if (done_->load() or transport_) {
+    if (done_->load()) {
       return;
     }
     auto expected = false;
@@ -289,6 +289,7 @@ private:
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
+  Box<RawMutex> transport_mutex_{std::in_place};
   Option<Box<folly::coro::Transport>> transport_;
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
   mutable Box<MessageQueue> control_queue_{std::in_place,

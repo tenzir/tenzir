@@ -58,10 +58,9 @@ public:
     Client client;
   };
 
-  struct SubpipelineFinished {};
   struct Wakeup {};
 
-  using Message = variant<Accepted, SubpipelineFinished, Wakeup>;
+  using Message = variant<Accepted, Wakeup>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit ServeTcp(ServeTcpArgs args) : args_{std::move(args)} {
@@ -140,11 +139,7 @@ public:
     for (size_t i = 0; i < clients_.size(); ++i) {
       write_tasks.push_back(write_to_client(clients_[i], data, diagnostics[i]));
     }
-    try {
-      co_await folly::coro::collectAllRange(std::move(write_tasks));
-    } catch (folly::OperationCancelled const&) {
-      co_return; // Cancellation is part of normal shutdown.
-    }
+    co_await folly::coro::collectAllRange(std::move(write_tasks));
     TENZIR_ASSERT(diagnostics.size() == clients_.size());
     auto client_it = clients_.begin();
     for (size_t i = 0; i < diagnostics.size(); ++i) {
@@ -179,11 +174,6 @@ public:
     auto message = std::move(*message_ptr);
     if (auto* accepted = std::get_if<Accepted>(&message)) {
       co_await add_client(std::move(accepted->client), ctx.dh());
-      co_return;
-    }
-    if (std::holds_alternative<SubpipelineFinished>(message)) {
-      subpipeline_finished_ = true;
-      maybe_finish();
     }
     co_return;
   }
@@ -205,7 +195,8 @@ public:
     if (done_->load()) {
       co_return;
     }
-    co_await message_queue_->enqueue(SubpipelineFinished{});
+    subpipeline_finished_ = true;
+    maybe_finish();
     co_return;
   }
 
@@ -293,9 +284,6 @@ private:
     if (tls_context_) {
       try {
         co_await upgrade_transport_to_tls_server(client, tls_context_);
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        co_return;
       } catch (folly::AsyncSocketException const& ex) {
         auto peer = client->getPeerAddress().describe();
         diagnostic::warning("TLS handshake failed")
@@ -329,7 +317,7 @@ private:
         auto transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
         auto client
-          = Box<folly::coro::Transport>::from_unique_ptr(std::move(transport));
+          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
         if (done_->load()) {
           co_return;
         }
@@ -337,9 +325,6 @@ private:
                      client->getPeerAddress().describe());
         co_await message_queue_->enqueue(Accepted{std::move(client)});
         continue;
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        co_return;
       } catch (folly::AsyncSocketException const& ex) {
         // Accept failures are per-connection network errors; keep the listener
         // alive and continue accepting new clients.

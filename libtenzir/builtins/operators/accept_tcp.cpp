@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -24,11 +25,8 @@
 
 #include <folly/ScopeGuard.h>
 #include <folly/SocketAddress.h>
-#include <folly/coro/AsyncScope.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
-#include <folly/coro/ViaIfAsync.h>
-#include <folly/coro/WithCancellation.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
@@ -38,7 +36,6 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace tenzir::plugins::accept_tcp {
 
@@ -60,6 +57,14 @@ struct AcceptTcpArgs {
 
 class AcceptTcpListener final : public Operator<void, table_slice> {
 public:
+  struct ConnectionHandle {
+    explicit ConnectionHandle(Box<folly::coro::Transport> transport)
+      : transport{std::move(transport)} {
+    }
+
+    Box<folly::coro::Transport> transport;
+  };
+
   struct Accepted {
     Box<folly::coro::Transport> transport;
   };
@@ -110,7 +115,7 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        request_stop();
+        request_abort();
         co_return;
       }
       tls_context_ = std::move(*context);
@@ -134,7 +139,7 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    if (done_->load()) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     auto message = std::move(result).as<Message>();
@@ -174,20 +179,18 @@ public:
         auto sub = co_await ctx.spawn_sub(
           std::move(key), std::move(pipeline_copy), tag_v<chunk_ptr>);
         auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
-        active_connections_.emplace(conn_id);
-        auto [it, inserted] = read_cancellation_sources_.emplace(
-          conn_id, std::make_shared<folly::CancellationSource>());
+        auto connection
+          = Arc<ConnectionHandle>{ConnectionHandle{std::move(transport)}};
+        auto [_, inserted] = connections_.emplace(conn_id, connection);
         TENZIR_ASSERT(inserted);
         keep_connection_slot = true;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
-          read_loop(conn_id, std::move(transport), std::move(open_pipeline),
-                    *message_queue_, std::move(bytes_read),
-                    it->second->getToken())));
+          read_loop(conn_id, std::move(connection), std::move(open_pipeline),
+                    *message_queue_, std::move(bytes_read))));
       },
       [&](ConnectionClosed closed) -> Task<void> {
-        read_cancellation_sources_.erase(closed.conn_id);
-        if (active_connections_.erase(closed.conn_id) == 1) {
+        if (connections_.erase(closed.conn_id) == 1) {
           co_await close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
         }
@@ -199,28 +202,20 @@ public:
           .note("connection id: {}", error.conn_id)
           .note("reason: {}", error.error)
           .emit(ctx);
-        read_cancellation_sources_.erase(error.conn_id);
-        if (active_connections_.erase(error.conn_id) == 1) {
+        if (connections_.erase(error.conn_id) == 1) {
           co_await close_subpipeline(error.conn_id, ctx);
           release_connection_slot();
         }
         co_return;
       },
       [&](ConnectionReadTimeout timeout) -> Task<void> {
-        if (not active_connections_.contains(timeout.conn_id)) {
-          co_return;
-        }
         auto key = sub_key_for(timeout.conn_id);
         if (ctx.get_sub(make_view(key))) {
           co_return;
         }
-        if (auto it = read_cancellation_sources_.find(timeout.conn_id);
-            it != read_cancellation_sources_.end()) {
-          it->second->requestCancellation();
-          read_cancellation_sources_.erase(it);
-        }
-        if (active_connections_.erase(timeout.conn_id) == 1) {
-          release_connection_slot();
+        if (auto it = connections_.find(timeout.conn_id);
+            it != connections_.end()) {
+          close_transport(it->second);
         }
         co_return;
       },
@@ -229,28 +224,85 @@ public:
       });
   }
 
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
+    -> Task<void> override {
+    auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
+    if (auto it = connections_.find(conn_id); it != connections_.end()) {
+      close_transport(it->second);
+    }
+    co_return;
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    lifecycle_ = Lifecycle::draining;
+    stop_accepting();
+    if (outstanding_connections() == 0) {
+      lifecycle_ = Lifecycle::done;
+      co_return FinalizeBehavior::done;
+    }
+    co_return FinalizeBehavior::continue_;
+  }
+
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    request_stop();
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    stop_accepting();
+    if (outstanding_connections() == 0) {
+      lifecycle_ = Lifecycle::done;
+    }
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return done_->load() ? OperatorState::done : OperatorState::unspecified;
+    if (lifecycle_ == Lifecycle::draining and outstanding_connections() == 0) {
+      lifecycle_ = Lifecycle::done;
+    }
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
   }
 
 private:
-  auto request_stop() -> void {
-    if (done_->exchange(true)) {
+  enum class Lifecycle {
+    running,
+    draining,
+    done,
+  };
+
+  auto request_abort() -> void {
+    if (lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::done;
+    stop_accepting();
+    for (auto& [_, connection] : connections_) {
+      connection->transport->close();
+    }
+  }
+
+  auto stop_accepting() -> void {
+    if (stop_accepting_->exchange(true)) {
       return;
     }
     if (server_) {
       server_->close();
     }
-    for (auto& [_, cancellation_source] : read_cancellation_sources_) {
-      cancellation_source->requestCancellation();
-    }
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+  }
+
+  auto outstanding_connections() const -> uint64_t {
+    return reserved_connections_->load(std::memory_order_relaxed);
+  }
+
+  static auto close_transport(Arc<ConnectionHandle> connection) -> void {
+    connection->transport->close();
   }
 
   static auto sub_key_for(uint64_t conn_id) -> data {
@@ -271,7 +323,7 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    while (not done_->load()) {
+    while (not stop_accepting_->load()) {
       std::unique_ptr<folly::coro::Transport> transport;
       auto accept_error = Option<std::string>{};
       try {
@@ -279,13 +331,10 @@ private:
         // `await_task` is now queue-based, so accepting runs in this task.
         transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        co_return;
       } catch (folly::AsyncSocketException const& ex) {
         // Accept can fail transiently (e.g., client abort/reset). Keep the
         // listener alive and continue with the next accept attempt.
-        if (done_->load()) {
+        if (stop_accepting_->load()) {
           co_return;
         }
         accept_error = ex.what();
@@ -296,13 +345,11 @@ private:
           .note("endpoint: {}", address_.describe())
           .note("reason: {}", *accept_error)
           .emit(dh);
-        try {
-          co_await folly::coro::sleep(accept_retry_delay);
-        } catch (folly::OperationCancelled const&) {
-          // Cancellation is part of normal shutdown.
-          co_return;
-        }
+        co_await folly::coro::sleep(accept_retry_delay);
         continue;
+      }
+      if (stop_accepting_->load()) {
+        co_return;
       }
       auto peer = transport->getPeerAddress();
       if (not try_acquire_connection_slot()) {
@@ -316,15 +363,17 @@ private:
           .emit(dh);
         continue;
       }
+      auto keep_connection_slot = false;
+      auto release_connection_slot_guard = folly::makeGuard([&] {
+        if (not keep_connection_slot) {
+          release_connection_slot();
+        }
+      });
       auto boxed
-        = Box<folly::coro::Transport>::from_unique_ptr(std::move(transport));
+        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
       if (tls_context_) {
         try {
           co_await upgrade_transport_to_tls_server(boxed, tls_context_);
-        } catch (folly::OperationCancelled const&) {
-          // Cancellation is part of normal shutdown.
-          release_connection_slot();
-          co_return;
         } catch (folly::AsyncSocketException const& ex) {
           // Peer-driven TLS failures are expected at runtime; keep serving
           // other connections instead of failing the whole operator.
@@ -334,22 +383,15 @@ private:
             .note("reason: {}", ex.what())
             .hint("verify TLS settings and certificates on both sides")
             .emit(dh);
-          release_connection_slot();
           continue;
         }
       }
-      if (done_->load()) {
-        release_connection_slot();
+      if (stop_accepting_->load()) {
         co_return;
       }
       TENZIR_DEBUG("accepted connection from {}", peer.describe());
-      try {
-        co_await message_queue_->enqueue(Accepted{std::move(boxed)});
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        release_connection_slot();
-        co_return;
-      }
+      co_await message_queue_->enqueue(Accepted{std::move(boxed)});
+      keep_connection_slot = true;
     }
   }
 
@@ -371,23 +413,17 @@ private:
   }
 
   static auto
-  read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
+  read_loop(uint64_t conn_id, Arc<ConnectionHandle> connection,
             OpenPipeline<chunk_ptr> pipeline, MessageQueue& message_queue,
-            MetricsCounter bytes_counter, folly::CancellationToken cancel_token)
-    -> Task<void> {
+            MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
       try {
-        bytes = co_await folly::coro::co_withCancellation(
-          cancel_token,
-          transport->read(buf, 1, buffer_size,
-                          std::chrono::duration_cast<std::chrono::milliseconds>(
-                            read_timeout)));
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is part of normal shutdown.
-        break;
+        bytes = co_await connection->transport->read(
+          buf, 1, buffer_size,
+          std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
         if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
@@ -413,10 +449,8 @@ private:
         data.insert(data.end(), begin, begin + range.size());
       }
       auto chk = chunk::make(std::move(data));
-      if ((co_await pipeline.push(std::move(chk))).is_err()) {
-        read_error = "subpipeline input was closed unexpectedly";
-        break;
-      }
+      auto push_result = co_await pipeline.push(std::move(chk));
+      TENZIR_UNUSED(push_result);
     }
     if (read_error) {
       co_await message_queue.enqueue(ConnectionError{conn_id, *read_error});
@@ -436,12 +470,11 @@ private:
     std::in_place,
     message_queue_capacity,
   };
-  std::unordered_set<uint64_t> active_connections_;
-  std::unordered_map<uint64_t, std::shared_ptr<folly::CancellationSource>>
-    read_cancellation_sources_;
+  std::unordered_map<uint64_t, Arc<ConnectionHandle>> connections_;
   Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
   uint64_t max_connections_ = 128;
-  Box<std::atomic_bool> done_{std::in_place, false};
+  Box<std::atomic_bool> stop_accepting_{std::in_place, false};
+  Lifecycle lifecycle_ = Lifecycle::running;
   mutable uint64_t next_conn_id_{0};
 };
 
