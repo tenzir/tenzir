@@ -38,12 +38,7 @@ public:
   virtual auto signature() const -> operator_signature = 0;
 
   /// @throws diagnostic
-  virtual auto parse_operator(parser_interface& p) const -> operator_ptr {
-    // TODO: Remove this default implementation and adjust `parser.cpp`
-    // accordingly when all operators are converted.
-    (void)p;
-    return nullptr;
-  }
+  virtual auto parse_operator(parser_interface& p) const -> operator_ptr;
 
   virtual auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>>;

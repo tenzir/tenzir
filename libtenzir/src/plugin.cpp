@@ -71,6 +71,14 @@ auto operator_parser_plugin::make_operator(std::string_view pipeline) const
                                            "the legacy parsing API")};
 }
 
+auto operator_parser_plugin::parse_operator(parser_interface& p) const
+  -> operator_ptr {
+  // TODO: Remove this default implementation and adjust `parser.cpp`
+  // accordingly when all operators are converted.
+  (void)p;
+  return nullptr;
+}
+
 // -- plugin singleton ---------------------------------------------------------
 
 namespace plugins {
