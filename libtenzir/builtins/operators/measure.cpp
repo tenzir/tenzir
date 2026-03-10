@@ -19,12 +19,20 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
+#include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::measure {
 
 TENZIR_ENUM(schema, name_only, legacy, exact);
 
 namespace {
+
+auto sleep_until(std::chrono::steady_clock::time_point t) -> Task<void> {
+  auto now = std::chrono::steady_clock::now();
+  auto diff = (t < now) ? std::chrono::steady_clock::duration{0} : t - now;
+  co_await folly::coro::sleep(
+    std::chrono::duration_cast<folly::HighResDuration>(diff));
+}
 
 class measure_operator final : public crtp_operator<measure_operator> {
 public:
@@ -165,18 +173,13 @@ struct MeasureArgs {
 class MeasureTableSlice final : public Operator<table_slice, table_slice> {
 public:
   explicit MeasureTableSlice(MeasureArgs args)
-    : args_{args}, last_finish_{std::chrono::steady_clock::time_point::min()} {
+    : args_{args}, last_flush_{std::chrono::steady_clock::time_point::min()} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto now = std::chrono::steady_clock::now();
     if (input.rows() == 0) {
-      if (builder_.length() > 0
-          and last_finish_ + defaults::import::batch_timeout < now) {
-        co_await flush(push);
-      }
       co_return;
     }
     auto& events = counters_[input.schema()];
@@ -196,9 +199,28 @@ public:
     } else {
       metric.field("schema", input.schema().name());
     }
+    const auto now = std::chrono::steady_clock::now();
     if (args_.real_time
         or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
-        or last_finish_ + defaults::import::batch_timeout < now) {
+        or last_flush_ + defaults::import::batch_timeout < now) {
+      co_await flush(push);
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (builder_.length() > 0) {
+      co_await sleep_until(last_flush_ + defaults::import::batch_timeout);
+    } else {
+      co_await wait_forever();
+    }
+    co_return Any{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    if (builder_.length() > 0) {
       co_await flush(push);
     }
   }
@@ -226,14 +248,14 @@ public:
 
 private:
   auto flush(Push<table_slice>& push) -> Task<void> {
-    last_finish_ = std::chrono::steady_clock::now();
+    last_flush_ = std::chrono::steady_clock::now();
     co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
   }
 
   MeasureArgs args_;
   std::unordered_map<type, uint64_t> counters_;
   series_builder builder_;
-  std::chrono::steady_clock::time_point last_finish_;
+  std::chrono::steady_clock::time_point last_flush_;
 };
 
 class MeasureChunk final : public Operator<chunk_ptr, table_slice> {
@@ -241,27 +263,41 @@ public:
   explicit MeasureChunk(MeasureArgs args)
     : args_{args},
       builder_{schema()},
-      last_finish_{std::chrono::steady_clock::time_point::min()} {
+      last_flush_{std::chrono::steady_clock::time_point::min()} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto now = std::chrono::steady_clock::now();
     if (not input or input->size() == 0) {
-      if (builder_.length() > 0
-          and last_finish_ + defaults::import::batch_timeout < now) {
-        co_await flush(push);
-      }
       co_return;
     }
     counter_ = args_.cumulative ? counter_ + input->size() : input->size();
     auto metric = builder_.record();
     metric.field("timestamp", time::clock::now());
     metric.field("bytes", counter_);
+    const auto now = std::chrono::steady_clock::now();
     if (args_.real_time
         or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
-        or last_finish_ + defaults::import::batch_timeout < now) {
+        or last_flush_ + defaults::import::batch_timeout < now) {
+      co_await flush(push);
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (builder_.length() > 0) {
+      co_await sleep_until(last_flush_ + defaults::import::batch_timeout);
+    } else {
+      co_await wait_forever();
+    }
+    co_return Any{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    if (builder_.length() > 0) {
       co_await flush(push);
     }
   }
@@ -300,14 +336,14 @@ private:
   }
 
   auto flush(Push<table_slice>& push) -> Task<void> {
-    last_finish_ = std::chrono::steady_clock::now();
+    last_flush_ = std::chrono::steady_clock::now();
     co_await push(builder_.finish_assert_one_slice());
   }
 
   MeasureArgs args_;
   uint64_t counter_ = 0;
   series_builder builder_;
-  std::chrono::steady_clock::time_point last_finish_;
+  std::chrono::steady_clock::time_point last_flush_;
 };
 
 class plugin final : public virtual operator_plugin<measure_operator>,
