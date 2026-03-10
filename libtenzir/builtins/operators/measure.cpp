@@ -208,7 +208,7 @@ public:
     }
     counter_ = args_.cumulative ? counter_ + input->size() : input->size();
 
-    series_builder builder_;
+    series_builder builder_{schema()};
     auto metric = builder_.record();
     metric.field("timestamp", time::clock::now());
     metric.field("bytes", counter_);
