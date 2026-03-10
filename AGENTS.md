@@ -7,6 +7,7 @@ building modular pipelines that process structured event data.
 
 ### Project structure
 
+- `.agents/` - Agent-specific configuration and reference material
 - `.claude/` - Claude Code configuration
 - `.docs/` - Optional local clone of the `tenzir/docs` repository
 - `.github/` - GitHub configuration and CI/CD workflows
@@ -109,3 +110,41 @@ When changing existing behavior or adding user-facing functionality, update
 
 Skip this process for internal refactorings that do not affect the user-facing
 TQL surface or command line tools.
+
+## Developing Tenzir
+
+Tenzir-specific idioms, APIs, and abstractions for C++ development. You MUST
+read the relevant references before writing any C++ code. NEVER assume patterns
+based on surrounding code alone.
+
+### Core Principle
+
+Work on **columns**, not rows. Tenzir uses Apache Arrow for columnar data
+processing. Evaluate expressions once per series or slice, then iterate if
+row-wise access is needed.
+
+### C++ Style
+
+You MUST read these before writing any C++ or plans that contain C++:
+
+- [coding-conventions.md](.agents/references/coding-conventions.md): Formatting, style, and structure
+- [naming-conventions.md](.agents/references/naming-conventions.md): Naming patterns and conventions
+
+### APIs and Patterns
+
+- [data-access.md](.agents/references/data-access.md): Reading and iterating columnar data
+- [data-building.md](.agents/references/data-building.md): Constructing series and table slices
+- [data-conversion.md](.agents/references/data-conversion.md): Converting between types
+- [variant-access.md](.agents/references/variant-access.md): Working with variants and match
+- [error-handling.md](.agents/references/error-handling.md): TRY, check, and expected patterns
+- [functions.md](.agents/references/functions.md): Implementing TQL functions
+- [operators.md](.agents/references/operators.md): Implementing TQL operators (incl. secrets)
+- [executor.md](.agents/references/executor.md): Executor for operators and pipeline execution
+
+### Tooling and Conventions
+
+- [external-files.md](.agents/references/external-files.md): Third-party code scaffold
+- [utilities.md](.agents/references/utilities.md): Generic utilities in tenzir::detail
+- [hashing.md](.agents/references/hashing.md): Hashing infrastructure
+- [parser-combinators.md](.agents/references/parser-combinators.md): Parser combinator framework
+- [common-types.md](.agents/references/common-types.md): Reusable common types
