@@ -1138,6 +1138,44 @@ auto filter(const table_slice& slice, const arrow::BooleanArray& mask)
   return result;
 }
 
+auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
+  -> std::pair<table_slice, table_slice> {
+  TENZIR_ASSERT(detail::narrow_cast<int64_t>(slice.rows()) == mask.length());
+  auto true_count = mask.true_count();
+  auto false_count = mask.length() - true_count;
+  if (true_count == 0) {
+    return {{}, slice};
+  }
+  if (false_count == 0) {
+    return {slice, {}};
+  }
+  auto schema = slice.schema();
+  auto rt = as<record_type>(schema);
+  auto true_builder = rt.make_arrow_builder(arrow_memory_pool());
+  auto false_builder = rt.make_arrow_builder(arrow_memory_pool());
+  auto batch = to_record_batch(slice);
+  auto struct_array = check(batch->ToStructArray());
+  partition_array(*true_builder, *false_builder, type{rt}, *struct_array, mask);
+  auto finish_slice = [&](arrow::StructBuilder& builder) -> table_slice {
+    auto rows = builder.length();
+    if (rows == 0) {
+      return {};
+    }
+    auto array = finish(builder);
+    auto arrow_schema = schema.to_arrow_schema();
+    auto result_batch = arrow::RecordBatch::Make(std::move(arrow_schema), rows,
+                                                 array->fields());
+    auto result = table_slice{result_batch, schema};
+    result.offset(slice.offset());
+    result.import_time(slice.import_time());
+    return result;
+  };
+  return {
+    finish_slice(dynamic_cast<arrow::StructBuilder&>(*true_builder)),
+    finish_slice(dynamic_cast<arrow::StructBuilder&>(*false_builder)),
+  };
+}
+
 uint64_t count_matching(const table_slice& slice, const expression& expr,
                         const ids& hints) {
   if (slice.rows() == 0) {

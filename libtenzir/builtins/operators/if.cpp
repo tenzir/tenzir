@@ -32,39 +32,6 @@ namespace tenzir::plugins::if_ {
 
 namespace {
 
-/// Splits a batch of events into two based on an array of bools. Treats null as
-/// false. The first element of the returned pair are the values for which the
-/// predicate returned true, and the second element are the other values.
-auto split_at_predicate(const table_slice& events,
-                        const arrow::BooleanArray& predicate)
-  -> std::pair<table_slice, table_slice> {
-  TENZIR_ASSERT(events.rows() > 0);
-  TENZIR_ASSERT(predicate.length() == detail::narrow<int64_t>(events.rows()));
-  auto lhs = std::vector<table_slice>{};
-  auto rhs = std::vector<table_slice>{};
-  const auto pred_at = [&](int64_t i) {
-    return predicate.IsValid(i) and predicate.GetView(i);
-  };
-  auto range_offset = int64_t{0};
-  auto range_value = pred_at(0);
-  const auto append = [&](int64_t i) {
-    auto& result = (range_value ? lhs : rhs);
-    result.push_back(subslice(events, range_offset, i));
-    range_offset = i;
-    range_value = not range_value;
-  };
-  for (auto i = range_offset + 1; i < predicate.length(); ++i) {
-    if (range_value != pred_at(i)) {
-      append(i);
-    }
-  }
-  append(predicate.length());
-  return {
-    concatenate(std::move(lhs)),
-    concatenate(std::move(rhs)),
-  };
-}
-
 struct branch_actor_traits {
   using signatures = caf::type_list<
     // Push events from the parent pipeline into the branch pipelines.
@@ -418,8 +385,7 @@ private:
           .primary(predicate_expr_)
           .emit(dh_);
       }
-      auto [lhs, rhs]
-        = split_at_predicate(sliced_input, *typed_predicate->array);
+      auto [lhs, rhs] = partition(sliced_input, *typed_predicate->array);
       TENZIR_ASSERT(lhs.rows() + rhs.rows() == sliced_input.rows());
       if (lhs.rows() > 0) {
         push_then(std::move(lhs));

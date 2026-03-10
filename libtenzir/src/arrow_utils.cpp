@@ -355,6 +355,27 @@ void for_each_true_run(const arrow::BooleanArray& mask, F&& fn) {
   }
 }
 
+/// Iterates contiguous runs in a boolean mask, calling fn(begin, end, value)
+/// for each run.
+template <typename F>
+void for_each_run(const arrow::BooleanArray& mask, F&& fn) {
+  auto len = mask.length();
+  if (len == 0) {
+    return;
+  }
+  auto run_begin = int64_t{0};
+  auto run_value = mask.Value(0);
+  for (auto i = int64_t{1}; i < len; ++i) {
+    auto value = mask.Value(i);
+    if (value != run_value) {
+      fn(run_begin, i, run_value);
+      run_begin = i;
+      run_value = value;
+    }
+  }
+  fn(run_begin, len, run_value);
+}
+
 } // namespace
 
 auto filter_array(arrow::ArrayBuilder& builder, const type& ty,
@@ -394,6 +415,50 @@ auto filter_array(arrow::ArrayBuilder& builder, const type& ty,
     } else {
       for_each_true_run(mask, [&](int64_t begin, int64_t end) {
         check(append_array_slice(builder, type{ty}, array, begin, end - begin));
+      });
+    }
+  });
+}
+
+auto partition_array(arrow::ArrayBuilder& true_builder,
+                     arrow::ArrayBuilder& false_builder, const type& ty,
+                     const arrow::Array& array, const arrow::BooleanArray& mask)
+  -> void {
+  TENZIR_ASSERT(array.length() == mask.length());
+  match(ty, [&]<class Ty>(const Ty& ty) {
+    auto& typed_array = as<type_to_arrow_array_t<Ty>>(array);
+    if constexpr (std::same_as<Ty, record_type>) {
+      auto& tb = as<arrow::StructBuilder>(true_builder);
+      auto& fb = as<arrow::StructBuilder>(false_builder);
+      for (auto i = int64_t{0}; i < mask.length(); ++i) {
+        auto& b = mask.Value(i) ? tb : fb;
+        check(b.Append(typed_array.IsValid(i)));
+      }
+      for (auto field = 0; field < tb.num_fields(); ++field) {
+        partition_array(*tb.field_builder(field), *fb.field_builder(field),
+                        ty.field(field).type, *typed_array.field(field), mask);
+      }
+    } else if constexpr (std::same_as<Ty, list_type>) {
+      auto& tb = as<arrow::ListBuilder>(true_builder);
+      auto& fb = as<arrow::ListBuilder>(false_builder);
+      for (auto i = int64_t{0}; i < mask.length(); ++i) {
+        auto& b = mask.Value(i) ? tb : fb;
+        auto valid = typed_array.IsValid(i);
+        check(b.Append(valid));
+        if (valid) {
+          auto list_begin = typed_array.value_offset(i);
+          auto list_end = typed_array.value_offset(i + 1);
+          check(append_array_slice(*b.value_builder(), type{ty.value_type()},
+                                   *typed_array.values(), list_begin,
+                                   list_end - list_begin));
+        }
+      }
+    } else if constexpr (std::same_as<Ty, map_type>) {
+      TENZIR_UNREACHABLE();
+    } else {
+      for_each_run(mask, [&](int64_t begin, int64_t end, bool value) {
+        auto& b = value ? true_builder : false_builder;
+        check(append_array_slice(b, type{ty}, array, begin, end - begin));
       });
     }
   });

@@ -280,4 +280,72 @@ TEST("filter table slice - sliced list array (non-zero arrow offset)") {
               (list{int64_t{50}, int64_t{51}, int64_t{52}}));
 }
 
+TEST("partition table slice - alternating") {
+  auto slice = make_test_slice();
+  auto mask = make_mask({true, false, true, false, true});
+  auto [lhs, rhs] = partition(slice, *mask);
+  REQUIRE_EQUAL(lhs.rows(), uint64_t{3});
+  CHECK_EQUAL(materialize(lhs.at(0, 0)), int64_t{10});
+  CHECK_EQUAL(materialize(lhs.at(1, 0)), int64_t{30});
+  CHECK_EQUAL(materialize(lhs.at(2, 0)), int64_t{50});
+  REQUIRE_EQUAL(rhs.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(rhs.at(0, 0)), int64_t{20});
+  CHECK_EQUAL(materialize(rhs.at(1, 0)), int64_t{40});
+}
+
+TEST("partition table slice - all true") {
+  auto slice = make_test_slice();
+  auto mask = make_mask({true, true, true, true, true});
+  auto [lhs, rhs] = partition(slice, *mask);
+  CHECK_EQUAL(lhs.rows(), uint64_t{5});
+  CHECK_EQUAL(rhs.rows(), uint64_t{0});
+}
+
+TEST("partition table slice - all false") {
+  auto slice = make_test_slice();
+  auto mask = make_mask({false, false, false, false, false});
+  auto [lhs, rhs] = partition(slice, *mask);
+  CHECK_EQUAL(lhs.rows(), uint64_t{0});
+  CHECK_EQUAL(rhs.rows(), uint64_t{5});
+}
+
+TEST("partition table slice - multiple fields with lists") {
+  auto b = series_builder{};
+  auto r0 = b.record();
+  r0.field("a").data(int64_t{1});
+  auto l0 = r0.field("b").list();
+  l0.data(int64_t{10});
+  l0.data(int64_t{11});
+  auto r1 = b.record();
+  r1.field("a").data(int64_t{2});
+  r1.field("b").data(caf::none);
+  auto r2 = b.record();
+  r2.field("a").data(int64_t{3});
+  r2.field("b").list();
+  auto r3 = b.record();
+  r3.field("a").data(int64_t{4});
+  r3.field("b").list().data(int64_t{40});
+  auto slices = b.finish_as_table_slice("part");
+  REQUIRE_EQUAL(slices.size(), size_t{1});
+  auto mask = make_mask({true, false, false, true});
+  auto [lhs, rhs] = partition(slices[0], *mask);
+  REQUIRE_EQUAL(lhs.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(lhs.at(0, 0)), int64_t{1});
+  CHECK_EQUAL(materialize(lhs.at(0, 1)), (list{int64_t{10}, int64_t{11}}));
+  CHECK_EQUAL(materialize(lhs.at(1, 0)), int64_t{4});
+  CHECK_EQUAL(materialize(lhs.at(1, 1)), (list{int64_t{40}}));
+  REQUIRE_EQUAL(rhs.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(rhs.at(0, 0)), int64_t{2});
+  CHECK_EQUAL(materialize(rhs.at(0, 1)), caf::none);
+  CHECK_EQUAL(materialize(rhs.at(1, 0)), int64_t{3});
+  CHECK_EQUAL(materialize(rhs.at(1, 1)), (list{}));
+}
+
+TEST("partition table slice - row count invariant") {
+  auto slice = make_test_slice();
+  auto mask = make_mask({true, false, true, true, false});
+  auto [lhs, rhs] = partition(slice, *mask);
+  CHECK_EQUAL(lhs.rows() + rhs.rows(), slice.rows());
+}
+
 } // namespace tenzir

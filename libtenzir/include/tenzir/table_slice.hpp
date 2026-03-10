@@ -408,6 +408,14 @@ filter(const table_slice& slice, const ids& hints);
 [[nodiscard]] auto filter(const table_slice& slice,
                           const arrow::BooleanArray& mask) -> table_slice;
 
+/// Partitions a table slice into two based on a boolean mask. Rows where the
+/// mask value bit is true go to the first result, others to the second.
+/// The null bitmap of the mask is ignored.
+/// @pre `slice.rows() == mask.length()`
+[[nodiscard]] auto
+partition(const table_slice& slice, const arrow::BooleanArray& mask)
+  -> std::pair<table_slice, table_slice>;
+
 /// Resolves all enumeration columns in a table slice to string columns. Note
 /// that this does not go into records inside lists or maps.
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
