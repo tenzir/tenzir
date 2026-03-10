@@ -56,6 +56,7 @@ jobs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
+      trusted-ci: ${{ steps.configure.outputs.trusted-ci }}
       ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
@@ -84,13 +85,6 @@ jobs:
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v5
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Configure GCloud Credentials
-        uses: google-github-actions/setup-gcloud@v2
       - name: Configure
         id: configure
         run: |
@@ -162,6 +156,12 @@ jobs:
           #################################
           ######## Decide what jobs to run.
           #################################
+          trusted_ci=true
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && \
+             [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+            trusted_ci=false
+          fi
+          echo "trusted-ci=${trusted_ci}" >> $GITHUB_OUTPUT
           # TODO: Split this into two steps:
           # * Set version variables (above)
           # * Enable Jobs (below)
@@ -172,6 +172,10 @@ jobs:
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
+          if [[ "${trusted_ci}" != "true" ]]; then
+            echo "::notice External pull request detected; skipping privileged CI jobs"
+            exit 0
+          fi
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
@@ -271,7 +275,7 @@ jobs:
     name: Policy Enforcement
     needs:
       - configure
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' && needs.configure.outputs.trusted-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -324,7 +328,7 @@ jobs:
     name: Docker
     needs:
       - configure
-    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    if: needs.configure.outputs.run-docker-tenzir == 'true' && needs.configure.outputs.trusted-ci == 'true'
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
@@ -383,7 +387,7 @@ jobs:
   tenzir-static-aarch64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true' && github.event_name != 'workflow_dispatch'
+    if: needs.configure.outputs.run-tenzir-nix == 'true' && needs.configure.outputs.trusted-ci == 'true' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubicloud-standard-4-arm
@@ -395,7 +399,7 @@ jobs:
   tenzir-static-x86_64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true' && github.event_name != 'workflow_dispatch'
+    if: needs.configure.outputs.run-tenzir-nix == 'true' && needs.configure.outputs.trusted-ci == 'true' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubuntu-latest
@@ -407,7 +411,7 @@ jobs:
   tenzir-static-arm64-darwin:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true'
+    if: needs.configure.outputs.run-tenzir-nix == 'true' && needs.configure.outputs.trusted-ci == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: macos-15
@@ -419,7 +423,8 @@ jobs:
 
   push-manifest-slim:
     name: Push tenzir-slim docker manifest
-    needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
+    needs: [configure, tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
+    if: needs.configure.outputs.trusted-ci == 'true'
     uses: ./.github/workflows/push-manifest.yaml
     with:
       source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
@@ -429,7 +434,7 @@ jobs:
   tenzir:
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
+    if: ${{ needs.configure.outputs.run-tenzir == 'true' && needs.configure.outputs.trusted-ci == 'true' }}
     name: Tenzir (${{ matrix.tenzir.name }})
     runs-on: ${{ matrix.tenzir.os }}
     container: ${{ matrix.tenzir.container }}
@@ -632,7 +637,7 @@ jobs:
       - configure
       - docker-tenzir
       - tenzir-static-x86_64-linux
-    if: ${{ needs.configure.outputs.run-python == 'true' }}
+    if: ${{ needs.configure.outputs.run-python == 'true' && needs.configure.outputs.trusted-ci == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
@@ -689,7 +694,7 @@ jobs:
       - tenzir-static-arm64-darwin
       - tenzir-static-aarch64-linux
       - tenzir-static-x86_64-linux
-    if: ${{ needs.configure.outputs.run-python-package == 'true' }}
+    if: ${{ needs.configure.outputs.run-python-package == 'true' && needs.configure.outputs.trusted-ci == 'true' }}
     name: Python Package
     runs-on: ${{ matrix.os }}
     strategy:
