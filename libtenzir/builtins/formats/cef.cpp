@@ -125,6 +125,10 @@ auto cef_unescape_value(std::string_view text) -> std::string {
           result += '\\';
           ++i;
           continue;
+        case '"':
+          result += '"';
+          ++i;
+          continue;
         default:
           break;
       }

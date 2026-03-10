@@ -6,5 +6,7 @@ from {
   x: "CEF:0|V|P|1.0|1|test|5|a=\"\" b=val",
 }, {
   x: "CEF:0|V|P|1.0|1|test|5|a=\"multi word value\" b=\"another quoted\" c=unquoted",
+}, {
+  x: "CEF:0|V|P|1.0|1|test|5|a=foo \\\"bar\\\" b=val",
 }
 y = x.parse_cef()
