@@ -138,6 +138,30 @@ series or slice first, then iterate only when row-wise access is necessary.
 - [operators.md](.agents/references/operators.md): TQL operator plugins and secrets
 - [executor.md](.agents/references/executor.md): Executor and pipeline execution
 
+### Rust-inspired vocabulary and helpers
+
+Prefer these Tenzir abstractions over direct standard-library use in new code
+when they model the same concept.
+
+#### Vocabulary types
+
+| Prefer      | Header                   | Instead of                   | Notes                                                     |
+| ----------- | ------------------------ | ---------------------------- | --------------------------------------------------------- |
+| `Arc<T>`    | `tenzir/arc.hpp`         | `std::shared_ptr<T>`         | Non-null, const-propagating shared ownership              |
+| `Box<T>`    | `tenzir/box.hpp`         | `std::unique_ptr<T>`         | Non-null owning indirection with copy support             |
+| `Option<T>` | `tenzir/option.hpp`      | `std::optional<T>`           | Optional value with reference support and monadic helpers |
+| `Atomic<T>` | `tenzir/atomic.hpp`      | `std::atomic<T>`             | Copyable and movable atomic wrapper                       |
+| `Ref<T>`    | `tenzir/ref.hpp`         | `std::reference_wrapper<T>`  | Non-owning reference with `->` and `*`                    |
+| `Mutex<T>`  | `tenzir/async/mutex.hpp` | `std::mutex` + separate data | Async/fiber mutex guarding owned data                     |
+
+#### Companion helpers
+
+| Prefer           | Header              | Instead of               | Notes                                                              |
+| ---------------- | ------------------- | ------------------------ | ------------------------------------------------------------------ |
+| `None`           | `tenzir/option.hpp` | `std::nullopt`           | Empty `Option` tag                                                 |
+| `panic(...)`     | `tenzir/panic.hpp`  | ad-hoc fatal checks      | Fails fast with formatted message, source location, and stacktrace |
+| `TRY` / `CO_TRY` | `tenzir/try.hpp`    | manual error propagation | Rust `?`-style propagation for supported result types              |
+
 ### Tooling
 
 - [external-files.md](.agents/references/external-files.md): Third-party code integration
