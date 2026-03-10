@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/assert.hpp"
 
+#include <algorithm>
 #include <array>
 #include <span>
 #include <string_view>
