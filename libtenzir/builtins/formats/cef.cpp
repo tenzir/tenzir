@@ -206,7 +206,7 @@ auto parse_extension(std::string_view ext, auto builder)
     // Check if this is a real key-value separator by looking backward for
     // whitespace followed by a valid key name.
     // Find the last whitespace before this '=' (searching within the value).
-    for (auto j = i - 1; j > value_start; --j) {
+    for (auto j = i - 1; j >= value_start; --j) {
       if (ext[j] != ' ' and ext[j] != '\t') {
         continue;
       }

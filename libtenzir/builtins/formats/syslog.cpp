@@ -296,6 +296,9 @@ struct message_content_parser : parser_base<message_content_parser> {
   using attribute = message_content;
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
+    if (f == l) {
+      return false;
+    }
     auto remaining = std::string_view{&*f, static_cast<size_t>(l - f)};
     auto bom = std::string_view{"\xEF\xBB\xBF"};
     if (remaining.starts_with(bom)) {
@@ -533,6 +536,7 @@ public:
                  std::optional<ast::field_path> raw_message_field
                  = std::nullopt)
     : timeout{opts.settings.timeout},
+      merge{opts.settings.merge},
       builder{std::move(opts), dh},
       raw_message_field_{std::move(raw_message_field)} {
   }
@@ -605,16 +609,16 @@ public:
     r.exact_field("app_name").data(std::move(row.hdr.app_name));
     r.exact_field("process_id").data(std::move(row.hdr.process_id));
     r.exact_field("message_id").data(std::move(row.hdr.msg_id));
-    if (not row.data.empty()) {
-      // Merge duplicate SD element IDs to avoid expensive builder resizes.
+    if (merge) {
+      // When merging, combine duplicate SD element IDs to avoid expensive
+      // builder resizes. Deduplicate param keys (last value wins) to avoid
+      // writing the same field twice to the builder.
       // Typically 0-3 elements, so linear scan is optimal.
       for (auto i = row.data.size(); i-- > 1;) {
         for (size_t j = 0; j < i; ++j) {
           if (row.data[j].id == row.data[i].id) {
             auto& target = row.data[j].params;
             auto& source = row.data[i].params;
-            // Deduplicate param keys (last value wins) to avoid
-            // writing the same field twice to the builder.
             for (auto& [sk, sv] : source) {
               auto found = false;
               for (auto& [tk, tv] : target) {
@@ -634,12 +638,12 @@ public:
           }
         }
       }
-      auto sd = r.exact_field("structured_data").record();
-      for (auto& elem : row.data) {
-        auto elem_rec = sd.field(elem.id).record();
-        for (auto& [k, v] : elem.params) {
-          elem_rec.field(k).data_unparsed(std::move(v));
-        }
+    }
+    auto sd = r.exact_field("structured_data").record();
+    for (auto& elem : row.data) {
+      auto elem_rec = sd.field(elem.id).record();
+      for (auto& [k, v] : elem.params) {
+        elem_rec.field(k).data_unparsed(std::move(v));
       }
     }
     r.exact_field("message").data(std::move(row.msg));
@@ -650,6 +654,7 @@ public:
   }
 
   duration timeout;
+  bool merge;
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};

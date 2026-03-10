@@ -1219,10 +1219,7 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
         }
       }
     }
-    // Using ToType{} is safe here because all remaining atom types
-    // (non-enumeration) are stateless, so a default-constructed instance is
-    // identical to one extracted from the builder's type.
-    return cast_value(FromType{}, value, ToType{});
+    return cast_value(FromType{}, value, as<ToType>(type()));
   };
   auto insert = [&]<class ToType>(tag<ToType>) -> caf::expected<void> {
     if constexpr (atom_type<ToType>) {
