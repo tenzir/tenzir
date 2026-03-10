@@ -36,7 +36,7 @@ auto sleep(duration d) -> Task<void> {
 auto sleep_until(time t) -> Task<void> {
   auto now = time::clock::now();
   // The check is needed because `-` can overflow and yield unexpected results.
-  auto diff = t < now ? duration{0} : t - time::clock::now();
+  auto diff = t < now ? duration{0} : t - now;
   return sleep(diff);
 }
 
@@ -63,6 +63,9 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result, push);
+    if (sleep_done_) {
+      co_return;
+    }
     sleep_done_ = true;
     // For transformation sub-pipelines, close the current one so it
     // finishes and triggers finish_sub.
@@ -137,6 +140,8 @@ public:
     // sub-pipeline and spawning the new one.
     auto sub = ctx.get_sub(int64_t{this->next_ - 1});
     if (not sub) {
+      TENZIR_WARN("every: dropping {} rows; sub-pipeline not available",
+                  input.rows());
       co_return;
     }
     auto& pipe = as<OpenPipeline<table_slice>>(*sub);
