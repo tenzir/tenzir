@@ -1,0 +1,20 @@
+{
+  x: {
+    facility: 4,
+    severity: 2,
+    version: 1,
+    timestamp: 2003-10-11T22:14:15.003Z,
+    hostname: "host",
+    app_name: "app",
+    process_id: null,
+    message_id: null,
+    structured_data: {
+      "sd@1": {
+        a: 1,
+        b: 2,
+        c: 3,
+      },
+    },
+    message: "msg",
+  },
+}

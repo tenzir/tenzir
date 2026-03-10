@@ -1,0 +1,6 @@
+from {
+  x: "CEF:0|V|P|1.0|1|test|5|key1= key2=value2",
+}, {
+  x: "CEF:0|V|P|1.0|1|test|5|a=1 b= c=3",
+}
+y = x.parse_cef()

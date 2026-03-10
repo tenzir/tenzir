@@ -1177,40 +1177,25 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
     using FromType = atom_view_to_type_t<FromData>;
     static_assert(atom_type<ToType>);
     static_assert(atom_type<FromType>);
-    auto full_ty = type();
-    auto ty = as<ToType>(full_ty);
-    // TODO: Refactor this logic.
     if constexpr (std::same_as<FromType, enumeration_type>) {
-      // We have to special case this, because we cannot construct a proper
-      // `FromType` instance just from the data.
-      if constexpr (std::same_as<ToType, enumeration_type>) {
-        if (ty.field(value).empty()) {
-          return caf::make_error(ec::invalid_argument,
-                                 fmt::format("enumeration type {} does not "
-                                             "accept value {}",
-                                             full_ty, value));
-        }
-        return value;
-      } else {
-        // TODO: We could consider allowing some conversions from enumeration.
-        // However, this code path is normally not taken anyway. For example,
-        // the JSON parser first has to resolve the enumeration string, which
-        // requires this having enumeration type.
-        return caf::make_error(ec::convert_error,
-                               fmt::format("cannot convert enumeration to {}",
-                                           type_kind::of<ToType>));
-      }
+      // TODO: We could consider allowing some conversions from enumeration.
+      // However, this code path is normally not taken anyway. For example,
+      // the JSON parser first has to resolve the enumeration string, which
+      // requires this having enumeration type.
+      return caf::make_error(ec::convert_error,
+                             fmt::format("cannot convert enumeration to {}",
+                                         type_kind::of<ToType>));
     } else if constexpr (std::same_as<ToType, duration_type>) {
-      // TODO: Should we prefer to error if no unit was specified?
-      auto unit = full_ty.attribute("unit").value_or("s");
-      if constexpr (
-        // TODO: These special cases were extracted from `cast.hpp`.
-        // We should make it so that this is not necessary.
-        std::same_as<FromType, int64_type>
-        || std::same_as<FromType, uint64_type>
-        || std::same_as<FromType, double_type>) {
-        return cast_value(FromType{}, value, ty, unit);
+      if constexpr (std::same_as<FromType, int64_type>
+                    || std::same_as<FromType, uint64_type>
+                    || std::same_as<FromType, double_type>) {
+        auto full_ty = type();
+        auto unit = full_ty.attribute("unit").value_or("s");
+        return cast_value(FromType{}, value, as<ToType>(full_ty), unit);
       } else if constexpr (std::same_as<FromType, string_type>) {
+        auto full_ty = type();
+        auto ty = as<ToType>(full_ty);
+        auto unit = full_ty.attribute("unit").value_or("s");
         auto result = cast_value(FromType{}, value, ty);
         if (not result) {
           result
@@ -1222,6 +1207,7 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
       if constexpr (std::same_as<FromType, int64_type>
                     || std::same_as<FromType, uint64_type>
                     || std::same_as<FromType, double_type>) {
+        auto full_ty = type();
         auto unit = full_ty.attribute("unit");
         if (unit) {
           auto since_epoch
@@ -1233,20 +1219,26 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
         }
       }
     }
-    return cast_value(FromType{}, value, ty);
+    return cast_value(FromType{}, value, as<ToType>(type()));
   };
   auto insert = [&]<class ToType>(tag<ToType>) -> caf::expected<void> {
     if constexpr (atom_type<ToType>) {
-      auto result = std::visit(
-        [&](auto& value) {
-          return cast(value, tag_v<ToType>);
+      return std::visit(
+        [&]<class FromData>(const FromData& value) -> caf::expected<void> {
+          using FromType = atom_view_to_type_t<FromData>;
+          if constexpr (std::same_as<FromType, ToType>) {
+            atom(detail::atom_view{value});
+            return {};
+          } else {
+            auto result = cast(value, tag_v<ToType>);
+            if (not result) {
+              return result.error();
+            }
+            atom(detail::atom_view{*result});
+            return {};
+          }
         },
         value);
-      if (not result) {
-        return result.error();
-      }
-      atom(detail::atom_view{*result});
-      return {};
     } else {
       auto from_kind = value.match([]<class T>(const T&) {
         return type_kind::of<atom_view_to_type_t<T>>;

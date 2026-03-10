@@ -1778,7 +1778,7 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
   }
-  if (num_ops > 0 and external_write_bytes > 0) {
+  if (external_write_bytes > 0) {
     auto m = operator_metric{};
     // We use operator index 1 such that a pipeline with a single operator will
     // still use two different operator indices for ingress and egress. The code
@@ -1792,7 +1792,7 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
   }
-  if (num_ops > 0 and internal_write_bytes > 0) {
+  if (internal_write_bytes > 0) {
     auto m = operator_metric{};
     m.operator_index = 1;
     m.operator_name = "sink";
