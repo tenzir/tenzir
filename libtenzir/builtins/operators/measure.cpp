@@ -27,23 +27,12 @@ TENZIR_ENUM(schema, name_only, legacy, exact);
 
 namespace {
 
-auto sleep_until(std::chrono::steady_clock::time_point t) -> Task<void> {
-  auto now = std::chrono::steady_clock::now();
-  auto diff = (t < now) ? std::chrono::steady_clock::duration{0} : t - now;
-  co_await folly::coro::sleep(
-    std::chrono::duration_cast<folly::HighResDuration>(diff));
-}
-
 class measure_operator final : public crtp_operator<measure_operator> {
 public:
   measure_operator() = default;
 
-  measure_operator(uint64_t batch_size, bool real_time, bool cumulative,
-                   enum schema schema)
-    : batch_size_{detail::narrow<int64_t>(batch_size)},
-      real_time_{real_time},
-      cumulative_{cumulative},
-      schema_{schema} {
+  measure_operator(bool real_time, bool cumulative, enum schema schema)
+    : real_time_{real_time}, cumulative_{cumulative}, schema_{schema} {
   }
 
   auto operator()(generator<table_slice> input) const
@@ -84,8 +73,7 @@ public:
                        is_new ? data{slice.schema().to_definition()} : data{});
           break;
       }
-      if (real_time_ or builder.length() == batch_size_
-          or last_finish + defaults::import::batch_timeout < now) {
+      if (real_time_ or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
         co_yield builder.finish_assert_one_slice("tenzir.measure.events");
         continue;
@@ -124,8 +112,7 @@ public:
       auto metric = builder.record();
       metric.field("timestamp", time::clock::now());
       metric.field("bytes", counter);
-      if (real_time_ or builder.length() == batch_size_
-          or last_finish + defaults::import::batch_timeout < now) {
+      if (real_time_ or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
         co_yield builder.finish_assert_one_slice();
         continue;
@@ -149,22 +136,18 @@ public:
   }
 
   friend auto inspect(auto& f, measure_operator& x) -> bool {
-    return f.object(x).fields(f.field("batch_size", x.batch_size_),
-                              f.field("real_time", x.real_time_),
+    return f.object(x).fields(f.field("real_time", x.real_time_),
                               f.field("cumulative", x.cumulative_),
                               f.field("schema", x.schema_));
   }
 
 private:
-  int64_t batch_size_ = {};
   bool real_time_ = {};
   bool cumulative_ = {};
   schema schema_ = {};
 };
 
 struct MeasureArgs {
-  uint64_t batch_size = 0;
-  bool real_time = false;
   bool cumulative = false;
   bool definition = false;
   bool exact_definition = false;
@@ -172,8 +155,7 @@ struct MeasureArgs {
 
 class MeasureTableSlice final : public Operator<table_slice, table_slice> {
 public:
-  explicit MeasureTableSlice(MeasureArgs args)
-    : args_{args}, last_flush_{std::chrono::steady_clock::time_point::min()} {
+  explicit MeasureTableSlice(MeasureArgs args) : args_{args} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -185,6 +167,8 @@ public:
     auto& events = counters_[input.schema()];
     const auto is_new = events == 0;
     events = args_.cumulative ? events + input.rows() : input.rows();
+
+    series_builder builder_;
     auto metric = builder_.record();
     metric.field("timestamp", time::clock::now());
     metric.field("events", events);
@@ -199,47 +183,7 @@ public:
     } else {
       metric.field("schema", input.schema().name());
     }
-    const auto now = std::chrono::steady_clock::now();
-    if (args_.real_time
-        or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
-        or last_flush_ + defaults::import::batch_timeout < now) {
-      co_await flush(push);
-    }
-  }
-
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    if (builder_.length() > 0) {
-      co_await sleep_until(last_flush_ + defaults::import::batch_timeout);
-    } else {
-      co_await wait_forever();
-    }
-    co_return Any{};
-  }
-
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(result, ctx);
-    if (builder_.length() > 0) {
-      co_await flush(push);
-    }
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    if (builder_.length() > 0) {
-      co_await flush(push);
-    }
-    co_return FinalizeBehavior::done;
-  }
-
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (builder_.length() > 0) {
-      co_await flush(push);
-    }
+    co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -247,23 +191,13 @@ public:
   }
 
 private:
-  auto flush(Push<table_slice>& push) -> Task<void> {
-    last_flush_ = std::chrono::steady_clock::now();
-    co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
-  }
-
   MeasureArgs args_;
   std::unordered_map<type, uint64_t> counters_;
-  series_builder builder_;
-  std::chrono::steady_clock::time_point last_flush_;
 };
 
 class MeasureChunk final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit MeasureChunk(MeasureArgs args)
-    : args_{args},
-      builder_{schema()},
-      last_flush_{std::chrono::steady_clock::time_point::min()} {
+  explicit MeasureChunk(MeasureArgs args) : args_{args} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -273,50 +207,13 @@ public:
       co_return;
     }
     counter_ = args_.cumulative ? counter_ + input->size() : input->size();
+
+    series_builder builder_;
     auto metric = builder_.record();
     metric.field("timestamp", time::clock::now());
     metric.field("bytes", counter_);
-    const auto now = std::chrono::steady_clock::now();
-    if (args_.real_time
-        or builder_.length() == detail::narrow<int64_t>(args_.batch_size)
-        or last_flush_ + defaults::import::batch_timeout < now) {
-      co_await flush(push);
-    }
-  }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    if (builder_.length() > 0) {
-      co_await sleep_until(last_flush_ + defaults::import::batch_timeout);
-    } else {
-      co_await wait_forever();
-    }
-    co_return Any{};
-  }
-
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(result, ctx);
-    if (builder_.length() > 0) {
-      co_await flush(push);
-    }
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    if (builder_.length() > 0) {
-      co_await flush(push);
-    }
-    co_return FinalizeBehavior::done;
-  }
-
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (builder_.length() > 0) {
-      co_await flush(push);
-    }
+    co_await push(builder_.finish_assert_one_slice());
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -335,15 +232,8 @@ private:
     return result;
   }
 
-  auto flush(Push<table_slice>& push) -> Task<void> {
-    last_flush_ = std::chrono::steady_clock::now();
-    co_await push(builder_.finish_assert_one_slice());
-  }
-
   MeasureArgs args_;
   uint64_t counter_ = 0;
-  series_builder builder_;
-  std::chrono::steady_clock::time_point last_flush_;
 };
 
 class plugin final : public virtual operator_plugin<measure_operator>,
@@ -362,8 +252,8 @@ public:
     parser.add("--real-time", real_time);
     parser.add("--cumulative", cumulative);
     parser.parse(p);
-    return std::make_unique<measure_operator>(batch_size_, real_time,
-                                              cumulative, schema::name_only);
+    return std::make_unique<measure_operator>(real_time, cumulative,
+                                              schema::name_only);
   }
 
   auto make(invocation inv, session ctx) const
@@ -379,25 +269,20 @@ public:
       .named("_exact_definition", exact_definition)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<measure_operator>(batch_size_, real_time,
-                                              cumulative,
+    return std::make_unique<measure_operator>(real_time, cumulative,
                                               exact_definition ? schema::exact
                                               : definition     ? schema::legacy
                                                            : schema::name_only);
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk>{
-      MeasureArgs{.batch_size = batch_size_}};
-    d.named("real_time", &MeasureArgs::real_time);
+    auto d
+      = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk>{MeasureArgs{}};
     d.named("cumulative", &MeasureArgs::cumulative);
     d.named("_definition", &MeasureArgs::definition);
     d.named("_exact_definition", &MeasureArgs::exact_definition);
     return d.without_optimize();
   }
-
-private:
-  uint64_t batch_size_ = {};
 };
 
 } // namespace
