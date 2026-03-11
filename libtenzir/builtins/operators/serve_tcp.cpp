@@ -23,7 +23,6 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
-#include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
@@ -43,9 +42,17 @@ namespace tenzir::plugins::serve_tcp {
 
 namespace {
 
+// Match a typical TCP server listen queue depth: large enough for short bursts
+// of incoming connections without implying that we expect unbounded fan-in.
 constexpr auto listen_backlog = uint32_t{128};
+// Retry accepts quickly after transient socket errors so the listener recovers
+// fast, while still backing off enough to avoid a tight warning loop.
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
+// Bound a single write attempt so a stalled peer cannot block fan-out to all
+// connected clients indefinitely.
 constexpr auto write_timeout = std::chrono::seconds{5};
+// The listener queue only carries accepted sockets and wakeups, so a modest
+// fixed capacity is sufficient while still tolerating short bursts.
 constexpr auto message_queue_capacity = uint32_t{512};
 
 struct ServeTcpArgs {
@@ -356,9 +363,10 @@ private:
     }
     if (tls_context_) {
       try {
-        co_await upgrade_transport_to_tls_server(client, tls_context_);
+        client = Box<folly::coro::Transport>{
+          co_await upgrade_transport_to_tls_server(std::move(*client),
+                                                   tls_context_)};
       } catch (folly::AsyncSocketException const& ex) {
-        auto peer = client->getPeerAddress().describe();
         diagnostic::warning("TLS handshake failed")
           .primary(args_.endpoint.source)
           .note("peer: {}", peer)
@@ -386,44 +394,40 @@ private:
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
-    try {
-      while (lifecycle_->load() == Lifecycle::running) {
-        auto accept_error = Option<std::string>{};
-        try {
-          auto transport
-            = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-          auto client
-            = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-          if (lifecycle_->load() != Lifecycle::running) {
-            close_client(std::move(client));
-            co_return;
-          }
-          TENZIR_DEBUG("serve_tcp: accepted {}",
-                       client->getPeerAddress().describe());
-          co_await message_queue_->enqueue(Accepted{std::move(client)});
-          continue;
-        } catch (folly::AsyncSocketException const& ex) {
-          // Accept failures are per-connection network errors; keep the
-          // listener alive and continue accepting new clients.
-          if (lifecycle_->load() != Lifecycle::running) {
-            co_return;
-          }
-          accept_error = ex.what();
+    while (lifecycle_->load() == Lifecycle::running) {
+      auto accept_error = Option<std::string>{};
+      try {
+        auto transport
+          = co_await folly::coro::co_withExecutor(evb_, server_->accept());
+        auto client
+          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+        if (lifecycle_->load() != Lifecycle::running) {
+          close_client(std::move(client));
+          co_return;
         }
-        if (accept_error) {
-          diagnostic::warning("failed to accept incoming connection")
-            .primary(args_.endpoint.source)
-            .note("endpoint: {}", address_.describe())
-            .note("reason: {}", *accept_error)
-            .emit(dh);
-          co_await folly::coro::sleep(accept_retry_delay);
-        }
+        TENZIR_DEBUG("serve_tcp: accepted {}",
+                     client->getPeerAddress().describe());
+        co_await message_queue_->enqueue(Accepted{std::move(client)});
+        continue;
+      } catch (folly::AsyncSocketException const& ex) {
+        // Accept failures are per-connection network errors; keep the
+        // listener alive and continue accepting new clients.
         if (lifecycle_->load() != Lifecycle::running) {
           co_return;
         }
+        accept_error = ex.what();
       }
-    } catch (folly::OperationCancelled const&) {
-      co_return;
+      if (accept_error) {
+        diagnostic::warning("failed to accept incoming connection")
+          .primary(args_.endpoint.source)
+          .note("endpoint: {}", address_.describe())
+          .note("reason: {}", *accept_error)
+          .emit(dh);
+        co_await folly::coro::sleep(accept_retry_delay);
+      }
+      if (lifecycle_->load() != Lifecycle::running) {
+        co_return;
+      }
     }
   }
 

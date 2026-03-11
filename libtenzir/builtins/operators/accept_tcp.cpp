@@ -85,16 +85,21 @@ public:
   struct Accepted {
     Box<folly::coro::Transport> transport;
   };
+
   struct ConnectionClosed {
     uint64_t conn_id;
     Option<std::string> error;
   };
+
   struct ConnectionReadTimeout {
     uint64_t conn_id;
   };
+
   struct Wakeup {};
+
   using Message
     = variant<Accepted, ConnectionClosed, ConnectionReadTimeout, Wakeup>;
+
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   AcceptTcpListener(AcceptTcpArgs args)
@@ -369,10 +374,11 @@ private:
     });
     if (tls_context_) {
       try {
-        co_await upgrade_transport_to_tls_server(transport, tls_context_);
+        transport = Box<folly::coro::Transport>{
+          co_await upgrade_transport_to_tls_server(std::move(*transport),
+                                                   tls_context_)};
       } catch (folly::AsyncSocketException const& ex) {
         if (lifecycle_->load() != Lifecycle::running) {
-          close_transport(std::move(transport));
           co_return;
         }
         // Peer-driven TLS failures are expected at runtime; keep serving other
@@ -399,56 +405,52 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    try {
-      while (lifecycle_->load() == Lifecycle::running) {
-        std::unique_ptr<folly::coro::Transport> transport;
-        auto accept_error = Option<std::string>{};
-        try {
-          co_await folly::coro::co_safe_point;
-          // `await_task` is now queue-based, so accepting runs in this task.
-          transport
-            = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-        } catch (folly::AsyncSocketException const& ex) {
-          // Accept can fail transiently (e.g., client abort/reset). Keep the
-          // listener alive and continue with the next accept attempt.
-          if (lifecycle_->load() != Lifecycle::running) {
-            co_return;
-          }
-          accept_error = ex.what();
-        }
-        if (accept_error) {
-          diagnostic::warning("failed to accept incoming connection")
-            .primary(endpoint_source_)
-            .note("endpoint: {}", address_.describe())
-            .note("reason: {}", *accept_error)
-            .emit(ctx.dh());
-          co_await folly::coro::sleep(accept_retry_delay);
-          continue;
-        }
-        auto boxed
-          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+    while (lifecycle_->load() == Lifecycle::running) {
+      std::unique_ptr<folly::coro::Transport> transport;
+      auto accept_error = Option<std::string>{};
+      try {
+        co_await folly::coro::co_safe_point;
+        // `await_task` is now queue-based, so accepting runs in this task.
+        transport
+          = co_await folly::coro::co_withExecutor(evb_, server_->accept());
+      } catch (folly::AsyncSocketException const& ex) {
+        // Accept can fail transiently (e.g., client abort/reset). Keep the
+        // listener alive and continue with the next accept attempt.
         if (lifecycle_->load() != Lifecycle::running) {
-          close_transport(std::move(boxed));
           co_return;
         }
-        auto peer = boxed->getPeerAddress();
-        if (not try_acquire_connection_slot()) {
-          diagnostic::warning(
-            "connection rejected: maximum number of connections reached")
-            .primary(endpoint_source_)
-            .note("peer: {}", peer.describe())
-            .note("max_connections: {}", max_connections_)
-            .hint("increase `max_connections` if this level of concurrency is "
-                  "expected")
-            .emit(ctx.dh());
-          close_transport(std::move(boxed));
-          continue;
-        }
-        ctx.spawn_task(
-          finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
+        accept_error = ex.what();
       }
-    } catch (folly::OperationCancelled const&) {
-      co_return;
+      if (accept_error) {
+        diagnostic::warning("failed to accept incoming connection")
+          .primary(endpoint_source_)
+          .note("endpoint: {}", address_.describe())
+          .note("reason: {}", *accept_error)
+          .emit(ctx.dh());
+        co_await folly::coro::sleep(accept_retry_delay);
+        continue;
+      }
+      auto boxed
+        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+      if (lifecycle_->load() != Lifecycle::running) {
+        close_transport(std::move(boxed));
+        co_return;
+      }
+      auto peer = boxed->getPeerAddress();
+      if (not try_acquire_connection_slot()) {
+        diagnostic::warning(
+          "connection rejected: maximum number of connections reached")
+          .primary(endpoint_source_)
+          .note("peer: {}", peer.describe())
+          .note("max_connections: {}", max_connections_)
+          .hint("increase `max_connections` if this level of concurrency is "
+                "expected")
+          .emit(ctx.dh());
+        close_transport(std::move(boxed));
+        continue;
+      }
+      ctx.spawn_task(
+        finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
     }
   }
 
@@ -475,11 +477,11 @@ private:
             MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
-      auto read_timed_out = false;
       auto read_result = tcp_read_result{};
+      auto read_timed_out = false;
       try {
         read_result = co_await read_tcp_chunk(
-          connection->transport, buffer_size,
+          *connection->transport, buffer_size,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
@@ -496,14 +498,13 @@ private:
       if (read_error) {
         break;
       }
-      if (read_result.chunk) {
-        bytes_counter.add(read_result.chunk->size());
-        auto push_result = co_await pipeline.push(std::move(read_result.chunk));
+      if (read_result) {
+        bytes_counter.add((*read_result)->size());
+        auto push_result = co_await pipeline.push(std::move(*read_result));
         TENZIR_UNUSED(push_result);
+        continue;
       }
-      if (read_result.eof or not read_result.chunk) {
-        break;
-      }
+      break;
     }
     co_await message_queue->enqueue(ConnectionClosed{
       conn_id,

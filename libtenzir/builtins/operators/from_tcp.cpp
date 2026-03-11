@@ -139,11 +139,12 @@ public:
       TENZIR_DEBUG("connecting to {}", address_.describe());
       auto connect_error = Option<std::string>{};
       try {
-        auto transport = co_await connect_tcp_client(
-          evb_, address_,
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-            connect_timeout),
-          tls_context_, host_);
+        auto transport
+          = Box<folly::coro::Transport>{co_await connect_tcp_client(
+            evb_, address_,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+              connect_timeout),
+            tls_context_, host_)};
         connection_active_ = true;
         TENZIR_DEBUG("connected to {}", address_.describe());
         co_return Message{Connected{std::move(transport)}};
@@ -282,7 +283,7 @@ private:
       auto read_result = tcp_read_result{};
       try {
         read_result = co_await read_tcp_chunk(
-          connection->transport, buffer_size,
+          *connection->transport, buffer_size,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // A read timeout is expected because we poll periodically for
@@ -296,13 +297,11 @@ private:
       if (not read_error.empty()) {
         break;
       }
-      if (read_result.chunk) {
-        co_await message_queue->enqueue(
-          ReadChunk{std::move(read_result.chunk)});
+      if (read_result) {
+        co_await message_queue->enqueue(ReadChunk{std::move(*read_result)});
+        continue;
       }
-      if (read_result.eof or not read_result.chunk) {
-        break;
-      }
+      break;
     }
     co_await message_queue->enqueue(ConnectionClosed{
       conn_id,

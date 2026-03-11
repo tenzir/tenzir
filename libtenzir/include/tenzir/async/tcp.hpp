@@ -9,8 +9,8 @@
 #pragma once
 
 #include "tenzir/async/task.hpp"
-#include "tenzir/box.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/option.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -29,12 +29,9 @@ class Transport;
 
 namespace tenzir {
 
-struct tcp_read_result {
-  chunk_ptr chunk;
-  bool eof = false;
-};
+using tcp_read_result = Option<chunk_ptr>;
 
-auto read_tcp_chunk(Box<folly::coro::Transport>& transport, size_t buffer_size,
+auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
                     std::chrono::milliseconds timeout) -> Task<tcp_read_result>;
 
 auto connect_tcp_client(folly::EventBase* evb,
@@ -42,6 +39,6 @@ auto connect_tcp_client(folly::EventBase* evb,
                         std::chrono::milliseconds timeout,
                         std::shared_ptr<folly::SSLContext> ssl_context = {},
                         std::string hostname = {})
-  -> Task<Box<folly::coro::Transport>>;
+  -> Task<folly::coro::Transport>;
 
 } // namespace tenzir

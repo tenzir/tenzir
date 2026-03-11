@@ -262,10 +262,10 @@ private:
     }
     auto connect_error = Option<std::string>{};
     try {
-      auto boxed = co_await connect_tcp_client(
+      auto boxed = Box<folly::coro::Transport>{co_await connect_tcp_client(
         evb_, address_,
         std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
-        tls_context_, host_);
+        tls_context_, host_)};
       auto guard = co_await transport_mutex_->lock();
       if (done_->load() or transport_) {
         close_transport(std::move(boxed));
