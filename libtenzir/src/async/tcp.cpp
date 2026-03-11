@@ -33,13 +33,13 @@ auto read_tcp_chunk(Box<folly::coro::Transport>& transport, size_t buffer_size,
   async_transport->setReadCB(&callback);
   auto wait_result = co_await folly::coro::co_awaitTry(callback.wait());
   async_transport->setReadCB(nullptr);
+  if (wait_result.hasException()) {
+    wait_result.exception().throw_exception();
+  }
   if (callback.error()) {
     callback.error().throw_exception();
   }
   auto length = buffer.chainLength();
-  if (wait_result.hasException()) {
-    wait_result.exception().throw_exception();
-  }
   if (length == 0) {
     co_return tcp_read_result{.eof = callback.eof};
   }

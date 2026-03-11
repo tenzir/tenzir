@@ -158,7 +158,9 @@ public:
       auto& maybe_diagnostic = diagnostics[i];
       if (maybe_diagnostic) {
         ctx.dh().emit(std::move(*maybe_diagnostic));
+        auto client = std::move(*client_it);
         client_it = clients_.erase(client_it);
+        close_client(std::move(client));
       } else {
         ++client_it;
       }
@@ -185,7 +187,7 @@ public:
     auto message = std::move(*message_ptr);
     if (auto* accepted = std::get_if<Accepted>(&message)) {
       if (lifecycle_->load() != Lifecycle::running) {
-        accepted->client->close();
+        close_client(std::move(accepted->client));
         co_return;
       }
       co_await add_client(std::move(accepted->client), ctx.dh());
@@ -227,6 +229,14 @@ public:
   }
 
 private:
+  static auto close_client(Client client) -> void {
+    auto* evb = client->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([client = std::move(client)]() mutable {
+      client->close();
+    });
+  }
+
   auto stop_accepting() -> void {
     accept_cancel_->requestCancellation();
     if (server_ and evb_) {
@@ -288,12 +298,12 @@ private:
         .hint("increase `max_connections` if this level of concurrency is "
               "expected")
         .emit(dh);
-      client->close();
+      close_client(std::move(client));
     };
     {
       auto guard = co_await clients_mutex_->lock();
       if (lifecycle_->load() != Lifecycle::running) {
-        client->close();
+        close_client(std::move(client));
         co_return;
       }
       if (clients_.size() >= max_connections_) {
@@ -312,13 +322,13 @@ private:
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
-        client->close();
+        close_client(std::move(client));
         co_return;
       }
     }
     auto guard = co_await clients_mutex_->lock();
     if (lifecycle_->load() != Lifecycle::running) {
-      client->close();
+      close_client(std::move(client));
       co_return;
     }
     if (clients_.size() >= max_connections_) {
@@ -342,7 +352,7 @@ private:
           auto client
             = Box<folly::coro::Transport>::from_non_null(std::move(transport));
           if (lifecycle_->load() != Lifecycle::running) {
-            client->close();
+            close_client(std::move(client));
             co_return;
           }
           TENZIR_DEBUG("serve_tcp: accepted {}",
