@@ -10,6 +10,7 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async/executor.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
@@ -614,6 +615,60 @@ private:
   std::vector<BackpressureEvent> backpressure_events_;
 };
 
+/// Push wrapper for fused channels that tracks channel metrics.
+template <class T>
+class MeteredFusedPush final : public Push<OperatorMsg<T>> {
+public:
+  MeteredFusedPush(FusedSender<OperatorMsg<T>> sender, Arc<ChannelStats> stats)
+    : sender_{std::move(sender)}, stats_{std::move(stats)} {
+  }
+
+  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+    stats_->in.bytes.fetch_add(count_bytes(x), std::memory_order::relaxed);
+    if (is<Signal>(x)) {
+      stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
+    } else {
+      stats_->in.batches.fetch_add(1, std::memory_order::relaxed);
+      stats_->in.events.fetch_add(count_events(x), std::memory_order::relaxed);
+    }
+    co_await sender_.send(std::move(x));
+  }
+
+private:
+  FusedSender<OperatorMsg<T>> sender_;
+  Arc<ChannelStats> stats_;
+};
+
+/// Pull wrapper for fused channels that tracks channel metrics.
+template <class T>
+class MeteredFusedPull final : public Pull<OperatorMsg<T>> {
+public:
+  MeteredFusedPull(FusedReceiver<OperatorMsg<T>> receiver,
+                   Arc<ChannelStats> stats)
+    : receiver_{std::move(receiver)}, stats_{std::move(stats)} {
+  }
+
+  auto operator()() -> Task<Option<OperatorMsg<T>>> override {
+    auto result = co_await receiver_.recv();
+    if (result.is_some()) {
+      stats_->out.bytes.fetch_add(count_bytes(*result),
+                                  std::memory_order::relaxed);
+      if (is<Signal>(*result)) {
+        stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
+      } else {
+        stats_->out.batches.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.events.fetch_add(count_events(*result),
+                                     std::memory_order::relaxed);
+      }
+    }
+    co_return result;
+  }
+
+private:
+  FusedReceiver<OperatorMsg<T>> receiver_;
+  Arc<ChannelStats> stats_;
+};
+
 /// Monotonic counters for profiling per-operator CPU usage.
 struct ExecutorStats {
   std::atomic<int64_t> wall_ns{0};
@@ -1012,6 +1067,20 @@ protected:
     return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
 
+  auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return make_profiled_fused_channel<void>(std::move(id));
+  }
+
+  auto make_fused_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return make_profiled_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_fused_bytes(ChannelId id)
+    -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return make_profiled_fused_channel<chunk_ptr>(std::move(id));
+  }
+
 private:
   /// Wraps an executor to contribute to the stats of the given operator.
   template <class Handle = folly::Executor>
@@ -1069,6 +1138,33 @@ private:
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
     return {OpPush<T>{shared}, OpPull<T>{shared}};
+  }
+
+  /// Create a fused channel and collect its profile.
+  template <class T>
+  auto make_profiled_fused_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+    auto stats = Option<Arc<ChannelStats>>{};
+    if (profiling_) {
+      auto lock = std::scoped_lock{mutex_};
+      for (auto& c : channels_) {
+        if (c.id == id) {
+          stats = c.stats;
+          break;
+        }
+      }
+      if (stats.is_none()) {
+        stats = Arc<ChannelStats>{std::in_place};
+        channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
+      }
+    }
+    auto [sender, receiver] = fused_channel<OperatorMsg<T>>();
+    if (stats.is_some()) {
+      return {MeteredFusedPush<T>{std::move(sender), *stats},
+              MeteredFusedPull<T>{std::move(receiver), *stats}};
+    }
+    return FusedSenderReceiver<OperatorMsg<T>>{std::move(sender),
+                                               std::move(receiver)}
+      .into_push_pull();
   }
 
   Arc<PipelineMetrics> metrics_{std::in_place};

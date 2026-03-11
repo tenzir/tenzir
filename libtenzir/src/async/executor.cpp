@@ -383,22 +383,35 @@ public:
   }
 
 protected:
-  auto make_void(ChannelId) -> PushPull<OperatorMsg<void>> override {
-    return fused_channel<OperatorMsg<void>>().into_push_pull();
+  auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return inner_.make_fused_channel<void>(std::move(id));
   }
 
-  auto make_events(ChannelId) -> PushPull<OperatorMsg<table_slice>> override {
-    return fused_channel<OperatorMsg<table_slice>>().into_push_pull();
+  auto make_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return inner_.make_fused_channel<table_slice>(std::move(id));
   }
 
-  auto make_bytes(ChannelId) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return fused_channel<OperatorMsg<chunk_ptr>>().into_push_pull();
+  auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return inner_.make_fused_channel<chunk_ptr>(std::move(id));
+  }
+
+  auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return inner_.make_fused_channel<void>(std::move(id));
+  }
+
+  auto make_fused_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return inner_.make_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_fused_bytes(ChannelId id)
+    -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return inner_.make_fused_channel<chunk_ptr>(std::move(id));
   }
 
 private:
   ExecCtx& inner_;
-  folly::Executor::KeepAlive<> executor_;
-  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
 };
 
 /// Run a pipeline with fused (run-to-completion) semantics.
