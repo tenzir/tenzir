@@ -318,6 +318,14 @@ auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
   };
 }
 
+struct Prepared {
+  call_map y;
+  plugins_map plugins;
+  std::optional<xlimit> x_min;
+  std::optional<xlimit> x_max;
+  location y_loc;
+};
+
 template <chart_type Ty>
 class Chart final : public Operator<table_slice, table_slice> {
 public:
@@ -325,15 +333,13 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not ensure_compiled(ctx)) {
-      failed_ = true;
-    }
+    prep_ = prepare(ctx);
     co_return;
   }
 
   auto process(table_slice input, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0 or failed_) {
+    if (input.rows() == 0 or not prep_) {
       co_return;
     }
     auto slices = filter_input(std::move(input), ctx.dh());
@@ -348,7 +354,7 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    if (failed_ or not compiled_) {
+    if (not prep_) {
       co_return FinalizeBehavior::done;
     }
     auto slices = build_output(ctx.dh());
@@ -359,29 +365,31 @@ public:
   }
 
 private:
-  auto ensure_compiled(OpCtx& ctx) -> bool {
+  auto prepare(OpCtx& ctx) -> std::optional<Prepared> {
     auto sp = session_provider::make(ctx.dh());
     auto s = sp.as_session();
+    auto prep = Prepared{};
 
     auto y_copy = args_.y;
-    if (auto result = handle_y<Ty>(y_, y_loc_, args_.res, y_copy, s, name());
+    if (auto result
+        = handle_y<Ty>(prep.y, prep.y_loc, args_.res, y_copy, s, name());
         not result) {
-      return false;
+      return std::nullopt;
     }
 
     if (args_.x_min) {
       auto result = handle_xlimit(args_, ast::binary_op::geq, *args_.x_min, s);
       if (not result) {
-        return false;
+        return std::nullopt;
       }
-      x_min_ = std::move(*result);
+      prep.x_min = std::move(*result);
     }
     if (args_.x_max) {
       auto result = handle_xlimit(args_, ast::binary_op::leq, *args_.x_max, s);
       if (not result) {
-        return false;
+        return std::nullopt;
       }
-      x_max_ = std::move(*result);
+      prep.x_max = std::move(*result);
     }
 
     // Convert y_min, y_max, fill to double in args
@@ -395,9 +403,8 @@ private:
       args_.fill->inner = to_double(std::move(args_.fill->inner));
     }
 
-    plugins_ = find_plugins(y_, s);
-    compiled_ = true;
-    return true;
+    prep.plugins = find_plugins(prep.y, s);
+    return prep;
   }
 
   auto name() const -> std::string {
@@ -464,7 +471,7 @@ private:
         }
         if (new_bucket) {
           b = &get_groups(groups_, x, ctx)
-                 ->emplace(group_name, make_bucket(plugins_, ctx))
+                 ->emplace(group_name, make_bucket(prep_->plugins, ctx))
                  .first->second;
         } else {
           b = newb;
@@ -501,7 +508,7 @@ private:
       if (not args_.group) {
         return std::string{y};
       }
-      if (y_.size() == 1) {
+      if (prep_->y.size() == 1) {
         return std::string{group};
       }
       return fmt::format("{}_{}", group, y);
@@ -517,7 +524,7 @@ private:
       auto r = b.record();
       r.field(xpath).data(x);
       for (auto const& gname : group_names_) {
-        for (auto const& [y, _] : y_) {
+        for (auto const& [y, _] : prep_->y) {
           r.field(make_yname(gname, y)).data(fill_value);
         }
       }
@@ -527,14 +534,14 @@ private:
       r.field(xpath).data(x);
       if (args_.fill) {
         for (auto const& gname : group_names_) {
-          for (auto const& [y, _] : y_) {
+          for (auto const& [y, _] : prep_->y) {
             r.field(make_yname(gname, y)).data(fill_value);
           }
         }
       }
       for (auto const& [name, bucket] : groups) {
-        TENZIR_ASSERT(y_.size() == bucket.size());
-        for (auto const& [y, instance] : std::views::zip(y_, bucket)) {
+        TENZIR_ASSERT(prep_->y.size() == bucket.size());
+        for (auto const& [y, instance] : std::views::zip(prep_->y, bucket)) {
           auto value = to_double(instance->get());
           if (args_.fill and is<caf::none_t>(value)) {
             continue;
@@ -545,9 +552,9 @@ private:
         }
       }
     };
-    if (x_min_ and args_.res) {
+    if (prep_->x_min and args_.res) {
       TENZIR_ASSERT(not groups_.empty());
-      auto min = std::optional{x_min_->rounded};
+      auto min = std::optional{prep_->x_min->rounded};
       auto const& first = groups_.begin()->first;
       if (*min != first) {
         fill_at(*min);
@@ -568,10 +575,10 @@ private:
       insert(x, gb);
       prev = x;
     }
-    if (x_max_ and args_.res) {
+    if (prep_->x_max and args_.res) {
       TENZIR_ASSERT(not groups_.empty());
       auto last = std::optional{groups_.rbegin()->first};
-      auto const& max = x_max_->rounded;
+      auto const& max = prep_->x_max->rounded;
       while (auto gap = find_gap(last, max)) {
         last = gap.value();
         fill_at(std::move(gap).value());
@@ -587,8 +594,8 @@ private:
         .emit(dh);
     }
     auto const limits = detail::stable_map<std::string_view, std::string>{
-      {"x_min", x_min_ ? jsonify_limit(x_min_->value.inner) : ""},
-      {"x_max", x_max_ ? jsonify_limit(x_max_->value.inner) : ""},
+      {"x_min", prep_->x_min ? jsonify_limit(prep_->x_min->value.inner) : ""},
+      {"x_max", prep_->x_max ? jsonify_limit(prep_->x_max->value.inner) : ""},
       {"y_min", args_.y_min ? jsonify_limit(args_.y_min->inner) : ""},
       {"y_max", args_.y_max ? jsonify_limit(args_.y_max->inner) : ""},
     };
@@ -694,23 +701,23 @@ private:
   auto filter_input(table_slice slice, diagnostic_handler& dh)
     -> std::vector<table_slice> {
     // Early exit: no limits set
-    if (not x_min_ and not x_max_) {
+    if (not prep_->x_min and not prep_->x_max) {
       return {std::move(slice)};
     }
     // Build combined expression from x_min and x_max
     auto const expr = std::invoke([&]() -> ast::expression {
-      if (x_min_ and x_max_) {
+      if (prep_->x_min and prep_->x_max) {
         return ast::binary_expr{
-          x_min_->expr,
+          prep_->x_min->expr,
           {ast::binary_op::and_, location::unknown},
-          x_max_->expr,
+          prep_->x_max->expr,
         };
       }
-      if (x_min_) {
-        return x_min_->expr;
+      if (prep_->x_min) {
+        return prep_->x_min->expr;
       }
-      TENZIR_ASSERT(x_max_);
-      return x_max_->expr;
+      TENZIR_ASSERT(prep_->x_max);
+      return prep_->x_max->expr;
     });
     // Evaluate expression and extract filtered slices
     auto results = std::vector<table_slice>{};
@@ -774,7 +781,7 @@ private:
         attrs.emplace_back(name, value);
       }
     }
-    for (auto i = ynums.size(); i < y_.size() or i < ynames.size(); ++i) {
+    for (auto i = ynums.size(); i < prep_->y.size() or i < ynames.size(); ++i) {
       ynums.emplace_back(fmt::format("y{}", i));
     }
     auto names = std::views::filter(ynames, [](auto&& x) {
@@ -887,17 +894,14 @@ private:
       });
   }
 
+  // input
   ChartArgs<Ty> args_;
-  call_map y_;
-  plugins_map plugins_;
-  std::optional<xlimit> x_min_;
-  std::optional<xlimit> x_max_;
-  location y_loc_;
-  bool compiled_ = false;
+  // cache
+  std::optional<Prepared> prep_;
+  // state
   std::optional<type> xty_;
   group_map groups_;
   std::unordered_set<std::string> group_names_;
-  bool failed_ = false;
 };
 
 // Helper validation for x limit types
