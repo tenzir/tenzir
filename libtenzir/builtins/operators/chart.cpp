@@ -91,8 +91,23 @@ using call_map = detail::stable_map<std::string, ast::function_call>;
 using plugins_map
   = std::vector<std::pair<aggregation_plugin const*, ast::function_call>>;
 
+struct xlimit {
+  located<data> value;
+  data rounded;
+  expression legacy_expr;
+  ast::expression expr;
+
+  friend auto inspect(auto& f, xlimit& x) -> bool {
+    return f.object(x).fields(f.field("value", x.value),
+                              f.field("rounded", x.rounded),
+                              f.field("legacy_expr", x.legacy_expr),
+                              f.field("expr", x.expr));
+  }
+};
+
+// Raw arguments struct used for parsing
 template <chart_type Ty>
-struct RawArgs {
+struct ChartArgs {
   ast::field_path x;
   ast::expression y;
   std::optional<ast::expression> group;
@@ -109,193 +124,37 @@ struct RawArgs {
     location::unknown,
   };
   located<std::string> position{"grouped", location::unknown};
-};
 
-struct xlimit {
-  located<data> value;
-  data rounded;
-  expression legacy_expr;
-  ast::expression expr;
-
-  friend auto inspect(auto& f, xlimit& x) -> bool {
-    return f.object(x).fields(f.field("value", x.value),
-                              f.field("rounded", x.rounded),
-                              f.field("legacy_expr", x.legacy_expr),
-                              f.field("expr", x.expr));
-  }
-};
-
-struct chart_args {
-  chart_type ty;
-  ast::field_path x;
-  call_map y;
-  std::optional<ast::expression> group;
-  std::optional<xlimit> x_min;
-  std::optional<xlimit> x_max;
-  std::optional<located<data>> y_min;
-  std::optional<located<data>> y_max;
-  std::optional<located<duration>> res;
-  std::optional<located<data>> fill;
-  std::optional<location> x_log;
-  std::optional<location> y_log;
-  located<uint64_t> limit{100'000, location::unknown};
-  located<std::string> position{"grouped", location::unknown};
-  expression filter{trivially_true_expression()};
-  location y_loc;
-  location op_loc;
-
-  friend auto inspect(auto& f, chart_args& x) -> bool {
+  friend auto inspect(auto& f, ChartArgs& x) -> bool {
     return f.object(x)
       .pretty_name("chart_args")
-      .fields(f.field("ty", x.ty), f.field("x", x.x), f.field("y", x.y),
-              f.field("group", x.group), f.field("x_min", x.x_min),
-              f.field("x_max", x.x_max), f.field("y_min", x.y_min),
-              f.field("y_max", x.y_max), f.field("res", x.res),
-              f.field("fill", x.fill), f.field("x_log", x.x_log),
-              f.field("y_log", x.y_log), f.field("limit", x.limit),
-              f.field("filter", x.filter), f.field("position", x.position),
-              f.field("y_loc", x.y_loc), f.field("op_loc", x.op_loc));
+      .fields(f.field("x", x.x), f.field("y", x.y), f.field("group", x.group),
+              f.field("x_min", x.x_min), f.field("x_max", x.x_max),
+              f.field("y_min", x.y_min), f.field("y_max", x.y_max),
+              f.field("res", x.res), f.field("fill", x.fill),
+              f.field("x_log", x.x_log), f.field("y_log", x.y_log),
+              f.field("limit", x.limit), f.field("position", x.position));
   }
+};
 
-  auto validate(diagnostic_handler& dh) const -> failure_or<void> {
-    if (position.inner != "stacked" and position.inner != "grouped") {
-      diagnostic::error("unsupported `position`")
-        .primary(position)
-        .hint("available positions: `grouped` (default) or `stacked`")
-        .emit(dh);
-      return failure::promise();
-    }
-    if (x_min) {
-      TRY(validate_xtype(x_min->value, dh));
-    }
-    if (x_max) {
-      TRY(validate_xtype(x_max->value, dh));
-    }
-    if (x_min and x_max) {
-      auto const min_idx = x_min->value.inner.get_data().index();
-      auto const max_idx = x_max->value.inner.get_data().index();
-      if (min_idx != max_idx) {
-        diagnostic::error("`x_min` and `x_max` must have the same type")
-          .primary(x_min->value.source)
-          .primary(x_max->value.source)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (x_min->value.inner >= x_max->value.inner) {
-        diagnostic::error("`x_min` must be less than `x_max`")
-          .primary(x_min->value.source)
-          .primary(x_max->value.source)
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    if (y_min) {
-      TRY(validate_ytype(*y_min, dh));
-    }
-    if (y_max) {
-      TRY(validate_ytype(*y_max, dh));
-    }
-    if (y_min and y_max) {
-      if (y_min->inner.get_data().index() != y_max->inner.get_data().index()) {
-        diagnostic::error("`y_min` and `y_max` must have the same type")
-          .primary(*y_min)
-          .primary(*y_max)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (y_min->inner >= y_max->inner) {
-        diagnostic::error("`y_min` must be less than `y_max`")
-          .primary(*y_min)
-          .primary(*y_max)
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    if (fill) {
-      if (not res) {
-        diagnostic::error("`fill` cannot be specified without `resolution`")
-          .primary(fill->source)
-          .emit(dh);
-        return failure::promise();
-      }
-      TRY(validate_ytype(*fill, dh));
-      if (y_min or y_max) {
-        auto const& type_idx = y_min ? y_min->inner.get_data().index()
-                                     : y_max->inner.get_data().index();
-        if (type_idx != fill->inner.get_data().index()) {
-          diagnostic::error("`fill` has a different type from `{}`",
-                            y_min ? "y_min" : "y_max")
-            .primary(fill->source)
-            .primary(y_min ? y_min->source : y_max->source)
-            .emit(dh);
-          return failure::promise();
-        }
-      }
-    }
-    if (limit.inner > 100'000) {
-      diagnostic::error("`limit` must be less than 100k")
-        .primary(limit)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (limit.inner == 0) {
-      diagnostic::error("`limit` must be positive").primary(limit).emit(dh);
-      return failure::promise();
-    }
-    return {};
-  }
-
-  auto validate_xtype(located<data> const& d, diagnostic_handler& dh) const
-    -> failure_or<void> {
-    auto const t = type::infer(d.inner);
-    if (not t) {
-      diagnostic::error("failed to infer type of option").primary(d).emit(dh);
-      return failure::promise();
-    }
-    auto valid = t->kind()
-                   .is_any<int64_type, uint64_type, double_type, duration_type,
-                           time_type>();
-    if (not valid) {
-      diagnostic::warning("limit cannot have type `{}`", t->kind())
-        .primary(d)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (res and not t->kind().is_any<time_type, duration_type>()) {
-      diagnostic::warning("cannot group type `{}` with resolution", t->kind())
-        .primary(d)
-        .primary(res->source)
-        .emit(dh);
-      return failure::promise();
-    }
-    return {};
-  }
-
-  static auto validate_ytype(located<data> const& d, diagnostic_handler& dh)
-    -> failure_or<void> {
-    auto const t = type::infer(d.inner);
-    if (not t) {
-      diagnostic::error("failed to infer type of option").primary(d).emit(dh);
-      return failure::promise();
-    }
-    if (not t->kind()
-              .is_any<int64_type, uint64_type, double_type, duration_type>()) {
-      diagnostic::error("y-axis cannot have type `{}`", t->kind())
-        .primary(d)
-        .emit(dh);
-      return failure::promise();
-    }
-    return {};
-  }
+// Processed arguments struct computed at runtime
+template <chart_type Ty>
+struct ProcessedArgs {
+  ChartArgs<Ty> args;
+  call_map y;
+  plugins_map plugins;
+  std::optional<xlimit> x_min;
+  std::optional<xlimit> x_max;
+  location y_loc;
 
   auto find_plugins(session ctx) const -> plugins_map {
-    auto plugins = plugins_map{};
+    auto result = plugins_map{};
     auto ident = ast::identifier{"once", location::unknown};
     auto const entity = ast::entity{std::vector{std::move(ident)}};
     for (auto const& [_, call] : y) {
       if (auto const* ptr
           = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(call))) {
-        plugins.emplace_back(ptr, call);
+        result.emplace_back(ptr, call);
         continue;
       }
       auto wrapped_call = ast::function_call{entity, {call}, call.rpar, false};
@@ -303,9 +162,9 @@ struct chart_args {
       auto const* ptr
         = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(wrapped_call));
       TENZIR_ASSERT(ptr);
-      plugins.emplace_back(ptr, std::move(wrapped_call));
+      result.emplace_back(ptr, std::move(wrapped_call));
     }
-    return plugins;
+    return result;
   }
 
   static auto make_bucket(plugins_map const& plugins, session ctx) -> bucket {
@@ -320,16 +179,16 @@ struct chart_args {
   }
 };
 
-auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
+template <chart_type Ty>
+auto handle_y(ProcessedArgs<Ty>& processed, ast::expression& y, session ctx,
               std::string_view operator_name) -> failure_or<void> {
   auto ident = ast::identifier{"once", location::unknown};
   auto const entity = ast::entity{std::vector{std::move(ident)}};
-  args.ty = ty;
-  args.y_loc = y.get_location();
+  processed.y_loc = y.get_location();
   return match(
     y,
     [&](ast::record& rec) -> failure_or<void> {
-      if (args.ty == chart_type::pie and rec.items.size() != 1) {
+      if (Ty == chart_type::pie and rec.items.size() != 1) {
         diagnostic::error("`{}` requires exactly one value", operator_name)
           .primary(y)
           .emit(ctx);
@@ -351,11 +210,11 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
         TRY(match(
           field->expr,
           [&](ast::function_call& call) -> failure_or<void> {
-            args.y[field->name.name] = std::move(call);
+            processed.y[field->name.name] = std::move(call);
             return {};
           },
           [&](auto& expr) -> failure_or<void> {
-            if (args.res) {
+            if (processed.args.res) {
               diagnostic::error("an aggregation function is required if "
                                 "`resolution` is specified")
                 .primary(field->expr)
@@ -365,18 +224,18 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
             auto result
               = ast::function_call{entity, {std::move(expr)}, loc, false};
             TENZIR_ASSERT(resolve_entities(result, ctx));
-            args.y[field->name.name] = std::move(result);
+            processed.y[field->name.name] = std::move(result);
             return {};
           }));
       }
       return {};
     },
     [&](ast::function_call& call) -> failure_or<void> {
-      args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(call);
+      processed.y[Ty == chart_type::pie ? "value" : "y"] = std::move(call);
       return {};
     },
     [&](auto&) -> failure_or<void> {
-      if (args.res) {
+      if (processed.args.res) {
         diagnostic::error(
           "an aggregation function is required if resolution is specified")
           .primary(y)
@@ -392,7 +251,7 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
                                                  &ast::identifier::name),
                                              "."));
         }
-        if (args.ty == chart_type::pie) {
+        if (Ty == chart_type::pie) {
           return "value";
         }
         return "y";
@@ -400,12 +259,13 @@ auto handle_y(chart_args& args, ast::expression& y, session ctx, chart_type ty,
       auto const loc = y.get_location();
       auto result = ast::function_call{entity, {std::move(y)}, loc, false};
       TENZIR_ASSERT(resolve_entities(result, ctx));
-      args.y[yname] = std::move(result);
+      processed.y[yname] = std::move(result);
       return {};
     });
 }
 
-auto handle_xlimit(chart_args const& args, ast::binary_op op,
+template <chart_type Ty>
+auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
                    located<data> limit, diagnostic_handler& dh)
   -> failure_or<xlimit> {
   auto const& loc = limit.source;
@@ -446,9 +306,9 @@ auto handle_xlimit(chart_args const& args, ast::binary_op op,
       auto result
         = op == ast::binary_op::geq
             ? check(arrow::compute::FloorTemporal(array, std::move(opts)))
-                .array_as<arrow::TimestampArray>()
+                .template array_as<arrow::TimestampArray>()
             : check(arrow::compute::CeilTemporal(array, std::move(opts)))
-                .array_as<arrow::TimestampArray>();
+                .template array_as<arrow::TimestampArray>();
       TENZIR_ASSERT(result->length() == 1);
       return ast::constant{value_at(time_type{}, *result, 0), loc};
     },
@@ -469,7 +329,7 @@ auto handle_xlimit(chart_args const& args, ast::binary_op op,
 template <chart_type Ty>
 class Chart final : public Operator<table_slice, table_slice> {
 public:
-  explicit Chart(RawArgs<Ty> args) : raw_{std::move(args)} {
+  explicit Chart(ChartArgs<Ty> args) : args_{std::move(args)} {
   }
 
   auto process(table_slice input, Push<table_slice>&, OpCtx& ctx)
@@ -493,7 +353,7 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    if (failed_ or not args_) {
+    if (failed_ or not processed_) {
       co_return FinalizeBehavior::done;
     }
     auto slices = build_output(ctx.dh());
@@ -505,56 +365,51 @@ public:
 
 private:
   auto ensure_compiled(OpCtx& ctx) -> bool {
-    if (args_) {
+    if (processed_) {
       return true;
     }
     auto sp = session_provider::make(ctx.dh());
     auto s = sp.as_session();
-    auto args = chart_args{};
-    args.ty = Ty;
-    args.x = std::move(raw_.x);
-    args.group = std::move(raw_.group);
-    args.y_min = std::move(raw_.y_min);
-    args.y_max = std::move(raw_.y_max);
-    args.res = std::move(raw_.res);
-    args.fill = std::move(raw_.fill);
-    args.x_log = std::move(raw_.x_log);
-    args.y_log = std::move(raw_.y_log);
-    args.limit = std::move(raw_.limit);
-    args.position = std::move(raw_.position);
-    if (auto result = handle_y(args, raw_.y, s, Ty, name()); not result) {
+    auto processed = ProcessedArgs<Ty>{};
+    processed.args = args_;
+
+    // Copy y for processing
+    auto y_copy = args_.y;
+    if (auto result = handle_y(processed, y_copy, s, name()); not result) {
       return false;
     }
-    if (raw_.x_min) {
-      auto result
-        = handle_xlimit(args, ast::binary_op::geq, std::move(*raw_.x_min), s);
+
+    if (args_.x_min) {
+      auto result = handle_xlimit(args_, ast::binary_op::geq, *args_.x_min, s);
       if (not result) {
         return false;
       }
-      args.x_min = std::move(*result);
+      processed.x_min = std::move(*result);
     }
-    if (raw_.x_max) {
-      auto result
-        = handle_xlimit(args, ast::binary_op::leq, std::move(*raw_.x_max), s);
+    if (args_.x_max) {
+      auto result = handle_xlimit(args_, ast::binary_op::leq, *args_.x_max, s);
       if (not result) {
         return false;
       }
-      args.x_max = std::move(*result);
+      processed.x_max = std::move(*result);
     }
-    if (args.y_min) {
-      args.y_min->inner = to_double(std::move(args.y_min->inner));
+
+    // Convert y_min, y_max, fill to double in args
+    if (processed.args.y_min) {
+      processed.args.y_min->inner
+        = to_double(std::move(processed.args.y_min->inner));
     }
-    if (args.y_max) {
-      args.y_max->inner = to_double(std::move(args.y_max->inner));
+    if (processed.args.y_max) {
+      processed.args.y_max->inner
+        = to_double(std::move(processed.args.y_max->inner));
     }
-    if (args.fill) {
-      args.fill->inner = to_double(std::move(args.fill->inner));
+    if (processed.args.fill) {
+      processed.args.fill->inner
+        = to_double(std::move(processed.args.fill->inner));
     }
-    if (auto result = args.validate(s.dh()); not result) {
-      return false;
-    }
-    args_ = std::move(args);
-    plugins_ = args_->find_plugins(s);
+
+    processed.plugins = processed.find_plugins(s);
+    processed_ = std::move(processed);
     return true;
   }
 
@@ -564,13 +419,13 @@ private:
 
   auto process_slice(table_slice const& slice, session ctx) -> void {
     auto& dh = ctx.dh();
-    auto xpath = args_->x.path()[0].id.name;
-    for (auto i = size_t{1}; i < args_->x.path().size(); ++i) {
+    auto xpath = processed_->args.x.path()[0].id.name;
+    for (auto i = size_t{1}; i < processed_->args.x.path().size(); ++i) {
       xpath += ".";
-      xpath += args_->x.path()[i].id.name;
+      xpath += processed_->args.x.path()[i].id.name;
     }
     auto consumed = size_t{};
-    auto xs = eval(args_->x, slice, dh);
+    auto xs = eval(processed_->args.x, slice, dh);
     auto gs = get_group_strings(slice, dh);
     TENZIR_ASSERT(gs.type.kind().template is<string_type>());
     if (not xty_) {
@@ -586,14 +441,14 @@ private:
         diagnostic::warning("cannot plot different types `{}` and `{}` on "
                             "the x-axis",
                             xty_.value().kind(), xs.type.kind())
-          .primary(args_->x)
+          .primary(processed_->args.x)
           .note("skipping invalid events")
           .emit(dh);
         consumed += xs.length();
         return;
       }
     }
-    if (args_->res) {
+    if (processed_->args.res) {
       xs = floor(xs);
     }
     bucket* b = nullptr;
@@ -601,9 +456,9 @@ private:
          auto&& [idx, x] : detail::enumerate<int64_t>(xs.values())) {
       auto const group_name = std::invoke([&]() -> std::string_view {
         if (gs.array->IsNull(idx)) {
-          if (args_->group) {
+          if (processed_->args.group) {
             diagnostic::warning("got group name `null`")
-              .primary(args_->group.value())
+              .primary(processed_->args.group.value())
               .note("using `\"null\"` instead")
               .emit(dh);
             return *gnames_.emplace("null").first;
@@ -621,7 +476,8 @@ private:
         }
         if (new_bucket) {
           b = &get_groups(groups_, x, ctx)
-                 ->emplace(group_name, args_->make_bucket(*plugins_, ctx))
+                 ->emplace(group_name, ProcessedArgs<Ty>::make_bucket(
+                                         processed_->plugins, ctx))
                  .first->second;
         } else {
           b = newb;
@@ -643,22 +499,22 @@ private:
   auto build_output(diagnostic_handler& dh) -> std::vector<table_slice> {
     if (groups_.empty()) {
       diagnostic::warning("chart_{} received no valid data", to_string(Ty))
-        .primary(args_->x)
+        .primary(processed_->args.x)
         .emit(dh);
       return {};
     }
-    auto xpath = args_->x.path()[0].id.name;
-    for (auto i = size_t{1}; i < args_->x.path().size(); ++i) {
+    auto xpath = processed_->args.x.path()[0].id.name;
+    for (auto i = size_t{1}; i < processed_->args.x.path().size(); ++i) {
       xpath += ".";
-      xpath += args_->x.path()[i].id.name;
+      xpath += processed_->args.x.path()[i].id.name;
     }
     auto ynames = detail::stable_map<std::string, bool>{};
     auto b = series_builder{};
     auto const make_yname = [&](std::string_view group, std::string_view y) {
-      if (not args_->group) {
+      if (not processed_->args.group) {
         return std::string{y};
       }
-      if (args_->y.size() == 1) {
+      if (processed_->y.size() == 1) {
         return std::string{group};
       }
       return fmt::format("{}_{}", group, y);
@@ -669,12 +525,13 @@ private:
       it->second &= valid;
       return it->first;
     };
-    auto const fill_value = args_->fill ? args_->fill->inner : data{};
+    auto const fill_value
+      = processed_->args.fill ? processed_->args.fill->inner : data{};
     auto const fill_at = [&](data const& x) {
       auto r = b.record();
       r.field(xpath).data(x);
       for (auto const& gname : gnames_) {
-        for (auto const& [y, _] : args_->y) {
+        for (auto const& [y, _] : processed_->y) {
           r.field(make_yname(gname, y)).data(fill_value);
         }
       }
@@ -682,18 +539,19 @@ private:
     auto const insert = [&](data const& x, grouped_bucket const& groups) {
       auto r = b.record();
       r.field(xpath).data(x);
-      if (args_->fill) {
+      if (processed_->args.fill) {
         for (auto const& gname : gnames_) {
-          for (auto const& [y, _] : args_->y) {
+          for (auto const& [y, _] : processed_->y) {
             r.field(make_yname(gname, y)).data(fill_value);
           }
         }
       }
       for (auto const& [name, bucket] : groups) {
-        TENZIR_ASSERT(args_->y.size() == bucket.size());
-        for (auto const& [y, instance] : std::views::zip(args_->y, bucket)) {
+        TENZIR_ASSERT(processed_->y.size() == bucket.size());
+        for (auto const& [y, instance] :
+             std::views::zip(processed_->y, bucket)) {
           auto value = to_double(instance->get());
-          if (args_->fill and is<caf::none_t>(value)) {
+          if (processed_->args.fill and is<caf::none_t>(value)) {
             continue;
           }
           auto valid = validate_y(value, make_yname(name, y.first),
@@ -702,9 +560,9 @@ private:
         }
       }
     };
-    if (args_->x_min and args_->res) {
+    if (processed_->x_min and processed_->args.res) {
       TENZIR_ASSERT(not groups_.empty());
-      auto min = std::optional{args_->x_min->rounded};
+      auto min = std::optional{processed_->x_min->rounded};
       auto const& first = groups_.begin()->first;
       if (*min != first) {
         fill_at(*min);
@@ -715,8 +573,9 @@ private:
       }
     }
     for (auto prev = std::optional<data>{};
-         auto const& [x, gb] : groups_ | std::views::take(args_->limit.inner)) {
-      if (args_->res) {
+         auto const& [x, gb] :
+         groups_ | std::views::take(processed_->args.limit.inner)) {
+      if (processed_->args.res) {
         while (auto gap = find_gap(prev, x)) {
           prev = gap.value();
           fill_at(std::move(gap).value());
@@ -725,10 +584,10 @@ private:
       insert(x, gb);
       prev = x;
     }
-    if (args_->x_max and args_->res) {
+    if (processed_->x_max and processed_->args.res) {
       TENZIR_ASSERT(not groups_.empty());
       auto last = std::optional{groups_.rbegin()->first};
-      auto const& max = args_->x_max->rounded;
+      auto const& max = processed_->x_max->rounded;
       while (auto gap = find_gap(last, max)) {
         last = gap.value();
         fill_at(std::move(gap).value());
@@ -740,14 +599,20 @@ private:
     auto slices = b.finish_as_table_slice("tenzir.chart");
     if (slices.size() > 1) {
       diagnostic::warning("got type conflicts, emitting multiple schemas")
-        .primary(args_->x)
+        .primary(processed_->args.x)
         .emit(dh);
     }
     auto const limits = detail::stable_map<std::string_view, std::string>{
-      {"x_min", args_->x_min ? jsonify_limit(args_->x_min->value.inner) : ""},
-      {"x_max", args_->x_max ? jsonify_limit(args_->x_max->value.inner) : ""},
-      {"y_min", args_->y_min ? jsonify_limit(args_->y_min->inner) : ""},
-      {"y_max", args_->y_max ? jsonify_limit(args_->y_max->inner) : ""},
+      {"x_min",
+       processed_->x_min ? jsonify_limit(processed_->x_min->value.inner) : ""},
+      {"x_max",
+       processed_->x_max ? jsonify_limit(processed_->x_max->value.inner) : ""},
+      {"y_min", processed_->args.y_min
+                  ? jsonify_limit(processed_->args.y_min->inner)
+                  : ""},
+      {"y_max", processed_->args.y_max
+                  ? jsonify_limit(processed_->args.y_max->inner)
+                  : ""},
     };
     auto ynums = std::deque<std::string>{"y"};
     auto const attrs = make_attributes(xpath, ynums, ynames, limits);
@@ -761,13 +626,13 @@ private:
 
   auto get_group_strings(table_slice const& slice, diagnostic_handler& dh) const
     -> series {
-    if (not args_->group) {
+    if (not processed_->args.group) {
       return series::null(string_type{}, detail::narrow<int64_t>(slice.rows()));
     }
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
-    auto gss = eval(args_->group.value(), slice, dh);
+    auto gss = eval(processed_->args.group.value(), slice, dh);
     for (auto&& gs : gss) {
-      if (gs.type.kind().is<null_type>()) {
+      if (gs.type.kind().template is<null_type>()) {
         check(b->AppendNulls(gs.length()));
         continue;
       }
@@ -779,10 +644,10 @@ private:
         continue;
       }
       if (not gs.type.kind()
-                .is_any<int64_type, uint64_type, double_type,
-                        enumeration_type>()) {
+                .template is_any<int64_type, uint64_type, double_type,
+                                 enumeration_type>()) {
         diagnostic::warning("cannot group type `{}`", gs.type.kind())
-          .primary(args_->group.value())
+          .primary(processed_->args.group.value())
           .emit(dh);
         check(b->AppendNulls(gs.length()));
         continue;
@@ -815,9 +680,10 @@ private:
     if (auto it = map.find(xv); it != map.end()) {
       return &it->second;
     }
-    if (map.size() == args_->limit.inner) {
-      diagnostic::warning("got more than {} data points", args_->limit.inner)
-        .primary(args_->x)
+    if (map.size() == processed_->args.limit.inner) {
+      diagnostic::warning("got more than {} data points",
+                          processed_->args.limit.inner)
+        .primary(processed_->args.x)
         .note("skipping excess data points")
         .hint(
           "consider filtering data or aggregating over a bigger `resolution`")
@@ -833,7 +699,7 @@ private:
     if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {
       if (is<caf::none_t>(x)) {
         diagnostic::warning("x-axis cannot be `null`")
-          .primary(args_->x)
+          .primary(processed_->args.x)
           .emit(ctx);
         return {nullptr, false};
       }
@@ -851,23 +717,23 @@ private:
   auto filter_input(table_slice slice, diagnostic_handler& dh)
     -> std::vector<table_slice> {
     // Early exit: no limits set
-    if (not args_->x_min and not args_->x_max) {
+    if (not processed_->x_min and not processed_->x_max) {
       return {std::move(slice)};
     }
     // Build combined expression from x_min and x_max
     auto const expr = std::invoke([&]() -> ast::expression {
-      if (args_->x_min and args_->x_max) {
+      if (processed_->x_min and processed_->x_max) {
         return ast::binary_expr{
-          args_->x_min->expr,
+          processed_->x_min->expr,
           {ast::binary_op::and_, location::unknown},
-          args_->x_max->expr,
+          processed_->x_max->expr,
         };
       }
-      if (args_->x_min) {
-        return args_->x_min->expr;
+      if (processed_->x_min) {
+        return processed_->x_min->expr;
       }
-      TENZIR_ASSERT(args_->x_max);
-      return args_->x_max->expr;
+      TENZIR_ASSERT(processed_->x_max);
+      return processed_->x_max->expr;
     });
     // Evaluate expression and extract filtered slices
     auto results = std::vector<table_slice>{};
@@ -897,14 +763,14 @@ private:
     auto result = match(
       std::tie(curr, *prev),
       [&](duration const& c, duration const& p) -> std::optional<data> {
-        if (c - p > args_->res->inner) {
-          return p + args_->res->inner;
+        if (c - p > processed_->args.res->inner) {
+          return p + processed_->args.res->inner;
         }
         return std::nullopt;
       },
       [&](time const& c, time const& p) -> std::optional<data> {
-        if (c - p > args_->res->inner) {
-          return p + args_->res->inner;
+        if (c - p > processed_->args.res->inner) {
+          return p + processed_->args.res->inner;
         }
         return std::nullopt;
       },
@@ -921,9 +787,9 @@ private:
     -> std::vector<type::attribute_view> {
     auto attrs = std::vector<type::attribute_view>{
       {"chart", to_string(Ty)},
-      {"position", args_->position.inner},
-      {"x_axis_type", args_->x_log ? "log" : "linear"},
-      {"y_axis_type", args_->y_log ? "log" : "linear"},
+      {"position", processed_->args.position.inner},
+      {"x_axis_type", processed_->args.x_log ? "log" : "linear"},
+      {"y_axis_type", processed_->args.y_log ? "log" : "linear"},
       {"x", xpath},
     };
     for (auto const& [name, value] : limits) {
@@ -931,7 +797,8 @@ private:
         attrs.emplace_back(name, value);
       }
     }
-    for (auto i = ynums.size(); i < args_->y.size() or i < ynames.size(); ++i) {
+    for (auto i = ynums.size(); i < processed_->y.size() or i < ynames.size();
+         ++i) {
       ynums.emplace_back(fmt::format("y{}", i));
     }
     auto names = std::views::filter(ynames, [](auto&& x) {
@@ -953,15 +820,16 @@ private:
     if (not valid) {
       diagnostic::warning("x-axis cannot have type `{}`", ty.kind())
         .note("skipping invalid events")
-        .primary(args_->x)
+        .primary(processed_->args.x)
         .emit(dh);
       return false;
     }
-    if (args_->res and not ty.kind().is_any<time_type, duration_type>()) {
+    if (processed_->args.res
+        and not ty.kind().is_any<time_type, duration_type>()) {
       diagnostic::warning("cannot group type `{}` with resolution", ty.kind())
         .note("skipping invalid events")
-        .primary(args_->x)
-        .primary(args_->res->source)
+        .primary(processed_->args.x)
+        .primary(processed_->args.res->source)
         .emit(dh);
       return false;
     }
@@ -987,12 +855,14 @@ private:
         .emit(dh);
       return false;
     }
-    if (args_->y_min or args_->y_max) {
-      auto const lty = args_->y_min ? type::infer(args_->y_min->inner)
-                                    : type::infer(args_->y_max->inner);
+    if (processed_->args.y_min or processed_->args.y_max) {
+      auto const lty = processed_->args.y_min
+                         ? type::infer(processed_->args.y_min->inner)
+                         : type::infer(processed_->args.y_max->inner);
       if (not lty) {
         diagnostic::warning("failed to infer type of limit")
-          .primary(args_->y_min ? args_->y_min->source : args_->y_max->source)
+          .primary(processed_->args.y_min ? processed_->args.y_min->source
+                                          : processed_->args.y_max->source)
           .note(fmt::format("skipping {}", yname))
           .emit(dh);
         return false;
@@ -1001,7 +871,8 @@ private:
         diagnostic::warning("limit has a different type `{}` from `y` type "
                             "`{}`",
                             lty->kind(), ty->kind())
-          .primary(args_->y_min ? args_->y_min->source : args_->y_max->source)
+          .primary(processed_->args.y_min ? processed_->args.y_min->source
+                                          : processed_->args.y_max->source)
           .note(fmt::format("skipping {}", yname))
           .emit(dh);
         return false;
@@ -1022,7 +893,7 @@ private:
             continue;
           }
           const auto val = array.Value(i);
-          const auto count = std::abs(args_->res->inner.count());
+          const auto count = std::abs(processed_->args.res->inner.count());
           const auto rem = std::abs(val % count);
           if (rem == 0) {
             check(b->Append(val));
@@ -1034,24 +905,204 @@ private:
         return {duration_type{}, finish(*b)};
       },
       [&](arrow::TimestampArray const& array) -> series {
-        auto opts = make_round_temporal_options(args_->res->inner);
+        auto opts = make_round_temporal_options(processed_->args.res->inner);
         return {time_type{},
                 check(arrow::compute::FloorTemporal(array, std::move(opts)))
-                  .array_as<arrow::TimestampArray>()};
+                  .template array_as<arrow::TimestampArray>()};
       },
       [&](auto const&) -> series {
         TENZIR_UNREACHABLE();
       });
   }
 
-  RawArgs<Ty> raw_;
-  std::optional<chart_args> args_;
-  std::optional<plugins_map> plugins_;
+  ChartArgs<Ty> args_;
+  std::optional<ProcessedArgs<Ty>> processed_;
   std::optional<type> xty_;
   group_map groups_;
   std::unordered_set<std::string> gnames_;
   bool failed_ = false;
 };
+
+// Helper validation for x limit types
+auto validate_x_limit_type(located<data> const& d,
+                           std::optional<located<duration>> const& res,
+                           DescribeCtx& ctx) -> void {
+  auto const t = type::infer(d.inner);
+  if (not t) {
+    diagnostic::error("failed to infer type of option").primary(d).emit(ctx);
+    return;
+  }
+  auto valid = t->kind()
+                 .is_any<int64_type, uint64_type, double_type, duration_type,
+                         time_type>();
+  if (not valid) {
+    diagnostic::warning("limit cannot have type `{}`", t->kind())
+      .primary(d)
+      .emit(ctx);
+    return;
+  }
+  if (res && ! t->kind().is_any<time_type, duration_type>()) {
+    diagnostic::warning("cannot group type `{}` with resolution", t->kind())
+      .primary(d)
+      .primary(res->source)
+      .emit(ctx);
+    return;
+  }
+}
+
+// Helper validation for y limit types
+auto validate_y_limit_type(located<data> const& d, DescribeCtx& ctx) -> void {
+  auto const t = type::infer(d.inner);
+  if (not t) {
+    diagnostic::error("failed to infer type of option").primary(d).emit(ctx);
+    return;
+  }
+  if (! t->kind().is_any<int64_type, uint64_type, double_type, duration_type>()) {
+    diagnostic::error("y-axis cannot have type `{}`", t->kind())
+      .primary(d)
+      .emit(ctx);
+    return;
+  }
+}
+
+// Validation for pie chart (only has limit)
+auto validate_chart_pie(auto limit, DescribeCtx& ctx) -> Empty {
+  if (auto lim = ctx.get(limit)) {
+    if (lim->inner == 0) {
+      diagnostic::error("`limit` must be positive").primary(*lim).emit(ctx);
+    }
+    if (lim->inner > 100'000) {
+      diagnostic::error("`limit` must be less than 100k")
+        .primary(*lim)
+        .emit(ctx);
+    }
+  }
+  return {};
+}
+
+// Unified validation function for area, bar, line charts
+auto validate_chart_common(auto limit, auto position, auto x_min, auto x_max,
+                           auto y_min, auto y_max, auto res, auto fill,
+                           DescribeCtx& ctx) -> Empty {
+  // Validate limit (common to all chart types)
+  if (auto lim = ctx.get(limit)) {
+    if (lim->inner == 0) {
+      diagnostic::error("`limit` must be positive").primary(*lim).emit(ctx);
+    }
+    if (lim->inner > 100'000) {
+      diagnostic::error("`limit` must be less than 100k")
+        .primary(*lim)
+        .emit(ctx);
+    }
+  }
+
+  // Validate position (only for area, bar - not line or pie)
+  if (auto pos = ctx.get(position)) {
+    // Check if this is actually a string type (not just any optional)
+    if constexpr (requires {
+                    pos->inner;
+                    typename decltype(pos->inner)::value_type;
+                  }) {
+      // It's a string
+      if (pos->inner != "stacked" && pos->inner != "grouped") {
+        diagnostic::error("unsupported `position`")
+          .primary(*pos)
+          .hint("available positions: `grouped` (default) or `stacked`")
+          .emit(ctx);
+      }
+    }
+  }
+
+  // Get resolution for x-limit validation
+  auto resolution = ctx.get(res);
+
+  // Validate x_min type
+  if (auto xmin = ctx.get(x_min)) {
+    validate_x_limit_type(*xmin, resolution, ctx);
+  }
+
+  // Validate x_max type
+  if (auto xmax = ctx.get(x_max)) {
+    validate_x_limit_type(*xmax, resolution, ctx);
+  }
+
+  // Validate x_min and x_max are compatible
+  if (auto xmin = ctx.get(x_min)) {
+    if (auto xmax = ctx.get(x_max)) {
+      auto const min_idx = xmin->inner.get_data().index();
+      auto const max_idx = xmax->inner.get_data().index();
+      if (min_idx != max_idx) {
+        diagnostic::error("`x_min` and `x_max` must have the same type")
+          .primary(*xmin)
+          .primary(*xmax)
+          .emit(ctx);
+      }
+      if (xmin->inner >= xmax->inner) {
+        diagnostic::error("`x_min` must be less than `x_max`")
+          .primary(*xmin)
+          .primary(*xmax)
+          .emit(ctx);
+      }
+    }
+  }
+
+  // Validate y_min type
+  if (auto ymin = ctx.get(y_min)) {
+    validate_y_limit_type(*ymin, ctx);
+  }
+
+  // Validate y_max type
+  if (auto ymax = ctx.get(y_max)) {
+    validate_y_limit_type(*ymax, ctx);
+  }
+
+  // Validate y_min and y_max are compatible
+  if (auto ymin = ctx.get(y_min)) {
+    if (auto ymax = ctx.get(y_max)) {
+      if (ymin->inner.get_data().index() != ymax->inner.get_data().index()) {
+        diagnostic::error("`y_min` and `y_max` must have the same type")
+          .primary(*ymin)
+          .primary(*ymax)
+          .emit(ctx);
+      }
+      if (ymin->inner >= ymax->inner) {
+        diagnostic::error("`y_min` must be less than `y_max`")
+          .primary(*ymin)
+          .primary(*ymax)
+          .emit(ctx);
+      }
+    }
+  }
+
+  // Validate fill
+  if (auto f = ctx.get(fill)) {
+    if (! resolution) {
+      diagnostic::error("`fill` cannot be specified without `resolution`")
+        .primary(*f)
+        .emit(ctx);
+    }
+    validate_y_limit_type(*f, ctx);
+
+    // Check fill type matches y_min or y_max
+    if (auto ymin = ctx.get(y_min)) {
+      if (ymin->inner.get_data().index() != f->inner.get_data().index()) {
+        diagnostic::error("`fill` has a different type from `y_min`")
+          .primary(*f)
+          .primary(*ymin)
+          .emit(ctx);
+      }
+    } else if (auto ymax = ctx.get(y_max)) {
+      if (ymax->inner.get_data().index() != f->inner.get_data().index()) {
+        diagnostic::error("`fill` has a different type from `y_max`")
+          .primary(*f)
+          .primary(*ymax)
+          .emit(ctx);
+      }
+    }
+  }
+
+  return {};
+}
 
 } // namespace
 
@@ -1061,24 +1112,28 @@ class PluginArea final : public virtual OperatorPlugin {
   }
 
   auto describe() const -> Description override {
-    auto d
-      = tenzir::Describer<RawArgs<chart_type::area>, Chart<chart_type::area>>{};
-    d.named("x", &RawArgs<chart_type::area>::x);
-    d.named("y", &RawArgs<chart_type::area>::y, "any");
-    d.named("x_min", &RawArgs<chart_type::area>::x_min);
-    d.named("x_max", &RawArgs<chart_type::area>::x_max);
-    d.named("y_min", &RawArgs<chart_type::area>::y_min);
-    d.named("y_max", &RawArgs<chart_type::area>::y_max);
+    constexpr auto Ty = chart_type::area;
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
-    d.named("resolution", &RawArgs<chart_type::area>::res);
-    d.named("fill", &RawArgs<chart_type::area>::fill);
+    d.named("x", &ChartArgs<Ty>::x);
+    d.named("y", &ChartArgs<Ty>::y, "any");
+    auto x_min = d.named("x_min", &ChartArgs<Ty>::x_min);
+    auto x_max = d.named("x_max", &ChartArgs<Ty>::x_max);
+    auto y_min = d.named("y_min", &ChartArgs<Ty>::y_min);
+    auto y_max = d.named("y_max", &ChartArgs<Ty>::y_max);
+    auto res = d.named("resolution", &ChartArgs<Ty>::res);
+    auto fill = d.named("fill", &ChartArgs<Ty>::fill);
+    d.named("x_log", &ChartArgs<Ty>::x_log);
+    d.named("y_log", &ChartArgs<Ty>::y_log);
+    d.named("group", &ChartArgs<Ty>::group, "any");
+    auto position = d.named_optional("position", &ChartArgs<Ty>::position);
+    auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    d.named("x_log", &RawArgs<chart_type::area>::x_log);
-    d.named("y_log", &RawArgs<chart_type::area>::y_log);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      return validate_chart_common(limit, position, x_min, x_max, y_min, y_max,
+                                   res, fill, ctx);
+    });
 
-    d.named("group", &RawArgs<chart_type::area>::group, "any");
-    d.named_optional("position", &RawArgs<chart_type::area>::position);
-    d.named_optional("_limit", &RawArgs<chart_type::area>::limit);
     return d.without_optimize();
   }
 };
@@ -1089,26 +1144,28 @@ class PluginBar final : public virtual OperatorPlugin {
   }
 
   auto describe() const -> Description override {
-    auto d
-      = tenzir::Describer<RawArgs<chart_type::bar>, Chart<chart_type::bar>>{};
+    constexpr auto Ty = chart_type::bar;
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
-    d.named({"x", "label"}, &RawArgs<chart_type::bar>::x);
-    d.named({"y", "value"}, &RawArgs<chart_type::bar>::y, "any");
+    d.named({"x", "label"}, &ChartArgs<Ty>::x);
+    d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
+    auto x_min = d.named("x_min", &ChartArgs<Ty>::x_min);
+    auto x_max = d.named("x_max", &ChartArgs<Ty>::x_max);
+    auto y_min = d.named("y_min", &ChartArgs<Ty>::y_min);
+    auto y_max = d.named("y_max", &ChartArgs<Ty>::y_max);
+    auto res = d.named("resolution", &ChartArgs<Ty>::res);
+    auto fill = d.named("fill", &ChartArgs<Ty>::fill);
+    d.named("x_log", &ChartArgs<Ty>::x_log);
+    d.named("y_log", &ChartArgs<Ty>::y_log);
+    d.named("group", &ChartArgs<Ty>::group, "any");
+    auto position = d.named_optional("position", &ChartArgs<Ty>::position);
+    auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    d.named("x_min", &RawArgs<chart_type::bar>::x_min);
-    d.named("x_max", &RawArgs<chart_type::bar>::x_max);
-    d.named("y_min", &RawArgs<chart_type::bar>::y_min);
-    d.named("y_max", &RawArgs<chart_type::bar>::y_max);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      return validate_chart_common(limit, position, x_min, x_max, y_min, y_max,
+                                   res, fill, ctx);
+    });
 
-    d.named("resolution", &RawArgs<chart_type::bar>::res);
-    d.named("fill", &RawArgs<chart_type::bar>::fill);
-
-    d.named("x_log", &RawArgs<chart_type::bar>::x_log);
-    d.named("y_log", &RawArgs<chart_type::bar>::y_log);
-
-    d.named("group", &RawArgs<chart_type::bar>::group, "any");
-    d.named_optional("position", &RawArgs<chart_type::bar>::position);
-    d.named_optional("_limit", &RawArgs<chart_type::bar>::limit);
     return d.without_optimize();
   }
 };
@@ -1119,24 +1176,29 @@ class PluginLine final : public virtual OperatorPlugin {
   }
 
   auto describe() const -> Description override {
-    auto d
-      = tenzir::Describer<RawArgs<chart_type::line>, Chart<chart_type::line>>{};
-    d.named("x", &RawArgs<chart_type::line>::x);
-    d.named("y", &RawArgs<chart_type::line>::y, "any");
+    constexpr auto Ty = chart_type::line;
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
-    d.named("x_min", &RawArgs<chart_type::line>::x_min);
-    d.named("x_max", &RawArgs<chart_type::line>::x_max);
-    d.named("y_min", &RawArgs<chart_type::line>::y_min);
-    d.named("y_max", &RawArgs<chart_type::line>::y_max);
+    d.named("x", &ChartArgs<Ty>::x);
+    d.named("y", &ChartArgs<Ty>::y, "any");
+    auto x_min = d.named("x_min", &ChartArgs<Ty>::x_min);
+    auto x_max = d.named("x_max", &ChartArgs<Ty>::x_max);
+    auto y_min = d.named("y_min", &ChartArgs<Ty>::y_min);
+    auto y_max = d.named("y_max", &ChartArgs<Ty>::y_max);
+    auto res = d.named("resolution", &ChartArgs<Ty>::res);
+    auto fill = d.named("fill", &ChartArgs<Ty>::fill);
+    d.named("x_log", &ChartArgs<Ty>::x_log);
+    d.named("y_log", &ChartArgs<Ty>::y_log);
+    d.named("group", &ChartArgs<Ty>::group, "any");
+    auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    d.named("resolution", &RawArgs<chart_type::line>::res);
-    d.named("fill", &RawArgs<chart_type::line>::fill);
+    // Line chart doesn't have position,  so pass limit as a dummy (ctx.get will
+    // return nullopt)
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      return validate_chart_common(limit, limit, x_min, x_max, y_min, y_max,
+                                   res, fill, ctx);
+    });
 
-    d.named("x_log", &RawArgs<chart_type::line>::x_log);
-    d.named("y_log", &RawArgs<chart_type::line>::y_log);
-
-    d.named("group", &RawArgs<chart_type::line>::group, "any");
-    d.named_optional("_limit", &RawArgs<chart_type::line>::limit);
     return d.without_optimize();
   }
 };
@@ -1147,14 +1209,19 @@ class PluginPie final : public virtual OperatorPlugin {
   }
 
   auto describe() const -> Description override {
-    auto d
-      = tenzir::Describer<RawArgs<chart_type::pie>, Chart<chart_type::pie>>{};
+    constexpr auto Ty = chart_type::pie;
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
-    d.named({"x", "label"}, &RawArgs<chart_type::pie>::x);
-    d.named({"y", "value"}, &RawArgs<chart_type::pie>::y, "any");
+    d.named({"x", "label"}, &ChartArgs<Ty>::x);
+    d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
+    d.named("group", &ChartArgs<Ty>::group, "any");
+    auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    d.named("group", &RawArgs<chart_type::pie>::group, "any");
-    d.named_optional("_limit", &RawArgs<chart_type::pie>::limit);
+    // Pie chart only has limit validation
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      return validate_chart_pie(limit, ctx);
+    });
+
     return d.without_optimize();
   }
 };
