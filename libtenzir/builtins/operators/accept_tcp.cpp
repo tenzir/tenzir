@@ -226,6 +226,13 @@ public:
         co_return;
       },
       [&](ConnectionReadTimeout timeout) -> Task<void> {
+        if (lifecycle_->load() != Lifecycle::running) {
+          if (auto it = connections_.find(timeout.conn_id);
+              it != connections_.end()) {
+            close_transport(it->second);
+          }
+          co_return;
+        }
         auto key = sub_key_for(timeout.conn_id);
         if (ctx.get_sub(make_view(key))) {
           co_return;
