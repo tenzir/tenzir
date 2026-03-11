@@ -169,7 +169,7 @@ public:
           }
         });
         if (lifecycle_->load() != Lifecycle::running) {
-          transport->close();
+          close_transport(std::move(transport));
           co_return;
         }
         auto* transport_evb = transport->getEventBase();
@@ -192,6 +192,7 @@ public:
         auto sub_result
           = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
+          close_transport(std::move(transport));
           co_return;
         }
         auto key = sub_key_for(conn_id);
