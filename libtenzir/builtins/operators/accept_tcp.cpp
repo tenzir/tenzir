@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/as_bytes.hpp>
+#include <tenzir/async/tcp.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -31,11 +31,9 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/io/IOBufQueue.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
-#include <folly/io/coro/TransportCallbacks.h>
 
 #include <atomic>
 #include <limits>
@@ -73,45 +71,6 @@ struct AcceptTcpArgs {
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
-
-struct ReadResult {
-  chunk_ptr chunk;
-  bool eof = false;
-};
-
-auto read_chunk(Box<folly::coro::Transport>& transport,
-                std::chrono::milliseconds timeout) -> Task<ReadResult> {
-  auto* evb = transport->getEventBase();
-  TENZIR_ASSERT(evb);
-  auto* async_transport = transport->getTransport();
-  TENZIR_ASSERT(async_transport);
-  auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
-  auto callback = folly::coro::ReadCallback{
-    evb->timer(), *async_transport, &buffer, 1, buffer_size, timeout,
-  };
-  async_transport->setReadCB(&callback);
-  auto wait_result = co_await folly::coro::co_awaitTry(callback.wait());
-  async_transport->setReadCB(nullptr);
-  if (callback.error()) {
-    callback.error().throw_exception();
-  }
-  auto length = buffer.chainLength();
-  if (wait_result.hasException()) {
-    wait_result.exception().throw_exception();
-  }
-  if (length == 0) {
-    co_return ReadResult{.eof = callback.eof};
-  }
-  auto iobuf = buffer.move();
-  auto range = iobuf->coalesce();
-  co_return ReadResult{
-    .chunk = chunk::make(as_bytes(range.data(), range.size()),
-                         [buf = std::move(iobuf)]() noexcept {
-                           static_cast<void>(buf);
-                         }),
-    .eof = callback.eof,
-  };
-}
 
 class AcceptTcpListener final : public Operator<void, table_slice> {
 public:
@@ -477,10 +436,10 @@ private:
     auto read_error = Option<std::string>{};
     while (true) {
       auto read_timed_out = false;
-      auto read_result = ReadResult{};
+      auto read_result = tcp_read_result{};
       try {
-        read_result = co_await read_chunk(
-          connection->transport,
+        read_result = co_await read_tcp_chunk(
+          connection->transport, buffer_size,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.

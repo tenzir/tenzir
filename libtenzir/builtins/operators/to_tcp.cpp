@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/mutex.hpp>
-#include <tenzir/async/tls.hpp>
+#include <tenzir/async/tcp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -23,16 +23,12 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
-#include <folly/Try.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Invoke.h>
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/futures/Future.h>
-#include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/coro/Transport.h>
-#include <folly/io/coro/TransportCallbacks.h>
 
 #include <algorithm>
 #include <atomic>
@@ -59,23 +55,6 @@ constexpr auto write_timeout = std::chrono::seconds{5};
 // The control queue only carries wakeups and reconnect requests, so a small
 // fixed capacity is sufficient while still tolerating short bursts.
 constexpr auto control_queue_capacity = uint32_t{64};
-
-auto connect_tls_client(folly::EventBase* evb,
-                        const folly::SocketAddress& address,
-                        std::shared_ptr<folly::SSLContext> ssl_context,
-                        std::string hostname)
-  -> Task<Box<folly::coro::Transport>> {
-  TENZIR_DEBUG("to_tcp TLS connect start: {}", address.describe());
-  auto transport = co_await folly::coro::co_withExecutor(
-    evb,
-    folly::coro::Transport::newConnectedSocket(evb, address, connect_timeout));
-  auto boxed = Box<folly::coro::Transport>{std::move(transport)};
-  TENZIR_DEBUG("to_tcp TLS plain connect done: {}", address.describe());
-  co_await upgrade_transport_to_tls_client(boxed, std::move(ssl_context),
-                                           std::move(hostname));
-  TENZIR_DEBUG("to_tcp TLS upgrade done: {}", address.describe());
-  co_return boxed;
-}
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -254,18 +233,10 @@ private:
     }
     auto connect_error = Option<std::string>{};
     try {
-      auto boxed = Box<folly::coro::Transport>{};
-      if (tls_context_) {
-        TENZIR_DEBUG("to_tcp ensure_connected: attempting TLS connection to {}",
-                     address_.describe());
-        boxed
-          = co_await connect_tls_client(evb_, address_, tls_context_, host_);
-      } else {
-        auto transport = co_await folly::coro::co_withExecutor(
-          evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
-                                                           connect_timeout));
-        boxed = Box<folly::coro::Transport>{std::move(transport)};
-      }
+      auto boxed = co_await connect_tcp_client(
+        evb_, address_,
+        std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
+        tls_context_, host_);
       auto guard = co_await transport_mutex_->lock();
       if (done_->load() or transport_) {
         co_return;
