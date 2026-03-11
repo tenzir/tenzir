@@ -217,8 +217,10 @@ public:
           = Arc<ConnectionHandle>{ConnectionHandle{std::move(transport)}};
         auto [_, inserted] = connections_.emplace(conn_id, connection);
         TENZIR_ASSERT(inserted);
+        auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
-          transport_evb, read_loop(conn_id, connection, *message_queue_)));
+          transport_evb,
+          read_loop(conn_id, connection, std::move(message_queue))));
       },
       [&](ReadChunk read_chunk) -> Task<void> {
         if (not pipeline_) {
@@ -250,7 +252,7 @@ public:
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
     if (auto it = connections_.find(conn_id); it != connections_.end()) {
       pipeline_ = None{};
-      it->second->transport->close();
+      close_transport(it->second);
     }
     co_return;
   }
@@ -260,15 +262,27 @@ public:
   }
 
 private:
+  static auto close_transport(Arc<ConnectionHandle> connection) -> void {
+    auto* evb = connection->transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
+      connection->transport->close();
+    });
+  }
+
   static auto read_loop(uint64_t conn_id, Arc<ConnectionHandle> connection,
-                        MessageQueue& message_queue) -> Task<void> {
+                        Arc<MessageQueue> message_queue) -> Task<void> {
     auto read_error = std::string{};
     while (true) {
-      folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
-      size_t bytes = 0;
+      auto data = std::vector<std::byte>(buffer_size);
+      auto bytes = size_t{0};
       try {
+        auto buffer = folly::MutableByteRange{
+          reinterpret_cast<unsigned char*>(data.data()),
+          data.size(),
+        };
         bytes = co_await connection->transport->read(
-          buf, 1, buffer_size,
+          buffer,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // A read timeout is expected because we poll periodically for

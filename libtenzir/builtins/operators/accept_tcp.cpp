@@ -188,10 +188,11 @@ public:
         auto [_, inserted] = connections_.emplace(conn_id, connection);
         TENZIR_ASSERT(inserted);
         keep_connection_slot = true;
+        auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
           read_loop(conn_id, std::move(connection), std::move(open_pipeline),
-                    *message_queue_, std::move(bytes_read))));
+                    std::move(message_queue), std::move(bytes_read))));
       },
       [&](ConnectionClosed closed) -> Task<void> {
         if (closed.error) {
@@ -278,7 +279,7 @@ private:
     stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     for (auto& [_, connection] : connections_) {
-      connection->transport->close();
+      close_transport(connection);
     }
   }
 
@@ -295,7 +296,11 @@ private:
   }
 
   static auto close_transport(Arc<ConnectionHandle> connection) -> void {
-    connection->transport->close();
+    auto* evb = connection->transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
+      connection->transport->close();
+    });
   }
 
   static auto sub_key_for(uint64_t conn_id) -> data {
@@ -411,16 +416,20 @@ private:
 
   static auto
   read_loop(uint64_t conn_id, Arc<ConnectionHandle> connection,
-            OpenPipeline<chunk_ptr> pipeline, MessageQueue& message_queue,
+            OpenPipeline<chunk_ptr> pipeline, Arc<MessageQueue> message_queue,
             MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
-      folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
-      size_t bytes = 0;
+      auto data = std::vector<std::byte>(buffer_size);
+      auto bytes = size_t{0};
       auto read_timed_out = false;
       try {
+        auto buffer = folly::MutableByteRange{
+          reinterpret_cast<unsigned char*>(data.data()),
+          data.size(),
+        };
         bytes = co_await connection->transport->read(
-          buf, 1, buffer_size,
+          buffer,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
@@ -431,7 +440,7 @@ private:
         }
       }
       if (read_timed_out) {
-        co_await message_queue.enqueue(ConnectionReadTimeout{conn_id});
+        co_await message_queue->enqueue(ConnectionReadTimeout{conn_id});
         continue;
       }
       if (read_error) {
@@ -441,19 +450,12 @@ private:
         break;
       }
       bytes_counter.add(bytes);
-      // Convert IOBuf to chunk
-      auto iobuf = buf.move();
-      auto data = std::vector<std::byte>{};
-      data.reserve(iobuf->computeChainDataLength());
-      for (auto& range : *iobuf) {
-        auto* begin = reinterpret_cast<const std::byte*>(range.data());
-        data.insert(data.end(), begin, begin + range.size());
-      }
+      data.resize(bytes);
       auto chk = chunk::make(std::move(data));
       auto push_result = co_await pipeline.push(std::move(chk));
       TENZIR_UNUSED(push_result);
     }
-    co_await message_queue.enqueue(ConnectionClosed{
+    co_await message_queue->enqueue(ConnectionClosed{
       conn_id,
       std::move(read_error),
     });
@@ -467,10 +469,8 @@ private:
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
-  mutable Box<MessageQueue> message_queue_{
-    std::in_place,
-    message_queue_capacity,
-  };
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
   std::unordered_map<uint64_t, Arc<ConnectionHandle>> connections_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   Box<std::atomic<uint64_t>> reserved_connections_{std::in_place, 0};
