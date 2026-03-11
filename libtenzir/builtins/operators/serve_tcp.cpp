@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/async/mutex.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -34,6 +35,7 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -55,10 +57,18 @@ struct ServeTcpArgs {
 
 class ServeTcp final : public Operator<table_slice, void> {
 public:
-  using Client = Box<folly::coro::Transport>;
+  struct ClientHandle {
+    explicit ClientHandle(Box<folly::coro::Transport> transport)
+      : transport{std::move(transport)} {
+    }
+
+    Box<folly::coro::Transport> transport;
+  };
+
+  using Client = Arc<ClientHandle>;
 
   struct Accepted {
-    Client client;
+    Box<folly::coro::Transport> client;
   };
 
   struct Wakeup {};
@@ -134,35 +144,44 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    auto guard = co_await clients_mutex_->lock();
-    if (lifecycle_->load() == Lifecycle::done or not chunk or chunk->size() == 0
-        or clients_.empty()) {
-      co_return;
+    auto clients = std::vector<Client>{};
+    {
+      auto guard = co_await clients_mutex_->lock();
+      if (lifecycle_->load() == Lifecycle::done or not chunk
+          or chunk->size() == 0 or clients_.empty()) {
+        co_return;
+      }
+      clients = clients_;
     }
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
     auto diagnostics = std::vector<std::optional<diagnostic>>{};
-    diagnostics.resize(clients_.size());
+    diagnostics.resize(clients.size());
     auto write_tasks = std::vector<Task<void>>{};
-    write_tasks.reserve(clients_.size());
-    for (size_t i = 0; i < clients_.size(); ++i) {
-      write_tasks.push_back(write_to_client(clients_[i], data, diagnostics[i]));
+    write_tasks.reserve(clients.size());
+    for (size_t i = 0; i < clients.size(); ++i) {
+      write_tasks.push_back(write_to_client(clients[i], data, diagnostics[i]));
     }
     co_await folly::coro::collectAllRange(std::move(write_tasks));
-    TENZIR_ASSERT(diagnostics.size() == clients_.size());
-    auto client_it = clients_.begin();
+    TENZIR_ASSERT(diagnostics.size() == clients.size());
+    auto guard = co_await clients_mutex_->lock();
     for (size_t i = 0; i < diagnostics.size(); ++i) {
-      TENZIR_ASSERT(client_it != clients_.end());
       auto& maybe_diagnostic = diagnostics[i];
-      if (maybe_diagnostic) {
-        ctx.dh().emit(std::move(*maybe_diagnostic));
-        auto client = std::move(*client_it);
-        client_it = clients_.erase(client_it);
-        close_client(std::move(client));
-      } else {
-        ++client_it;
+      if (not maybe_diagnostic) {
+        continue;
+      }
+      ctx.dh().emit(std::move(*maybe_diagnostic));
+      auto* failed_client = &*clients[i];
+      auto new_end = std::remove_if(clients_.begin(), clients_.end(),
+                                    [&](Client const& client) {
+                                      return &*client == failed_client;
+                                    });
+      auto removed = new_end != clients_.end();
+      clients_.erase(new_end, clients_.end());
+      if (removed) {
+        close_client(std::move(clients[i]));
       }
     }
     co_return;
@@ -234,11 +253,19 @@ public:
   }
 
 private:
-  static auto close_client(Client client) -> void {
+  static auto close_client(Box<folly::coro::Transport> client) -> void {
     auto* evb = client->getEventBase();
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([client = std::move(client)]() mutable {
       client->close();
+    });
+  }
+
+  static auto close_client(Client client) -> void {
+    auto* evb = client->transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([client = std::move(client)]() mutable {
+      client->transport->close();
     });
   }
 
@@ -270,16 +297,17 @@ private:
     co_return;
   }
 
-  auto write_to_client(Client& client, folly::ByteRange data,
+  auto write_to_client(Client client, folly::ByteRange data,
                        std::optional<diagnostic>& maybe_diagnostic)
     -> Task<void> {
     try {
       co_await folly::coro::timeout(
-        folly::coro::co_withExecutor(evb_, client->write(data)), write_timeout);
+        folly::coro::co_withExecutor(evb_, client->transport->write(data)),
+        write_timeout);
       maybe_diagnostic.reset();
       co_return;
     } catch (folly::FutureTimeout const& ex) {
-      auto peer = client->getPeerAddress().describe();
+      auto peer = client->transport->getPeerAddress().describe();
       maybe_diagnostic
         = diagnostic::warning("failed to write to client {}", peer)
             .primary(args_.endpoint.source)
@@ -289,7 +317,7 @@ private:
             .done();
       co_return;
     } catch (folly::AsyncSocketException const& ex) {
-      auto peer = client->getPeerAddress().describe();
+      auto peer = client->transport->getPeerAddress().describe();
       maybe_diagnostic
         = diagnostic::warning("failed to write to client {}", peer)
             .primary(args_.endpoint.source)
@@ -301,7 +329,8 @@ private:
     }
   }
 
-  auto add_client(Client client, diagnostic_handler& dh) -> Task<void> {
+  auto add_client(Box<folly::coro::Transport> client, diagnostic_handler& dh)
+    -> Task<void> {
     auto peer = client->getPeerAddress().describe();
     auto reject_max_connections = [&]() {
       diagnostic::warning(
@@ -350,7 +379,7 @@ private:
       co_return;
     }
     TENZIR_DEBUG("accepted client {}", client->getPeerAddress().describe());
-    clients_.push_back(std::move(client));
+    clients_.push_back(Arc<ClientHandle>{ClientHandle{std::move(client)}});
     co_return;
   }
 

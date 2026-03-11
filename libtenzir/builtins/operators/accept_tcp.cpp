@@ -265,6 +265,7 @@ public:
     }
     lifecycle_->store(Lifecycle::draining);
     stop_accepting();
+    close_all_connections();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
     co_return maybe_finish_draining() ? FinalizeBehavior::done
                                       : FinalizeBehavior::continue_;
@@ -301,6 +302,10 @@ private:
     lifecycle_->store(Lifecycle::done);
     stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+    close_all_connections();
+  }
+
+  auto close_all_connections() -> void {
     for (auto& [_, connection] : connections_) {
       close_transport(connection);
     }
