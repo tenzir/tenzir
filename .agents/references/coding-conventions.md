@@ -57,6 +57,8 @@ code should follow the new conventions.
 ## Other
 
 - Use `class` for template parameters; `typename` only for dependent types
+- Use `tenzir/si_literals.hpp` for SI or binary magnitude constants when they
+  model the value clearly, e.g. `64_Ki`, `5_k`, or `100_M`
 - Use `Box<T>` for a `std::unique_ptr<T>` that cannot be null
 - Use `std::optional<Box<T>>` for a `std::unique_ptr<T>` that may be null
 - Use the current year in the copyright notice when creating new files. Do not
