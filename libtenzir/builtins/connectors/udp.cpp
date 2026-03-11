@@ -53,6 +53,7 @@ struct saver_args {
 
 auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   -> generator<chunk_ptr> {
+  co_yield {};
   // A UDP packet contains its length as 16-bit field in the header, giving
   // rise to packets sized up to 65,535 bytes (including the header). When we
   // go over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
@@ -242,6 +243,7 @@ public:
           .note("got {} bytes but sent only {}", sent_bytes, chunk->size())
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 

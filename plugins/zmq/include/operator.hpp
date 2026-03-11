@@ -461,6 +461,7 @@ public:
       if (auto error = conn->send(chunk); error.valid()) {
         diagnostic::error(error).emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 

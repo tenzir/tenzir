@@ -480,6 +480,7 @@ public:
           }
         }
       }
+      co_yield {};
     }
     if (b.has_contents()) {
       send_req(req, b.yield(dh), dh);

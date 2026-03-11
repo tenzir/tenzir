@@ -303,6 +303,7 @@ public:
       } catch (diagnostic& d) {
         dh.emit(std::move(d));
       }
+      co_yield {};
     }
   }
 

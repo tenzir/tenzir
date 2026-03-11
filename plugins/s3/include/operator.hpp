@@ -296,6 +296,7 @@ public:
           .emit(dh);
         co_return;
       }
+      co_yield {};
     }
   }
 

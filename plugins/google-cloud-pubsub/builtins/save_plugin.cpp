@@ -71,6 +71,7 @@ public:
         diagnostic::error("google-cloud-publisher: {}", id.status().message())
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 

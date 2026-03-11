@@ -238,6 +238,7 @@ public:
     -> std::optional<generator<chunk_ptr>> override {
     auto make = [](std::chrono::milliseconds timeout, fd_wrapper fd,
                    bool following) -> generator<chunk_ptr> {
+      co_yield {};
       auto in_buf = detail::fdinbuf(fd, max_chunk_size);
       in_buf.read_timeout() = timeout;
       auto current_data = std::vector<std::byte>{};

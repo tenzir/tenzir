@@ -270,6 +270,7 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
         continue;
       }
       worker->send(slice);
+      co_yield {};
     }
   } else {
     // Multi-threaded path.

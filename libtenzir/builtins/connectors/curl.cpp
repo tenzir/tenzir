@@ -340,6 +340,7 @@ public:
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 

@@ -31,6 +31,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    co_yield {};
     if (auto result = make_processes(ctrl.diagnostics())) {
       co_yield std::move(*result);
     }

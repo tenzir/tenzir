@@ -168,6 +168,7 @@ public:
       // This check guards against that. We should remove it once we get to
       // rewriting our catalog.
       if (as<record_type>(slice.schema()).num_fields() == 0) {
+        co_yield {};
         continue;
       }
       if (not slice.schema().attribute("internal").has_value()) {
@@ -195,8 +196,8 @@ public:
       // Limit to at most 20 in-flight batches.
       if (inflight_batches >= 20) {
         ctrl.set_waiting(true);
-        co_yield {};
       }
+      co_yield {};
     }
     while (inflight_batches > 0) {
       ctrl.set_waiting(true);

@@ -777,6 +777,7 @@ public:
         continue;
       }
       if (chunk->size() == 0) {
+        co_yield {};
         continue;
       }
       ctrl.self()

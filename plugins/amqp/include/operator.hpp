@@ -860,6 +860,7 @@ public:
           .hint("{}", err)
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 

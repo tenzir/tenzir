@@ -92,10 +92,12 @@ public:
         diagnostic::warning("empty event will be dropped")
           .primary(args.operator_location)
           .emit(ctrl.diagnostics());
+        co_yield {};
         continue;
       }
       slice = resolve_enumerations(slice);
       (void)client->insert(slice);
+      co_yield {};
     }
   } catch (const panic_exception& e) {
     throw;
