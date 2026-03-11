@@ -202,6 +202,7 @@ public:
           = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
           connection_active_ = false;
+          close_transport(std::move(transport));
           co_return;
         }
         auto sub = co_await ctx.spawn_sub(
@@ -246,7 +247,9 @@ public:
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
     if (auto it = connections_.find(conn_id); it != connections_.end()) {
       pipeline_ = None{};
-      close_transport(it->second);
+      auto connection = it->second;
+      connections_.erase(it);
+      close_transport(std::move(connection));
     }
     co_return;
   }
@@ -261,6 +264,14 @@ private:
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
       connection->transport->close();
+    });
+  }
+
+  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+    auto* evb = transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport->close();
     });
   }
 
