@@ -29,7 +29,7 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter, (void)order;
-    return do_not_optimize(*this);
+    return {{}, event_order::unordered, copy()};
   }
 
   auto name() const -> std::string override {

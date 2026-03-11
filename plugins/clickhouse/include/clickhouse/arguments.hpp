@@ -43,13 +43,51 @@ emit_invalid_identifier(std::string_view name, std::string_view value,
     .emit(dh);
 }
 
+inline auto validate_table_name(std::string_view table, location loc,
+                                diagnostic_handler& dh) -> failure_or<void> {
+  const auto quoting = detail::quoting_escaping_policy{.quotes = "\""};
+  const auto dot = quoting.find_first_of_not_in_quotes(table, ".");
+  if (dot != std::string::npos) {
+    if (dot == table.size() - 1) {
+      diagnostic::error("expected database name after `.`")
+        .primary(loc)
+        .emit(dh);
+      return failure::promise();
+    }
+    const auto dot2 = quoting.find_first_of_not_in_quotes(table, ".", dot + 1);
+    if (dot2 != std::string::npos) {
+      diagnostic::error("`table` may contain at most one `.`")
+        .note("the `.` separates database and table name")
+        .hint("quote the identifiers if you want the `.` to be part of the "
+              "identifier")
+        .primary(loc)
+        .emit(dh);
+      return failure::promise();
+    }
+    const auto database_name = table.substr(0, dot);
+    const auto table_name = table.substr(dot + 1);
+    if (not validate_identifier(database_name)) {
+      emit_invalid_identifier("database-part", database_name, loc, dh);
+      return failure::promise();
+    }
+    if (not validate_identifier(table_name)) {
+      emit_invalid_identifier("table-part", table_name, loc, dh);
+      return failure::promise();
+    }
+  } else if (not validate_identifier(table)) {
+    emit_invalid_identifier("table", table, loc, dh);
+    return failure::promise();
+  }
+  return {};
+}
+
 struct operator_arguments {
   tenzir::location operator_location;
   located<secret> host = {secret::make_literal("localhost"), operator_location};
   located<uint16_t> port = {9000, operator_location};
   located<secret> user = {secret::make_literal("default"), operator_location};
   located<secret> password = {secret::make_literal(""), operator_location};
-  located<std::string> table = {"REQUIRED", location::unknown};
+  ast::expression table = {};
   located<enum mode> mode = located{mode::create_append, operator_location};
   std::optional<located<std::string>> primary = std::nullopt;
   tls_options ssl = {};
@@ -69,60 +107,17 @@ struct operator_arguments {
     parser.named("port", port);
     parser.named_optional("user", res.user);
     parser.named_optional("password", res.password);
-    parser.named("table", res.table);
+    parser.named("table", res.table, "string");
     parser.named_optional("mode", mode_str);
     parser.named("primary", primary_selector, "field");
     res.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
-    const auto quoting = detail::quoting_escaping_policy{.quotes = "\""};
-    const auto dot = quoting.find_first_of_not_in_quotes(res.table.inner, ".");
-    if (dot != std::string::npos) {
-      if (dot == res.table.inner.size() - 1) {
-        diagnostic::error("expected database name after `.`")
-          .primary(res.table)
-          .emit(ctx);
-        return failure::promise();
-      }
-      const auto dot2
-        = quoting.find_first_of_not_in_quotes(res.table.inner, ".", dot + 1);
-      if (dot2 != std::string::npos) {
-        diagnostic::error("`table` may contain at most one `.`")
-          .note("the `.` separates database and table name")
-          .hint("quote the identifiers if you want the `.` to be part of the "
-                "identifier")
-          .primary(res.table)
-          .emit(ctx);
-        return failure::promise();
-      }
-      const auto database_name
-        = std::string_view{res.table.inner}.substr(0, dot);
-      const auto table_name = std::string_view{res.table.inner}.substr(dot + 1);
-      if (not validate_identifier(database_name)) {
-        emit_invalid_identifier("database-part", database_name,
-                                res.table.source, ctx);
-        return failure::promise();
-      }
-      if (not validate_identifier(table_name)) {
-        emit_invalid_identifier("table-part", table_name, res.table.source,
-                                ctx);
-        return failure::promise();
-      }
-    } else if (not validate_identifier(res.table.inner)) {
-      emit_invalid_identifier("table", res.table.inner, res.table.source, ctx);
-      return failure::promise();
-    }
     if (auto x = from_string<enum mode>(mode_str.inner)) {
       res.mode = located{*x, mode_str.source};
     } else {
       diagnostic::error(
         "`mode` must be one of `create`, `append` or `create_append`")
         .primary(mode_str, "got `{}`", mode_str.inner)
-        .emit(ctx);
-      return failure::promise();
-    }
-    if (res.mode.inner == mode::create and not res.primary) {
-      diagnostic::error("mode `create` requires `primary` to be set")
-        .primary(mode_str)
         .emit(ctx);
       return failure::promise();
     }
@@ -140,6 +135,12 @@ struct operator_arguments {
                                 res.primary->source, ctx);
         return failure::promise();
       }
+    }
+    if (res.mode.inner == mode::create and not res.primary) {
+      diagnostic::error("mode `create` requires `primary` to be set")
+        .primary(mode_str)
+        .emit(ctx);
+      return failure::promise();
     }
     if (not port) {
       if (res.ssl.get_tls(nullptr).inner) {

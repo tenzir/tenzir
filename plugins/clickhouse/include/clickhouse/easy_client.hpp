@@ -15,6 +15,9 @@
 
 #include <clickhouse/client.h>
 
+#include <map>
+#include <string_view>
+
 namespace tenzir::plugins::clickhouse {
 
 auto inline has_location(const diagnostic& diag) -> bool {
@@ -34,7 +37,7 @@ public:
     std::string user;
     std::string password;
     tls_options ssl;
-    located<std::string> table = {"REQUIRED", location::unknown};
+    ast::expression table = {};
     located<enum mode> mode = located{mode::create_append, operator_location};
     std::optional<located<std::string>> primary = std::nullopt;
     location operator_location;
@@ -89,17 +92,30 @@ public:
   void ping();
 
   auto insert(const table_slice& slice) -> bool;
+  auto insert(const table_slice& slice, std::string_view table_name) -> bool;
 
 private:
-  auto check_if_table_exists() -> bool;
-  auto get_schema_transformations() -> failure_or<void>;
-  auto create_table(const tenzir::record_type& schema) -> failure_or<void>;
+  /// Ensures that the transformation for the given name + schema exists. This
+  /// is the main entry point, doing all checking and conditional table creation.
+  auto ensure_transformations(const tenzir::record_type& schema,
+                              std::string_view table_name)
+    -> transformer_record*;
+  /// Checks the DB if a table exists.
+  auto remote_check_table_exists(std::string_view table_name) -> bool;
+  /// Fetches the transformations from either the local storage or the upstream
+  /// table, if it exists. Returns nullptr if the table does not exist.
+  auto remote_fetch_schema_transformations(std::string_view table_name)
+    -> transformer_record*;
+  auto
+  /// Creates a table with the given schema.
+  remote_create_table(const tenzir::record_type& schema,
+                      std::string_view table_name)
+    -> failure_or<transformer_record*>;
 
-private:
   ::clickhouse::Client client_;
   arguments args_;
   transforming_diagnostic_handler dh_;
-  std::optional<transformer_record> transformations_;
+  detail::heterogeneous_string_hashmap<transformer_record> transformations_;
   dropmask_type dropmask_;
 };
 

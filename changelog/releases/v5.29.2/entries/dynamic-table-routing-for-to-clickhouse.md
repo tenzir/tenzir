@@ -1,0 +1,21 @@
+---
+title: Dynamic table routing for to_clickhouse
+type: feature
+authors:
+  - IyeOnline
+  - codex
+pr: 5897
+created: 2026-03-11T22:21:22.602464Z
+---
+
+The `to_clickhouse` operator now supports dynamic table names via an expression
+`table=...`, which must evaluate to a `string`. If the value is not a valid
+table name, the events will be dropped with a warning.
+
+The prime use-case for this are OCSF event streams:
+
+```tql
+subscribe "ocsf"
+ocsf::cast encode_variants=true, null_fill=true
+to_clickhouse table=activity_name, ...
+```
