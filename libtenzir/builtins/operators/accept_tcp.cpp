@@ -371,6 +371,10 @@ private:
       try {
         co_await upgrade_transport_to_tls_server(transport, tls_context_);
       } catch (folly::AsyncSocketException const& ex) {
+        if (lifecycle_->load() != Lifecycle::running) {
+          close_transport(std::move(transport));
+          co_return;
+        }
         // Peer-driven TLS failures are expected at runtime; keep serving other
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
