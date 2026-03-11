@@ -22,12 +22,16 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
+#include <folly/Try.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Invoke.h>
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/futures/Future.h>
+#include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/coro/Transport.h>
+#include <folly/io/coro/TransportCallbacks.h>
 
 #include <algorithm>
 #include <atomic>
@@ -42,6 +46,23 @@ constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5000};
 constexpr auto write_timeout = std::chrono::seconds{5};
 constexpr auto control_queue_capacity = uint32_t{64};
+
+auto connect_tls_client(folly::EventBase* evb,
+                        const folly::SocketAddress& address,
+                        std::shared_ptr<folly::SSLContext> ssl_context,
+                        std::string hostname)
+  -> Task<Box<folly::coro::Transport>> {
+  TENZIR_DEBUG("to_tcp TLS connect start: {}", address.describe());
+  auto transport = co_await folly::coro::co_withExecutor(
+    evb,
+    folly::coro::Transport::newConnectedSocket(evb, address, connect_timeout));
+  auto boxed = Box<folly::coro::Transport>{std::move(transport)};
+  TENZIR_DEBUG("to_tcp TLS plain connect done: {}", address.describe());
+  co_await upgrade_transport_to_tls_client(boxed, std::move(ssl_context),
+                                           std::move(hostname));
+  TENZIR_DEBUG("to_tcp TLS upgrade done: {}", address.describe());
+  co_return boxed;
+}
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -116,6 +137,16 @@ public:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
+    {
+      auto guard = co_await transport_mutex_->lock();
+      if (done_->load()) {
+        co_return;
+      }
+      if (not transport_) {
+        request_connect();
+      }
+    }
+    co_await ensure_connected(ctx);
     auto guard = co_await transport_mutex_->lock();
     if (done_->load()) {
       co_return;
@@ -210,12 +241,17 @@ private:
     }
     auto connect_error = Option<std::string>{};
     try {
-      auto transport = co_await folly::coro::co_withExecutor(
-        evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
-                                                         connect_timeout));
-      auto boxed = Box<folly::coro::Transport>{std::move(transport)};
+      auto boxed = Box<folly::coro::Transport>{};
       if (tls_context_) {
-        co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
+        TENZIR_DEBUG("to_tcp ensure_connected: attempting TLS connection to {}",
+                     address_.describe());
+        boxed
+          = co_await connect_tls_client(evb_, address_, tls_context_, host_);
+      } else {
+        auto transport = co_await folly::coro::co_withExecutor(
+          evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
+                                                           connect_timeout));
+        boxed = Box<folly::coro::Transport>{std::move(transport)};
       }
       auto guard = co_await transport_mutex_->lock();
       if (done_->load() or transport_) {
@@ -223,6 +259,8 @@ private:
       }
       transport_ = std::move(boxed);
       reconnect_backoff_ = connect_initial_backoff;
+      TENZIR_DEBUG("to_tcp ensure_connected: connected to {}",
+                   address_.describe());
       co_return;
     } catch (folly::AsyncSocketException const& ex) {
       // Connect/TLS handshake failures are per-attempt network errors; retry

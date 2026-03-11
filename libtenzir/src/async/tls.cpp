@@ -12,8 +12,6 @@
 
 #include <folly/coro/Invoke.h>
 #include <folly/coro/Task.h>
-#include <folly/coro/Timeout.h>
-#include <folly/futures/Future.h>
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/coro/Transport.h>
 #include <folly/io/coro/TransportCallbackBase.h>
@@ -25,7 +23,6 @@ namespace {
 
 constexpr auto tls_handshake_timeout = std::chrono::seconds{5};
 
-/// Coroutine-friendly callback for SSL/TLS handshake completion.
 class client_ssl_handshake_callback
   : public folly::coro::TransportCallbackBase,
     public folly::AsyncSSLSocket::HandshakeCB {
@@ -47,11 +44,9 @@ private:
     if (not preverify_ok) {
       return false;
     }
-    // Only verify hostname on the leaf certificate (depth 0).
-    if (X509_STORE_CTX_get_error_depth(ctx) != 0) {
+    if (hostname_.empty() or X509_STORE_CTX_get_error_depth(ctx) != 0) {
       return true;
     }
-    // Verify that the certificate's CN or SAN matches the target hostname.
     auto* cert = X509_STORE_CTX_get_current_cert(ctx);
     if (not cert) {
       return false;
@@ -75,7 +70,6 @@ private:
   std::string hostname_;
 };
 
-/// Coroutine-friendly callback for server-side SSL/TLS handshake completion.
 class server_ssl_handshake_callback
   : public folly::coro::TransportCallbackBase,
     public folly::AsyncSSLSocket::HandshakeCB {
@@ -102,6 +96,19 @@ private:
   folly::AsyncSSLSocket& socket_;
 };
 
+auto get_socket_transport(Box<folly::coro::Transport>& transport)
+  -> folly::AsyncSocket* {
+  auto* raw_transport = transport->getTransport();
+  auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
+  if (not socket) {
+    throw folly::AsyncSocketException{
+      folly::AsyncSocketException::INTERNAL_ERROR,
+      "transport is not backed by AsyncSocket",
+    };
+  }
+  return socket;
+}
+
 } // namespace
 
 auto upgrade_transport_to_tls_client(
@@ -110,40 +117,41 @@ auto upgrade_transport_to_tls_client(
   -> Task<void> {
   auto* evb = transport->getEventBase();
   TENZIR_ASSERT(evb);
-  co_await folly::coro::co_withExecutor(
-    evb, folly::coro::co_invoke([&transport, evb, ctx = std::move(ssl_context),
-                                 hostname = std::move(
-                                   hostname)]() mutable -> Task<void> {
-      // Get the underlying socket and detach its fd.
-      auto* raw_transport = transport->getTransport();
-      auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
-      TENZIR_ASSERT(socket);
-      auto fd = socket->detachNetworkSocket();
-      // Create an SSL socket wrapping the existing fd.
-      auto ssl_socket
-        = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb, fd,
-                                           /*server=*/false,
-                                           /*deferSecurityNegotiation=*/true);
-      auto* ssl_ptr = ssl_socket.get();
-      // Replace the transport with one wrapping the SSL socket.
-      transport = Box<folly::coro::Transport>{
-        std::in_place, evb,
-        folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
-      // Perform the TLS handshake.
-      auto cb = client_ssl_handshake_callback{*ssl_ptr, std::move(hostname)};
-      ssl_ptr->sslConn(&cb);
-      try {
-        co_await folly::coro::timeout(cb.wait(), tls_handshake_timeout);
-      } catch (const folly::FutureTimeout&) {
-        throw folly::AsyncSocketException{
-          folly::AsyncSocketException::TIMED_OUT, "TLS handshake timed out"};
-      }
-      // Re-throw handshake errors captured in the callback.
-      if (cb.error()) {
-        cb.error().throw_exception();
-      }
-      co_return;
-    }));
+  auto callback = co_await folly::coro::co_withExecutor(
+    evb, folly::coro::co_invoke(
+           [&transport, evb, ctx = std::move(ssl_context),
+            hostname = std::move(hostname)]() mutable
+             -> Task<std::shared_ptr<client_ssl_handshake_callback>> {
+             auto* old_socket = get_socket_transport(transport);
+             auto ssl_socket = folly::AsyncSSLSocket::UniquePtr{
+               new folly::AsyncSSLSocket{
+                 std::move(ctx),
+                 old_socket,
+                 /*server=*/false,
+                 /*deferSecurityNegotiation=*/true,
+               },
+             };
+             auto* ssl_ptr = ssl_socket.get();
+             if (not hostname.empty()) {
+               ssl_ptr->setServerName(hostname);
+             }
+             transport = Box<folly::coro::Transport>{
+               std::in_place,
+               evb,
+               folly::AsyncTransport::UniquePtr{ssl_socket.release()},
+             };
+             auto callback = std::make_shared<client_ssl_handshake_callback>(
+               *ssl_ptr, std::move(hostname));
+             ssl_ptr->sslConn(callback.get(), tls_handshake_timeout);
+             co_return callback;
+           }));
+  auto result = co_await folly::coro::co_awaitTry(callback->wait());
+  if (result.hasException()) {
+    result.exception().throw_exception();
+  }
+  if (callback->error()) {
+    callback->error().throw_exception();
+  }
 }
 
 auto upgrade_transport_to_tls_server(
@@ -151,35 +159,37 @@ auto upgrade_transport_to_tls_server(
   std::shared_ptr<folly::SSLContext> ssl_context) -> Task<void> {
   auto* evb = transport->getEventBase();
   TENZIR_ASSERT(evb);
-  co_await folly::coro::co_withExecutor(
-    evb,
-    folly::coro::co_invoke(
-      [&transport, evb, ctx = std::move(ssl_context)]() mutable -> Task<void> {
-        auto* raw_transport = transport->getTransport();
-        auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
-        TENZIR_ASSERT(socket);
-        auto fd = socket->detachNetworkSocket();
-        auto ssl_socket
-          = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb, fd,
-                                             /*server=*/true,
-                                             /*deferSecurityNegotiation=*/true);
-        auto* ssl_ptr = ssl_socket.get();
-        transport = Box<folly::coro::Transport>{
-          std::in_place, evb,
-          folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
-        auto cb = server_ssl_handshake_callback{*ssl_ptr};
-        ssl_ptr->sslAccept(&cb);
-        try {
-          co_await folly::coro::timeout(cb.wait(), tls_handshake_timeout);
-        } catch (const folly::FutureTimeout&) {
-          throw folly::AsyncSocketException{
-            folly::AsyncSocketException::TIMED_OUT, "TLS handshake timed out"};
-        }
-        if (cb.error()) {
-          cb.error().throw_exception();
-        }
-        co_return;
-      }));
+  auto callback = co_await folly::coro::co_withExecutor(
+    evb, folly::coro::co_invoke(
+           [&transport, evb, ctx = std::move(ssl_context)]() mutable
+             -> Task<std::shared_ptr<server_ssl_handshake_callback>> {
+             auto* old_socket = get_socket_transport(transport);
+             auto ssl_socket = folly::AsyncSSLSocket::UniquePtr{
+               new folly::AsyncSSLSocket{
+                 std::move(ctx),
+                 old_socket,
+                 /*server=*/true,
+                 /*deferSecurityNegotiation=*/true,
+               },
+             };
+             auto* ssl_ptr = ssl_socket.get();
+             transport = Box<folly::coro::Transport>{
+               std::in_place,
+               evb,
+               folly::AsyncTransport::UniquePtr{ssl_socket.release()},
+             };
+             auto callback
+               = std::make_shared<server_ssl_handshake_callback>(*ssl_ptr);
+             ssl_ptr->sslAccept(callback.get(), tls_handshake_timeout);
+             co_return callback;
+           }));
+  auto result = co_await folly::coro::co_awaitTry(callback->wait());
+  if (result.hasException()) {
+    result.exception().throw_exception();
+  }
+  if (callback->error()) {
+    callback->error().throw_exception();
+  }
 }
 
 auto upgrade_transport_to_tls(Box<folly::coro::Transport>& transport,
