@@ -144,7 +144,7 @@ auto value_at([[maybe_unused]] const Type& type,
   TENZIR_ASSERT_EXPENSIVE(row < arr.length(),
                           "{} is out of bounds for {}-array of length {}", row,
                           arr.length(), type_kind{tag_v<Type>});
-  TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
+  TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
   if constexpr (std::is_same_v<Type, null_type>) {
     return caf::none;
   } else if constexpr (detail::is_any_v<Type, bool_type, uint64_type,
@@ -239,7 +239,7 @@ auto value_at([[maybe_unused]] const Type& type,
           // nop
         }
         value_type at(size_type i) const override {
-          TENZIR_ASSERT_EXPENSIVE(!key_array->IsNull(value_offset + i));
+          TENZIR_ASSERT_EXPENSIVE(! key_array->IsNull(value_offset + i));
           if (item_array->IsNull(value_offset + i)) {
             return {value_at(key_type, *key_array, value_offset + i), {}};
           }
@@ -303,7 +303,7 @@ template <concrete_type Type>
 auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> view<type_to_data_t<Type>> {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
-  TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
+  TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
     return value_at(type, *as<type_to_arrow_array_t<Type>>(arr).storage(), row);
   } else {
@@ -356,7 +356,7 @@ auto values(const type& type,
     = []<concrete_type Type>(
         const Type& type, const arrow::Array& array) -> generator<data_view> {
     for (auto&& result : values(type, as<type_to_arrow_array_t<Type>>(array))) {
-      if (!result) {
+      if (! result) {
         co_yield {};
       } else {
         co_yield std::move(*result);
@@ -387,14 +387,33 @@ struct indexed_transformation {
 };
 
 /// Applies a list of transformations to both a Tenzir schema and an Arrow
-/// struct array.
+/// struct array. Transformations are sorted internally by index.
+///
+/// Each transformation receives a field and its corresponding child array as
+/// they are stored in the struct, without the parent struct's null bitmap
+/// merged in. The transformation returns zero or more replacement (field,
+/// array) pairs. Returning an empty result removes the column; returning
+/// multiple results expands it (e.g., for flattening).
+///
+/// The returned struct array preserves the input's null bitmap. Child arrays
+/// follow standard Arrow semantics: their validity must be interpreted in
+/// context of the parent struct's null bitmap. Callers that extract children
+/// from the result for use outside the struct (e.g., to dissolve a record
+/// level) must merge the struct's null bitmap into the children themselves,
+/// for example via `arrow::StructArray::Flatten()`.
+///
+/// Transformations must not change the length of the returned arrays. Doing so
+/// leads to unspecified behavior regarding the null bitmap of the result.
+///
+/// @pre Transformation indices must not be a subset of the following
+/// transformation's index.
 std::pair<type, std::shared_ptr<arrow::StructArray>>
 transform_columns(type schema,
                   const std::shared_ptr<arrow::StructArray>& struct_array,
                   std::vector<indexed_transformation> transformations);
 
-/// Applies a list of transformations to a table slice.
-/// @pre Transformations must be sorted by index.
+/// Applies a list of transformations to a table slice. Transformations are
+/// sorted internally by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
 table_slice
