@@ -21,6 +21,9 @@ namespace tenzir {
 
 namespace {
 
+// Give certificate exchange and verification enough time to complete on a
+// healthy peer, but fail fast enough that broken TLS setup feeds back into the
+// caller's reconnect logic promptly.
 constexpr auto tls_handshake_timeout = std::chrono::seconds{5};
 
 class client_ssl_handshake_callback

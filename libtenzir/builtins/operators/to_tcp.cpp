@@ -16,6 +16,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -41,10 +42,22 @@ namespace tenzir::plugins::to_tcp {
 
 namespace {
 
+using namespace tenzir::si_literals;
+
+// Give remote endpoints long enough for a normal TCP plus TLS setup while
+// still surfacing unavailable servers quickly to the retry loop.
 constexpr auto connect_timeout = std::chrono::seconds{5};
+// Reconnect almost immediately after the first failure so short races during
+// fixture startup or service restarts do not stall the pipeline.
 constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
-constexpr auto connect_max_backoff = std::chrono::milliseconds{5000};
+// Cap retries at five seconds to avoid hammering broken endpoints while still
+// keeping recovery reasonably quick once the peer comes back.
+constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
+// Bound a single write attempt so a stalled peer stops the pipeline instead of
+// letting output bytes pile up behind an indefinitely blocked socket.
 constexpr auto write_timeout = std::chrono::seconds{5};
+// The control queue only carries wakeups and reconnect requests, so a small
+// fixed capacity is sufficient while still tolerating short bursts.
 constexpr auto control_queue_capacity = uint32_t{64};
 
 auto connect_tls_client(folly::EventBase* evb,

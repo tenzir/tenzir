@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/as_bytes.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -18,21 +19,23 @@
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
-#include <folly/OperationCancelled.h>
 #include <folly/ScopeGuard.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/IOBufQueue.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
+#include <folly/io/coro/TransportCallbacks.h>
 
 #include <atomic>
 #include <limits>
@@ -43,10 +46,24 @@ namespace tenzir::plugins::accept_tcp {
 
 namespace {
 
+using namespace tenzir::si_literals;
+
+// Poll idle connections once per second so cancellation and sub-pipeline
+// shutdown are observed promptly without spinning on the socket.
 constexpr auto read_timeout = std::chrono::seconds{1};
-constexpr auto buffer_size = size_t{65536};
+// Read at most 64 KiB per socket callback. This keeps the per-connection
+// working set modest while still amortizing callback overhead well for TCP
+// streams, and it aligns with the movable-buffer read path below where folly
+// hands us owned buffers that we transfer directly into chunks.
+constexpr auto buffer_size = size_t{64_Ki};
+// Match a typical TCP server listen queue depth: large enough for short bursts
+// of incoming connections without implying that we expect unbounded fan-in.
 constexpr auto listen_backlog = uint32_t{128};
-constexpr auto message_queue_capacity = uint32_t{1024};
+// Leave room for many in-flight connection lifecycle notifications without
+// turning the queue into another large per-listener memory sink.
+constexpr auto message_queue_capacity = uint32_t{1_Ki};
+// Retry accepts quickly after transient socket errors so the listener recovers
+// fast, while still backing off enough to avoid a tight warning loop.
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 
 struct AcceptTcpArgs {
@@ -56,6 +73,45 @@ struct AcceptTcpArgs {
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
+
+struct ReadResult {
+  chunk_ptr chunk;
+  bool eof = false;
+};
+
+auto read_chunk(Box<folly::coro::Transport>& transport,
+                std::chrono::milliseconds timeout) -> Task<ReadResult> {
+  auto* evb = transport->getEventBase();
+  TENZIR_ASSERT(evb);
+  auto* async_transport = transport->getTransport();
+  TENZIR_ASSERT(async_transport);
+  auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
+  auto callback = folly::coro::ReadCallback{
+    evb->timer(), *async_transport, &buffer, 1, buffer_size, timeout,
+  };
+  async_transport->setReadCB(&callback);
+  auto wait_result = co_await folly::coro::co_awaitTry(callback.wait());
+  async_transport->setReadCB(nullptr);
+  if (callback.error()) {
+    callback.error().throw_exception();
+  }
+  auto length = buffer.chainLength();
+  if (wait_result.hasException()) {
+    wait_result.exception().throw_exception();
+  }
+  if (length == 0) {
+    co_return ReadResult{.eof = callback.eof};
+  }
+  auto iobuf = buffer.move();
+  auto range = iobuf->coalesce();
+  co_return ReadResult{
+    .chunk = chunk::make(as_bytes(range.data(), range.size()),
+                         [buf = std::move(iobuf)]() noexcept {
+                           static_cast<void>(buf);
+                         }),
+    .eof = callback.eof,
+  };
+}
 
 class AcceptTcpListener final : public Operator<void, table_slice> {
 public:
@@ -420,16 +476,11 @@ private:
             MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
-      auto data = std::vector<std::byte>(buffer_size);
-      auto bytes = size_t{0};
       auto read_timed_out = false;
+      auto read_result = ReadResult{};
       try {
-        auto buffer = folly::MutableByteRange{
-          reinterpret_cast<unsigned char*>(data.data()),
-          data.size(),
-        };
-        bytes = co_await connection->transport->read(
-          buffer,
+        read_result = co_await read_chunk(
+          connection->transport,
           std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         // Read timeouts are expected; other socket errors are connection-local.
@@ -446,14 +497,14 @@ private:
       if (read_error) {
         break;
       }
-      if (bytes == 0) {
+      if (read_result.chunk) {
+        bytes_counter.add(read_result.chunk->size());
+        auto push_result = co_await pipeline.push(std::move(read_result.chunk));
+        TENZIR_UNUSED(push_result);
+      }
+      if (read_result.eof or not read_result.chunk) {
         break;
       }
-      bytes_counter.add(bytes);
-      data.resize(bytes);
-      auto chk = chunk::make(std::move(data));
-      auto push_result = co_await pipeline.push(std::move(chk));
-      TENZIR_UNUSED(push_result);
     }
     co_await message_queue->enqueue(ConnectionClosed{
       conn_id,
