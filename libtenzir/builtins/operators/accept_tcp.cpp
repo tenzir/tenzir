@@ -252,7 +252,11 @@ public:
     -> Task<void> override {
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
     if (auto it = connections_.find(conn_id); it != connections_.end()) {
-      close_transport(it->second);
+      auto connection = it->second;
+      connections_.erase(it);
+      release_connection_slot();
+      maybe_finish_draining();
+      close_transport(std::move(connection));
     }
     co_return;
   }
