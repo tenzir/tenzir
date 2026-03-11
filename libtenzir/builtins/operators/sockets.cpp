@@ -22,6 +22,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    co_yield {};
     auto system = os::make();
     if (not system) {
       diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());

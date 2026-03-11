@@ -159,8 +159,9 @@ public:
     co_yield builder.finish_assert_one_slice();
   }
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    co_yield {};
     try {
       const auto path = args_.path ? std::filesystem::path{*args_.path}
                                    : std::filesystem::current_path();
@@ -202,8 +203,8 @@ public:
     return operator_location::local;
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -222,8 +223,8 @@ public:
     return {.source = true};
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = files_args{};
     TRY(argument_parser2::operator_("files")
           .positional("dir", args.path)

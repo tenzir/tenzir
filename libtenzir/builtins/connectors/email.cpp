@@ -133,6 +133,7 @@ public:
       for (auto chunk : input) {
         if (not chunk || chunk->size() == 0) {
           co_yield {};
+          continue;
         }
         // When sending a MIME message, we set the mail headers via
         // CURLOPT_HTTPHEADER as opposed to building the entire message
@@ -159,6 +160,7 @@ public:
             .note("{}", err)
             .emit(ctrl.diagnostics());
         }
+        co_yield {};
       };
     }
     for (auto chunk : input) {
@@ -188,6 +190,7 @@ public:
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     };
   }
 

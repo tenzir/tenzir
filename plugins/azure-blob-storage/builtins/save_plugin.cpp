@@ -120,6 +120,7 @@ public:
           .primary(args_.op)
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 

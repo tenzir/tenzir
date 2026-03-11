@@ -438,6 +438,7 @@ public:
       // It's advised to call poll periodically to tell Kafka "you can flush
       // buffered messages if you like".
       client->poll(0ms);
+      co_yield {};
     }
   }
 

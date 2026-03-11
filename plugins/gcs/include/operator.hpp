@@ -203,6 +203,7 @@ public:
           .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 
