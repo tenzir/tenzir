@@ -13,6 +13,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/stable_set.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
@@ -84,14 +85,17 @@ auto split_contiguous_true_runs(arrow::BooleanArray const& array,
   return results;
 }
 
-using bucket = std::vector<std::unique_ptr<aggregation_instance>>;
-// Will point to valid strings, as `std::unordered_set` does not invalidate
-// pointers on insertion
-using grouped_bucket = detail::stable_map<std::string_view, bucket>;
-using group_map = std::map<data, grouped_bucket>;
 using call_map = detail::stable_map<std::string, ast::function_call>;
 using plugins_map
   = std::vector<std::pair<aggregation_plugin const*, ast::function_call>>;
+
+struct Bucket {
+  std::vector<std::unique_ptr<aggregation_instance>> instances;
+};
+
+struct GroupedBucket {
+  detail::stable_map<std::string, Bucket> groups;
+};
 
 struct xlimit {
   located<data> value;
@@ -159,13 +163,13 @@ auto find_plugins(call_map const& y, session ctx) -> plugins_map {
   return result;
 }
 
-auto make_bucket(plugins_map const& plugins, session ctx) -> bucket {
-  auto b = bucket{};
+auto make_bucket(plugins_map const& plugins, session ctx) -> Bucket {
+  auto b = Bucket{};
   for (auto const& [plugin, arg] : plugins) {
     auto inv = aggregation_plugin::invocation{arg};
     auto instance = plugin->make_aggregation(std::move(inv), ctx);
     TENZIR_ASSERT(instance);
-    b.push_back(std::move(instance).unwrap());
+    b.instances.push_back(std::move(instance).unwrap());
   }
   return b;
 }
@@ -445,33 +449,32 @@ private:
     if (args_.res) {
       xs = floor(xs);
     }
-    bucket* b = nullptr;
+    Bucket* b = nullptr;
     for (auto i = size_t{};
          auto&& [idx, x] : detail::enumerate<int64_t>(xs.values())) {
-      auto const group_name = std::invoke([&]() -> std::string_view {
+      auto const group_name = std::invoke([&]() -> std::string {
         if (gs.array->IsNull(idx)) {
           if (args_.group) {
             diagnostic::warning("got group name `null`")
               .primary(args_.group.value())
               .note("using `\"null\"` instead")
               .emit(dh);
-            return *group_names_.emplace("null").first;
+            return std::string{"null"};
           }
-          return *group_names_.emplace("").first;
+          return std::string{};
         }
-        return *group_names_.emplace(value_at(string_type{}, *gs.array, idx))
-                  .first;
+        return std::string{value_at(string_type{}, *gs.array, idx)};
       });
       auto [newb, new_bucket] = get_bucket(groups_, x, group_name, ctx);
       if (b != newb or new_bucket) {
         if (b) {
-          for (auto&& instance : *b) {
+          for (auto&& instance : b->instances) {
             instance->update(subslice(slice, consumed, consumed + i), ctx);
           }
         }
         if (new_bucket) {
           b = &get_groups(groups_, x, ctx)
-                 ->emplace(group_name, make_bucket(prep_->plugins, ctx))
+                 ->groups.emplace(group_name, make_bucket(prep_->plugins, ctx))
                  .first->second;
         } else {
           b = newb;
@@ -482,7 +485,7 @@ private:
       ++i;
     }
     if (b) {
-      for (auto&& instance : *b) {
+      for (auto&& instance : b->instances) {
         if (consumed != slice.rows()) {
           instance->update(subslice(slice, consumed, slice.rows()), ctx);
         }
@@ -501,6 +504,13 @@ private:
     for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
       xpath += ".";
       xpath += args_.x.path()[i].id.name;
+    }
+    // Collect unique group names in insertion order
+    auto all_group_names = detail::stable_set<std::string>{};
+    for (auto const& [_, gb] : groups_) {
+      for (auto const& [gname, _] : gb.groups) {
+        all_group_names.emplace(gname);
+      }
     }
     auto ynames = detail::stable_map<std::string, bool>{};
     auto b = series_builder{};
@@ -523,25 +533,26 @@ private:
     auto const fill_at = [&](data const& x) {
       auto r = b.record();
       r.field(xpath).data(x);
-      for (auto const& gname : group_names_) {
+      for (auto const& gname : all_group_names) {
         for (auto const& [y, _] : prep_->y) {
           r.field(make_yname(gname, y)).data(fill_value);
         }
       }
     };
-    auto const insert = [&](data const& x, grouped_bucket const& groups) {
+    auto const insert = [&](data const& x, GroupedBucket const& groups) {
       auto r = b.record();
       r.field(xpath).data(x);
       if (args_.fill) {
-        for (auto const& gname : group_names_) {
+        for (auto const& gname : all_group_names) {
           for (auto const& [y, _] : prep_->y) {
             r.field(make_yname(gname, y)).data(fill_value);
           }
         }
       }
-      for (auto const& [name, bucket] : groups) {
-        TENZIR_ASSERT(prep_->y.size() == bucket.size());
-        for (auto const& [y, instance] : std::views::zip(prep_->y, bucket)) {
+      for (auto const& [name, bucket] : groups.groups) {
+        TENZIR_ASSERT(prep_->y.size() == bucket.instances.size());
+        for (auto const& [y, instance] :
+             std::views::zip(prep_->y, bucket.instances)) {
           auto value = to_double(instance->get());
           if (args_.fill and is<caf::none_t>(value)) {
             continue;
@@ -659,8 +670,8 @@ private:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(group_map& map, data_view const& x, session ctx) const
-    -> grouped_bucket* {
+  auto get_groups(std::map<data, GroupedBucket>& map, data_view const& x,
+                  session ctx) const -> GroupedBucket* {
     auto const xv = materialize(x);
     if (auto it = map.find(xv); it != map.end()) {
       return &it->second;
@@ -677,9 +688,9 @@ private:
     return &map[xv];
   }
 
-  auto get_bucket(group_map& map, data_view const& x,
-                  std::string_view const group, session ctx) const
-    -> std::pair<bucket*, bool> {
+  auto get_bucket(std::map<data, GroupedBucket>& map, data_view const& x,
+                  std::string const& group, session ctx) const
+    -> std::pair<Bucket*, bool> {
     if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {
       if (is<caf::none_t>(x)) {
         diagnostic::warning("x-axis cannot be `null`")
@@ -692,7 +703,7 @@ private:
     if (not gs) {
       return {nullptr, false};
     }
-    if (auto it = gs->find(group); it != gs->end()) {
+    if (auto it = gs->groups.find(group); it != gs->groups.end()) {
       return {&it->second, false};
     }
     return {nullptr, true};
@@ -900,8 +911,7 @@ private:
   std::optional<Prepared> prep_;
   // state
   std::optional<type> xty_;
-  group_map groups_;
-  std::unordered_set<std::string> group_names_;
+  std::map<data, GroupedBucket> groups_;
 };
 
 // Helper validation for x limit types
