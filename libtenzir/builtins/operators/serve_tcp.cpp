@@ -198,6 +198,7 @@ public:
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto lifecycle = lifecycle_->load();
     if (lifecycle == Lifecycle::done) {
+      co_await close_all_clients();
       co_return FinalizeBehavior::done;
     }
     if (lifecycle == Lifecycle::running) {
@@ -210,16 +211,20 @@ public:
         request_stop();
       }
     }
-    co_return lifecycle_->load() == Lifecycle::done
-      ? FinalizeBehavior::done
-      : FinalizeBehavior::continue_;
+    if (lifecycle_->load() == Lifecycle::done) {
+      co_await close_all_clients();
+      co_return FinalizeBehavior::done;
+    }
+    co_return FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     if (lifecycle_->load() == Lifecycle::done) {
+      co_await close_all_clients();
       co_return;
     }
     request_stop();
+    co_await close_all_clients();
     co_return;
   }
 
@@ -254,6 +259,15 @@ private:
     }
     stop_accepting();
     TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+  }
+
+  auto close_all_clients() -> Task<void> {
+    auto guard = co_await clients_mutex_->lock();
+    auto clients = std::move(clients_);
+    for (auto& client : clients) {
+      close_client(std::move(client));
+    }
+    co_return;
   }
 
   auto write_to_client(Client& client, folly::ByteRange data,
