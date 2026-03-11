@@ -139,51 +139,57 @@ public:
       }
     }
     co_await ensure_connected(ctx);
-    auto guard = co_await transport_mutex_->lock();
-    if (done_->load()) {
-      co_return;
-    }
-    if (not transport_) {
-      diagnostic::warning("connection to {} is not established",
-                          address_.describe())
-        .primary(args_.endpoint.source)
-        .note("stopping to avoid dropping output bytes")
-        .hint("restart once the TCP endpoint is reachable")
-        .emit(ctx);
-      request_stop();
-      co_return;
-    }
-    try {
-      co_await folly::coro::timeout(
-        folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
-        write_timeout);
-      reconnect_backoff_ = connect_initial_backoff;
-      co_return;
-    } catch (folly::FutureTimeout const& ex) {
+    auto old_transport = Option<Box<folly::coro::Transport>>{};
+    {
+      auto guard = co_await transport_mutex_->lock();
       if (done_->load()) {
         co_return;
       }
-      diagnostic::warning("failed to write to {}", address_.describe())
-        .primary(args_.endpoint.source)
-        .note("reason: {}", ex.what())
-        .note("stopping to avoid dropping output bytes")
-        .emit(ctx);
-      transport_ = None{};
-      request_stop();
-      co_return;
-    } catch (folly::AsyncSocketException const& ex) {
-      if (done_->load()) {
+      if (not transport_) {
+        diagnostic::warning("connection to {} is not established",
+                            address_.describe())
+          .primary(args_.endpoint.source)
+          .note("stopping to avoid dropping output bytes")
+          .hint("restart once the TCP endpoint is reachable")
+          .emit(ctx);
+        request_stop();
         co_return;
       }
-      diagnostic::warning("failed to write to {}", address_.describe())
-        .primary(args_.endpoint.source)
-        .note("reason: {}", ex.what())
-        .note("stopping to avoid dropping output bytes")
-        .emit(ctx);
-      transport_ = None{};
-      request_stop();
-      co_return;
+      try {
+        co_await folly::coro::timeout(
+          folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
+          write_timeout);
+        reconnect_backoff_ = connect_initial_backoff;
+        co_return;
+      } catch (folly::FutureTimeout const& ex) {
+        if (done_->load()) {
+          co_return;
+        }
+        diagnostic::warning("failed to write to {}", address_.describe())
+          .primary(args_.endpoint.source)
+          .note("reason: {}", ex.what())
+          .note("stopping to avoid dropping output bytes")
+          .emit(ctx);
+        old_transport = std::move(transport_);
+        transport_ = None{};
+      } catch (folly::AsyncSocketException const& ex) {
+        if (done_->load()) {
+          co_return;
+        }
+        diagnostic::warning("failed to write to {}", address_.describe())
+          .primary(args_.endpoint.source)
+          .note("reason: {}", ex.what())
+          .note("stopping to avoid dropping output bytes")
+          .emit(ctx);
+        old_transport = std::move(transport_);
+        transport_ = None{};
+      }
     }
+    if (old_transport) {
+      close_transport(std::move(*old_transport));
+      request_stop();
+    }
+    co_return;
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -211,11 +217,13 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
+    co_await close_current_transport();
     co_return FinalizeBehavior::done;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     request_stop();
+    co_await close_current_transport();
     co_return;
   }
 
@@ -224,6 +232,27 @@ public:
   }
 
 private:
+  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+    auto* evb = transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport->close();
+    });
+  }
+
+  auto close_current_transport() -> Task<void> {
+    auto old_transport = Option<Box<folly::coro::Transport>>{};
+    {
+      auto guard = co_await transport_mutex_->lock();
+      old_transport = std::move(transport_);
+      transport_ = None{};
+    }
+    if (old_transport) {
+      close_transport(std::move(*old_transport));
+    }
+    co_return;
+  }
+
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
     {
       auto guard = co_await transport_mutex_->lock();
@@ -239,6 +268,7 @@ private:
         tls_context_, host_);
       auto guard = co_await transport_mutex_->lock();
       if (done_->load() or transport_) {
+        close_transport(std::move(boxed));
         co_return;
       }
       transport_ = std::move(boxed);
