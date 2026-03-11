@@ -1508,11 +1508,13 @@ auto flatten_record(
   auto result = indexed_transformation::result_type{};
   result.reserve(output_struct_array->num_fields());
   const auto& output_rt = as<record_type>(output_type);
+  auto flattened_children
+    = check(output_struct_array->Flatten(tenzir::arrow_memory_pool()));
   for (int i = 0; i < output_struct_array->num_fields(); ++i) {
     const auto field_view = output_rt.field(i);
     result.push_back({
       {std::string{field_view.name}, field_view.type},
-      output_struct_array->field(i),
+      std::move(flattened_children[i]),
     });
   }
   return result;
