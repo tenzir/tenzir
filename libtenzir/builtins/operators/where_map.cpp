@@ -824,7 +824,8 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    for (auto output : filter2(input, expr_, ctx, false)) {
+    auto output = filter2(input, expr_, ctx, false);
+    if (output.rows() > 0) {
       co_await push(std::move(output));
     }
   }

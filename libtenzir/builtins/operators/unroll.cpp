@@ -143,13 +143,16 @@ auto unroll(const table_slice& slice, const offset& offset, bool unordered)
         transform_columns(slice, std::move(transformations)));
     }
     if (unordered) {
+      auto mask_builder = arrow::BooleanBuilder{arrow_memory_pool()};
+      check(mask_builder.Reserve(resolved.second->length()));
+      for (auto i = int64_t{}; i < resolved.second->length(); ++i) {
+        check(mask_builder.Append(resolved.second->IsValid(i)));
+      }
+      auto mask = finish(mask_builder);
       for (const auto& transformed_slice : transformed_slices) {
-        auto ids = null_bitmap{};
-        for (auto i = int64_t{}; i < resolved.second->length(); ++i) {
-          ids.append_bit(resolved.second->IsValid(i));
-        }
-        for (const auto [begin, end] : select_runs(ids)) {
-          co_yield subslice(transformed_slice, begin, end);
+        auto filtered = filter(transformed_slice, *mask);
+        if (filtered.rows() > 0) {
+          co_yield std::move(filtered);
         }
       }
       co_return;

@@ -146,7 +146,8 @@ public:
       co_await push(std::move(*expected));
       co_return;
     }
-    for (auto& output : filter2(*expected, *remainder_, ctx, false)) {
+    auto output = filter2(*expected, *remainder_, ctx, false);
+    if (output.rows() > 0) {
       co_await push(std::move(output));
     }
   }

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -17,45 +18,30 @@
 namespace tenzir {
 
 inline auto filter2(const table_slice& slice, const ast::expression& expr,
-                    diagnostic_handler& dh, bool warn)
-  -> std::vector<table_slice> {
-  auto results = std::vector<table_slice>{};
-  auto offset = int64_t{0};
-  for (auto& filter : eval(expr, slice, dh)) {
-    auto array = try_as<arrow::BooleanArray>(&*filter.array);
+                    diagnostic_handler& dh, bool warn) -> table_slice {
+  auto mask_builder = arrow::BooleanBuilder{arrow_memory_pool()};
+  check(mask_builder.Reserve(detail::narrow_cast<int64_t>(slice.rows())));
+  auto warned = false;
+  for (auto& part : eval(expr, slice, dh)) {
+    auto array = try_as<arrow::BooleanArray>(&*part.array);
     if (not array) {
-      diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+      diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
         .primary(expr)
         .emit(dh);
-      offset += filter.array->length();
+      for (auto i = int64_t{0}; i < part.array->length(); ++i) {
+        check(mask_builder.Append(false));
+      }
       continue;
     }
-    if (array->true_count() == array->length()) {
-      results.push_back(subslice(slice, offset, offset + array->length()));
-      offset += array->length();
-      continue;
-    }
-    if (warn) {
+    if (warn and not warned and array->true_count() != array->length()) {
       diagnostic::warning("assertion failure").primary(expr).emit(dh);
+      warned = true;
     }
-    auto length = array->length();
-    auto current_value = array->Value(0);
-    auto current_begin = int64_t{0};
-    // We add an artificial `false` at index `length` to flush.
-    for (auto i = int64_t{1}; i < length + 1; ++i) {
-      const auto next = i != length && array->IsValid(i) && array->Value(i);
-      if (current_value == next) {
-        continue;
-      }
-      if (current_value) {
-        results.push_back(subslice(slice, offset + current_begin, offset + i));
-      }
-      current_value = next;
-      current_begin = i;
+    for (auto i = int64_t{0}; i < array->length(); ++i) {
+      check(mask_builder.Append(array->IsValid(i) and array->Value(i)));
     }
-    offset += length;
   }
-  return results;
+  return filter(slice, *finish(mask_builder));
 }
 
 } // namespace tenzir
