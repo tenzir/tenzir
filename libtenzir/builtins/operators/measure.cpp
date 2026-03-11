@@ -208,12 +208,12 @@ public:
     }
     counter_ = args_.cumulative ? counter_ + input->size() : input->size();
 
-    series_builder builder_{schema()};
+    series_builder builder_;
     auto metric = builder_.record();
     metric.field("timestamp", time::clock::now());
     metric.field("bytes", counter_);
 
-    co_await push(builder_.finish_assert_one_slice());
+    co_await push(builder_.finish_assert_one_slice("tenzir.measure.bytes"));
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -221,17 +221,6 @@ public:
   }
 
 private:
-  static auto schema() -> const type& {
-    static const auto result = type{
-      "tenzir.measure.bytes",
-      record_type{
-        {"timestamp", time_type{}},
-        {"bytes", uint64_type{}},
-      },
-    };
-    return result;
-  }
-
   MeasureArgs args_;
   uint64_t counter_ = 0;
 };
