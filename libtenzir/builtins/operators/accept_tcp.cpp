@@ -142,7 +142,7 @@ public:
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
     ctx.spawn_task(folly::coro::co_withCancellation(accept_cancel_->getToken(),
-                                                    accept_loop(ctx.dh())));
+                                                    accept_loop(ctx)));
     co_return;
   }
 
@@ -318,6 +318,14 @@ private:
     });
   }
 
+  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+    auto* evb = transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport->close();
+    });
+  }
+
   static auto sub_key_for(uint64_t conn_id) -> data {
     TENZIR_ASSERT(
       conn_id <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
@@ -333,7 +341,41 @@ private:
     co_return;
   }
 
-  auto accept_loop(diagnostic_handler& dh) -> Task<void> {
+  auto finish_accept(Box<folly::coro::Transport> transport,
+                     folly::SocketAddress peer, diagnostic_handler& dh)
+    -> Task<void> {
+    auto keep_connection_slot = false;
+    auto release_connection_slot_guard = folly::makeGuard([&] {
+      if (not keep_connection_slot) {
+        release_connection_slot();
+      }
+    });
+    if (tls_context_) {
+      try {
+        co_await upgrade_transport_to_tls_server(transport, tls_context_);
+      } catch (folly::AsyncSocketException const& ex) {
+        // Peer-driven TLS failures are expected at runtime; keep serving other
+        // connections instead of failing the whole operator.
+        diagnostic::warning("TLS handshake failed")
+          .primary(endpoint_source_)
+          .note("TLS handshake with peer {} failed", peer.describe())
+          .note("reason: {}", ex.what())
+          .hint("verify TLS settings and certificates on both sides")
+          .emit(dh);
+        close_transport(std::move(transport));
+        co_return;
+      }
+    }
+    if (lifecycle_->load() != Lifecycle::running) {
+      close_transport(std::move(transport));
+      co_return;
+    }
+    TENZIR_DEBUG("accepted connection from {}", peer.describe());
+    co_await message_queue_->enqueue(Accepted{std::move(transport)});
+    keep_connection_slot = true;
+  }
+
+  auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
     try {
@@ -358,14 +400,17 @@ private:
             .primary(endpoint_source_)
             .note("endpoint: {}", address_.describe())
             .note("reason: {}", *accept_error)
-            .emit(dh);
+            .emit(ctx.dh());
           co_await folly::coro::sleep(accept_retry_delay);
           continue;
         }
+        auto boxed
+          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
         if (lifecycle_->load() != Lifecycle::running) {
+          close_transport(std::move(boxed));
           co_return;
         }
-        auto peer = transport->getPeerAddress();
+        auto peer = boxed->getPeerAddress();
         if (not try_acquire_connection_slot()) {
           diagnostic::warning(
             "connection rejected: maximum number of connections reached")
@@ -374,38 +419,12 @@ private:
             .note("max_connections: {}", max_connections_)
             .hint("increase `max_connections` if this level of concurrency is "
                   "expected")
-            .emit(dh);
+            .emit(ctx.dh());
+          close_transport(std::move(boxed));
           continue;
         }
-        auto keep_connection_slot = false;
-        auto release_connection_slot_guard = folly::makeGuard([&] {
-          if (not keep_connection_slot) {
-            release_connection_slot();
-          }
-        });
-        auto boxed
-          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-        if (tls_context_) {
-          try {
-            co_await upgrade_transport_to_tls_server(boxed, tls_context_);
-          } catch (folly::AsyncSocketException const& ex) {
-            // Peer-driven TLS failures are expected at runtime; keep serving
-            // other connections instead of failing the whole operator.
-            diagnostic::warning("TLS handshake failed")
-              .primary(endpoint_source_)
-              .note("TLS handshake with peer {} failed", peer.describe())
-              .note("reason: {}", ex.what())
-              .hint("verify TLS settings and certificates on both sides")
-              .emit(dh);
-            continue;
-          }
-        }
-        if (lifecycle_->load() != Lifecycle::running) {
-          co_return;
-        }
-        TENZIR_DEBUG("accepted connection from {}", peer.describe());
-        co_await message_queue_->enqueue(Accepted{std::move(boxed)});
-        keep_connection_slot = true;
+        ctx.spawn_task(
+          finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
       }
     } catch (folly::OperationCancelled const&) {
       co_return;
