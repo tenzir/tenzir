@@ -51,41 +51,6 @@ auto jsonify_limit(data const& d) -> std::string {
   return result;
 }
 
-/// Extracts contiguous runs of `true` values from a boolean array and returns
-/// the corresponding subslices.
-auto split_contiguous_true_runs(arrow::BooleanArray const& array,
-                                table_slice const& slice, int64_t offset = 0)
-  -> std::vector<table_slice> {
-  // TODO: use the new table_slice::filter() and produce a single table_slice
-  // instead of a vec
-  auto const len = array.length();
-  // Fast path: no true values
-  if (array.true_count() == 0) {
-    return {};
-  }
-  // Fast path: all true values
-  if (array.true_count() == len) {
-    return {subslice(slice, offset, offset + len)};
-  }
-  // Extract contiguous runs of true values
-  auto results = std::vector<table_slice>{};
-  auto curr = array.Value(0);
-  auto begin = int64_t{0};
-  // We add an artificial `false` at index `length` to flush.
-  for (auto i = int64_t{1}; i < len + 1; ++i) {
-    auto const next = i != len and array.IsValid(i) and array.Value(i);
-    if (curr == next) {
-      continue;
-    }
-    if (curr) {
-      results.push_back(subslice(slice, offset + begin, offset + i));
-    }
-    curr = next;
-    begin = i;
-  }
-  return results;
-}
-
 using call_map = detail::stable_map<std::string, ast::function_call>;
 using plugins_map
   = std::vector<std::pair<aggregation_plugin const*, ast::function_call>>;
@@ -329,11 +294,8 @@ public:
     if (input.rows() == 0 or not prep_) {
       co_return;
     }
-    auto slices = filter_input(std::move(input), ctx.dh());
-    for (auto&& slice : slices) {
-      if (slice.rows() == 0) {
-        continue;
-      }
+    auto slice = filter_input(std::move(input), ctx.dh());
+    if (slice.rows() > 0) {
       auto sp = session_provider::make(ctx.dh());
       process_slice(slice, sp.as_session());
     }
@@ -692,11 +654,10 @@ private:
     return {nullptr, true};
   }
 
-  auto filter_input(table_slice slice, diagnostic_handler& dh)
-    -> std::vector<table_slice> {
+  auto filter_input(table_slice slice, diagnostic_handler& dh) -> table_slice {
     // Early exit: no limits set
     if (not prep_->x_min and not prep_->x_max) {
-      return {std::move(slice)};
+      return slice;
     }
     // Build combined expression from x_min and x_max
     auto const expr = std::invoke([&]() -> ast::expression {
@@ -713,20 +674,18 @@ private:
       TENZIR_ASSERT(prep_->x_max);
       return prep_->x_max->expr;
     });
-    // Evaluate expression and extract filtered slices
+    // Evaluate expression and collect filtered slices
     auto results = std::vector<table_slice>{};
     auto offset = int64_t{0};
-    for (auto& filter : eval(expr, slice, dh)) {
-      auto const* array = try_as<arrow::BooleanArray>(&*filter.array);
+    for (auto& f : eval(expr, slice, dh)) {
+      auto const* array = try_as<arrow::BooleanArray>(&*f.array);
       TENZIR_ASSERT(array);
       auto const len = array->length();
-      // Use shared helper to extract contiguous runs
-      auto subslices = split_contiguous_true_runs(*array, slice, offset);
-      results.insert(results.end(), std::make_move_iterator(subslices.begin()),
-                     std::make_move_iterator(subslices.end()));
+      results.push_back(
+        tenzir::filter(subslice(slice, offset, offset + len), *array));
       offset += len;
     }
-    return results;
+    return concatenate(std::move(results));
   }
 
   auto find_gap(std::optional<data>& prev, data const& curr) const
