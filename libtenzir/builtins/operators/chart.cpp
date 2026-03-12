@@ -927,13 +927,13 @@ auto validate_x_limit_type(located<data> const& d,
                  .is_any<int64_type, uint64_type, double_type, duration_type,
                          time_type>();
   if (not valid) {
-    diagnostic::warning("limit cannot have type `{}`", t->kind())
+    diagnostic::error("limit cannot have type `{}`", t->kind())
       .primary(d)
       .emit(ctx);
     return;
   }
   if (res && ! t->kind().is_any<time_type, duration_type>()) {
-    diagnostic::warning("cannot group type `{}` with resolution", t->kind())
+    diagnostic::error("cannot group type `{}` with resolution", t->kind())
       .primary(d)
       .primary(res->source)
       .emit(ctx);
