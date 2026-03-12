@@ -1,0 +1,38 @@
+{
+  xs: [
+    {
+      left: "c",
+      right: "cc",
+    },
+    {
+      left: "",
+      right: "cc",
+    },
+    {
+      left: null,
+      right: "cc",
+    },
+  ],
+  filtered: [
+    {
+      left: "c",
+      right: "cc",
+    },
+    {
+      left: "",
+      right: "cc",
+    },
+    {
+      left: null,
+      right: "cc",
+    },
+  ],
+  mapped: [
+    "c",
+    "",
+    null,
+  ],
+  filtered2: [
+    "c",
+  ],
+}

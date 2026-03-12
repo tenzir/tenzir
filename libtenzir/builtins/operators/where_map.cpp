@@ -388,8 +388,11 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
                   ids.append_bits(false, result.length());
                 });
             }
-            TENZIR_ASSERT(list_values.length()
-                          == detail::narrow<int64_t>(ids.size()));
+            const auto offset_begin = lists.array->value_offset(0);
+            const auto offset_end
+              = lists.array->value_offset(lists.array->length());
+            TENZIR_ASSERT_EQ(offset_end - offset_begin,
+                             detail::narrow<int64_t>(ids.size()));
             if (all_true) {
               return field;
             }
@@ -411,7 +414,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
                 const auto offset = lists.array->value_offset(i);
                 const auto length = lists.array->value_length(i);
                 for (auto j = offset; j < offset + length; ++j) {
-                  if (not ids[j]) {
+                  if (not ids[j - offset_begin]) {
                     continue;
                   }
                   if (list_values.array->IsNull(j)) {
@@ -512,15 +515,29 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           .emit(ctx);
         return series::null(null_type{}, field.length());
       }
-      // The list array may be a slice of a larger backing array, so we must
-      // use the offsets to determine the actual values range.
-      auto values_start = field_list->array->value_offset(0);
-      auto values_end
+      // Handle all-empty lists. The `eval` call below would return an empty
+      // multi-series for it. The list array may be a slice of a larger backing
+      // array, so we must use the offsets to determine the actual values range.
+      auto const values_start = field_list->array->value_offset(0);
+      auto const values_end
         = field_list->array->value_offset(field_list->array->length());
       auto values_length = values_end - values_start;
       if (values_length == 0) {
-        return make_list_series(series::null(null_type{}, field_list->length()),
-                                *field_list->array);
+        /// TODO: theoretically it would be good to return the expected result
+        /// type here. However, we have no real way of obtaining it, given that
+        /// we dont have a value to run the lambda on. For _some_ cases it would
+        /// be possible to statically analyze the type.
+        /// As a reasonable stopgap, we simply return a list[null] array.
+        const auto t = type{list_type{null_type{}}};
+        auto b = series_builder{&t};
+        for (auto v : values3(*field_list->array)) {
+          if (not v) {
+            b.null();
+            continue;
+          }
+          b.list();
+        }
+        return b.finish_assert_one_array();
       }
       auto ms = eval(args.lambda, *field_list);
       TENZIR_ASSERT(not ms.parts().empty());
@@ -530,13 +547,14 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
       const auto n_parts = ms.parts().size();
       if (n_parts == 1) {
         auto& values = ms.parts().front();
+        auto [offsets, null_bitmap]
+          = rebase_list_array_buffers(*field_list->array);
         return series{
           list_type{values.type},
           std::make_shared<arrow::ListArray>(
             list_type{values.type}.to_arrow_type(), field_list->array->length(),
-            field_list->array->value_offsets(), values.array,
-            field_list->array->null_bitmap(), field_list->array->null_count(),
-            field_list->array->offset()),
+            std::move(offsets), values.array, std::move(null_bitmap),
+            field_list->array->null_count()),
         };
       }
       // If there is more than one part, we need to rebuild batches by merging
@@ -596,7 +614,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           continue;
         }
         const auto event_start_offset
-          = field_list->array->value_offset(event_index);
+          = field_list->array->value_offset(event_index) - values_start;
         const auto event_list_size
           = static_cast<int64_t>(field_list->array->value_length(event_index));
         const auto event_end_offset = event_start_offset + event_list_size;

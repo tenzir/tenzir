@@ -1,0 +1,8 @@
+from \
+{xs: [{left: "a", right: "to"}, {left: "b", right: "cc"}]},
+{xs: [{left: "c", right: "cc"}, {left: "", right: "cc"}, {left: null, right: "cc"}]}
+batch
+slice begin=1, end=2
+filtered = xs.where(e => e.right.to_lower() == "cc")
+mapped = filtered.map(e => e.left)
+filtered2 = mapped.where(e => e != null and not e.is_empty())
