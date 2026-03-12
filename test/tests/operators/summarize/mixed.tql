@@ -1,0 +1,4 @@
+from {x: 1, g: "a"},
+     {x: 2, g: "b"},
+     {x: 3, g: "a"}
+summarize g, n=count(), total=sum(x)
