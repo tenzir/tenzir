@@ -91,10 +91,15 @@ struct ChartArgs {
   located<std::string> position{"grouped", location::unknown};
 };
 
+auto make_once_entity() -> ast::entity {
+  return ast::entity{
+    std::vector{ast::identifier{"once", location::unknown}},
+  };
+}
+
 auto find_plugins(call_map const& y, session ctx) -> plugins_map {
   auto result = plugins_map{};
-  auto ident = ast::identifier{"once", location::unknown};
-  auto const entity = ast::entity{std::vector{std::move(ident)}};
+  auto const entity = make_once_entity();
   for (auto const& [_, call] : y) {
     if (auto const* ptr
         = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(call))) {
@@ -126,8 +131,7 @@ template <chart_type Ty>
 auto handle_y(call_map& y_out, location& y_loc_out,
               std::optional<located<duration>> const& res, ast::expression& y,
               session ctx) -> failure_or<void> {
-  auto ident = ast::identifier{"once", location::unknown};
-  auto const entity = ast::entity{std::vector{std::move(ident)}};
+  auto const entity = make_once_entity();
   y_loc_out = y.get_location();
   return match(
     y,
@@ -249,6 +253,7 @@ struct Prepared {
   std::optional<xlimit> x_min;
   std::optional<xlimit> x_max;
   location y_loc;
+  std::string xpath;
 };
 
 template <chart_type Ty>
@@ -325,6 +330,13 @@ private:
     }
 
     prep.plugins = find_plugins(prep.y, s);
+
+    prep.xpath = args_.x.path()[0].id.name;
+    for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
+      prep.xpath += ".";
+      prep.xpath += args_.x.path()[i].id.name;
+    }
+
     return prep;
   }
 
@@ -334,11 +346,6 @@ private:
 
   auto process_slice(table_slice const& slice, session ctx) -> void {
     auto& dh = ctx.dh();
-    auto xpath = args_.x.path()[0].id.name;
-    for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
-      xpath += ".";
-      xpath += args_.x.path()[i].id.name;
-    }
     auto consumed = size_t{};
     auto xs = eval(args_.x, slice, dh);
     auto gs = get_group_strings(slice, dh);
@@ -417,11 +424,7 @@ private:
         .emit(dh);
       return {};
     }
-    auto xpath = args_.x.path()[0].id.name;
-    for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
-      xpath += ".";
-      xpath += args_.x.path()[i].id.name;
-    }
+    auto const& xpath = prep_->xpath;
     // Collect unique group names in insertion order
     auto all_group_names = detail::stable_set<std::string>{};
     for (auto const& [_, gb] : groups_) {
@@ -527,8 +530,7 @@ private:
       {"y_min", args_.y_min ? jsonify_limit(args_.y_min->inner) : ""},
       {"y_max", args_.y_max ? jsonify_limit(args_.y_max->inner) : ""},
     };
-    auto ynums = std::deque<std::string>{"y"};
-    auto const attrs = make_attributes(xpath, ynums, ynames, limits);
+    auto const attrs = make_attributes(xpath, ynames, limits);
     auto result = std::vector<table_slice>{};
     for (auto&& slice : slices) {
       auto schema = type{slice.schema(), std::vector{attrs}};
@@ -660,10 +662,9 @@ private:
     return concatenate(std::move(results));
   }
 
-  auto find_gap(std::optional<data>& prev, data const& curr) const
+  auto find_gap(std::optional<data> const& prev, data const& curr) const
     -> std::optional<data> {
     if (not prev) {
-      prev = curr;
       return std::nullopt;
     }
     if (is<caf::none_t>(*prev) or is<caf::none_t>(curr)) {
@@ -690,23 +691,31 @@ private:
   }
 
   auto make_attributes(
-    std::string const& xpath, std::deque<std::string>& ynums,
-    detail::stable_map<std::string, bool>& ynames,
+    std::string const& xpath,
+    detail::stable_map<std::string, bool> const& ynames,
     detail::stable_map<std::string_view, std::string> const& limits) const
     -> std::vector<type::attribute_view> {
     auto attrs = std::vector<type::attribute_view>{
       {"chart", to_string(Ty)},
-      {"position", args_.position.inner},
-      {"x_axis_type", args_.x_log ? "log" : "linear"},
-      {"y_axis_type", args_.y_log ? "log" : "linear"},
       {"x", xpath},
     };
+    // pie charts do not support position or axis-type options
+    if constexpr (Ty != chart_type::pie) {
+      attrs.emplace_back("position", args_.position.inner);
+      attrs.emplace_back("x_axis_type", args_.x_log ? "log" : "linear");
+      attrs.emplace_back("y_axis_type", args_.y_log ? "log" : "linear");
+    }
     for (auto const& [name, value] : limits) {
       if (not value.empty()) {
         attrs.emplace_back(name, value);
       }
     }
-    for (auto i = ynums.size(); i < prep_->y.size() or i < ynames.size(); ++i) {
+    // Build the y-axis attribute keys: "y" for the first series, then "y1",
+    // "y2", ... for any additional ones. The count must cover both the number
+    // of aggregation expressions and the number of resolved output columns.
+    auto ynums = std::deque<std::string>{"y"};
+    auto const total = std::max(prep_->y.size(), ynames.size());
+    for (auto i = ynums.size(); i < total; ++i) {
       ynums.emplace_back(fmt::format("y{}", i));
     }
     auto names = std::views::filter(ynames, [](auto&& x) {
@@ -914,10 +923,24 @@ auto validate_y_limit_type(located<data> const& d, DescribeCtx& ctx) -> void {
   }
 }
 
-// Unified validation function for area, bar, line charts
-auto validate_chart_common(auto y, auto limit, auto position, auto x_min,
-                           auto x_max, auto y_min, auto y_max, auto res,
-                           auto fill, DescribeCtx& ctx) -> Empty {
+// Validates the `position` argument for chart types that support it (area, bar).
+auto validate_position(auto position, DescribeCtx& ctx) -> void {
+  if (auto pos = ctx.get(position)) {
+    if (pos->inner != "stacked" && pos->inner != "grouped") {
+      diagnostic::error("unsupported `position`")
+        .primary(*pos)
+        .hint("available positions: `grouped` (default) or `stacked`")
+        .emit(ctx);
+    }
+  }
+}
+
+// Unified validation function for area, bar, line charts.
+// Does not validate `position`; call validate_position() separately for chart
+// types that support it.
+auto validate_chart_common(auto y, auto limit, auto x_min, auto x_max,
+                           auto y_min, auto y_max, auto res, auto fill,
+                           DescribeCtx& ctx) -> Empty {
   // Validate y expression
   auto resolution = ctx.get(res);
   if (auto y_val = ctx.get(y)) {
@@ -932,23 +955,6 @@ auto validate_chart_common(auto y, auto limit, auto position, auto x_min,
       diagnostic::error("`limit` must be less than 100k")
         .primary(*lim)
         .emit(ctx);
-    }
-  }
-
-  // Validate position (only for area, bar - not line or pie)
-  if (auto pos = ctx.get(position)) {
-    // Check if this is actually a string type (not just any optional)
-    if constexpr (requires {
-                    pos->inner;
-                    typename decltype(pos->inner)::value_type;
-                  }) {
-      // It's a string
-      if (pos->inner != "stacked" && pos->inner != "grouped") {
-        diagnostic::error("unsupported `position`")
-          .primary(*pos)
-          .hint("available positions: `grouped` (default) or `stacked`")
-          .emit(ctx);
-      }
     }
   }
 
@@ -972,8 +978,7 @@ auto validate_chart_common(auto y, auto limit, auto position, auto x_min,
           .primary(*xmin)
           .primary(*xmax)
           .emit(ctx);
-      }
-      if (xmin->inner >= xmax->inner) {
+      } else if (xmin->inner >= xmax->inner) {
         diagnostic::error("`x_min` must be less than `x_max`")
           .primary(*xmin)
           .primary(*xmax)
@@ -1002,8 +1007,7 @@ auto validate_chart_common(auto y, auto limit, auto position, auto x_min,
           .primary(*ymin)
           .primary(*ymax)
           .emit(ctx);
-      }
-      if (ymin->inner >= ymax->inner) {
+      } else if (ymin_coerced >= ymax_coerced) {
         diagnostic::error("`y_min` must be less than `y_max`")
           .primary(*ymin)
           .primary(*ymax)
@@ -1071,8 +1075,9 @@ class PluginArea final : public virtual OperatorPlugin {
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_common(y, limit, position, x_min, x_max, y_min,
-                                   y_max, res, fill, ctx);
+      validate_position(position, ctx);
+      return validate_chart_common(y, limit, x_min, x_max, y_min, y_max, res,
+                                   fill, ctx);
     });
 
     return d.without_optimize();
@@ -1103,8 +1108,9 @@ class PluginBar final : public virtual OperatorPlugin {
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_common(y, limit, position, x_min, x_max, y_min,
-                                   y_max, res, fill, ctx);
+      validate_position(position, ctx);
+      return validate_chart_common(y, limit, x_min, x_max, y_min, y_max, res,
+                                   fill, ctx);
     });
 
     return d.without_optimize();
@@ -1133,11 +1139,9 @@ class PluginLine final : public virtual OperatorPlugin {
     d.named("group", &ChartArgs<Ty>::group, "any");
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    // Line chart doesn't have position, so pass limit as a dummy (ctx.get will
-    // return nullopt)
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_common(y, limit, limit, x_min, x_max, y_min, y_max,
-                                   res, fill, ctx);
+      return validate_chart_common(y, limit, x_min, x_max, y_min, y_max, res,
+                                   fill, ctx);
     });
 
     return d.without_optimize();
