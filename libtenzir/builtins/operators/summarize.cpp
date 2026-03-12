@@ -10,6 +10,7 @@
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -17,6 +18,7 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
@@ -24,6 +26,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/registry.hpp>
@@ -477,8 +480,8 @@ private:
 /// Classifies a flat list of expressions (as received from inv.args or from
 /// optional_variadic) into a fully-populated config.  The options={...}
 /// positional-assignment syntax is handled here, identical to the old make().
-static auto build_config(const std::vector<ast::expression>& exprs,
-                         session ctx) -> failure_or<config> {
+static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
+  -> failure_or<config> {
   auto cfg = config{};
   auto failed = false;
   auto mode_location = std::optional<location>{};
@@ -544,23 +547,23 @@ static auto build_config(const std::vector<ast::expression>& exprs,
     }
   };
 
-  auto add_aggregate = [&](std::optional<ast::field_path> dest,
-                           ast::function_call call) {
-    auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
-    if (not fn) {
-      diagnostic::error("function does not support aggregations")
-        .primary(call.fn)
-        .hint("if you want to group by this, use assignment before")
-        .docs("https://docs.tenzir.com/operators/summarize")
-        .emit(ctx);
-      return;
-    }
-    if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
-      auto index = detail::narrow<int64_t>(cfg.aggregates.size());
-      cfg.indices.push_back(index);
-      cfg.aggregates.emplace_back(std::move(dest), std::move(call));
-    }
-  };
+  auto add_aggregate
+    = [&](std::optional<ast::field_path> dest, ast::function_call call) {
+        auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
+        if (not fn) {
+          diagnostic::error("function does not support aggregations")
+            .primary(call.fn)
+            .hint("if you want to group by this, use assignment before")
+            .docs("https://docs.tenzir.com/operators/summarize")
+            .emit(ctx);
+          return;
+        }
+        if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
+          auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+          cfg.indices.push_back(index);
+          cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+        }
+      };
 
   auto add_group
     = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
@@ -729,31 +732,14 @@ private:
   config cfg_;
 };
 
-// -------------------------
-// SummarizeArgs + Summarize
-// -------------------------
-
-struct SummarizeArgs {
-  std::vector<ast::expression> exprs;
-
-  friend auto inspect(auto& f, SummarizeArgs& x) -> bool {
-    return f.apply(x.exprs);
-  }
-};
-
 class Summarize final : public Operator<table_slice, table_slice> {
 public:
-  explicit Summarize(SummarizeArgs args) : args_{std::move(args)} {
+  explicit Summarize(config cfg) : cfg_{std::move(cfg)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     provider_.emplace(session_provider::make(ctx.dh()));
-    auto cfg_result = build_config(args_.exprs, provider_->as_session());
-    // Validation was performed at describe()-time, so this must succeed.
-    TENZIR_ASSERT(cfg_result);
-    frequency_ = cfg_result->frequency;
-    impl_ = std::make_unique<implementation2>(*std::move(cfg_result),
-                                              provider_->as_session());
+    impl_ = std::make_unique<implementation2>(cfg_, provider_->as_session());
     co_return;
   }
 
@@ -774,16 +760,16 @@ public:
   }
 
   /// Drives periodic flushing when `options={frequency: ...}` is set.
-  /// Sleeps for one interval and returns; the executor calls process_task()
-  /// which performs the flush, then immediately calls await_task() again.
-  /// Without a frequency, we wait forever so the executor never wakes us.
+  /// Sleeps for one frequency interval; the executor calls process_task() to
+  /// perform the flush, then calls await_task() again immediately.
+  /// Without a frequency the default implementation waits forever.
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (not frequency_) {
+    if (not cfg_.frequency) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    co_await sleep_for(*frequency_);
+    co_await sleep_for(*cfg_.frequency);
     co_return {};
   }
 
@@ -799,16 +785,67 @@ public:
   }
 
 private:
-  SummarizeArgs args_;
+  config cfg_;
+  // provider_ must outlive impl_ because impl_ holds a session that
+  // references provider_.  Member destruction order (reverse of declaration)
+  // guarantees impl_ is destroyed before provider_.
   std::optional<session_provider> provider_;
   std::unique_ptr<implementation2> impl_;
-  /// Cached from the parsed config so await_task() (which is const) can read
-  /// it without re-parsing args_.
-  mutable std::optional<duration> frequency_;
+};
+
+class summarize_ir final : public ir::Operator {
+public:
+  summarize_ir() = default;
+
+  summarize_ir(location self, config cfg) : self_{self}, cfg_{std::move(cfg)} {
+  }
+
+  auto name() const -> std::string override {
+    return "summarize_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(instantiate);
+    // Substitute through function-call arguments in aggregates; they can
+    // reference let-bindings.  Group field-paths are static identifiers.
+    for (auto& aggregate : cfg_.aggregates) {
+      for (auto& arg : aggregate.call.args) {
+        TRY(arg.substitute(ctx));
+      }
+    }
+    return {};
+  }
+
+  auto spawn(element_type_tag input) && -> AnyOperator override {
+    TENZIR_ASSERT(input.is<table_slice>());
+    return Summarize{std::move(cfg_)};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("operator expects events").primary(self_).emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto main_location() const -> location override {
+    return self_;
+  }
+
+  friend auto inspect(auto& f, summarize_ir& x) -> bool {
+    return f.object(x).fields(f.field("self", x.self_), f.field("cfg", x.cfg_));
+  }
+
+private:
+  location self_;
+  config cfg_;
 };
 
 class plugin2 final : public virtual operator_plugin2<summarize_operator2>,
-                      public virtual OperatorPlugin {
+                      public virtual operator_compiler_plugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -816,34 +853,18 @@ public:
     return std::make_unique<summarize_operator2>(std::move(cfg));
   }
 
-  auto describe() const -> Description override {
-    auto d = Describer<SummarizeArgs, Summarize>{};
-    auto exprs
-      = d.optional_variadic("exprs", &SummarizeArgs::exprs, "any");
-    d.validate([=](DescribeCtx& ctx) -> Empty {
-      auto values = ctx.get_all(exprs);
-      auto locations = ctx.get_locations(exprs);
-      TENZIR_ASSERT(values.size() == locations.size());
-
-      // Re-run the full classification via build_config so all errors
-      // (unknown aggregation functions, bad options, mode-without-frequency,
-      // etc.) are surfaced at compile time.
-      auto exprs_vec = std::vector<ast::expression>{};
-      exprs_vec.reserve(values.size());
-      for (auto i = 0uz; i < values.size(); ++i) {
-        if (not values[i]) {
-          // Incomplete expression — cannot validate yet; bail out silently.
-          return {};
-        }
-        exprs_vec.push_back(std::move(*values[i]));
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<Box<ir::Operator>> override {
+    auto loc = inv.op.get_location();
+    // Bind all non-pipeline arguments before parsing.
+    for (auto& arg : inv.args) {
+      if (is<ast::assignment>(arg) or not is<ast::pipeline_expr>(arg)) {
+        TRY(arg.bind(ctx));
       }
-
-      auto provider = session_provider::make(ctx);
-      // Discard the result; we only care about any diagnostics emitted.
-      (void)build_config(exprs_vec, provider.as_session());
-      return {};
-    });
-    return d.without_optimize();
+    }
+    auto provider = session_provider::make(ctx);
+    TRY(auto cfg, build_config(inv.args, provider.as_session()));
+    return summarize_ir{loc, std::move(cfg)};
   }
 };
 
@@ -852,3 +873,6 @@ public:
 } // namespace tenzir::plugins::summarize
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin2)
+TENZIR_REGISTER_PLUGIN(
+  (tenzir::inspection_plugin<tenzir::ir::Operator,
+                             tenzir::plugins::summarize::summarize_ir>))
