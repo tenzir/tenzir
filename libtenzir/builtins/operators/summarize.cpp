@@ -855,6 +855,17 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<Box<ir::Operator>> override {
+    // We use `operator_compiler_plugin` rather than `OperatorPlugin`/`Describer`
+    // because `GenericIr` unconditionally routes any `ast::assignment` arg to
+    // the named-argument path (look up LHS in a fixed `desc->named` list, error
+    // if absent).  `summarize` uses assignments *positionally*: the LHS is the
+    // output rename and the RHS determines the kind (aggregate vs. group vs.
+    // options). Adding variadic named args to `Describer` would still pre-split
+    // named from positional before `build_config()` can see them together,
+    // requiring awkward reconstruction.  `compile()` receives the raw
+    // `inv.args` unchanged, so `build_config()` can apply its own
+    // classification logic directly.
+
     auto loc = inv.op.get_location();
     // Bind all non-pipeline arguments before parsing.
     for (auto& arg : inv.args) {
