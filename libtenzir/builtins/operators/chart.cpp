@@ -186,8 +186,7 @@ auto handle_y(call_map& y_out, location& y_loc_out,
 
 template <chart_type Ty>
 auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
-                   located<data> limit, diagnostic_handler& dh)
-  -> failure_or<xlimit> {
+                   located<data> limit) -> failure_or<xlimit> {
   auto const& loc = limit.source;
   auto result = match(
     limit.inner,
@@ -300,14 +299,14 @@ private:
     }
 
     if (args_.x_min) {
-      auto result = handle_xlimit(args_, ast::binary_op::geq, *args_.x_min, s);
+      auto result = handle_xlimit(args_, ast::binary_op::geq, *args_.x_min);
       if (not result) {
         return std::nullopt;
       }
       prep.x_min = std::move(*result);
     }
     if (args_.x_max) {
-      auto result = handle_xlimit(args_, ast::binary_op::leq, *args_.x_max, s);
+      auto result = handle_xlimit(args_, ast::binary_op::leq, *args_.x_max);
       if (not result) {
         return std::nullopt;
       }
@@ -1166,6 +1165,10 @@ class PluginPie final : public virtual OperatorPlugin {
           [&](ast::record const& rec) {
             if (rec.items.size() != 1) {
               diagnostic::error("`chart_pie` requires exactly one value")
+                .primary(*y_val)
+                .emit(ctx);
+            } else if (try_as<ast::spread>(rec.items[0])) {
+              diagnostic::error("cannot use `...` here")
                 .primary(*y_val)
                 .emit(ctx);
             }

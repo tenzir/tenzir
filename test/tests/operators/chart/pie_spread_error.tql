@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: "a", v: 1}
+chart_pie x=x, y={...v}
