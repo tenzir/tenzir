@@ -1,19 +1,15 @@
 {
-  x: 3,
-  y: 3.0,
+  x: 1,
+  value: 1.0,
 }
 {
-  x: 5,
-  y: 2.0,
+  x: 2,
+  value: 1.0,
 }
-{
-  x: 6,
-  y: 5.0,
-}
-warning: got more than 3 data points
- --> tests/operators/chart/limit.tql:2:13
+warning: got more than 2 data points
+ --> tests/operators/chart/limit.tql:4:13
   |
-2 | chart_bar x=x, y=y, x_min=2, _limit=3
+4 | chart_pie x=x, y=count(), _limit=2
   |             ~ 
   |
   = note: skipping excess data points

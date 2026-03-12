@@ -9,6 +9,7 @@
 #include "tenzir/operator_plugin.hpp"
 
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/secret.hpp"
@@ -84,9 +85,7 @@ auto display_names(const Named& named) -> std::string {
 }
 
 auto primary_name(const Named& named) -> std::string_view {
-  if (named.names.empty()) {
-    return "<unnamed>";
-  }
+  TENZIR_ASSERT(! named.names.empty());
   return named.names.front();
 }
 

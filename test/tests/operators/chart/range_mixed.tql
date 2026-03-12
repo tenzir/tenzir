@@ -3,4 +3,4 @@ from {x: 1.0, v: 10},
      {x: 3.5, v: 30},
      {x: 4.0, v: 40},
      {x: 5.5, v: 50}
-chart_line x=x, y=v, x_min=2.0, x_max=4.5
+chart_line x=x, y=v, x_min=2, x_max=4

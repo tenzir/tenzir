@@ -46,7 +46,8 @@ auto jsonify_limit(data const& d) -> std::string {
     .numeric_durations = true,
   }};
   auto it = std::back_inserter(result);
-  TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
+  auto success = printer.print(it, make_view_wrapper(d));
+  TENZIR_ASSERT(success);
   return result;
 }
 
@@ -102,13 +103,6 @@ struct xlimit {
   data rounded;
   expression legacy_expr;
   ast::expression expr;
-
-  friend auto inspect(auto& f, xlimit& x) -> bool {
-    return f.object(x).fields(f.field("value", x.value),
-                              f.field("rounded", x.rounded),
-                              f.field("legacy_expr", x.legacy_expr),
-                              f.field("expr", x.expr));
-  }
 };
 
 // Raw arguments struct used for parsing
@@ -130,17 +124,6 @@ struct ChartArgs {
     location::unknown,
   };
   located<std::string> position{"grouped", location::unknown};
-
-  friend auto inspect(auto& f, ChartArgs& x) -> bool {
-    return f.object(x)
-      .pretty_name("chart_args")
-      .fields(f.field("x", x.x), f.field("y", x.y), f.field("group", x.group),
-              f.field("x_min", x.x_min), f.field("x_max", x.x_max),
-              f.field("y_min", x.y_min), f.field("y_max", x.y_max),
-              f.field("res", x.res), f.field("fill", x.fill),
-              f.field("x_log", x.x_log), f.field("y_log", x.y_log),
-              f.field("limit", x.limit), f.field("position", x.position));
-  }
 };
 
 auto find_plugins(call_map const& y, session ctx) -> plugins_map {
@@ -1050,7 +1033,9 @@ auto validate_chart_common(auto limit, auto position, auto x_min, auto x_max,
   // Validate y_min and y_max are compatible
   if (auto ymin = ctx.get(y_min)) {
     if (auto ymax = ctx.get(y_max)) {
-      if (ymin->inner.get_data().index() != ymax->inner.get_data().index()) {
+      auto const ymin_coerced = to_double(ymin->inner);
+      auto const ymax_coerced = to_double(ymax->inner);
+      if (ymin_coerced.get_data().index() != ymax_coerced.get_data().index()) {
         diagnostic::error("`y_min` and `y_max` must have the same type")
           .primary(*ymin)
           .primary(*ymax)
@@ -1067,7 +1052,7 @@ auto validate_chart_common(auto limit, auto position, auto x_min, auto x_max,
 
   // Validate fill
   if (auto f = ctx.get(fill)) {
-    if (! resolution) {
+    if (! ctx.get_location(res)) {
       diagnostic::error("`fill` cannot be specified without `resolution`")
         .primary(*f)
         .emit(ctx);
@@ -1075,15 +1060,18 @@ auto validate_chart_common(auto limit, auto position, auto x_min, auto x_max,
     validate_y_limit_type(*f, ctx);
 
     // Check fill type matches y_min or y_max
+    auto const f_coerced = to_double(f->inner);
     if (auto ymin = ctx.get(y_min)) {
-      if (ymin->inner.get_data().index() != f->inner.get_data().index()) {
+      if (to_double(ymin->inner).get_data().index()
+          != f_coerced.get_data().index()) {
         diagnostic::error("`fill` has a different type from `y_min`")
           .primary(*f)
           .primary(*ymin)
           .emit(ctx);
       }
     } else if (auto ymax = ctx.get(y_max)) {
-      if (ymax->inner.get_data().index() != f->inner.get_data().index()) {
+      if (to_double(ymax->inner).get_data().index()
+          != f_coerced.get_data().index()) {
         diagnostic::error("`fill` has a different type from `y_max`")
           .primary(*f)
           .primary(*ymax)

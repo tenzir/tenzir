@@ -524,7 +524,8 @@ public:
       .numeric_durations = true,
     }};
     auto it = std::back_inserter(result);
-    TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
+    auto success = printer.print(it, make_view_wrapper(d));
+    TENZIR_ASSERT(success);
     return result;
   }
 
