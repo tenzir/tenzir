@@ -162,14 +162,6 @@ auto append_array(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
   return append_array_slice(builder, ty, array, 0, array.length());
 }
 
-/// Filters an array by a boolean mask, appending only rows where the mask value
-/// bit is true. The null bitmap of the mask is ignored. Walks the type tree
-/// column-by-column for cache efficiency: for records, all runs are processed
-/// per field before moving to the next field.
-auto filter_array(arrow::ArrayBuilder& builder, const type& ty,
-                  const arrow::Array& array, const arrow::BooleanArray& mask)
-  -> void;
-
 /// Partitions an array into two builders based on a boolean mask. Rows where
 /// the mask value bit is true go to `true_builder`, others to `false_builder`.
 /// The null bitmap of the mask is ignored. Walks the type tree column-by-column
