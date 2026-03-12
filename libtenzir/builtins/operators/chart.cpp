@@ -125,31 +125,19 @@ auto make_bucket(plugins_map const& plugins, session ctx) -> Bucket {
 template <chart_type Ty>
 auto handle_y(call_map& y_out, location& y_loc_out,
               std::optional<located<duration>> const& res, ast::expression& y,
-              session ctx, std::string_view operator_name) -> failure_or<void> {
+              session ctx) -> failure_or<void> {
   auto ident = ast::identifier{"once", location::unknown};
   auto const entity = ast::entity{std::vector{std::move(ident)}};
   y_loc_out = y.get_location();
   return match(
     y,
     [&](ast::record& rec) -> failure_or<void> {
-      if (Ty == chart_type::pie and rec.items.size() != 1) {
-        diagnostic::error("`{}` requires exactly one value", operator_name)
-          .primary(y)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (rec.items.empty()) {
-        diagnostic::error("`{}` requires at least one value", operator_name)
-          .primary(y)
-          .emit(ctx);
-        return failure::promise();
-      }
+      // Structural validation is done in Describer::validate; assert invariants.
+      TENZIR_ASSERT(not rec.items.empty());
+      TENZIR_ASSERT(Ty != chart_type::pie or rec.items.size() == 1);
       for (auto& i : rec.items) {
         auto* field = try_as<ast::record::field>(i);
-        if (not field) {
-          diagnostic::error("cannot use `...` here").primary(y).emit(ctx);
-          return failure::promise();
-        }
+        TENZIR_ASSERT(field); // spreads caught by validate
         auto const loc = field->expr.get_location();
         TRY(match(
           field->expr,
@@ -158,13 +146,7 @@ auto handle_y(call_map& y_out, location& y_loc_out,
             return {};
           },
           [&](auto& expr) -> failure_or<void> {
-            if (res) {
-              diagnostic::error("an aggregation function is required if "
-                                "`resolution` is specified")
-                .primary(field->expr)
-                .emit(ctx);
-              return failure::promise();
-            }
+            TENZIR_ASSERT(not res); // caught by validate
             auto result
               = ast::function_call{entity, {std::move(expr)}, loc, false};
             TENZIR_ASSERT(resolve_entities(result, ctx));
@@ -179,13 +161,7 @@ auto handle_y(call_map& y_out, location& y_loc_out,
       return {};
     },
     [&](auto&) -> failure_or<void> {
-      if (res) {
-        diagnostic::error(
-          "an aggregation function is required if resolution is specified")
-          .primary(y)
-          .emit(ctx);
-        return failure::promise();
-      }
+      TENZIR_ASSERT(not res); // caught by validate
       auto const yname = std::invoke([&]() -> std::string {
         if (auto ss = ast::field_path::try_from(y)) {
           return fmt::format("{}", fmt::join(ss->path()
@@ -215,13 +191,11 @@ auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
   auto const& loc = limit.source;
   auto result = match(
     limit.inner,
-    [&](const caf::none_t&) -> failure_or<ast::constant> {
-      diagnostic::error("limit cannot be `null`").primary(limit).emit(dh);
-      return failure::promise();
+    [](const caf::none_t&) -> failure_or<ast::constant> {
+      TENZIR_UNREACHABLE(); // caught by validate
     },
-    [&](pattern const&) -> failure_or<ast::constant> {
-      diagnostic::error("limit cannot be a pattern").primary(limit).emit(dh);
-      return failure::promise();
+    [](pattern const&) -> failure_or<ast::constant> {
+      TENZIR_UNREACHABLE(); // caught by validate
     },
     [&](duration const& d) -> failure_or<ast::constant> {
       if (args.res) {
@@ -320,8 +294,7 @@ private:
     auto prep = Prepared{};
 
     auto y_copy = args_.y;
-    if (auto result
-        = handle_y<Ty>(prep.y, prep.y_loc, args_.res, y_copy, s, name());
+    if (auto result = handle_y<Ty>(prep.y, prep.y_loc, args_.res, y_copy, s);
         not result) {
       return std::nullopt;
     }
@@ -860,6 +833,14 @@ private:
 auto validate_x_limit_type(located<data> const& d,
                            std::optional<located<duration>> const& res,
                            DescribeCtx& ctx) -> void {
+  if (is<caf::none_t>(d.inner)) {
+    diagnostic::error("limit cannot be `null`").primary(d).emit(ctx);
+    return;
+  }
+  if (is<pattern>(d.inner)) {
+    diagnostic::error("limit cannot be a pattern").primary(d).emit(ctx);
+    return;
+  }
   auto const t = type::infer(d.inner);
   if (not t) {
     diagnostic::error("failed to infer type of option").primary(d).emit(ctx);
@@ -883,6 +864,42 @@ auto validate_x_limit_type(located<data> const& d,
   }
 }
 
+// Validation for the y expression of non-pie charts (area, bar, line)
+auto validate_y_common(ast::expression const& y,
+                       std::optional<located<duration>> const& res,
+                       DescribeCtx& ctx) -> void {
+  match(
+    y,
+    [&](ast::record const& rec) {
+      if (rec.items.empty()) {
+        diagnostic::error("requires at least one value").primary(y).emit(ctx);
+        return;
+      }
+      for (auto const& item : rec.items) {
+        auto const* field = try_as<ast::record::field>(item);
+        if (not field) {
+          diagnostic::error("cannot use `...` here").primary(y).emit(ctx);
+          return;
+        }
+        if (not try_as<ast::function_call>(field->expr) and res) {
+          diagnostic::error("an aggregation function is required if "
+                            "`resolution` is specified")
+            .primary(field->expr)
+            .emit(ctx);
+        }
+      }
+    },
+    [](ast::function_call const&) {},
+    [&](auto const&) {
+      if (res) {
+        diagnostic::error(
+          "an aggregation function is required if resolution is specified")
+          .primary(y)
+          .emit(ctx);
+      }
+    });
+}
+
 // Helper validation for y limit types
 auto validate_y_limit_type(located<data> const& d, DescribeCtx& ctx) -> void {
   auto const t = type::infer(d.inner);
@@ -898,25 +915,15 @@ auto validate_y_limit_type(located<data> const& d, DescribeCtx& ctx) -> void {
   }
 }
 
-// Validation for pie chart (only has limit)
-auto validate_chart_pie(auto limit, DescribeCtx& ctx) -> Empty {
-  if (auto lim = ctx.get(limit)) {
-    if (lim->inner == 0) {
-      diagnostic::error("`limit` must be positive").primary(*lim).emit(ctx);
-    }
-    if (lim->inner > 100'000) {
-      diagnostic::error("`limit` must be less than 100k")
-        .primary(*lim)
-        .emit(ctx);
-    }
-  }
-  return {};
-}
-
 // Unified validation function for area, bar, line charts
-auto validate_chart_common(auto limit, auto position, auto x_min, auto x_max,
-                           auto y_min, auto y_max, auto res, auto fill,
-                           DescribeCtx& ctx) -> Empty {
+auto validate_chart_common(auto y, auto limit, auto position, auto x_min,
+                           auto x_max, auto y_min, auto y_max, auto res,
+                           auto fill, DescribeCtx& ctx) -> Empty {
+  // Validate y expression
+  auto resolution = ctx.get(res);
+  if (auto y_val = ctx.get(y)) {
+    validate_y_common(*y_val, resolution, ctx);
+  }
   // Validate limit (common to all chart types)
   if (auto lim = ctx.get(limit)) {
     if (lim->inner == 0) {
@@ -945,9 +952,6 @@ auto validate_chart_common(auto limit, auto position, auto x_min, auto x_max,
       }
     }
   }
-
-  // Get resolution for x-limit validation
-  auto resolution = ctx.get(res);
 
   // Validate x_min type
   if (auto xmin = ctx.get(x_min)) {
@@ -1054,7 +1058,7 @@ class PluginArea final : public virtual OperatorPlugin {
     auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
     d.named("x", &ChartArgs<Ty>::x);
-    d.named("y", &ChartArgs<Ty>::y, "any");
+    auto y = d.named("y", &ChartArgs<Ty>::y, "any");
     auto x_min = d.named("x_min", &ChartArgs<Ty>::x_min);
     auto x_max = d.named("x_max", &ChartArgs<Ty>::x_max);
     auto y_min = d.named("y_min", &ChartArgs<Ty>::y_min);
@@ -1068,8 +1072,8 @@ class PluginArea final : public virtual OperatorPlugin {
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_common(limit, position, x_min, x_max, y_min, y_max,
-                                   res, fill, ctx);
+      return validate_chart_common(y, limit, position, x_min, x_max, y_min,
+                                   y_max, res, fill, ctx);
     });
 
     return d.without_optimize();
@@ -1086,7 +1090,7 @@ class PluginBar final : public virtual OperatorPlugin {
     auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
     d.named({"x", "label"}, &ChartArgs<Ty>::x);
-    d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
+    auto y = d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
     auto x_min = d.named("x_min", &ChartArgs<Ty>::x_min);
     auto x_max = d.named("x_max", &ChartArgs<Ty>::x_max);
     auto y_min = d.named("y_min", &ChartArgs<Ty>::y_min);
@@ -1100,8 +1104,8 @@ class PluginBar final : public virtual OperatorPlugin {
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_common(limit, position, x_min, x_max, y_min, y_max,
-                                   res, fill, ctx);
+      return validate_chart_common(y, limit, position, x_min, x_max, y_min,
+                                   y_max, res, fill, ctx);
     });
 
     return d.without_optimize();
@@ -1118,7 +1122,7 @@ class PluginLine final : public virtual OperatorPlugin {
     auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
     d.named("x", &ChartArgs<Ty>::x);
-    d.named("y", &ChartArgs<Ty>::y, "any");
+    auto y = d.named("y", &ChartArgs<Ty>::y, "any");
     auto x_min = d.named("x_min", &ChartArgs<Ty>::x_min);
     auto x_max = d.named("x_max", &ChartArgs<Ty>::x_max);
     auto y_min = d.named("y_min", &ChartArgs<Ty>::y_min);
@@ -1130,10 +1134,10 @@ class PluginLine final : public virtual OperatorPlugin {
     d.named("group", &ChartArgs<Ty>::group, "any");
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    // Line chart doesn't have position,  so pass limit as a dummy (ctx.get will
+    // Line chart doesn't have position, so pass limit as a dummy (ctx.get will
     // return nullopt)
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_common(limit, limit, x_min, x_max, y_min, y_max,
+      return validate_chart_common(y, limit, limit, x_min, x_max, y_min, y_max,
                                    res, fill, ctx);
     });
 
@@ -1151,13 +1155,34 @@ class PluginPie final : public virtual OperatorPlugin {
     auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
 
     d.named({"x", "label"}, &ChartArgs<Ty>::x);
-    d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
+    auto y = d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
     d.named("group", &ChartArgs<Ty>::group, "any");
     auto limit = d.named_optional("_limit", &ChartArgs<Ty>::limit);
 
-    // Pie chart only has limit validation
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      return validate_chart_pie(limit, ctx);
+      if (auto y_val = ctx.get(y)) {
+        match(
+          *y_val,
+          [&](ast::record const& rec) {
+            if (rec.items.size() != 1) {
+              diagnostic::error("`chart_pie` requires exactly one value")
+                .primary(*y_val)
+                .emit(ctx);
+            }
+          },
+          [](ast::function_call const&) {}, [](auto const&) {});
+      }
+      if (auto lim = ctx.get(limit)) {
+        if (lim->inner == 0) {
+          diagnostic::error("`limit` must be positive").primary(*lim).emit(ctx);
+        }
+        if (lim->inner > 100'000) {
+          diagnostic::error("`limit` must be less than 100k")
+            .primary(*lim)
+            .emit(ctx);
+        }
+      }
+      return {};
     });
 
     return d.without_optimize();
