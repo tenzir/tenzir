@@ -434,7 +434,13 @@ struct EvalBinOp<Op, L, R> {
         continue;
       }
       if (ln || rn) {
-        check(b->AppendNull());
+        if constexpr (Op == ast::binary_op::eq) {
+          check(b->Append(false));
+        } else if constexpr (Op == ast::binary_op::neq) {
+          check(b->Append(true));
+        } else {
+          check(b->AppendNull());
+        }
         continue;
       }
       auto lv = value_at(L{}, l, i);
@@ -615,7 +621,7 @@ struct EvalBinOp<Op, string_type, string_type> {
   }
 };
 
-template <concrete_type L>
+template <basic_type L>
 struct EvalBinOp<ast::binary_op::in, L, list_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
                    auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
@@ -624,35 +630,46 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
     const auto lty = type::from_arrow(*l.type());
     const auto rty = type::from_arrow(*r.value_type());
     const auto f = [&]<concrete_type R>(const R&) {
-      if constexpr (caf::detail::is_complete<
+      if constexpr (basic_type<R>
+                    and caf::detail::is_complete<
                       EvalBinOp<ast::binary_op::eq, L, R>>) {
+        using RA = type_to_arrow_array_t<R>;
+        auto* values = dynamic_cast<const RA*>(r.values().get());
+        TENZIR_ASSERT(values);
         for (auto i = int64_t{}; i < l.length(); ++i) {
           if (r.IsNull(i)) {
             b.UnsafeAppendNull();
             continue;
           }
-          auto lslice
-            = std::static_pointer_cast<type_to_arrow_array_t<L>>(l.Slice(i, 1));
-          auto rslice = r.value_slice(i);
-          TENZIR_ASSERT(lslice);
-          TENZIR_ASSERT(rslice);
-          auto result = false;
-          for (auto j = int64_t{}; j < rslice->length(); ++j) {
-            auto vals = std::dynamic_pointer_cast<type_to_arrow_array_t<R>>(
-              rslice->Slice(j, 1));
-            TENZIR_ASSERT(vals);
-            auto out = std::dynamic_pointer_cast<arrow::BooleanArray>(
-              EvalBinOp<ast::binary_op::eq, L, R>::eval(*lslice, *vals, warn));
-            TENZIR_ASSERT(out);
-            TENZIR_ASSERT_EQ(out->length(), 1);
-            // Equality never returns `null` (if it's defined for the types).
-            TENZIR_ASSERT(out->IsValid(0));
-            if (out->Value(0)) {
-              result = true;
-              break;
+          auto ln = l.IsNull(i);
+          auto list_begin = r.value_offset(i);
+          auto list_end = r.value_offset(i + 1);
+          auto found = false;
+          if (ln) {
+            for (auto j = list_begin; j < list_end; ++j) {
+              if (values->IsNull(j)) {
+                found = true;
+                break;
+              }
+            }
+          } else {
+            auto lv = value_at(L{}, l, i);
+            for (auto j = list_begin; j < list_end; ++j) {
+              if (values->IsNull(j)) {
+                continue;
+              }
+              auto rv = value_at(R{}, *values, j);
+              if constexpr (integral_type<L> and integral_type<R>) {
+                found = std::cmp_equal(lv, rv);
+              } else if constexpr (requires { lv == rv; }) {
+                found = lv == rv;
+              }
+              if (found) {
+                break;
+              }
             }
           }
-          check(b.Append(result));
+          b.UnsafeAppend(found);
         }
       } else {
         warn(fmt::format("got incompatible types for `in`: `{} in list<{}>`",
