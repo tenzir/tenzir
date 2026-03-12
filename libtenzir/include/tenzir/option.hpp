@@ -54,6 +54,10 @@ public:
   auto reset() noexcept -> void {
     inner_.reset();
   }
+  template <class... Args>
+  auto emplace(Args&&... args) -> T& {
+    return inner_.emplace(std::forward<Args>(args)...);
+  }
 
 private:
   std::optional<T> inner_;
@@ -76,6 +80,12 @@ public:
   }
   auto reset() noexcept -> void {
     ptr_ = nullptr;
+  }
+  template <class U>
+    requires std::convertible_to<U&, T&>
+  auto emplace(U& ref) -> T& {
+    ptr_ = &ref;
+    return *ptr_;
   }
 
 private:
@@ -157,6 +167,20 @@ public:
   /// Returns whether the option is empty.
   auto is_none() const noexcept -> bool {
     return not is_some();
+  }
+
+  /// Constructs/rebinds the contained value in-place.
+  template <class... Args>
+    requires(not std::is_reference_v<T> and std::constructible_from<T, Args...>)
+  auto emplace(Args&&... args) -> Value& {
+    return storage_.emplace(std::forward<Args>(args)...);
+  }
+
+  /// Rebinds the contained reference in-place.
+  template <class U = std::remove_reference_t<T>>
+    requires(std::is_reference_v<T> and std::convertible_to<U&, T>)
+  auto emplace(U& ref) -> Value& {
+    return storage_.emplace(ref);
   }
 
   /// Returns `true` if the option has a value and the predicate returns `true`.

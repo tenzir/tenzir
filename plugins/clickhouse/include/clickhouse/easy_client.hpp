@@ -13,9 +13,12 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/type.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <clickhouse/client.h>
 
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string_view>
 
 namespace tenzir::plugins::clickhouse {
@@ -33,7 +36,7 @@ class easy_client {
 public:
   struct arguments {
     std::string host;
-    located<uint16_t> port = {9000, operator_location};
+    located<uint64_t> port = {9000, operator_location};
     std::string user;
     std::string password;
     tls_options ssl;
@@ -42,25 +45,28 @@ public:
     std::optional<located<std::string>> primary = std::nullopt;
     location operator_location;
 
-    auto make_options(operator_control_plane& ctrl) const
+    auto make_options(const caf::actor_system_config& cfg) const
       -> ::clickhouse::ClientOptions {
-      auto opts = ::clickhouse::ClientOptions()
-                    .SetEndpoints({{std::string{host}, port.inner}})
-                    .SetUser(std::string{user})
-                    .SetPassword(std::string{password});
-      if (ssl.get_tls(&ctrl).inner) {
+      auto opts
+        = ::clickhouse::ClientOptions()
+            .SetEndpoints({::clickhouse::Endpoint{
+              std::string{host}, detail::narrow_cast<uint16_t>(port.inner)}})
+            .SetUser(std::string{user})
+            .SetPassword(std::string{password})
+            .SetDefaultDatabase("");
+      if (ssl.get_tls(&cfg).inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
         tls_opts.SetSkipVerification(
-          ssl.get_skip_peer_verification(&ctrl).inner);
+          ssl.get_skip_peer_verification(&cfg).inner);
         auto commands = std::vector<
           ::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
-        if (auto x = ssl.get_cacert(&ctrl)) {
+        if (auto x = ssl.get_cacert(&cfg)) {
           commands.emplace_back("ChainCAFile", x->inner);
         }
-        if (auto x = ssl.get_certfile(&ctrl)) {
+        if (auto x = ssl.get_certfile(&cfg)) {
           commands.emplace_back("Certificate", x->inner);
         }
-        if (auto x = ssl.get_keyfile(&ctrl)) {
+        if (auto x = ssl.get_keyfile(&cfg)) {
           commands.emplace_back("PrivateKey", x->inner);
         }
         tls_opts.SetConfiguration(commands);
@@ -74,11 +80,11 @@ private:
   struct ctor_token {};
 
 public:
-  explicit easy_client(arguments args, operator_control_plane& ctrl, ctor_token)
-    : client_{args.make_options(ctrl)},
+  explicit easy_client(arguments args, const caf::actor_system_config& cfg,
+                       diagnostic_handler& dh, ctor_token)
+    : client_{args.make_options(cfg)},
       args_{std::move(args)},
-      dh_{ctrl.diagnostics(),
-          [loc = args.operator_location](diagnostic diag) -> diagnostic {
+      dh_{dh, [loc = args_.operator_location](diagnostic diag) -> diagnostic {
             if (not has_location(diag)) {
               diag.annotations.emplace_back(true, std::string{}, loc);
             }
@@ -86,26 +92,35 @@ public:
           }} {
   }
 
-  static auto make(arguments args, operator_control_plane& ctrl)
-    -> std::unique_ptr<easy_client>;
+  static auto make(arguments args, const caf::actor_system_config& cfg,
+                   diagnostic_handler& dh) -> std::shared_ptr<easy_client>;
+
+  auto dh() -> diagnostic_handler& {
+    return dh_;
+  }
 
   void ping();
 
-  auto insert(const table_slice& slice) -> bool;
-  auto insert(const table_slice& slice, std::string_view table_name) -> bool;
+  auto insert_dynamic(const table_slice& slice,
+                      std::string_view query_id
+                      = ::clickhouse::Query::default_query_id)
+    -> failure_or<void>;
 
 private:
+  auto insert(const table_slice& slice, std::string_view table_name,
+              std::string_view query_id) -> failure_or<void>;
   /// Ensures that the transformation for the given name + schema exists. This
   /// is the main entry point, doing all checking and conditional table creation.
   auto ensure_transformations(const tenzir::record_type& schema,
                               std::string_view table_name)
-    -> transformer_record*;
-  /// Checks the DB if a table exists.
-  auto remote_check_table_exists(std::string_view table_name) -> bool;
-  /// Fetches the transformations from either the local storage or the upstream
-  /// table, if it exists. Returns nullptr if the table does not exist.
+    -> failure_or<transformer_record*>;
+  /// Checks the DB if an object of the given kind exists.
+  auto remote_check_exists(std::string_view object_kind,
+                           std::string_view object_name) -> failure_or<bool>;
+  /// Fetches the transformations from remote. Assumes the table exists remotely.
   auto remote_fetch_schema_transformations(std::string_view table_name)
-    -> transformer_record*;
+    -> failure_or<transformer_record*>;
+  auto remote_create_database(std::string_view database_name) -> void;
   auto
   /// Creates a table with the given schema.
   remote_create_table(const tenzir::record_type& schema,
@@ -113,6 +128,7 @@ private:
     -> failure_or<transformer_record*>;
 
   ::clickhouse::Client client_;
+  std::mutex client_mutex_;
   arguments args_;
   transforming_diagnostic_handler dh_;
   detail::heterogeneous_string_hashmap<transformer_record> transformations_;

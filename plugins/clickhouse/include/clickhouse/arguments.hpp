@@ -12,6 +12,7 @@
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/tls_options.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/regex.hpp>
@@ -22,20 +23,30 @@ namespace tenzir::plugins::clickhouse {
 TENZIR_ENUM(mode, create_append, create, append);
 
 constexpr static auto validation_expr = "^[a-zA-Z_][0-9a-zA-Z_]*$";
+inline const auto table_name_quoting
+  = detail::quoting_escaping_policy{.quotes = "\"`"};
 
 inline auto validate_identifier(std::string_view text) -> bool {
-  const static auto quoting = detail::quoting_escaping_policy{.quotes = "\"`"};
-  if (quoting.is_quoted(text)) {
+  if (table_name_quoting.is_quoted(text)) {
     return true;
   }
   const static auto re = boost::regex{validation_expr};
   return boost::regex_match(text.begin(), text.end(), re);
 }
 
+template <bool error>
+inline auto diag_root(std::string_view msg) -> diagnostic_builder {
+  if constexpr (error) {
+    return diagnostic::error("{}", msg);
+  }
+  return diagnostic::warning("{}", msg);
+}
+
+template <bool error>
 inline auto
 emit_invalid_identifier(std::string_view name, std::string_view value,
                         location loc, diagnostic_handler& dh) {
-  diagnostic::error("invalid {} `{}`", name, value)
+  diag_root<error>(fmt::format("invalid {} `{}`", name, value))
     .primary(loc)
     .hint("{} must either be a quoted string, or match the regular "
           "expression `{}`",
@@ -43,48 +54,70 @@ emit_invalid_identifier(std::string_view name, std::string_view value,
     .emit(dh);
 }
 
-inline auto validate_table_name(std::string_view table, location loc,
-                                diagnostic_handler& dh) -> failure_or<void> {
-  const auto quoting = detail::quoting_escaping_policy{.quotes = "\""};
-  const auto dot = quoting.find_first_of_not_in_quotes(table, ".");
-  if (dot != std::string::npos) {
-    if (dot == table.size() - 1) {
-      diagnostic::error("expected database name after `.`")
-        .primary(loc)
-        .emit(dh);
-      return failure::promise();
-    }
-    const auto dot2 = quoting.find_first_of_not_in_quotes(table, ".", dot + 1);
-    if (dot2 != std::string::npos) {
-      diagnostic::error("`table` may contain at most one `.`")
-        .note("the `.` separates database and table name")
-        .hint("quote the identifiers if you want the `.` to be part of the "
-              "identifier")
-        .primary(loc)
-        .emit(dh);
-      return failure::promise();
-    }
-    const auto database_name = table.substr(0, dot);
-    const auto table_name = table.substr(dot + 1);
-    if (not validate_identifier(database_name)) {
-      emit_invalid_identifier("database-part", database_name, loc, dh);
-      return failure::promise();
-    }
-    if (not validate_identifier(table_name)) {
-      emit_invalid_identifier("table-part", table_name, loc, dh);
-      return failure::promise();
-    }
-  } else if (not validate_identifier(table)) {
-    emit_invalid_identifier("table", table, loc, dh);
-    return failure::promise();
+struct split_table_name_result {
+  std::optional<std::string_view> database;
+  std::string_view table;
+};
+
+template <bool error>
+inline auto split_table_name(std::string_view table, location table_loc,
+                             diagnostic_handler& dh)
+  -> std::optional<split_table_name_result> {
+  const auto dot = table_name_quoting.find_first_of_not_in_quotes(table, ".");
+  if (dot == std::string::npos) {
+    return split_table_name_result{std::nullopt, table};
   }
-  return {};
+  if (dot == table.size() - 1) {
+    diag_root<error>("expected table name after `.`")
+      .primary(table_loc)
+      .emit(dh);
+    return std::nullopt;
+  }
+  const auto dot2
+    = table_name_quoting.find_first_of_not_in_quotes(table, ".", dot + 1);
+  if (dot2 != std::string::npos) {
+    diag_root<error>("`table` may contain at most one `.`")
+      .note("the `.` separates database and table name")
+      .hint("quote the identifiers if you want the `.` to be part of the "
+            "identifier")
+      .primary(table_loc)
+      .emit(dh);
+    return std::nullopt;
+  }
+  return split_table_name_result{
+    table.substr(0, dot),
+    table.substr(dot + 1),
+  };
+}
+
+template <bool error>
+inline auto validate_table_name(std::string_view table, location table_loc,
+                                diagnostic_handler& dh) -> bool {
+  auto split = split_table_name<error>(table, table_loc, dh);
+  if (not split) {
+    return false;
+  }
+  if (split->database) {
+    if (not validate_identifier(*split->database)) {
+      emit_invalid_identifier<error>("database-part", *split->database,
+                                     table_loc, dh);
+      return false;
+    }
+    if (not validate_identifier(split->table)) {
+      emit_invalid_identifier<error>("table-part", split->table, table_loc, dh);
+      return false;
+    }
+  } else if (not validate_identifier(split->table)) {
+    emit_invalid_identifier<error>("table", table, table_loc, dh);
+    return false;
+  }
+  return true;
 }
 
 struct operator_arguments {
   tenzir::location operator_location;
   located<secret> host = {secret::make_literal("localhost"), operator_location};
-  located<uint16_t> port = {9000, operator_location};
+  std::optional<located<uint64_t>> port = std::nullopt;
   located<secret> user = {secret::make_literal("default"), operator_location};
   located<secret> password = {secret::make_literal(""), operator_location};
   ast::expression table = {};
@@ -131,8 +164,8 @@ struct operator_arguments {
       }
       res.primary = {p.front().id.name, primary_selector->get_location()};
       if (not validate_identifier(res.primary->inner)) {
-        emit_invalid_identifier("primary", res.primary->inner,
-                                res.primary->source, ctx);
+        emit_invalid_identifier<true>("primary", res.primary->inner,
+                                      res.primary->source, ctx);
         return failure::promise();
       }
     }
@@ -142,14 +175,28 @@ struct operator_arguments {
         .emit(ctx);
       return failure::promise();
     }
-    if (not port) {
-      if (res.ssl.get_tls(nullptr).inner) {
-        port = located{9440, res.operator_location};
+    if (port) {
+      if (port->inner <= 0 or port->inner > 65535) {
+        diagnostic::error("`port` must be between 1 and 65535")
+          .primary(port->source, "got `{}`", port->inner)
+          .emit(ctx);
+        return failure::promise();
+      }
+      res.port = {static_cast<uint64_t>(port->inner), port->source};
+    }
+    auto sp = session_provider::make(ctx);
+    if (auto table_name = try_const_eval(res.table, sp.as_session())) {
+      if (const auto* s = try_as<std::string>(*table_name)) {
+        if (not validate_table_name<true>(*s, res.table.get_location(), ctx)) {
+          return failure::promise();
+        }
       } else {
-        port = located{9000, res.operator_location};
+        diagnostic::error("`table` must be a `string`")
+          .primary(res.table.get_location())
+          .emit(ctx);
+        return failure::promise();
       }
     }
-    res.port = *port;
     return res;
   }
 
