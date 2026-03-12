@@ -1493,6 +1493,17 @@ auto flatten_record(
   }
   auto struct_array
     = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
+  // When we are inside a list (list_offsets non-empty), the transformations
+  // will wrap leaf arrays in lists, changing their length. This causes
+  // transform_columns to hit a fallback path that drops the struct's null
+  // bitmap. To avoid losing null information, we pre-flatten the struct to
+  // merge its null bitmap into the children before transforming.
+  if (not list_offsets.empty() && struct_array->null_bitmap()) {
+    auto flat_children
+      = check(struct_array->Flatten(tenzir::arrow_memory_pool()));
+    struct_array = std::make_shared<arrow::StructArray>(
+      struct_array->type(), struct_array->length(), std::move(flat_children));
+  }
   const auto next_name_prefix
     = fmt::format("{}{}{}", name_prefix, field.name, separator);
   auto transformations = std::vector<indexed_transformation>{};
@@ -1508,11 +1519,13 @@ auto flatten_record(
   auto result = indexed_transformation::result_type{};
   result.reserve(output_struct_array->num_fields());
   const auto& output_rt = as<record_type>(output_type);
+  auto flattened_children
+    = check(output_struct_array->Flatten(tenzir::arrow_memory_pool()));
   for (int i = 0; i < output_struct_array->num_fields(); ++i) {
     const auto field_view = output_rt.field(i);
     result.push_back({
       {std::string{field_view.name}, field_view.type},
-      output_struct_array->field(i),
+      std::move(flattened_children[i]),
     });
   }
   return result;
