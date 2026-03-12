@@ -274,75 +274,6 @@ public:
     }
     TENZIR_ASSERT(cfg_.mode == "update");
     // Emit only groups where values changed
-    auto emplace = [](record& root, const ast::field_path& sel, data value) {
-      if (sel.path().empty()) {
-        if (auto* rec = try_as<record>(&value)) {
-          root = std::move(*rec);
-        }
-        return;
-      }
-      auto* current = &root;
-      for (const auto& segment : sel.path()) {
-        auto& val = (*current)[segment.id.name];
-        if (&segment == &sel.path().back()) {
-          val = std::move(value);
-        } else {
-          current = try_as<record>(&val);
-          if (not current) {
-            val = record{};
-            current = &as<record>(val);
-          }
-        }
-      }
-    };
-
-    const auto finish_group = [&](const auto& key, const auto& group) {
-      auto result = record{};
-      for (auto index : cfg_.indices) {
-        if (index >= 0) {
-          auto& dest = cfg_.aggregates[index].dest;
-          auto value = group->aggregations[index]->get();
-          if (dest) {
-            emplace(result, *dest, value);
-          } else {
-            auto& call = cfg_.aggregates[index].call;
-            auto arg = std::invoke([&]() -> std::string {
-              if (call.args.empty()) {
-                return "";
-              }
-              if (call.args.size() > 1) {
-                return "...";
-              }
-              auto sel = ast::field_path::try_from(call.args[0]);
-              if (not sel) {
-                return "...";
-              }
-              auto arg = std::string{};
-              if (sel->has_this()) {
-                arg = "this";
-              }
-              for (auto& segment : sel->path()) {
-                if (not arg.empty()) {
-                  arg += '.';
-                }
-                arg += segment.id.name;
-              }
-              return arg;
-            });
-            result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
-                           value);
-          }
-        } else {
-          index = -index - 1;
-          auto& group_def = cfg_.groups[index];
-          auto& dest = group_def.dest ? *group_def.dest : group_def.expr;
-          auto& value = key[index];
-          emplace(result, dest, value);
-        }
-      }
-      return result;
-    };
-
     auto b = series_builder{};
     for (const auto& [key, group] : groups_) {
       // Get current aggregation values.
@@ -356,14 +287,14 @@ public:
       auto should_emit
         = (it == previous_values_.end()) or (it->second != current_values);
       if (should_emit) {
-        b.data(finish_group(key, group));
+        b.data(finish_group(key, *group));
         previous_values_[key] = current_values;
       }
     }
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events.
     if (cfg_.groups.empty() and groups_.empty()) {
-      b.data(finish_group(group_by_key{}, make_bucket()));
+      b.data(finish_group(group_by_key{}, *make_bucket()));
     }
     return b.finish_as_table_slice();
   }
@@ -378,91 +309,99 @@ public:
 
 private:
   auto finish_impl() -> std::vector<table_slice> {
-    auto emplace = [](record& root, const ast::field_path& sel, data value) {
-      if (sel.path().empty()) {
-        // TODO
-        if (auto rec = try_as<record>(&value)) {
-          root = std::move(*rec);
-        }
-        return;
-      }
-      auto current = &root;
-      for (auto& segment : sel.path()) {
-        auto& val = (*current)[segment.id.name];
-        if (&segment == &sel.path().back()) {
-          val = std::move(value);
-        } else {
-          current = try_as<record>(&val);
-          if (not current) {
-            val = record{};
-            current = &as<record>(val);
-          }
-        }
-      }
-    };
-    const auto finish_group = [&](const auto& key, const auto& group) {
-      auto result = record{};
-      for (auto index : cfg_.indices) {
-        if (index >= 0) {
-          auto& dest = cfg_.aggregates[index].dest;
-          auto value = group->aggregations[index]->get();
-          if (dest) {
-            emplace(result, *dest, value);
-          } else {
-            auto& call = cfg_.aggregates[index].call;
-            // TODO: Decide and properly implement this.
-            auto arg = std::invoke([&]() -> std::string {
-              if (call.args.empty()) {
-                return "";
-              }
-              if (call.args.size() > 1) {
-                return "...";
-              }
-              auto sel = ast::field_path::try_from(call.args[0]);
-              if (not sel) {
-                return "...";
-              }
-              auto arg = std::string{};
-              if (sel->has_this()) {
-                arg = "this";
-              }
-              for (auto& segment : sel->path()) {
-                // TODO: This is wrong if the path contains special characters.
-                if (not arg.empty()) {
-                  arg += '.';
-                }
-                arg += segment.id.name;
-              }
-              return arg;
-            });
-            result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
-                           value);
-          }
-        } else {
-          index = -index - 1;
-          auto& group = cfg_.groups[index];
-          auto& dest = group.dest ? *group.dest : group.expr;
-          auto& value = key[index];
-          emplace(result, dest, value);
-        }
-      }
-      return result;
-    };
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events, then we create a new
     // bucket and just finish it. That way, `from [] | summarize count()` will
     // return a single event showing a count of zero.
     if (cfg_.groups.empty() and groups_.empty()) {
       auto b = series_builder{};
-      b.data(finish_group(group_by_key{}, make_bucket()));
+      b.data(finish_group(group_by_key{}, *make_bucket()));
       return b.finish_as_table_slice();
     }
     // TODO: Group by schema again to make this more efficient.
     auto b = series_builder{};
     for (const auto& [key, group] : groups_) {
-      b.data(finish_group(key, group));
+      b.data(finish_group(key, *group));
     }
     return b.finish_as_table_slice();
+  }
+
+  /// Writes @p value into @p root at the path described by @p sel.
+  static auto
+  emplace_value(record& root, const ast::field_path& sel, data value) -> void {
+    if (sel.path().empty()) {
+      // TODO
+      if (auto* rec = try_as<record>(&value)) {
+        root = std::move(*rec);
+      }
+      return;
+    }
+    auto* current = &root;
+    for (const auto& segment : sel.path()) {
+      auto& val = (*current)[segment.id.name];
+      if (&segment == &sel.path().back()) {
+        val = std::move(value);
+      } else {
+        current = try_as<record>(&val);
+        if (not current) {
+          val = record{};
+          current = &as<record>(val);
+        }
+      }
+    }
+  }
+
+  /// Builds the output record for one group bucket.
+  auto finish_group(const group_by_key& key, const bucket2& bucket) const
+    -> record {
+    auto result = record{};
+    for (auto index : cfg_.indices) {
+      if (index >= 0) {
+        const auto& dest = cfg_.aggregates[index].dest;
+        auto value = bucket.aggregations[index]->get();
+        if (dest) {
+          emplace_value(result, *dest, value);
+        } else {
+          const auto& call = cfg_.aggregates[index].call;
+          // TODO: Decide and properly implement this. The format below
+          // produces names like `count()` or `sum(x)`.  It is wrong for
+          // field names that contain special characters (e.g. spaces or
+          // dots), because the segments are joined with '.' without quoting.
+          auto arg = std::invoke([&]() -> std::string {
+            if (call.args.empty()) {
+              return "";
+            }
+            if (call.args.size() > 1) {
+              return "...";
+            }
+            auto sel = ast::field_path::try_from(call.args[0]);
+            if (not sel) {
+              return "...";
+            }
+            auto s = std::string{};
+            if (sel->has_this()) {
+              s = "this";
+            }
+            for (const auto& segment : sel->path()) {
+              // TODO: This is wrong if the path contains special characters.
+              if (not s.empty()) {
+                s += '.';
+              }
+              s += segment.id.name;
+            }
+            return s;
+          });
+          result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
+                         value);
+        }
+      } else {
+        auto group_index = -index - 1;
+        const auto& group_def = cfg_.groups[group_index];
+        const auto& dest = group_def.dest ? *group_def.dest : group_def.expr;
+        emplace_value(result, dest, key[group_index]);
+      }
+    }
+    return result;
   }
 
   const config& cfg_;
@@ -655,18 +594,6 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     // TODO: Do not create a new session here.
-    auto info = cfg_.groups.size() == 0 and cfg_.aggregates.size() == 1
-                and cfg_.aggregates[0].dest
-                and cfg_.aggregates[0].dest->path().size() == 1
-                and cfg_.aggregates[0].dest->path()[0].id.name == "foo";
-    if (info) {
-      TENZIR_WARN("spawning summarize");
-    }
-    ctrl.self().attach_functor([info] {
-      if (info) {
-        TENZIR_WARN("destroying summarize");
-      }
-    });
     auto provider = session_provider::make(ctrl.diagnostics());
     auto impl = implementation2{cfg_, provider.as_session()};
 
@@ -781,6 +708,11 @@ public:
     }
   }
 
+  // TODO: Implement snapshotting. The aggregation state could be serialized
+  // using aggregation_instance::save()/restore(), and group keys and
+  // previous_values_ via the inspect framework. This is currently blocked
+  // because ast::expression (stored inside aggregation instances) is not yet
+  // serializable. See aggregation_instance::restore() for details.
   auto snapshot(Serde&) -> void override {
   }
 
@@ -801,7 +733,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "summarize_ir";
+    return "summarize";
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -855,21 +787,21 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<Box<ir::Operator>> override {
-    // We use `operator_compiler_plugin` rather than `OperatorPlugin`/`Describer`
-    // because `GenericIr` unconditionally routes any `ast::assignment` arg to
-    // the named-argument path (look up LHS in a fixed `desc->named` list, error
-    // if absent).  `summarize` uses assignments *positionally*: the LHS is the
-    // output rename and the RHS determines the kind (aggregate vs. group vs.
-    // options). Adding variadic named args to `Describer` would still pre-split
-    // named from positional before `build_config()` can see them together,
-    // requiring awkward reconstruction.  `compile()` receives the raw
-    // `inv.args` unchanged, so `build_config()` can apply its own
-    // classification logic directly.
+    // We use `operator_compiler_plugin` rather than
+    // `OperatorPlugin`/`Describer` because `GenericIr` unconditionally routes
+    // any `ast::assignment` arg to the named-argument path (look up LHS in a
+    // fixed `desc->named` list, error if absent).  `summarize` uses assignments
+    // *positionally*: the LHS is the output rename and the RHS determines the
+    // kind (aggregate vs. group vs. options). Adding variadic named args to
+    // `Describer` would still pre-split named from positional before
+    // `build_config()` can see them together, requiring awkward reconstruction.
+    // `compile()` receives the raw `inv.args` unchanged, so `build_config()`
+    // can apply its own classification logic directly.
 
     auto loc = inv.op.get_location();
-    // Bind all non-pipeline arguments before parsing.
+    // Bind all arguments except pipeline expressions before parsing.
     for (auto& arg : inv.args) {
-      if (is<ast::assignment>(arg) or not is<ast::pipeline_expr>(arg)) {
+      if (not is<ast::pipeline_expr>(arg)) {
         TRY(arg.bind(ctx));
       }
     }

@@ -1,4 +1,6 @@
-// Ensure frequency timer does not emit before first input arrives.
+// Ensure frequency timer does not emit before first input arrives. The timer
+// fires several times before the event at 200ms is seen, but those ticks are
+// suppressed. The single output record comes from the final emission.
 from {ts: 200ms.from_epoch(), x: 1}
 delay ts
 summarize count=count(), options={frequency: 50ms}

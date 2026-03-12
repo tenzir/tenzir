@@ -1,4 +1,6 @@
-// Test frequency with no groups (aggregate only)
+// Frequency with no groups: all input arrives before the first timer fires
+// (no `delay`), so only the final emission is produced. Verifies that the
+// operator works without any group-by keys.
 from {x: 1},
      {x: 2},
      {x: 3}
