@@ -390,6 +390,11 @@ transform_columns(type schema,
   }
   auto current = transformations.begin();
   const auto sentinel = transformations.end();
+  // We use `fields()` instead of `Flatten()` for zero-copy access to children.
+  // The struct's null bitmap is not merged into the children here; instead, it
+  // is preserved structurally when reassembling the result (same-length path).
+  // Callers that trigger the length-changing path must handle null bitmap
+  // propagation themselves (see `flatten_record` in table_slice.cpp).
   auto layer = unpacked_layer{
     .fields = {},
     .arrays = struct_array->fields(),
@@ -426,7 +431,11 @@ transform_columns(type schema,
   } else {
     // FIXME: Callers should not rely on this hack. The signature of this
     // function does not really allow this, as it can change the behavior for
-    // nulls.
+    // nulls. Since we use `fields()` instead of `Flatten()` to unpack the
+    // struct, the null bitmap is not merged into the children. This path drops
+    // the struct's null bitmap entirely, so callers that trigger
+    // length-changing transformations must pre-flatten the input struct if it
+    // has a null bitmap (see `flatten_record` in table_slice.cpp).
     new_struct_array
       = check(arrow::StructArray::Make(layer.arrays, arrow_fields));
   }
