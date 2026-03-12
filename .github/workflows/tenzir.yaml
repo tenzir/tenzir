@@ -9,6 +9,10 @@ on:
     types:
       - opened
       - synchronize
+  pull_request_target:
+    types:
+      - labeled
+      - synchronize
   merge_group:
     types:
       - checks_requested
@@ -23,14 +27,15 @@ concurrency:
   # has a double-purpose: It ensures that caches are always able to pick up work
   # from previous builds of the same branch, and it rate-limits the CI to ensure
   # it's running smoothly for all users.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   # Cancel all in-progress runs of this action for the same pull request.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || github.event_name == 'merge_group' }}
 
 env:
   CCACHE_MAXSIZE: "5G"
   GCP_WORKLOAD_IDP: projects/1057156539039/locations/global/workloadIdentityPools/gh-actions-pool/providers/gh-actions-provider
   GCP_SERVICE_ACCOUNT: github-actions@crucial-kayak-261816.iam.gserviceaccount.com
+  EXTERNAL_PR_LABEL: ok-to-test
 
 # TODO: cherry-pick permissions
 permissions:
@@ -49,14 +54,50 @@ permissions:
   statuses: write
 
 jobs:
+  reset-external-pr-approval:
+    name: Reset External PR Approval
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove ok-to-test label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = process.env.EXTERNAL_PR_LABEL;
+            const labels = context.payload.pull_request.labels.map((entry) => entry.name);
+            if (!labels.includes(label)) {
+              core.notice(`label ${label} is already absent`);
+              return;
+            }
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: label,
+            });
+            core.notice(`removed ${label} after synchronize`);
+        env:
+          EXTERNAL_PR_LABEL: ${{ env.EXTERNAL_PR_LABEL }}
+
   configure:
     name: Configure
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      (
+        github.event.action == 'labeled' &&
+        github.event.label.name == 'ok-to-test' &&
+        github.event.pull_request.head.repo.full_name != github.repository
+      )
     runs-on: ubuntu-latest
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
       trusted-ci: ${{ steps.configure.outputs.trusted-ci }}
+      checkout-ref: ${{ steps.configure.outputs.checkout-ref }}
       ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
@@ -65,6 +106,7 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
+      run-external-pr-validation: ${{ steps.configure.outputs.run-external-pr-validation }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
       nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
@@ -75,11 +117,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.number) || github.ref }}
       - name: Fetch to merge-base
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
         run: |
-          git fetch origin main
-          base_ref="${GITHUB_BASE_REF:-main}"
+          base_ref="${GITHUB_BASE_REF:-${{ github.event.pull_request.base.ref || 'main' }}}"
+          git fetch origin "$base_ref"
           git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
@@ -141,25 +184,30 @@ jobs:
             # In Pull Requests we replace the normal commit hash based version
             # suffix with the PR number. That way we get stable arguments to
             # `docker build`, which is needed for layer caching to work.
-            if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == "pull_request" || "$GITHUB_EVENT_NAME" == "pull_request_target" ]]; then
               tenzir_docker_version_build_metadata="pr${{ github.event.number }}"
             fi
           fi
           echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> $GITHUB_OUTPUT
           echo "tenzir-docker-version-build-metadata=${tenzir_docker_version_build_metadata}" >> $GITHUB_OUTPUT
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" || "$GITHUB_EVENT_NAME" == "pull_request_target" ]]; then
             tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
+            checkout_ref="refs/pull/${{ github.event.number }}/merge"
           else
             tenzir_container_ref="${{ github.sha }}"
+            checkout_ref="${{ github.sha }}"
           fi
           echo "tenzir-container-ref=${tenzir_container_ref}" >> $GITHUB_OUTPUT
+          echo "checkout-ref=${checkout_ref}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
           #################################
           trusted_ci=true
+          external_pull_request=false
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && \
              [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
             trusted_ci=false
+            external_pull_request=true
           fi
           echo "trusted-ci=${trusted_ci}" >> $GITHUB_OUTPUT
           # TODO: Split this into two steps:
@@ -167,18 +215,20 @@ jobs:
           # * Enable Jobs (below)
           echo "::notice Disable all others so we can selectivly enable again"
           echo "run-regression-tests=false" >> $GITHUB_OUTPUT
+          echo "run-external-pr-validation=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
-          if [[ "${trusted_ci}" != "true" ]]; then
-            echo "::notice External pull request detected; skipping privileged CI jobs"
-            exit 0
-          fi
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
+            run_regression_tests=true; \
+            run_python=true; \
+            run_docker_tenzir=true; \
+            run_tenzir_nix=true; \
+            run_tenzir=true; \
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
@@ -204,45 +254,48 @@ jobs:
             exit 0
           fi
           # From here on we should be in a pull request.
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" && "$GITHUB_EVENT_NAME" != "pull_request_target" ]]; then
             echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
             exit 1
           fi
           echo "::notice Enabling pull request jobs"
           echo "::notice sourcing configure helpers"
           # Set the comparison point for detecting changes in pull requests
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            base_ref="${GITHUB_BASE_REF:-main}"
-            before_sha=$(git merge-base "origin/$base_ref" HEAD)
-            export before_sha
-          fi
+          base_ref="${GITHUB_BASE_REF:-${{ github.event.pull_request.base.ref || 'main' }}}"
+          before_sha=$(git merge-base "origin/$base_ref" HEAD)
+          export before_sha
           source ./.github/workflows/configure_helpers.bash
           # Run all checks if this file changed.
           if is_changed .github/workflows/tenzir.yaml; then
             run_all_checks
-            exit 0
+          else
+            run_if_changed python "python/"
+            TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
+            run_if_changed tenzir "${TENZIR_SOURCES[@]}"
+            run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
+            run_if_changed_default docker-tenzir $run_docker_tenzir \
+              "Dockerfile" ".dockerignore" \
+              "scripts/debian/build-*.sh" \
+              "scripts/debian/install-dev-dependencies.sh" \
+              ".github/workflows/docker.yaml" \
+              ".github/workflows/docker-config-base.json"
+            run_if_changed_default regression-tests $run_docker_tenzir
+            run_if_changed tenzir-nix \
+              "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
+              ".github/workflows/nix.nu" \
+              ".github/workflows/nix.yaml" \
+              ".github/workflows/nix-config-base.json"
           fi
-          run_if_changed python "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
-          run_if_changed tenzir "${TENZIR_SOURCES[@]}"
-          run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
-          run_if_changed_default docker-tenzir $run_docker_tenzir \
-            "Dockerfile" ".dockerignore" \
-            "scripts/debian/build-*.sh" \
-            "scripts/debian/install-dev-dependencies.sh" \
-            ".github/workflows/docker.yaml" \
-            ".github/workflows/docker-config-base.json"
-          run_if_changed_default regression-tests $run_docker_tenzir
-          run_if_changed tenzir-nix \
-            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
-            ".github/workflows/nix.nu" \
-            ".github/workflows/nix.yaml" \
-            ".github/workflows/nix-config-base.json"
+          if [[ "${external_pull_request}" == "true" ]]; then
+            run_external_pr_validation="$(any ${run_tenzir} ${run_python} ${run_docker_tenzir} ${run_regression_tests} ${run_tenzir_nix})"
+            echo "run-external-pr-validation=${run_external_pr_validation}" >> $GITHUB_OUTPUT
+            echo "::notice External pull request detected; using fork-safe validation path"
+          fi
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-tenzir == 'true'
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" || "$GITHUB_EVENT_NAME" == "pull_request_target" ]]; then
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             tags=('main' "${{ github.sha }}")
@@ -262,7 +315,7 @@ jobs:
             --args -- "${tags[@]}")"
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" || "$GITHUB_EVENT_NAME" == "pull_request_target" ]]; then
             docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
               ."image-registries") |= ["ghcr.io"]' \
@@ -270,6 +323,54 @@ jobs:
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
+
+  external-pr-validation:
+    name: External PR Validation
+    needs:
+      - configure
+    if: >-
+      needs.configure.outputs.run-external-pr-validation == 'true' &&
+      needs.configure.outputs.trusted-ci != 'true'
+    runs-on: ubuntu-latest
+    container: debian:bookworm-20230227-slim
+    env:
+      BUILD_DIR: build
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get -y install git
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.configure.outputs.checkout-ref }}
+      - name: Checkout public submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive libtenzir
+          git submodule update --init --recursive plugins
+      - name: Install dependencies
+        run: |
+          ./scripts/debian/install-dev-dependencies.sh
+      - name: Configure
+        run: |
+          cmake -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE:STRING=Debug \
+            -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
+            -DTENZIR_PLUGINS:STRING='plugins/*' \
+            -DTENZIR_UNIT_TEST_TIMEOUT=180
+      - name: Compile all targets
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
+      - name: Run unit tests
+        run: |
+          cmake --build "$BUILD_DIR" --target unit-tests
+      - name: Run integration tests
+        run: |
+          cmake --build "$BUILD_DIR" --target integration-tests
 
   policy-enforcement:
     name: Policy Enforcement
@@ -280,6 +381,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.configure.outputs.checkout-ref }}
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -331,6 +434,7 @@ jobs:
     if: needs.configure.outputs.run-docker-tenzir == 'true' && needs.configure.outputs.trusted-ci == 'true'
     uses: ./.github/workflows/docker.yaml
     with:
+      checkout-ref: ${{ needs.configure.outputs.checkout-ref }}
       config: ${{ needs.configure.outputs.docker-config }}
     secrets: inherit
 
@@ -360,7 +464,7 @@ jobs:
     needs:
       - docker-tenzir
       - configure
-    if: needs.configure.outputs.run-regression-tests == 'true'
+    if: needs.configure.outputs.run-regression-tests == 'true' && needs.configure.outputs.trusted-ci == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -372,6 +476,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.configure.outputs.checkout-ref }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
@@ -390,6 +496,7 @@ jobs:
     if: needs.configure.outputs.run-tenzir-nix == 'true' && needs.configure.outputs.trusted-ci == 'true' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
+      checkout-ref: ${{ needs.configure.outputs.checkout-ref }}
       runner: ubicloud-standard-4-arm
       os: linux
       arch: aarch64
@@ -402,6 +509,7 @@ jobs:
     if: needs.configure.outputs.run-tenzir-nix == 'true' && needs.configure.outputs.trusted-ci == 'true' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
+      checkout-ref: ${{ needs.configure.outputs.checkout-ref }}
       runner: ubuntu-latest
       os: linux
       arch: x86_64
@@ -414,6 +522,7 @@ jobs:
     if: needs.configure.outputs.run-tenzir-nix == 'true' && needs.configure.outputs.trusted-ci == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
+      checkout-ref: ${{ needs.configure.outputs.checkout-ref }}
       runner: macos-15
       os: darwin
       arch: arm64
@@ -485,6 +594,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.configure.outputs.checkout-ref }}
       - name: Tailscale
         if: false && runner.os == 'Linux'
         uses: tailscale/github-action@v3
@@ -651,6 +762,8 @@ jobs:
       DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          ref: ${{ needs.configure.outputs.checkout-ref }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
@@ -708,6 +821,8 @@ jobs:
       DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          ref: ${{ needs.configure.outputs.checkout-ref }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
@@ -777,6 +892,7 @@ jobs:
   pass-branch-protections:
     needs:
       - configure
+      - external-pr-validation
       - docker-tenzir
       - policy-enforcement
       - python
@@ -789,7 +905,7 @@ jobs:
       - tenzir-static-arm64-darwin
       - tenzir-static-aarch64-linux
       - tenzir-static-x86_64-linux
-    if: always() && github.event_name != 'workflow_dispatch'
+    if: always() && github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     name: Pass Branch Protections
     steps:

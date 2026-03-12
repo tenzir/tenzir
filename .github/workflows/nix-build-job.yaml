@@ -2,6 +2,9 @@ name: Nix Build Job
 on:
   workflow_call:
     inputs:
+      checkout-ref:
+        type: string
+        required: true
       runner:
         type: string
         required: true
@@ -53,6 +56,8 @@ jobs:
           fi
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          ref: ${{ inputs.checkout-ref }}
       - name: Tailscale
         if: false
         uses: tailscale/github-action@a392da0a182bba0e9613b6243ebd69529b1878aa  # v4.1.0
