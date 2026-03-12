@@ -9,6 +9,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -17,10 +18,12 @@
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/registry.hpp>
@@ -30,6 +33,7 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
+#include <folly/coro/Sleep.h>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
@@ -40,6 +44,12 @@
 namespace tenzir::plugins::summarize {
 
 namespace {
+
+using std::chrono::duration_cast;
+
+auto sleep_for(duration d) -> Task<void> {
+  return folly::coro::sleep(duration_cast<folly::HighResDuration>(d));
+}
 
 /// The key by which aggregations are grouped. Essentially, this is a vector of
 /// data. We create a new type here to support a custom hash and equality
@@ -460,6 +470,173 @@ private:
   group_map<std::vector<data>> previous_values_;
 };
 
+// ---------------------------------------------------------------------------
+// build_config: shared parsing logic used by both plugin2::make() and Summarize
+// ---------------------------------------------------------------------------
+
+/// Classifies a flat list of expressions (as received from inv.args or from
+/// optional_variadic) into a fully-populated config.  The options={...}
+/// positional-assignment syntax is handled here, identical to the old make().
+static auto build_config(const std::vector<ast::expression>& exprs,
+                         session ctx) -> failure_or<config> {
+  auto cfg = config{};
+  auto failed = false;
+  auto mode_location = std::optional<location>{};
+
+  auto parse_options = [&](const ast::record& rec) {
+    for (const auto& item : rec.items) {
+      const auto* field = try_as<ast::record::field>(item);
+      if (not field) {
+        diagnostic::error("spread not allowed in options record")
+          .primary(rec.get_location())
+          .emit(ctx);
+        failed = true;
+        return;
+      }
+      const auto& name = field->name.name;
+      if (name == "frequency") {
+        auto value = const_eval(field->expr, ctx);
+        if (not value) {
+          failed = true;
+          return;
+        }
+        auto* dur = try_as<duration>(*value);
+        if (! dur) {
+          diagnostic::error("expected duration for `frequency`")
+            .primary(field->expr)
+            .emit(ctx);
+          failed = true;
+          return;
+        }
+        cfg.frequency = *dur;
+      } else if (name == "mode") {
+        auto value = const_eval(field->expr, ctx);
+        if (not value) {
+          failed = true;
+          return;
+        }
+        auto* str = try_as<std::string>(*value);
+        if (! str) {
+          diagnostic::error("expected string for `mode`")
+            .primary(field->expr)
+            .emit(ctx);
+          failed = true;
+          return;
+        }
+        if (*str == "reset" || *str == "cumulative" || *str == "update") {
+          cfg.mode = *str;
+          mode_location = field->expr.get_location();
+        } else {
+          diagnostic::error("invalid mode `{}`", *str)
+            .primary(field->expr)
+            .hint("expected `reset`, `cumulative`, or `update`")
+            .emit(ctx);
+          failed = true;
+          return;
+        }
+      } else {
+        diagnostic::error("unknown option `{}`", name)
+          .primary(field->name)
+          .emit(ctx);
+        failed = true;
+        return;
+      }
+    }
+  };
+
+  auto add_aggregate = [&](std::optional<ast::field_path> dest,
+                           ast::function_call call) {
+    auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
+    if (not fn) {
+      diagnostic::error("function does not support aggregations")
+        .primary(call.fn)
+        .hint("if you want to group by this, use assignment before")
+        .docs("https://docs.tenzir.com/operators/summarize")
+        .emit(ctx);
+      return;
+    }
+    if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
+      auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+      cfg.indices.push_back(index);
+      cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+    }
+  };
+
+  auto add_group
+    = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
+        auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+        cfg.indices.push_back(index);
+        cfg.groups.emplace_back(std::move(dest), std::move(expr));
+      };
+
+  for (const auto& arg : exprs) {
+    arg.match(
+      [&](const ast::function_call& arg) {
+        add_aggregate(std::nullopt, arg);
+      },
+      [&](const ast::assignment& arg) {
+        auto* left = try_as<ast::field_path>(arg.left);
+        if (not left) {
+          diagnostic::error("expected data selector, not meta")
+            .primary(arg.left)
+            .emit(ctx);
+          return;
+        }
+        // Check for `options=...` named argument
+        if (not left->has_this() and left->path().size() == 1
+            and left->path()[0].id.name == "options") {
+          auto* rec = try_as<ast::record>(arg.right);
+          if (not rec) {
+            diagnostic::error("expected record for `options`")
+              .primary(arg.right)
+              .emit(ctx);
+            failed = true;
+            return;
+          }
+          parse_options(*rec);
+          return;
+        }
+        arg.right.match(
+          [&](const ast::function_call& right) {
+            add_aggregate(std::move(*left), right);
+          },
+          [&](const auto&) {
+            auto right = ast::field_path::try_from(arg.right);
+            if (right) {
+              add_group(std::move(*left), std::move(*right));
+            } else {
+              diagnostic::error(
+                "expected selector or aggregation function call")
+                .primary(arg.right)
+                .emit(ctx);
+            }
+          });
+      },
+      [&](const auto&) {
+        auto selector = ast::field_path::try_from(arg);
+        if (selector) {
+          add_group(std::nullopt, std::move(*selector));
+        } else {
+          diagnostic::error(
+            "expected selector, assignment or aggregation function call")
+            .primary(arg)
+            .emit(ctx);
+        }
+      });
+  }
+
+  if (failed) {
+    return failure::promise();
+  }
+  if (mode_location and not cfg.frequency) {
+    diagnostic::error("`mode` requires `frequency` to be set")
+      .primary(*mode_location)
+      .emit(ctx);
+    return failure::promise();
+  }
+  return cfg;
+}
+
 class summarize_operator2 final : public crtp_operator<summarize_operator2> {
 public:
   summarize_operator2() = default;
@@ -552,168 +729,121 @@ private:
   config cfg_;
 };
 
-class plugin2 final : public operator_plugin2<summarize_operator2> {
+// -------------------------
+// SummarizeArgs + Summarize
+// -------------------------
+
+struct SummarizeArgs {
+  std::vector<ast::expression> exprs;
+
+  friend auto inspect(auto& f, SummarizeArgs& x) -> bool {
+    return f.apply(x.exprs);
+  }
+};
+
+class Summarize final : public Operator<table_slice, table_slice> {
+public:
+  explicit Summarize(SummarizeArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    provider_.emplace(session_provider::make(ctx.dh()));
+    auto cfg_result = build_config(args_.exprs, provider_->as_session());
+    // Validation was performed at describe()-time, so this must succeed.
+    TENZIR_ASSERT(cfg_result);
+    frequency_ = cfg_result->frequency;
+    impl_ = std::make_unique<implementation2>(*std::move(cfg_result),
+                                              provider_->as_session());
+    co_return;
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push, ctx);
+    impl_->add(input);
+    co_return;
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    for (auto& slice : impl_->finish()) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  /// Drives periodic flushing when `options={frequency: ...}` is set.
+  /// Sleeps for one interval and returns; the executor calls process_task()
+  /// which performs the flush, then immediately calls await_task() again.
+  /// Without a frequency, we wait forever so the executor never wakes us.
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (not frequency_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_await sleep_for(*frequency_);
+    co_return {};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    for (auto& slice : impl_->flush()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto snapshot(Serde&) -> void override {
+  }
+
+private:
+  SummarizeArgs args_;
+  std::optional<session_provider> provider_;
+  std::unique_ptr<implementation2> impl_;
+  /// Cached from the parsed config so await_task() (which is const) can read
+  /// it without re-parsing args_.
+  mutable std::optional<duration> frequency_;
+};
+
+class plugin2 final : public virtual operator_plugin2<summarize_operator2>,
+                      public virtual OperatorPlugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto cfg = config{};
-    auto failed = false;
-    auto mode_location = std::optional<location>{};
-
-    // Helper to parse the options record
-    auto parse_options = [&](ast::record& rec) {
-      for (auto& item : rec.items) {
-        auto* field = try_as<ast::record::field>(item);
-        if (not field) {
-          diagnostic::error("spread not allowed in options record")
-            .primary(rec.get_location())
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-        const auto& name = field->name.name;
-        if (name == "frequency") {
-          auto value = const_eval(field->expr, ctx);
-          if (not value) {
-            failed = true;
-            return;
-          }
-          auto* dur = try_as<duration>(*value);
-          if (! dur) {
-            diagnostic::error("expected duration for `frequency`")
-              .primary(field->expr)
-              .emit(ctx);
-            failed = true;
-            return;
-          }
-          cfg.frequency = *dur;
-        } else if (name == "mode") {
-          auto value = const_eval(field->expr, ctx);
-          if (not value) {
-            failed = true;
-            return;
-          }
-          auto* str = try_as<std::string>(*value);
-          if (! str) {
-            diagnostic::error("expected string for `mode`")
-              .primary(field->expr)
-              .emit(ctx);
-            failed = true;
-            return;
-          }
-          if (*str == "reset" || *str == "cumulative" || *str == "update") {
-            cfg.mode = *str;
-            mode_location = field->expr.get_location();
-          } else {
-            diagnostic::error("invalid mode `{}`", *str)
-              .primary(field->expr)
-              .hint("expected `reset`, `cumulative`, or `update`")
-              .emit(ctx);
-            failed = true;
-            return;
-          }
-        } else {
-          diagnostic::error("unknown option `{}`", name)
-            .primary(field->name)
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-      }
-    };
-
-    auto add_aggregate = [&](std::optional<ast::field_path> dest,
-                             ast::function_call call) {
-      // TODO: Improve this and try to forward function handle directly.
-      auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
-      if (not fn) {
-        diagnostic::error("function does not support aggregations")
-          .primary(call.fn)
-          .hint("if you want to group by this, use assignment before")
-          .docs("https://docs.tenzir.com/operators/summarize")
-          .emit(ctx);
-        return;
-      }
-      // We test the arguments by making and discarding it. This is a bit
-      // hacky and should be improved in the future.
-      if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
-        auto index = detail::narrow<int64_t>(cfg.aggregates.size());
-        cfg.indices.push_back(index);
-        cfg.aggregates.emplace_back(std::move(dest), std::move(call));
-      }
-    };
-    auto add_group
-      = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
-          auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
-          cfg.indices.push_back(index);
-          cfg.groups.emplace_back(std::move(dest), std::move(expr));
-        };
-    for (auto& arg : inv.args) {
-      arg.match(
-        [&](ast::function_call& arg) {
-          add_aggregate(std::nullopt, std::move(arg));
-        },
-        [&](ast::assignment& arg) {
-          auto* left = try_as<ast::field_path>(arg.left);
-          if (not left) {
-            // TODO
-            diagnostic::error("expected data selector, not meta")
-              .primary(arg.left)
-              .emit(ctx);
-            return;
-          }
-          // Check for `options=...` named argument
-          if (not left->has_this() and left->path().size() == 1
-              and left->path()[0].id.name == "options") {
-            auto* rec = try_as<ast::record>(arg.right);
-            if (not rec) {
-              diagnostic::error("expected record for `options`")
-                .primary(arg.right)
-                .emit(ctx);
-              failed = true;
-              return;
-            }
-            parse_options(*rec);
-            return;
-          }
-          arg.right.match(
-            [&](ast::function_call& right) {
-              add_aggregate(std::move(*left), std::move(right));
-            },
-            [&](auto&) {
-              auto right = ast::field_path::try_from(arg.right);
-              if (right) {
-                add_group(std::move(*left), std::move(*right));
-              } else {
-                diagnostic::error(
-                  "expected selector or aggregation function call")
-                  .primary(arg.right)
-                  .emit(ctx);
-              }
-            });
-        },
-        [&](auto&) {
-          auto selector = ast::field_path::try_from(arg);
-          if (selector) {
-            add_group(std::nullopt, std::move(*selector));
-          } else {
-            diagnostic::error(
-              "expected selector, assignment or aggregation function call")
-              .primary(arg)
-              .emit(ctx);
-          }
-        });
-    }
-    if (failed) {
-      return failure::promise();
-    }
-    if (mode_location and not cfg.frequency) {
-      diagnostic::error("`mode` requires `frequency` to be set")
-        .primary(*mode_location)
-        .emit(ctx);
-      return failure::promise();
-    }
+    TRY(auto cfg, build_config(inv.args, ctx));
     return std::make_unique<summarize_operator2>(std::move(cfg));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<SummarizeArgs, Summarize>{};
+    auto exprs
+      = d.optional_variadic("exprs", &SummarizeArgs::exprs, "any");
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      auto values = ctx.get_all(exprs);
+      auto locations = ctx.get_locations(exprs);
+      TENZIR_ASSERT(values.size() == locations.size());
+
+      // Re-run the full classification via build_config so all errors
+      // (unknown aggregation functions, bad options, mode-without-frequency,
+      // etc.) are surfaced at compile time.
+      auto exprs_vec = std::vector<ast::expression>{};
+      exprs_vec.reserve(values.size());
+      for (auto i = 0uz; i < values.size(); ++i) {
+        if (not values[i]) {
+          // Incomplete expression — cannot validate yet; bail out silently.
+          return {};
+        }
+        exprs_vec.push_back(std::move(*values[i]));
+      }
+
+      auto provider = session_provider::make(ctx);
+      // Discard the result; we only care about any diagnostics emitted.
+      (void)build_config(exprs_vec, provider.as_session());
+      return {};
+    });
+    return d.without_optimize();
   }
 };
 
