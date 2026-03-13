@@ -151,19 +151,30 @@ struct config {
   /// corresponds to `aggregates`, otherwise `groups[-index - 1]`.
   std::vector<int64_t> indices;
 
+  /// Unevaluated expression for the `frequency` option. Set by build_config
+  /// when parsing options={frequency: <expr>}. Evaluated and written to
+  /// `frequency` by evaluate_options() after let-bindings are substituted.
+  std::optional<ast::expression> frequency_expr;
+
+  /// Unevaluated expression for the `mode` option. Set by build_config when
+  /// parsing options={mode: <expr>}. Evaluated and written to `mode` by
+  /// evaluate_options() after let-bindings are substituted.
+  std::optional<ast::expression> mode_expr;
+
   /// Optional frequency for periodic emission of aggregation results.
+  /// Populated by evaluate_options().
   std::optional<duration> frequency;
 
   /// Emission mode: "reset", "cumulative", or "update".
-  /// - "reset" (default): Reset aggregations after each emission
-  /// - "cumulative": Accumulate aggregations across emissions
-  /// - "update": Accumulate but only emit when values change
+  /// Populated by evaluate_options(). Defaults to "reset".
   std::string mode = "reset";
 
   friend auto inspect(auto& f, config& x) -> bool {
     return f.object(x).fields(f.field("aggregates", x.aggregates),
                               f.field("groups", x.groups),
                               f.field("indices", x.indices),
+                              f.field("frequency_expr", x.frequency_expr),
+                              f.field("mode_expr", x.mode_expr),
                               f.field("frequency", x.frequency),
                               f.field("mode", x.mode));
   }
@@ -419,8 +430,13 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
   -> failure_or<config> {
   auto cfg = config{};
   auto failed = false;
-  auto mode_location = std::optional<location>{};
 
+  // Store option field expressions without evaluating them.  Evaluation is
+  // intentionally deferred to evaluate_options(), which is called from
+  // plugin2::make() immediately (non-IR path, let-bindings already resolved)
+  // and from summarize_ir::substitute() after substitution (IR path).  This
+  // mirrors the pattern used for aggregation arguments: build_config stores
+  // the AST, a separate step validates/evaluates it once bindings are known.
   auto parse_options = [&](const ast::record& rec) {
     for (const auto& item : rec.items) {
       const auto* field = try_as<ast::record::field>(item);
@@ -433,45 +449,9 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
       }
       const auto& name = field->name.name;
       if (name == "frequency") {
-        auto value = const_eval(field->expr, ctx);
-        if (not value) {
-          failed = true;
-          return;
-        }
-        auto* dur = try_as<duration>(*value);
-        if (! dur) {
-          diagnostic::error("expected duration for `frequency`")
-            .primary(field->expr)
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-        cfg.frequency = *dur;
+        cfg.frequency_expr = field->expr;
       } else if (name == "mode") {
-        auto value = const_eval(field->expr, ctx);
-        if (not value) {
-          failed = true;
-          return;
-        }
-        auto* str = try_as<std::string>(*value);
-        if (! str) {
-          diagnostic::error("expected string for `mode`")
-            .primary(field->expr)
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-        if (*str == "reset" || *str == "cumulative" || *str == "update") {
-          cfg.mode = *str;
-          mode_location = field->expr.get_location();
-        } else {
-          diagnostic::error("invalid mode `{}`", *str)
-            .primary(field->expr)
-            .hint("expected `reset`, `cumulative`, or `update`")
-            .emit(ctx);
-          failed = true;
-          return;
-        }
+        cfg.mode_expr = field->expr;
       } else {
         diagnostic::error("unknown option `{}`", name)
           .primary(field->name)
@@ -573,12 +553,6 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
   if (failed) {
     return failure::promise();
   }
-  if (mode_location and not cfg.frequency) {
-    diagnostic::error("`mode` requires `frequency` to be set")
-      .primary(*mode_location)
-      .emit(ctx);
-    return failure::promise();
-  }
   return cfg;
 }
 
@@ -592,6 +566,50 @@ auto validate_aggregates(const config& cfg, session ctx) -> failure_or<void> {
       = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
     TENZIR_ASSERT(fn); // already verified as aggregation_plugin in build_config
     TRY(fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx));
+  }
+  return {};
+}
+
+/// Evaluates cfg.frequency_expr and cfg.mode_expr and writes the results into
+/// cfg.frequency and cfg.mode. Must be called after all let-binding references
+/// in the expressions have been substituted. Mirrors validate_aggregates() for
+/// the options field: build_config stores the AST, this step evaluates it.
+auto evaluate_options(config& cfg, session ctx) -> failure_or<void> {
+  if (cfg.frequency_expr) {
+    TRY(auto value, const_eval(*cfg.frequency_expr, ctx));
+    auto* dur = try_as<duration>(value);
+    if (not dur) {
+      diagnostic::error("expected duration for `frequency`")
+        .primary(*cfg.frequency_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    cfg.frequency = *dur;
+  }
+  if (cfg.mode_expr) {
+    TRY(auto value, const_eval(*cfg.mode_expr, ctx));
+    auto* str = try_as<std::string>(value);
+    if (not str) {
+      diagnostic::error("expected string for `mode`")
+        .primary(*cfg.mode_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (*str == "reset" || *str == "cumulative" || *str == "update") {
+      cfg.mode = *str;
+    } else {
+      diagnostic::error("invalid mode `{}`", *str)
+        .primary(*cfg.mode_expr)
+        .hint("expected `reset`, `cumulative`, or `update`")
+        .emit(ctx);
+      return failure::promise();
+    }
+  }
+  if (cfg.mode_expr and not cfg.frequency) {
+    diagnostic::error("`mode` requires `frequency` to be set")
+      .primary(*cfg.mode_expr)
+      .emit(ctx);
+    return failure::promise();
   }
   return {};
 }
@@ -765,14 +783,22 @@ public:
         TRY(arg.substitute(ctx));
       }
     }
-    // Validate aggregation arguments only when instantiating, i.e., when all
-    // let-bindings are guaranteed to be resolved.  Calling make_aggregation
-    // earlier (e.g. during compile()) would fail for parameterized calls like
-    // quantile(x, q=$q) because $q is still an unresolved dollar_var at that
-    // point.
+    // Substitute through option expressions so that let-binding references
+    // (e.g. options={frequency: $freq}) are resolved before evaluation.
+    if (cfg_.frequency_expr) {
+      TRY(cfg_.frequency_expr->substitute(ctx));
+    }
+    if (cfg_.mode_expr) {
+      TRY(cfg_.mode_expr->substitute(ctx));
+    }
+    // Validate aggregation arguments and evaluate options only when
+    // instantiating, i.e., when all let-bindings are guaranteed to be
+    // resolved.  Both make_aggregation (for aggregates) and const_eval (for
+    // option values) require fully-resolved expressions to succeed.
     if (instantiate) {
       auto provider = session_provider::make(ctx);
       TRY(validate_aggregates(cfg_, provider.as_session()));
+      TRY(evaluate_options(cfg_, provider.as_session()));
     }
     return {};
   }
@@ -811,6 +837,7 @@ public:
     -> failure_or<operator_ptr> override {
     TRY(auto cfg, build_config(std::move(inv.args), ctx));
     TRY(validate_aggregates(cfg, ctx));
+    TRY(evaluate_options(cfg, ctx));
     return std::make_unique<summarize_operator2>(std::move(cfg));
   }
 

@@ -6,20 +6,6 @@
 
 ---
 
-## P2 — Evaluate summarize options after let substitution
-
-**File:** `libtenzir/builtins/operators/summarize.cpp:437`  
-**Source:** Codex
-
-`build_config` const-evaluates `options.frequency` / `options.mode` immediately
-during `compile()`, before let bindings are substituted into the IR operator.
-Queries like `let freq = 1s; ... | summarize ..., options={frequency: $freq}`
-therefore fail at compile time despite having valid bindings at instantiation time.
-
-**Fix:** Defer option evaluation until substitution/spawn.
-
----
-
 ## P3 — Timer drift: sleep restarted after flush, not on wall-clock intervals
 
 **File:** `libtenzir/builtins/operators/summarize.cpp:694–706`  
@@ -80,16 +66,14 @@ flush-then-final sequence.
 
 ## Summary
 
-🟠 P2 · 💬 GIT-1 · Evaluate summarize options after let substitution · `summarize.cpp:437`
-🟡 P3 · 💬 GIT-2 · Timer drift: sleep restarted after flush, not on wall-clock intervals · `summarize.cpp:694`
-🟡 P3 · 💬 GIT-3 · Last periodic flush may be skipped when EndOfData races the timer · `summarize.cpp:685`
-🔴 P1 · 💬 GIT-4 · Implement serialization · `summarize.cpp:716`
+🟡 P3 · 💬 GIT-1 · Timer drift: sleep restarted after flush, not on wall-clock intervals · `summarize.cpp:694`
+🟡 P3 · 💬 GIT-2 · Last periodic flush may be skipped when EndOfData races the timer · `summarize.cpp:685`
+🔴 P1 · 💬 GIT-3 · Implement serialization · `summarize.cpp:716`
 
 ╭───────────────────────────────────────────╮
-│ 🔴 P1: 1   🟠 P2: 1   🟡 P3: 2   ⚪ P4: 0 │
+│ 🔴 P1: 1   🟠 P2: 0   🟡 P3: 2   ⚪ P4: 0 │
 ╰───────────────────────────────────────────╯
 **Blocked**:
 - Implement `snapshot()` serialization before shipping — the current no-op means aggregation state is silently lost across restarts.
-- Defer `options.frequency` / `options.mode` const-evaluation to `substitute()` so let-bound option values work in the IR path (same root cause as the aggregation-validation fix already landed).
 - Address the timer-drift and last-flush-race issues together, as both stem from the `await_task`/`finalize` split; consider a `pending_flush` flag in `finalize()` and documenting the drift behavior.
 
