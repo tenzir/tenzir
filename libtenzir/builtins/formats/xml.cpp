@@ -885,8 +885,6 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
         winlog_system_to_record(system_record, *elem);
       } else if (elem->name == "EventData") {
         std::vector<const xml_element*> data_elems;
-        bool has_named = false;
-        bool has_unnamed = false;
         for (const auto& event_data_child : elem->children) {
           if (auto* data_elem
               = try_as<std::unique_ptr<xml_element>>(event_data_child)) {
@@ -894,26 +892,14 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
               continue;
             }
             data_elems.push_back(data_elem->get());
-            if (data_name_attr(*data_elem->get())) {
-              has_named = true;
-            } else {
-              has_unnamed = true;
-            }
           }
         }
         if (data_elems.empty()) {
           record.field(elem->name).record();
           continue;
         }
-        if (not has_named and has_unnamed) {
-          auto list = record.field(elem->name).list();
-          for (const auto* data_elem : data_elems) {
-            append_data_value(list, *data_elem);
-          }
-        } else {
-          auto event_data_record = record.field(elem->name).record();
-          transform_event_data(event_data_record, data_elems);
-        }
+        auto event_data_record = record.field(elem->name).record();
+        transform_event_data(event_data_record, data_elems);
       } else {
         // Regular element handling
         auto field = record.field(elem->name);

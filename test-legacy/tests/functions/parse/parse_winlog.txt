@@ -47,10 +47,10 @@
     Channel: "Application",
     Computer: "SERVER1",
   },
-  EventData: [
-    "MyApp.exe",
-    "1.0.0.0",
-  ],
+  EventData: {
+    "0": "MyApp.exe",
+    "1": 1.0.0.0,
+  },
 }
 {
   System: {
@@ -70,9 +70,6 @@
   },
 }
 {}
-warning: type mismatch between list elements
- = note: field `EventData`
-
 warning: failed to parse XML: line 1:15: no element found
   --> tests/functions/parse/parse_winlog.tql:72:8
    |
