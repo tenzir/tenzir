@@ -707,7 +707,13 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(push, ctx);
+    TENZIR_UNUSED(ctx);
+    if (pending_flush_) {
+      pending_flush_ = false;
+      for (auto& slice : impl_->flush()) {
+        co_await push(std::move(slice));
+      }
+    }
     if (input.rows() == 0) {
       co_return;
     }
@@ -725,8 +731,9 @@ public:
   }
 
   /// Drives periodic flushing when `options={frequency: ...}` is set.
-  /// Sleeps for one frequency interval; the executor calls process_task() to
-  /// perform the flush, then calls await_task() again immediately.
+  /// Sleeps until the next scheduled wall-clock deadline and marks a pending
+  /// flush. If process() runs before the scheduled task executes, it will flush
+  /// immediately and clear the pending flag so process_task() can skip it.
   /// Without a frequency the default implementation waits forever.
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
@@ -734,13 +741,22 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    co_await sleep_for(*cfg_.frequency);
+    if (next_flush_ == time::min()) {
+      next_flush_ = time::clock::now() + *cfg_.frequency;
+    } else {
+      next_flush_ += *cfg_.frequency;
+    }
+    co_await sleep_until(next_flush_);
+    pending_flush_ = true;
     co_return {};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result, ctx);
+    if (not std::exchange(pending_flush_, false)) {
+      co_return;
+    }
     for (auto& slice : impl_->flush()) {
       co_await push(std::move(slice));
     }
@@ -761,6 +777,13 @@ private:
   // guarantees impl_ is destroyed before provider_.
   std::optional<session_provider> provider_;
   std::unique_ptr<implementation2> impl_;
+  /// Next wall-clock deadline for periodic flush. Mutable because await_task()
+  /// is const but advances the schedule each time it is awaited.
+  mutable time next_flush_ = time::min();
+  /// Set when await_task's sleep completes. If process() runs before
+  /// process_task(), it will perform the flush and clear this flag so the
+  /// scheduled task can skip its flush.
+  mutable bool pending_flush_ = false;
 };
 
 class summarize_ir final : public ir::Operator {
