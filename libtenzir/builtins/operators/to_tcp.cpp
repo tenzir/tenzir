@@ -23,15 +23,10 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
-#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
-#include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/futures/Future.h>
 #include <folly/io/coro/Transport.h>
 
-#include <algorithm>
-#include <atomic>
 #include <memory>
 
 namespace tenzir::plugins::to_tcp {
@@ -49,12 +44,6 @@ constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 // Cap retries at five seconds to avoid hammering broken endpoints while still
 // keeping recovery reasonably quick once the peer comes back.
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
-// Bound a single write attempt so a stalled peer stops the pipeline instead of
-// letting output bytes pile up behind an indefinitely blocked socket.
-constexpr auto write_timeout = std::chrono::seconds{5};
-// The control queue only carries wakeups and reconnect requests, so a small
-// fixed capacity is sufficient while still tolerating short bursts.
-constexpr auto control_queue_capacity = uint32_t{64};
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -64,11 +53,6 @@ struct ToTcpArgs {
 
 class ToTcp final : public Operator<table_slice, void> {
 public:
-  struct EnsureConnected {};
-  struct Wakeup {};
-  using Message = variant<EnsureConnected, Wakeup>;
-  using MessageQueue = folly::coro::BoundedQueue<Message>;
-
   explicit ToTcp(ToTcpArgs args) : args_{std::move(args)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -100,12 +84,11 @@ public:
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
                                       tag_v<table_slice>);
     TENZIR_UNUSED(sub);
-    request_connect();
     co_return;
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_->load()) {
+    if (done_) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
@@ -122,101 +105,68 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (done_->load() or not chunk or chunk->size() == 0) {
+    if (done_ or not chunk or chunk->size() == 0) {
       co_return;
     }
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    {
-      auto guard = co_await transport_mutex_->lock();
-      if (done_->load()) {
+    while (not done_) {
+      co_await ensure_connected(ctx);
+      if (done_) {
         co_return;
       }
-      if (not transport_) {
-        request_connect();
-      }
-    }
-    co_await ensure_connected(ctx);
-    auto old_transport = Option<Box<folly::coro::Transport>>{};
-    {
-      auto guard = co_await transport_mutex_->lock();
-      if (done_->load()) {
+      auto old_transport = Option<Box<folly::coro::Transport>>{};
+      auto guard = co_await state_->lock();
+      if (done_) {
         co_return;
       }
-      if (not transport_) {
-        diagnostic::warning("connection to {} is not established",
-                            address_.describe())
-          .primary(args_.endpoint.source)
-          .note("stopping to avoid dropping output bytes")
-          .hint("restart once the TCP endpoint is reachable")
-          .emit(ctx);
-        request_stop();
-        co_return;
-      }
+      TENZIR_ASSERT(guard->transport);
       try {
-        co_await folly::coro::timeout(
-          folly::coro::co_withExecutor(evb_, (*transport_)->write(data)),
-          write_timeout);
-        reconnect_backoff_ = connect_initial_backoff;
+        co_await folly::coro::co_withExecutor(evb_,
+                                              (*guard->transport)->write(data));
+        guard->reconnect_backoff = connect_initial_backoff;
         co_return;
-      } catch (folly::FutureTimeout const& ex) {
-        if (done_->load()) {
-          co_return;
-        }
-        diagnostic::warning("failed to write to {}", address_.describe())
-          .primary(args_.endpoint.source)
-          .note("reason: {}", ex.what())
-          .note("stopping to avoid dropping output bytes")
-          .emit(ctx);
-        old_transport = std::move(transport_);
-        transport_ = None{};
       } catch (folly::AsyncSocketException const& ex) {
-        if (done_->load()) {
-          co_return;
+        old_transport = std::move(guard->transport);
+        guard->transport = None{};
+        if (old_transport) {
+          diagnostic::warning("failed to write to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .note("retrying after reconnect")
+            .emit(ctx);
         }
-        diagnostic::warning("failed to write to {}", address_.describe())
-          .primary(args_.endpoint.source)
-          .note("reason: {}", ex.what())
-          .note("stopping to avoid dropping output bytes")
-          .emit(ctx);
-        old_transport = std::move(transport_);
-        transport_ = None{};
       }
-    }
-    if (old_transport) {
-      close_transport(std::move(*old_transport));
-      request_stop();
+      if (old_transport) {
+        close_transport(std::move(*old_transport));
+      }
     }
     co_return;
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (done_->load()) {
-      co_return {};
-    }
-    co_return co_await control_queue_->dequeue();
+    co_await wait_forever();
+    TENZIR_UNREACHABLE();
   }
 
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (done_->load()) {
-      co_return;
-    }
-    auto* message = result.try_as<Message>();
-    if (not message) {
-      co_return;
-    }
-    if (std::holds_alternative<EnsureConnected>(*message)) {
-      connect_scheduled_->store(false);
-      co_await ensure_connected(ctx);
-    }
-    co_return;
+  auto process_task(Any, OpCtx&) -> Task<void> override {
+    TENZIR_UNREACHABLE();
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
+    if (done_) {
+      co_await close_current_transport();
+      co_return FinalizeBehavior::done;
+    }
+    if (auto sub = ctx.get_sub(make_view(sub_key_))) {
+      auto pipeline = as<OpenPipeline<table_slice>>(*sub);
+      co_await pipeline.close();
+      co_return FinalizeBehavior::continue_;
+    }
+    request_stop();
     co_await close_current_transport();
     co_return FinalizeBehavior::done;
   }
@@ -228,10 +178,15 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_->load() ? OperatorState::done : OperatorState::unspecified;
+    return done_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
+  struct State {
+    Option<Box<folly::coro::Transport>> transport;
+    std::chrono::milliseconds reconnect_backoff = connect_initial_backoff;
+  };
+
   static auto close_transport(Box<folly::coro::Transport> transport) -> void {
     auto* evb = transport->getEventBase();
     TENZIR_ASSERT(evb);
@@ -243,9 +198,9 @@ private:
   auto close_current_transport() -> Task<void> {
     auto old_transport = Option<Box<folly::coro::Transport>>{};
     {
-      auto guard = co_await transport_mutex_->lock();
-      old_transport = std::move(transport_);
-      transport_ = None{};
+      auto guard = co_await state_->lock();
+      old_transport = std::move(guard->transport);
+      guard->transport = None{};
     }
     if (old_transport) {
       close_transport(std::move(*old_transport));
@@ -254,78 +209,57 @@ private:
   }
 
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
-    {
-      auto guard = co_await transport_mutex_->lock();
-      if (done_->load() or transport_) {
-        co_return;
-      }
-    }
-    auto connect_error = Option<std::string>{};
-    try {
-      auto boxed = Box<folly::coro::Transport>{co_await connect_tcp_client(
-        evb_, address_,
-        std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
-        tls_context_, host_)};
-      auto guard = co_await transport_mutex_->lock();
-      if (done_->load() or transport_) {
-        close_transport(std::move(boxed));
-        co_return;
-      }
-      transport_ = std::move(boxed);
-      reconnect_backoff_ = connect_initial_backoff;
-      TENZIR_DEBUG("to_tcp ensure_connected: connected to {}",
-                   address_.describe());
-      co_return;
-    } catch (folly::AsyncSocketException const& ex) {
-      // Connect/TLS handshake failures are per-attempt network errors; retry
-      // asynchronously with backoff instead of blocking this task forever.
-      if (done_->load()) {
-        co_return;
-      }
-      connect_error = ex.what();
-    }
-    if (connect_error) {
-      auto backoff = connect_initial_backoff;
+    while (not done_) {
       {
-        auto guard = co_await transport_mutex_->lock();
-        if (done_->load()) {
+        auto guard = co_await state_->lock();
+        if (guard->transport) {
           co_return;
         }
-        backoff = reconnect_backoff_;
-        reconnect_backoff_
-          = std::min(reconnect_backoff_ * 2, connect_max_backoff);
+      }
+      auto connect_error = Option<std::string>{};
+      try {
+        auto boxed = Box<folly::coro::Transport>{co_await connect_tcp_client(
+          evb_, address_,
+          std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
+          tls_context_, host_)};
+        auto guard = co_await state_->lock();
+        if (done_ or guard->transport) {
+          close_transport(std::move(boxed));
+          co_return;
+        }
+        guard->transport = std::move(boxed);
+        guard->reconnect_backoff = connect_initial_backoff;
+        TENZIR_DEBUG("to_tcp ensure_connected: connected to {}",
+                     address_.describe());
+        co_return;
+      } catch (folly::AsyncSocketException const& ex) {
+        if (done_) {
+          co_return;
+        }
+        connect_error = ex.what();
+      }
+      auto backoff = connect_initial_backoff;
+      {
+        auto guard = co_await state_->lock();
+        if (done_) {
+          co_return;
+        }
+        backoff = guard->reconnect_backoff;
+        guard->reconnect_backoff
+          = std::min(guard->reconnect_backoff * 2, connect_max_backoff);
       }
       diagnostic::warning("failed to connect to {}", address_.describe())
         .primary(args_.endpoint.source)
         .note("reason: {}", *connect_error)
         .hint("ensure a TCP server is listening on this endpoint")
         .emit(ctx);
-      ctx.spawn_task([this, backoff]() -> Task<void> {
-        co_await folly::coro::sleep(backoff);
-        request_connect();
-      }());
+      co_await folly::coro::sleep(backoff);
     }
+    co_return;
   }
 
   auto request_stop() -> void {
-    if (done_->exchange(true)) {
-      return;
-    }
-    connect_scheduled_->store(false);
-    TENZIR_UNUSED(control_queue_->try_enqueue(Wakeup{}));
-  }
-
-  auto request_connect() -> void {
-    if (done_->load()) {
-      return;
-    }
-    auto expected = false;
-    if (not connect_scheduled_->compare_exchange_strong(expected, true)) {
-      return;
-    }
-    if (not control_queue_->try_enqueue(EnsureConnected{})) {
-      connect_scheduled_->store(false);
-    }
+    done_ = true;
   }
 
   ToTcpArgs args_;
@@ -335,13 +269,8 @@ private:
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
-  Box<RawMutex> transport_mutex_{std::in_place};
-  Option<Box<folly::coro::Transport>> transport_;
-  std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
-  mutable Box<MessageQueue> control_queue_{std::in_place,
-                                           control_queue_capacity};
-  Box<std::atomic_bool> connect_scheduled_{std::in_place, false};
-  Box<std::atomic_bool> done_{std::in_place, false};
+  Box<Mutex<State>> state_{std::in_place, State{}};
+  bool done_ = false;
 };
 
 class ToTcpPlugin final : public OperatorPlugin {
