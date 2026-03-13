@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {a: 2025-01-02T00:00:00Z, b: 22}
+chart_bar x=a, y=sum(b), resolution=0s

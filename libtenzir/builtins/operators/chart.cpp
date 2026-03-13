@@ -943,6 +943,13 @@ auto validate_chart_common(auto y, auto limit, auto x_min, auto x_max,
                            DescribeCtx& ctx) -> Empty {
   // Validate y expression
   auto resolution = ctx.get(res);
+  if (resolution) {
+    if (resolution->inner.count() == 0) {
+      diagnostic::error("`resolution` must be non-zero")
+        .primary(*resolution)
+        .emit(ctx);
+    }
+  }
   if (auto y_val = ctx.get(y)) {
     validate_y_common(*y_val, resolution, ctx);
   }
