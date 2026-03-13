@@ -681,6 +681,9 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push, ctx);
+    if (input.rows() == 0) {
+      co_return;
+    }
     impl_->add(input);
     co_return;
   }
