@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async/result.hpp"
+
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/logger.hpp>
@@ -163,8 +165,9 @@ auto HttpPool::post(std::string body,
     [](std::shared_ptr<Impl> impl, std::string body,
        std::map<std::string, std::string> headers)
       -> Task<Result<HttpResponse, std::string>> {
-      auto result
-        = co_await folly::coro::co_awaitTry([&]() -> Task<HttpResponse> {
+      co_return (
+        co_await async_try(
+          std::invoke([&]() -> Task<HttpResponse> {
             auto sr = co_await impl->pool->getSessionWithReservation();
             TENZIR_ASSERT_ALWAYS(sr.session);
             auto* source
@@ -176,11 +179,10 @@ auto HttpPool::post(std::string body,
               proxygen::coro::HTTPClient::makeDefaultReader(resp),
               impl->config.request_timeout);
             co_return to_http_response(resp);
-          }());
-      if (result.hasException()) {
-        co_return Err{result.exception().what().toStdString()};
-      }
-      co_return std::move(*result);
+          })))
+        .map_err([](folly::exception_wrapper const& e) {
+          return e.what().toStdString();
+        });
     }(impl_, std::move(body), std::move(headers)));
 }
 
@@ -195,8 +197,8 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
        std::map<std::string, std::string> headers,
        std::chrono::milliseconds timeout)
       -> Task<Result<HttpResponse, std::string>> {
-      auto result = co_await folly::coro::co_awaitTry(
-        [&]() -> Task<HttpResponse> {
+      co_return (
+        co_await async_try([&]() -> Task<HttpResponse> {
           auto parsed = proxygen::URL{url};
           if (not parsed.isValid() or not parsed.hasHost()) {
             throw std::runtime_error(fmt::format("invalid url: {}", url));
@@ -222,11 +224,10 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
             session, std::move(*reservation), source,
             proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
           co_return to_http_response(resp);
-        }());
-      if (result.hasException()) {
-        co_return Err{result.exception().what().toStdString()};
-      }
-      co_return std::move(*result);
+        }()))
+        .map_err([](folly::exception_wrapper const& e) {
+          return e.what().toStdString();
+        });
     }(evb, std::move(url), std::move(body), std::move(headers), timeout));
 }
 

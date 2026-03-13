@@ -170,10 +170,10 @@ public:
         panic("got empty exception object in queue scope");
       }
       if constexpr (std::same_as<T, void>) {
-        std::move(*result).unwrap();
+        std::move(*result).value();
         co_return Unit{};
       } else {
-        co_return std::move(*result).unwrap();
+        co_return std::move(*result).value();
       }
     }
     co_return None{};

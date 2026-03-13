@@ -202,7 +202,7 @@ struct SenderReceiver {
 };
 
 template <class T>
-auto bounded_channel(size_t capacity) -> SenderReceiver<T> {
+auto channel(size_t capacity) -> SenderReceiver<T> {
   auto shared = std::make_shared<SenderReceiverShared<T>>(capacity);
   return {Sender<T>{shared}, Receiver<T>{shared}};
 }
@@ -307,11 +307,14 @@ struct SubPipelineFinished {};
 struct SubPipelineReadyForShutdown {};
 struct SubPipelineTerminated {};
 
-struct SubPipelineEvent {
-  data key;
-  variant<SubPipelineFinished, SubPipelineReadyForShutdown,
-          SubPipelineTerminated>
-    event;
+/// An message transported from a subpipeline to the parent pipeline.
+///
+/// Since this goes over a back-edge, we need to replay it when restoring.
+struct SubMessage {
+  using Event = variant<Checkpoint, Terminated>;
+
+  SubKey key;
+  Event event;
 };
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
@@ -434,17 +437,18 @@ auto run_chain_fused(OperatorChain<Input, Output> chain,
 }
 
 template <class T>
-class SelectQueue {
+class JoinSet {
 public:
-  class Produce;
-
-  // Activate the queue over the scope of a task.
+  // Activate the set over the scope of a task.
+  //
+  // This has the same lifetime requirements as `async_scope`.
   template <class U>
   auto activate(Task<U> task) -> Task<U> {
     co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
       scope_ = &scope;
       auto guard = detail::scope_guard{[&] noexcept {
-        // We assume that the consumer is not interested anymore.
+        // We assume that the consumer is not interested anymore. Otherwise,
+        // they would have called `next()` until it returns `None`.
         scope_->cancel();
         scope_ = nullptr;
       }};
@@ -453,10 +457,63 @@ public:
   }
 
   // Activate the queue over the scope of a function.
+  //
+  // This has the same lifetime requirements as `async_scope`.
   template <class F>
   auto activate(F&& f)
     -> Task<folly::coro::semi_await_result_t<std::invoke_result_t<F>>> {
     return activate(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  /// Return the next result, or `None` if we are done.
+  ///
+  /// This is NOT thread safe and must only be used within `activate`.
+  auto next() -> Task<Option<T>> {
+    if (running_ == 0) {
+      co_return None{};
+    }
+    auto item = co_await queue_.dequeue();
+    running_ -= 1;
+    co_return item;
+  }
+
+  /// Add a new task to the set.
+  ///
+  /// This is NOT thread safe and must only be used within `activate`.
+  template <class U>
+    requires std::convertible_to<U, T>
+  auto add(Task<U> task) -> void {
+    TENZIR_ASSERT(scope_);
+    running_ += 1;
+    scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
+      queue_.enqueue(co_await std::move(task));
+    });
+  }
+
+  template <class F>
+    requires std::convertible_to<
+      folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
+  auto add(F&& f) -> void {
+    add(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+private:
+  size_t running_{0};
+  folly::coro::UnboundedQueue<T> queue_;
+  AsyncScope* scope_ = nullptr;
+};
+
+/// A `JoinSet` that the consumer can select/filter over.
+template <class T>
+class SelectSet {
+public:
+  // Activate the set over the scope of a function.
+  //
+  // This has the same lifetime requirements as `async_scope`.
+  template <class F>
+  auto activate(F&& f)
+    -> Task<folly::coro::semi_await_result_t<std::invoke_result_t<F>>> {
+    return set_.activate(std::forward<F>(f));
   }
 
   /// Wait for the next item that satisfies the filter.
@@ -467,142 +524,43 @@ public:
   auto next(Filter&& filter) -> Task<Option<T>> {
     // First, inspect the existing items to see if one qualifies.
     for (auto it = existing_.begin(); it != existing_.end(); ++it) {
-      if (std::invoke(filter, std::as_const(it->value))) {
-        auto value = std::move(it->value);
-        it->notify->notify_one();
+      if (std::invoke(filter, std::as_const(*it))) {
+        auto value = std::move(*it);
         existing_.erase(it);
         co_return value;
       }
     }
     // If nothing was found, wait for new items to arrive.
-    while (true) {
-      if (running_ == 0) {
-        // All tasks are done and we saw all the data. If some of it still
-        // unprocessed by now, we would deadlock.
-        if (existing_.empty()) {
-          co_return None{};
-        }
-        panic("got {} outstanding items without progress", existing_.size());
-      }
-      auto item = co_await shared_->queue.dequeue();
-      if (not item) {
-        // A task terminated.
-        running_ -= 1;
-        continue;
-      }
-      if (std::invoke(filter, std::as_const(item->value))) {
-        item->notify->notify_one();
-        co_return std::move(item->value);
-      }
-      existing_.push_back(std::move(*item));
+    auto value = co_await set_.next();
+    if (value) {
+      co_return value;
     }
+    // All tasks are done. If some of it is unprocessed by now, we would deadlock.
+    if (existing_.empty()) {
+      co_return None{};
+    }
+    panic("got {} outstanding items without progress", existing_.size());
   }
 
-  /// Return the next item without any filter.
-  auto next() -> Task<Option<T>> {
-    return next([](T const&) {
-      return true;
-    });
-  }
-
+  /// Add a new task to the set.
+  ///
+  /// This is NOT thread safe and must only be used within `activate`.
   template <class U>
-    requires std::constructible_from<T, U>
+    requires std::convertible_to<U, T>
   auto add(Task<U> task) -> void {
-    TENZIR_ASSERT(scope_);
-    running_ += 1;
-    scope_->spawn(
-      [shared = shared_, task = std::move(task)] mutable -> Task<void> {
-        auto value = co_await std::move(task);
-        auto notify = std::make_shared<Notify>();
-        shared->queue.enqueue(Item{std::move(value), notify});
-        co_await notify->wait();
-        shared->queue.enqueue(None{});
-      });
+    return set_.add(std::move(task));
   }
 
   template <class F>
-    requires(folly::coro::is_semi_awaitable_v<std::invoke_result_t<F>>)
+    requires std::convertible_to<
+      folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
   auto add(F&& f) -> void {
-    add(folly::coro::co_invoke(std::forward<F>(f)));
-  }
-
-  template <class F>
-    requires(std::is_void_v<
-             folly::coro::semi_await_result_t<std::invoke_result_t<F, Produce>>>)
-  auto add(F&& f) -> void {
-    TENZIR_ASSERT(scope_);
-    running_ += 1;
-    scope_->spawn(
-      [shared = shared_, f = std::forward<F>(f)] mutable -> Task<void> {
-        auto produce = Produce{*shared};
-        co_await std::invoke(std::forward<F>(f), produce);
-        shared->queue.enqueue(None{});
-      });
-  }
-
-  template <class U>
-    requires std::constructible_from<T, U>
-  auto add(AsyncGenerator<U> gen) -> void {
-    TENZIR_ASSERT(scope_);
-    running_ += 1;
-    scope_->spawn(
-      [shared = shared_, gen = std::move(gen)] mutable -> Task<void> {
-        while (auto value = co_await gen.next()) {
-          auto notify = std::make_shared<Notify>();
-          shared->queue.enqueue(Item{std::move(*value), notify});
-          co_await notify->wait();
-        }
-        shared->queue.enqueue(None{});
-      });
-  }
-
-  template <class F>
-    requires(
-      std::constructible_from<T, typename std::invoke_result_t<F>::value_type>)
-  auto add(F&& f) -> void {
-    add(folly::coro::co_invoke(std::forward<F>(f)));
-  }
-
-  // Return the async scope of the (activated) queue.
-  auto scope() -> AsyncScope& {
-    TENZIR_ASSERT(scope_);
-    return *scope_;
+    return set_.add(std::forward<F>(f));
   }
 
 private:
-  struct Item {
-    T value;
-    // TODO: We can get rid of that if we don't want to support generators.
-    std::shared_ptr<Notify> notify; // To let the producer know.
-  };
-
-  struct Shared {
-    // Whenever a task finishes, it will enqueue a `None`.
-    folly::coro::UnboundedQueue<Option<Item>> queue;
-  };
-
-public:
-  class Produce {
-  public:
-    auto operator()(T value) -> Task<void> {
-      auto notify = std::make_shared<Notify>();
-      shared_.queue.enqueue(Item{std::move(value), notify});
-      co_await notify->wait();
-    }
-
-  private:
-    explicit Produce(Shared& shared) : shared_{shared} {
-    }
-
-    Shared& shared_;
-    friend class SelectQueue;
-  };
-
-private:
-  size_t running_ = 0;
-  std::shared_ptr<Shared> shared_ = std::make_shared<Shared>();
-  AsyncScope* scope_ = nullptr;
-  std::vector<Item> existing_;
+  std::vector<T> existing_;
+  JoinSet<T> set_;
 };
 
 /// Core execution logic for a single operator.
@@ -646,12 +604,12 @@ private:
 ///             └─>│ Subpipeline 2├───┴──────────────────┘
 ///                └──────────────┘
 ///
-/// Here, `finish_sub()` is a back-edge. We will replay those calls as
-/// explained in the paper. On the other hand, `process_sub()` is a
-/// forward-edge, which doesn't need channel snapshotting. Thus we just forward
-/// data from subpipelines. This is good because it means we don't have to
-/// capture any actual in-flight data in the snapshot, which could be quite big
-/// and changes all the time.
+/// Here, `finish_sub()` is a back-edge. We will replay those calls as explained
+/// in the paper. On the other hand, `process_sub()` is a forward-edge, which
+/// doesn't need channel snapshotting. Thus we just forward data from
+/// subpipelines. This is good because it means we don't have to capture any
+/// actual in-flight data in the snapshot, which could be quite big and changes
+/// all the time.
 ///
 /// You could also make `process_sub()` a back-edge, which would be necessary to
 /// make something like `while expr { … }` work. Recording incoming messages
@@ -719,7 +677,7 @@ public:
       LOGW("returning from operator runner {}", id_);
     }};
     LOGV("creating runner scope");
-    co_await queue_.activate([&] -> Task<void> {
+    co_await driver_.activate([&] -> Task<void> {
       // TODO: Figure out where exactly the operator scope is and move this.
       LOGV("creating operator scope");
       co_await async_scope([&](AsyncScope& operator_scope) -> Task<void> {
@@ -934,19 +892,18 @@ private:
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
     auto [from_control_sender, from_control_receiver]
-      = bounded_channel<FromControl>(16);
-    auto [to_control_sender, to_control_receiver]
-      = bounded_channel<ToControl>(16);
-    auto [runner, push_upstream, pull_downstream] = match(
+      = channel<FromControl>(16);
+    auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
+    auto [runner, push_sub, pull_sub] = match(
       std::tie(input, **output),
       [&]<class In, class Out>(
         tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
         auto chain
           = OperatorChain<In, Out>::try_from(std::move(spawned)).unwrap();
         auto [push_downstream, pull_downstream]
-          = exec_ctx_.make<Out>(id_.to(sub_id.op(0)));
+          = exec_ctx_.make_channel<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
-          = exec_ctx_.make<In>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<In>(sub_id.op(chain.size() - 1).to(id_));
         return {
           run_chain(std::move(chain), std::move(pull_upstream),
                     std::move(push_downstream),
@@ -957,68 +914,79 @@ private:
           AnyOpPull{std::move(pull_downstream)},
         };
       });
-    queue_.add([this, key, runner = std::move(runner),
-                pull_sub = std::move(pull_downstream)](
-                 SelectQueue<Event>::Produce produce) mutable -> Task<void> {
-      struct CheckpointDone {};
-      using Event
-        = variant<Option<AnyOperatorMsg>, FromControl, CheckpointDone>;
-      auto allow_output = true;
-      auto queue = SelectQueue<Event>{};
-      // match(pull_sub,
-      //       []<class Out>(
-      //         Box<Pull<OperatorMsg<Out>>>& pull) -> Option<AnyOperatorMsg> {
-      //         co_return co_await pull();
-      //       });
-      co_await queue.activate([&] -> Task<void> {
-        while (auto next = co_await queue.next([&](Event const& event) {
-          // Block subpipeline output after receiving its checkpoint.
-          return allow_output or not is<Option<AnyOperatorMsg>>(event);
-        })) {
-          co_await co_match(
-            *next,
-            [&](Option<AnyOperatorMsg> output) -> Task<void> {
-              TENZIR_ASSERT(allow_output);
-              co_await co_match(
-                std::move(*output),
-                [&](chunk_ptr output) -> Task<void> {
-                  TENZIR_TODO();
-                  // co_await call_process_sub(make_view(key), std::move(output));
-                },
-                [&](table_slice output) -> Task<void> {
-                  co_await call_process_sub(make_view(key), std::move(output));
-                },
-                [&](Signal signal) -> Task<void> {
-                  co_await co_match(
-                    signal,
-                    [&](EndOfData) -> Task<void> {
-                      co_await produce(
-                        SubPipelineEvent{key, SubPipelineFinished{}});
-                    },
-                    [&](Checkpoint) -> Task<void> {
-                      // TODO: Handle checkpoint.
-                      // Block all future output until ...
-                      allow_output = false;
-                      // TODO: We also need to inform the host operator that we
-                      // finished checkpointing...
-                      // TODO: Have some count for checkpoints reached...
-                      queue.add([] -> Task<CheckpointDone> {
-                        // TODO: Resolve this once we want to unblock.
+    auto [to_parent, from_sub] = channel<SubMessage>(16);
+    // TODO: Where do we put this?
+    TENZIR_ASSERT(operator_scope_);
+    operator_scope_->spawn(
+      [this, key = std::move(key), runner = std::move(runner),
+       pull_sub = std::move(pull_sub),
+       from_control = std::move(from_control_sender),
+       to_control = std::move(to_control_receiver),
+       to_parent = std::move(to_parent)]() mutable -> Task<void> {
+        // The main loop of the subpipeline (or combiner?).
+        using Event = variant<Option<AnyOperatorMsg>, FromControl>;
+        auto allow_output = true;
+        auto driver = SelectSet<Event>{};
+        co_await driver.activate([&] -> Task<void> {
+          driver.add(co_match(pull_sub,
+                              []<class Out>(Box<Pull<OperatorMsg<Out>>>& pull)
+                                -> Task<Option<AnyOperatorMsg>> {
+                                co_return co_await pull();
+                              }));
+          while (auto next = co_await driver.next([&](Event const& event) {
+            // Block subpipeline output after receiving its checkpoint.
+            return allow_output or not is<Option<AnyOperatorMsg>>(event);
+          })) {
+            co_await co_match(
+              *next,
+              [&](Option<AnyOperatorMsg> output) -> Task<void> {
+                TENZIR_ASSERT(allow_output);
+                co_await co_match(
+                  std::move(*output),
+                  [&](chunk_ptr output) -> Task<void> {
+                    TENZIR_TODO();
+                    // co_await call_process_sub(make_view(key),
+                    // std::move(output));
+                  },
+                  [&](table_slice output) -> Task<void> {
+                    co_await call_process_sub(make_view(key),
+                                              std::move(output));
+                  },
+                  [&](Signal signal) -> Task<void> {
+                    co_await co_match(
+                      signal,
+                      [&](EndOfData) -> Task<void> {
+                        // TODO: Now what?
+                        // co_await produce(SubEvent{key, SubPipelineFinished{}});
+                      },
+                      [&](Checkpoint checkpoint) -> Task<void> {
+                        // TODO: Handle checkpoint.
+                        // Block all future output until ...
+                        allow_output = false;
+                        co_await to_parent.send(SubMessage{key, checkpoint});
+                        // TODO: Wait until the checkpoint is done.
+                        co_return;
                       });
-                      co_return;
-                    });
-                });
-            },
-            [&](Option<FromControl> from_control) -> Task<void> {
-
-            },
-            [&](CheckpointDone) -> Task<void> {
-              // TODO: How do we get this message??
-              allow_output = true;
-            });
-        }
+                  });
+                driver.add(
+                  co_match(pull_sub,
+                           []<class Out>(Box<Pull<OperatorMsg<Out>>>& pull)
+                             -> Task<Option<AnyOperatorMsg>> {
+                             co_return co_await pull();
+                           }));
+              },
+              [&](Option<FromControl> from_control) -> Task<void> {
+                // FIXME
+                co_return;
+              },
+              [&](CheckpointDone) -> Task<void> {
+                // TODO: How do we get this message??
+                allow_output = true;
+              });
+          }
+        });
+        co_return SubPipelineFinished{};
       });
-    });
 #if 1
 #else
     auto [runner, push_upstream] = co_match(
@@ -1032,48 +1000,48 @@ private:
           [this, key, end_of_data, output_is_void,
            pull_downstream = std::move(pull_downstream)](
             SelectQueue<Event>::Produce produce) mutable -> Task<void> {
-        // Pulling from the subpipeline needs to happen independently from
-        // the main operator logic. This is because we might block when
-        // pushing to the subpipeline due to backpressure, but in order to
-        // alleviate the backpressure, we need to pull from it.
-        auto saw_end_of_data = false;
-        auto block_pull = false;
-        while (true) {
-          auto output = co_await pull_downstream();
-          if (not output) {
-            break;
-          }
-          co_await co_match(
-            std::move(*output),
-            [&](table_slice output) -> Task<void> {
-              co_await call_process_sub(make_view(key), std::move(output));
-            },
-            [&](Signal signal) -> Task<void> {
+            // Pulling from the subpipeline needs to happen independently from
+            // the main operator logic. This is because we might block when
+            // pushing to the subpipeline due to backpressure, but in order to
+            // alleviate the backpressure, we need to pull from it.
+            auto saw_end_of_data = false;
+            auto block_pull = false;
+            while (true) {
+              auto output = co_await pull_downstream();
+              if (not output) {
+                break;
+              }
               co_await co_match(
-                signal,
-                [&](EndOfData) -> Task<void> {
-                  saw_end_of_data = true;
-                  co_await produce(
-                    SubPipelineEvent{key, SubPipelineFinished{}});
-                  // TODO: Can we do this?
-                  end_of_data->notify_one();
+                std::move(*output),
+                [&](table_slice output) -> Task<void> {
+                  co_await call_process_sub(make_view(key), std::move(output));
                 },
-                [&](Checkpoint) -> Task<void> {
-                  // TODO: Handle checkpoint.
-                  // Block all future output until
-                  block_pull = true;
-                  co_return;
+                [&](Signal signal) -> Task<void> {
+                  co_await co_match(
+                    signal,
+                    [&](EndOfData) -> Task<void> {
+                      saw_end_of_data = true;
+                      co_await produce(
+                        SubPipelineEvent{key, SubPipelineFinished{}});
+                      // TODO: Can we do this?
+                      end_of_data->notify_one();
+                    },
+                    [&](Checkpoint) -> Task<void> {
+                      // TODO: Handle checkpoint.
+                      // Block all future output until
+                      block_pull = true;
+                      co_return;
+                    });
                 });
-            });
-        }
-        if (not saw_end_of_data) {
-          if (not output_is_void) {
-            LOGW("subpipeline channel closed without EndOfData");
-          }
-          co_await produce(SubPipelineEvent{key, SubPipelineFinished{}});
-        }
-        end_of_data->notify_one();
-      });
+            }
+            if (not saw_end_of_data) {
+              if (not output_is_void) {
+                LOGW("subpipeline channel closed without EndOfData");
+              }
+              co_await produce(SubPipelineEvent{key, SubPipelineFinished{}});
+            }
+            end_of_data->notify_one();
+          });
         auto runner_task
           = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
                                     std::move(push_downstream),
@@ -1088,57 +1056,59 @@ private:
         return {std::move(runner_task), std::move(push_upstream)};
       });
     // TODO: Should this even be a concurrent task?
-  // FIXME: No, combine all of them.
-  queue_.add([this, key, to_control_receiver = std::move(to_control_receiver)](
-               SelectQueue<Event>::Produce produce) mutable -> Task<void> {
-    while (true) {
-      auto to_control = co_await to_control_receiver.recv();
-      if (not to_control) {
-        LOGW("control channel from subpipeline got closed");
-        co_return;
-      }
-      switch (*to_control) {
-        case ToControl::no_more_input:
-          // TODO: How do we inform the operator that the subpipeline
-          // doesn't want anymore input?
-          continue;
-        case ToControl::ready_for_shutdown:
-          co_await produce(
-            SubPipelineEvent{key, SubPipelineReadyForShutdown{}});
-          co_return;
-        case ToControl::checkpoint_begin:
-        case ToControl::checkpoint_done:
-          TENZIR_TODO();
-      }
-      TENZIR_UNREACHABLE();
+    // FIXME: No, combine all of them.
+    queue_.add(
+      [this, key, to_control_receiver = std::move(to_control_receiver)](
+        SelectQueue<Event>::Produce produce) mutable -> Task<void> {
+        while (true) {
+          auto to_control = co_await to_control_receiver.recv();
+          if (not to_control) {
+            LOGW("control channel from subpipeline got closed");
+            co_return;
+          }
+          switch (*to_control) {
+            case ToControl::no_more_input:
+              // TODO: How do we inform the operator that the subpipeline
+              // doesn't want anymore input?
+              continue;
+            case ToControl::ready_for_shutdown:
+              co_await produce(
+                SubPipelineEvent{key, SubPipelineReadyForShutdown{}});
+              co_return;
+            case ToControl::checkpoint_begin:
+            case ToControl::checkpoint_done:
+              TENZIR_TODO();
+          }
+          TENZIR_UNREACHABLE();
         }
-  });
-  // Spawn the wired-up chain runner, adding a `SubPipelineTerminated`
-  // event into the queue once it's done.
-  queue_.add([key, control_handle, end_of_data,
-              runner = std::move(runner)]() mutable -> Task<SubPipelineEvent> {
-    co_await std::move(runner);
-    // Also wait for both control and output messages to guarantee order in
-    // the queue.
-    co_await control_handle.join();
-    co_await end_of_data->wait();
-    co_return SubPipelineEvent{key, SubPipelineTerminated{}};
-  });
-  // Insert the resulting subpipeline into our internal state.
-  co_return co_match(push_upstream,
-                     [&]<class In>(Box<Push<OperatorMsg<In>>>& push_upstream)
-                       -> AnyOpenPipeline {
-                       auto [it, inserted] = subpipelines_.try_emplace(
-                         std::move(key), SubPipeline{
-                                           std::move(push_upstream),
-                                           std::move(from_control_sender),
-                                         });
-                       if (not inserted) {
-                         panic("already have a subpipeline for that key");
-                       }
-                       auto& subpipe = as<SubPipeline<In>>(it->second.handle);
-                       return OpenPipeline<In>{subpipe.push};
-                     });
+      });
+    // Spawn the wired-up chain runner, adding a `SubPipelineTerminated`
+    // event into the queue once it's done.
+    queue_.add(
+      [key, control_handle, end_of_data,
+       runner = std::move(runner)]() mutable -> Task<SubPipelineEvent> {
+        co_await std::move(runner);
+        // Also wait for both control and output messages to guarantee order in
+        // the queue.
+        co_await control_handle.join();
+        co_await end_of_data->wait();
+        co_return SubPipelineEvent{key, SubPipelineTerminated{}};
+      });
+    // Insert the resulting subpipeline into our internal state.
+    co_return co_match(push_upstream,
+                       [&]<class In>(Box<Push<OperatorMsg<In>>>& push_upstream)
+                         -> AnyOpenPipeline {
+                         auto [it, inserted] = subpipelines_.try_emplace(
+                           std::move(key), SubPipeline{
+                                             std::move(push_upstream),
+                                             std::move(from_control_sender),
+                                           });
+                         if (not inserted) {
+                           panic("already have a subpipeline for that key");
+                         }
+                         auto& subpipe = as<SubPipeline<In>>(it->second.handle);
+                         return OpenPipeline<In>{subpipe.push};
+                       });
 #endif
   }
 
@@ -1322,11 +1292,11 @@ private:
       }
       co_await base_op().start(*this);
       LOGI("-> post start");
-      queue_.spawn([this] -> Task<ExplicitAny> {
+      driver_.add([this] -> Task<ExplicitAny> {
         co_return ExplicitAny{co_await base_op().await_task(*this)};
       });
-      queue_.spawn(pull_upstream());
-      queue_.spawn(from_control_.recv());
+      driver_.add(pull_upstream());
+      driver_.add(from_control_.recv());
       // Process until we got a shutdown request and the upstream channel
       // closed. The upstream closure cascades: each operator waits for its
       // predecessor to shut down and drop its push handle first.
@@ -1345,7 +1315,6 @@ private:
       throw;
     }
     LOGW("CANCELING queue");
-    queue_.cancel();
   }
 
   auto tick() -> Task<void> {
@@ -1359,7 +1328,13 @@ private:
         break;
     }
     LOGV("waiting in {} for message", op_name());
-    auto message = (co_await queue_.next()).unwrap();
+    // FIXME: Why the unwrap?
+    auto message = (co_await driver_.next([&](Event const& event) {
+                     // When there is an active checkpoint, we only allow
+                     // subpipeline messages.
+                     return not active_checkpoint_ or is<SubMessage>(event);
+                   }))
+                     .unwrap();
     co_await co_match(std::move(message), [&](auto message) {
       return process(std::move(message));
     });
@@ -1375,7 +1350,7 @@ private:
     if (base_op().state() == OperatorState::done) {
       co_await handle_done();
     } else {
-      queue_.spawn([this] -> Task<ExplicitAny> {
+      driver_.add([this] -> Task<ExplicitAny> {
         co_return ExplicitAny{co_await base_op().await_task(*this)};
       });
     }
@@ -1416,7 +1391,7 @@ private:
           });
       });
     // FIXME: Don't pull here if we are processing a checkpoint!
-    queue_.spawn(pull_upstream());
+    driver_.add(pull_upstream());
   }
 
   /// Checkpoint the operator and all of its subpipelines.
@@ -1521,10 +1496,37 @@ private:
       [&](Stop) -> Task<void> {
         co_await handle_done();
       });
-    queue_.spawn(from_control_.recv());
+    driver_.add(from_control_.recv());
   }
 
-  auto process(SubPipelineEvent message) -> Task<void> {
+  auto process(SubMessage message) -> Task<void> {
+#if 1
+    co_await co_match(
+      std::move(message.event),
+      [&](Checkpoint checkpoint) -> Task<void> {
+        auto maybe_cleanup_subpipeline = [this](auto it) -> Task<void> {
+          // We currently do not guarantee ordering between the Finished and
+          // Terminated messages. This should not happen once the subpipeline
+          // implementation is cleaned up.
+          if (it->second.finished and it->second.terminated) {
+            subpipelines_.erase(it);
+            co_await try_ready_for_shutdown();
+          }
+        };
+
+        auto it = subpipelines_.find(message.key);
+        TENZIR_ASSERT(it != subpipelines_.end());
+        TENZIR_ASSERT(not it->second.finished);
+        it->second.finished = true;
+        co_await maybe_cleanup_subpipeline(it);
+        co_await try_send_end_of_data();
+      },
+      [&](Terminated) -> Task<void> {
+        co_await call_finish_sub(make_view(message.key));
+        // TODO: Can we do without the permissions?
+        co_await try_ready_for_shutdown();
+      });
+#else
     co_await co_match(
       std::move(message.event),
       [&](SubPipelineFinished) -> Task<void> {
@@ -1566,6 +1568,7 @@ private:
           co_await try_ready_for_shutdown();
         }
       });
+#endif
   }
 
   auto handle_done() -> Task<void> {
@@ -1666,10 +1669,12 @@ private:
     // Result of `await_task()`.
     ExplicitAny,
     // Anything coming from a subpipeline.
-    SubPipelineEvent>;
+    SubMessage>;
 
-  /// The primary queue of events that the main loop reacts to.
-  SelectQueue<Event> queue_;
+  /// The primary stream of events that the main loop reacts to.
+  SelectSet<Event> driver_;
+  /// Whether we want to exclusively listen for messages from subpipelines.
+  bool active_checkpoint_{false};
 
   bool got_shutdown_request_ = false;
   bool upstream_done_ = false;
@@ -1772,9 +1777,8 @@ private:
           return std::move(sender);
         }();
         auto [from_control_sender, from_control_receiver]
-          = bounded_channel<FromControl>(16);
-        auto [to_control_sender, to_control_receiver]
-          = bounded_channel<ToControl>(16);
+          = channel<FromControl>(16);
+        auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
         operator_ctrl_.push_back(std::move(from_control_sender));
         auto executor = exec_ctx_.make_executor(id_.op(index),
                                                 demangle_op_type(typeid(*op)));
@@ -2042,35 +2046,20 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
   try {
     auto [from_control_sender, from_control_receiver]
-      = bounded_channel<FromControl>(16);
-    auto [to_control_sender, to_control_receiver]
-      = bounded_channel<ToControl>(16);
-    auto queue
-      = SelectQueue<variant<Terminated, ToControl, OperatorMsg<void>>>{};
+      = channel<FromControl>(16);
+    auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
+    auto driver = JoinSet<
+      variant<Terminated, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
-    co_await queue.activate([&] -> Task<void> {
-      // Spawn periodic metrics emission.
-      queue.scope().spawn([&exec_ctx] -> Task<void> {
-        while (true) {
-          co_await folly::coro::sleep(
-            std::chrono::duration_cast<folly::HighResDuration>(
-              defaults::metrics_interval));
-          auto snapshot = exec_ctx.metrics()->take_snapshot();
-          exec_ctx.emit_metrics(snapshot);
-        }
-      });
-      queue.add([&] -> Task<Terminated> {
+    co_await driver.activate([&] -> Task<void> {
+      driver.add([&] -> Task<Terminated> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
                            std::move(from_control_receiver),
                            std::move(to_control_sender), id, exec_ctx, sys, dh);
         co_return Terminated{};
       });
-      queue.add([&] -> AsyncGenerator<OperatorMsg<void>> {
-        while (auto next = co_await pull_output()) {
-          co_yield std::move(*next);
-        }
-      });
+      driver.add(pull_output());
       // TODO: We just have this right now to simulate checkpointing.
 #if 0
       queue.scope().spawn([&] -> Task<std::monostate> {
@@ -2082,8 +2071,8 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         }
       });
 #endif
-      queue.add(std::move(to_control_receiver).into_generator());
-      while (auto next = co_await queue.next()) {
+      driver.add(to_control_receiver.recv());
+      while (auto next = co_await driver.next()) {
         co_await co_match(
           std::move(*next),
           [&](Terminated) -> Task<void> {
@@ -2091,7 +2080,10 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
             LOGI("run_pipeline got info that chain terminated");
             co_return;
           },
-          [&](ToControl to_control) -> Task<void> {
+          [&](Option<ToControl> to_control) -> Task<void> {
+            if (not to_control) {
+              co_return;
+            }
             // TODO
             TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
             LOGI("got shutdown request from outermost subpipeline");
@@ -2099,10 +2091,15 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
             // Close the input channel so that operator 0 observes None from
             // its upstream pull, enabling orderly sequential shutdown.
             {
+              // FIXME: We should not leave this dangling.
               auto _ = std::move(push_input);
             }
+            driver.add(to_control_receiver.recv());
           },
           [&](Option<OperatorMsg<void>> msg) -> Task<void> {
+            if (not msg) {
+              co_return;
+            }
             co_match(*msg, [&](Signal signal) {
               co_match(
                 signal,
@@ -2113,12 +2110,10 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   LOGI("checkpoint {} is leaving pipeline", checkpoint.id);
                 });
             });
+            driver.add(pull_output());
             co_return;
           });
       }
-      // Emit final metrics snapshot so the last interval is not lost.
-      auto snapshot = exec_ctx.metrics()->take_snapshot();
-      exec_ctx.emit_metrics(snapshot);
     });
   } catch (panic_exception& e) {
     dh.emit(to_diagnostic(e));

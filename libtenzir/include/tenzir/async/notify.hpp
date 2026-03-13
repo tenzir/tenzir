@@ -49,7 +49,7 @@ public:
                                                 }};
     co_await baton_;
     if (token.isCancellationRequested()) {
-      co_yield folly::coro::co_cancelled;
+      co_yield folly::coro::co_stopped_may_throw;
     }
     // This races with other calls to `notify_one()`. However, that is okay, as
     // we only guarantee that the notification is eventually consumed. We can

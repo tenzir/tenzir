@@ -80,9 +80,8 @@ public:
         folly::coro::co_invoke([this, state,
                                 awaitable = std::forward<SemiAwaitable>(
                                   awaitable)] mutable -> Task<void> {
-          auto result = AsyncResult{co_await folly::coro::co_awaitTry(
-            folly::coro::co_withCancellation(data_.cancel_token,
-                                             std::move(awaitable)))};
+          auto result = co_await async_result(folly::coro::co_withCancellation(
+            data_.cancel_token, std::move(awaitable)));
           if (result.is_exception()) {
             auto lock = std::scoped_lock{data_.exception_mutex};
             if (not data_.exception) {
@@ -160,7 +159,19 @@ private:
 ///
 /// The given function and all tasks spawned may access external objects as long
 /// as they outlive this function call. It will only return once all spawned
-/// tasks have terminated.
+/// tasks have terminated. For example:
+/// ```
+/// auto safe_to_access = ...;
+/// async_scope([&](AsyncScope& scope) {
+///   auto not_safe_to_access = ...;
+///   scope.spawn([&]() -> Task<void> {
+///     // This is allowed:
+///     auto okay = safe_to_access;
+///     // DO NOT DO THIS!
+//      auto this_is_ub = not_safe_to_access;
+///   });
+/// });
+/// ```
 ///
 /// If the function is cancelled, then all spawned tasks will be cancelled as
 /// well and cancellation will be propagated. If just a spawned task is
@@ -193,9 +204,8 @@ auto async_scope(F&& f) -> Task<
     TENZIR_ERROR("aborting because async scope join failed");
     std::terminate();
   }};
-  auto result = AsyncResult{co_await folly::coro::co_awaitTry(
-    folly::coro::co_withCancellation(data.cancel_token,
-                                     std::invoke(std::forward<F>(f), scope)))};
+  auto result = co_await async_result(folly::coro::co_withCancellation(
+    data.cancel_token, std::invoke(std::forward<F>(f), scope)));
   // We only cancel the jobs if the given function failed or was cancelled.
   if (not result.is_value()) {
     if (not data.cancel_token.isCancellationRequested()) {
@@ -208,8 +218,8 @@ auto async_scope(F&& f) -> Task<
   // exceptions, this should always succeed (if it returns at all).
   LOGV("joining scope {} (cancelled = {})", fmt::ptr(&scope),
        data.cancel_token.isCancellationRequested());
-  auto join_result = AsyncResult{co_await folly::coro::co_awaitTry(
-    folly::coro::co_withCancellation({}, data.scope.joinAsync()))};
+  auto join_result = co_await async_result(
+    folly::coro::co_withCancellation({}, data.scope.joinAsync()));
   LOGV("joined scope {}", fmt::ptr(&scope));
   // Just in case, we still check explicitly.
   if (join_result.is_value()) {
@@ -226,7 +236,7 @@ auto async_scope(F&& f) -> Task<
   }
   LOGV("leaving scope {}", fmt::ptr(&scope));
   // Now return the result of the user-provided function.
-  co_return std::move(result).unwrap();
+  co_return std::move(result).value();
 }
 
 } // namespace tenzir

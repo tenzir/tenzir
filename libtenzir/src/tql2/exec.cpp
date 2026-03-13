@@ -2073,12 +2073,12 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   }
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-    co_return co_await folly::coro::co_awaitTry(
-      folly::coro::co_withCancellation(
+  auto task = folly::coro::co_invoke(
+    [&] -> Task<AsyncResult<failure_or<void>>> {
+      co_return co_await async_result(folly::coro::co_withCancellation(
         cancel_source.getToken(), run_plan(std::move(chain), sys, diag_handler,
                                            std::move(profiler), false)));
-  });
+    });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -2093,7 +2093,7 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
     TRY(diag_handler.failure());
     panic("pipeline got cancelled without error");
   }
-  return std::move(result).unwrap();
+  return std::move(result).value();
 }
 
 } // namespace
