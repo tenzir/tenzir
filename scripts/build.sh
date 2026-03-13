@@ -7,21 +7,15 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
+build_dir="${BUILD_DIR:-build/clang/release}"
 
-# Use BUILD_DIR env var if set, otherwise auto-discover
-if [[ -n "${BUILD_DIR:-}" ]]; then
-  build_dir="$BUILD_DIR"
-else
-  build_dir=$(find "$repo_root/build" -name CMakeCache.txt -print -quit 2>/dev/null | xargs -r dirname)
-fi
-
-if [[ -z "$build_dir" ]]; then
-  echo "error: no build directory found (run cmake first or set BUILD_DIR)" >&2
+if [[ ! -d "$build_dir" ]]; then
+  echo "error: build directory '$build_dir' not found (run cmake first or set BUILD_DIR)" >&2
   exit 1
 fi
 
-target=${1:-tenzir}
-shift 2>/dev/null || true
+target="${1:-tenzir}"
+shift || true
 
 cmake --build "$build_dir" --target "$target" "$@"
 echo "=== BUILD SUCCESS ==="

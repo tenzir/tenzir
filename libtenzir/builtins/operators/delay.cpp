@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -17,7 +18,6 @@
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
-#include <tenzir/async/task.hpp>
 
 namespace tenzir::plugins::delay {
 

@@ -10,6 +10,7 @@
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
@@ -36,7 +37,6 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
-#include <tenzir/async/task.hpp>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
