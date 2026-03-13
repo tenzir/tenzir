@@ -330,7 +330,9 @@ private:
   static auto
   emplace_value(record& root, const ast::field_path& sel, data value) -> void {
     if (sel.path().empty()) {
-      // TODO
+      // An empty path means the selector refers to `this` (the whole record).
+      // Merge the value into root if it is a record; non-record values are
+      // silently ignored because there is no meaningful field to assign them to.
       if (auto* rec = try_as<record>(&value)) {
         root = std::move(*rec);
       }
@@ -419,7 +421,7 @@ private:
 /// Classifies a flat list of expressions (as received from inv.args or from
 /// optional_variadic) into a fully-populated config.  The options={...}
 /// positional-assignment syntax is handled here, identical to the old make().
-static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
+auto build_config(std::vector<ast::expression> exprs, session ctx)
   -> failure_or<config> {
   auto cfg = config{};
   auto failed = false;
@@ -495,12 +497,15 @@ static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
             .hint("if you want to group by this, use assignment before")
             .docs("https://docs.tenzir.com/operators/summarize")
             .emit(ctx);
+          failed = true;
           return;
         }
         if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
           auto index = detail::narrow<int64_t>(cfg.aggregates.size());
           cfg.indices.push_back(index);
           cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+        } else {
+          failed = true;
         }
       };
 
@@ -511,17 +516,18 @@ static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
         cfg.groups.emplace_back(std::move(dest), std::move(expr));
       };
 
-  for (const auto& arg : exprs) {
+  for (auto& arg : exprs) {
     arg.match(
-      [&](const ast::function_call& arg) {
-        add_aggregate(std::nullopt, arg);
+      [&](ast::function_call& arg) {
+        add_aggregate(std::nullopt, std::move(arg));
       },
-      [&](const ast::assignment& arg) {
+      [&](ast::assignment& arg) {
         auto* left = try_as<ast::field_path>(arg.left);
         if (not left) {
           diagnostic::error("expected data selector, not meta")
             .primary(arg.left)
             .emit(ctx);
+          failed = true;
           return;
         }
         // Check for `options=...` named argument
@@ -539,10 +545,10 @@ static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
           return;
         }
         arg.right.match(
-          [&](const ast::function_call& right) {
-            add_aggregate(std::move(*left), right);
+          [&](ast::function_call& right) {
+            add_aggregate(std::move(*left), std::move(right));
           },
-          [&](const auto&) {
+          [&](auto&) {
             auto right = ast::field_path::try_from(arg.right);
             if (right) {
               add_group(std::move(*left), std::move(*right));
@@ -551,10 +557,11 @@ static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
                 "expected selector or aggregation function call")
                 .primary(arg.right)
                 .emit(ctx);
+              failed = true;
             }
           });
       },
-      [&](const auto&) {
+      [&](auto&) {
         auto selector = ast::field_path::try_from(arg);
         if (selector) {
           add_group(std::nullopt, std::move(*selector));
@@ -563,6 +570,7 @@ static auto build_config(const std::vector<ast::expression>& exprs, session ctx)
             "expected selector, assignment or aggregation function call")
             .primary(arg)
             .emit(ctx);
+          failed = true;
         }
       });
   }
@@ -781,7 +789,7 @@ class plugin2 final : public virtual operator_plugin2<summarize_operator2>,
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    TRY(auto cfg, build_config(inv.args, ctx));
+    TRY(auto cfg, build_config(std::move(inv.args), ctx));
     return std::make_unique<summarize_operator2>(std::move(cfg));
   }
 
@@ -806,7 +814,7 @@ public:
       }
     }
     auto provider = session_provider::make(ctx);
-    TRY(auto cfg, build_config(inv.args, provider.as_session()));
+    TRY(auto cfg, build_config(std::move(inv.args), provider.as_session()));
     return summarize_ir{loc, std::move(cfg)};
   }
 };
