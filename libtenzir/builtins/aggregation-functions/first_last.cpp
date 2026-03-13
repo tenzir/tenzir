@@ -66,7 +66,7 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> void override {
     constexpr auto name = Mode == mode::first ? "first" : "last";
     const auto fb
       = flatbuffer<fbs::aggregation::FirstLast>::make(std::move(chunk));

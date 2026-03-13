@@ -112,7 +112,7 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> void override {
     const auto fb = flatbuffer<fbs::aggregation::Mean>::make(std::move(chunk));
     if (not fb) {
       TENZIR_WARN("failed to restore `mean` aggregation instance: invalid FlatBuffer");

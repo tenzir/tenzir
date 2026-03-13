@@ -142,7 +142,7 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> void override {
     const auto name = mode_ == mode::stddev ? "stddev" : "variance";
     const auto fb
       = flatbuffer<fbs::aggregation::StddevVariance>::make(std::move(chunk));

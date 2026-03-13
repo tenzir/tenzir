@@ -114,7 +114,7 @@ public:
     fbb.Finish(fb_min_max);
     return chunk::make(fbb.Release());
   }
-  auto restore(chunk_ptr chunk) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> void override {
     const auto fb = flatbuffer<fbs::aggregation::ModeValueCountsEntropy>::make(
       std::move(chunk));
     if (not fb) {

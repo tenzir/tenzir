@@ -152,7 +152,7 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> void override {
     constexpr auto name = Mode == mode::min ? "min" : "max";
     const auto fb
       = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));

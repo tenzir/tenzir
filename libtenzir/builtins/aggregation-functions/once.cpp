@@ -54,7 +54,7 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> void override {
     const auto fb = flatbuffer<fbs::aggregation::Once>::make(std::move(chunk));
     if (not fb) {
       TENZIR_WARN("failed to restore `once` aggregation instance: invalid FlatBuffer");
