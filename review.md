@@ -6,21 +6,6 @@
 
 ---
 
-## P2 — Defer aggregation validation until after let substitution
-
-**File:** `libtenzir/builtins/operators/summarize.cpp:497`  
-**Source:** Codex
-
-In the IR path, `compile()` builds the config before `summarize_ir::substitute()`
-runs, but `add_aggregate` eagerly calls `make_aggregation` to validate arguments.
-This rejects valid let-parameterized aggregations (e.g. `quantile(x, q=$q)`)
-because `$q` is still unresolved at compile time, even though the call would be
-valid after substitution.
-
-**Fix:** Defer argument validation until substitution/spawn time.
-
----
-
 ## P2 — Evaluate summarize options after let substitution
 
 **File:** `libtenzir/builtins/operators/summarize.cpp:437`  
@@ -90,4 +75,21 @@ flush-then-final sequence.
 ## P1 — Implement serialization
 
 **File:** `libtenzir/builtins/operators/summarize.cpp:716–728`  
+
+---
+
+## Summary
+
+🟠 P2 · 💬 GIT-1 · Evaluate summarize options after let substitution · `summarize.cpp:437`
+🟡 P3 · 💬 GIT-2 · Timer drift: sleep restarted after flush, not on wall-clock intervals · `summarize.cpp:694`
+🟡 P3 · 💬 GIT-3 · Last periodic flush may be skipped when EndOfData races the timer · `summarize.cpp:685`
+🔴 P1 · 💬 GIT-4 · Implement serialization · `summarize.cpp:716`
+
+╭───────────────────────────────────────────╮
+│ 🔴 P1: 1   🟠 P2: 1   🟡 P3: 2   ⚪ P4: 0 │
+╰───────────────────────────────────────────╯
+**Blocked**:
+- Implement `snapshot()` serialization before shipping — the current no-op means aggregation state is silently lost across restarts.
+- Defer `options.frequency` / `options.mode` const-evaluation to `substitute()` so let-bound option values work in the IR path (same root cause as the aggregation-validation fix already landed).
+- Address the timer-drift and last-flush-race issues together, as both stem from the `await_task`/`finalize` split; consider a `pending_flush` flag in `finalize()` and documenting the drift behavior.
 

@@ -494,13 +494,14 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
           failed = true;
           return;
         }
-        if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
-          auto index = detail::narrow<int64_t>(cfg.aggregates.size());
-          cfg.indices.push_back(index);
-          cfg.aggregates.emplace_back(std::move(dest), std::move(call));
-        } else {
-          failed = true;
-        }
+        // Argument validation via make_aggregation is intentionally deferred:
+        // args may contain unresolved let-bindings when called from compile().
+        // Validation is performed by validate_aggregates(), which is called
+        // directly in plugin2::make() and in summarize_ir::substitute() after
+        // substitution has resolved all let-binding references.
+        auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+        cfg.indices.push_back(index);
+        cfg.aggregates.emplace_back(std::move(dest), std::move(call));
       };
 
   auto add_group
@@ -579,6 +580,20 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
     return failure::promise();
   }
   return cfg;
+}
+
+/// Validates each aggregate's arguments by calling make_aggregation with the
+/// fully-resolved function-call AST. Must be called after all let-binding
+/// references have been substituted so that const_eval inside the argument
+/// parsers can evaluate every argument to a concrete value.
+auto validate_aggregates(const config& cfg, session ctx) -> failure_or<void> {
+  for (const auto& aggr : cfg.aggregates) {
+    const auto* fn
+      = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
+    TENZIR_ASSERT(fn); // already verified as aggregation_plugin in build_config
+    TRY(fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx));
+  }
+  return {};
 }
 
 class summarize_operator2 final : public crtp_operator<summarize_operator2> {
@@ -743,13 +758,21 @@ public:
 
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
-    TENZIR_UNUSED(instantiate);
     // Substitute through function-call arguments in aggregates; they can
     // reference let-bindings.  Group field-paths are static identifiers.
     for (auto& aggregate : cfg_.aggregates) {
       for (auto& arg : aggregate.call.args) {
         TRY(arg.substitute(ctx));
       }
+    }
+    // Validate aggregation arguments only when instantiating, i.e., when all
+    // let-bindings are guaranteed to be resolved.  Calling make_aggregation
+    // earlier (e.g. during compile()) would fail for parameterized calls like
+    // quantile(x, q=$q) because $q is still an unresolved dollar_var at that
+    // point.
+    if (instantiate) {
+      auto provider = session_provider::make(ctx);
+      TRY(validate_aggregates(cfg_, provider.as_session()));
     }
     return {};
   }
@@ -787,6 +810,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto cfg, build_config(std::move(inv.args), ctx));
+    TRY(validate_aggregates(cfg, ctx));
     return std::make_unique<summarize_operator2>(std::move(cfg));
   }
 
