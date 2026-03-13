@@ -9,6 +9,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -113,43 +114,33 @@ public:
     fbb.Finish(fb_min_max);
     return chunk::make(fbb.Release());
   }
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) -> void override {
     const auto fb = flatbuffer<fbs::aggregation::ModeValueCountsEntropy>::make(
       std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `{}` aggregation instance", Kind)
-        .emit(ctx);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid FlatBuffer", Kind);
       return;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      diagnostic::warning("missing field `result`")
-        .note("failed to restore `{}` aggregation instance", Kind)
-        .emit(ctx);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field `result`", Kind);
       return;
     }
     counts_.clear();
     counts_.reserve(fb_result->size());
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
-        diagnostic::warning("missing element in field `result`")
-          .note("failed to restore `{}` aggregation instance", Kind)
-          .emit(ctx);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: missing element in field `result`", Kind);
         return;
       }
       const auto* fb_element_value = fb_element->value();
       if (not fb_element_value) {
-        diagnostic::warning("missing value for element in field `result`")
-          .note("failed to restore `{}` aggregation instance", Kind)
-          .emit(ctx);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: missing value for element in field `result`", Kind);
         return;
       }
       auto value = data{};
       if (auto err = unpack(*fb_element_value, value); err.valid()) {
-        diagnostic::warning("{}", err)
-          .note("failed to restore `{}` aggregation instance", Kind)
-          .emit(ctx);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: {}", Kind, err);
         return;
       }
       counts_.emplace(std::move(value), fb_element->count());

@@ -8,6 +8,7 @@
 
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -141,14 +142,12 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) -> void override {
+    const auto name = mode_ == mode::stddev ? "stddev" : "variance";
     const auto fb
       = flatbuffer<fbs::aggregation::StddevVariance>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `{}` aggregation instance",
-              mode_ == mode::stddev ? "stddev" : "variance")
-        .emit(ctx);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid FlatBuffer", name);
       return;
     }
     mean_ = (*fb)->result();
@@ -168,10 +167,7 @@ public:
         state_ = state::numeric;
         return;
     }
-    diagnostic::warning("unknown `state` value")
-      .note("failed to restore `{}` aggregation instance",
-            mode_ == mode::stddev ? "stddev" : "variance")
-      .emit(ctx);
+    TENZIR_WARN("failed to restore `{}` aggregation instance: unknown state value", name);
   }
 
   auto reset() -> void override {

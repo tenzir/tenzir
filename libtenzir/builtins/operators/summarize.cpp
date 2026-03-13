@@ -186,6 +186,19 @@ using group_map
 
 struct bucket2 {
   std::vector<std::unique_ptr<aggregation_instance>> aggregations{};
+  std::vector<chunk_ptr> blobs_{}; // staging area for restore; empty during normal use
+
+  friend auto inspect(auto& f, bucket2& x) -> bool {
+    if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
+      return f.apply(x.blobs_);
+    } else {
+      auto blobs = std::vector<chunk_ptr>{};
+      blobs.reserve(x.aggregations.size());
+      for (const auto& aggr : x.aggregations)
+        blobs.push_back(aggr->save());
+      return f.apply(blobs);
+    }
+  }
 };
 
 class implementation2 {
@@ -194,14 +207,14 @@ public:
     : cfg_{cfg}, ctx_{ctx} {
   }
 
-  auto make_bucket() -> std::unique_ptr<bucket2> {
-    auto bucket = std::make_unique<bucket2>();
+  auto make_bucket() -> bucket2 {
+    auto bucket = bucket2{};
     for (const auto& aggr : cfg_.aggregates) {
       // We already checked the cast and instantiation before.
       const auto* fn
         = dynamic_cast<const aggregation_plugin*>(&ctx_.reg().get(aggr.call));
       TENZIR_ASSERT(fn);
-      bucket->aggregations.push_back(
+      bucket.aggregations.push_back(
         fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx_)
           .unwrap());
     }
@@ -230,7 +243,7 @@ public:
       if (it == groups_.end()) {
         it = groups_.emplace_hint(it, materialize(key), make_bucket());
       }
-      return &*it->second;
+      return &it.value();
     };
     auto total_rows = detail::narrow<int64_t>(slice.rows());
     auto current_group = find_or_create_group(0);
@@ -259,13 +272,14 @@ public:
     if (cfg_.mode == "reset") {
       // Emit all groups and reset aggregations
       auto result = finish_impl();
-      for (auto& [key, bucket] : groups_) {
-        bucket->aggregations.clear();
+      for (auto it = groups_.begin(); it != groups_.end(); ++it) {
+        auto& bucket = it.value();
+        bucket.aggregations.clear();
         for (const auto& aggr : cfg_.aggregates) {
           const auto* fn = dynamic_cast<const aggregation_plugin*>(
             &ctx_.reg().get(aggr.call));
           TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(
+          bucket.aggregations.push_back(
             fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
                                  ctx_)
               .unwrap());
@@ -283,8 +297,8 @@ public:
     for (const auto& [key, group] : groups_) {
       // Get current aggregation values.
       auto current_values = std::vector<data>{};
-      current_values.reserve(group->aggregations.size());
-      for (const auto& aggr : group->aggregations) {
+      current_values.reserve(group.aggregations.size());
+      for (const auto& aggr : group.aggregations) {
         current_values.push_back(aggr->get());
       }
       // Check if values changed (or first emission for this group).
@@ -292,14 +306,14 @@ public:
       auto should_emit
         = (it == previous_values_.end()) or (it->second != current_values);
       if (should_emit) {
-        b.data(finish_group(key, *group));
+        b.data(finish_group(key, group));
         previous_values_[key] = current_values;
       }
     }
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events.
     if (cfg_.groups.empty() and groups_.empty()) {
-      b.data(finish_group(group_by_key{}, *make_bucket()));
+      b.data(finish_group(group_by_key{}, make_bucket()));
     }
     return b.finish_as_table_slice();
   }
@@ -320,13 +334,13 @@ private:
     // return a single event showing a count of zero.
     if (cfg_.groups.empty() and groups_.empty()) {
       auto b = series_builder{};
-      b.data(finish_group(group_by_key{}, *make_bucket()));
+      b.data(finish_group(group_by_key{}, make_bucket()));
       return b.finish_as_table_slice();
     }
     // TODO: Group by schema again to make this more efficient.
     auto b = series_builder{};
     for (const auto& [key, group] : groups_) {
-      b.data(finish_group(key, *group));
+      b.data(finish_group(key, group));
     }
     return b.finish_as_table_slice();
   }
@@ -411,9 +425,29 @@ private:
     return result;
   }
 
+  friend auto inspect(auto& f, implementation2& x) -> bool {
+    auto on_load = [&]() noexcept {
+      for (auto it = x.groups_.begin(); it != x.groups_.end(); ++it) {
+        auto& bucket = it.value();
+        auto fresh = x.make_bucket();
+        TENZIR_ASSERT(bucket.blobs_.size() == fresh.aggregations.size());
+        for (auto i = size_t{0}; i < bucket.blobs_.size(); ++i)
+          fresh.aggregations[i]->restore(std::move(bucket.blobs_[i]));
+        bucket.aggregations = std::move(fresh.aggregations);
+        bucket.blobs_.clear();
+      }
+      return true;
+    };
+    return f.object(x)
+      .on_load(on_load)
+      .fields(f.field("saw_input", x.saw_input_),
+              f.field("groups", x.groups_),
+              f.field("previous_values", x.previous_values_));
+  }
+
   const config& cfg_;
   session ctx_;
-  group_map<std::unique_ptr<bucket2>> groups_;
+  group_map<bucket2> groups_;
   bool saw_input_ = false;
   /// Previous aggregation values for each group (used in "update" mode)
   group_map<std::vector<data>> previous_values_;
@@ -753,12 +787,9 @@ public:
     co_await flush(push);
   }
 
-  // TODO: Implement snapshotting. The aggregation state could be serialized
-  // using aggregation_instance::save()/restore(), and group keys and
-  // previous_values_ via the inspect framework. This is currently blocked
-  // because ast::expression (stored inside aggregation instances) is not yet
-  // serializable. See aggregation_instance::restore() for details.
-  auto snapshot(Serde&) -> void override {
+  auto snapshot(Serde& serde) -> void override {
+    if (impl_)
+      serde("state", *impl_);
   }
 
 private:
