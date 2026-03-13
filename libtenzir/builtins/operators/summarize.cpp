@@ -708,12 +708,7 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (pending_flush_) {
-      pending_flush_ = false;
-      for (auto& slice : impl_->flush()) {
-        co_await push(std::move(slice));
-      }
-    }
+    co_await flush(push);
     if (input.rows() == 0) {
       co_return;
     }
@@ -724,6 +719,7 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
+    co_await flush(push);
     for (auto& slice : impl_->finish()) {
       co_await push(std::move(slice));
     }
@@ -754,12 +750,7 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result, ctx);
-    if (not std::exchange(pending_flush_, false)) {
-      co_return;
-    }
-    for (auto& slice : impl_->flush()) {
-      co_await push(std::move(slice));
-    }
+    co_await flush(push);
   }
 
   // TODO: Implement snapshotting. The aggregation state could be serialized
@@ -771,6 +762,17 @@ public:
   }
 
 private:
+  // Push a summary, if a pending_flush_ is set.
+  // This only happen if frequency is set.
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    if (not std::exchange(pending_flush_, false)) {
+      co_return;
+    }
+    for (auto& slice : impl_->flush()) {
+      co_await push(std::move(slice));
+    }
+  }
+
   config cfg_;
   // provider_ must outlive impl_ because impl_ holds a session that
   // references provider_.  Member destruction order (reverse of declaration)
