@@ -27,15 +27,12 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
-#include <folly/coro/Timeout.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/futures/Future.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
 #include <algorithm>
-#include <atomic>
 #include <memory>
 
 namespace tenzir::plugins::serve_tcp {
@@ -48,11 +45,8 @@ constexpr auto listen_backlog = uint32_t{128};
 // Retry accepts quickly after transient socket errors so the listener recovers
 // fast, while still backing off enough to avoid a tight warning loop.
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
-// Bound a single write attempt so a stalled peer cannot block fan-out to all
-// connected clients indefinitely.
-constexpr auto write_timeout = std::chrono::seconds{5};
-// The listener queue only carries accepted sockets and wakeups, so a modest
-// fixed capacity is sufficient while still tolerating short bursts.
+// The listener queue only carries accepted sockets, so a modest fixed
+// capacity is sufficient while still tolerating short bursts.
 constexpr auto message_queue_capacity = uint32_t{512};
 
 struct ServeTcpArgs {
@@ -64,23 +58,13 @@ struct ServeTcpArgs {
 
 class ServeTcp final : public Operator<table_slice, void> {
 public:
-  struct ClientHandle {
-    explicit ClientHandle(Box<folly::coro::Transport> transport)
-      : transport{std::move(transport)} {
-    }
-
-    Box<folly::coro::Transport> transport;
-  };
-
-  using Client = Arc<ClientHandle>;
+  using Client = Arc<folly::coro::Transport>;
 
   struct Accepted {
     Box<folly::coro::Transport> client;
   };
 
-  struct Wakeup {};
-
-  using Message = variant<Accepted, Wakeup>;
+  using Message = variant<Accepted>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   enum class Lifecycle {
@@ -134,7 +118,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_->load() != Lifecycle::running) {
+    if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
@@ -153,12 +137,12 @@ public:
     -> Task<void> override {
     auto clients = std::vector<Client>{};
     {
-      auto guard = co_await clients_mutex_->lock();
-      if (lifecycle_->load() == Lifecycle::done or not chunk
-          or chunk->size() == 0 or clients_.empty()) {
+      auto guard = co_await clients_->lock();
+      if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0
+          or guard->empty()) {
         co_return;
       }
-      clients = clients_;
+      clients = *guard;
     }
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
@@ -173,7 +157,7 @@ public:
     }
     co_await folly::coro::collectAllRange(std::move(write_tasks));
     TENZIR_ASSERT(diagnostics.size() == clients.size());
-    auto guard = co_await clients_mutex_->lock();
+    auto guard = co_await clients_->lock();
     for (size_t i = 0; i < diagnostics.size(); ++i) {
       auto& maybe_diagnostic = diagnostics[i];
       if (not maybe_diagnostic) {
@@ -181,12 +165,12 @@ public:
       }
       ctx.dh().emit(std::move(*maybe_diagnostic));
       auto* failed_client = &*clients[i];
-      auto new_end = std::remove_if(clients_.begin(), clients_.end(),
+      auto new_end = std::remove_if(guard->begin(), guard->end(),
                                     [&](Client const& client) {
                                       return &*client == failed_client;
                                     });
-      auto removed = new_end != clients_.end();
-      clients_.erase(new_end, clients_.end());
+      auto removed = new_end != guard->end();
+      guard->erase(new_end, guard->end());
       if (removed) {
         close_client(std::move(clients[i]));
       }
@@ -196,23 +180,17 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (lifecycle_->load() == Lifecycle::done) {
-      co_return {};
-    }
     co_return co_await message_queue_->dequeue();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_->load() == Lifecycle::done) {
-      co_return;
-    }
     auto* message_ptr = result.try_as<Message>();
     if (not message_ptr) {
       co_return;
     }
     auto message = std::move(*message_ptr);
     if (auto* accepted = std::get_if<Accepted>(&message)) {
-      if (lifecycle_->load() != Lifecycle::running) {
+      if (lifecycle_ != Lifecycle::running) {
         close_client(std::move(accepted->client));
         co_return;
       }
@@ -222,14 +200,12 @@ public:
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    auto lifecycle = lifecycle_->load();
-    if (lifecycle == Lifecycle::done) {
+    if (lifecycle_ == Lifecycle::done) {
       co_await close_all_clients();
       co_return FinalizeBehavior::done;
     }
-    if (lifecycle == Lifecycle::running) {
-      lifecycle_->store(Lifecycle::draining);
-      stop_accepting();
+    if (lifecycle_ == Lifecycle::running) {
+      begin_draining();
       if (auto sub = ctx.get_sub(make_view(sub_key_))) {
         auto pipeline = as<OpenPipeline<table_slice>>(*sub);
         co_await pipeline.close();
@@ -237,7 +213,7 @@ public:
         request_stop();
       }
     }
-    if (lifecycle_->load() == Lifecycle::done) {
+    if (lifecycle_ == Lifecycle::done) {
       co_await close_all_clients();
       co_return FinalizeBehavior::done;
     }
@@ -245,18 +221,14 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (lifecycle_->load() == Lifecycle::done) {
-      co_await close_all_clients();
-      co_return;
-    }
     request_stop();
     co_await close_all_clients();
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return lifecycle_->load() == Lifecycle::done ? OperatorState::done
-                                                 : OperatorState::unspecified;
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
   }
 
 private:
@@ -269,10 +241,10 @@ private:
   }
 
   static auto close_client(Client client) -> void {
-    auto* evb = client->transport->getEventBase();
+    auto* evb = client->getEventBase();
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([client = std::move(client)]() mutable {
-      client->transport->close();
+      client->close();
     });
   }
 
@@ -287,17 +259,25 @@ private:
     }
   }
 
-  auto request_stop() -> void {
-    if (lifecycle_->exchange(Lifecycle::done) == Lifecycle::done) {
+  auto begin_draining() -> void {
+    if (lifecycle_ != Lifecycle::running) {
       return;
     }
+    lifecycle_ = Lifecycle::draining;
     stop_accepting();
-    TENZIR_UNUSED(message_queue_->try_enqueue(Wakeup{}));
+  }
+
+  auto request_stop() -> void {
+    if (lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::done;
+    stop_accepting();
   }
 
   auto close_all_clients() -> Task<void> {
-    auto guard = co_await clients_mutex_->lock();
-    auto clients = std::move(clients_);
+    auto guard = co_await clients_->lock();
+    auto clients = std::move(*guard);
     for (auto& client : clients) {
       close_client(std::move(client));
     }
@@ -308,23 +288,11 @@ private:
                        std::optional<diagnostic>& maybe_diagnostic)
     -> Task<void> {
     try {
-      co_await folly::coro::timeout(
-        folly::coro::co_withExecutor(evb_, client->transport->write(data)),
-        write_timeout);
+      co_await folly::coro::co_withExecutor(evb_, client->write(data));
       maybe_diagnostic.reset();
       co_return;
-    } catch (folly::FutureTimeout const& ex) {
-      auto peer = client->transport->getPeerAddress().describe();
-      maybe_diagnostic
-        = diagnostic::warning("failed to write to client {}", peer)
-            .primary(args_.endpoint.source)
-            .note("reason: {}", ex.what())
-            .note("dropping this client and continuing with "
-                  "remaining connections")
-            .done();
-      co_return;
     } catch (folly::AsyncSocketException const& ex) {
-      auto peer = client->transport->getPeerAddress().describe();
+      auto peer = client->getPeerAddress().describe();
       maybe_diagnostic
         = diagnostic::warning("failed to write to client {}", peer)
             .primary(args_.endpoint.source)
@@ -351,12 +319,12 @@ private:
       close_client(std::move(client));
     };
     {
-      auto guard = co_await clients_mutex_->lock();
-      if (lifecycle_->load() != Lifecycle::running) {
+      auto guard = co_await clients_->lock();
+      if (lifecycle_ != Lifecycle::running) {
         close_client(std::move(client));
         co_return;
       }
-      if (clients_.size() >= max_connections_) {
+      if (guard->size() >= max_connections_) {
         reject_max_connections();
         co_return;
       }
@@ -373,35 +341,35 @@ private:
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
-        close_client(std::move(client));
         co_return;
       }
     }
-    auto guard = co_await clients_mutex_->lock();
-    if (lifecycle_->load() != Lifecycle::running) {
+    auto guard = co_await clients_->lock();
+    if (lifecycle_ != Lifecycle::running) {
       close_client(std::move(client));
       co_return;
     }
-    if (clients_.size() >= max_connections_) {
+    if (guard->size() >= max_connections_) {
       reject_max_connections();
       co_return;
     }
     TENZIR_DEBUG("accepted client {}", client->getPeerAddress().describe());
-    clients_.push_back(Arc<ClientHandle>{ClientHandle{std::move(client)}});
+    guard->push_back(Client{std::move(*client)});
     co_return;
   }
 
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
-    while (lifecycle_->load() == Lifecycle::running) {
+    auto cancellation_token = accept_cancel_->getToken();
+    while (not cancellation_token.isCancellationRequested()) {
       auto accept_error = Option<std::string>{};
       try {
         auto transport
           = co_await folly::coro::co_withExecutor(evb_, server_->accept());
         auto client
           = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-        if (lifecycle_->load() != Lifecycle::running) {
+        if (cancellation_token.isCancellationRequested()) {
           close_client(std::move(client));
           co_return;
         }
@@ -412,7 +380,7 @@ private:
       } catch (folly::AsyncSocketException const& ex) {
         // Accept failures are per-connection network errors; keep the
         // listener alive and continue accepting new clients.
-        if (lifecycle_->load() != Lifecycle::running) {
+        if (cancellation_token.isCancellationRequested()) {
           co_return;
         }
         accept_error = ex.what();
@@ -424,9 +392,6 @@ private:
           .note("reason: {}", *accept_error)
           .emit(dh);
         co_await folly::coro::sleep(accept_retry_delay);
-      }
-      if (lifecycle_->load() != Lifecycle::running) {
-        co_return;
       }
     }
   }
@@ -441,10 +406,10 @@ private:
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
-  Box<RawMutex> clients_mutex_{std::in_place};
-  std::vector<Client> clients_;
+  Box<Mutex<std::vector<Client>>> clients_{std::in_place,
+                                           std::vector<Client>{}};
   uint64_t max_connections_ = 128;
-  Box<std::atomic<Lifecycle>> lifecycle_{std::in_place, Lifecycle::running};
+  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 class ServeTcpPlugin final : public OperatorPlugin {
