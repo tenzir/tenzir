@@ -265,7 +265,7 @@ public:
   friend void hash_append(Hasher& h, container_view_handle xs) {
     // TODO: include the concrete view type in the hash digest so that it
     // guarantees the absense of collisions between view types.
-    if (!xs) {
+    if (! xs) {
       return hash_append(h, caf::none);
     }
     for (auto x : *xs) {
@@ -281,10 +281,10 @@ public:
 
   friend bool
   operator<(const container_view_handle& x, const container_view_handle& y) {
-    if (!x) {
+    if (! x) {
       return static_cast<bool>(y);
     }
-    if (!y) {
+    if (! y) {
       return false;
     }
     return *x < *y;
@@ -518,7 +518,7 @@ data_view make_data_view(const T& x) {
 /// @relates view_trait
 template <class T>
 data_view make_data_view(const std::optional<T>& x) {
-  if (!x) {
+  if (! x) {
     return make_view(caf::none);
   }
   return make_view(*x);
@@ -614,6 +614,8 @@ namespace std {
 
 template <>
 struct hash<tenzir::data_view> {
+  using is_transparent = void;
+
   auto operator()(const tenzir::data_view& x) const {
     return tenzir::hash(x);
   }
