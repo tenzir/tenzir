@@ -537,7 +537,11 @@ else ()
          "\nfind_package(glog CONFIG REQUIRED)")
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
 endif ()
-target_link_libraries(libtenzir PRIVATE proxygen::proxygenhttpserver)
+# proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
+# without declaring the dependency. Linking it explicitly ensures the static
+# linker sees the archive.
+target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
+  proxygen_utils_trace_event_types)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -545,12 +549,14 @@ target_link_libraries(libtenzir PRIVATE proxygen::proxygenhttpserver)
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
-    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygenhttpserver>)
+    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>)
 else ()
-  target_link_libraries(libtenzir_builtins PRIVATE proxygen::proxygenhttpserver)
+  target_link_libraries(libtenzir_builtins PRIVATE proxygen::proxygen_coro_client)
 endif ()
-target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1)
-target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_HAS_PROXYGEN=1)
+target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
+                                            nsel_CONFIG_SELECT_EXPECTED=1)
+target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_HAS_PROXYGEN=1
+                                              nsel_CONFIG_SELECT_EXPECTED=1)
 # gflags is a transitive dependency of glog (used by folly). We must re-export
 # find_package(gflags) so that plugins can resolve the gflags_shared cmake
 # target that appears in the exported transitive link libraries.
