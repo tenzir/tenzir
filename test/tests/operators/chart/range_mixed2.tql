@@ -1,0 +1,2 @@
+from {x: 1.0, y: 10}, {x: 2.0, y: 20}, {x: 3.0, y: 30}
+chart_line x=x, y=sum(y), y_min=0, y_max=100.0
