@@ -783,7 +783,8 @@ void transform_event_data(RecordBuilder record,
     if (const auto* name = data_name_attr(*elem)) {
       append_data_value(record.field(*name), *elem);
     } else {
-      append_data_value(record.field(std::to_string(unnamed_index++)), *elem);
+      append_data_value(record.field(fmt::format("_{}", unnamed_index++)),
+                        *elem);
     }
   }
 }
