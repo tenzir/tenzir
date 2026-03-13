@@ -1,0 +1,5 @@
+from_stdin {
+  compress_brotli
+  decompress_brotli
+  read_json
+}

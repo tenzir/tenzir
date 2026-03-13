@@ -1,0 +1,6 @@
+error: invalid compression level: `99999999999999`
+ --> tests/operators/compress_decompress/error_invalid_level.tql:7:21
+  |
+7 | compress_gzip level=99999999999999
+  |                     ^^^^^^^^^^^^^^ 
+  |
