@@ -36,7 +36,7 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
-#include <folly/coro/Sleep.h>
+#include <tenzir/async/task.hpp>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
@@ -47,12 +47,6 @@
 namespace tenzir::plugins::summarize {
 
 namespace {
-
-using std::chrono::duration_cast;
-
-auto sleep_for(duration d) -> Task<void> {
-  return folly::coro::sleep(duration_cast<folly::HighResDuration>(d));
-}
 
 /// The key by which aggregations are grouped. Essentially, this is a vector of
 /// data. We create a new type here to support a custom hash and equality

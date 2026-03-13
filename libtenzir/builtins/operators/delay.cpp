@@ -17,17 +17,11 @@
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
-#include <folly/coro/Sleep.h>
+#include <tenzir/async/task.hpp>
 
 namespace tenzir::plugins::delay {
 
 namespace {
-using std::chrono::duration_cast;
-
-auto sleep_for(duration d) -> Task<void> {
-  return folly::coro::sleep(duration_cast<folly::HighResDuration>(d));
-}
-
 class delay_operator final : public crtp_operator<delay_operator> {
 public:
   delay_operator() = default;
