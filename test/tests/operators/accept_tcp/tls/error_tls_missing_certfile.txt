@@ -1,7 +1,7 @@
 error: `tls.certfile` is required when `tls.keyfile` is set
  --> tests/operators/accept_tcp/tls/error_tls_missing_certfile.tql:6:14
   |
-6 |          tls={keyfile: "tests/operators/accept_tcp/tls/error_tls_missing_certfile.tql"} {
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+6 |          tls={keyfile: "tests/operators/accept_tcp/tls/test.key"} {
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
   = hint: set both `tls.certfile` and `tls.keyfile`

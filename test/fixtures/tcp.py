@@ -176,6 +176,8 @@ def tcp() -> FixtureHandle:
     def _teardown() -> None:
         stop_event.set()
         worker.join(timeout=2)
+        if worker.is_alive():
+            raise RuntimeError("tcp fixture worker did not stop within 2 seconds")
         if server_capture_path is not None and os.path.exists(server_capture_path):
             os.remove(server_capture_path)
         if client_capture_path is not None and os.path.exists(client_capture_path):

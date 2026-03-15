@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/async/mutex.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -117,29 +118,37 @@ public:
       if (done_) {
         co_return;
       }
-      auto old_transport = Option<Box<folly::coro::Transport>>{};
-      auto guard = co_await state_->lock();
-      if (done_) {
-        co_return;
+      auto transport = Option<Transport>{};
+      {
+        auto guard = co_await state_->lock();
+        if (done_) {
+          co_return;
+        }
+        TENZIR_ASSERT(guard->transport);
+        transport = guard->transport;
       }
-      TENZIR_ASSERT(guard->transport);
+      TENZIR_ASSERT(transport);
+      auto write_error = Option<std::string>{};
       try {
-        co_await folly::coro::co_withExecutor(evb_,
-                                              (*guard->transport)->write(data));
+        co_await folly::coro::co_withExecutor(evb_, (**transport).write(data));
+      } catch (folly::AsyncSocketException const& ex) {
+        write_error = ex.what();
+      }
+      if (not write_error) {
+        auto guard = co_await state_->lock();
         guard->reconnect_backoff = connect_initial_backoff;
         co_return;
-      } catch (folly::AsyncSocketException const& ex) {
-        old_transport = std::move(guard->transport);
-        guard->transport = None{};
-        if (old_transport) {
-          diagnostic::warning("failed to write to {}", address_.describe())
-            .primary(args_.endpoint.source)
-            .note("reason: {}", ex.what())
-            .note("retrying after reconnect")
-            .emit(ctx);
-        }
       }
-      if (old_transport) {
+      auto guard = co_await state_->lock();
+      auto* transport_ptr = &**transport;
+      if (guard->transport and &**guard->transport == transport_ptr) {
+        auto old_transport = std::move(guard->transport);
+        guard->transport = None{};
+        diagnostic::warning("failed to write to {}", address_.describe())
+          .primary(args_.endpoint.source)
+          .note("reason: {}", *write_error)
+          .note("retrying after reconnect")
+          .emit(ctx);
         close_transport(std::move(*old_transport));
       }
     }
@@ -182,12 +191,14 @@ public:
   }
 
 private:
+  using Transport = Arc<folly::coro::Transport>;
+
   struct State {
-    Option<Box<folly::coro::Transport>> transport;
+    Option<Transport> transport;
     std::chrono::milliseconds reconnect_backoff = connect_initial_backoff;
   };
 
-  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+  static auto close_transport(Transport transport) -> void {
     auto* evb = transport->getEventBase();
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
@@ -196,7 +207,7 @@ private:
   }
 
   auto close_current_transport() -> Task<void> {
-    auto old_transport = Option<Box<folly::coro::Transport>>{};
+    auto old_transport = Option<Transport>{};
     {
       auto guard = co_await state_->lock();
       old_transport = std::move(guard->transport);
@@ -218,16 +229,16 @@ private:
       }
       auto connect_error = Option<std::string>{};
       try {
-        auto boxed = Box<folly::coro::Transport>{co_await connect_tcp_client(
+        auto transport = Transport{co_await connect_tcp_client(
           evb_, address_,
           std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
           tls_context_, host_)};
         auto guard = co_await state_->lock();
         if (done_ or guard->transport) {
-          close_transport(std::move(boxed));
+          close_transport(std::move(transport));
           co_return;
         }
-        guard->transport = std::move(boxed);
+        guard->transport = std::move(transport);
         guard->reconnect_backoff = connect_initial_backoff;
         TENZIR_DEBUG("to_tcp ensure_connected: connected to {}",
                      address_.describe());
