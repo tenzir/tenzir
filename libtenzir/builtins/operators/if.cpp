@@ -37,7 +37,8 @@ struct branch_actor_traits {
     // Push events from the parent pipeline into the branch pipelines.
     auto(atom::push, table_slice input)->caf::result<void>,
     // Pull evaluated events into the branch pipelines.
-    auto(atom::internal, atom::pull, bool predicate)->caf::result<table_slice>,
+    auto(atom::internal, atom::pull, bool predicate)
+      ->caf::result<std::vector<table_slice>>,
     // Push events from the branch pipelines into the parent.
     auto(atom::internal, atom::push, bool predicate, table_slice output)
       ->caf::result<void>,
@@ -77,22 +78,22 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto done = false;
-    auto result = table_slice{};
+    auto results = std::vector<table_slice>{};
     while (not done) {
       ctrl.self()
         .mail(atom::internal_v, atom::pull_v, predicate_)
         .request(branch_, caf::infinite)
         .then(
-          [&](table_slice input) {
-            done = input.rows() == 0;
-            result = std::move(input);
+          [&](std::vector<table_slice> inputs) {
+            done = inputs.empty();
+            results = std::move(inputs);
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
             if (err.empty() or err == caf::sec::request_receiver_down
                 or err == caf::exit_reason::remote_link_unreachable) {
               done = true;
-              result = table_slice{};
+              results = {};
               ctrl.set_waiting(false);
               return;
             }
@@ -104,7 +105,10 @@ public:
       ctrl.set_waiting(true);
       co_yield {};
       if (not done) {
-        co_yield std::move(result);
+        results = rebatch(std::move(results));
+        for (auto& result : results) {
+          co_yield std::move(result);
+        }
       }
     }
   }
@@ -311,7 +315,7 @@ private:
     TENZIR_ASSERT(input.rows() > 0);
     if (to_then_branch_rp_.pending()) {
       TENZIR_ASSERT(then_inputs_.empty());
-      to_then_branch_rp_.deliver(std::move(input));
+      to_then_branch_rp_.deliver(std::vector{std::move(input)});
       return;
     }
     then_inputs_.push_back(std::move(input));
@@ -325,7 +329,7 @@ private:
     }
     if (to_else_branch_rp_.pending()) {
       TENZIR_ASSERT(else_inputs_.empty());
-      to_else_branch_rp_.deliver(std::move(input));
+      to_else_branch_rp_.deliver(std::vector{std::move(input)});
       return;
     }
     else_inputs_.push_back(std::move(input));
@@ -349,18 +353,19 @@ private:
   auto handle_input(const table_slice& input) -> caf::result<void> {
     TENZIR_ASSERT(not from_if_rp_.pending());
     if (input.rows() == 0) {
-      const auto eoi = [](caf::typed_response_promise<table_slice>& rp,
-                          std::deque<table_slice>& inputs) {
-        if (rp.pending()) {
-          TENZIR_ASSERT(inputs.empty());
-          rp.deliver(table_slice{});
-          return;
-        }
-        inputs.emplace_back();
-      };
-      eoi(to_then_branch_rp_, then_inputs_);
+      const auto eoi
+        = [](caf::typed_response_promise<std::vector<table_slice>>& rp,
+             std::vector<table_slice>& inputs, bool& eoi_flag) {
+            if (rp.pending()) {
+              TENZIR_ASSERT(inputs.empty());
+              rp.deliver(std::vector<table_slice>{});
+              return;
+            }
+            eoi_flag = true;
+          };
+      eoi(to_then_branch_rp_, then_inputs_, then_eoi_);
       if (else_branch_) {
-        eoi(to_else_branch_rp_, else_inputs_);
+        eoi(to_else_branch_rp_, else_inputs_, else_eoi_);
       }
       return {};
     }
@@ -401,21 +406,25 @@ private:
     return from_if_rp_;
   }
 
-  auto forward_to_branch(bool predicate) -> caf::result<table_slice> {
+  auto forward_to_branch(bool predicate)
+    -> caf::result<std::vector<table_slice>> {
     auto& pull_rp = predicate ? to_then_branch_rp_ : to_else_branch_rp_;
     auto& inputs = predicate ? then_inputs_ : else_inputs_;
+    auto& eoi = predicate ? then_eoi_ : else_eoi_;
     TENZIR_ASSERT(not pull_rp.pending());
     if (inputs.empty()) {
-      pull_rp = self_->make_response_promise<table_slice>();
+      if (eoi) {
+        return std::vector<table_slice>{};
+      }
+      pull_rp = self_->make_response_promise<std::vector<table_slice>>();
       return pull_rp;
     }
-    inputs = rebatch<std::deque>(std::move(inputs));
-    auto input = std::move(inputs.front());
-    inputs.pop_front();
+    auto result = std::vector<table_slice>{};
+    std::swap(result, inputs);
     if (from_if_rp_.pending() and can_push_more()) {
       from_if_rp_.deliver();
     }
-    return input;
+    return result;
   }
 
   auto handle_output(bool predicate, table_slice output) -> caf::result<void> {
@@ -495,13 +504,15 @@ private:
   std::optional<located<pipeline_executor_actor>> else_branch_;
 
   static constexpr size_t max_queued = 10;
-  std::deque<table_slice> then_inputs_;
-  std::deque<table_slice> else_inputs_;
+  std::vector<table_slice> then_inputs_;
+  std::vector<table_slice> else_inputs_;
+  bool then_eoi_ = false;
+  bool else_eoi_ = false;
   std::deque<table_slice> outputs_;
 
   caf::typed_response_promise<void> from_if_rp_;
-  caf::typed_response_promise<table_slice> to_then_branch_rp_;
-  caf::typed_response_promise<table_slice> to_else_branch_rp_;
+  caf::typed_response_promise<std::vector<table_slice>> to_then_branch_rp_;
+  caf::typed_response_promise<std::vector<table_slice>> to_else_branch_rp_;
   caf::typed_response_promise<void> from_then_branch_rp_;
   caf::typed_response_promise<void> from_else_branch_rp_;
   caf::typed_response_promise<table_slice> to_endif_rp_;
