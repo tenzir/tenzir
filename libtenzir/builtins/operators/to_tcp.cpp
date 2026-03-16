@@ -150,11 +150,13 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
+  auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
     if (done_) {
       co_return;
     }
-    co_await message_queue_->enqueue(chunk_ptr{});
+    ctx.spawn_task([this]() -> Task<void> {
+      co_await message_queue_->enqueue(chunk_ptr{});
+    });
     co_return;
   }
 
