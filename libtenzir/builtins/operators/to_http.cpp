@@ -584,7 +584,7 @@ auto make_to_http_description() -> Description {
   auto max_retry_count
     = d.named_optional("max_retry_count", &ToHttpArgs::max_retry_count);
   auto retry_delay = d.named_optional("retry_delay", &ToHttpArgs::retry_delay);
-  d.validate([=](ValidateCtx& ctx) -> Empty {
+  d.validate([=](DescribeCtx& ctx) -> Empty {
     auto args = ToHttpArgs{};
     args.op = ctx.get_location(url).value_or(location::unknown);
     if (auto x = ctx.get(url)) {

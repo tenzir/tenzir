@@ -10,8 +10,8 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/async/notify.hpp"
-#include "tenzir/async/tls.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/co_match.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
@@ -20,33 +20,42 @@
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/si_literals.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <folly/ScopeGuard.h>
-#include <folly/executors/GlobalExecutor.h>
-#include <folly/io/IOBuf.h>
-#include <folly/io/coro/ServerSocket.h>
+#include <folly/coro/BoundedQueue.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
-#include <proxygen/lib/http/codec/HTTPCodecFactory.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
+#include <proxygen/lib/http/coro/server/HTTPServer.h>
+#include <proxygen/lib/http/coro/server/HTTPCoroAcceptor.h>
+#include <proxygen/lib/services/AcceptorConfiguration.h>
+
+#include <folly/io/async/AsyncServerSocket.h>
 
 #include <atomic>
+#include <future>
 #include <limits>
-#include <mutex>
+#include <memory>
+#include <optional>
+#include <thread>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 
 namespace tenzir::plugins {
 namespace {
 
+using namespace tenzir::si_literals;
+
 constexpr auto default_listen_backlog = uint32_t{128};
+constexpr auto message_queue_capacity = uint32_t{1_Ki};
 constexpr auto default_stream_path = std::string_view{"/"};
 constexpr auto default_stream_method = std::string_view{"GET"};
 constexpr auto default_stream_content_type
   = std::string_view{"application/x-ndjson"};
+constexpr auto http_1_1 = std::string_view{"http/1.1"};
 
 template <typename T>
 constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
@@ -54,245 +63,6 @@ constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
     return x.inner;
   });
 }
-
-class ServeHttpClientRegistry;
-
-class ServeHttpClient final {
-public:
-  ServeHttpClient(uint64_t id, std::weak_ptr<ServeHttpClientRegistry> registry)
-    : id_{id}, registry_{std::move(registry)} {
-  }
-
-  auto enqueue(std::string_view payload) -> bool {
-    if (closed_.load(std::memory_order_acquire)) {
-      return false;
-    }
-    queue_->enqueue(std::optional<std::string>{std::string{payload}});
-    return true;
-  }
-
-  auto dequeue() const -> Task<std::optional<std::string>> {
-    co_return co_await queue_->dequeue();
-  }
-
-  auto close() -> void;
-
-private:
-  uint64_t id_ = 0;
-  std::weak_ptr<ServeHttpClientRegistry> registry_;
-  std::shared_ptr<UnboundedQueue<std::optional<std::string>>> queue_
-    = std::make_shared<UnboundedQueue<std::optional<std::string>>>();
-  std::atomic<bool> closed_ = false;
-};
-
-class ServeHttpClientRegistry final
-  : public std::enable_shared_from_this<ServeHttpClientRegistry> {
-public:
-  auto create_client() -> std::shared_ptr<ServeHttpClient> {
-    auto guard = std::lock_guard{mutex_};
-    if (stopping_) {
-      return {};
-    }
-    auto id = next_client_id_++;
-    auto client = std::make_shared<ServeHttpClient>(id, weak_from_this());
-    clients_.emplace(id, client);
-    clients_changed_.notify_one();
-    return client;
-  }
-
-  auto remove_client(uint64_t id) -> void {
-    {
-      auto guard = std::lock_guard{mutex_};
-      clients_.erase(id);
-    }
-    clients_changed_.notify_one();
-  }
-
-  auto snapshot_clients() const
-    -> std::vector<std::shared_ptr<ServeHttpClient>> {
-    auto guard = std::lock_guard{mutex_};
-    auto result = std::vector<std::shared_ptr<ServeHttpClient>>{};
-    result.reserve(clients_.size());
-    for (auto const& [_, client] : clients_) {
-      result.push_back(client);
-    }
-    return result;
-  }
-
-  auto has_clients() const -> bool {
-    auto guard = std::lock_guard{mutex_};
-    return not clients_.empty();
-  }
-
-  auto is_stopping() const -> bool {
-    auto guard = std::lock_guard{mutex_};
-    return stopping_;
-  }
-
-  auto wait_for_change() -> Task<void> {
-    co_await clients_changed_.wait();
-  }
-
-  auto shutdown() -> void {
-    auto clients = std::vector<std::shared_ptr<ServeHttpClient>>{};
-    {
-      auto guard = std::lock_guard{mutex_};
-      if (stopping_) {
-        return;
-      }
-      stopping_ = true;
-      clients.reserve(clients_.size());
-      for (auto const& [_, client] : clients_) {
-        clients.push_back(client);
-      }
-      clients_.clear();
-    }
-    for (auto const& client : clients) {
-      client->close();
-    }
-    clients_changed_.notify_one();
-  }
-
-private:
-  mutable std::mutex mutex_;
-  std::unordered_map<uint64_t, std::shared_ptr<ServeHttpClient>> clients_;
-  uint64_t next_client_id_ = 0;
-  bool stopping_ = false;
-  Notify clients_changed_;
-};
-
-auto ServeHttpClient::close() -> void {
-  auto expected = false;
-  if (not closed_.compare_exchange_strong(expected, true,
-                                          std::memory_order_acq_rel)) {
-    return;
-  }
-  queue_->enqueue(std::nullopt);
-  if (auto registry = registry_.lock()) {
-    registry->remove_client(id_);
-  }
-}
-
-class ServeHttpStreamSource final : public proxygen::coro::HTTPSource {
-public:
-  explicit ServeHttpStreamSource(std::shared_ptr<ServeHttpClient> client)
-    : client_{std::move(client)} {
-    setHeapAllocated();
-  }
-
-  auto readHeaderEvent()
-    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
-    auto msg = std::make_unique<proxygen::HTTPMessage>();
-    msg->setStatusCode(200);
-    msg->setStatusMessage(proxygen::HTTPMessage::getDefaultReason(200));
-    msg->setHTTPVersion(1, 1);
-    msg->getHeaders().set("Content-Type",
-                          std::string{default_stream_content_type});
-    auto event = proxygen::coro::HTTPHeaderEvent{std::move(msg), false};
-    auto guard = folly::makeGuard(lifetime(event));
-    co_return event;
-  }
-
-  auto readBodyEvent(uint32_t max = std::numeric_limits<uint32_t>::max())
-    -> folly::coro::Task<proxygen::coro::HTTPBodyEvent> override {
-    if (max == 0) {
-      max = 1;
-    }
-    while (buffered_.empty() and not input_done_) {
-      auto payload = co_await client_->dequeue();
-      if (payload) {
-        buffered_ = std::move(*payload);
-      } else {
-        input_done_ = true;
-      }
-    }
-    if (buffered_.empty()) {
-      auto event = proxygen::coro::HTTPBodyEvent{
-        std::unique_ptr<folly::IOBuf>{nullptr}, true};
-      auto guard = folly::makeGuard(lifetime(event));
-      co_return event;
-    }
-    auto chunk_size = std::min<size_t>(max, buffered_.size());
-    auto chunk = folly::IOBuf::copyBuffer(
-      std::string_view{buffered_.data(), chunk_size});
-    buffered_.erase(0, chunk_size);
-    auto event = proxygen::coro::HTTPBodyEvent{
-      std::move(chunk), input_done_ and buffered_.empty()};
-    auto guard = folly::makeGuard(lifetime(event));
-    co_return event;
-  }
-
-  void
-  stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
-    client_->close();
-    if (heapAllocated_) {
-      delete this;
-    }
-  }
-
-private:
-  std::shared_ptr<ServeHttpClient> client_;
-  std::string buffered_;
-  bool input_done_ = false;
-};
-
-struct ServeHttpServerState {
-  std::optional<record> responses;
-  std::string stream_path = std::string{default_stream_path};
-  std::string stream_method = std::string{default_stream_method};
-  std::shared_ptr<ServeHttpClientRegistry> clients;
-};
-
-class ServeHttpHandler final : public proxygen::coro::HTTPHandler {
-public:
-  explicit ServeHttpHandler(std::shared_ptr<ServeHttpServerState> state)
-    : state_{std::move(state)} {
-  }
-
-  auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
-                     proxygen::coro::HTTPSourceHolder request_source)
-    -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
-    auto request_path = std::string{};
-    auto request_method = std::string{};
-    auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
-    reader.onHeaders([&](std::unique_ptr<proxygen::HTTPMessage> msg,
-                         bool is_final, bool /*eom*/) -> bool {
-      if (not is_final) {
-        return proxygen::coro::HTTPSourceReader::Continue;
-      }
-      request_method = msg->getMethodString();
-      request_path = msg->getPath();
-      return proxygen::coro::HTTPSourceReader::Continue;
-    });
-    reader.onBody([&](proxygen::coro::BufQueue body, bool /*eom*/) -> bool {
-      std::ignore = body.move();
-      return proxygen::coro::HTTPSourceReader::Continue;
-    });
-    co_await reader.read();
-    if (state_->responses) {
-      if (auto response
-          = http::lookup_response(*state_->responses, request_path)) {
-        co_return http::make_fixed_response_source(
-          response->code, std::move(response->body), response->content_type);
-      }
-    }
-    if (request_path != state_->stream_path) {
-      co_return http::make_fixed_response_source(404, std::string{});
-    }
-    if (not detail::ascii_icase_equal(request_method, state_->stream_method)) {
-      co_return http::make_fixed_response_source(405, std::string{});
-    }
-    auto client = state_->clients->create_client();
-    if (not client) {
-      co_return http::make_fixed_response_source(503, std::string{});
-    }
-    co_return proxygen::coro::HTTPSourceHolder{
-      new ServeHttpStreamSource{std::move(client)}};
-  }
-
-private:
-  std::shared_ptr<ServeHttpServerState> state_;
-};
 
 struct ServeHttpArgs {
   location op = location::unknown;
@@ -340,6 +110,300 @@ struct ServeHttpArgs {
   }
 };
 
+struct ServeHttpClient {
+  uint64_t id = 0;
+  std::shared_ptr<UnboundedQueue<std::optional<std::string>>> queue
+    = std::make_shared<UnboundedQueue<std::optional<std::string>>>();
+};
+
+struct ClientOpened {
+  std::shared_ptr<ServeHttpClient> client;
+};
+
+struct ClientClosed {
+  uint64_t id = 0;
+};
+
+struct Shutdown {
+};
+
+using Message = variant<ClientOpened, ClientClosed, Shutdown>;
+using MessageQueue = folly::coro::BoundedQueue<Message>;
+
+enum class Lifecycle {
+  running,
+  draining,
+  done,
+};
+
+struct ServeHttpServerState {
+  std::shared_ptr<MessageQueue> message_queue;
+  std::optional<record> responses;
+  std::string stream_path = std::string{default_stream_path};
+  std::string stream_method = std::string{default_stream_method};
+  std::optional<uint64_t> max_connections;
+
+  auto create_client() -> std::shared_ptr<ServeHttpClient> {
+    if (not try_acquire_connection_slot()) {
+      return {};
+    }
+    auto client = std::make_shared<ServeHttpClient>();
+    client->id = next_client_id_.fetch_add(1, std::memory_order_relaxed);
+    return client;
+  }
+
+  auto release_connection_slot() -> void {
+    if (not max_connections) {
+      return;
+    }
+    auto previous
+      = reserved_connections_.fetch_sub(1, std::memory_order_relaxed);
+    TENZIR_ASSERT(previous > 0);
+  }
+
+private:
+  auto try_acquire_connection_slot() -> bool {
+    if (not max_connections) {
+      return true;
+    }
+    auto current = reserved_connections_.load(std::memory_order_relaxed);
+    while (current < *max_connections) {
+      if (reserved_connections_.compare_exchange_weak(
+            current, current + 1, std::memory_order_relaxed)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // The HTTP handler must decide synchronously whether it can hand out a new
+  // streaming response before the operator thread processes the corresponding
+  // `ClientOpened` message, so a minimal atomic reservation counter is the
+  // smallest shared surface that preserves queue-based coordination.
+  std::atomic<uint64_t> reserved_connections_{0};
+  std::atomic<uint64_t> next_client_id_{0};
+};
+
+class HttpServerThread final {
+public:
+  HttpServerThread(folly::SocketAddress address,
+                   std::shared_ptr<const proxygen::AcceptorConfiguration>
+                     acceptor_config,
+                   std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+    : address_{std::move(address)},
+      acceptor_config_{std::move(acceptor_config)},
+      handler_{std::move(handler)} {
+  }
+
+  HttpServerThread(HttpServerThread const&) = delete;
+  auto operator=(HttpServerThread const&) -> HttpServerThread& = delete;
+  HttpServerThread(HttpServerThread&&) = delete;
+  auto operator=(HttpServerThread&&) -> HttpServerThread& = delete;
+
+  ~HttpServerThread() {
+    stop();
+  }
+
+  auto start() -> std::optional<std::string> {
+    auto ready = std::promise<std::optional<std::string>>{};
+    auto ready_future = ready.get_future();
+    thread_ = std::thread([this, ready = std::move(ready)]() mutable {
+      try {
+        socket_ = folly::AsyncServerSocket::UniquePtr(
+          new folly::AsyncServerSocket(&event_base_));
+        socket_->bind(address_);
+        socket_->listen(acceptor_config_->acceptBacklog);
+        socket_->startAccepting();
+        acceptor_ = std::make_unique<proxygen::coro::HTTPCoroAcceptor>(
+          acceptor_config_, handler_);
+        acceptor_->init(socket_.get(), &event_base_);
+        ready.set_value(std::nullopt);
+        event_base_.loopForever();
+      } catch (std::exception const& ex) {
+        ready.set_value(std::string{ex.what()});
+      }
+    });
+    auto error = ready_future.get();
+    if (error) {
+      if (thread_.joinable()) {
+        thread_.join();
+      }
+    }
+    return error;
+  }
+
+  auto stop() -> void {
+    if (not thread_.joinable()) {
+      return;
+    }
+    event_base_.runInEventBaseThreadAndWait([this] {
+      if (acceptor_) {
+        acceptor_->forceStop();
+      }
+      if (socket_) {
+        socket_->stopAccepting();
+      }
+      event_base_.terminateLoopSoon();
+    });
+    thread_.join();
+    std::ignore = acceptor_.release();
+    std::ignore = socket_.release();
+  }
+
+private:
+  folly::SocketAddress address_;
+  std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config_;
+  std::shared_ptr<proxygen::coro::HTTPHandler> handler_;
+  folly::EventBase event_base_;
+  folly::AsyncServerSocket::UniquePtr socket_;
+  std::unique_ptr<proxygen::coro::HTTPCoroAcceptor> acceptor_;
+  std::thread thread_;
+};
+
+auto notify_client_closed(uint64_t client_id,
+                          std::shared_ptr<MessageQueue> message_queue,
+                          std::shared_ptr<std::atomic<bool>> notified)
+  -> Task<void> {
+  auto expected = false;
+  if (not notified->compare_exchange_strong(expected, true,
+                                            std::memory_order_acq_rel)) {
+    co_return;
+  }
+  co_await message_queue->enqueue(ClientClosed{client_id});
+}
+
+class ServeHttpStreamSource final : public proxygen::coro::HTTPSource {
+public:
+  ServeHttpStreamSource(std::shared_ptr<ServeHttpClient> client,
+                        folly::EventBase* evb,
+                        std::shared_ptr<MessageQueue> message_queue)
+    : client_{std::move(client)},
+      evb_{evb},
+      message_queue_{std::move(message_queue)},
+      closed_notified_{std::make_shared<std::atomic<bool>>(false)} {
+    setHeapAllocated();
+  }
+
+  auto readHeaderEvent()
+    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
+    auto msg = std::make_unique<proxygen::HTTPMessage>();
+    msg->setStatusCode(200);
+    msg->setStatusMessage(proxygen::HTTPMessage::getDefaultReason(200));
+    msg->setHTTPVersion(1, 1);
+    msg->getHeaders().set("Content-Type",
+                          std::string{default_stream_content_type});
+    auto event = proxygen::coro::HTTPHeaderEvent{std::move(msg), false};
+    auto guard = folly::makeGuard(lifetime(event));
+    co_return event;
+  }
+
+  auto readBodyEvent(uint32_t max = std::numeric_limits<uint32_t>::max())
+    -> folly::coro::Task<proxygen::coro::HTTPBodyEvent> override {
+    if (max == 0) {
+      max = 1;
+    }
+    while (buffered_.empty() and not input_done_) {
+      auto payload = co_await client_->queue->dequeue();
+      if (payload) {
+        buffered_ = std::move(*payload);
+      } else {
+        input_done_ = true;
+      }
+    }
+    if (buffered_.empty()) {
+      co_await notify_client_closed(client_->id, message_queue_,
+                                    closed_notified_);
+      auto event = proxygen::coro::HTTPBodyEvent{
+        std::unique_ptr<folly::IOBuf>{nullptr}, true};
+      auto guard = folly::makeGuard(lifetime(event));
+      co_return event;
+    }
+    auto chunk_size = std::min<size_t>(max, buffered_.size());
+    auto chunk = folly::IOBuf::copyBuffer(
+      std::string_view{buffered_.data(), chunk_size});
+    buffered_.erase(0, chunk_size);
+    auto event = proxygen::coro::HTTPBodyEvent{
+      std::move(chunk), input_done_ and buffered_.empty()};
+    if (event.eom) {
+      co_await notify_client_closed(client_->id, message_queue_,
+                                    closed_notified_);
+    }
+    auto guard = folly::makeGuard(lifetime(event));
+    co_return event;
+  }
+
+  void
+  stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
+    folly::coro::co_withExecutor(
+      evb_, notify_client_closed(client_->id, message_queue_, closed_notified_))
+      .start();
+    if (heapAllocated_) {
+      delete this;
+    }
+  }
+
+private:
+  std::shared_ptr<ServeHttpClient> client_;
+  folly::EventBase* evb_ = nullptr;
+  std::shared_ptr<MessageQueue> message_queue_;
+  std::shared_ptr<std::atomic<bool>> closed_notified_;
+  std::string buffered_;
+  bool input_done_ = false;
+};
+
+class ServeHttpHandler final : public proxygen::coro::HTTPHandler {
+public:
+  explicit ServeHttpHandler(std::shared_ptr<ServeHttpServerState> state)
+    : state_{std::move(state)} {
+  }
+
+  auto handleRequest(folly::EventBase* evb,
+                     proxygen::coro::HTTPSessionContextPtr,
+                     proxygen::coro::HTTPSourceHolder request_source)
+    -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
+    auto request_path = std::string{};
+    auto request_method = std::string{};
+    auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
+    reader.onHeaders([&](std::unique_ptr<proxygen::HTTPMessage> msg,
+                         bool is_final, bool /*eom*/) -> bool {
+      if (not is_final) {
+        return proxygen::coro::HTTPSourceReader::Continue;
+      }
+      request_method = msg->getMethodString();
+      request_path = msg->getPath();
+      return proxygen::coro::HTTPSourceReader::Continue;
+    });
+    reader.onBody([&](proxygen::coro::BufQueue body, bool /*eom*/) -> bool {
+      std::ignore = body.move();
+      return proxygen::coro::HTTPSourceReader::Continue;
+    });
+    co_await reader.read();
+    if (state_->responses) {
+      if (auto response
+          = http::lookup_response(*state_->responses, request_path)) {
+        co_return http::make_fixed_response_source(
+          response->code, std::move(response->body), response->content_type);
+      }
+    }
+    if (request_path != state_->stream_path) {
+      co_return http::make_fixed_response_source(404, std::string{});
+    }
+    if (not detail::ascii_icase_equal(request_method, state_->stream_method)) {
+      co_return http::make_fixed_response_source(405, std::string{});
+    }
+    auto client = state_->create_client();
+    if (not client) {
+      co_return http::make_fixed_response_source(503, std::string{});
+    }
+    co_await state_->message_queue->enqueue(ClientOpened{client});
+    co_return proxygen::coro::HTTPSourceHolder{
+      new ServeHttpStreamSource{std::move(client), evb, state_->message_queue}};
+  }
+
+private:
+  std::shared_ptr<ServeHttpServerState> state_;
+};
+
 class ServeHttp final : public Operator<table_slice, void> {
 public:
   explicit ServeHttp(ServeHttpArgs args) : args_{std::move(args)} {
@@ -350,24 +414,17 @@ public:
   ServeHttp(ServeHttp&&) noexcept = default;
   auto operator=(ServeHttp&&) noexcept -> ServeHttp& = default;
 
-  ~ServeHttp() override {
-    stop_server();
-    if (clients_) {
-      clients_->shutdown();
-    }
-  }
-
   auto start(OpCtx& ctx) -> Task<void> override {
     auto& dh = ctx.dh();
     auto request = make_secret_request("url", args_.url, resolved_url_, dh);
     auto resolved = co_await ctx.resolve_secrets({std::move(request)});
     if (not resolved) {
-      done_ = true;
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     if (resolved_url_.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
-      done_ = true;
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto endpoint = http::parse_host_port_endpoint(resolved_url_);
@@ -375,21 +432,15 @@ public:
       diagnostic::error("`url` must have the form `<host>:<port>`")
         .primary(args_.url)
         .emit(dh);
-      done_ = true;
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto [host, port] = std::move(endpoint).unwrap();
     tls_options_
       = args_.tls
           ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
           : tls_options{{.tls_default = false, .is_server = true}};
-    auto ssl_result = tls_options_.make_folly_ssl_context(dh);
-    if (not ssl_result) {
-      done_ = true;
-      co_return;
-    }
-    tls_context_ = std::move(*ssl_result);
     server_state_ = std::make_shared<ServeHttpServerState>();
+    server_state_->message_queue = message_queue_;
     server_state_->responses = args_.responses.transform([](auto const& x) {
       return x.inner;
     });
@@ -401,23 +452,61 @@ public:
       TENZIR_ASSERT(method);
       server_state_->stream_method = std::move(*method);
     }
-    server_state_->clients = clients_;
-    auto backlog = default_listen_backlog;
-    if (auto max_connections = inner(args_.max_connections)) {
-      backlog = detail::narrow<uint32_t>(*max_connections);
-    }
-    auto* event_base = folly::getGlobalIOExecutor()->getEventBase();
-    TENZIR_ASSERT(event_base);
-    auto socket = folly::AsyncServerSocket::newSocket(event_base);
-    auto addr = folly::SocketAddress{host, port, true};
-    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket),
-                                             addr, backlog};
+    server_state_->max_connections = inner(args_.max_connections);
     handler_ = std::make_shared<ServeHttpHandler>(server_state_);
-    ctx.spawn_task(folly::coro::co_withExecutor(event_base, accept_loop()));
+    auto [host, port] = std::move(endpoint).unwrap();
+    auto config = make_server_config(host, port, dh);
+    if (not config) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    server_ = std::make_unique<HttpServerThread>(
+      folly::SocketAddress{host, port, true}, std::move(*config), handler_);
+    if (auto error = server_->start()) {
+      diagnostic::error("failed to start http server")
+        .primary(args_.url)
+        .note("reason: {}", *error)
+        .emit(dh);
+      server_.reset();
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx&) -> Task<void> override {
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](ClientOpened event) -> Task<void> {
+        if (lifecycle_ != Lifecycle::running) {
+          event.client->queue->enqueue(std::nullopt);
+          server_state_->release_connection_slot();
+          co_return;
+        }
+        auto [_, inserted] = clients_.emplace(event.client->id,
+                                              std::move(event.client));
+        TENZIR_ASSERT(inserted);
+        clients_changed_->notify_one();
+      },
+      [&](ClientClosed event) -> Task<void> {
+        if (clients_.erase(event.id) == 1) {
+          server_state_->release_connection_slot();
+          clients_changed_->notify_one();
+        }
+        maybe_finish_draining();
+        co_return;
+      },
+      [&](Shutdown) -> Task<void> {
+        maybe_finish_draining();
+        co_return;
+      });
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_ or stopping_) {
+    if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
     if (input.rows() == 0) {
@@ -434,106 +523,130 @@ public:
       auto line = std::move(*json);
       line.push_back('\n');
       while (true) {
-        if (done_ or stopping_ or clients_->is_stopping()) {
+        if (lifecycle_ != Lifecycle::running) {
           co_return;
         }
-        auto clients = clients_->snapshot_clients();
-        if (clients.empty()) {
-          co_await clients_->wait_for_change();
+        if (clients_.empty()) {
+          co_await clients_changed_->wait();
           continue;
         }
-        auto delivered = false;
-        for (auto const& client : clients) {
-          delivered |= client->enqueue(line);
+        for (auto const& [_, client] : clients_) {
+          client->queue->enqueue(std::optional<std::string>{line});
         }
-        if (delivered) {
-          break;
-        }
-        co_await clients_->wait_for_change();
+        break;
       }
     }
     co_return;
   }
 
   auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
-    done_ = true;
-    clients_->shutdown();
-    stop_server();
-    co_return FinalizeBehavior::done;
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    co_await request_shutdown();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto stop(OpCtx&) -> Task<void> override {
-    stopping_ = true;
-    done_ = true;
-    clients_->shutdown();
-    stop_server();
-    co_return;
+    co_await request_shutdown();
   }
 
   auto state() -> OperatorState override {
-    if (done_) {
-      return OperatorState::done;
-    }
-    return OperatorState::unspecified;
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
   }
 
 private:
-  auto accept_loop() -> Task<void> {
-    TENZIR_ASSERT(server_);
-    while (not stopping_) {
-      std::unique_ptr<folly::coro::Transport> transport;
-      try {
-        transport = co_await (*server_)->accept();
-      } catch (...) {
-        if (not stopping_) {
-          done_ = true;
-          clients_->shutdown();
-        }
-        co_return;
-      }
-      if (not transport) {
-        continue;
-      }
-      auto peer_addr = transport->getPeerAddress();
-      if (tls_context_) {
-        try {
-          co_await upgrade_transport_to_tls_server(transport, tls_context_);
-        } catch (std::exception const& ex) {
-          TENZIR_DEBUG("serve_http: TLS handshake failed with {}: {}",
-                       peer_addr.describe(), ex.what());
-          continue;
-        }
-      }
-      auto codec = proxygen::HTTPCodecFactory::getCodec(
-        proxygen::CodecProtocol::HTTP_1_1,
-        proxygen::TransportDirection::DOWNSTREAM);
-      TENZIR_ASSERT(codec);
-      auto tinfo = wangle::TransportInfo{};
-      auto session = proxygen::coro::HTTPCoroSession::makeDownstreamCoroSession(
-        std::move(transport), handler_, std::move(codec), std::move(tinfo));
-      TENZIR_ASSERT(session);
-      session->run().start();
+  auto make_server_config(std::string const& host, uint16_t port,
+                          diagnostic_handler& dh)
+    -> failure_or<std::shared_ptr<const proxygen::AcceptorConfiguration>> {
+    auto config = std::make_shared<proxygen::AcceptorConfiguration>();
+    config->plaintextProtocol = std::string{http_1_1};
+    config->forceHTTP1_0_to_1_1 = true;
+    config->bindAddress = folly::SocketAddress{host, port, true};
+    config->acceptBacklog = inner(args_.max_connections)
+                              .transform([](auto value) {
+                                return detail::narrow<uint32_t>(value);
+                              })
+                              .value_or(default_listen_backlog);
+    config->maxNumPendingConnectionsPerWorker = config->acceptBacklog;
+    if (not tls_options_.get_tls(nullptr).inner) {
+      return config;
     }
+    auto certfile = tls_options_.get_certfile(nullptr);
+    auto keyfile = tls_options_.get_keyfile(nullptr);
+    if (not certfile or not keyfile) {
+      diagnostic::error("TLS server mode requires `tls.certfile` and `tls.keyfile`")
+        .primary(args_.url)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto tls_config = proxygen::coro::HTTPServer::getDefaultTLSConfig();
+    try {
+      tls_config.setCertificate(certfile->inner, keyfile->inner, "");
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to configure TLS server certificate")
+        .primary(args_.url)
+        .note("reason: {}", ex.what())
+        .emit(dh);
+      return failure::promise();
+    }
+    config->sslContextConfigs.emplace_back(std::move(tls_config));
+    return config;
   }
 
   auto stop_server() -> void {
-    stopping_ = true;
-    if (server_) {
-      (*server_)->close();
+    server_.reset();
+    handler_.reset();
+  }
+
+  auto close_all_clients() -> void {
+    if (not server_state_) {
+      clients_.clear();
+      clients_changed_->notify_one();
+      return;
+    }
+    for (auto& [_, client] : clients_) {
+      client->queue->enqueue(std::nullopt);
+      server_state_->release_connection_slot();
+    }
+    clients_.clear();
+    clients_changed_->notify_one();
+  }
+
+  auto request_shutdown() -> Task<void> {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining;
+      stop_server();
+      close_all_clients();
+      co_await message_queue_->enqueue(Shutdown{});
+    }
+    maybe_finish_draining();
+    co_return;
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ == Lifecycle::draining and clients_.empty()) {
+      lifecycle_ = Lifecycle::done;
     }
   }
 
   ServeHttpArgs args_;
   std::string resolved_url_;
+  std::shared_ptr<MessageQueue> message_queue_
+    = std::make_shared<MessageQueue>(message_queue_capacity);
   std::shared_ptr<ServeHttpServerState> server_state_;
-  std::shared_ptr<ServeHttpClientRegistry> clients_
-    = std::make_shared<ServeHttpClientRegistry>();
-  std::optional<Box<folly::coro::ServerSocket>> server_;
+  std::unique_ptr<HttpServerThread> server_;
   std::shared_ptr<ServeHttpHandler> handler_;
-  std::shared_ptr<folly::SSLContext> tls_context_;
+  std::unordered_map<uint64_t, std::shared_ptr<ServeHttpClient>> clients_;
+  Box<Notify> clients_changed_{std::in_place};
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
-  bool stopping_ = false;
-  bool done_ = false;
+  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 } // namespace
@@ -553,7 +666,7 @@ struct ServeHttpPlugin final : public virtual OperatorPlugin {
     auto max_connections
       = d.named("max_connections", &ServeHttpArgs::max_connections);
     auto tls = d.named("tls", &ServeHttpArgs::tls);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto args = ServeHttpArgs{};
       args.op = ctx.get_location(url).value_or(location::unknown);
       if (auto x = ctx.get(url)) {

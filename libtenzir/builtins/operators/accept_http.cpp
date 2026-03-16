@@ -9,11 +9,9 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/async.hpp"
-#include "tenzir/async/tls.hpp"
-#include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -26,13 +24,19 @@
 #include "tenzir/tql2/set.hpp"
 
 #include <boost/url/parse.hpp>
-#include <folly/executors/GlobalExecutor.h>
-#include <folly/io/coro/ServerSocket.h>
+#include <folly/coro/BoundedQueue.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
-#include <proxygen/lib/http/codec/HTTPCodecFactory.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
+#include <proxygen/lib/http/coro/server/HTTPServer.h>
+#include <proxygen/lib/http/coro/server/HTTPCoroAcceptor.h>
+#include <proxygen/lib/services/AcceptorConfiguration.h>
 
+#include <folly/io/async/AsyncServerSocket.h>
+
+#include <future>
+#include <memory>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -44,6 +48,8 @@ using namespace tenzir::si_literals;
 
 constexpr auto default_max_request_size = 10_Mi;
 constexpr auto default_listen_backlog = uint32_t{128};
+constexpr auto message_queue_capacity = uint32_t{1_Ki};
+constexpr auto http_1_1 = std::string_view{"http/1.1"};
 
 template <typename T>
 constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
@@ -99,10 +105,102 @@ struct AcceptHttpArgs {
   }
 };
 
+struct RequestReceived {
+  http::RequestData request;
+};
+
+struct Shutdown {
+};
+
+using Message = variant<RequestReceived, Shutdown>;
+using MessageQueue = folly::coro::BoundedQueue<Message>;
+
+enum class Lifecycle {
+  running,
+  draining,
+  done,
+};
+
 struct AcceptHttpServerState {
-  std::shared_ptr<UnboundedQueue<std::optional<http::RequestData>>> queue;
+  std::shared_ptr<MessageQueue> message_queue;
   std::optional<record> responses;
   size_t max_request_size = default_max_request_size;
+};
+
+class HttpServerThread final {
+public:
+  HttpServerThread(folly::SocketAddress address,
+                   std::shared_ptr<const proxygen::AcceptorConfiguration>
+                     acceptor_config,
+                   std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+    : address_{std::move(address)},
+      acceptor_config_{std::move(acceptor_config)},
+      handler_{std::move(handler)} {
+  }
+
+  HttpServerThread(HttpServerThread const&) = delete;
+  auto operator=(HttpServerThread const&) -> HttpServerThread& = delete;
+  HttpServerThread(HttpServerThread&&) = delete;
+  auto operator=(HttpServerThread&&) -> HttpServerThread& = delete;
+
+  ~HttpServerThread() {
+    stop();
+  }
+
+  auto start() -> std::optional<std::string> {
+    auto ready = std::promise<std::optional<std::string>>{};
+    auto ready_future = ready.get_future();
+    thread_ = std::thread([this, ready = std::move(ready)]() mutable {
+      try {
+        socket_ = folly::AsyncServerSocket::UniquePtr(
+          new folly::AsyncServerSocket(&event_base_));
+        socket_->bind(address_);
+        socket_->listen(acceptor_config_->acceptBacklog);
+        socket_->startAccepting();
+        acceptor_ = std::make_unique<proxygen::coro::HTTPCoroAcceptor>(
+          acceptor_config_, handler_);
+        acceptor_->init(socket_.get(), &event_base_);
+        ready.set_value(std::nullopt);
+        event_base_.loopForever();
+      } catch (std::exception const& ex) {
+        ready.set_value(std::string{ex.what()});
+      }
+    });
+    auto error = ready_future.get();
+    if (error) {
+      if (thread_.joinable()) {
+        thread_.join();
+      }
+    }
+    return error;
+  }
+
+  auto stop() -> void {
+    if (not thread_.joinable()) {
+      return;
+    }
+    event_base_.runInEventBaseThreadAndWait([this] {
+      if (acceptor_) {
+        acceptor_->forceStop();
+      }
+      if (socket_) {
+        socket_->stopAccepting();
+      }
+      event_base_.terminateLoopSoon();
+    });
+    thread_.join();
+    std::ignore = acceptor_.release();
+    std::ignore = socket_.release();
+  }
+
+private:
+  folly::SocketAddress address_;
+  std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config_;
+  std::shared_ptr<proxygen::coro::HTTPHandler> handler_;
+  folly::EventBase event_base_;
+  folly::AsyncServerSocket::UniquePtr socket_;
+  std::unique_ptr<proxygen::coro::HTTPCoroAcceptor> acceptor_;
+  std::thread thread_;
 };
 
 class AcceptHttpHandler final : public proxygen::coro::HTTPHandler {
@@ -156,7 +254,6 @@ public:
     if (body_too_large) {
       co_return http::make_fixed_response_source(413, std::string{});
     }
-    state_->queue->enqueue(std::optional<http::RequestData>{request});
     auto response_code = uint16_t{200};
     auto content_type = std::string{};
     auto body = std::string{};
@@ -168,16 +265,14 @@ public:
         body = response->body;
       }
     }
+    co_await state_->message_queue->enqueue(
+      RequestReceived{std::move(request)});
     co_return http::make_fixed_response_source(response_code, std::move(body),
                                                content_type);
   }
 
 private:
   std::shared_ptr<AcceptHttpServerState> state_;
-};
-
-struct AcceptHttpTaskEvent {
-  std::optional<http::RequestData> request;
 };
 
 class AcceptHttp final : public Operator<void, table_slice> {
@@ -191,21 +286,17 @@ public:
   AcceptHttp(AcceptHttp&&) noexcept = default;
   auto operator=(AcceptHttp&&) noexcept -> AcceptHttp& = default;
 
-  ~AcceptHttp() override {
-    stop_server();
-  }
-
   auto start(OpCtx& ctx) -> Task<void> override {
     auto& dh = ctx.dh();
     auto request = make_secret_request("url", args_.url, resolved_url_, dh);
     auto resolved = co_await ctx.resolve_secrets({std::move(request)});
     if (not resolved) {
-      done_ = true;
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     if (resolved_url_.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
-      done_ = true;
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto endpoint = http::parse_host_port_endpoint(resolved_url_);
@@ -213,112 +304,113 @@ public:
       diagnostic::error("`url` must have the form `<host>:<port>`")
         .primary(args_.url)
         .emit(dh);
-      done_ = true;
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto [host, port] = std::move(endpoint).unwrap();
     tls_options_
       = args_.tls
           ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
           : tls_options{{.tls_default = false, .is_server = true}};
-    auto ssl_result = tls_options_.make_folly_ssl_context(dh);
-    if (not ssl_result) {
-      done_ = true;
-      co_return;
-    }
-    tls_context_ = std::move(*ssl_result);
     server_state_ = std::make_shared<AcceptHttpServerState>();
-    server_state_->queue = queue_;
+    server_state_->message_queue = message_queue_;
     server_state_->responses = args_.responses.transform([](auto const& x) {
       return x.inner;
     });
     server_state_->max_request_size
       = inner(args_.max_request_size).value_or(default_max_request_size);
-    auto backlog = default_listen_backlog;
-    if (auto max_connections = inner(args_.max_connections)) {
-      backlog = detail::narrow<uint32_t>(*max_connections);
-    }
-    auto* event_base = folly::getGlobalIOExecutor()->getEventBase();
-    TENZIR_ASSERT(event_base);
-    auto socket = folly::AsyncServerSocket::newSocket(event_base);
-    auto addr = folly::SocketAddress{host, port, true};
-    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket),
-                                             addr, backlog};
     handler_ = std::make_shared<AcceptHttpHandler>(server_state_);
-    ctx.spawn_task(folly::coro::co_withExecutor(event_base, accept_loop()));
+    auto [host, port] = std::move(endpoint).unwrap();
+    auto config = make_server_config(host, port, dh);
+    if (not config) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    server_ = std::make_unique<HttpServerThread>(
+      folly::SocketAddress{host, port, true}, std::move(*config), handler_);
+    if (auto error = server_->start()) {
+      diagnostic::error("failed to start http server")
+        .primary(args_.url)
+        .note("reason: {}", *error)
+        .emit(dh);
+      server_.reset();
+      lifecycle_ = Lifecycle::done;
+    }
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (done_) {
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
-    }
-    auto request = co_await queue_->dequeue();
-    co_return AcceptHttpTaskEvent{std::move(request)};
+    co_return co_await message_queue_->dequeue();
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto event = std::move(result).as<AcceptHttpTaskEvent>();
-    if (not event.request) {
-      done_ = true;
-      co_return;
-    }
-    auto request = std::move(*event.request);
-    auto request_record = http::make_request_record(request);
-    if (not args_.parse) {
-      auto slice = http::make_request_event(request);
-      if (args_.metadata_field) {
-        auto metadata = series_builder{};
-        for (auto i = size_t{}; i < slice.rows(); ++i) {
-          metadata.data(request_record);
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](RequestReceived event) -> Task<void> {
+        if (lifecycle_ == Lifecycle::done) {
+          co_return;
         }
-        slice
-          = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
-                   std::move(slice), ctx.dh());
-      }
-      co_await push(std::move(slice));
-      co_return;
-    }
-    if (request.body.empty()) {
-      co_return;
-    }
-    auto body = std::move(request.body);
-    auto encoding
-      = http::find_header_value(request.headers, "content-encoding");
-    auto payload = chunk_ptr{};
-    auto body_span = std::span<std::byte const>{body.data(), body.size()};
-    if (auto decompressed
-        = http::try_decompress_body(encoding, body_span, ctx.dh())) {
-      payload = chunk::make(std::move(*decompressed));
-    } else {
-      payload = chunk::make(std::move(body));
-    }
-    auto pipeline = args_.parse->inner;
-    auto env = substitute_ctx::env_t{};
-    env[request_let_id_] = request_record;
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
-    auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
-    if (not sub_result) {
-      co_return;
-    }
-    auto sub_key = data{next_sub_key_++};
-    active_sub_keys_.insert(sub_key);
-    if (args_.metadata_field) {
-      request_metadata_by_sub_key_.emplace(sub_key, request_record);
-    }
-    auto sub
-      = co_await ctx.spawn_sub(sub_key, std::move(pipeline), tag_v<chunk_ptr>);
-    auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
-    auto push_result = co_await open_pipeline.push(std::move(payload));
-    if (push_result.is_err()) {
-      active_sub_keys_.erase(sub_key);
-      request_metadata_by_sub_key_.erase(sub_key);
-      done_ = true;
-      co_return;
-    }
-    co_await open_pipeline.close();
+        auto request = std::move(event.request);
+        auto request_record = http::make_request_record(request);
+        if (not args_.parse) {
+          auto slice = http::make_request_event(request);
+          if (args_.metadata_field) {
+            auto metadata = series_builder{};
+            for (auto i = size_t{}; i < slice.rows(); ++i) {
+              metadata.data(request_record);
+            }
+            slice = assign(*args_.metadata_field,
+                           metadata.finish_assert_one_array(),
+                           std::move(slice), ctx.dh());
+          }
+          co_await push(std::move(slice));
+          co_return;
+        }
+        if (request.body.empty()) {
+          co_return;
+        }
+        auto body = std::move(request.body);
+        auto encoding
+          = http::find_header_value(request.headers, "content-encoding");
+        auto payload = chunk_ptr{};
+        auto body_span = std::span<std::byte const>{body.data(), body.size()};
+        if (auto decompressed
+            = http::try_decompress_body(encoding, body_span, ctx.dh())) {
+          payload = chunk::make(std::move(*decompressed));
+        } else {
+          payload = chunk::make(std::move(body));
+        }
+        auto pipeline = args_.parse->inner;
+        auto env = substitute_ctx::env_t{};
+        env[request_let_id_] = request_record;
+        auto reg = global_registry();
+        auto b_ctx = base_ctx{ctx, *reg};
+        auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env},
+                                              true);
+        if (not sub_result) {
+          co_return;
+        }
+        auto sub_key = data{next_sub_key_++};
+        active_sub_keys_.insert(sub_key);
+        if (args_.metadata_field) {
+          request_metadata_by_sub_key_.emplace(sub_key, request_record);
+        }
+        auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
+                                          tag_v<chunk_ptr>);
+        auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
+        auto push_result = co_await open_pipeline.push(std::move(payload));
+        if (push_result.is_err()) {
+          active_sub_keys_.erase(sub_key);
+          request_metadata_by_sub_key_.erase(sub_key);
+          co_await request_shutdown();
+          co_return;
+        }
+        co_await open_pipeline.close();
+      },
+      [&](Shutdown) -> Task<void> {
+        maybe_finish_draining();
+        co_return;
+      });
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
@@ -348,73 +440,106 @@ public:
     auto sub_key = materialize(key);
     active_sub_keys_.erase(sub_key);
     request_metadata_by_sub_key_.erase(sub_key);
+    maybe_finish_draining();
     co_return;
   }
 
+  auto finalize(Push<table_slice>&, OpCtx&) -> Task<FinalizeBehavior> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    co_await request_shutdown();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
+  }
+
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
   }
 
 private:
-  auto accept_loop() -> Task<void> {
-    TENZIR_ASSERT(server_);
-    while (not stopping_) {
-      std::unique_ptr<folly::coro::Transport> transport;
-      try {
-        transport = co_await (*server_)->accept();
-      } catch (...) {
-        if (not stopping_) {
-          queue_->enqueue(std::nullopt);
-        }
-        co_return;
-      }
-      if (not transport) {
-        continue;
-      }
-      auto peer_addr = transport->getPeerAddress();
-      if (tls_context_) {
-        try {
-          co_await upgrade_transport_to_tls_server(transport, tls_context_);
-        } catch (std::exception const& ex) {
-          TENZIR_DEBUG("accept_http: TLS handshake failed with {}: {}",
-                       peer_addr.describe(), ex.what());
-          continue;
-        }
-      }
-      auto codec = proxygen::HTTPCodecFactory::getCodec(
-        proxygen::CodecProtocol::HTTP_1_1,
-        proxygen::TransportDirection::DOWNSTREAM);
-      TENZIR_ASSERT(codec);
-      auto tinfo = wangle::TransportInfo{};
-      auto session = proxygen::coro::HTTPCoroSession::makeDownstreamCoroSession(
-        std::move(transport), handler_, std::move(codec), std::move(tinfo));
-      TENZIR_ASSERT(session);
-      session->run().start();
+  auto make_server_config(std::string const& host, uint16_t port,
+                          diagnostic_handler& dh)
+    -> failure_or<std::shared_ptr<const proxygen::AcceptorConfiguration>> {
+    auto config = std::make_shared<proxygen::AcceptorConfiguration>();
+    config->plaintextProtocol = std::string{http_1_1};
+    config->forceHTTP1_0_to_1_1 = true;
+    config->bindAddress = folly::SocketAddress{host, port, true};
+    config->acceptBacklog = inner(args_.max_connections)
+                              .transform([](auto value) {
+                                return detail::narrow<uint32_t>(value);
+                              })
+                              .value_or(default_listen_backlog);
+    config->maxNumPendingConnectionsPerWorker = config->acceptBacklog;
+    if (not tls_options_.get_tls(nullptr).inner) {
+      return config;
     }
+    auto certfile = tls_options_.get_certfile(nullptr);
+    auto keyfile = tls_options_.get_keyfile(nullptr);
+    if (not certfile or not keyfile) {
+      diagnostic::error("TLS server mode requires `tls.certfile` and `tls.keyfile`")
+        .primary(args_.url)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto tls_config = proxygen::coro::HTTPServer::getDefaultTLSConfig();
+    try {
+      tls_config.setCertificate(certfile->inner, keyfile->inner, "");
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to configure TLS server certificate")
+        .primary(args_.url)
+        .note("reason: {}", ex.what())
+        .emit(dh);
+      return failure::promise();
+    }
+    config->sslContextConfigs.emplace_back(std::move(tls_config));
+    return config;
   }
 
   auto stop_server() -> void {
-    stopping_ = true;
-    if (server_) {
-      (*server_)->close();
+    server_.reset();
+    handler_.reset();
+    server_state_.reset();
+  }
+
+  auto begin_draining() -> bool {
+    if (lifecycle_ != Lifecycle::running) {
+      return false;
+    }
+    lifecycle_ = Lifecycle::draining;
+    stop_server();
+    return true;
+  }
+
+  auto request_shutdown() -> Task<void> {
+    if (begin_draining()) {
+      co_await message_queue_->enqueue(Shutdown{});
+    }
+    maybe_finish_draining();
+    co_return;
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ == Lifecycle::draining and active_sub_keys_.empty()) {
+      lifecycle_ = Lifecycle::done;
     }
   }
 
   AcceptHttpArgs args_;
   std::string resolved_url_;
+  std::shared_ptr<MessageQueue> message_queue_
+    = std::make_shared<MessageQueue>(message_queue_capacity);
   std::shared_ptr<AcceptHttpServerState> server_state_;
-  std::shared_ptr<UnboundedQueue<std::optional<http::RequestData>>> queue_
-    = std::make_shared<UnboundedQueue<std::optional<http::RequestData>>>();
+  std::unique_ptr<HttpServerThread> server_;
+  std::shared_ptr<AcceptHttpHandler> handler_;
   std::unordered_set<data> active_sub_keys_;
   std::unordered_map<data, record> request_metadata_by_sub_key_;
-  std::optional<Box<folly::coro::ServerSocket>> server_;
-  std::shared_ptr<AcceptHttpHandler> handler_;
-  std::shared_ptr<folly::SSLContext> tls_context_;
   let_id request_let_id_;
   uint64_t next_sub_key_ = 0;
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
-  bool stopping_ = false;
-  bool done_ = false;
+  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 } // namespace
@@ -438,7 +563,7 @@ struct AcceptHttpPlugin final : public virtual OperatorPlugin {
     auto tls = d.named("tls", &AcceptHttpArgs::tls);
     auto parse = d.pipeline(&AcceptHttpArgs::parse,
                             {{"request", &AcceptHttpArgs::request_let}});
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto args = AcceptHttpArgs{};
       args.op = ctx.get_location(url).value_or(location::unknown);
       if (auto x = ctx.get(url)) {

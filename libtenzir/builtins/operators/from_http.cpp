@@ -1204,7 +1204,7 @@ auto make_http_executor_description() -> Description {
   auto parse = d.pipeline(&HttpExecutorArgs::parse,
                           {{"request", &HttpExecutorArgs::request_let},
                            {"response", &HttpExecutorArgs::response_let}});
-  d.validate([=](ValidateCtx& ctx) -> Empty {
+  d.validate([=](DescribeCtx& ctx) -> Empty {
     if (ctx.get(encode) and not ctx.get_location(body)) {
       diagnostic::error("encoding specified without a `body`")
         .primary(ctx.get_location(encode).value())
@@ -1290,7 +1290,7 @@ struct FromHttpPlugin final : public virtual OperatorPlugin {
     auto tls = d.named("tls", &FromHttpArgs::tls);
     auto parse = d.pipeline(&FromHttpArgs::parse,
                             {{"response", &FromHttpArgs::response_let}});
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto args = FromHttpArgs{};
       args.op = ctx.get_location(url).value_or(location::unknown);
       if (auto x = ctx.get(url)) {

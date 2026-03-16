@@ -539,11 +539,14 @@ if (_tenzir_folly_include_dirs)
   target_include_directories(libtenzir_builtins BEFORE
                              PRIVATE ${_tenzir_folly_include_dirs})
 endif ()
-# proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
-# without declaring the dependency. Linking it explicitly ensures the static
-# linker sees the archive.
+# The bundled Proxygen split now leaves some legacy HTTP client symbols only in
+# the monolithic `proxygen` target, while proxygen_utils_trace still references
+# symbols from proxygen_utils_trace_event_types without declaring that
+# dependency. The HTTP server helpers live in a separate coro-server target.
 target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
-                                        proxygen_utils_trace_event_types)
+                                        proxygen::proxygen_coro_server
+                                        proxygen_utils_trace_event_types
+                                        proxygen)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -551,10 +554,12 @@ target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
-    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>)
+    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>
+            $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_server>)
 else ()
   target_link_libraries(libtenzir_builtins
-                        PRIVATE proxygen::proxygen_coro_client)
+                        PRIVATE proxygen::proxygen_coro_client
+                                proxygen::proxygen_coro_server)
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)
