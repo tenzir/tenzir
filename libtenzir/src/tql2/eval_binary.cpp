@@ -633,43 +633,51 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
       if constexpr (basic_type<R>
                     and caf::detail::is_complete<
                       EvalBinOp<ast::binary_op::eq, L, R>>) {
-        using RA = type_to_arrow_array_t<R>;
-        auto* values = dynamic_cast<const RA*>(r.values().get());
-        TENZIR_ASSERT(values);
-        for (auto i = int64_t{}; i < l.length(); ++i) {
-          if (r.IsNull(i)) {
-            b.UnsafeAppendNull();
-            continue;
-          }
-          auto ln = l.IsNull(i);
-          auto list_begin = r.value_offset(i);
-          auto list_end = r.value_offset(i + 1);
-          auto found = false;
-          if (ln) {
-            for (auto j = list_begin; j < list_end; ++j) {
-              if (values->IsNull(j)) {
-                found = true;
-                break;
+        if constexpr (std::same_as<secret_type, L>
+                      or std::same_as<secret_type, R>) {
+          warn("`secret` cannot be compared");
+          check(b.AppendNulls(l.length()));
+        } else {
+          // r.values() returns the extension-wrapped child array because Tenzir
+          // registers its extension types with Arrow, so MakeArray() wraps them.
+          using RA = type_to_arrow_array_t<R>;
+          auto* values = dynamic_cast<const RA*>(r.values().get());
+          TENZIR_ASSERT(values);
+          for (auto i = int64_t{}; i < l.length(); ++i) {
+            if (r.IsNull(i)) {
+              b.UnsafeAppendNull();
+              continue;
+            }
+            auto ln = l.IsNull(i);
+            auto list_begin = r.value_offset(i);
+            auto list_end = r.value_offset(i + 1);
+            auto found = false;
+            if (ln) {
+              for (auto j = list_begin; j < list_end; ++j) {
+                if (values->IsNull(j)) {
+                  found = true;
+                  break;
+                }
+              }
+            } else {
+              auto lv = value_at(L{}, l, i);
+              for (auto j = list_begin; j < list_end; ++j) {
+                if (values->IsNull(j)) {
+                  continue;
+                }
+                auto rv = value_at(R{}, *values, j);
+                if constexpr (integral_type<L> and integral_type<R>) {
+                  found = std::cmp_equal(lv, rv);
+                } else if constexpr (requires { lv == rv; }) {
+                  found = lv == rv;
+                }
+                if (found) {
+                  break;
+                }
               }
             }
-          } else {
-            auto lv = value_at(L{}, l, i);
-            for (auto j = list_begin; j < list_end; ++j) {
-              if (values->IsNull(j)) {
-                continue;
-              }
-              auto rv = value_at(R{}, *values, j);
-              if constexpr (integral_type<L> and integral_type<R>) {
-                found = std::cmp_equal(lv, rv);
-              } else if constexpr (requires { lv == rv; }) {
-                found = lv == rv;
-              }
-              if (found) {
-                break;
-              }
-            }
+            b.UnsafeAppend(found);
           }
-          b.UnsafeAppend(found);
         }
       } else {
         warn(fmt::format("got incompatible types for `in`: `{} in list<{}>`",
