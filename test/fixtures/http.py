@@ -85,6 +85,7 @@ class HttpOptions:
     content_type: str = "application/json"
     expected_status: int = 200
     expected_response_body: str = ""
+    connect_delay: float = 0.0
 
 
 def _normalize_expected_request(
@@ -454,6 +455,8 @@ def _run_client(
         ssl_context = None
         if opts.tls:
             ssl_context = ssl._create_unverified_context()
+        if opts.connect_delay > 0:
+            time.sleep(opts.connect_delay)
         while not stop_event.is_set():
             conn: http.client.HTTPConnection | http.client.HTTPSConnection | None = None
             try:

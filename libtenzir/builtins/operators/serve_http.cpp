@@ -10,6 +10,7 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/notify.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/box.hpp"
@@ -38,6 +39,7 @@
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
 
+#include <cstdint>
 #include <future>
 #include <limits>
 #include <memory>
@@ -59,7 +61,7 @@ constexpr auto default_stream_method = std::string_view{"GET"};
 constexpr auto default_stream_content_type
   = std::string_view{"application/x-ndjson"};
 constexpr auto http_1_1 = std::string_view{"http/1.1"};
-constexpr auto first_client_grace_period = std::chrono::seconds{1};
+constexpr auto backlog_grace_period = std::chrono::seconds{1};
 
 template <typename T>
 constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
@@ -68,12 +70,33 @@ constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
   });
 }
 
+enum class BacklogPolicy : uint8_t {
+  buffer,
+  block,
+  drop,
+};
+
+auto parse_backlog_policy(std::string_view value)
+  -> std::optional<BacklogPolicy> {
+  if (detail::ascii_icase_equal(value, "buffer")) {
+    return BacklogPolicy::buffer;
+  }
+  if (detail::ascii_icase_equal(value, "block")) {
+    return BacklogPolicy::block;
+  }
+  if (detail::ascii_icase_equal(value, "drop")) {
+    return BacklogPolicy::drop;
+  }
+  return std::nullopt;
+}
+
 struct ServeHttpArgs {
   location op = location::unknown;
   located<secret> url;
   std::optional<located<std::string>> path;
   std::optional<located<std::string>> method;
   std::optional<located<record>> responses;
+  std::optional<located<std::string>> on_backlog;
   std::optional<located<uint64_t>> max_connections;
   std::optional<located<data>> tls;
 
@@ -99,6 +122,13 @@ struct ServeHttpArgs {
           .emit(dh);
         return failure::promise();
       }
+    }
+    if (on_backlog and not parse_backlog_policy(on_backlog->inner)) {
+      diagnostic::error("unsupported backlog policy: `{}`", on_backlog->inner)
+        .primary(*on_backlog)
+        .hint("`on_backlog` must be `\"buffer\"`, `\"block\"`, or `\"drop\"`")
+        .emit(dh);
+      return failure::promise();
     }
     if (max_connections and max_connections->inner == 0) {
       diagnostic::error("`max_connections` must not be zero")
@@ -138,22 +168,16 @@ struct Payload {
 
 struct Shutdown {};
 
-struct FirstClientTimeout {};
+struct BacklogTimeout {};
 
 using Message
-  = variant<Shutdown, ClientClosed, Payload, FirstClientTimeout, ClientOpened>;
+  = variant<Shutdown, ClientClosed, Payload, BacklogTimeout, ClientOpened>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 enum class Lifecycle {
   running,
   draining,
   done,
-};
-
-enum class DeliveryState {
-  waiting_for_first_client,
-  waiting_for_first_client_timeout,
-  live,
 };
 
 enum class ListenerState {
@@ -477,6 +501,11 @@ public:
       (*server_state_)->stream_method = std::move(*method);
     }
     (*server_state_)->max_connections = inner(args_.max_connections);
+    if (args_.on_backlog) {
+      auto policy = parse_backlog_policy(args_.on_backlog->inner);
+      TENZIR_ASSERT(policy);
+      backlog_policy_ = *policy;
+    }
     handler_ = std::make_shared<ServeHttpHandler>(*server_state_);
     auto [host, port] = std::move(endpoint).unwrap();
     auto config = make_server_config(host, port, dh);
@@ -508,7 +537,7 @@ public:
       [&](ClientOpened event) -> Task<void> {
         if (lifecycle_ == Lifecycle::done
             or (lifecycle_ == Lifecycle::draining
-                and delivery_state_ == DeliveryState::live)) {
+                and pending_payloads_.empty())) {
           event.client->queue->enqueue(None{});
           TENZIR_ASSERT(server_state_);
           (*server_state_)->release_connection_slot();
@@ -517,12 +546,12 @@ public:
         auto [_, inserted]
           = clients_.emplace(client_key(event.client), std::move(event.client));
         TENZIR_ASSERT(inserted);
-        if (delivery_state_ != DeliveryState::live) {
+        client_ready_->notify_one();
+        if (not pending_payloads_.empty()) {
           for (auto const& line : pending_payloads_) {
             send_to_clients(line);
           }
           pending_payloads_.clear();
-          delivery_state_ = DeliveryState::live;
           if (lifecycle_ == Lifecycle::draining) {
             stop_accepting();
             close_all_clients();
@@ -543,10 +572,17 @@ public:
         if (lifecycle_ == Lifecycle::done or payload.line.empty()) {
           co_return;
         }
-        if (delivery_state_ == DeliveryState::live) {
+        if (not clients_.empty()) {
           send_to_clients(payload.line);
-        } else {
-          pending_payloads_.push_back(std::move(payload.line));
+          co_return;
+        }
+        switch (backlog_policy_) {
+          case BacklogPolicy::buffer:
+          case BacklogPolicy::block:
+            pending_payloads_.push_back(std::move(payload.line));
+            break;
+          case BacklogPolicy::drop:
+            break;
         }
         co_return;
       },
@@ -554,13 +590,25 @@ public:
         if (lifecycle_ != Lifecycle::draining) {
           co_return;
         }
-        if (delivery_state_ == DeliveryState::waiting_for_first_client
-            and not pending_payloads_.empty()) {
-          delivery_state_ = DeliveryState::waiting_for_first_client_timeout;
-          ctx.spawn_task([message_queue = message_queue_]() mutable -> Task<void> {
-            co_await folly::coro::sleep(first_client_grace_period);
-            co_await message_queue->enqueue(FirstClientTimeout{});
-          });
+        if (clients_.empty()) {
+          if (not pending_payloads_.empty()) {
+            switch (backlog_policy_) {
+              case BacklogPolicy::buffer:
+                ctx.spawn_task(
+                  [message_queue = message_queue_]() mutable -> Task<void> {
+                    co_await folly::coro::sleep(backlog_grace_period);
+                    co_await message_queue->enqueue(BacklogTimeout{});
+                  });
+                co_return;
+              case BacklogPolicy::block:
+                co_return;
+              case BacklogPolicy::drop:
+                pending_payloads_.clear();
+                break;
+            }
+          }
+          stop_accepting();
+          maybe_finish_draining();
           co_return;
         }
         stop_accepting();
@@ -568,11 +616,10 @@ public:
         maybe_finish_draining();
         co_return;
       },
-      [&](FirstClientTimeout) -> Task<void> {
-        if (lifecycle_ == Lifecycle::draining
-            and delivery_state_
-                  == DeliveryState::waiting_for_first_client_timeout
-            and clients_.empty()) {
+      [&](BacklogTimeout) -> Task<void> {
+        if (lifecycle_ == Lifecycle::draining and clients_.empty()
+            and backlog_policy_ == BacklogPolicy::buffer
+            and not pending_payloads_.empty()) {
           pending_payloads_.clear();
           stop_accepting();
           maybe_finish_draining();
@@ -589,6 +636,13 @@ public:
       co_return;
     }
     for (auto row : input.values()) {
+      while (backlog_policy_ == BacklogPolicy::block
+             and lifecycle_ == Lifecycle::running and clients_.empty()) {
+        co_await client_ready_->wait();
+      }
+      if (lifecycle_ != Lifecycle::running) {
+        co_return;
+      }
       auto json = to_json(materialize(row), {.oneline = true});
       if (not json) {
         diagnostic::warning("failed to encode event as json")
@@ -695,6 +749,7 @@ private:
     }
     if (lifecycle_ == Lifecycle::running) {
       lifecycle_ = Lifecycle::draining;
+      client_ready_->notify_one();
       co_await message_queue_->enqueue(Shutdown{});
     }
     maybe_finish_draining();
@@ -718,9 +773,10 @@ private:
   std::shared_ptr<ServeHttpHandler> handler_;
   std::unordered_map<ClientKey, Arc<ServeHttpClient>> clients_;
   std::vector<std::string> pending_payloads_;
+  Box<Notify> client_ready_{std::in_place};
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
+  BacklogPolicy backlog_policy_ = BacklogPolicy::buffer;
   Lifecycle lifecycle_ = Lifecycle::running;
-  DeliveryState delivery_state_ = DeliveryState::waiting_for_first_client;
   ListenerState listener_state_ = ListenerState::accepting;
 };
 
@@ -738,6 +794,8 @@ struct ServeHttpPlugin final : public virtual OperatorPlugin {
     auto path = d.named("path", &ServeHttpArgs::path, "string");
     auto method = d.named("method", &ServeHttpArgs::method, "string");
     auto responses = d.named("responses", &ServeHttpArgs::responses);
+    auto on_backlog = d.named("on_backlog", &ServeHttpArgs::on_backlog,
+                              "string");
     auto max_connections
       = d.named("max_connections", &ServeHttpArgs::max_connections);
     auto tls = d.named("tls", &ServeHttpArgs::tls);
@@ -755,6 +813,9 @@ struct ServeHttpPlugin final : public virtual OperatorPlugin {
       }
       if (auto x = ctx.get(responses)) {
         args.responses = *x;
+      }
+      if (auto x = ctx.get(on_backlog)) {
+        args.on_backlog = *x;
       }
       if (auto x = ctx.get(max_connections)) {
         args.max_connections = *x;

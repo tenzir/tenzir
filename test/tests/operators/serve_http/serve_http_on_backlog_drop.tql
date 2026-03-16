@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http:
+      mode: client
+      connect_delay: 0.2
+      method: GET
+      path: /
+      expected_response_body: |
+        {"n":2}
+timeout: 60
+---
+
+from {n: 1, ts: 2025-03-03T12:12:10},
+     {n: 2, ts: 2025-03-03T12:12:11}
+delay ts
+drop ts
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), on_backlog="drop"
