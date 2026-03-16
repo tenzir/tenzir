@@ -30,9 +30,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
-#include <algorithm>
 #include <memory>
-#include <unordered_map>
 
 namespace tenzir::plugins::from_tcp {
 
@@ -73,7 +71,7 @@ public:
     Box<folly::coro::Transport> transport;
   };
 
-  struct ReadChunk {
+  struct Payload {
     chunk_ptr chunk;
   };
 
@@ -82,7 +80,7 @@ public:
     Option<std::string> error;
   };
 
-  using Message = variant<Connected, ReadChunk, ConnectionClosed>;
+  using Message = variant<Connected, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit FromTcpConnector(FromTcpArgs args)
@@ -124,7 +122,7 @@ public:
     if (done_) {
       co_return {};
     }
-    if (connection_active_) {
+    if (current_connection_) {
       co_return co_await message_queue_->dequeue();
     }
     while (not done_) {
@@ -137,7 +135,6 @@ public:
             std::chrono::duration_cast<std::chrono::milliseconds>(
               connect_timeout),
             tls_context_, host_)};
-        connection_active_ = true;
         TENZIR_DEBUG("connected to {}", address_.describe());
         co_return Message{Connected{std::move(transport)}};
       } catch (folly::AsyncSocketException const& ex) {
@@ -196,27 +193,24 @@ public:
         auto sub_result
           = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
-          connection_active_ = false;
           close_transport(std::move(transport));
           co_return;
         }
         auto sub = co_await ctx.spawn_sub(
           data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
         pipeline_ = as<OpenPipeline<chunk_ptr>>(sub);
-        auto connection = Connection{std::move(*transport)};
-        auto [_, inserted] = connections_.emplace(conn_id, connection);
-        TENZIR_ASSERT(inserted);
+        current_conn_id_ = conn_id;
+        current_connection_ = Connection{std::move(*transport)};
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
-          read_loop(conn_id, connection, std::move(message_queue))));
+          read_loop(conn_id, *current_connection_, std::move(message_queue))));
       },
-      [&](ReadChunk read_chunk) -> Task<void> {
+      [&](Payload payload) -> Task<void> {
         if (not pipeline_) {
           co_return;
         }
-        auto push_result
-          = co_await pipeline_->push(std::move(read_chunk.chunk));
+        auto push_result = co_await pipeline_->push(std::move(payload.chunk));
         TENZIR_UNUSED(push_result);
       },
       [&](ConnectionClosed closed) -> Task<void> {
@@ -229,23 +223,28 @@ public:
             .note("reason: {}", *closed.error)
             .emit(ctx);
         }
-        connections_.erase(closed.conn_id);
-        if (pipeline_) {
-          co_await pipeline_->close();
-          pipeline_ = None{};
+        if (current_conn_id_ and *current_conn_id_ == closed.conn_id) {
+          current_connection_ = None{};
+          current_conn_id_ = None{};
+          if (pipeline_) {
+            co_await pipeline_->close();
+            pipeline_ = None{};
+          }
         }
-        connection_active_ = false;
       });
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
-    if (auto it = connections_.find(conn_id); it != connections_.end()) {
+    if (current_conn_id_ and *current_conn_id_ == conn_id) {
       pipeline_ = None{};
-      auto connection = it->second;
-      connections_.erase(it);
-      close_transport(std::move(connection));
+      if (current_connection_) {
+        auto connection = std::move(*current_connection_);
+        current_connection_ = None{};
+        close_transport(std::move(connection));
+      }
+      current_conn_id_ = None{};
     }
     co_return;
   }
@@ -284,7 +283,7 @@ private:
         if (not read_result) {
           break;
         }
-        co_await message_queue->enqueue(ReadChunk{std::move(*read_result)});
+        co_await message_queue->enqueue(Payload{std::move(*read_result)});
       } catch (const folly::AsyncSocketException& e) {
         // Socket errors are connection-scoped; log and reconnect.
         read_error = e.what();
@@ -309,11 +308,11 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<OpenPipeline<chunk_ptr>> pipeline_;
-  std::unordered_map<uint64_t, Connection> connections_;
+  Option<Connection> current_connection_;
+  Option<uint64_t> current_conn_id_;
   bool done_ = false;
-  mutable bool connection_active_ = false;
   mutable std::chrono::milliseconds reconnect_backoff_{connect_initial_backoff};
-  mutable uint64_t next_conn_id_{0};
+  uint64_t next_conn_id_{0};
 };
 
 class from_tcp_plugin final : public virtual OperatorPlugin {
