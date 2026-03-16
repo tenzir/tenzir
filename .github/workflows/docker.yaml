@@ -190,12 +190,22 @@ jobs:
               #     --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
               #     <image>
               echo "::notice Signing ${image_by_digest} with Cosign (keyless)"
-              cosign sign --yes "${image_by_digest}"
+              cosign sign --yes "${image_by_digest}" || {
+                echo "::warning Cosign keyless signing failed for ${image_by_digest}"
+                failed=1
+              }
               # Sigstore-format signing for Podman automatic verification.
               # Signatures are stored as OCI artifacts directly in the registry.
               # Users configure /etc/containers/policy.json with the public key
               # and set use-sigstore-attachments: true in registries.d.
               echo "::notice Signing ${image_by_digest} with sigstore format for Podman"
-              cosign sign --yes --key /tmp/signing-key.pem "${image_by_digest}"
+              cosign sign --yes --key /tmp/signing-key.pem "${image_by_digest}" || {
+                echo "::warning Sigstore signing failed for ${image_by_digest}"
+                failed=1
+              }
             done
           done
+          if [[ "${failed:-0}" -eq 1 ]]; then
+            echo "::error One or more signing operations failed"
+            exit 1
+          fi
