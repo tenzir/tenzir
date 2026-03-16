@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <tenzir/time.hpp>
-
 #include <folly/coro/Task.h>
+
+#include <chrono>
 
 namespace tenzir {
 
@@ -21,10 +21,10 @@ using Task = folly::coro::Task<T>;
 auto wait_forever() -> Task<void>;
 
 /// Returns a task that completes after the given duration.
-auto sleep_for(duration d) -> Task<void>;
+auto sleep_for(std::chrono::steady_clock::duration d) -> Task<void>;
 
 /// Returns a task that completes at the given point in time (or immediately if
 /// it is already in the past).
-auto sleep_until(time t) -> Task<void>;
+auto sleep_until(std::chrono::steady_clock::time_point t) -> Task<void>;
 
 } // namespace tenzir

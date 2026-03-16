@@ -21,11 +21,14 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
+#include <chrono>
 #include <string_view>
 
 namespace tenzir::plugins::every_cron {
 
 namespace {
+
+using std::chrono::steady_clock;
 
 template <class Input>
 class EveryBase : public Operator<Input, table_slice> {
@@ -84,12 +87,11 @@ public:
 
   auto snapshot(Serde& s) -> void override {
     s("next", next_);
-    s("last_started", last_started_);
   }
 
 protected:
   auto spawn_new(OpCtx& ctx) -> Task<void> {
-    last_started_ = time::clock::now();
+    last_started_ = steady_clock::now();
     sleep_done_ = false;
     sub_finished_ = false;
     co_await ctx.spawn_sub(int64_t{next_}, ir_, tag_v<Input>);
@@ -104,7 +106,7 @@ protected:
 
   duration interval_;
   ir::pipeline ir_;
-  time last_started_ = time::min();
+  steady_clock::time_point last_started_ = steady_clock::time_point::min();
   int64_t next_ = 0;
   bool sleep_done_ = false;
   bool sub_finished_ = false;
