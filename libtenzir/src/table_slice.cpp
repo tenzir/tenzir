@@ -29,6 +29,7 @@
 #include "tenzir/type.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
@@ -1119,25 +1120,70 @@ auto filter(const table_slice& slice, const arrow::BooleanArray& mask)
     return slice;
   }
   auto schema = slice.schema();
-  auto rt = as<record_type>(schema);
-  auto builder = rt.make_arrow_builder(arrow_memory_pool());
   auto batch = to_record_batch(slice);
-  auto struct_array = check(batch->ToStructArray());
-  filter_array(*builder, type{rt}, *struct_array, mask);
-  auto rows = builder->length();
-  if (rows == 0) {
+  auto datum = check(arrow::compute::Filter(batch, mask));
+  auto result_batch = datum.record_batch();
+  if (result_batch->num_rows() == 0) {
     return {};
   }
-  auto array = finish(*builder);
-  auto arrow_schema = schema.to_arrow_schema();
-  auto result_batch
-    = arrow::RecordBatch::Make(std::move(arrow_schema), rows, array->fields());
   auto result = table_slice{result_batch, schema};
   result.offset(slice.offset());
   result.import_time(slice.import_time());
   return result;
 }
 
+namespace {
+
+/// Creates an Arrow ArrayBuilder from an existing DataType, avoiding the
+/// expensive recursive `to_arrow_type()` reconstruction.
+auto make_builder_with_type(const std::shared_ptr<arrow::DataType>& arrow_ty,
+                            arrow::MemoryPool* pool)
+  -> std::shared_ptr<arrow::ArrayBuilder> {
+  switch (arrow_ty->id()) {
+    case arrow::Type::STRUCT: {
+      auto field_builders = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
+      for (auto i = 0; i < arrow_ty->num_fields(); ++i) {
+        field_builders.push_back(
+          make_builder_with_type(arrow_ty->field(i)->type(), pool));
+      }
+      return std::make_shared<arrow::StructBuilder>(arrow_ty, pool,
+                                                    std::move(field_builders));
+    }
+    case arrow::Type::LIST: {
+      auto list_ty = std::static_pointer_cast<arrow::ListType>(arrow_ty);
+      auto value_builder = make_builder_with_type(list_ty->value_type(), pool);
+      return std::make_shared<arrow::ListBuilder>(
+        pool, std::move(value_builder), arrow_ty);
+    }
+    case arrow::Type::EXTENSION: {
+      if (dynamic_cast<const ip_type::arrow_type*>(arrow_ty.get())) {
+        return ip_type::make_arrow_builder(pool);
+      }
+      if (dynamic_cast<const subnet_type::arrow_type*>(arrow_ty.get())) {
+        return subnet_type::make_arrow_builder(pool);
+      }
+      if (dynamic_cast<const secret_type::arrow_type*>(arrow_ty.get())) {
+        return secret_type::make_arrow_builder(pool);
+      }
+      if (dynamic_cast<const enumeration_type::arrow_type*>(arrow_ty.get())) {
+        return std::make_shared<enumeration_type::builder_type>(
+          std::static_pointer_cast<enumeration_type::arrow_type>(arrow_ty),
+          pool);
+      }
+      TENZIR_UNREACHABLE();
+    }
+    default: {
+      auto builder = check(arrow::MakeBuilder(arrow_ty, pool));
+      return std::shared_ptr<arrow::ArrayBuilder>{std::move(builder)};
+    }
+  }
+}
+
+} // namespace
+
+// Note: This uses a custom builder-based approach instead of calling
+// `arrow::compute::Filter` twice (with mask and inverted mask). Benchmarking
+// showed that calling `Filter` twice is ~50% slower.
 auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
   -> std::pair<table_slice, table_slice> {
   TENZIR_ASSERT(detail::narrow_cast<int64_t>(slice.rows()) == mask.length());
@@ -1145,25 +1191,26 @@ auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
   if (true_count == 0) {
     return {{}, slice};
   }
-  if (mask.null_count() == 0 and true_count == mask.length()) {
+  if (true_count == mask.length()) {
     return {slice, {}};
   }
   auto schema = slice.schema();
   auto rt = as<record_type>(schema);
-  auto true_builder = rt.make_arrow_builder(arrow_memory_pool());
-  auto false_builder = rt.make_arrow_builder(arrow_memory_pool());
   auto batch = to_record_batch(slice);
   auto struct_array = check(batch->ToStructArray());
+  auto struct_type = struct_array->type();
+  auto true_builder = make_builder_with_type(struct_type, arrow_memory_pool());
+  auto false_builder = make_builder_with_type(struct_type, arrow_memory_pool());
   partition_array(*true_builder, *false_builder, type{rt}, *struct_array, mask);
+  auto arrow_schema = batch->schema();
   auto finish_slice = [&](arrow::StructBuilder& builder) -> table_slice {
     auto rows = builder.length();
     if (rows == 0) {
       return {};
     }
     auto array = finish(builder);
-    auto arrow_schema = schema.to_arrow_schema();
-    auto result_batch = arrow::RecordBatch::Make(std::move(arrow_schema), rows,
-                                                 array->fields());
+    auto result_batch
+      = arrow::RecordBatch::Make(arrow_schema, rows, array->fields());
     auto result = table_slice{result_batch, schema};
     result.offset(slice.offset());
     result.import_time(slice.import_time());
