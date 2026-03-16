@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+serve_tcp ":31337",
+          tls={bogus_option: true} {
+  write_ndjson
+}

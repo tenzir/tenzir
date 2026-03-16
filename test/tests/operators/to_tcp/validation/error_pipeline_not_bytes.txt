@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/to_tcp/validation/error_pipeline_not_bytes.tql:5:26
+  |
+5 | to_tcp "127.0.0.1:31337" {
+  |                          ^ 
+  |

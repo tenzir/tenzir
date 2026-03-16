@@ -249,6 +249,14 @@ public:
     }
   }
 
+  /// Process byte output from a spawned subpipeline in a *thread-safe* way.
+  virtual auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
+                           OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, chunk, push, ctx);
+    panic("subpipeline chunk result handling is not implemented for this "
+          "operator");
+  }
+
   /// This is *not* required to be thread-safe.
   virtual auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
@@ -283,6 +291,12 @@ public:
   virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)
     -> Task<void> {
     TENZIR_UNUSED(key, slice, ctx);
+    TENZIR_UNREACHABLE();
+  }
+
+  virtual auto process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(key, chunk, ctx);
     TENZIR_UNREACHABLE();
   }
 
