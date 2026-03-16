@@ -16,6 +16,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -185,6 +186,10 @@ public:
           {"ip", peer_addr.getAddressStr()},
           {"port", int64_t{peer_addr.getPort()}},
         };
+        auto bytes_read = ctx.make_counter(
+          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                    peer_addr.getAddressStr())},
+          MetricsDirection::read, MetricsVisibility::external_);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = user_pipeline_.inner;
         auto env = substitute_ctx::env_t{};
@@ -205,7 +210,8 @@ public:
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
-          read_loop(conn_id, *current_connection_, std::move(message_queue))));
+          read_loop(conn_id, *current_connection_, std::move(message_queue),
+                    std::move(bytes_read))));
       },
       [&](Payload payload) -> Task<void> {
         if (not pipeline_ or not current_conn_id_
@@ -273,7 +279,8 @@ private:
   }
 
   static auto read_loop(uint64_t conn_id, Connection connection,
-                        Arc<MessageQueue> message_queue) -> Task<void> {
+                        Arc<MessageQueue> message_queue,
+                        MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = std::string{};
     auto cancellation_token
       = co_await folly::coro::co_current_cancellation_token;
@@ -285,6 +292,7 @@ private:
         if (not read_result) {
           break;
         }
+        bytes_counter.add((*read_result)->size());
         co_await message_queue->enqueue(
           Payload{conn_id, std::move(*read_result)});
       } catch (const folly::AsyncSocketException& e) {
