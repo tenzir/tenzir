@@ -774,7 +774,7 @@ void append_data_value(Builder builder, const xml_element& data_elem) {
 
 /// Transform EventData for Windows Event Log.
 /// Named Data elements become record fields: {x: "v"}
-/// Unnamed Data elements get numeric keys: {"0": "v1", "1": "v2"}
+/// Unnamed Data elements get underscore-prefixed numeric keys: {"_0": "v1", "_1": "v2"}
 template <typename RecordBuilder>
 void transform_event_data(RecordBuilder record,
                           const std::vector<const xml_element*>& data_elems) {
@@ -879,6 +879,10 @@ template <typename RecordBuilder>
 void winlog_rendering_info_to_record(RecordBuilder record,
                                      const xml_element& ri_elem,
                                      const xml_options& opts) {
+  // Preserve attributes on the RenderingInfo element itself (e.g. Culture="en-US").
+  for (const auto& [name, value] : ri_elem.attributes) {
+    record.field(name).data(value);
+  }
   for (const auto& child : ri_elem.children) {
     auto* elem_ptr = try_as<std::unique_ptr<xml_element>>(child);
     if (not elem_ptr) {
