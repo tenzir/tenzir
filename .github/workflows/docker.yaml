@@ -161,16 +161,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3
       - name: Create manifests and sign images
         env:
           BUILDX_GIT_LABELS: full
           COSIGN_PASSWORD: ${{ secrets.CONTAINER_SIGNING_KEY_PASSWORD }}
         run: |
-          trap 'rm -f /tmp/signing-key.pem' EXIT
+          set -euo pipefail
+          trap 'rm -f /tmp/signing-key.pem /tmp/editions.txt' EXIT
           echo "${{ secrets.CONTAINER_SIGNING_KEY }}" > /tmp/signing-key.pem
+          chmod 600 /tmp/signing-key.pem
           jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
-            <<< '${{ inputs.config }}' | while read -r name target registry; do
+            <<< '${{ inputs.config }}' > /tmp/editions.txt
+          while read -r name target registry; do
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
               image="${registry}/tenzir/${name}:${tag}"
               echo "::notice Creating manifest for ${image}"
@@ -204,7 +207,7 @@ jobs:
                 failed=1
               }
             done
-          done
+          done < /tmp/editions.txt
           if [[ "${failed:-0}" -eq 1 ]]; then
             echo "::error One or more signing operations failed"
             exit 1
