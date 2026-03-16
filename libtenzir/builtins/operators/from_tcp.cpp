@@ -72,6 +72,7 @@ public:
   };
 
   struct Payload {
+    uint64_t conn_id;
     chunk_ptr chunk;
   };
 
@@ -207,7 +208,8 @@ public:
           read_loop(conn_id, *current_connection_, std::move(message_queue))));
       },
       [&](Payload payload) -> Task<void> {
-        if (not pipeline_) {
+        if (not pipeline_ or not current_conn_id_
+            or payload.conn_id != *current_conn_id_) {
           co_return;
         }
         auto push_result = co_await pipeline_->push(std::move(payload.chunk));
@@ -283,7 +285,8 @@ private:
         if (not read_result) {
           break;
         }
-        co_await message_queue->enqueue(Payload{std::move(*read_result)});
+        co_await message_queue->enqueue(
+          Payload{conn_id, std::move(*read_result)});
       } catch (const folly::AsyncSocketException& e) {
         // Socket errors are connection-scoped; log and reconnect.
         read_error = e.what();
