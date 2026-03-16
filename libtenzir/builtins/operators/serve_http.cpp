@@ -38,7 +38,6 @@
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
 
-#include <atomic>
 #include <future>
 #include <limits>
 #include <memory>
@@ -116,16 +115,21 @@ struct ServeHttpArgs {
 };
 
 struct ServeHttpClient {
-  uint64_t id = 0;
   Arc<UnboundedQueue<Option<std::string>>> queue{std::in_place};
 };
+
+using ClientKey = const ServeHttpClient*;
+
+auto client_key(Arc<ServeHttpClient> const& client) -> ClientKey {
+  return client.operator->();
+}
 
 struct ClientOpened {
   Arc<ServeHttpClient> client;
 };
 
 struct ClientClosed {
-  uint64_t id = 0;
+  ClientKey client = nullptr;
 };
 
 struct Payload {
@@ -172,9 +176,7 @@ struct ServeHttpServerState {
     if (not try_acquire_connection_slot()) {
       return None{};
     }
-    auto client = Arc<ServeHttpClient>{std::in_place};
-    client->id = next_client_id_.fetch_add(1, std::memory_order_relaxed);
-    return client;
+    return Arc<ServeHttpClient>{std::in_place};
   }
 
   auto release_connection_slot() -> void {
@@ -206,7 +208,6 @@ private:
   // `ClientOpened` message, so a minimal atomic reservation counter is the
   // smallest shared surface that preserves queue-based coordination.
   Atomic<uint64_t> reserved_connections_{0};
-  Atomic<uint64_t> next_client_id_{0};
 };
 
 class HttpServerThread final {
@@ -296,15 +297,9 @@ private:
   std::thread thread_;
 };
 
-auto notify_client_closed(uint64_t client_id,
-                          Arc<MessageQueue> message_queue,
-                          Arc<Atomic<bool>> notified) -> Task<void> {
-  auto expected = false;
-  if (not notified->compare_exchange_strong(expected, true,
-                                            std::memory_order_acq_rel)) {
-    co_return;
-  }
-  co_await message_queue->enqueue(ClientClosed{client_id});
+auto notify_client_closed(ClientKey client,
+                          Arc<MessageQueue> message_queue) -> Task<void> {
+  co_await message_queue->enqueue(ClientClosed{client});
 }
 
 class ServeHttpStreamSource final : public proxygen::coro::HTTPSource {
@@ -313,8 +308,7 @@ public:
                         Arc<MessageQueue> message_queue)
     : client_{std::move(client)},
       evb_{evb},
-      message_queue_{std::move(message_queue)},
-      closed_notified_{std::in_place, false} {
+      message_queue_{std::move(message_queue)} {
     setHeapAllocated();
   }
 
@@ -345,8 +339,7 @@ public:
       }
     }
     if (buffered_.empty()) {
-      co_await notify_client_closed(client_->id, message_queue_,
-                                    closed_notified_);
+      co_await notify_client_closed(client_key(client_), message_queue_);
       auto event = proxygen::coro::HTTPBodyEvent{
         std::unique_ptr<folly::IOBuf>{nullptr}, true};
       auto guard = folly::makeGuard(lifetime(event));
@@ -359,8 +352,7 @@ public:
     auto event = proxygen::coro::HTTPBodyEvent{
       std::move(chunk), input_done_ and buffered_.empty()};
     if (event.eom) {
-      co_await notify_client_closed(client_->id, message_queue_,
-                                    closed_notified_);
+      co_await notify_client_closed(client_key(client_), message_queue_);
     }
     auto guard = folly::makeGuard(lifetime(event));
     co_return event;
@@ -369,7 +361,7 @@ public:
   void
   stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
     folly::coro::co_withExecutor(
-      evb_, notify_client_closed(client_->id, message_queue_, closed_notified_))
+      evb_, notify_client_closed(client_key(client_), message_queue_))
       .start();
     if (heapAllocated_) {
       delete this;
@@ -380,7 +372,6 @@ private:
   Arc<ServeHttpClient> client_;
   folly::EventBase* evb_ = nullptr;
   Arc<MessageQueue> message_queue_;
-  Arc<Atomic<bool>> closed_notified_;
   std::string buffered_;
   bool input_done_ = false;
 };
@@ -524,7 +515,7 @@ public:
           co_return;
         }
         auto [_, inserted]
-          = clients_.emplace(event.client->id, std::move(event.client));
+          = clients_.emplace(client_key(event.client), std::move(event.client));
         TENZIR_ASSERT(inserted);
         if (delivery_state_ != DeliveryState::live) {
           for (auto const& line : pending_payloads_) {
@@ -541,7 +532,7 @@ public:
         co_return;
       },
       [&](ClientClosed event) -> Task<void> {
-        if (clients_.erase(event.id) == 1) {
+        if (clients_.erase(event.client) == 1) {
           TENZIR_ASSERT(server_state_);
           (*server_state_)->release_connection_slot();
         }
@@ -725,7 +716,7 @@ private:
   Option<Arc<ServeHttpServerState>> server_state_;
   Option<Box<HttpServerThread>> server_;
   std::shared_ptr<ServeHttpHandler> handler_;
-  std::unordered_map<uint64_t, Arc<ServeHttpClient>> clients_;
+  std::unordered_map<ClientKey, Arc<ServeHttpClient>> clients_;
   std::vector<std::string> pending_payloads_;
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
   Lifecycle lifecycle_ = Lifecycle::running;
