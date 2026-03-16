@@ -119,11 +119,17 @@ public:
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    auto* chunk = result.try_as<chunk_ptr>();
+    if (not chunk) {
       co_return;
     }
-    auto* chunk = result.try_as<chunk_ptr>();
-    if (not chunk or not *chunk or (*chunk)->size() == 0) {
+    if (not *chunk) {
+      // A null chunk marks end-of-stream after all buffered payloads.
+      request_stop();
+      close_current_transport();
+      co_return;
+    }
+    if (done_ or (*chunk)->size() == 0) {
       co_return;
     }
     co_await write_chunk(*chunk, ctx.dh());
@@ -145,8 +151,10 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    request_stop();
-    close_current_transport();
+    if (done_) {
+      co_return;
+    }
+    co_await message_queue_->enqueue(chunk_ptr{});
     co_return;
   }
 
