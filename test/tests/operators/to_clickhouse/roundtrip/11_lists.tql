@@ -1,0 +1,12 @@
+// 5k rows with list columns.
+from {id: 0, tags: ["alpha", "beta", "gamma"], scores: [1.0, 2.5, 3.7]}
+repeat 5000
+batch
+enumerate id
+to_clickhouse table="test_lists",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

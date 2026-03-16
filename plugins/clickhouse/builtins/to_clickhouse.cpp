@@ -19,12 +19,13 @@
 #include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 
-#include <algorithm>
 #include <memory>
 
 using namespace clickhouse;
 
 namespace tenzir::plugins::clickhouse {
+
+namespace {
 
 class clickhouse_sink_operator final
   : public crtp_operator<clickhouse_sink_operator> {
@@ -364,7 +365,7 @@ public:
         auto mode_enum = std::optional<enum mode>{};
         if (auto mode_opt = ctx.get(mode_arg)) {
           if (auto x = from_string<enum mode>(mode_opt->inner)) {
-            mode_enum = *x;
+            mode_enum = x;
           } else {
             diagnostic::error(
               "`mode` must be one of `create`, `append` or `create_append`")
@@ -420,6 +421,7 @@ public:
   }
 };
 
+} // namespace
 } // namespace tenzir::plugins::clickhouse
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::clickhouse::to_clickhouse)

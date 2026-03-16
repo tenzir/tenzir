@@ -1,0 +1,5 @@
+suite: to-clickhouse-roundtrip
+fixtures: [clickhouse]
+timeout: 180
+skip:
+  on: fixture-unavailable

@@ -1,0 +1,4 @@
+total=10000
+null_y=5000
+non_null_y=5000
+ok

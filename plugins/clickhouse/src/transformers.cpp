@@ -416,7 +416,7 @@ struct transformer_from_trait : transformer {
     -> ::clickhouse::ColumnRef override {
     if constexpr (Nullable) {
       auto columns = traits::template allocate<Nullable>(n);
-      for (size_t i = 0; i < n; ++n) {
+      for (size_t i = 0; i < n; ++i) {
         columns->Append(traits::null_value);
       }
       return columns;

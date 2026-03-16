@@ -1,0 +1,12 @@
+// Insert 10k rows into a new table.
+from {id: 0, name: "alice", score: 95.5, active: true}
+repeat 10000
+batch
+enumerate id
+to_clickhouse table="test_basic",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"
