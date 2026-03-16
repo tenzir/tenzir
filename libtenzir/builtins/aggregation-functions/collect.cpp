@@ -55,32 +55,33 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) noexcept -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb
       = flatbuffer<fbs::aggregation::CollectDistinct>::make(std::move(chunk));
     if (not fb) {
       TENZIR_WARN("failed to restore `collect` aggregation instance: invalid FlatBuffer");
-      return;
+      return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
       TENZIR_WARN("failed to restore `collect` aggregation instance: missing field `result`");
-      return;
+      return false;
     }
     result_.clear();
     result_.reserve(fb_result->size());
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
         TENZIR_WARN("failed to restore `collect` aggregation instance: missing element in field `result`");
-        return;
+        return false;
       }
       auto element = data{};
       if (auto err = unpack(*fb_element, element); err.valid()) {
         TENZIR_WARN("failed to restore `collect` aggregation instance: {}", err);
-        return;
+        return false;
       }
       result_.push_back(std::move(element));
     }
+    return true;
   }
 
   auto reset() -> void override {

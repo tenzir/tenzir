@@ -77,26 +77,27 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) noexcept -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb
       = flatbuffer<fbs::aggregation::AnyAll>::make(std::move(chunk));
     if (not fb) {
       TENZIR_WARN("failed to restore `any` aggregation instance: invalid FlatBuffer");
-      return;
+      return false;
     }
     any_ = (*fb)->result();
     switch ((*fb)->state()) {
       case fbs::aggregation::AnyAllState::None:
         state_ = state::none;
-        return;
+        return true;
       case fbs::aggregation::AnyAllState::Failed:
         state_ = state::failed;
-        return;
+        return true;
       case fbs::aggregation::AnyAllState::Nulled:
         state_ = state::nulled;
-        return;
+        return true;
     }
     TENZIR_WARN("failed to restore `any` aggregation instance: unknown state value");
+    return false;
   }
 
   auto reset() -> void override {

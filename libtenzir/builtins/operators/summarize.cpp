@@ -326,6 +326,17 @@ public:
     return finish_impl();
   }
 
+  auto take_restore_failed() noexcept -> bool {
+    return std::exchange(restore_failed_, false);
+  }
+
+  auto discard_snapshot(bool signal_failure = false) noexcept -> void {
+    groups_.clear();
+    previous_values_.clear();
+    saw_input_ = false;
+    restore_failed_ = signal_failure;
+  }
+
 private:
   auto finish_impl() -> std::vector<table_slice> {
     // Special case: if there are no configured groups, and no groups were
@@ -427,12 +438,25 @@ private:
 
   friend auto inspect(auto& f, implementation2& x) -> bool {
     auto on_load = [&]() noexcept {
+      const auto expected = x.make_bucket().aggregations.size();
       for (auto it = x.groups_.begin(); it != x.groups_.end(); ++it) {
         auto& bucket = it.value();
+        if (bucket.blobs_.size() != expected) {
+          TENZIR_WARN("summarize: snapshot has {} aggregation(s) but pipeline "
+                      "expects {}; discarding snapshot and starting fresh",
+                      bucket.blobs_.size(), expected);
+          x.discard_snapshot();
+          return true;
+        }
         auto fresh = x.make_bucket();
-        TENZIR_ASSERT(bucket.blobs_.size() == fresh.aggregations.size());
-        for (auto i = size_t{0}; i < bucket.blobs_.size(); ++i)
-          fresh.aggregations[i]->restore(std::move(bucket.blobs_[i]));
+        for (auto i = size_t{0}; i < bucket.blobs_.size(); ++i) {
+          if (not fresh.aggregations[i]->restore(std::move(bucket.blobs_[i]))) {
+            TENZIR_WARN("summarize: failed to restore aggregation state; "
+                        "discarding snapshot and starting fresh");
+            x.discard_snapshot(/*signal_failure=*/true);
+            return true;
+          }
+        }
         bucket.aggregations = std::move(fresh.aggregations);
         bucket.blobs_.clear();
       }
@@ -449,6 +473,7 @@ private:
   session ctx_;
   group_map<bucket2> groups_;
   bool saw_input_ = false;
+  bool restore_failed_ = false;
   /// Previous aggregation values for each group (used in "update" mode)
   group_map<std::vector<data>> previous_values_;
 };
@@ -742,6 +767,11 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    if (impl_ && impl_->take_restore_failed()) {
+      diagnostic::warning("summarize aggregation state could not be restored "
+                          "from snapshot; restarting from empty state")
+        .emit(provider_->as_session());
+    }
     co_await flush(push);
     if (input.rows() == 0) {
       co_return;

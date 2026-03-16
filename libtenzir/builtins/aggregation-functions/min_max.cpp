@@ -152,24 +152,25 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk) noexcept -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     constexpr auto name = Mode == mode::min ? "min" : "max";
     const auto fb
       = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));
     if (not fb) {
       TENZIR_WARN("failed to restore `{}` aggregation instance: invalid FlatBuffer", name);
-      return;
+      return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
       TENZIR_WARN("failed to restore `{}` aggregation instance: missing field `result`", name);
-      return;
+      return false;
     }
     auto result = data{};
     if (auto err = unpack(*fb_result, result); err.valid()) {
       TENZIR_WARN("failed to restore `{}` aggregation instance: {}", name, err);
-      return;
+      return false;
     }
+    auto ok = true;
     match(result, [&]<class T>(const T& x) {
       if constexpr (std::is_same_v<T, caf::none_t>) {
         result_.reset();
@@ -177,16 +178,20 @@ public:
         result_.emplace(x);
       } else {
         TENZIR_WARN("failed to restore `{}` aggregation instance: invalid value for field `result`: `{}`", name, result);
+        ok = false;
       }
     });
+    if (not ok)
+      return false;
     const auto* fb_type = (*fb)->type();
     if (not fb_type) {
       TENZIR_WARN("failed to restore `{}` aggregation instance: missing field `type`", name);
-      return;
+      return false;
     }
     const auto* fb_type_nested_root = (*fb)->type_nested_root();
     TENZIR_ASSERT(fb_type_nested_root);
     type_ = type{fb->slice(*fb_type_nested_root, *fb_type)};
+    return true;
   }
 
   auto reset() -> void override {

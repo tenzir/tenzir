@@ -191,7 +191,7 @@ public:
 
   /// Save and restore the state of the aggregation instance.
   virtual auto save() const -> chunk_ptr = 0;
-  virtual auto restore(chunk_ptr chunk) noexcept -> void = 0;
+  virtual auto restore(chunk_ptr chunk) noexcept -> bool = 0;
 };
 
 class aggregation_plugin : public virtual function_plugin {
