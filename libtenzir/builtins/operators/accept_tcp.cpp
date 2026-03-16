@@ -197,6 +197,8 @@ public:
       },
       [&](ConnectionClosed closed) -> Task<void> {
         if (closed.error) {
+          // TODO: Surface routine TCP read failures and disconnects as metrics
+          // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
             .primary(endpoint_source_)
             .note("connection id: {}", closed.conn_id)

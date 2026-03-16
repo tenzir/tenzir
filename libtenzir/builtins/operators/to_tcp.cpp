@@ -144,6 +144,8 @@ public:
       if (guard->transport and &**guard->transport == transport_ptr) {
         auto old_transport = std::move(guard->transport);
         guard->transport = None{};
+        // TODO: Surface routine TCP write failures and reconnects as metrics
+        // in a follow-up that covers all TCP operators.
         diagnostic::warning("failed to write to {}", address_.describe())
           .primary(args_.endpoint.source)
           .note("reason: {}", *write_error)
@@ -259,6 +261,8 @@ private:
         guard->reconnect_backoff
           = std::min(guard->reconnect_backoff * 2, connect_max_backoff);
       }
+      // TODO: Surface connect retries and failures as metrics in a follow-up
+      // that covers all TCP operators.
       diagnostic::warning("failed to connect to {}", address_.describe())
         .primary(args_.endpoint.source)
         .note("reason: {}", *connect_error)

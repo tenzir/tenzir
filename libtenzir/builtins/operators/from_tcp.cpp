@@ -149,6 +149,8 @@ public:
         if (done_) {
           co_return {};
         }
+        // TODO: Surface connect retries and failures as metrics in a
+        // follow-up that covers all TCP operators.
         diagnostic::warning("failed to connect to {}", address_.describe())
           .primary(endpoint_source_)
           .note("reason: {}", *connect_error)
@@ -219,6 +221,8 @@ public:
       },
       [&](ConnectionClosed closed) -> Task<void> {
         if (closed.error) {
+          // TODO: Surface routine TCP read failures and disconnects as metrics
+          // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
             .primary(endpoint_source_)
             .note("endpoint: {}", address_.describe())

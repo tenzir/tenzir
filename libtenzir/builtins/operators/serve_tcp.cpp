@@ -144,7 +144,7 @@ public:
             or payload.chunk->size() == 0 or clients_.empty()) {
           co_return;
         }
-        co_await broadcast_payload(payload.chunk, ctx.dh());
+        co_await broadcast_payload(payload.chunk);
       });
   }
 
@@ -252,33 +252,31 @@ private:
   }
 
   auto write_to_client(folly::coro::Transport& client, folly::ByteRange data)
-    -> Task<std::optional<diagnostic>> {
+    -> Task<bool> {
     try {
       co_await folly::coro::co_withExecutor(evb_, client.write(data));
-      co_return std::nullopt;
-    } catch (folly::AsyncSocketException const& ex) {
-      auto peer = client.getPeerAddress().describe();
-      co_return diagnostic::warning("failed to write to client {}", peer)
-        .primary(args_.endpoint.source)
-        .note("reason: {}", ex.what())
-        .note("dropping this client and continuing with remaining connections")
-        .done();
+      co_return true;
+    } catch (folly::AsyncSocketException const&) {
+      // TODO: Surface peer disconnects and other routine TCP write failures
+      // as metrics instead of warnings in a follow-up that covers all TCP
+      // operators.
+      co_return false;
     }
   }
 
   auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
     -> Task<void> {
+    TENZIR_UNUSED(dh);
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
     for (size_t i = 0; i < clients_.size();) {
-      auto maybe_diagnostic = co_await write_to_client(*clients_[i], data);
-      if (not maybe_diagnostic) {
+      auto ok = co_await write_to_client(*clients_[i], data);
+      if (ok) {
         ++i;
         continue;
       }
-      dh.emit(std::move(*maybe_diagnostic));
       close_client(std::move(clients_[i]));
       release_connection_slot();
       clients_.erase(clients_.begin() + i);
