@@ -13,7 +13,6 @@
 #include "tenzir/multi_series_builder.hpp"
 
 #include <tenzir/error.hpp>
-#include <tenzir/module.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -79,7 +78,6 @@ private:
   // options by checking/setting values here
   // this is only relevant to tql1
 public:
-  std::vector<tenzir::type> schemas_;
   bool has_manual_defaults_ = false;
   bool is_tql1_ = false;
   multi_series_builder::settings_type settings_ = {};
