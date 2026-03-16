@@ -65,9 +65,7 @@ public:
     chunk_ptr chunk;
   };
 
-  struct DrainCheck {};
-
-  using Message = variant<Accepted, Payload, DrainCheck>;
+  using Message = variant<Accepted, Payload>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   enum class Lifecycle {
@@ -97,7 +95,7 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        request_stop();
+        co_await request_stop();
         co_return;
       }
       tls_context_ = std::move(*context);
@@ -107,11 +105,18 @@ public:
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    ctx.spawn_task(folly::coro::co_withCancellation(accept_cancel_->getToken(),
-                                                    accept_loop(ctx.dh())));
+    accept_loop_done_ = false;
+    ctx.spawn_task([this, &ctx]() -> Task<void> {
+      auto notify_done = folly::makeGuard([this] {
+        accept_loop_done_ = true;
+        accept_loop_notify_->notify_one();
+      });
+      co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
+                                                accept_loop(ctx.dh()));
+    });
     auto pipeline = std::move(args_.printer.inner);
     if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      request_stop();
+      co_await request_stop();
       co_return;
     }
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
@@ -150,10 +155,6 @@ public:
           co_return;
         }
         co_await broadcast_payload(payload.chunk, ctx.dh());
-      },
-      [&](DrainCheck) -> Task<void> {
-        maybe_finish_draining();
-        co_return;
       });
   }
 
@@ -163,13 +164,13 @@ public:
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
     if (not sub) {
-      request_stop();
+      co_await request_stop();
       co_return;
     }
     auto pipeline = as<OpenPipeline<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
-      request_stop();
+      co_await request_stop();
     }
   }
 
@@ -190,7 +191,7 @@ public:
         auto pipeline = as<OpenPipeline<table_slice>>(*sub);
         co_await pipeline.close();
       } else {
-        request_stop();
+        co_await request_stop();
       }
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
@@ -198,7 +199,7 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    request_stop();
+    co_await request_stop();
     co_return;
   }
 
@@ -236,12 +237,13 @@ private:
     stop_accepting();
   }
 
-  auto request_stop() -> void {
+  auto request_stop() -> Task<void> {
     if (lifecycle_ == Lifecycle::done) {
-      return;
+      co_return;
     }
     begin_draining();
     close_all_clients();
+    co_await wait_for_accept_loop();
     maybe_finish_draining();
   }
 
@@ -273,9 +275,11 @@ private:
     }
   }
 
-  auto release_connection_slot_and_notify() -> Task<void> {
-    release_connection_slot();
-    co_await message_queue_->enqueue(DrainCheck{});
+  auto wait_for_accept_loop() -> Task<void> {
+    if (accept_loop_done_) {
+      co_return;
+    }
+    co_await accept_loop_notify_->wait();
   }
 
   auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
@@ -329,8 +333,6 @@ private:
           release_connection_slot();
         });
         if (tls_context_) {
-          auto tls_error = Option<std::string>{};
-          auto tls_cancelled = false;
           try {
             // TODO: Move TLS handshakes into an async preparation stage that
             // posts ready clients back into the queue without introducing
@@ -343,33 +345,20 @@ private:
           } catch (folly::AsyncSocketException const& ex) {
             if (cancellation_token.isCancellationRequested()
                 or lifecycle_ != Lifecycle::running) {
-              tls_cancelled = true;
-            } else {
-              tls_error = ex.what();
+              co_return;
             }
-          }
-          if (tls_cancelled) {
-            co_await release_connection_slot_and_notify();
-            release_connection_slot_guard.dismiss();
-            co_return;
-          }
-          if (tls_error) {
             diagnostic::warning("TLS handshake failed")
               .primary(args_.endpoint.source)
               .note("peer: {}", peer)
-              .note("reason: {}", *tls_error)
+              .note("reason: {}", ex.what())
               .hint("verify TLS settings and certificates on both sides")
               .emit(dh);
-            co_await release_connection_slot_and_notify();
-            release_connection_slot_guard.dismiss();
             continue;
           }
         }
         if (cancellation_token.isCancellationRequested()
             or lifecycle_ != Lifecycle::running) {
           close_client(std::move(client));
-          co_await release_connection_slot_and_notify();
-          release_connection_slot_guard.dismiss();
           co_return;
         }
         TENZIR_DEBUG("serve_tcp: accepted {}", peer);
@@ -422,6 +411,8 @@ private:
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
+  Box<Notify> accept_loop_notify_{std::in_place};
+  bool accept_loop_done_ = true;
   Atomic<uint64_t> reserved_connections_{0};
   std::vector<Box<folly::coro::Transport>> clients_;
   uint64_t max_connections_ = 128;
