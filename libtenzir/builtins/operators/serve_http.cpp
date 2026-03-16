@@ -8,8 +8,11 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/atomic.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -18,6 +21,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tls_options.hpp"
@@ -113,12 +117,11 @@ struct ServeHttpArgs {
 
 struct ServeHttpClient {
   uint64_t id = 0;
-  std::shared_ptr<UnboundedQueue<std::optional<std::string>>> queue
-    = std::make_shared<UnboundedQueue<std::optional<std::string>>>();
+  Arc<UnboundedQueue<Option<std::string>>> queue{std::in_place};
 };
 
 struct ClientOpened {
-  std::shared_ptr<ServeHttpClient> client;
+  Arc<ServeHttpClient> client;
 };
 
 struct ClientClosed {
@@ -134,7 +137,7 @@ struct Shutdown {};
 struct FirstClientTimeout {};
 
 using Message
-  = variant<ClientOpened, ClientClosed, Payload, Shutdown, FirstClientTimeout>;
+  = variant<Shutdown, ClientClosed, Payload, FirstClientTimeout, ClientOpened>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 enum class Lifecycle {
@@ -155,17 +158,21 @@ enum class ListenerState {
 };
 
 struct ServeHttpServerState {
-  std::shared_ptr<MessageQueue> message_queue;
-  std::optional<record> responses;
+  explicit ServeHttpServerState(Arc<MessageQueue> message_queue)
+    : message_queue{std::move(message_queue)} {
+  }
+
+  Arc<MessageQueue> message_queue;
+  Option<record> responses;
   std::string stream_path = std::string{default_stream_path};
   std::string stream_method = std::string{default_stream_method};
-  std::optional<uint64_t> max_connections;
+  Option<uint64_t> max_connections;
 
-  auto create_client() -> std::shared_ptr<ServeHttpClient> {
+  auto create_client() -> Option<Arc<ServeHttpClient>> {
     if (not try_acquire_connection_slot()) {
-      return {};
+      return None{};
     }
-    auto client = std::make_shared<ServeHttpClient>();
+    auto client = Arc<ServeHttpClient>{std::in_place};
     client->id = next_client_id_.fetch_add(1, std::memory_order_relaxed);
     return client;
   }
@@ -198,8 +205,8 @@ private:
   // streaming response before the operator thread processes the corresponding
   // `ClientOpened` message, so a minimal atomic reservation counter is the
   // smallest shared surface that preserves queue-based coordination.
-  std::atomic<uint64_t> reserved_connections_{0};
-  std::atomic<uint64_t> next_client_id_{0};
+  Atomic<uint64_t> reserved_connections_{0};
+  Atomic<uint64_t> next_client_id_{0};
 };
 
 class HttpServerThread final {
@@ -222,8 +229,8 @@ public:
     stop();
   }
 
-  auto start() -> std::optional<std::string> {
-    auto ready = std::promise<std::optional<std::string>>{};
+  auto start() -> Option<std::string> {
+    auto ready = std::promise<Option<std::string>>{};
     auto ready_future = ready.get_future();
     thread_ = std::thread([this, ready = std::move(ready)]() mutable {
       try {
@@ -235,7 +242,7 @@ public:
         acceptor_ = std::make_unique<proxygen::coro::HTTPCoroAcceptor>(
           acceptor_config_, handler_);
         acceptor_->init(socket_.get(), &event_base_);
-        ready.set_value(std::nullopt);
+        ready.set_value(None{});
         event_base_.loopForever();
       } catch (std::exception const& ex) {
         ready.set_value(std::string{ex.what()});
@@ -290,9 +297,8 @@ private:
 };
 
 auto notify_client_closed(uint64_t client_id,
-                          std::shared_ptr<MessageQueue> message_queue,
-                          std::shared_ptr<std::atomic<bool>> notified)
-  -> Task<void> {
+                          Arc<MessageQueue> message_queue,
+                          Arc<Atomic<bool>> notified) -> Task<void> {
   auto expected = false;
   if (not notified->compare_exchange_strong(expected, true,
                                             std::memory_order_acq_rel)) {
@@ -303,13 +309,12 @@ auto notify_client_closed(uint64_t client_id,
 
 class ServeHttpStreamSource final : public proxygen::coro::HTTPSource {
 public:
-  ServeHttpStreamSource(std::shared_ptr<ServeHttpClient> client,
-                        folly::EventBase* evb,
-                        std::shared_ptr<MessageQueue> message_queue)
+  ServeHttpStreamSource(Arc<ServeHttpClient> client, folly::EventBase* evb,
+                        Arc<MessageQueue> message_queue)
     : client_{std::move(client)},
       evb_{evb},
       message_queue_{std::move(message_queue)},
-      closed_notified_{std::make_shared<std::atomic<bool>>(false)} {
+      closed_notified_{std::in_place, false} {
     setHeapAllocated();
   }
 
@@ -372,17 +377,17 @@ public:
   }
 
 private:
-  std::shared_ptr<ServeHttpClient> client_;
+  Arc<ServeHttpClient> client_;
   folly::EventBase* evb_ = nullptr;
-  std::shared_ptr<MessageQueue> message_queue_;
-  std::shared_ptr<std::atomic<bool>> closed_notified_;
+  Arc<MessageQueue> message_queue_;
+  Arc<Atomic<bool>> closed_notified_;
   std::string buffered_;
   bool input_done_ = false;
 };
 
 class ServeHttpHandler final : public proxygen::coro::HTTPHandler {
 public:
-  explicit ServeHttpHandler(std::shared_ptr<ServeHttpServerState> state)
+  explicit ServeHttpHandler(Arc<ServeHttpServerState> state)
     : state_{std::move(state)} {
   }
 
@@ -424,13 +429,13 @@ public:
     if (not client) {
       co_return http::make_fixed_response_source(503, std::string{});
     }
-    co_await state_->message_queue->enqueue(ClientOpened{client});
+    co_await state_->message_queue->enqueue(ClientOpened{*client});
     co_return proxygen::coro::HTTPSourceHolder{
-      new ServeHttpStreamSource{std::move(client), evb, state_->message_queue}};
+      new ServeHttpStreamSource{*client, evb, state_->message_queue}};
   }
 
 private:
-  std::shared_ptr<ServeHttpServerState> state_;
+  Arc<ServeHttpServerState> state_;
 };
 
 class ServeHttp final : public Operator<table_slice, void> {
@@ -468,35 +473,35 @@ public:
       = args_.tls
           ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
           : tls_options{{.tls_default = false, .is_server = true}};
-    server_state_ = std::make_shared<ServeHttpServerState>();
-    server_state_->message_queue = message_queue_;
-    server_state_->responses = args_.responses.transform([](auto const& x) {
+    server_state_ = Arc<ServeHttpServerState>{std::in_place, message_queue_};
+    (*server_state_)->responses = args_.responses.transform([](auto const& x) {
       return x.inner;
     });
-    server_state_->stream_path
+    (*server_state_)->stream_path
       = args_.path ? args_.path->inner : std::string{default_stream_path};
-    server_state_->stream_method = std::string{default_stream_method};
+    (*server_state_)->stream_method = std::string{default_stream_method};
     if (args_.method) {
       auto method = http::normalize_http_method(args_.method->inner);
       TENZIR_ASSERT(method);
-      server_state_->stream_method = std::move(*method);
+      (*server_state_)->stream_method = std::move(*method);
     }
-    server_state_->max_connections = inner(args_.max_connections);
-    handler_ = std::make_shared<ServeHttpHandler>(server_state_);
+    (*server_state_)->max_connections = inner(args_.max_connections);
+    handler_ = std::make_shared<ServeHttpHandler>(*server_state_);
     auto [host, port] = std::move(endpoint).unwrap();
     auto config = make_server_config(host, port, dh);
     if (not config) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = std::make_unique<HttpServerThread>(
-      folly::SocketAddress{host, port, true}, std::move(*config), handler_);
-    if (auto error = server_->start()) {
+    server_ = Box<HttpServerThread>{
+      std::in_place, folly::SocketAddress{host, port, true},
+      std::move(*config), handler_};
+    if (auto error = (*server_)->start()) {
       diagnostic::error("failed to start http server")
         .primary(args_.url)
         .note("reason: {}", *error)
         .emit(dh);
-      server_.reset();
+      server_ = None{};
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -513,8 +518,9 @@ public:
         if (lifecycle_ == Lifecycle::done
             or (lifecycle_ == Lifecycle::draining
                 and delivery_state_ == DeliveryState::live)) {
-          event.client->queue->enqueue(std::nullopt);
-          server_state_->release_connection_slot();
+          event.client->queue->enqueue(None{});
+          TENZIR_ASSERT(server_state_);
+          (*server_state_)->release_connection_slot();
           co_return;
         }
         auto [_, inserted]
@@ -536,7 +542,8 @@ public:
       },
       [&](ClientClosed event) -> Task<void> {
         if (clients_.erase(event.id) == 1) {
-          server_state_->release_connection_slot();
+          TENZIR_ASSERT(server_state_);
+          (*server_state_)->release_connection_slot();
         }
         maybe_finish_draining();
         co_return;
@@ -559,7 +566,7 @@ public:
         if (delivery_state_ == DeliveryState::waiting_for_first_client
             and not pending_payloads_.empty()) {
           delivery_state_ = DeliveryState::waiting_for_first_client_timeout;
-          ctx.spawn_task([message_queue = message_queue_]() -> Task<void> {
+          ctx.spawn_task([message_queue = message_queue_]() mutable -> Task<void> {
             co_await folly::coro::sleep(first_client_grace_period);
             co_await message_queue->enqueue(FirstClientTimeout{});
           });
@@ -669,24 +676,25 @@ private:
     }
     listener_state_ = ListenerState::stopping;
     if (server_) {
-      server_->request_stop_accepting();
+      (*server_)->request_stop_accepting();
     }
   }
 
   auto wait_for_server() -> void {
-    server_.reset();
+    server_ = None{};
     handler_.reset();
+    server_state_ = None{};
   }
 
   auto send_to_clients(std::string const& line) -> void {
-    for (auto const& [_, client] : clients_) {
-      client->queue->enqueue(std::optional<std::string>{line});
+    for (auto& [_, client] : clients_) {
+      client->queue->enqueue(line);
     }
   }
 
   auto close_all_clients() -> void {
     for (auto& [_, client] : clients_) {
-      client->queue->enqueue(std::nullopt);
+      client->queue->enqueue(None{});
     }
   }
 
@@ -712,12 +720,12 @@ private:
 
   ServeHttpArgs args_;
   std::string resolved_url_;
-  std::shared_ptr<MessageQueue> message_queue_
-    = std::make_shared<MessageQueue>(message_queue_capacity);
-  std::shared_ptr<ServeHttpServerState> server_state_;
-  std::unique_ptr<HttpServerThread> server_;
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  Option<Arc<ServeHttpServerState>> server_state_;
+  Option<Box<HttpServerThread>> server_;
   std::shared_ptr<ServeHttpHandler> handler_;
-  std::unordered_map<uint64_t, std::shared_ptr<ServeHttpClient>> clients_;
+  std::unordered_map<uint64_t, Arc<ServeHttpClient>> clients_;
   std::vector<std::string> pending_payloads_;
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
   Lifecycle lifecycle_ = Lifecycle::running;

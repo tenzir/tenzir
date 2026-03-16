@@ -8,9 +8,12 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
@@ -122,8 +125,12 @@ enum class Lifecycle {
 };
 
 struct AcceptHttpServerState {
-  std::shared_ptr<MessageQueue> message_queue;
-  std::optional<record> responses;
+  explicit AcceptHttpServerState(Arc<MessageQueue> message_queue)
+    : message_queue{std::move(message_queue)} {
+  }
+
+  Arc<MessageQueue> message_queue;
+  Option<record> responses;
   size_t max_request_size = default_max_request_size;
 };
 
@@ -147,8 +154,8 @@ public:
     stop();
   }
 
-  auto start() -> std::optional<std::string> {
-    auto ready = std::promise<std::optional<std::string>>{};
+  auto start() -> Option<std::string> {
+    auto ready = std::promise<Option<std::string>>{};
     auto ready_future = ready.get_future();
     thread_ = std::thread([this, ready = std::move(ready)]() mutable {
       try {
@@ -160,7 +167,7 @@ public:
         acceptor_ = std::make_unique<proxygen::coro::HTTPCoroAcceptor>(
           acceptor_config_, handler_);
         acceptor_->init(socket_.get(), &event_base_);
-        ready.set_value(std::nullopt);
+        ready.set_value(None{});
         event_base_.loopForever();
       } catch (std::exception const& ex) {
         ready.set_value(std::string{ex.what()});
@@ -205,7 +212,7 @@ private:
 
 class AcceptHttpHandler final : public proxygen::coro::HTTPHandler {
 public:
-  explicit AcceptHttpHandler(std::shared_ptr<AcceptHttpServerState> state)
+  explicit AcceptHttpHandler(Arc<AcceptHttpServerState> state)
     : state_{std::move(state)} {
   }
 
@@ -272,7 +279,7 @@ public:
   }
 
 private:
-  std::shared_ptr<AcceptHttpServerState> state_;
+  Arc<AcceptHttpServerState> state_;
 };
 
 class AcceptHttp final : public Operator<void, table_slice> {
@@ -311,28 +318,28 @@ public:
       = args_.tls
           ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
           : tls_options{{.tls_default = false, .is_server = true}};
-    server_state_ = std::make_shared<AcceptHttpServerState>();
-    server_state_->message_queue = message_queue_;
-    server_state_->responses = args_.responses.transform([](auto const& x) {
+    server_state_ = Arc<AcceptHttpServerState>{std::in_place, message_queue_};
+    (*server_state_)->responses = args_.responses.transform([](auto const& x) {
       return x.inner;
     });
-    server_state_->max_request_size
+    (*server_state_)->max_request_size
       = inner(args_.max_request_size).value_or(default_max_request_size);
-    handler_ = std::make_shared<AcceptHttpHandler>(server_state_);
+    handler_ = std::make_shared<AcceptHttpHandler>(*server_state_);
     auto [host, port] = std::move(endpoint).unwrap();
     auto config = make_server_config(host, port, dh);
     if (not config) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = std::make_unique<HttpServerThread>(
-      folly::SocketAddress{host, port, true}, std::move(*config), handler_);
-    if (auto error = server_->start()) {
+    server_ = Box<HttpServerThread>{
+      std::in_place, folly::SocketAddress{host, port, true},
+      std::move(*config), handler_};
+    if (auto error = (*server_)->start()) {
       diagnostic::error("failed to start http server")
         .primary(args_.url)
         .note("reason: {}", *error)
         .emit(dh);
-      server_.reset();
+      server_ = None{};
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -499,9 +506,9 @@ private:
   }
 
   auto stop_server() -> void {
-    server_.reset();
+    server_ = None{};
     handler_.reset();
-    server_state_.reset();
+    server_state_ = None{};
   }
 
   auto begin_draining() -> bool {
@@ -529,10 +536,10 @@ private:
 
   AcceptHttpArgs args_;
   std::string resolved_url_;
-  std::shared_ptr<MessageQueue> message_queue_
-    = std::make_shared<MessageQueue>(message_queue_capacity);
-  std::shared_ptr<AcceptHttpServerState> server_state_;
-  std::unique_ptr<HttpServerThread> server_;
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  Option<Arc<AcceptHttpServerState>> server_state_;
+  Option<Box<HttpServerThread>> server_;
   std::shared_ptr<AcceptHttpHandler> handler_;
   std::unordered_set<data> active_sub_keys_;
   std::unordered_map<data, record> request_metadata_by_sub_key_;

@@ -10,6 +10,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/async/notify.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -19,6 +20,7 @@
 #include "tenzir/error.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -273,8 +275,8 @@ auto queue_executor_request(
 }
 
 struct FromHttpTaskEvent {
-  std::optional<ExecutorHttpRequest> request;
-  std::optional<http::HttpResult<http::ResponseData>> response;
+  Option<ExecutorHttpRequest> request;
+  Option<http::HttpResult<http::ResponseData>> response;
 };
 
 class FromHttp final : public Operator<void, table_slice> {
@@ -386,8 +388,8 @@ public:
       }
       auto result = co_await perform_request(request);
       co_return FromHttpTaskEvent{
-        std::optional<ExecutorHttpRequest>{std::move(request)},
-        std::optional<http::HttpResult<http::ResponseData>>{std::move(result)},
+        Option<ExecutorHttpRequest>{std::move(request)},
+        Option<http::HttpResult<http::ResponseData>>{std::move(result)},
       };
     }
     co_await notify_->wait();
@@ -509,7 +511,7 @@ public:
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     auto push_result = co_await open_pipeline.push(std::move(payload));
     if (push_result.is_err()) {
-      active_sub_ = std::nullopt;
+      active_sub_ = None{};
       done_ = true;
       co_return;
     }
@@ -546,7 +548,7 @@ public:
     if (materialize(key) != data{active_sub_->key}) {
       co_return;
     }
-    active_sub_ = std::nullopt;
+    active_sub_ = None{};
     if (pending_.empty()) {
       done_ = true;
     } else {
@@ -588,10 +590,10 @@ private:
   mutable std::shared_ptr<folly::SSLContext> ssl_context_;
   mutable tls_options tls_options_{{.tls_default = false}};
   mutable std::deque<ExecutorHttpRequest> pending_;
-  mutable std::optional<ActiveSubContext> active_sub_;
+  mutable Option<ActiveSubContext> active_sub_;
   let_id response_let_id_;
   uint64_t next_sub_key_ = 0;
-  mutable std::shared_ptr<Notify> notify_ = std::make_shared<Notify>();
+  mutable Box<Notify> notify_{std::in_place};
   mutable bool tls_enabled_ = false;
   bool done_ = false;
 };
