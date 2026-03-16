@@ -101,6 +101,6 @@ jobs:
 
       - name: Attach SBOM to release
         env:
-          GH_TOKEN: ${{ needs.release.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: gh release upload "$RELEASE_VERSION" /tmp/tenzir.spdx.json --clobber
