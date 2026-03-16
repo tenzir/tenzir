@@ -82,7 +82,9 @@ public:
     Option<std::string> error;
   };
 
-  using Message = variant<Accepted, ConnectionClosed>;
+  struct DrainCheck {};
+
+  using Message = variant<Accepted, ConnectionClosed, DrainCheck>;
 
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
@@ -211,6 +213,10 @@ public:
         }
         maybe_finish_draining();
         co_return;
+      },
+      [&](DrainCheck) -> Task<void> {
+        maybe_finish_draining();
+        co_return;
       });
   }
 
@@ -321,6 +327,11 @@ private:
     co_return;
   }
 
+  auto release_connection_slot_and_notify() -> Task<void> {
+    release_connection_slot();
+    co_await message_queue_->enqueue(DrainCheck{});
+  }
+
   auto finish_accept(Box<folly::coro::Transport> transport,
                      folly::SocketAddress peer, diagnostic_handler& dh)
     -> Task<void> {
@@ -331,27 +342,42 @@ private:
       }
     });
     if (tls_context_) {
+      auto tls_error = Option<std::string>{};
+      auto tls_cancelled = false;
       try {
         transport = Box<folly::coro::Transport>{
           co_await upgrade_transport_to_tls_server(std::move(*transport),
                                                    tls_context_)};
       } catch (folly::AsyncSocketException const& ex) {
         if (accept_cancel_->getToken().isCancellationRequested()) {
-          co_return;
+          tls_cancelled = true;
+        } else {
+          tls_error = ex.what();
         }
+      }
+      if (tls_cancelled) {
+        co_await release_connection_slot_and_notify();
+        keep_connection_slot = true;
+        co_return;
+      }
+      if (tls_error) {
         // Peer-driven TLS failures are expected at runtime; keep serving other
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
           .primary(endpoint_source_)
           .note("TLS handshake with peer {} failed", peer.describe())
-          .note("reason: {}", ex.what())
+          .note("reason: {}", *tls_error)
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
+        co_await release_connection_slot_and_notify();
+        keep_connection_slot = true;
         co_return;
       }
     }
     if (accept_cancel_->getToken().isCancellationRequested()) {
       close_transport(std::move(transport));
+      co_await release_connection_slot_and_notify();
+      keep_connection_slot = true;
       co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
