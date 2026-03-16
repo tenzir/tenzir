@@ -82,9 +82,7 @@ public:
     Option<std::string> error;
   };
 
-  struct DrainCheck {};
-
-  using Message = variant<Accepted, ConnectionClosed, DrainCheck>;
+  using Message = variant<Accepted, ConnectionClosed>;
 
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
@@ -132,8 +130,15 @@ public:
     // Let ServerSocket handle bind/listen setup
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    ctx.spawn_task(folly::coro::co_withCancellation(accept_cancel_->getToken(),
-                                                    accept_loop(ctx)));
+    accept_loop_done_ = false;
+    ctx.spawn_task([this, &ctx]() -> Task<void> {
+      auto notify_done = folly::makeGuard([this] {
+        accept_loop_done_ = true;
+        accept_loop_notify_->notify_one();
+      });
+      co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
+                                                accept_loop(ctx));
+    });
     co_return;
   }
 
@@ -213,10 +218,6 @@ public:
         }
         maybe_finish_draining();
         co_return;
-      },
-      [&](DrainCheck) -> Task<void> {
-        maybe_finish_draining();
-        co_return;
       });
   }
 
@@ -242,6 +243,7 @@ public:
     lifecycle_ = Lifecycle::draining;
     stop_accepting();
     close_all_connections();
+    co_await wait_for_accept_loop();
     co_return maybe_finish_draining() ? FinalizeBehavior::done
                                       : FinalizeBehavior::continue_;
   }
@@ -327,9 +329,11 @@ private:
     co_return;
   }
 
-  auto release_connection_slot_and_notify() -> Task<void> {
-    release_connection_slot();
-    co_await message_queue_->enqueue(DrainCheck{});
+  auto wait_for_accept_loop() -> Task<void> {
+    if (accept_loop_done_) {
+      co_return;
+    }
+    co_await accept_loop_notify_->wait();
   }
 
   auto finish_accept(Box<folly::coro::Transport> transport,
@@ -342,42 +346,27 @@ private:
       }
     });
     if (tls_context_) {
-      auto tls_error = Option<std::string>{};
-      auto tls_cancelled = false;
       try {
         transport = Box<folly::coro::Transport>{
           co_await upgrade_transport_to_tls_server(std::move(*transport),
                                                    tls_context_)};
       } catch (folly::AsyncSocketException const& ex) {
         if (accept_cancel_->getToken().isCancellationRequested()) {
-          tls_cancelled = true;
-        } else {
-          tls_error = ex.what();
+          co_return;
         }
-      }
-      if (tls_cancelled) {
-        co_await release_connection_slot_and_notify();
-        keep_connection_slot = true;
-        co_return;
-      }
-      if (tls_error) {
         // Peer-driven TLS failures are expected at runtime; keep serving other
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
           .primary(endpoint_source_)
           .note("TLS handshake with peer {} failed", peer.describe())
-          .note("reason: {}", *tls_error)
+          .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
-        co_await release_connection_slot_and_notify();
-        keep_connection_slot = true;
         co_return;
       }
     }
     if (accept_cancel_->getToken().isCancellationRequested()) {
       close_transport(std::move(transport));
-      co_await release_connection_slot_and_notify();
-      keep_connection_slot = true;
       co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
@@ -389,53 +378,54 @@ private:
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
     auto cancellation_token = accept_cancel_->getToken();
-    while (not cancellation_token.isCancellationRequested()) {
-      std::unique_ptr<folly::coro::Transport> transport;
-      auto accept_error = Option<std::string>{};
-      try {
-        co_await folly::coro::co_safe_point;
-        // `await_task` is now queue-based, so accepting runs in this task.
-        transport
-          = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-      } catch (folly::AsyncSocketException const& ex) {
-        // Accept can fail transiently (e.g., client abort/reset). Keep the
-        // listener alive and continue with the next accept attempt.
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      while (not cancellation_token.isCancellationRequested()) {
+        std::unique_ptr<folly::coro::Transport> transport;
+        auto accept_error = Option<std::string>{};
+        try {
+          co_await folly::coro::co_safe_point;
+          // `await_task` is now queue-based, so accepting runs in this task.
+          transport
+            = co_await folly::coro::co_withExecutor(evb_, server_->accept());
+        } catch (folly::AsyncSocketException const& ex) {
+          // Accept can fail transiently (e.g., client abort/reset). Keep the
+          // listener alive and continue with the next accept attempt.
+          if (cancellation_token.isCancellationRequested()) {
+            co_return;
+          }
+          accept_error = ex.what();
+        }
+        if (accept_error) {
+          diagnostic::warning("failed to accept incoming connection")
+            .primary(endpoint_source_)
+            .note("endpoint: {}", address_.describe())
+            .note("reason: {}", *accept_error)
+            .emit(ctx.dh());
+          co_await folly::coro::sleep(accept_retry_delay);
+          continue;
+        }
+        auto boxed
+          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
         if (cancellation_token.isCancellationRequested()) {
+          close_transport(std::move(boxed));
           co_return;
         }
-        accept_error = ex.what();
+        auto peer = boxed->getPeerAddress();
+        if (not try_acquire_connection_slot()) {
+          diagnostic::warning(
+            "connection rejected: maximum number of connections reached")
+            .primary(endpoint_source_)
+            .note("peer: {}", peer.describe())
+            .note("max_connections: {}", max_connections_)
+            .hint("increase `max_connections` if this level of concurrency is "
+                  "expected")
+            .emit(ctx.dh());
+          close_transport(std::move(boxed));
+          continue;
+        }
+        scope.spawn(finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
       }
-      if (accept_error) {
-        diagnostic::warning("failed to accept incoming connection")
-          .primary(endpoint_source_)
-          .note("endpoint: {}", address_.describe())
-          .note("reason: {}", *accept_error)
-          .emit(ctx.dh());
-        co_await folly::coro::sleep(accept_retry_delay);
-        continue;
-      }
-      auto boxed
-        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-      if (cancellation_token.isCancellationRequested()) {
-        close_transport(std::move(boxed));
-        co_return;
-      }
-      auto peer = boxed->getPeerAddress();
-      if (not try_acquire_connection_slot()) {
-        diagnostic::warning(
-          "connection rejected: maximum number of connections reached")
-          .primary(endpoint_source_)
-          .note("peer: {}", peer.describe())
-          .note("max_connections: {}", max_connections_)
-          .hint("increase `max_connections` if this level of concurrency is "
-                "expected")
-          .emit(ctx.dh());
-        close_transport(std::move(boxed));
-        continue;
-      }
-      ctx.spawn_task(
-        finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
-    }
+    });
   }
 
   auto try_acquire_connection_slot() -> bool {
@@ -494,6 +484,8 @@ private:
                                            message_queue_capacity};
   std::unordered_map<uint64_t, Connection> connections_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
+  Box<Notify> accept_loop_notify_{std::in_place};
+  bool accept_loop_done_ = true;
   Atomic<uint64_t> reserved_connections_{0};
   uint64_t max_connections_ = 128;
   Lifecycle lifecycle_ = Lifecycle::running;
