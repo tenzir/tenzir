@@ -13,7 +13,7 @@ include(TenzirVersion)
 project(
   Tenzir
   VERSION "${TENZIR_VERSION_MMP}"
-  DESCRIPTION "Visibility Across Space and Time"
+  DESCRIPTION "Data Pipeline Engine for Security Teams"
   HOMEPAGE_URL "https://tenzir.com"
   LANGUAGES C CXX)
 
