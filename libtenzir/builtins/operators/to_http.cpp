@@ -146,13 +146,10 @@ struct ToHttpArgs {
   auto make_method(std::string_view method_name) const
     -> std::optional<std::string> {
     if (method_name.empty()) {
-      if (not method) {
-        return std::string{"POST"};
-      }
-      if (body) {
-        return std::string{"POST"};
-      }
-      return std::string{"GET"};
+      // `to_http` always sends a body: either the explicit `body=` value or
+      // the serialized input event. A missing/null per-row method should
+      // therefore keep the operator's webhook-style POST default.
+      return std::string{"POST"};
     }
     return http::normalize_http_method(method_name);
   }

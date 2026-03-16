@@ -10,14 +10,15 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/option.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/si_literals.hpp"
@@ -27,17 +28,18 @@
 #include "tenzir/tql2/set.hpp"
 
 #include <boost/url/parse.hpp>
+#include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
+#include <folly/io/async/AsyncServerSocket.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
-#include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/http/coro/server/HTTPCoroAcceptor.h>
+#include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
 
-#include <folly/io/async/AsyncServerSocket.h>
-
 #include <future>
+#include <limits>
 #include <memory>
 #include <thread>
 #include <unordered_map>
@@ -85,6 +87,14 @@ struct AcceptHttpArgs {
         .emit(dh);
       return failure::promise();
     }
+    if (max_connections
+        and max_connections->inner > std::numeric_limits<uint32_t>::max()) {
+      diagnostic::error("`max_connections` must be at most {}",
+                        std::numeric_limits<uint32_t>::max())
+        .primary(max_connections->source)
+        .emit(dh);
+      return failure::promise();
+    }
     if (responses) {
       TRY(http::validate_response_map(responses->inner, dh, responses->source));
     }
@@ -112,8 +122,7 @@ struct RequestReceived {
   http::RequestData request;
 };
 
-struct Shutdown {
-};
+struct Shutdown {};
 
 using Message = variant<RequestReceived, Shutdown>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
@@ -132,14 +141,88 @@ struct AcceptHttpServerState {
   Arc<MessageQueue> message_queue;
   Option<record> responses;
   size_t max_request_size = default_max_request_size;
+  Option<uint64_t> max_connections;
+
+  auto try_acquire_connection_slot() -> bool {
+    if (not max_connections) {
+      return true;
+    }
+    auto current = reserved_connections_.load(std::memory_order_relaxed);
+    while (current < *max_connections) {
+      if (reserved_connections_.compare_exchange_weak(
+            current, current + 1, std::memory_order_relaxed)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  auto release_connection_slot() -> void {
+    if (not max_connections) {
+      return;
+    }
+    auto previous
+      = reserved_connections_.fetch_sub(1, std::memory_order_relaxed);
+    TENZIR_ASSERT(previous > 0);
+  }
+
+private:
+  Atomic<uint64_t> reserved_connections_{0};
+};
+
+class ConnectionLimitedSource final : public proxygen::coro::HTTPSourceFilter {
+public:
+  ConnectionLimitedSource(Arc<AcceptHttpServerState> state,
+                          proxygen::coro::HTTPSource* source)
+    : HTTPSourceFilter{source}, state_{std::move(state)} {
+    setHeapAllocated();
+  }
+
+  auto readHeaderEvent()
+    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
+    auto event = co_await readHeaderEventImpl(/*deleteOnDone=*/false);
+    if (event.eom) {
+      release_connection_slot();
+    }
+    auto guard = folly::makeGuard(lifetime(event));
+    co_return event;
+  }
+
+  auto readBodyEvent(uint32_t max = std::numeric_limits<uint32_t>::max())
+    -> folly::coro::Task<proxygen::coro::HTTPBodyEvent> override {
+    auto event = co_await readBodyEventImpl(max, /*deleteOnDone=*/false);
+    if (event.eom) {
+      release_connection_slot();
+    }
+    auto guard = folly::makeGuard(lifetime(event));
+    co_return event;
+  }
+
+  void stopReading(
+    folly::Optional<const proxygen::coro::HTTPErrorCode> error) override {
+    release_connection_slot();
+    HTTPSourceFilter::stopReading(error);
+  }
+
+private:
+  auto release_connection_slot() -> void {
+    if (released_) {
+      return;
+    }
+    released_ = true;
+    state_->release_connection_slot();
+  }
+
+  Arc<AcceptHttpServerState> state_;
+  bool released_ = false;
 };
 
 class HttpServerThread final {
 public:
-  HttpServerThread(folly::SocketAddress address,
-                   std::shared_ptr<const proxygen::AcceptorConfiguration>
-                     acceptor_config,
-                   std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+  HttpServerThread(
+    folly::SocketAddress address,
+    std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config,
+    std::shared_ptr<proxygen::coro::HTTPHandler> handler)
     : address_{std::move(address)},
       acceptor_config_{std::move(acceptor_config)},
       handler_{std::move(handler)} {
@@ -219,6 +302,9 @@ public:
   auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
                      proxygen::coro::HTTPSourceHolder request_source)
     -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
+    if (not state_->try_acquire_connection_slot()) {
+      co_return http::make_fixed_response_source(503, std::string{});
+    }
     auto request = http::RequestData{};
     auto body_too_large = false;
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
@@ -259,7 +345,9 @@ public:
     });
     co_await reader.read();
     if (body_too_large) {
-      co_return http::make_fixed_response_source(413, std::string{});
+      auto response = http::make_fixed_response_source(413, std::string{});
+      co_return proxygen::coro::HTTPSourceHolder{
+        new ConnectionLimitedSource{state_, response.release()}};
     }
     auto response_code = uint16_t{200};
     auto content_type = std::string{};
@@ -274,8 +362,10 @@ public:
     }
     co_await state_->message_queue->enqueue(
       RequestReceived{std::move(request)});
-    co_return http::make_fixed_response_source(response_code, std::move(body),
-                                               content_type);
+    auto response = http::make_fixed_response_source(
+      response_code, std::move(body), content_type);
+    co_return proxygen::coro::HTTPSourceHolder{
+      new ConnectionLimitedSource{state_, response.release()}};
   }
 
 private:
@@ -324,6 +414,7 @@ public:
     });
     (*server_state_)->max_request_size
       = inner(args_.max_request_size).value_or(default_max_request_size);
+    (*server_state_)->max_connections = inner(args_.max_connections);
     handler_ = std::make_shared<AcceptHttpHandler>(*server_state_);
     auto [host, port] = std::move(endpoint).unwrap();
     auto config = make_server_config(host, port, dh);
@@ -331,9 +422,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Box<HttpServerThread>{
-      std::in_place, folly::SocketAddress{host, port, true},
-      std::move(*config), handler_};
+    server_ = Box<HttpServerThread>{std::in_place,
+                                    folly::SocketAddress{host, port, true},
+                                    std::move(*config), handler_};
     if (auto error = (*server_)->start()) {
       diagnostic::error("failed to start http server")
         .primary(args_.url)
@@ -367,8 +458,8 @@ public:
               metadata.data(request_record);
             }
             slice = assign(*args_.metadata_field,
-                           metadata.finish_assert_one_array(),
-                           std::move(slice), ctx.dh());
+                           metadata.finish_assert_one_array(), std::move(slice),
+                           ctx.dh());
           }
           co_await push(std::move(slice));
           co_return;
@@ -392,8 +483,8 @@ public:
         env[request_let_id_] = request_record;
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
-        auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env},
-                                              true);
+        auto sub_result
+          = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
           co_return;
         }
@@ -486,7 +577,8 @@ private:
     auto certfile = tls_options_.get_certfile(nullptr);
     auto keyfile = tls_options_.get_keyfile(nullptr);
     if (not certfile or not keyfile) {
-      diagnostic::error("TLS server mode requires `tls.certfile` and `tls.keyfile`")
+      diagnostic::error(
+        "TLS server mode requires `tls.certfile` and `tls.keyfile`")
         .primary(args_.url)
         .emit(dh);
       return failure::promise();

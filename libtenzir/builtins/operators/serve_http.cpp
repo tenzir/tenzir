@@ -136,6 +136,14 @@ struct ServeHttpArgs {
         .emit(dh);
       return failure::promise();
     }
+    if (max_connections
+        and max_connections->inner > std::numeric_limits<uint32_t>::max()) {
+      diagnostic::error("`max_connections` must be at most {}",
+                        std::numeric_limits<uint32_t>::max())
+        .primary(max_connections->source)
+        .emit(dh);
+      return failure::promise();
+    }
     auto tls_opts
       = tls ? tls_options{*tls, {.tls_default = false, .is_server = true}}
             : tls_options{{.tls_default = false, .is_server = true}};
@@ -321,8 +329,8 @@ private:
   std::thread thread_;
 };
 
-auto notify_client_closed(ClientKey client,
-                          Arc<MessageQueue> message_queue) -> Task<void> {
+auto notify_client_closed(ClientKey client, Arc<MessageQueue> message_queue)
+  -> Task<void> {
   co_await message_queue->enqueue(ClientClosed{client});
 }
 
@@ -384,8 +392,8 @@ public:
 
   void
   stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
-    folly::coro::co_withExecutor(
-      evb_, notify_client_closed(client_key(client_), message_queue_))
+    folly::coro::co_withExecutor(evb_, notify_client_closed(client_key(client_),
+                                                            message_queue_))
       .start();
     if (heapAllocated_) {
       delete this;
@@ -513,9 +521,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Box<HttpServerThread>{
-      std::in_place, folly::SocketAddress{host, port, true},
-      std::move(*config), handler_};
+    server_ = Box<HttpServerThread>{std::in_place,
+                                    folly::SocketAddress{host, port, true},
+                                    std::move(*config), handler_};
     if (auto error = (*server_)->start()) {
       diagnostic::error("failed to start http server")
         .primary(args_.url)
@@ -794,8 +802,8 @@ struct ServeHttpPlugin final : public virtual OperatorPlugin {
     auto path = d.named("path", &ServeHttpArgs::path, "string");
     auto method = d.named("method", &ServeHttpArgs::method, "string");
     auto responses = d.named("responses", &ServeHttpArgs::responses);
-    auto on_backlog = d.named("on_backlog", &ServeHttpArgs::on_backlog,
-                              "string");
+    auto on_backlog
+      = d.named("on_backlog", &ServeHttpArgs::on_backlog, "string");
     auto max_connections
       = d.named("max_connections", &ServeHttpArgs::max_connections);
     auto tls = d.named("tls", &ServeHttpArgs::tls);

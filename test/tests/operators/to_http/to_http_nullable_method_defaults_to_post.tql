@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http:
+      expected_request:
+        count: 1
+        method: POST
+        path: /options/method
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_METHOD_URL"),
+  m: null,
+}
+to_http u, method=m
