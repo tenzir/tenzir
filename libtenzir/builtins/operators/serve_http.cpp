@@ -9,7 +9,6 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/async.hpp"
-#include "tenzir/async/notify.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
@@ -26,14 +25,14 @@
 
 #include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Sleep.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
+#include <folly/io/async/AsyncServerSocket.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
-#include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/http/coro/server/HTTPCoroAcceptor.h>
+#include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
-
-#include <folly/io/async/AsyncServerSocket.h>
 
 #include <atomic>
 #include <future>
@@ -43,6 +42,7 @@
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace tenzir::plugins {
 namespace {
@@ -56,6 +56,7 @@ constexpr auto default_stream_method = std::string_view{"GET"};
 constexpr auto default_stream_content_type
   = std::string_view{"application/x-ndjson"};
 constexpr auto http_1_1 = std::string_view{"http/1.1"};
+constexpr auto first_client_grace_period = std::chrono::seconds{1};
 
 template <typename T>
 constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
@@ -124,16 +125,33 @@ struct ClientClosed {
   uint64_t id = 0;
 };
 
-struct Shutdown {
+struct Payload {
+  std::string line;
 };
 
-using Message = variant<ClientOpened, ClientClosed, Shutdown>;
+struct Shutdown {};
+
+struct FirstClientTimeout {};
+
+using Message
+  = variant<ClientOpened, ClientClosed, Payload, Shutdown, FirstClientTimeout>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 enum class Lifecycle {
   running,
   draining,
   done,
+};
+
+enum class DeliveryState {
+  waiting_for_first_client,
+  waiting_for_first_client_timeout,
+  live,
+};
+
+enum class ListenerState {
+  accepting,
+  stopping,
 };
 
 struct ServeHttpServerState {
@@ -186,10 +204,10 @@ private:
 
 class HttpServerThread final {
 public:
-  HttpServerThread(folly::SocketAddress address,
-                   std::shared_ptr<const proxygen::AcceptorConfiguration>
-                     acceptor_config,
-                   std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+  HttpServerThread(
+    folly::SocketAddress address,
+    std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config,
+    std::shared_ptr<proxygen::coro::HTTPHandler> handler)
     : address_{std::move(address)},
       acceptor_config_{std::move(acceptor_config)},
       handler_{std::move(handler)} {
@@ -230,6 +248,17 @@ public:
       }
     }
     return error;
+  }
+
+  auto request_stop_accepting() -> void {
+    if (not thread_.joinable()) {
+      return;
+    }
+    event_base_.runInEventBaseThreadAndWait([this] {
+      if (socket_) {
+        socket_->stopAccepting();
+      }
+    });
   }
 
   auto stop() -> void {
@@ -357,9 +386,9 @@ public:
     : state_{std::move(state)} {
   }
 
-  auto handleRequest(folly::EventBase* evb,
-                     proxygen::coro::HTTPSessionContextPtr,
-                     proxygen::coro::HTTPSourceHolder request_source)
+  auto
+  handleRequest(folly::EventBase* evb, proxygen::coro::HTTPSessionContextPtr,
+                proxygen::coro::HTTPSourceHolder request_source)
     -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
     auto request_path = std::string{};
     auto request_method = std::string{};
@@ -476,31 +505,80 @@ public:
     co_return co_await message_queue_->dequeue();
   }
 
-  auto process_task(Any result, OpCtx&) -> Task<void> override {
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     auto message = std::move(result).as<Message>();
     co_await co_match(
       std::move(message),
       [&](ClientOpened event) -> Task<void> {
-        if (lifecycle_ != Lifecycle::running) {
+        if (lifecycle_ == Lifecycle::done
+            or (lifecycle_ == Lifecycle::draining
+                and delivery_state_ == DeliveryState::live)) {
           event.client->queue->enqueue(std::nullopt);
           server_state_->release_connection_slot();
           co_return;
         }
-        auto [_, inserted] = clients_.emplace(event.client->id,
-                                              std::move(event.client));
+        auto [_, inserted]
+          = clients_.emplace(event.client->id, std::move(event.client));
         TENZIR_ASSERT(inserted);
-        clients_changed_->notify_one();
-      },
-      [&](ClientClosed event) -> Task<void> {
-        if (clients_.erase(event.id) == 1) {
-          server_state_->release_connection_slot();
-          clients_changed_->notify_one();
+        if (delivery_state_ != DeliveryState::live) {
+          for (auto const& line : pending_payloads_) {
+            send_to_clients(line);
+          }
+          pending_payloads_.clear();
+          delivery_state_ = DeliveryState::live;
+          if (lifecycle_ == Lifecycle::draining) {
+            stop_accepting();
+            close_all_clients();
+          }
         }
         maybe_finish_draining();
         co_return;
       },
-      [&](Shutdown) -> Task<void> {
+      [&](ClientClosed event) -> Task<void> {
+        if (clients_.erase(event.id) == 1) {
+          server_state_->release_connection_slot();
+        }
         maybe_finish_draining();
+        co_return;
+      },
+      [&](Payload payload) -> Task<void> {
+        if (lifecycle_ == Lifecycle::done or payload.line.empty()) {
+          co_return;
+        }
+        if (delivery_state_ == DeliveryState::live) {
+          send_to_clients(payload.line);
+        } else {
+          pending_payloads_.push_back(std::move(payload.line));
+        }
+        co_return;
+      },
+      [&](Shutdown) -> Task<void> {
+        if (lifecycle_ != Lifecycle::draining) {
+          co_return;
+        }
+        if (delivery_state_ == DeliveryState::waiting_for_first_client
+            and not pending_payloads_.empty()) {
+          delivery_state_ = DeliveryState::waiting_for_first_client_timeout;
+          ctx.spawn_task([message_queue = message_queue_]() -> Task<void> {
+            co_await folly::coro::sleep(first_client_grace_period);
+            co_await message_queue->enqueue(FirstClientTimeout{});
+          });
+          co_return;
+        }
+        stop_accepting();
+        close_all_clients();
+        maybe_finish_draining();
+        co_return;
+      },
+      [&](FirstClientTimeout) -> Task<void> {
+        if (lifecycle_ == Lifecycle::draining
+            and delivery_state_
+                  == DeliveryState::waiting_for_first_client_timeout
+            and clients_.empty()) {
+          pending_payloads_.clear();
+          stop_accepting();
+          maybe_finish_draining();
+        }
         co_return;
       });
   }
@@ -522,34 +600,21 @@ public:
       }
       auto line = std::move(*json);
       line.push_back('\n');
-      while (true) {
-        if (lifecycle_ != Lifecycle::running) {
-          co_return;
-        }
-        if (clients_.empty()) {
-          co_await clients_changed_->wait();
-          continue;
-        }
-        for (auto const& [_, client] : clients_) {
-          client->queue->enqueue(std::optional<std::string>{line});
-        }
-        break;
-      }
+      co_await message_queue_->enqueue(Payload{std::move(line)});
     }
-    co_return;
   }
 
-  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (lifecycle_ == Lifecycle::done) {
       co_return FinalizeBehavior::done;
     }
-    co_await request_shutdown();
+    co_await request_shutdown(ctx);
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
   }
 
-  auto stop(OpCtx&) -> Task<void> override {
-    co_await request_shutdown();
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    co_await request_shutdown(ctx);
   }
 
   auto state() -> OperatorState override {
@@ -578,7 +643,8 @@ private:
     auto certfile = tls_options_.get_certfile(nullptr);
     auto keyfile = tls_options_.get_keyfile(nullptr);
     if (not certfile or not keyfile) {
-      diagnostic::error("TLS server mode requires `tls.certfile` and `tls.keyfile`")
+      diagnostic::error(
+        "TLS server mode requires `tls.certfile` and `tls.keyfile`")
         .primary(args_.url)
         .emit(dh);
       return failure::promise();
@@ -597,33 +663,39 @@ private:
     return config;
   }
 
-  auto stop_server() -> void {
+  auto stop_accepting() -> void {
+    if (listener_state_ == ListenerState::stopping) {
+      return;
+    }
+    listener_state_ = ListenerState::stopping;
+    if (server_) {
+      server_->request_stop_accepting();
+    }
+  }
+
+  auto wait_for_server() -> void {
     server_.reset();
     handler_.reset();
   }
 
-  auto close_all_clients() -> void {
-    if (not server_state_) {
-      clients_.clear();
-      clients_changed_->notify_one();
-      return;
+  auto send_to_clients(std::string const& line) -> void {
+    for (auto const& [_, client] : clients_) {
+      client->queue->enqueue(std::optional<std::string>{line});
     }
-    for (auto& [_, client] : clients_) {
-      client->queue->enqueue(std::nullopt);
-      server_state_->release_connection_slot();
-    }
-    clients_.clear();
-    clients_changed_->notify_one();
   }
 
-  auto request_shutdown() -> Task<void> {
+  auto close_all_clients() -> void {
+    for (auto& [_, client] : clients_) {
+      client->queue->enqueue(std::nullopt);
+    }
+  }
+
+  auto request_shutdown(OpCtx&) -> Task<void> {
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     if (lifecycle_ == Lifecycle::running) {
       lifecycle_ = Lifecycle::draining;
-      stop_server();
-      close_all_clients();
       co_await message_queue_->enqueue(Shutdown{});
     }
     maybe_finish_draining();
@@ -631,7 +703,9 @@ private:
   }
 
   auto maybe_finish_draining() -> void {
-    if (lifecycle_ == Lifecycle::draining and clients_.empty()) {
+    if (lifecycle_ == Lifecycle::draining
+        and listener_state_ == ListenerState::stopping and clients_.empty()) {
+      wait_for_server();
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -644,9 +718,11 @@ private:
   std::unique_ptr<HttpServerThread> server_;
   std::shared_ptr<ServeHttpHandler> handler_;
   std::unordered_map<uint64_t, std::shared_ptr<ServeHttpClient>> clients_;
-  Box<Notify> clients_changed_{std::in_place};
+  std::vector<std::string> pending_payloads_;
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
   Lifecycle lifecycle_ = Lifecycle::running;
+  DeliveryState delivery_state_ = DeliveryState::waiting_for_first_client;
+  ListenerState listener_state_ = ListenerState::accepting;
 };
 
 } // namespace
