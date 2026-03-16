@@ -139,7 +139,7 @@ jobs:
               --cache-to "${CACHE_REF}" \
               --tag "img"
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
-              buildah push img "${registry}/tenzir/${name}:${{ matrix.build.tag }}-${tag}"
+              buildah push img "${registry}/tenzir/${name}:${tag}-${{ matrix.build.tag }}"
             done
           done
 
@@ -176,8 +176,8 @@ jobs:
               echo "::notice Creating manifest for ${image}"
               docker buildx imagetools create \
                 --tag "${image}" \
-                "${registry}/tenzir/${name}:amd64-${tag}" \
-                "${registry}/tenzir/${name}:arm64-${tag}"
+                "${registry}/tenzir/${name}:${tag}-amd64" \
+                "${registry}/tenzir/${name}:${tag}-arm64"
               # Resolve the tag to a digest for signing. Cosign warns when
               # signing by tag because the tag could be moved between the
               # manifest push and the signing step.
