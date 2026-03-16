@@ -1,6 +1,6 @@
 //    _   _____   __________
 //   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\\ \\  / /          Across
+//   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
@@ -144,7 +144,7 @@ public:
             or payload.chunk->size() == 0 or clients_.empty()) {
           co_return;
         }
-        co_await broadcast_payload(payload.chunk);
+        co_await broadcast_payload(payload.chunk, ctx.dh());
       });
   }
 
