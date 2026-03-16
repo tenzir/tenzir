@@ -11,7 +11,7 @@ operator, a `summarize_ir` IR node, and migrates/expands integration tests.
 
 ## Findings
 
-### 🔴 P1 · 💬 GIT-1 · Dangling pointer when robin_map rehashes during group iteration · 92% (@chatgpt-codex-connector)
+### ~~🔴 P1 · 💬 GIT-1 · Dangling pointer when robin_map rehashes during group iteration · 92% (@chatgpt-codex-connector)~~ ✅ Fixed
 
 **File:** `libtenzir/builtins/operators/summarize.cpp:248`
 
@@ -24,24 +24,10 @@ resize and relocate all existing elements. A subsequent `update_group(*current_g
 then dereferences a dangling pointer, which is undefined behavior that can
 silently corrupt summarization results or crash the process.
 
-**Evidence:**
-```cpp
-auto find_or_create_group = [&](int64_t row) -> bucket2* {
-    // ...
-    it = groups_.emplace_hint(it, materialize(key), make_bucket());
-    return &it.value();   // pointer may be invalidated by the next emplace_hint
-};
-auto current_group = find_or_create_group(0);
-for (auto row = int64_t{1}; row < total_rows; ++row) {
-    auto group = find_or_create_group(row);  // may trigger rehash
-    if (current_group != group) {            // UB if current_group was relocated
-        update_group(*current_group, ...);   // UB dereference
-```
-
-**Suggestion:** Store a stable group identifier (e.g., a map iterator or an
-index into a `std::vector`) rather than a raw value pointer. Alternatively,
-reserve sufficient capacity for `groups_` before processing the slice so that
-`emplace_hint` cannot trigger a rehash mid-loop.
+**Fix:** `groups_.reserve(groups_.size() + static_cast<size_t>(total_rows))`
+is called before the first `find_or_create_group` invocation. This pre-allocates
+enough buckets for up to `total_rows` new insertions, preventing any rehash
+during the loop and keeping all returned `bucket2*` pointers stable.
 
 ---
 
@@ -182,11 +168,11 @@ restored per GIT-3, repurpose it as the search root).
 
 ```
 ╭───────────────────────────────────────────╮
-│ 🔴 P1: 2   🟠 P2: 1   🟡 P3: 0   ⚪ P4: 3 │
+│ 🔴 P1: 1   🟠 P2: 1   🟡 P3: 0   ⚪ P4: 3 │
 ╰───────────────────────────────────────────╯
 ```
 
 **Needs changes:**
-- Fix the dangling-pointer bug in `implementation2::add` (GIT-1): `current_group` must not be a raw `tsl::robin_map` value pointer across `emplace_hint` calls.
 - Fix the snapshot restore path (GIT-2): move `impl_` construction before `snapshot()` is called, or deserialize into a staging area; otherwise checkpoint/restore silently produces wrong results.
 - Restore build-directory auto-discovery in `scripts/build.sh` (GIT-3) and remove the dead `repo_root` variable (GIT-6).
+- ~~GIT-1 resolved~~: `groups_.reserve()` before the group-iteration loop prevents robin_map rehash and pointer invalidation.

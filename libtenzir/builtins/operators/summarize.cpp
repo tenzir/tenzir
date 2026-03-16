@@ -248,10 +248,15 @@ public:
       return &it.value();
     };
     auto total_rows = detail::narrow<int64_t>(slice.rows());
-    auto current_group = find_or_create_group(0);
+    // Reserve enough capacity before any insertions so that emplace_hint
+    // cannot trigger a rehash during the loop below. tsl::robin_map
+    // invalidates all pointers on rehash, so current_group would dangle
+    // if a new group insertion reallocated the table mid-iteration.
+    groups_.reserve(groups_.size() + static_cast<size_t>(total_rows));
+    auto* current_group = find_or_create_group(0);
     auto current_begin = int64_t{0};
     for (auto row = int64_t{1}; row < total_rows; ++row) {
-      auto group = find_or_create_group(row);
+      auto* group = find_or_create_group(row);
       if (current_group != group) {
         update_group(*current_group, current_begin, row);
         current_group = group;
