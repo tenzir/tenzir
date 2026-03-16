@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arc.hpp>
-#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/tls.hpp>
+#include <tenzir/atomic.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -23,16 +23,15 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
+#include <folly/ScopeGuard.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-#include <algorithm>
 #include <memory>
 
 namespace tenzir::plugins::serve_tcp {
@@ -58,13 +57,15 @@ struct ServeTcpArgs {
 
 class ServeTcp final : public Operator<table_slice, void> {
 public:
-  using Client = Arc<folly::coro::Transport>;
-
   struct Accepted {
     Box<folly::coro::Transport> client;
   };
 
-  using Message = variant<Accepted>;
+  struct Payload {
+    chunk_ptr chunk;
+  };
+
+  using Message = variant<Accepted, Payload>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   enum class Lifecycle {
@@ -117,6 +118,36 @@ public:
     co_return;
   }
 
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    auto* message_ptr = result.try_as<Message>();
+    if (not message_ptr) {
+      co_return;
+    }
+    auto message = std::move(*message_ptr);
+    co_await co_match(
+      std::move(message),
+      [&](Accepted accepted) -> Task<void> {
+        if (lifecycle_ != Lifecycle::running) {
+          close_client(std::move(accepted.client));
+          release_connection_slot();
+          co_return;
+        }
+        co_await add_client(std::move(accepted.client), ctx.dh());
+      },
+      [&](Payload payload) -> Task<void> {
+        if (lifecycle_ != Lifecycle::running or not payload.chunk
+            or payload.chunk->size() == 0 or clients_.empty()) {
+          co_return;
+        }
+        co_await broadcast_payload(payload.chunk, ctx.dh());
+      });
+  }
+
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     if (lifecycle_ != Lifecycle::running) {
       co_return;
@@ -133,75 +164,15 @@ public:
     }
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
-    -> Task<void> override {
-    auto clients = std::vector<Client>{};
-    {
-      auto guard = co_await clients_->lock();
-      if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0
-          or guard->empty()) {
-        co_return;
-      }
-      clients = *guard;
-    }
-    auto data = folly::ByteRange{
-      reinterpret_cast<unsigned char const*>(chunk->data()),
-      chunk->size(),
-    };
-    auto diagnostics = std::vector<std::optional<diagnostic>>{};
-    diagnostics.resize(clients.size());
-    auto write_tasks = std::vector<Task<void>>{};
-    write_tasks.reserve(clients.size());
-    for (size_t i = 0; i < clients.size(); ++i) {
-      write_tasks.push_back(write_to_client(clients[i], data, diagnostics[i]));
-    }
-    co_await folly::coro::collectAllRange(std::move(write_tasks));
-    TENZIR_ASSERT(diagnostics.size() == clients.size());
-    auto guard = co_await clients_->lock();
-    for (size_t i = 0; i < diagnostics.size(); ++i) {
-      auto& maybe_diagnostic = diagnostics[i];
-      if (not maybe_diagnostic) {
-        continue;
-      }
-      ctx.dh().emit(std::move(*maybe_diagnostic));
-      auto* failed_client = &*clients[i];
-      auto new_end = std::remove_if(guard->begin(), guard->end(),
-                                    [&](Client const& client) {
-                                      return &*client == failed_client;
-                                    });
-      auto removed = new_end != guard->end();
-      guard->erase(new_end, guard->end());
-      if (removed) {
-        close_client(std::move(clients[i]));
-      }
-    }
-    co_return;
-  }
-
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    co_return co_await message_queue_->dequeue();
-  }
-
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    auto* message_ptr = result.try_as<Message>();
-    if (not message_ptr) {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+    if (lifecycle_ != Lifecycle::running or not chunk or chunk->size() == 0) {
       co_return;
     }
-    auto message = std::move(*message_ptr);
-    if (auto* accepted = std::get_if<Accepted>(&message)) {
-      if (lifecycle_ != Lifecycle::running) {
-        close_client(std::move(accepted->client));
-        co_return;
-      }
-      co_await add_client(std::move(accepted->client), ctx.dh());
-    }
-    co_return;
+    co_await message_queue_->enqueue(Payload{std::move(chunk)});
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (lifecycle_ == Lifecycle::done) {
-      co_await close_all_clients();
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
@@ -213,34 +184,23 @@ public:
         request_stop();
       }
     }
-    if (lifecycle_ == Lifecycle::done) {
-      co_await close_all_clients();
-      co_return FinalizeBehavior::done;
-    }
-    co_return FinalizeBehavior::continue_;
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     request_stop();
-    co_await close_all_clients();
     co_return;
   }
 
   auto state() -> OperatorState override {
+    maybe_finish_draining();
     return lifecycle_ == Lifecycle::done ? OperatorState::done
                                          : OperatorState::unspecified;
   }
 
 private:
   static auto close_client(Box<folly::coro::Transport> client) -> void {
-    auto* evb = client->getEventBase();
-    TENZIR_ASSERT(evb);
-    evb->runInEventBaseThread([client = std::move(client)]() mutable {
-      client->close();
-    });
-  }
-
-  static auto close_client(Client client) -> void {
     auto* evb = client->getEventBase();
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([client = std::move(client)]() mutable {
@@ -271,63 +231,69 @@ private:
     if (lifecycle_ == Lifecycle::done) {
       return;
     }
-    lifecycle_ = Lifecycle::done;
-    stop_accepting();
+    begin_draining();
+    close_all_clients();
+    maybe_finish_draining();
   }
 
-  auto close_all_clients() -> Task<void> {
-    auto guard = co_await clients_->lock();
-    auto clients = std::move(*guard);
-    for (auto& client : clients) {
-      close_client(std::move(client));
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ == Lifecycle::draining
+        and reserved_connections_.load(std::memory_order_relaxed) == 0) {
+      lifecycle_ = Lifecycle::done;
     }
-    co_return;
   }
 
-  auto write_to_client(Client client, folly::ByteRange data,
-                       std::optional<diagnostic>& maybe_diagnostic)
-    -> Task<void> {
+  auto close_all_clients() -> void {
+    for (auto& client : clients_) {
+      close_client(std::move(client));
+      release_connection_slot();
+    }
+    clients_.clear();
+  }
+
+  auto write_to_client(folly::coro::Transport& client, folly::ByteRange data)
+    -> Task<std::optional<diagnostic>> {
     try {
-      co_await folly::coro::co_withExecutor(evb_, client->write(data));
-      maybe_diagnostic.reset();
-      co_return;
+      co_await folly::coro::co_withExecutor(evb_, client.write(data));
+      co_return std::nullopt;
     } catch (folly::AsyncSocketException const& ex) {
-      auto peer = client->getPeerAddress().describe();
-      maybe_diagnostic
-        = diagnostic::warning("failed to write to client {}", peer)
-            .primary(args_.endpoint.source)
-            .note("reason: {}", ex.what())
-            .note("dropping this client and continuing with "
-                  "remaining connections")
-            .done();
-      co_return;
+      auto peer = client.getPeerAddress().describe();
+      co_return diagnostic::warning("failed to write to client {}", peer)
+        .primary(args_.endpoint.source)
+        .note("reason: {}", ex.what())
+        .note("dropping this client and continuing with remaining connections")
+        .done();
+    }
+  }
+
+  auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
+    -> Task<void> {
+    auto data = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(chunk->data()),
+      chunk->size(),
+    };
+    for (size_t i = 0; i < clients_.size();) {
+      auto maybe_diagnostic = co_await write_to_client(*clients_[i], data);
+      if (not maybe_diagnostic) {
+        ++i;
+        continue;
+      }
+      dh.emit(std::move(*maybe_diagnostic));
+      close_client(std::move(clients_[i]));
+      release_connection_slot();
+      clients_.erase(clients_.begin() + i);
     }
   }
 
   auto add_client(Box<folly::coro::Transport> client, diagnostic_handler& dh)
     -> Task<void> {
+    auto release_connection_slot_guard = folly::makeGuard([&] {
+      release_connection_slot();
+    });
     auto peer = client->getPeerAddress().describe();
-    auto reject_max_connections = [&]() {
-      diagnostic::warning(
-        "connection rejected: maximum number of connections reached")
-        .primary(args_.endpoint.source)
-        .note("peer: {}", peer)
-        .note("max_connections: {}", max_connections_)
-        .hint("increase `max_connections` if this level of concurrency is "
-              "expected")
-        .emit(dh);
+    if (lifecycle_ != Lifecycle::running) {
       close_client(std::move(client));
-    };
-    {
-      auto guard = co_await clients_->lock();
-      if (lifecycle_ != Lifecycle::running) {
-        close_client(std::move(client));
-        co_return;
-      }
-      if (guard->size() >= max_connections_) {
-        reject_max_connections();
-        co_return;
-      }
+      co_return;
     }
     if (tls_context_) {
       try {
@@ -344,17 +310,13 @@ private:
         co_return;
       }
     }
-    auto guard = co_await clients_->lock();
     if (lifecycle_ != Lifecycle::running) {
       close_client(std::move(client));
       co_return;
     }
-    if (guard->size() >= max_connections_) {
-      reject_max_connections();
-      co_return;
-    }
     TENZIR_DEBUG("accepted client {}", client->getPeerAddress().describe());
-    guard->push_back(Client{std::move(*client)});
+    clients_.push_back(std::move(client));
+    release_connection_slot_guard.dismiss();
     co_return;
   }
 
@@ -373,9 +335,25 @@ private:
           close_client(std::move(client));
           co_return;
         }
-        TENZIR_DEBUG("serve_tcp: accepted {}",
-                     client->getPeerAddress().describe());
+        auto peer = client->getPeerAddress().describe();
+        if (not try_acquire_connection_slot()) {
+          diagnostic::warning(
+            "connection rejected: maximum number of connections reached")
+            .primary(args_.endpoint.source)
+            .note("peer: {}", peer)
+            .note("max_connections: {}", max_connections_)
+            .hint("increase `max_connections` if this level of concurrency is "
+                  "expected")
+            .emit(dh);
+          close_client(std::move(client));
+          continue;
+        }
+        auto release_connection_slot_guard = folly::makeGuard([&] {
+          release_connection_slot();
+        });
+        TENZIR_DEBUG("serve_tcp: accepted {}", peer);
         co_await message_queue_->enqueue(Accepted{std::move(client)});
+        release_connection_slot_guard.dismiss();
         continue;
       } catch (folly::AsyncSocketException const& ex) {
         // Accept failures are per-connection network errors; keep the
@@ -396,6 +374,23 @@ private:
     }
   }
 
+  auto try_acquire_connection_slot() -> bool {
+    auto current = reserved_connections_.load(std::memory_order_relaxed);
+    while (current < max_connections_) {
+      if (reserved_connections_.compare_exchange_weak(
+            current, current + 1, std::memory_order_relaxed)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  auto release_connection_slot() -> void {
+    auto previous
+      = reserved_connections_.fetch_sub(1, std::memory_order_relaxed);
+    TENZIR_ASSERT(previous > 0);
+  }
+
   ServeTcpArgs args_;
   data sub_key_ = data{int64_t{0}};
   folly::SocketAddress address_;
@@ -406,8 +401,8 @@ private:
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
-  Box<Mutex<std::vector<Client>>> clients_{std::in_place,
-                                           std::vector<Client>{}};
+  Atomic<uint64_t> reserved_connections_{0};
+  std::vector<Box<folly::coro::Transport>> clients_;
   uint64_t max_connections_ = 128;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
