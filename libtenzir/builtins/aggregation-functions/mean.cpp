@@ -115,7 +115,8 @@ public:
   auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::Mean>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `mean` aggregation instance: invalid FlatBuffer");
+      TENZIR_WARN(
+        "failed to restore `mean` aggregation instance: invalid FlatBuffer");
       return false;
     }
     mean_ = (*fb)->result();
@@ -134,7 +135,8 @@ public:
         state_ = state::numeric;
         return true;
     }
-    TENZIR_WARN("failed to restore `mean` aggregation instance: unknown state value");
+    TENZIR_WARN(
+      "failed to restore `mean` aggregation instance: unknown state value");
     return false;
   }
 

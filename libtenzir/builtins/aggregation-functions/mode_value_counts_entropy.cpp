@@ -118,29 +118,38 @@ public:
     const auto fb = flatbuffer<fbs::aggregation::ModeValueCountsEntropy>::make(
       std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid FlatBuffer", Kind);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                  "FlatBuffer",
+                  Kind);
       return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field `result`", Kind);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field "
+                  "`result`",
+                  Kind);
       return false;
     }
     counts_.clear();
     counts_.reserve(fb_result->size());
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
-        TENZIR_WARN("failed to restore `{}` aggregation instance: missing element in field `result`", Kind);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: missing "
+                    "element in field `result`",
+                    Kind);
         return false;
       }
       const auto* fb_element_value = fb_element->value();
       if (not fb_element_value) {
-        TENZIR_WARN("failed to restore `{}` aggregation instance: missing value for element in field `result`", Kind);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: missing "
+                    "value for element in field `result`",
+                    Kind);
         return false;
       }
       auto value = data{};
       if (auto err = unpack(*fb_element_value, value); err.valid()) {
-        TENZIR_WARN("failed to restore `{}` aggregation instance: {}", Kind, err);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: {}", Kind,
+                    err);
         return false;
       }
       counts_.emplace(std::move(value), fb_element->count());

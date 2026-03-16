@@ -71,12 +71,16 @@ public:
     const auto fb
       = flatbuffer<fbs::aggregation::FirstLast>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid FlatBuffer", name);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                  "FlatBuffer",
+                  name);
       return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field `result`", name);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field "
+                  "`result`",
+                  name);
       return false;
     }
     if (auto err = unpack(*fb_result, result_); err.valid()) {

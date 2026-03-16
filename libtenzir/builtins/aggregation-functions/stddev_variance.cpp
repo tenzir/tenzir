@@ -147,7 +147,9 @@ public:
     const auto fb
       = flatbuffer<fbs::aggregation::StddevVariance>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid FlatBuffer", name);
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                  "FlatBuffer",
+                  name);
       return false;
     }
     mean_ = (*fb)->result();
@@ -167,7 +169,8 @@ public:
         state_ = state::numeric;
         return true;
     }
-    TENZIR_WARN("failed to restore `{}` aggregation instance: unknown state value", name);
+    TENZIR_WARN(
+      "failed to restore `{}` aggregation instance: unknown state value", name);
     return false;
   }
 

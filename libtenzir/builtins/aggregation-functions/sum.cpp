@@ -159,12 +159,14 @@ public:
     const auto fb
       = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `sum` aggregation instance: invalid FlatBuffer");
+      TENZIR_WARN(
+        "failed to restore `sum` aggregation instance: invalid FlatBuffer");
       return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      TENZIR_WARN("failed to restore `sum` aggregation instance: missing field `result`");
+      TENZIR_WARN(
+        "failed to restore `sum` aggregation instance: missing field `result`");
       return false;
     }
     auto result = data{};
@@ -179,15 +181,19 @@ public:
       } else if constexpr (sum_t::can_have<T>) {
         sum_.emplace(x);
       } else {
-        TENZIR_WARN("failed to restore `sum` aggregation instance: invalid value for field `result`: `{}`", result);
+        TENZIR_WARN("failed to restore `sum` aggregation instance: invalid "
+                    "value for field `result`: `{}`",
+                    result);
         ok = false;
       }
     });
-    if (not ok)
+    if (not ok) {
       return false;
+    }
     const auto* fb_type = (*fb)->type();
     if (not fb_type) {
-      TENZIR_WARN("failed to restore `sum` aggregation instance: missing field `type`");
+      TENZIR_WARN(
+        "failed to restore `sum` aggregation instance: missing field `type`");
       return false;
     }
     const auto* fb_type_nested_root = (*fb)->type_nested_root();

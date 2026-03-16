@@ -186,7 +186,8 @@ using group_map
 
 struct bucket2 {
   std::vector<std::unique_ptr<aggregation_instance>> aggregations{};
-  std::vector<chunk_ptr> blobs_{}; // staging area for restore; empty during normal use
+  std::vector<chunk_ptr>
+    blobs_{}; // staging area for restore; empty during normal use
 
   friend auto inspect(auto& f, bucket2& x) -> bool {
     if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
@@ -194,8 +195,9 @@ struct bucket2 {
     } else {
       auto blobs = std::vector<chunk_ptr>{};
       blobs.reserve(x.aggregations.size());
-      for (const auto& aggr : x.aggregations)
+      for (const auto& aggr : x.aggregations) {
         blobs.push_back(aggr->save());
+      }
       return f.apply(blobs);
     }
   }
@@ -462,11 +464,9 @@ private:
       }
       return true;
     };
-    return f.object(x)
-      .on_load(on_load)
-      .fields(f.field("saw_input", x.saw_input_),
-              f.field("groups", x.groups_),
-              f.field("previous_values", x.previous_values_));
+    return f.object(x).on_load(on_load).fields(
+      f.field("saw_input", x.saw_input_), f.field("groups", x.groups_),
+      f.field("previous_values", x.previous_values_));
   }
 
   const config& cfg_;
@@ -818,8 +818,9 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
-    if (impl_)
+    if (impl_) {
       serde("state", *impl_);
+    }
   }
 
 private:

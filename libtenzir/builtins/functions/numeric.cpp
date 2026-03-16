@@ -193,7 +193,8 @@ public:
   auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::Count>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `count` aggregation instance: invalid FlatBuffer");
+      TENZIR_WARN(
+        "failed to restore `count` aggregation instance: invalid FlatBuffer");
       return false;
     }
     count_ = (*fb)->result();
@@ -343,7 +344,8 @@ public:
 
   auto restore(chunk_ptr chunk) noexcept -> bool override {
     TENZIR_UNUSED(chunk);
-    TENZIR_WARN("restoring `quantile` aggregation instance from snapshot is not yet implemented");
+    TENZIR_WARN("restoring `quantile` aggregation instance from snapshot is "
+                "not yet implemented");
     return false;
   }
 

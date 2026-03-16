@@ -81,7 +81,8 @@ public:
     const auto fb
       = flatbuffer<fbs::aggregation::AnyAll>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `any` aggregation instance: invalid FlatBuffer");
+      TENZIR_WARN(
+        "failed to restore `any` aggregation instance: invalid FlatBuffer");
       return false;
     }
     any_ = (*fb)->result();
@@ -96,7 +97,8 @@ public:
         state_ = state::nulled;
         return true;
     }
-    TENZIR_WARN("failed to restore `any` aggregation instance: unknown state value");
+    TENZIR_WARN(
+      "failed to restore `any` aggregation instance: unknown state value");
     return false;
   }
 

@@ -106,24 +106,28 @@ public:
     const auto fb
       = flatbuffer<fbs::aggregation::CollectDistinct>::make(std::move(chunk));
     if (not fb) {
-      TENZIR_WARN("failed to restore `distinct` aggregation instance: invalid FlatBuffer");
+      TENZIR_WARN("failed to restore `distinct` aggregation instance: invalid "
+                  "FlatBuffer");
       return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      TENZIR_WARN("failed to restore `distinct` aggregation instance: missing field `result`");
+      TENZIR_WARN("failed to restore `distinct` aggregation instance: missing "
+                  "field `result`");
       return false;
     }
     distinct_.clear();
     distinct_.reserve(fb_result->size());
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
-        TENZIR_WARN("failed to restore `distinct` aggregation instance: missing element in field `result`");
+        TENZIR_WARN("failed to restore `distinct` aggregation instance: "
+                    "missing element in field `result`");
         return false;
       }
       auto element = data{};
       if (auto err = unpack(*fb_element, element); err.valid()) {
-        TENZIR_WARN("failed to restore `distinct` aggregation instance: {}", err);
+        TENZIR_WARN("failed to restore `distinct` aggregation instance: {}",
+                    err);
         return false;
       }
       distinct_.insert(std::move(element));
