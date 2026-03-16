@@ -167,6 +167,7 @@ jobs:
           BUILDX_GIT_LABELS: full
           COSIGN_PASSWORD: ${{ secrets.CONTAINER_SIGNING_KEY_PASSWORD }}
         run: |
+          trap 'rm -f /tmp/signing-key.pem' EXIT
           echo "${{ secrets.CONTAINER_SIGNING_KEY }}" > /tmp/signing-key.pem
           jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
@@ -198,4 +199,3 @@ jobs:
               cosign sign --yes --key /tmp/signing-key.pem "${image_by_digest}"
             done
           done
-          rm -f /tmp/signing-key.pem
