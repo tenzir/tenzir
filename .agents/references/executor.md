@@ -50,6 +50,56 @@ operator class.
 
 Use `co_match` instead of `match` — see `variant-access.md`.
 
+### Message-queue coordination
+
+Helper tasks must not mutate operator members. Instead, define a typed message
+variant and a bounded queue. The helper writes messages; `process_task()` is
+the single place that updates operator state.
+
+Reference implementations: `accept_tcp.cpp`, `from_tcp.cpp`, `serve_tcp.cpp`,
+`to_tcp.cpp` under `libtenzir/builtins/operators/`.
+
+```cpp
+// Define one message per event kind the operator cares about.
+struct Accepted { Box<folly::coro::Transport> client; };
+struct ConnectionClosed { uint64_t conn_id; Option<std::string> error; };
+using Message = variant<Accepted, ConnectionClosed>;
+using MessageQueue = folly::coro::BoundedQueue<Message>;
+```
+
+- `await_task()` dequeues the next message.
+- `process_task()` dispatches it with `co_match` and updates members.
+- The queue provides backpressure for free.
+
+### Lifecycle modeling
+
+Use an enum, not booleans. A `done_` flag hides an incomplete state machine as
+soon as a second task or shutdown path appears.
+
+```cpp
+enum class Lifecycle { running, draining, done };
+```
+
+Transition in `process_task()` and `finalize()`. Check in `state()`.
+
+### Cancellation
+
+Wrap long-running loops with `folly::CancellationSource`:
+
+```cpp
+co_await folly::coro::co_withCancellation(cancel_.getToken(), accept_loop());
+```
+
+Inside helpers, obtain the token with
+`co_await folly::coro::co_current_cancellation_token` and check it at loop
+boundaries. Shutdown sequence:
+
+1. Call `cancel_.requestCancellation()`.
+2. Close or cancel the I/O object on its owning executor.
+3. Wait for the helper to finish (notification or RAII guard).
+
+Do not add a second `stop_` flag—cancellation tokens already express this.
+
 ## Patterns
 
 ### Streaming (head, filter)
