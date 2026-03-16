@@ -137,7 +137,10 @@ public:
           release_connection_slot();
           co_return;
         }
-        co_await add_client(std::move(accepted.client), ctx.dh());
+        TENZIR_DEBUG("accepted client {}",
+                     accepted.client->getPeerAddress().describe());
+        clients_.push_back(std::move(accepted.client));
+        co_return;
       },
       [&](Payload payload) -> Task<void> {
         if (lifecycle_ != Lifecycle::running or not payload.chunk
@@ -283,41 +286,6 @@ private:
     }
   }
 
-  auto add_client(Box<folly::coro::Transport> client, diagnostic_handler& dh)
-    -> Task<void> {
-    auto release_connection_slot_guard = folly::makeGuard([&] {
-      release_connection_slot();
-    });
-    auto peer = client->getPeerAddress().describe();
-    if (lifecycle_ != Lifecycle::running) {
-      close_client(std::move(client));
-      co_return;
-    }
-    if (tls_context_) {
-      try {
-        client = Box<folly::coro::Transport>{
-          co_await upgrade_transport_to_tls_server(std::move(*client),
-                                                   tls_context_)};
-      } catch (folly::AsyncSocketException const& ex) {
-        diagnostic::warning("TLS handshake failed")
-          .primary(args_.endpoint.source)
-          .note("peer: {}", peer)
-          .note("reason: {}", ex.what())
-          .hint("verify TLS settings and certificates on both sides")
-          .emit(dh);
-        co_return;
-      }
-    }
-    if (lifecycle_ != Lifecycle::running) {
-      close_client(std::move(client));
-      co_return;
-    }
-    TENZIR_DEBUG("accepted client {}", client->getPeerAddress().describe());
-    clients_.push_back(std::move(client));
-    release_connection_slot_guard.dismiss();
-    co_return;
-  }
-
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
@@ -349,6 +317,35 @@ private:
         auto release_connection_slot_guard = folly::makeGuard([&] {
           release_connection_slot();
         });
+        if (tls_context_) {
+          try {
+            // TODO: Move TLS handshakes into an async preparation stage that
+            // posts ready clients back into the queue without introducing
+            // shared mutable state. The current conservative approach keeps
+            // fan-out non-blocking, but serializes the accept loop on
+            // handshake work.
+            client = Box<folly::coro::Transport>{
+              co_await upgrade_transport_to_tls_server(std::move(*client),
+                                                       tls_context_)};
+          } catch (folly::AsyncSocketException const& ex) {
+            if (cancellation_token.isCancellationRequested()
+                or lifecycle_ != Lifecycle::running) {
+              co_return;
+            }
+            diagnostic::warning("TLS handshake failed")
+              .primary(args_.endpoint.source)
+              .note("peer: {}", peer)
+              .note("reason: {}", ex.what())
+              .hint("verify TLS settings and certificates on both sides")
+              .emit(dh);
+            continue;
+          }
+        }
+        if (cancellation_token.isCancellationRequested()
+            or lifecycle_ != Lifecycle::running) {
+          close_client(std::move(client));
+          co_return;
+        }
         TENZIR_DEBUG("serve_tcp: accepted {}", peer);
         co_await message_queue_->enqueue(Accepted{std::move(client)});
         release_connection_slot_guard.dismiss();
