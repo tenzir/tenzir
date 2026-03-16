@@ -42,7 +42,6 @@
 #include <algorithm>
 #include <ranges>
 #include <utility>
-#include <variant>
 
 namespace tenzir::plugins::summarize {
 
@@ -185,9 +184,9 @@ using group_map
   = tsl::robin_map<group_by_key, Value, group_by_key_hash, group_by_key_equal>;
 
 struct bucket2 {
-  std::vector<std::unique_ptr<aggregation_instance>> aggregations{};
+  std::vector<std::unique_ptr<aggregation_instance>> aggregations;
   std::vector<chunk_ptr>
-    blobs_{}; // staging area for restore; empty during normal use
+    blobs_; // staging area for restore; empty during normal use
 
   friend auto inspect(auto& f, bucket2& x) -> bool {
     if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
@@ -205,35 +204,40 @@ struct bucket2 {
 
 class implementation2 {
 public:
-  explicit implementation2(const config& cfg, session ctx)
-    : cfg_{cfg}, ctx_{ctx} {
+  implementation2() = default;
+
+  explicit implementation2(config cfg) : cfg_{std::move(cfg)} {
   }
 
-  auto make_bucket() -> bucket2 {
+  auto cfg() const -> const config& {
+    return cfg_;
+  }
+
+  auto make_bucket(session ctx) -> bucket2 {
     auto bucket = bucket2{};
     for (const auto& aggr : cfg_.aggregates) {
       // We already checked the cast and instantiation before.
       const auto* fn
-        = dynamic_cast<const aggregation_plugin*>(&ctx_.reg().get(aggr.call));
+        = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
       TENZIR_ASSERT(fn);
       bucket.aggregations.push_back(
-        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx_)
+        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx)
           .unwrap());
     }
     return bucket;
   }
 
-  void add(const table_slice& slice) {
+  void add(const table_slice& slice, session ctx) {
     saw_input_ = true;
     auto group_values = std::vector<multi_series>{};
     for (auto& group : cfg_.groups) {
-      group_values.push_back(eval(group.expr.inner(), slice, ctx_));
+      group_values.push_back(eval(group.expr.inner(), slice, ctx));
     }
     auto key = group_by_key_view{};
     key.resize(cfg_.groups.size());
     auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
       for (auto&& aggr : group.aggregations) {
-        aggr->update(subslice(slice, begin, end), ctx_);
+        aggr->update(subslice(slice, begin, end), ctx);
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
@@ -243,7 +247,7 @@ public:
       }
       auto it = groups_.find(key);
       if (it == groups_.end()) {
-        it = groups_.emplace_hint(it, materialize(key), make_bucket());
+        it = groups_.emplace_hint(it, materialize(key), make_bucket(ctx));
       }
       return &it.value();
     };
@@ -266,11 +270,11 @@ public:
     update_group(*current_group, current_begin, total_rows);
   }
 
-  auto flush() -> std::vector<table_slice> {
-    return flush(false);
+  auto flush(session ctx) -> std::vector<table_slice> {
+    return flush(false, ctx);
   }
 
-  auto flush(bool force) -> std::vector<table_slice> {
+  auto flush(bool force, session ctx) -> std::vector<table_slice> {
     // Avoid emitting before any input arrived unless explicitly forced (used
     // for final emission).
     if (not force and not saw_input_) {
@@ -278,25 +282,15 @@ public:
     }
     if (cfg_.mode == "reset") {
       // Emit all groups and reset aggregations
-      auto result = finish_impl();
+      auto result = finish_impl(ctx);
       for (auto it = groups_.begin(); it != groups_.end(); ++it) {
-        auto& bucket = it.value();
-        bucket.aggregations.clear();
-        for (const auto& aggr : cfg_.aggregates) {
-          const auto* fn = dynamic_cast<const aggregation_plugin*>(
-            &ctx_.reg().get(aggr.call));
-          TENZIR_ASSERT(fn);
-          bucket.aggregations.push_back(
-            fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
-                                 ctx_)
-              .unwrap());
-        }
+        it.value().aggregations = make_bucket(ctx).aggregations;
       }
       return result;
     }
     if (cfg_.mode == "cumulative") {
       // Emit all groups and keep aggregations
-      return finish_impl();
+      return finish_impl(ctx);
     }
     TENZIR_ASSERT(cfg_.mode == "update");
     // Emit only groups where values changed
@@ -320,17 +314,17 @@ public:
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events.
     if (cfg_.groups.empty() and groups_.empty()) {
-      b.data(finish_group(group_by_key{}, make_bucket()));
+      b.data(finish_group(group_by_key{}, make_bucket(ctx)));
     }
     return b.finish_as_table_slice();
   }
 
-  auto finish() -> std::vector<table_slice> {
+  auto finish(session ctx) -> std::vector<table_slice> {
     if (cfg_.mode == "update") {
       // Reuse flush to honor change detection for the final emission.
-      return flush(true);
+      return flush(true, ctx);
     }
-    return finish_impl();
+    return finish_impl(ctx);
   }
 
   auto take_restore_failed() noexcept -> bool {
@@ -345,14 +339,14 @@ public:
   }
 
 private:
-  auto finish_impl() -> std::vector<table_slice> {
+  auto finish_impl(session ctx) -> std::vector<table_slice> {
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events, then we create a new
     // bucket and just finish it. That way, `from [] | summarize count()` will
     // return a single event showing a count of zero.
     if (cfg_.groups.empty() and groups_.empty()) {
       auto b = series_builder{};
-      b.data(finish_group(group_by_key{}, make_bucket()));
+      b.data(finish_group(group_by_key{}, make_bucket(ctx)));
       return b.finish_as_table_slice();
     }
     // TODO: Group by schema again to make this more efficient.
@@ -445,7 +439,13 @@ private:
 
   friend auto inspect(auto& f, implementation2& x) -> bool {
     auto on_load = [&]() noexcept {
-      const auto expected = x.make_bucket().aggregations.size();
+      // Use a null diagnostic handler: make_bucket() is called only to
+      // instantiate fresh aggregation objects for restore; the pipeline was
+      // already validated at compile time so no real diagnostics are expected.
+      auto null_dh = null_diagnostic_handler{};
+      auto null_sp = session_provider::make(null_dh);
+      const auto expected
+        = x.make_bucket(null_sp.as_session()).aggregations.size();
       for (auto it = x.groups_.begin(); it != x.groups_.end(); ++it) {
         auto& bucket = it.value();
         if (bucket.blobs_.size() != expected) {
@@ -455,7 +455,7 @@ private:
           x.discard_snapshot();
           return true;
         }
-        auto fresh = x.make_bucket();
+        auto fresh = x.make_bucket(null_sp.as_session());
         for (auto i = size_t{0}; i < bucket.blobs_.size(); ++i) {
           if (not fresh.aggregations[i]->restore(std::move(bucket.blobs_[i]))) {
             TENZIR_WARN("summarize: failed to restore aggregation state; "
@@ -470,12 +470,20 @@ private:
       return true;
     };
     return f.object(x).on_load(on_load).fields(
-      f.field("saw_input", x.saw_input_), f.field("groups", x.groups_),
+      f.field("cfg", x.cfg_), f.field("saw_input", x.saw_input_),
+      f.field("groups", x.groups_),
       f.field("previous_values", x.previous_values_));
   }
 
-  const config& cfg_;
-  session ctx_;
+  friend auto inspect(auto& f, std::unique_ptr<implementation2>& x) -> bool {
+    if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
+      x = std::make_unique<implementation2>();
+    }
+    TENZIR_ASSERT(x);
+    return inspect(f, *x);
+  }
+
+  config cfg_;
   group_map<bucket2> groups_;
   bool saw_input_ = false;
   bool restore_failed_ = false;
@@ -526,27 +534,27 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
     }
   };
 
-  auto add_aggregate
-    = [&](std::optional<ast::field_path> dest, ast::function_call call) {
-        auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
-        if (not fn) {
-          diagnostic::error("function does not support aggregations")
-            .primary(call.fn)
-            .hint("if you want to group by this, use assignment before")
-            .docs("https://docs.tenzir.com/operators/summarize")
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-        // Argument validation via make_aggregation is intentionally deferred:
-        // args may contain unresolved let-bindings when called from compile().
-        // Validation is performed by validate_aggregates(), which is called
-        // directly in plugin2::make() and in summarize_ir::substitute() after
-        // substitution has resolved all let-binding references.
-        auto index = detail::narrow<int64_t>(cfg.aggregates.size());
-        cfg.indices.push_back(index);
-        cfg.aggregates.emplace_back(std::move(dest), std::move(call));
-      };
+  auto add_aggregate = [&](std::optional<ast::field_path> dest,
+                           ast::function_call call) {
+    auto* fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
+    if (not fn) {
+      diagnostic::error("function does not support aggregations")
+        .primary(call.fn)
+        .hint("if you want to group by this, use assignment before")
+        .docs("https://docs.tenzir.com/operators/summarize")
+        .emit(ctx);
+      failed = true;
+      return;
+    }
+    // Argument validation via make_aggregation is intentionally deferred:
+    // args may contain unresolved let-bindings when called from compile().
+    // Validation is performed by validate_aggregates(), which is called
+    // directly in plugin2::make() and in summarize_ir::substitute() after
+    // substitution has resolved all let-binding references.
+    auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+    cfg.indices.push_back(index);
+    cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+  };
 
   auto add_group
     = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
@@ -682,7 +690,8 @@ class summarize_operator2 final : public crtp_operator<summarize_operator2> {
 public:
   summarize_operator2() = default;
 
-  explicit summarize_operator2(config cfg) : cfg_{std::move(cfg)} {
+  explicit summarize_operator2(config cfg)
+    : impl_{std::make_unique<implementation2>(std::move(cfg))} {
   }
 
   auto name() const -> std::string override {
@@ -692,53 +701,56 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    TENZIR_ASSERT(impl_);
     // TODO: Do not create a new session here.
     auto provider = session_provider::make(ctrl.diagnostics());
-    auto impl = implementation2{cfg_, provider.as_session()};
+    auto& impl = *impl_;
 
-    if (cfg_.frequency) {
+    if (impl.cfg().frequency) {
       // Periodic emission mode.
       auto pending_flush = false;
       detail::weak_run_delayed_loop(
-        &ctrl.self(), *cfg_.frequency,
+        &ctrl.self(), *impl.cfg().frequency,
         [&] {
           pending_flush = true;
           ctrl.set_waiting(false);
         },
         false);
-      for (auto slice : input) {
+      auto session = provider.as_session();
+      for (const auto& slice : input) {
         // Drain pending flushes that were scheduled while idle.
         if (std::exchange(pending_flush, false)) {
-          for (auto result : impl.flush()) {
+          for (auto result : impl.flush(session)) {
             co_yield std::move(result);
           }
         }
         if (slice.rows() == 0) {
           co_yield {};
         } else {
-          impl.add(slice);
+          impl.add(slice, session);
         }
       }
       // Flush anything that may have been scheduled while consuming the last
       // slices before producing the final result.
       if (std::exchange(pending_flush, false)) {
-        for (auto result : impl.flush()) {
+        for (auto result : impl.flush(session)) {
           co_yield std::move(result);
         }
       }
       // Final emission when input ends.
-      for (auto result : impl.finish()) {
+      for (auto result : impl.finish(session)) {
         co_yield std::move(result);
       }
     } else {
+      auto session = provider.as_session();
       for (auto&& slice : input) {
         if (slice.rows() == 0) {
           co_yield {};
           continue;
         }
-        impl.add(slice);
+        impl.add(slice, session);
       }
-      for (auto slice : impl.finish()) {
+      for (auto slice : impl.finish(session)) {
         co_yield std::move(slice);
       }
     }
@@ -751,28 +763,29 @@ public:
   }
 
   friend auto inspect(auto& f, summarize_operator2& x) -> bool {
-    return f.apply(x.cfg_);
+    return f.apply(x.impl_);
   }
 
 private:
-  config cfg_;
+  // mutable because operator() is const but impl_ accumulates aggregation state.
+  mutable std::unique_ptr<implementation2> impl_;
 };
 
 class Summarize final : public Operator<table_slice, table_slice> {
 public:
-  explicit Summarize(config cfg) : cfg_{std::move(cfg)} {
+  explicit Summarize(config cfg)
+    : impl_{std::make_unique<implementation2>(std::move(cfg))} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     provider_.emplace(session_provider::make(ctx.dh()));
-    impl_ = std::make_unique<implementation2>(cfg_, provider_->as_session());
     co_return;
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (impl_ && impl_->take_restore_failed()) {
+    if (impl_->take_restore_failed()) {
       diagnostic::warning("summarize aggregation state could not be restored "
                           "from snapshot; restarting from empty state")
         .emit(provider_->as_session());
@@ -781,7 +794,7 @@ public:
     if (input.rows() == 0) {
       co_return;
     }
-    impl_->add(input);
+    impl_->add(input, provider_->as_session());
     co_return;
   }
 
@@ -789,7 +802,7 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     co_await flush(push);
-    for (auto& slice : impl_->finish()) {
+    for (auto& slice : impl_->finish(provider_->as_session())) {
       co_await push(std::move(slice));
     }
     co_return FinalizeBehavior::done;
@@ -802,14 +815,14 @@ public:
   /// Without a frequency the default implementation waits forever.
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (not cfg_.frequency) {
+    if (not impl_->cfg().frequency) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
     if (next_flush_ == time::min()) {
-      next_flush_ = time::clock::now() + *cfg_.frequency;
+      next_flush_ = time::clock::now() + *impl_->cfg().frequency;
     } else {
-      next_flush_ += *cfg_.frequency;
+      next_flush_ += *impl_->cfg().frequency;
     }
     co_await sleep_until(next_flush_);
     pending_flush_ = true;
@@ -823,29 +836,24 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
-    if (impl_) {
-      serde("state", *impl_);
-    }
+    serde("state", *impl_);
   }
 
 private:
-  // Push a summary, if a pending_flush_ is set.
-  // This only happen if frequency is set.
+  // Push a summary if a pending_flush_ is set.
+  // This only happens if frequency is set.
   auto flush(Push<table_slice>& push) -> Task<void> {
     if (not std::exchange(pending_flush_, false)) {
       co_return;
     }
-    for (auto& slice : impl_->flush()) {
+    for (auto& slice : impl_->flush(provider_->as_session())) {
       co_await push(std::move(slice));
     }
   }
 
-  config cfg_;
-  // provider_ must outlive impl_ because impl_ holds a session that
-  // references provider_.  Member destruction order (reverse of declaration)
-  // guarantees impl_ is destroyed before provider_.
-  std::optional<session_provider> provider_;
   std::unique_ptr<implementation2> impl_;
+  // initialised in start() and reused across all calls
+  std::optional<session_provider> provider_;
   /// Next wall-clock deadline for periodic flush. Mutable because await_task()
   /// is const but advances the schedule each time it is awaited.
   mutable time next_flush_ = time::min();
