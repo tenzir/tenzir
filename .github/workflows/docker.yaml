@@ -177,20 +177,25 @@ jobs:
                 --tag "${image}" \
                 "${registry}/tenzir/${name}:amd64-${tag}" \
                 "${registry}/tenzir/${name}:arm64-${tag}"
+              # Resolve the tag to a digest for signing. Cosign warns when
+              # signing by tag because the tag could be moved between the
+              # manifest push and the signing step.
+              digest=$(docker buildx imagetools inspect "${image}" --format '{{.Manifest.Digest}}')
+              image_by_digest="${registry}/tenzir/${name}@${digest}"
               # Keyless signing uses GitHub Actions OIDC identity.
               # Verify with:
               #   cosign verify \
               #     --certificate-identity-regexp="https://github.com/tenzir/tenzir/.*" \
               #     --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
               #     <image>
-              echo "::notice Signing ${image} with Cosign (keyless)"
-              cosign sign --yes "${image}"
+              echo "::notice Signing ${image_by_digest} with Cosign (keyless)"
+              cosign sign --yes "${image_by_digest}"
               # Sigstore-format signing for Podman automatic verification.
               # Signatures are stored as OCI artifacts directly in the registry.
               # Users configure /etc/containers/policy.json with the public key
               # and set use-sigstore-attachments: true in registries.d.
-              echo "::notice Signing ${image} with sigstore format for Podman"
-              cosign sign --yes --key /tmp/signing-key.pem "${image}"
+              echo "::notice Signing ${image_by_digest} with sigstore format for Podman"
+              cosign sign --yes --key /tmp/signing-key.pem "${image_by_digest}"
             done
           done
           rm -f /tmp/signing-key.pem
