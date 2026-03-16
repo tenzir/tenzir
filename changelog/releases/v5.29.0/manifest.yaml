@@ -1,0 +1,6 @@
+created: 2026-03-16
+title: Expanded parsing support for legacy syslog and Suricata 8
+intro: >-
+  This release improves log ingestion by extracting structured data from legacy syslog
+  messages and aligning the bundled schema with Suricata 8. It also republishes the
+  previous release after an error in the earlier release process.
