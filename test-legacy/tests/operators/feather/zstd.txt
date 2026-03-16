@@ -19,10 +19,10 @@
   count: 21,
 }
 {
-  service: "ftp-data",
+  service: "ftp",
   count: 2,
 }
 {
-  service: "ftp",
+  service: "ftp-data",
   count: 2,
 }
