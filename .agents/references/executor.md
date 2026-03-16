@@ -52,16 +52,20 @@ Use `co_match` instead of `match` — see `variant-access.md`.
 
 ### Message-queue coordination
 
-Helper tasks must not mutate operator members. Instead, define a typed message
-variant and a bounded queue. The helper writes messages; `process_task()` is
-the single place that updates operator state.
+Helper tasks must not mutate operator members. This in particular applies to
+tasks spawned with `ctx.spawn_task()`, as well as `await_task()`, as those tasks
+run concurrently with the other functions. When more than a single task needs to
+be awaited on, use a bounded queue to read from in `await_task()` which is
+written to by the other tasks. The messages then arrive in `process_task()`,
+which is then allowed to update operator state. Similarly, communication from
+`process_task()` and the other operator functions such as `process()` to
+asynchronous tasks should be done via channels.
 
-Reference implementations: `accept_tcp.cpp`, `from_tcp.cpp`, `serve_tcp.cpp`,
-`to_tcp.cpp` under `libtenzir/builtins/operators/`.
+References: `accept_tcp.cpp`, `from_tcp.cpp`, `serve_tcp.cpp`, `to_tcp.cpp`.
 
 ```cpp
 // Define one message per event kind the operator cares about.
-struct Accepted { Box<folly::coro::Transport> client; };
+struct Accepted { folly::coro::Transport client; };
 struct ConnectionClosed { uint64_t conn_id; Option<std::string> error; };
 using Message = variant<Accepted, ConnectionClosed>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
@@ -71,34 +75,27 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 - `process_task()` dispatches it with `co_match` and updates members.
 - The queue provides backpressure for free.
 
-### Lifecycle modeling
-
-Use an enum, not booleans. A `done_` flag hides an incomplete state machine as
-soon as a second task or shutdown path appears.
-
-```cpp
-enum class Lifecycle { running, draining, done };
-```
-
-Transition in `process_task()` and `finalize()`. Check in `state()`.
-
 ### Cancellation
 
-Wrap long-running loops with `folly::CancellationSource`:
+Do not customize cancellation unless necessary. The framework will by default
+cancel all tasks when the pipeline is stopped. You must customize cancellation
+if it's needed for the operator to perform correctly. For example, if a HTTP
+operator wants to stop accepting connections, it could make sense to stop the
+loop that calls `accept` with a custom `folly::CancellationSource`.
 
 ```cpp
-co_await folly::coro::co_withCancellation(cancel_.getToken(), accept_loop());
+ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop()));
 ```
 
-Inside helpers, obtain the token with
-`co_await folly::coro::co_current_cancellation_token` and check it at loop
-boundaries. Shutdown sequence:
-
-1. Call `cancel_.requestCancellation()`.
-2. Close or cancel the I/O object on its owning executor.
-3. Wait for the helper to finish (notification or RAII guard).
-
 Do not add a second `stop_` flag—cancellation tokens already express this.
+
+Usually, you do not need to check for cancellation explicitly, as many async
+operations implicitly do so. You may `co_await folly::coro::co_safe_point` at
+the top of loops if needed.
+
+Do not attempt to catch cancellation, neither as an exception nor with
+`co_awaitTry`, unless truly necessary. Usually, cancellation should propagate
+necessary to the outermost task.
 
 ## Patterns
 

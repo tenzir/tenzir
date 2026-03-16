@@ -59,10 +59,11 @@ code should follow the new conventions.
 - One coroutine or callback owns a piece of mutable state. Do not share it.
 - Coordinate through bounded queues and typed message variants, not mutexes and
   shared fields.
-- Model lifecycle with an enum (`running`/`draining`/`done`), not boolean flags
-  like `done_` or `connected_`.
-- Shut down long-running loops with `folly::CancellationSource`, not a separate
-  stop flag.
+- Avoid polling asynchronous functions with timeouts.
+- As a corollary, do not use "stop flags" to signal termination for other tasks.
+  Instead, prefer cancellation through `folly::CancellationSource`, or if the
+  other task should not be cancelled, a proper async notification mechanism (for
+  example: event in an async queue, or `Notify`).
 - Atomics and mutexes are a last resort. When unavoidable, keep the shared
   surface minimal and document why a queue does not work.
 - See `executor.md` for operator-specific patterns.
