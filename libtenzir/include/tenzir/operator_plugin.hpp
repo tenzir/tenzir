@@ -148,6 +148,8 @@ struct Description {
   std::vector<Named> named;
   std::optional<Validator> validator;
   std::optional<Setter<ir::optimize_filter>> set_filter;
+  std::optional<Setter<event_order>> set_order;
+  bool order_invariant = false;
   std::optional<Setter<location>> set_operator_location;
   // FIXME: Document.
   std::optional<Spawner> spawner;
@@ -893,12 +895,18 @@ public:
   auto optimize(F&& f) -> Description;
 
   auto without_optimize() -> Description {
-    // TODO
     return std::move(desc_);
   }
 
   auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
+    TENZIR_ASSERT(not desc_.set_filter);
     desc_.set_filter = make_setter(ptr);
+    return std::move(desc_);
+  }
+
+  auto optimize_order(event_order Args::* ptr) -> Description {
+    TENZIR_ASSERT(not desc_.set_order);
+    desc_.set_order = make_setter(ptr);
     return std::move(desc_);
   }
 
@@ -909,7 +917,7 @@ public:
   }
 
   auto order_invariant() -> Description {
-    // TODO
+    desc_.order_invariant = true;
     return std::move(desc_);
   }
 

@@ -418,6 +418,9 @@ public:
     } else {
       TENZIR_ASSERT(filter_.empty());
     }
+    if (desc_->set_order) {
+      (*desc_->set_order)(args, optimize_order_);
+    }
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
     }
@@ -598,14 +601,23 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
+    auto const order_invariant = desc_->order_invariant;
+    if (desc_->set_order and order > optimize_order_) {
+      optimize_order_ = order;
+    }
     if (desc_->set_filter) {
       filter_.append_range(filter | std::views::as_rvalue);
       auto replacement = std::vector<Box<Operator>>{};
       replacement.emplace_back(std::move(*this));
-      return {ir::optimize_filter{}, event_order::ordered,
+      return {ir::optimize_filter{},
+              order_invariant ? order : event_order::ordered,
               ir::pipeline{{}, std::move(replacement)}};
     }
-    return std::move(*this).Operator::optimize(std::move(filter), order);
+    auto result = std::move(*this).Operator::optimize(std::move(filter), order);
+    if (order_invariant and order > result.order) {
+      result.order = order;
+    }
+    return result;
   }
 
   auto main_location() const -> location override {
@@ -617,6 +629,7 @@ private:
     return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
                               f.field("args", x.args_),
                               f.field("filter", x.filter_),
+                              f.field("optimize_order", x.optimize_order_),
                               f.field("named_args", x.named_args_),
                               f.field("pipeline", x.pipeline_));
   }
@@ -635,6 +648,8 @@ private:
 
   /// The filter passed to `optimize` (only if the operator wants to consume it).
   ir::optimize_filter filter_;
+  /// The order passed to `optimize` (only if the operator wants to consume it).
+  event_order optimize_order_ = event_order::ordered;
 
   /// The object describing the available parameters.
   SharedDescription desc_;

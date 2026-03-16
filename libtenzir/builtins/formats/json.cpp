@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async/task.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/json_parser.hpp"
@@ -1147,7 +1148,7 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
-  bool unordered = false;
+  event_order order = event_order::ordered;
   multi_series_builder::options msb_options;
 };
 
@@ -1159,6 +1160,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    args_.msb_options.settings.ordered = args_.order == event_order::ordered;
     parser_ = std::make_unique<default_parser>(
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
@@ -1226,6 +1228,13 @@ public:
   }
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    if (args_.jobs > 0 and args_.order != event_order::unordered) {
+      diagnostic::error("`_jobs` requires unordered downstream")
+        .hint("wrap this operator in `unordered { ... }`")
+        .emit(ctx.dh());
+      co_await wait_forever();
+      co_return;
+    }
     if (args_.jobs > 0 and finished_workers_ < args_.jobs) {
       // Parallel mode: workers have their own parsers.
       auto capacity = static_cast<uint32_t>(args_.jobs * 2);
@@ -1240,10 +1249,9 @@ public:
       }
       co_return;
     }
-    auto msb_options = args_.msb_options;
-    msb_options.settings.ordered = not args_.unordered;
+    args_.msb_options.settings.ordered = args_.order == event_order::ordered;
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
-                                              msb_options);
+                                              args_.msb_options);
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -1587,7 +1595,7 @@ public:
     auto d = Describer<ReadJsonArgs, ReadJson>{};
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
     d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
-    return d.without_optimize();
+    return d.optimize_order(&ReadJsonArgs::order);
   }
 
   auto make(invocation inv, session ctx) const
@@ -1629,8 +1637,6 @@ public:
                    .msb_options = {}}};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    // TODO: Integrate with the `unordered` operator instead.
-    auto unordered = d.named("_unordered", &ReadJsonArgs::unordered);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (auto j = ctx.get(jobs); j and *j == 0) {
@@ -1638,14 +1644,9 @@ public:
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
-      if (auto j = ctx.get(jobs); j and *j > 0 and not ctx.get(unordered)) {
-        diagnostic::error("`_jobs` requires `_unordered`")
-          .primary(ctx.get_location(jobs).value_or(location::unknown))
-          .emit(ctx);
-      }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize_order(&ReadJsonArgs::order);
   }
 
   auto make(invocation inv, session ctx) const
@@ -1695,7 +1696,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize_order(&ReadJsonArgs::order);
   }
 
   auto make(invocation inv, session ctx) const
@@ -1757,7 +1758,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize_order(&ReadJsonArgs::order);
   }
 
   auto make(invocation inv, session ctx) const

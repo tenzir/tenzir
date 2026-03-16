@@ -24,6 +24,7 @@
 +          right: constant int64 42 @ 35..39
 +        }
 +      ],
++      optimize_order: "ordered",
 +      named_args: [
 +        
 +      ]
@@ -42,6 +43,7 @@
 +      filter: [
          
        ],
+       optimize_order: "ordered",
        named_args: [
          
        ]
