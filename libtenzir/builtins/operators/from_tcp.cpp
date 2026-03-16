@@ -186,7 +186,7 @@ public:
           {"ip", peer_addr.getAddressStr()},
           {"port", int64_t{peer_addr.getPort()}},
         };
-        auto bytes_read = ctx.make_counter(
+        auto bytes_read_counter = ctx.make_counter(
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     peer_addr.getAddressStr())},
           MetricsDirection::read, MetricsVisibility::external_);
@@ -211,7 +211,7 @@ public:
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
           read_loop(conn_id, *current_connection_, std::move(message_queue),
-                    std::move(bytes_read))));
+                    std::move(bytes_read_counter))));
       },
       [&](Payload payload) -> Task<void> {
         if (not pipeline_ or not current_conn_id_
@@ -280,7 +280,7 @@ private:
 
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
-                        MetricsCounter bytes_counter) -> Task<void> {
+                        MetricsCounter bytes_read_counter) -> Task<void> {
     auto read_error = std::string{};
     auto cancellation_token
       = co_await folly::coro::co_current_cancellation_token;
@@ -292,7 +292,7 @@ private:
         if (not read_result) {
           break;
         }
-        bytes_counter.add((*read_result)->size());
+        bytes_read_counter.add((*read_result)->size());
         co_await message_queue->enqueue(
           Payload{conn_id, std::move(*read_result)});
       } catch (const folly::AsyncSocketException& e) {

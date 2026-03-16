@@ -196,7 +196,7 @@ private:
           std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
           tls_context_, host_)};
         auto peer_addr = (*transport_)->getPeerAddress();
-        write_bytes_counter_ = ctx.make_counter(
+        bytes_write_counter_ = ctx.make_counter(
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     peer_addr.getAddressStr())},
           MetricsDirection::write, MetricsVisibility::external_);
@@ -236,7 +236,7 @@ private:
       auto write_error = Option<std::string>{};
       try {
         co_await folly::coro::co_withExecutor(evb_, (**transport_).write(data));
-        write_bytes_counter_.add(chunk->size());
+        bytes_write_counter_.add(chunk->size());
         reconnect_backoff_ = connect_initial_backoff;
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
@@ -268,7 +268,7 @@ private:
                                            message_queue_capacity};
   Option<Box<folly::coro::Transport>> transport_;
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
-  MetricsCounter write_bytes_counter_ = {};
+  MetricsCounter bytes_write_counter_ = {};
   bool done_ = false;
 };
 
