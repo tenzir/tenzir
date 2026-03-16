@@ -65,7 +65,9 @@ public:
     chunk_ptr chunk;
   };
 
-  using Message = variant<Accepted, Payload>;
+  struct DrainCheck {};
+
+  using Message = variant<Accepted, Payload, DrainCheck>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   enum class Lifecycle {
@@ -148,6 +150,10 @@ public:
           co_return;
         }
         co_await broadcast_payload(payload.chunk, ctx.dh());
+      },
+      [&](DrainCheck) -> Task<void> {
+        maybe_finish_draining();
+        co_return;
       });
   }
 
@@ -267,6 +273,11 @@ private:
     }
   }
 
+  auto release_connection_slot_and_notify() -> Task<void> {
+    release_connection_slot();
+    co_await message_queue_->enqueue(DrainCheck{});
+  }
+
   auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
     -> Task<void> {
     TENZIR_UNUSED(dh);
@@ -318,6 +329,8 @@ private:
           release_connection_slot();
         });
         if (tls_context_) {
+          auto tls_error = Option<std::string>{};
+          auto tls_cancelled = false;
           try {
             // TODO: Move TLS handshakes into an async preparation stage that
             // posts ready clients back into the queue without introducing
@@ -330,20 +343,33 @@ private:
           } catch (folly::AsyncSocketException const& ex) {
             if (cancellation_token.isCancellationRequested()
                 or lifecycle_ != Lifecycle::running) {
-              co_return;
+              tls_cancelled = true;
+            } else {
+              tls_error = ex.what();
             }
+          }
+          if (tls_cancelled) {
+            co_await release_connection_slot_and_notify();
+            release_connection_slot_guard.dismiss();
+            co_return;
+          }
+          if (tls_error) {
             diagnostic::warning("TLS handshake failed")
               .primary(args_.endpoint.source)
               .note("peer: {}", peer)
-              .note("reason: {}", ex.what())
+              .note("reason: {}", *tls_error)
               .hint("verify TLS settings and certificates on both sides")
               .emit(dh);
+            co_await release_connection_slot_and_notify();
+            release_connection_slot_guard.dismiss();
             continue;
           }
         }
         if (cancellation_token.isCancellationRequested()
             or lifecycle_ != Lifecycle::running) {
           close_client(std::move(client));
+          co_await release_connection_slot_and_notify();
+          release_connection_slot_guard.dismiss();
           co_return;
         }
         TENZIR_DEBUG("serve_tcp: accepted {}", peer);
