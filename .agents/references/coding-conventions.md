@@ -54,6 +54,19 @@ code should follow the new conventions.
 - Program defensively with `TENZIR_ASSERT` whenever it's not obvious
 - `TENZIR_ASSERT` is enabled in release builds, but don't put side effects there
 
+## Concurrency and async coordination
+
+- One coroutine or callback owns a piece of mutable state. Do not share it.
+- Coordinate through bounded queues and typed message variants, not mutexes and
+  shared fields.
+- Model lifecycle with an enum (`running`/`draining`/`done`), not boolean flags
+  like `done_` or `connected_`.
+- Shut down long-running loops with `folly::CancellationSource`, not a separate
+  stop flag.
+- Atomics and mutexes are a last resort. When unavoidable, keep the shared
+  surface minimal and document why a queue does not work.
+- See `executor.md` for operator-specific patterns.
+
 ## Other
 
 - Use `class` for template parameters; `typename` only for dependent types
