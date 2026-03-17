@@ -70,7 +70,8 @@ bool is_equal(const data& x, const data_view& y) {
       return std::ranges::equal(make_view(lhs), rhs);
     },
     [&](const pattern& lhs, const view<pattern>& rhs) {
-      return lhs.string() == rhs.string();
+      return lhs.string() == rhs.string()
+             && lhs.options().case_insensitive == rhs.case_insensitive();
     },
     [&](const list& lhs, const view<list>& rhs) {
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
