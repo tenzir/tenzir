@@ -456,12 +456,14 @@ type suricata.http2_stream = record {
   settings: list<suricata.http2_setting>,
   headers: list<suricata.http2_header>,
   error_code: string,
+  has_multiple: bool,
   priority: uint64
 }
 
 type suricata.http2 = suricata.component.common + record {
   tx_id: uint64 #index=hash,
   http2: record {
+    stream_id: uint64,
     request: suricata.http2_stream,
     response: suricata.http2_stream
   }
@@ -789,14 +791,26 @@ type suricata.modbus = suricata.component.common + record {
   tx_id: uint64 #index=hash,
   modbus: record {
     id: uint64,
-    transaction_id: uint64,
-    protocol_id: uint64,
-    unit_id: uint64,
-    function_code: string,
-    function_raw: uint64,
-    access_type: string,
-    category: string,
-    error_flags: string,
+    request: record {
+      transaction_id: uint64,
+      protocol_id: uint64,
+      unit_id: uint64,
+      function_code: string,
+      function_raw: uint64,
+      access_type: string,
+      category: string,
+      error_flags: string
+    },
+    response: record {
+      transaction_id: uint64,
+      protocol_id: uint64,
+      unit_id: uint64,
+      function_code: string,
+      function_raw: uint64,
+      access_type: string,
+      category: string,
+      error_flags: string
+    },
     exception: record {
       raw: uint64,
       code: string
@@ -872,14 +886,51 @@ type suricata.packet = suricata.component.common + record {
   }
 }
 
-type suricata.pgsql_startup_parameters = record {
-  user: string,
-  optional_parameters: list<string>
+type suricata.pgsql_optional_parameter = record {
+  application_name: string,
+  client_encoding: string,
+  database: string,
+  datestyle: string,
+  extra_float_digits: string,
+  options: string,
+  replication: string
 }
 
-type suricata.pgsql_copy_data = record {
-  field_count: uint64,
-  data_size: uint64
+type suricata.pgsql_startup_parameters = record {
+  user: string,
+  optional_parameters: list<suricata.pgsql_optional_parameter>
+}
+
+type suricata.pgsql_parameter_status = record {
+  application_name: string,
+  client_encoding: string,
+  date_style: string,
+  integer_datetimes: string,
+  interval_style: string,
+  is_superuser: string,
+  server_encoding: string,
+  server_version: string,
+  session_authorization: string,
+  standard_conforming_strings: string,
+  time_zone: string
+}
+
+type suricata.pgsql_copy_data_in = record {
+  data_size: uint64,
+  msg_count: uint64
+}
+
+type suricata.pgsql_copy_in_response = record {
+  columns: uint64
+}
+
+type suricata.pgsql_copy_out_response = record {
+  columns: uint64
+}
+
+type suricata.pgsql_copy_data_out = record {
+  data_size: uint64,
+  row_count: uint64
 }
 
 type suricata.pgsql = suricata.component.common + record {
@@ -898,7 +949,7 @@ type suricata.pgsql = suricata.component.common + record {
       secret_key: uint64,
       simple_query: string,
       startup_parameters: suricata.pgsql_startup_parameters,
-      copy_data_in: suricata.pgsql_copy_data
+      copy_data_in: suricata.pgsql_copy_data_in
     },
     response: record {
       authentication_md5_password: string,
@@ -908,13 +959,19 @@ type suricata.pgsql = suricata.component.common + record {
       data_size: uint64,
       field_count: uint64,
       message: string,
-      parameter_status: list<string>,
+      parameter_status: list<suricata.pgsql_parameter_status>,
       process_id: uint64,
       secret_key: uint64,
       ssl_accepted: bool,
-      copy_in_response: suricata.pgsql_copy_data,
-      copy_out_response: suricata.pgsql_copy_data,
-      copy_data_out: suricata.pgsql_copy_data
+      code: string,
+      file: string,
+      line: string,
+      routine: string,
+      severity_localizable: string,
+      severity_non_localizable: string,
+      copy_in_response: suricata.pgsql_copy_in_response,
+      copy_out_response: suricata.pgsql_copy_out_response,
+      copy_data_out: suricata.pgsql_copy_data_out
     }
   }
 }
