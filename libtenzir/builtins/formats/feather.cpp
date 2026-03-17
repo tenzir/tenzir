@@ -262,9 +262,17 @@ public:
     for (const auto& slice : slices_) {
       record_batches.push_back(wrap_record_batch(slice));
     }
-    const auto table = ::arrow::Table::FromRecordBatches(record_batches);
+    auto table = ::arrow::Table::FromRecordBatches(record_batches);
     if (not table.ok()) {
       return caf::make_error(ec::system_error, table.status().ToString());
+    }
+    // Attach origin metadata to the table schema.
+    {
+      auto metadata = table.ValueUnsafe()->schema()->metadata()
+                        ? table.ValueUnsafe()->schema()->metadata()->Copy()
+                        : std::make_shared<arrow::KeyValueMetadata>();
+      metadata->Append("TENZIR:store:origin", origin());
+      table = table.ValueUnsafe()->ReplaceSchemaMetadata(std::move(metadata));
     }
     auto output_stream
       = check(arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool()));
