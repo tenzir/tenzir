@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -66,6 +66,12 @@ struct ToTcpArgs {
 
 class ToTcp final : public Operator<table_slice, void> {
 public:
+  enum class Lifecycle {
+    running,
+    draining,
+    done,
+  };
+
   explicit ToTcp(ToTcpArgs args) : args_{std::move(args)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -82,7 +88,7 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        request_stop();
+        finish();
         co_return;
       }
       tls_context_ = std::move(*context);
@@ -91,7 +97,7 @@ public:
     TENZIR_ASSERT(evb_);
     auto pipeline = std::move(args_.printer.inner);
     if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      request_stop();
+      finish();
       co_return;
     }
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
@@ -101,23 +107,23 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
     if (not sub) {
-      request_stop();
+      finish();
       co_return;
     }
     auto pipeline = as<OpenPipeline<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
-      request_stop();
+      finish();
     }
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (done_ or not chunk or chunk->size() == 0) {
+    if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
       co_return;
     }
     co_await message_queue_->enqueue(std::move(chunk));
@@ -135,33 +141,36 @@ public:
     }
     if (not *chunk) {
       // A null chunk marks end-of-stream after all buffered payloads.
-      request_stop();
-      close_current_transport();
+      finish();
       co_return;
     }
-    if (done_ or (*chunk)->size() == 0) {
+    if (lifecycle_ == Lifecycle::done or (*chunk)->size() == 0) {
       co_return;
     }
     co_await write_chunk(*chunk, ctx);
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    if (done_) {
+    if (lifecycle_ == Lifecycle::done) {
       close_current_transport();
       co_return FinalizeBehavior::done;
     }
-    if (auto sub = ctx.get_sub(make_view(sub_key_))) {
-      auto pipeline = as<OpenPipeline<table_slice>>(*sub);
-      co_await pipeline.close();
-      co_return FinalizeBehavior::continue_;
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining;
+      if (auto sub = ctx.get_sub(make_view(sub_key_))) {
+        auto pipeline = as<OpenPipeline<table_slice>>(*sub);
+        co_await pipeline.close();
+        co_return FinalizeBehavior::continue_;
+      }
+      finish();
+      co_return FinalizeBehavior::done;
     }
-    request_stop();
-    close_current_transport();
-    co_return FinalizeBehavior::done;
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     ctx.spawn_task([this]() -> Task<void> {
@@ -171,7 +180,8 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
   }
 
 private:
@@ -194,7 +204,7 @@ private:
   }
 
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
-    if (done_ or transport_) {
+    if (lifecycle_ == Lifecycle::done or transport_) {
       co_return;
     }
     transport_ = co_await folly::coro::retryWithExponentialBackoff(
@@ -233,9 +243,9 @@ private:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    while (not done_) {
+    while (lifecycle_ != Lifecycle::done) {
       co_await ensure_connected(ctx);
-      if (done_ or not transport_) {
+      if (lifecycle_ == Lifecycle::done or not transport_) {
         co_return;
       }
       auto write_error = Option<std::string>{};
@@ -260,8 +270,9 @@ private:
     }
   }
 
-  auto request_stop() -> void {
-    done_ = true;
+  auto finish() -> void {
+    lifecycle_ = Lifecycle::done;
+    close_current_transport();
   }
 
   ToTcpArgs args_;
@@ -275,7 +286,7 @@ private:
                                            message_queue_capacity};
   Option<Box<folly::coro::Transport>> transport_;
   MetricsCounter bytes_write_counter_ = {};
-  bool done_ = false;
+  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 class ToTcpPlugin final : public OperatorPlugin {

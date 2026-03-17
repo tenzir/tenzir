@@ -27,12 +27,14 @@
 #include <folly/CancellationToken.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Error.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 namespace tenzir::plugins::from_tcp {
 
@@ -115,8 +117,8 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        done_ = true;
-        co_return;
+        co_yield folly::coro::co_error(
+          std::runtime_error{"failed to create TLS context"});
       }
       tls_context_ = std::move(*context);
     }
@@ -126,9 +128,6 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    if (done_) {
-      co_return {};
-    }
     if (current_connection_) {
       co_return co_await message_queue_->dequeue();
     }
@@ -162,9 +161,6 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    if (done_) {
-      co_return;
-    }
     auto* message = result.try_as<Message>();
     if (not message) {
       co_return;
@@ -251,10 +247,6 @@ public:
     co_return;
   }
 
-  auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
-  }
-
 private:
   static auto close_transport(Connection connection) -> void {
     auto* evb = connection->getEventBase();
@@ -313,7 +305,6 @@ private:
   Option<OpenPipeline<chunk_ptr>> pipeline_;
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
-  bool done_ = false;
   uint64_t next_conn_id_{0};
 };
 
