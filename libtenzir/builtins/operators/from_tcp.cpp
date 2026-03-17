@@ -85,25 +85,22 @@ public:
   using Message = variant<Connected, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
-  explicit FromTcpConnector(FromTcpArgs args)
-    : endpoint_source_{args.endpoint.source},
-      user_pipeline_{std::move(args.user_pipeline)},
-      peer_let_id_{args.peer_info} {
-    auto ep = to<struct endpoint>(args.endpoint.inner);
+  explicit FromTcpConnector(FromTcpArgs args) : args_{std::move(args)} {
+    auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     TENZIR_ASSERT(not ep->host.empty());
     address_.setFromHostPort(ep->host, ep->port->number());
     host_ = ep->host;
-    if (args.tls) {
-      tls_ = tls_options{*args.tls, {.is_server = false}};
+    if (args_.tls) {
+      tls_ = tls_options{*args_.tls, {.is_server = false}};
     }
   }
 
-  FromTcpConnector(const FromTcpConnector&) = delete;
-  FromTcpConnector& operator=(const FromTcpConnector&) = delete;
+  FromTcpConnector(FromTcpConnector const&) = delete;
+  auto operator=(FromTcpConnector const&) -> FromTcpConnector& = delete;
   FromTcpConnector(FromTcpConnector&&) noexcept = default;
-  FromTcpConnector& operator=(FromTcpConnector&&) noexcept = default;
+  auto operator=(FromTcpConnector&&) noexcept -> FromTcpConnector& = default;
   ~FromTcpConnector() override = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -151,7 +148,7 @@ public:
         // TODO: Surface connect retries and failures as metrics in a
         // follow-up that covers all TCP operators.
         diagnostic::warning("failed to connect to {}", address_.describe())
-          .primary(endpoint_source_)
+          .primary(args_.endpoint.source)
           .note("reason: {}", *connect_error)
           .hint("ensure a TCP server is listening on this endpoint")
           .emit(dh);
@@ -191,9 +188,9 @@ public:
                                     peer_addr.getAddressStr())},
           MetricsDirection::read, MetricsVisibility::external_);
         auto conn_id = next_conn_id_++;
-        auto pipeline_copy = user_pipeline_.inner;
+        auto pipeline_copy = args_.user_pipeline.inner;
         auto env = substitute_ctx::env_t{};
-        env[peer_let_id_] = std::move(peer_record);
+        env[args_.peer_info] = std::move(peer_record);
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
         auto sub_result
@@ -226,7 +223,7 @@ public:
           // TODO: Surface routine TCP read failures and disconnects as metrics
           // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
-            .primary(endpoint_source_)
+            .primary(args_.endpoint.source)
             .note("endpoint: {}", address_.describe())
             .note("reason: {}", *closed.error)
             .emit(ctx);
@@ -295,7 +292,7 @@ private:
         bytes_read_counter.add((*read_result)->size());
         co_await message_queue->enqueue(
           Payload{conn_id, std::move(*read_result)});
-      } catch (const folly::AsyncSocketException& e) {
+      } catch (folly::AsyncSocketException const& e) {
         // Socket errors are connection-scoped; log and reconnect.
         read_error = e.what();
         break;
@@ -308,11 +305,9 @@ private:
     });
   }
 
-  location endpoint_source_ = location::unknown;
+  FromTcpArgs args_;
   folly::SocketAddress address_;
   std::string host_;
-  located<ir::pipeline> user_pipeline_;
-  let_id peer_let_id_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
@@ -367,7 +362,6 @@ public:
       }
       return {};
     });
-
     return d.without_optimize();
   }
 };

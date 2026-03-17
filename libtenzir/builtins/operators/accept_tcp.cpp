@@ -88,15 +88,13 @@ public:
   using SlotQueue = folly::coro::BoundedQueue<ConnectionSlot>;
 
   AcceptTcpListener(AcceptTcpArgs args)
-    : endpoint_source_{args.endpoint.source},
-      user_pipeline_{std::move(args.user_pipeline)},
-      peer_let_id_{args.peer_info},
-      max_connections_{args.max_connections ? args.max_connections->inner
-                                            : uint64_t{128}},
+    : args_{std::move(args)},
+      max_connections_{args_.max_connections ? args_.max_connections->inner
+                                             : uint64_t{128}},
       slot_queue_{make_slot_queue(max_connections_)} {
     // Parse endpoint string to SocketAddress (validation already done in
     // describe)
-    auto ep = to<struct endpoint>(args.endpoint.inner);
+    auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     if (ep->host.empty()) {
@@ -104,8 +102,8 @@ public:
     } else {
       address_.setFromHostPort(ep->host, ep->port->number());
     }
-    if (args.tls) {
-      tls_ = tls_options{*args.tls, {.is_server = true}};
+    if (args_.tls) {
+      tls_ = tls_options{*args_.tls, {.is_server = true}};
     }
     for (auto i = uint64_t{0}; i < max_connections_; ++i) {
       auto success = slot_queue_->try_enqueue(ConnectionSlot{});
@@ -171,9 +169,9 @@ public:
           {"port", int64_t{peer_addr.getPort()}},
         };
         auto conn_id = next_conn_id_++;
-        auto pipeline_copy = user_pipeline_.inner;
+        auto pipeline_copy = args_.user_pipeline.inner;
         auto env = substitute_ctx::env_t{};
-        env[peer_let_id_] = std::move(peer_record);
+        env[args_.peer_info] = std::move(peer_record);
         auto bytes_read = ctx.make_counter(
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     peer_addr.getAddressStr())},
@@ -208,7 +206,7 @@ public:
           // TODO: Surface routine TCP read failures and disconnects as metrics
           // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
-            .primary(endpoint_source_)
+            .primary(args_.endpoint.source)
             .note("connection id: {}", closed.conn_id)
             .note("reason: {}", *closed.error)
             .emit(ctx);
@@ -379,7 +377,7 @@ private:
         // Peer-driven TLS failures are expected at runtime; keep serving other
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
-          .primary(endpoint_source_)
+          .primary(args_.endpoint.source)
           .note("TLS handshake with peer {} failed", peer.describe())
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
@@ -421,7 +419,7 @@ private:
         }
         if (accept_error) {
           diagnostic::warning("failed to accept incoming connection")
-            .primary(endpoint_source_)
+            .primary(args_.endpoint.source)
             .note("endpoint: {}", address_.describe())
             .note("reason: {}", *accept_error)
             .emit(ctx.dh());
@@ -439,7 +437,7 @@ private:
         if (not slot) {
           diagnostic::warning(
             "connection rejected: maximum number of connections reached")
-            .primary(endpoint_source_)
+            .primary(args_.endpoint.source)
             .note("peer: {}", peer.describe())
             .note("max_connections: {}", max_connections_)
             .hint("increase `max_connections` if this level of concurrency is "
@@ -481,10 +479,8 @@ private:
       ConnectionClosed{conn_id, std::move(read_error)});
   }
 
-  location endpoint_source_ = location::unknown;
+  AcceptTcpArgs args_;
   folly::SocketAddress address_;
-  located<ir::pipeline> user_pipeline_;
-  let_id peer_let_id_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
