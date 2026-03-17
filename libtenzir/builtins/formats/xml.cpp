@@ -3,9 +3,8 @@
 //    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
 //    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
-//   This file is part of Tenzir.
-//
-//   Tenzir is made available under the Apache License, Version 2.0.
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
