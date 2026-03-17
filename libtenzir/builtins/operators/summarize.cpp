@@ -670,6 +670,12 @@ auto evaluate_options(config& cfg, session ctx) -> failure_or<void> {
         .emit(ctx);
       return failure::promise();
     }
+    if (*dur <= duration::zero()) {
+      diagnostic::error("`frequency` must be greater than zero")
+        .primary(*cfg.frequency_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
     cfg.frequency = *dur;
   }
   if (cfg.mode_expr) {

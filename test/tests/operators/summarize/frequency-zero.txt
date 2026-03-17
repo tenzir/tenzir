@@ -1,0 +1,6 @@
+error: `frequency` must be greater than zero
+ --> tests/operators/summarize/frequency-zero.tql:6:46
+  |
+6 | summarize count=count(), options={frequency: 0s}
+  |                                              ^^ 
+  |
