@@ -1,9 +1,0 @@
-let $parent = now()
-every 750ms {
-  from {x: 1}
-}
-every 1s {
-  let $started = now()
-  x = ($started - $parent).round(1s)
-}
-head 4
