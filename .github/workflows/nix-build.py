@@ -40,6 +40,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
+# Homebrew's `uninstall pkgutil:` matches the component package receipt ids from
+# PackageInfo and Distribution. CPack's product identifier is separate, so we
+# normalize the pkgutil-facing identifier after expanding the signed archive.
 TENZIR_MACOS_PKGUTIL_IDENTIFIER = "com.tenzir.tenzir.runtime"
 
 
