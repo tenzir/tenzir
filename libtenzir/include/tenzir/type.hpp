@@ -65,6 +65,9 @@ using type_kind = detail::tl_apply_t<concrete_types, tag_variant>;
 /// Returns the name of the type kind.
 auto to_string(type_kind x) -> std::string_view;
 
+/// Returns the type kind corresponding to the value held by @p x.
+auto type_kind_of_data(const data& x) -> type_kind;
+
 /// A concept that models any concrete type.
 template <class T>
 concept concrete_type = requires(const T& value) {

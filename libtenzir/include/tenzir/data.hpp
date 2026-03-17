@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/aliases.hpp"
+#include "tenzir/type.hpp"
 #include "tenzir/blob.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/printable/print.hpp"
@@ -509,6 +510,7 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
 /// @param x The data instance.
 /// @returns The YAML representation of *x*, or an error.
 caf::expected<std::string> to_yaml(const data& x);
+
 
 } // namespace tenzir
 
