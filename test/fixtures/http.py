@@ -25,6 +25,7 @@ automatically.
 
 from __future__ import annotations
 
+import gzip
 import http.client
 import json
 import os
@@ -59,6 +60,7 @@ _LINK_MULTI_MULTI_PAGE_1 = "/link-pagination/multi-multi/1"
 _LINK_MULTI_MULTI_PAGE_2 = "/link-pagination/multi-multi/2"
 _LINK_MULTI_MULTI_PAGE_3 = "/link-pagination/multi-multi/3"
 _LINK_NONE_PAGE_1 = "/link-pagination/no-link/1"
+_GZIP_EMPTY = "/content-encoding/gzip-empty"
 
 
 @dataclass(frozen=True)
@@ -126,13 +128,9 @@ def _make_handler(
                 expected_method = expected_request.method.upper()
                 if self.command != expected_method:
                     errors.append(
-                        "expected request method "
-                        f"{expected_method}, got {self.command}"
+                        f"expected request method {expected_method}, got {self.command}"
                     )
-            if (
-                expected_request.path
-                and path != expected_request.path
-            ):
+            if expected_request.path and path != expected_request.path:
                 errors.append(
                     f"expected request path {expected_request.path}, got {path}"
                 )
@@ -261,6 +259,12 @@ def _make_handler(
                 self._reply(
                     b'{"error":"not-found"}\n',
                     status=HTTPStatus.NOT_FOUND,
+                )
+                return
+            if path == _GZIP_EMPTY:
+                self._reply(
+                    gzip.compress(b""),
+                    [("Content-Encoding", "gzip")],
                 )
                 return
             if path == _LINK_BASIC_PAGE_1:
@@ -412,6 +416,7 @@ def _run_server(
             "HTTP_FIXTURE_HEADER_URL": f"{base_url}/options/header",
             "HTTP_FIXTURE_BODY_URL": f"{base_url}/options/body",
             "HTTP_FIXTURE_STATUS_404_URL": f"{base_url}/status/not-found",
+            "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",
             "HTTP_CAPTURE_FILE": str(capture_path),
         }
         env.update(tls_env)
@@ -420,10 +425,7 @@ def _run_server(
         server.shutdown()
         worker.join()
         expected_request = opts.expected_request
-        if (
-            expected_request.count
-            and request_count[0] != expected_request.count
-        ):
+        if expected_request.count and request_count[0] != expected_request.count:
             errors.append(
                 "expected request count "
                 f"{expected_request.count}, got {request_count[0]}"
@@ -479,7 +481,10 @@ def _run_client(
                     )
                     done_event.set()
                     return
-                if opts.expected_response_body and response_text != opts.expected_response_body:
+                if (
+                    opts.expected_response_body
+                    and response_text != opts.expected_response_body
+                ):
                     errors.append(
                         "expected HTTP response body "
                         f"{opts.expected_response_body!r}, got {response_text!r}"
@@ -562,9 +567,7 @@ def run() -> Iterator[dict[str, str]]:
         if opts.mode == "client":
             yield from _run_client(opts, capture_path, tls_env)
             return
-        raise RuntimeError(
-            "http fixture option `mode` must be `server` or `client`"
-        )
+        raise RuntimeError("http fixture option `mode` must be `server` or `client`")
     finally:
         if capture_path.exists():
             capture_path.unlink()

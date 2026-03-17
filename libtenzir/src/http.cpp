@@ -816,7 +816,6 @@ auto try_decompress_body(std::string_view encoding,
       }
     }
   }
-  TENZIR_ASSERT(written != 0);
   out.resize(written);
   return out;
 }
