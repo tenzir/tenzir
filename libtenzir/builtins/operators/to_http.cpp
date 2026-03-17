@@ -105,6 +105,12 @@ struct ToHttpArgs {
           .emit(dh);
         return failure::promise();
       }
+      if (encode->inner == "form" and not body) {
+        diagnostic::error("`encode=\"form\"` requires an explicit `body`")
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
+      }
     }
     if (retry_delay.inner < duration::zero()) {
       diagnostic::error("`retry_delay` must be a positive duration")

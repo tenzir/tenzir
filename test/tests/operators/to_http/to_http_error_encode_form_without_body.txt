@@ -1,0 +1,6 @@
+error: `encode="form"` requires an explicit `body`
+ --> tests/operators/to_http/to_http_error_encode_form_without_body.tql:8:41
+  |
+8 | to_http env("HTTP_FIXTURE_URL"), encode="form"
+  |                                         ^^^^^^ 
+  |
