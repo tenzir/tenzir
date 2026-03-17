@@ -8,18 +8,22 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/notify.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
+#include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::batch {
 
@@ -28,14 +32,8 @@ namespace {
 struct buffer_entry {
   std::vector<table_slice> events;
   uint64_t num_buffered = {};
-  std::chrono::steady_clock::duration last_yield
-    = std::chrono::steady_clock::now().time_since_epoch();
-
-  friend auto inspect(auto& f, buffer_entry& x) -> bool {
-    return f.object(x).fields(f.field("events", x.events),
-                              f.field("num_buffered", x.num_buffered),
-                              f.field("last_yield", x.last_yield));
-  }
+  std::chrono::steady_clock::time_point start_time
+    = std::chrono::steady_clock::now();
 };
 
 class batch_operator final : public crtp_operator<batch_operator> {
@@ -51,17 +49,16 @@ public:
     -> generator<table_slice> {
     std::unordered_map<type, buffer_entry> buffers;
     for (auto&& slice : input) {
-      const auto now = std::chrono::steady_clock::now().time_since_epoch();
+      const auto now = std::chrono::steady_clock::now();
       // Check all current buffers to see if we have hit a timeout.
-      for (auto it = buffers.begin(); it != buffers.end(); ++it) {
+      for (auto it = buffers.begin(); it != buffers.end();) {
         auto& entry = it->second;
-        if (now - entry.last_yield > timeout_) {
+        if (now - entry.start_time > timeout_) {
           TENZIR_ASSERT(entry.num_buffered < limit_);
           co_yield concatenate(std::exchange(entry.events, {}));
           it = buffers.erase(it);
-          if (it == buffers.end()) {
-            break;
-          }
+        } else {
+          ++it;
         }
       }
       if (slice.rows() == 0) {
@@ -87,7 +84,7 @@ public:
         auto [lhs, rhs] = split(entry.events, limit_);
         auto result = concatenate(std::move(lhs));
         entry.num_buffered -= result.rows();
-        entry.last_yield = now;
+        entry.start_time = std::chrono::steady_clock::now();
         co_yield std::move(result);
         entry.events = std::move(rhs);
       }
@@ -96,13 +93,13 @@ public:
       }
     }
     // When our input is done, yield the rest of all buffers.
-    // We sort the remaining buffers by yield time for consistent output.
+    // We sort the remaining buffers by start time for consistent output.
     std::vector<buffer_entry> remaining;
     remaining.reserve(buffers.size());
     for (auto& [_, entry] : buffers) {
       remaining.emplace_back(std::move(entry));
     }
-    std::ranges::sort(remaining, {}, &buffer_entry::last_yield);
+    std::ranges::sort(remaining, {}, &buffer_entry::start_time);
     for (auto& entry : remaining) {
       co_yield concatenate(std::move(entry.events));
     }
@@ -144,18 +141,6 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    // push any stale buffers
-    for (auto it = buffers_.begin(); it != buffers_.end();) {
-      auto& entry = it->second;
-      if (now - entry.last_yield > timeout_) {
-        TENZIR_ASSERT(entry.num_buffered < limit_);
-        co_await push(concatenate(std::exchange(entry.events, {})));
-        it = buffers_.erase(it);
-        continue;
-      }
-      ++it;
-    }
     if (input.rows() == 0) {
       co_return;
     }
@@ -178,53 +163,97 @@ public:
       auto [lhs, rhs] = split(entry.events, limit_);
       auto result = concatenate(std::move(lhs));
       entry.num_buffered -= result.rows();
-      entry.last_yield = now;
+      entry.start_time = std::chrono::steady_clock::now();
       co_await push(std::move(result));
       entry.events = std::move(rhs);
     }
     if (entry.num_buffered == 0) {
       buffers_.erase(it);
     }
+    update_next_timeout();
   }
 
-  auto flush(Push<table_slice>& push) -> Task<void> {
-    // collect into a single vector
-    std::vector<buffer_entry> remaining;
-    remaining.reserve(buffers_.size());
-    for (auto& [_, entry] : buffers_) {
-      remaining.emplace_back(std::move(entry));
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (not next_timeout_) {
+      co_await buffer_ready_->wait();
     }
-    buffers_.clear();
-    // sort by last yield for consistency
-    std::ranges::sort(remaining, {}, &buffer_entry::last_yield);
-    // push each
-    for (auto& entry : remaining) {
-      co_await push(concatenate(std::move(entry.events)));
+    if (next_timeout_) {
+      co_await sleep_until(*next_timeout_);
     }
+    co_return {};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    co_await flush_timed_out(push);
   }
 
   auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_await flush(push);
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    serde("buffers", buffers_);
+    co_await flush_all(push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
-    co_await flush(push);
+    co_await flush_all(push);
     co_return FinalizeBehavior::done;
   }
 
 private:
+  auto update_next_timeout() -> void {
+    auto was_null = next_timeout_.is_none();
+    next_timeout_ = None{};
+    for (const auto& [_, entry] : buffers_) {
+      auto deadline = entry.start_time + timeout_;
+      if (not next_timeout_ || deadline < *next_timeout_) {
+        next_timeout_ = deadline;
+      }
+    }
+    if (was_null && next_timeout_) {
+      buffer_ready_->notify_one();
+    }
+  }
+
+  auto flush_timed_out(Push<table_slice>& push) -> Task<void> {
+    const auto now = std::chrono::steady_clock::now();
+    for (auto it = buffers_.begin(); it != buffers_.end();) {
+      if (now - it->second.start_time >= timeout_) {
+        co_await push(concatenate(std::exchange(it->second.events, {})));
+        it = buffers_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    update_next_timeout();
+  }
+
+  auto flush_all(Push<table_slice>& push) -> Task<void> {
+    // collect
+    std::vector<buffer_entry> to_flush;
+    to_flush.reserve(buffers_.size());
+    for (auto& [_, entry] : buffers_) {
+      to_flush.emplace_back(std::move(entry));
+    }
+    buffers_.clear();
+    update_next_timeout();
+
+    // sort by start time for consistent output ordering
+    std::ranges::sort(to_flush, {}, &buffer_entry::start_time);
+    for (auto& entry : to_flush) {
+      co_await push(concatenate(std::move(entry.events)));
+    }
+  }
+
   uint64_t limit_;
   duration timeout_;
   event_order order_ = event_order::ordered;
   std::unordered_map<type, buffer_entry> buffers_;
+  mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
+  mutable std::unique_ptr<Notify> buffer_ready_ = std::make_unique<Notify>();
 };
 
 class plugin final : public virtual operator_plugin<batch_operator>,

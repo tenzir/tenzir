@@ -274,7 +274,7 @@ public:
         // compute needed delay
         const auto elapsed = std::chrono::steady_clock::now() - *start_time_;
         const auto anchor = *start_ + duration_cast<duration>(elapsed * speed_);
-        const auto delay = duration_cast<duration>(
+        const auto delay = duration_cast<std::chrono::steady_clock::duration>(
           duration_cast<std::chrono::duration<double>>(*time - anchor)
           / speed_);
         // if needed, push & sleep

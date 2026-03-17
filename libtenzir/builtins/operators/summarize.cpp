@@ -40,12 +40,15 @@
 #include <tsl/robin_map.h>
 
 #include <algorithm>
+#include <chrono>
 #include <ranges>
 #include <utility>
 
 namespace tenzir::plugins::summarize {
 
 namespace {
+
+using std::chrono::steady_clock;
 
 /// The key by which aggregations are grouped. Essentially, this is a vector of
 /// data. We create a new type here to support a custom hash and equality
@@ -839,8 +842,8 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    if (next_flush_ == time::min()) {
-      next_flush_ = time::clock::now() + *impl_->cfg().frequency;
+    if (next_flush_ == steady_clock::time_point::min()) {
+      next_flush_ = steady_clock::now() + *impl_->cfg().frequency;
     } else {
       next_flush_ += *impl_->cfg().frequency;
     }
@@ -876,7 +879,8 @@ private:
   std::optional<session_provider> provider_;
   /// Next wall-clock deadline for periodic flush. Mutable because await_task()
   /// is const but advances the schedule each time it is awaited.
-  mutable time next_flush_ = time::min();
+  mutable steady_clock::time_point next_flush_
+    = steady_clock::time_point::min();
   /// Set when await_task's sleep completes. If process() runs before
   /// process_task(), it will perform the flush and clear this flag so the
   /// scheduled task can skip its flush.
