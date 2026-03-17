@@ -83,7 +83,9 @@ public:
     Option<std::string> error;
   };
 
-  using Message = variant<Accepted, ConnectionClosed>;
+  struct AcceptLoopFinished {};
+
+  using Message = variant<Accepted, ConnectionClosed, AcceptLoopFinished>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
   using SlotQueue = folly::coro::BoundedQueue<ConnectionSlot>;
 
@@ -132,13 +134,10 @@ public:
     // Let ServerSocket handle bind/listen setup
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    accept_loop_ = ctx.spawn_task([this, &ctx]() -> Task<void> {
-      try {
-        co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
-                                                  accept_loop(ctx));
-      } catch (folly::OperationCancelled const&) {
-        co_return;
-      }
+    accept_loop_finished_ = false;
+    ctx.spawn_task([this, &ctx]() -> Task<void> {
+      co_await accept_loop(ctx);
+      co_await message_queue_->enqueue(AcceptLoopFinished{});
     });
     co_return;
   }
@@ -159,6 +158,7 @@ public:
         if (lifecycle_ != Lifecycle::running) {
           close_transport(std::move(transport));
           release_connection_slot(std::move(accepted.slot));
+          maybe_finish_draining();
           co_return;
         }
         auto* transport_evb = transport->getEventBase();
@@ -183,6 +183,7 @@ public:
         if (not sub_result) {
           close_transport(std::move(transport));
           release_connection_slot(std::move(accepted.slot));
+          maybe_finish_draining();
           co_return;
         }
         auto key = sub_key_for(conn_id);
@@ -218,6 +219,12 @@ public:
           co_await close_subpipeline(closed.conn_id, ctx);
           release_connection_slot(std::move(state.slot));
         }
+        maybe_finish_draining();
+        co_return;
+      },
+      [&](AcceptLoopFinished) -> Task<void> {
+        accept_loop_finished_ = true;
+        maybe_finish_draining();
         co_return;
       });
   }
@@ -230,6 +237,7 @@ public:
       connections_.erase(it);
       release_connection_slot(std::move(state.slot));
       close_transport(std::move(state.transport));
+      maybe_finish_draining();
     }
     co_return;
   }
@@ -240,14 +248,18 @@ public:
     if (lifecycle_ == Lifecycle::done) {
       co_return FinalizeBehavior::done;
     }
-    lifecycle_ = Lifecycle::done;
-    stop_accepting();
-    co_await join_accept_loop();
-    close_all_connections();
-    co_return FinalizeBehavior::done;
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining;
+      stop_accepting();
+      close_all_connections();
+    }
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto state() -> OperatorState override {
+    maybe_finish_draining();
     return lifecycle_ == Lifecycle::done ? OperatorState::done
                                          : OperatorState::unspecified;
   }
@@ -257,10 +269,10 @@ public:
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
-    lifecycle_ = Lifecycle::done;
+    lifecycle_ = Lifecycle::draining;
     stop_accepting();
-    co_await join_accept_loop();
     close_all_connections();
+    maybe_finish_draining();
   }
 
 private:
@@ -271,6 +283,7 @@ private:
 
   enum class Lifecycle {
     running,
+    draining,
     done,
   };
 
@@ -300,21 +313,21 @@ private:
     close_all_connections();
   }
 
-  auto join_accept_loop() -> Task<void> {
-    if (not accept_loop_) {
-      co_return;
-    }
-    auto accept_loop = std::move(*accept_loop_);
-    accept_loop_ = None{};
-    co_await accept_loop.join();
-  }
-
   auto close_all_connections() -> void {
     for (auto& [_, state] : connections_) {
       close_transport(state.transport);
       release_connection_slot(std::move(state.slot));
     }
     connections_.clear();
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining) {
+      return;
+    }
+    if (static_cast<uint64_t>(slot_queue_->size()) == max_connections_) {
+      lifecycle_ = Lifecycle::done;
+    }
   }
 
   static auto close_transport(Connection connection) -> void {
@@ -491,7 +504,7 @@ private:
   Box<SlotQueue> slot_queue_;
   std::unordered_map<uint64_t, ConnectionState> connections_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
-  Option<AsyncHandle<void>> accept_loop_;
+  bool accept_loop_finished_ = true;
   Lifecycle lifecycle_ = Lifecycle::running;
   mutable uint64_t next_conn_id_{0};
 };
