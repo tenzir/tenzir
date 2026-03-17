@@ -3,7 +3,7 @@ title: Add Suricata schema types for IKE, HTTP2, PGSQL, and Modbus
 type: feature
 authors:
   - tobim
-pr: 0
+pr: 5914
 created: 2026-03-17T00:00:00Z
 ---
 
