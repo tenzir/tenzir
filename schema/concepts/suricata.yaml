@@ -11,7 +11,7 @@
       - suricata.http.src_ip
       - suricata.fileinfo.src_ip
       - suricata.flow.src_ip
-      - suricata.ikev2.src_ip
+      - suricata.ike.src_ip
       - suricata.krb5.src_ip
       - suricata.mqtt.src_ip
       - suricata.netflow.src_ip
@@ -39,7 +39,7 @@
       - suricata.http.src_port
       - suricata.fileinfo.src_port
       - suricata.flow.src_port
-      - suricata.ikev2.src_port
+      - suricata.ike.src_port
       - suricata.krb5.src_port
       - suricata.mqtt.src_port
       - suricata.netflow.src_port
@@ -67,7 +67,7 @@
       - suricata.http.dest_ip
       - suricata.fileinfo.dest_ip
       - suricata.flow.dest_ip
-      - suricata.ikev2.dest_ip
+      - suricata.ike.dest_ip
       - suricata.krb5.dest_ip
       - suricata.mqtt.dest_ip
       - suricata.netflow.dest_ip
@@ -95,7 +95,7 @@
       - suricata.http.dest_port
       - suricata.fileinfo.dest_port
       - suricata.flow.dest_port
-      - suricata.ikev2.dest_port
+      - suricata.ike.dest_port
       - suricata.krb5.dest_port
       - suricata.mqtt.dest_port
       - suricata.netflow.dest_port
@@ -122,7 +122,7 @@
       - suricata.http.event_type
       - suricata.fileinfo.app_proto
       - suricata.flow.app_proto
-      - suricata.ikev2.app_proto
+      - suricata.ike.app_proto
       - suricata.krb5.event_type
       - suricata.mqtt.event_type
       - suricata.netflow.app_proto
@@ -149,7 +149,7 @@
       - suricata.http.proto
       - suricata.fileinfo.proto
       - suricata.flow.proto
-      - suricata.ikev2.proto
+      - suricata.ike.proto
       - suricata.krb5.proto
       - suricata.mqtt.proto
       - suricata.netflow.proto
@@ -177,7 +177,7 @@
       - suricata.http.community_id
       - suricata.fileinfo.community_id
       - suricata.flow.community_id
-      - suricata.ikev2.community_id
+      - suricata.ike.community_id
       - suricata.krb5.community_id
       - suricata.mqtt.community_id
       - suricata.netflow.community_id
@@ -246,7 +246,7 @@
       - suricata.http.vlan
       - suricata.fileinfo.vlan
       - suricata.flow.vlan
-      - suricata.ikev2.vlan
+      - suricata.ike.vlan
       - suricata.krb5.vlan
       - suricata.mqtt.vlan
       - suricata.netflow.vlan
@@ -274,7 +274,7 @@
       - suricata.http.pcap_cnt
       - suricata.fileinfo.pcap_cnt
       - suricata.flow.pcap_cnt
-      - suricata.ikev2.pcap_cnt
+      - suricata.ike.pcap_cnt
       - suricata.krb5.pcap_cnt
       - suricata.mqtt.pcap_cnt
       - suricata.netflow.pcap_cnt

@@ -936,7 +936,6 @@ type suricata.pgsql_copy_data_out = record {
 type suricata.pgsql = suricata.component.common + record {
   tx_id: uint64 #index=hash,
   pgsql: record {
-    tx_id: uint64 #index=hash,
     request: record {
       message: string,
       password: string,
