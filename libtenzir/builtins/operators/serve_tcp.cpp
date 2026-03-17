@@ -335,6 +335,39 @@ private:
     }
   }
 
+  auto finish_accept(Box<folly::coro::Transport> client, std::string peer,
+                     ConnectionSlot slot, diagnostic_handler& dh)
+    -> Task<void> {
+    if (tls_context_) {
+      try {
+        client = Box<folly::coro::Transport>{
+          co_await upgrade_transport_to_tls_server(std::move(*client),
+                                                   tls_context_)};
+      } catch (folly::AsyncSocketException const& ex) {
+        if (accept_cancel_->getToken().isCancellationRequested()) {
+          release_connection_slot(std::move(slot));
+          co_return;
+        }
+        diagnostic::warning("TLS handshake failed")
+          .primary(args_.endpoint.source)
+          .note("peer: {}", peer)
+          .note("reason: {}", ex.what())
+          .hint("verify TLS settings and certificates on both sides")
+          .emit(dh);
+        release_connection_slot(std::move(slot));
+        co_return;
+      }
+    }
+    if (accept_cancel_->getToken().isCancellationRequested()) {
+      close_client(std::move(client));
+      release_connection_slot(std::move(slot));
+      co_return;
+    }
+    TENZIR_DEBUG("serve_tcp: accepted {}", peer);
+    co_await message_queue_->enqueue(
+      Accepted{std::move(client), std::move(slot)});
+  }
+
   auto accept_loop(diagnostic_handler& dh) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
