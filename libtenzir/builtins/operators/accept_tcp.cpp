@@ -13,6 +13,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -26,7 +27,6 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
-#include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
@@ -137,14 +137,12 @@ public:
       std::move(socket), address_, listen_backlog);
     accept_loop_finished_ = false;
     ctx.spawn_task([this, &ctx]() -> Task<void> {
-      try {
-        co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
-                                                  accept_loop(ctx));
-      } catch (folly::OperationCancelled const&) {
-        // Cancellation is expected during draining; still notify process_task
-        // so the listener can transition to done.
-      }
-      co_await message_queue_->enqueue(AcceptLoopFinished{});
+      auto notify_finished = detail::scope_guard{[this]() noexcept {
+        auto success = message_queue_->try_enqueue(AcceptLoopFinished{});
+        TENZIR_ASSERT(success);
+      }};
+      co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
+                                                accept_loop(ctx));
     });
     co_return;
   }
@@ -388,6 +386,9 @@ private:
   auto finish_accept(Box<folly::coro::Transport> transport,
                      folly::SocketAddress peer, ConnectionSlot slot,
                      diagnostic_handler& dh) -> Task<void> {
+    auto release_connection_slot_guard = detail::scope_guard{[&]() noexcept {
+      release_connection_slot(std::move(slot));
+    }};
     if (tls_context_) {
       try {
         transport = Box<folly::coro::Transport>{
@@ -395,7 +396,6 @@ private:
                                                    tls_context_)};
       } catch (folly::AsyncSocketException const& ex) {
         if (accept_cancel_->getToken().isCancellationRequested()) {
-          release_connection_slot(std::move(slot));
           co_return;
         }
         // Peer-driven TLS failures are expected at runtime; keep serving other
@@ -406,18 +406,17 @@ private:
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
-        release_connection_slot(std::move(slot));
         co_return;
       }
     }
     if (accept_cancel_->getToken().isCancellationRequested()) {
       close_transport(std::move(transport));
-      release_connection_slot(std::move(slot));
       co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
     co_await message_queue_->enqueue(
       Accepted{std::move(transport), std::move(slot)});
+    release_connection_slot_guard.disable();
   }
 
   auto accept_loop(OpCtx& ctx) -> Task<void> {
