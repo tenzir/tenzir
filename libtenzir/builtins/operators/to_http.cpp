@@ -511,7 +511,9 @@ private:
             continue;
           }
           if (form) {
-            co_yield {curl::escape(flatten(materialize(value.value()))), true};
+            buffer = curl::escape(flatten(materialize(value.value())));
+            co_yield {buffer, true};
+            buffer.clear();
             continue;
           }
           auto printer = json_printer{{}};
