@@ -101,7 +101,6 @@ public:
   auto operator=(FromTcpConnector const&) -> FromTcpConnector& = delete;
   FromTcpConnector(FromTcpConnector&&) noexcept = default;
   auto operator=(FromTcpConnector&&) noexcept -> FromTcpConnector& = default;
-  ~FromTcpConnector() override = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (tls_ and tls_->get_tls(nullptr).inner) {

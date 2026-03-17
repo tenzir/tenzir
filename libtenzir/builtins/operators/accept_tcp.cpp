@@ -89,7 +89,7 @@ public:
   using MessageQueue = folly::coro::BoundedQueue<Message>;
   using SlotQueue = folly::coro::BoundedQueue<ConnectionSlot>;
 
-  AcceptTcpListener(AcceptTcpArgs args)
+  explicit AcceptTcpListener(AcceptTcpArgs args)
     : args_{std::move(args)},
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
@@ -325,7 +325,11 @@ private:
     if (lifecycle_ != Lifecycle::draining) {
       return;
     }
-    if (static_cast<uint64_t>(slot_queue_->size()) == max_connections_) {
+    // All slots must be returned *and* the accept loop must have finished
+    // (which implies all in-flight finish_accept tasks have completed) before
+    // we can safely transition to done.
+    if (accept_loop_finished_
+        and static_cast<uint64_t>(slot_queue_->size()) == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
   }

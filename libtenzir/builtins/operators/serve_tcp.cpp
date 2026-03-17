@@ -275,7 +275,11 @@ private:
     if (lifecycle_ != Lifecycle::draining) {
       return;
     }
-    if (static_cast<uint64_t>(slot_queue_->size()) == max_connections_) {
+    // All slots must be returned *and* the accept loop must have finished
+    // (which implies all in-flight finish_accept tasks have completed) before
+    // we can safely transition to done.
+    if (accept_loop_finished_
+        and static_cast<uint64_t>(slot_queue_->size()) == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -402,7 +406,6 @@ private:
           }
           scope.spawn(finish_accept(std::move(client), std::move(peer),
                                     std::move(*slot), dh));
-          continue;
         } catch (folly::AsyncSocketException const& ex) {
           // Accept failures are per-connection network errors; keep the
           // listener alive and continue accepting new clients.
