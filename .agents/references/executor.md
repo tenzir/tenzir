@@ -74,11 +74,29 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 - `await_task()` dequeues the next message.
 - `process_task()` dispatches it with `co_match` and updates members.
 - The queue provides backpressure for free.
+- Use `tenzir::Mutex<T>` only for small shared helper state that must be
+  touched from multiple tasks.
+
+### Structured concurrency with `async_scope`
+
+Use `async_scope()` for fan-out within a task. If a task spawns child tasks and
+must wait for them before returning, wrap that code in `async_scope()`.
+
+```cpp
+co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+  while (has_more_work()) {
+    scope.spawn(handle_one());
+  }
+});
+```
+
+References: `accept_tcp.cpp`, `serve_tcp.cpp`.
 
 ### Semaphores for capacity limits
 
-Use `folly::fibers::Semaphore` for resource permits. Keep using message queues
-for state coordination.
+Use `folly::fibers::Semaphore` for resource permits. Do not use atomics or
+ad-hoc counters for permit accounting. Keep using message queues for state
+coordination.
 
 Acquire the permit before starting the operation that creates or reserves the
 resource. Release permits via RAII in the task that currently owns them. If
@@ -97,10 +115,10 @@ release.disable();
 ### Cancellation
 
 Do not customize cancellation unless necessary. The framework will by default
-cancel all tasks when the pipeline is stopped. You must customize cancellation
-if it's needed for the operator to perform correctly. For example, if a HTTP
-operator wants to stop accepting connections, it could make sense to stop the
-loop that calls `accept` with a custom `folly::CancellationSource`.
+cancel all tasks when the pipeline is stopped. Add custom cancellation only
+when the operator needs a separate shutdown path to behave correctly. For
+example, a HTTP operator that must stop accepting connections should stop the
+`accept` loop with a custom `folly::CancellationSource`.
 
 ```cpp
 ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop()));
@@ -109,12 +127,33 @@ ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop(
 Do not add a second `stop_` flag—cancellation tokens already express this.
 
 Usually, you do not need to check for cancellation explicitly, as many async
-operations implicitly do so. You may `co_await folly::coro::co_safe_point` at
-the top of loops if needed.
+operations implicitly do so. Insert `co_await folly::coro::co_safe_point` at
+the top of loops only when the loop body would otherwise delay cancellation.
+
+Use `Notify` for one-shot wakeups. Do not use `folly::coro::Baton` directly in
+operators, because it is not cancellation-aware.
 
 Do not attempt to catch cancellation, neither as an exception nor with
-`co_awaitTry`, unless truly necessary. Usually, cancellation should propagate
-necessary to the outermost task.
+`co_awaitTry`, unless truly necessary. Let cancellation propagate to the
+outermost task.
+
+### Retry loops
+
+Use `folly::coro::retryWithExponentialBackoff` for retriable async operations
+such as reconnects. Do not hand-roll sleep / backoff loops.
+
+```cpp
+co_await folly::coro::retryWithExponentialBackoff(
+  std::numeric_limits<uint32_t>::max(),
+  std::chrono::milliseconds{100},
+  std::chrono::seconds{5},
+  0.0,
+  []() -> Task<void> {
+    co_await try_once();
+  });
+```
+
+References: `from_tcp.cpp`, `to_tcp.cpp`.
 
 ## Patterns
 

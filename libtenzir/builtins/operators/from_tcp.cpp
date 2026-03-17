@@ -27,10 +27,11 @@
 #include <folly/CancellationToken.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Sleep.h>
+#include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
+#include <limits>
 #include <memory>
 
 namespace tenzir::plugins::from_tcp {
@@ -53,9 +54,17 @@ constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 // Cap retries at five seconds to avoid hammering broken endpoints while still
 // keeping recovery reasonably quick once the peer comes back.
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
+// Preserve the current deterministic reconnect timing; if many connectors are
+// expected to flap together, revisit this and add jitter.
+constexpr auto connect_retry_jitter = 0.0;
+constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
 // Leave room for many in-flight read and close notifications without turning
 // the queue into another large per-connection memory sink.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+
+constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
+  return ew.is_compatible_with<folly::AsyncSocketException>();
+};
 
 struct FromTcpArgs {
   located<std::string> endpoint;
@@ -123,41 +132,31 @@ public:
     if (current_connection_) {
       co_return co_await message_queue_->dequeue();
     }
-    while (not done_) {
-      TENZIR_DEBUG("connecting to {}", address_.describe());
-      auto connect_error = Option<std::string>{};
-      try {
-        auto transport
-          = Box<folly::coro::Transport>{co_await connect_tcp_client(
+    auto transport = co_await folly::coro::retryWithExponentialBackoff(
+      connect_max_retries, connect_initial_backoff, connect_max_backoff,
+      connect_retry_jitter,
+      [this, &dh]() -> Task<Box<folly::coro::Transport>> {
+        TENZIR_DEBUG("connecting to {}", address_.describe());
+        try {
+          co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
             evb_, address_,
             std::chrono::duration_cast<std::chrono::milliseconds>(
               connect_timeout),
             tls_context_, host_)};
-        TENZIR_DEBUG("connected to {}", address_.describe());
-        co_return Message{Connected{std::move(transport)}};
-      } catch (folly::AsyncSocketException const& ex) {
-        // Connection attempts can fail transiently; treat this as a retriable
-        // network condition and keep the operator alive.
-        connect_error = ex.what();
-      }
-      if (connect_error) {
-        if (done_) {
-          co_return {};
+        } catch (folly::AsyncSocketException const& ex) {
+          // TODO: Surface connect retries and failures as metrics in a
+          // follow-up that covers all TCP operators.
+          diagnostic::warning("failed to connect to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .hint("ensure a TCP server is listening on this endpoint")
+            .emit(dh);
+          throw;
         }
-        // TODO: Surface connect retries and failures as metrics in a
-        // follow-up that covers all TCP operators.
-        diagnostic::warning("failed to connect to {}", address_.describe())
-          .primary(args_.endpoint.source)
-          .note("reason: {}", *connect_error)
-          .hint("ensure a TCP server is listening on this endpoint")
-          .emit(dh);
-        auto backoff = reconnect_backoff_;
-        reconnect_backoff_
-          = std::min(reconnect_backoff_ * 2, connect_max_backoff);
-        co_await folly::coro::sleep(backoff);
-      }
-    }
-    co_return {};
+      },
+      should_retry_connect);
+    TENZIR_DEBUG("connected to {}", address_.describe());
+    co_return Message{Connected{std::move(transport)}};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
@@ -176,7 +175,6 @@ public:
         auto transport = std::move(connected.transport);
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
-        reconnect_backoff_ = connect_initial_backoff;
         auto peer_addr = transport->getPeerAddress();
         auto peer_record = record{
           {"ip", peer_addr.getAddressStr()},
@@ -316,7 +314,6 @@ private:
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
   bool done_ = false;
-  mutable std::chrono::milliseconds reconnect_backoff_{connect_initial_backoff};
   uint64_t next_conn_id_{0};
 };
 

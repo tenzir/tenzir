@@ -24,10 +24,11 @@
 
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Sleep.h>
+#include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
+#include <limits>
 #include <memory>
 
 namespace tenzir::plugins::to_tcp {
@@ -45,9 +46,17 @@ constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 // Cap retries at five seconds to avoid hammering broken endpoints while still
 // keeping recovery reasonably quick once the peer comes back.
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
+// Preserve the current deterministic reconnect timing; if many sinks are
+// expected to flap together, revisit this and add jitter.
+constexpr auto connect_retry_jitter = 0.0;
+constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
 // Leave room for many queued payloads while still applying backpressure when
 // the remote peer falls behind or reconnects take time.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+
+constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
+  return ew.is_compatible_with<folly::AsyncSocketException>();
+};
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -185,42 +194,38 @@ private:
   }
 
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
-    while (not done_) {
-      if (transport_) {
-        co_return;
-      }
-      auto connect_error = Option<std::string>{};
-      try {
-        transport_ = Box<folly::coro::Transport>{co_await connect_tcp_client(
-          evb_, address_,
-          std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
-          tls_context_, host_)};
-        auto peer_addr = (*transport_)->getPeerAddress();
-        bytes_write_counter_ = ctx.make_counter(
-          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    peer_addr.getAddressStr())},
-          MetricsDirection::write, MetricsVisibility::external_);
-        reconnect_backoff_ = connect_initial_backoff;
-        TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
-        co_return;
-      } catch (folly::AsyncSocketException const& ex) {
-        if (done_) {
-          co_return;
-        }
-        connect_error = ex.what();
-      }
-      auto backoff = reconnect_backoff_;
-      reconnect_backoff_
-        = std::min(reconnect_backoff_ * 2, connect_max_backoff);
-      // TODO: Surface connect retries and failures as metrics in a follow-up
-      // that covers all TCP operators.
-      diagnostic::warning("failed to connect to {}", address_.describe())
-        .primary(args_.endpoint.source)
-        .note("reason: {}", *connect_error)
-        .hint("ensure a TCP server is listening on this endpoint")
-        .emit(ctx.dh());
-      co_await folly::coro::sleep(backoff);
+    if (done_ or transport_) {
+      co_return;
     }
+    transport_ = co_await folly::coro::retryWithExponentialBackoff(
+      connect_max_retries, connect_initial_backoff, connect_max_backoff,
+      connect_retry_jitter,
+      [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
+        TENZIR_DEBUG("to_tcp: connecting to {}", address_.describe());
+        try {
+          co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
+            evb_, address_,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+              connect_timeout),
+            tls_context_, host_)};
+        } catch (folly::AsyncSocketException const& ex) {
+          // TODO: Surface connect retries and failures as metrics in a
+          // follow-up that covers all TCP operators.
+          diagnostic::warning("failed to connect to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .hint("ensure a TCP server is listening on this endpoint")
+            .emit(ctx.dh());
+          throw;
+        }
+      },
+      should_retry_connect);
+    auto peer_addr = (*transport_)->getPeerAddress();
+    bytes_write_counter_ = ctx.make_counter(
+      MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                peer_addr.getAddressStr())},
+      MetricsDirection::write, MetricsVisibility::external_);
+    TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
   }
 
   auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
@@ -240,7 +245,6 @@ private:
         co_await folly::coro::co_withExecutor(transport_evb,
                                               (**transport_).write(data));
         bytes_write_counter_.add(chunk->size());
-        reconnect_backoff_ = connect_initial_backoff;
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
         write_error = ex.what();
@@ -270,7 +274,6 @@ private:
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<Box<folly::coro::Transport>> transport_;
-  std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
   MetricsCounter bytes_write_counter_ = {};
   bool done_ = false;
 };
