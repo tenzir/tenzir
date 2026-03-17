@@ -184,7 +184,7 @@ jobs:
               # Resolve the tag to a digest for signing. Cosign warns when
               # signing by tag because the tag could be moved between the
               # manifest push and the signing step.
-              digest=$(docker buildx imagetools inspect "${image}" --format '{{.Manifest.Digest}}')
+              digest="sha256:$(docker buildx imagetools inspect "${image}" --raw | sha256sum | cut -d' ' -f1)"
               image_by_digest="${registry}/tenzir/${name}@${digest}"
               # Keyless signing uses GitHub Actions OIDC identity.
               # Verify with:
