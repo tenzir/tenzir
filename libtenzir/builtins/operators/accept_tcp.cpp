@@ -539,12 +539,21 @@ public:
         }
       }
       if (auto max_connections = ctx.get(max_connections_arg);
-          max_connections and max_connections->inner == 0) {
+          max_connections) {
         auto loc
           = ctx.get_location(max_connections_arg).value_or(location::unknown);
-        diagnostic::error("max_connections must be greater than 0")
-          .primary(loc)
-          .emit(ctx);
+        if (max_connections->inner == 0) {
+          diagnostic::error("max_connections must be greater than 0")
+            .primary(loc)
+            .emit(ctx);
+        } else if (max_connections->inner > static_cast<uint64_t>(
+                     std::numeric_limits<uint32_t>::max())) {
+          diagnostic::error("max_connections is too large")
+            .primary(loc)
+            .note("maximum supported value: {}",
+                  std::numeric_limits<uint32_t>::max())
+            .emit(ctx);
+        }
       }
       TRY(auto pipeline, ctx.get(pipeline_arg));
       auto output = pipeline.inner.infer_type(tag_v<chunk_ptr>, ctx);
