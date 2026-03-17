@@ -10,6 +10,7 @@ on:
 
 env:
   DEBIAN_FRONTEND: noninteractive
+  EXTERNAL_PR_LABEL: ok-to-test
 jobs:
   ansible-lint:
     name: ansible-lint
@@ -77,15 +78,19 @@ jobs:
   cmake-format:
     name: cmake-format
     runs-on: ubuntu-latest
+    env:
+      IS_FORK_PR: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Configure ssh-agent
+        if: env.IS_FORK_PR != 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Check out submodule
+        if: env.IS_FORK_PR != 'true'
         run: |
           git submodule update --init --recommend-shallow contrib/tenzir-plugins
       - name: Set up uv
@@ -96,8 +101,12 @@ jobs:
           git add --intent-to-add --all
           git ls-files -z -- 'CMakeLists.txt' '*.cmake' |
             xargs -0 uvx --from cmakelang cmake-format --in-place
-          git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
-            xargs -0 uvx --from cmakelang cmake-format --in-place
+          if [[ "${IS_FORK_PR}" != "true" ]]; then
+            git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
+              xargs -0 uvx --from cmakelang cmake-format --in-place
+          else
+            echo "::notice Skipping contrib/tenzir-plugins formatting for fork pull requests"
+          fi
           git diff --quiet --submodule=diff --exit-code || {
             echo '::error title=cmake-format::Please run `cmake-format --in-place path/to/file.cmake` or apply the following diff directly:'
             git diff --submodule=diff --exit-code
