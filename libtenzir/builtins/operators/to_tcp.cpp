@@ -14,6 +14,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -132,7 +133,7 @@ public:
     if (done_ or (*chunk)->size() == 0) {
       co_return;
     }
-    co_await write_chunk(*chunk, ctx.dh());
+    co_await write_chunk(*chunk, ctx);
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -183,7 +184,7 @@ private:
     }
   }
 
-  auto ensure_connected(diagnostic_handler& dh) -> Task<void> {
+  auto ensure_connected(OpCtx& ctx) -> Task<void> {
     while (not done_) {
       if (transport_) {
         co_return;
@@ -194,6 +195,11 @@ private:
           evb_, address_,
           std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
           tls_context_, host_)};
+        auto peer_addr = (*transport_)->getPeerAddress();
+        bytes_write_counter_ = ctx.make_counter(
+          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                    peer_addr.getAddressStr())},
+          MetricsDirection::write, MetricsVisibility::external_);
         reconnect_backoff_ = connect_initial_backoff;
         TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
         co_return;
@@ -212,25 +218,25 @@ private:
         .primary(args_.endpoint.source)
         .note("reason: {}", *connect_error)
         .hint("ensure a TCP server is listening on this endpoint")
-        .emit(dh);
+        .emit(ctx.dh());
       co_await folly::coro::sleep(backoff);
     }
   }
 
-  auto write_chunk(chunk_ptr const& chunk, diagnostic_handler& dh)
-    -> Task<void> {
+  auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
     auto data = folly::ByteRange{
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
     while (not done_) {
-      co_await ensure_connected(dh);
+      co_await ensure_connected(ctx);
       if (done_ or not transport_) {
         co_return;
       }
       auto write_error = Option<std::string>{};
       try {
         co_await folly::coro::co_withExecutor(evb_, (**transport_).write(data));
+        bytes_write_counter_.add(chunk->size());
         reconnect_backoff_ = connect_initial_backoff;
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
@@ -242,7 +248,7 @@ private:
         .primary(args_.endpoint.source)
         .note("reason: {}", *write_error)
         .note("retrying after reconnect")
-        .emit(dh);
+        .emit(ctx.dh());
       close_current_transport();
     }
   }
@@ -262,6 +268,7 @@ private:
                                            message_queue_capacity};
   Option<Box<folly::coro::Transport>> transport_;
   std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
+  MetricsCounter bytes_write_counter_ = {};
   bool done_ = false;
 };
 
