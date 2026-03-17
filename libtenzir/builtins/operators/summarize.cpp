@@ -185,20 +185,20 @@ using group_map
 
 struct bucket2 {
   std::vector<std::unique_ptr<aggregation_instance>> aggregations;
-  std::vector<chunk_ptr>
-    blobs_; // staging area for restore; empty during normal use
 
+  // Only the saving direction is handled here. Loading is performed at the
+  // implementation2 level via a temporary staging map so that blobs are never
+  // stored as a permanent member of live buckets.
   friend auto inspect(auto& f, bucket2& x) -> bool {
-    if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
-      return f.apply(x.blobs_);
-    } else {
-      auto blobs = std::vector<chunk_ptr>{};
-      blobs.reserve(x.aggregations.size());
-      for (const auto& aggr : x.aggregations) {
-        blobs.push_back(aggr->save());
-      }
-      return f.apply(blobs);
+    static_assert(not std::remove_reference_t<decltype(f)>::is_loading,
+                  "bucket2 does not support direct loading; use the "
+                  "implementation2 staging path");
+    auto blobs = std::vector<chunk_ptr>{};
+    blobs.reserve(x.aggregations.size());
+    for (const auto& aggr : x.aggregations) {
+      blobs.push_back(aggr->save());
     }
+    return f.apply(blobs);
   }
 };
 
@@ -264,7 +264,7 @@ public:
     auto current_begin = int64_t{0};
     for (auto row = int64_t{1}; row < total_rows; ++row) {
       find_or_create_group(row);
-      if (!group_by_key_equal{}(key, current_key)) {
+      if (! group_by_key_equal{}(key, current_key)) {
         update_group(groups_.find(current_key).value(), current_begin, row);
         current_key = materialize(key);
         current_begin = row;
@@ -441,41 +441,52 @@ private:
   }
 
   friend auto inspect(auto& f, implementation2& x) -> bool {
-    auto on_load = [&]() noexcept {
-      // Use a null diagnostic handler: make_bucket() is called only to
-      // instantiate fresh aggregation objects for restore; the pipeline was
-      // already validated at compile time so no real diagnostics are expected.
-      auto null_dh = null_diagnostic_handler{};
-      auto null_sp = session_provider::make(null_dh);
-      const auto expected
-        = x.make_bucket(null_sp.as_session()).aggregations.size();
-      for (auto it = x.groups_.begin(); it != x.groups_.end(); ++it) {
-        auto& bucket = it.value();
-        if (bucket.blobs_.size() != expected) {
-          TENZIR_WARN("summarize: snapshot has {} aggregation(s) but pipeline "
-                      "expects {}; discarding snapshot and starting fresh",
-                      bucket.blobs_.size(), expected);
-          x.discard_snapshot();
-          return true;
-        }
-        auto fresh = x.make_bucket(null_sp.as_session());
-        for (auto i = size_t{0}; i < bucket.blobs_.size(); ++i) {
-          if (not fresh.aggregations[i]->restore(std::move(bucket.blobs_[i]))) {
-            TENZIR_WARN("summarize: failed to restore aggregation state; "
-                        "discarding snapshot and starting fresh");
-            x.discard_snapshot(/*signal_failure=*/true);
+    if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
+      // Load group blobs into a temporary staging map so that bucket2 objects
+      // in steady state never carry an extra vector<chunk_ptr>. The staging
+      // map is destroyed at the end of this inspect call.
+      auto staging = group_map<std::vector<chunk_ptr>>{};
+      auto on_load = [&]() noexcept {
+        // Use a null diagnostic handler: make_bucket() is called only to
+        // instantiate fresh aggregation objects for restore; the pipeline was
+        // already validated at compile time so no real diagnostics are expected.
+        auto null_dh = null_diagnostic_handler{};
+        auto null_sp = session_provider::make(null_dh);
+        const auto expected
+          = x.make_bucket(null_sp.as_session()).aggregations.size();
+        for (auto it = staging.begin(); it != staging.end(); ++it) {
+          auto& blobs = it.value();
+          if (blobs.size() != expected) {
+            TENZIR_WARN("summarize: snapshot has {} aggregation(s) but "
+                        "pipeline expects {}; discarding snapshot and starting "
+                        "fresh",
+                        blobs.size(), expected);
+            x.discard_snapshot();
             return true;
           }
+          auto fresh = x.make_bucket(null_sp.as_session());
+          for (auto i = size_t{0}; i < blobs.size(); ++i) {
+            if (not fresh.aggregations[i]->restore(std::move(blobs[i]))) {
+              TENZIR_WARN("summarize: failed to restore aggregation state; "
+                          "discarding snapshot and starting fresh");
+              x.discard_snapshot(/*signal_failure=*/true);
+              return true;
+            }
+          }
+          x.groups_.emplace(it->first, std::move(fresh));
         }
-        bucket.aggregations = std::move(fresh.aggregations);
-        bucket.blobs_.clear();
-      }
-      return true;
-    };
-    return f.object(x).on_load(on_load).fields(
-      f.field("cfg", x.cfg_), f.field("saw_input", x.saw_input_),
-      f.field("groups", x.groups_),
-      f.field("previous_values", x.previous_values_));
+        return true;
+      };
+      return f.object(x).on_load(on_load).fields(
+        f.field("cfg", x.cfg_), f.field("saw_input", x.saw_input_),
+        f.field("groups", staging),
+        f.field("previous_values", x.previous_values_));
+    } else {
+      return f.object(x).fields(f.field("cfg", x.cfg_),
+                                f.field("saw_input", x.saw_input_),
+                                f.field("groups", x.groups_),
+                                f.field("previous_values", x.previous_values_));
+    }
   }
 
   friend auto inspect(auto& f, std::unique_ptr<implementation2>& x) -> bool {
