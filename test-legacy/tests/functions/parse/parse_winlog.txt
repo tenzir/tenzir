@@ -47,10 +47,10 @@
     Channel: "Application",
     Computer: "SERVER1",
   },
-  EventData: [
-    "MyApp.exe",
-    "1.0.0.0",
-  ],
+  EventData: {
+    _0: "MyApp.exe",
+    _1: 1.0.0.0,
+  },
 }
 {
   System: {
@@ -69,20 +69,52 @@
     },
   },
 }
+{
+  System: {
+    Provider: {
+      Name: "Microsoft-Windows-Security-Auditing",
+    },
+    EventID: 4624,
+    Channel: "Security",
+    Computer: "DC1",
+  },
+  RenderingInfo: {
+    Culture: "en-US",
+    Message: "An account was successfully logged on.",
+    Keywords: [
+      "Audit Success",
+    ],
+  },
+}
+{
+  System: {
+    Provider: {
+      Name: "Microsoft-Windows-Security-Auditing",
+    },
+    EventID: 4625,
+    Channel: "Security",
+    Computer: "DC1",
+  },
+  RenderingInfo: {
+    Culture: "en-US",
+    Message: "An account failed to log on.",
+    Keywords: [
+      "Audit Failure",
+      "Logon",
+    ],
+  },
+}
 {}
-warning: type mismatch between list elements
- = note: field `EventData`
-
 warning: failed to parse XML: line 1:15: no element found
-  --> tests/functions/parse/parse_winlog.tql:72:8
-   |
-72 | this = x.parse_winlog()
-   |        ~~~~~~~~~~~~~~~~ 
-   |
+   --> tests/functions/parse/parse_winlog.tql:102:8
+    |
+102 | this = x.parse_winlog()
+    |        ~~~~~~~~~~~~~~~~ 
+    |
 
 warning: assignment to `this` requires `record`, but got `null`
-  --> tests/functions/parse/parse_winlog.tql:72:1
-   |
-72 | this = x.parse_winlog()
-   | ~~~~ 
-   |
+   --> tests/functions/parse/parse_winlog.tql:102:1
+    |
+102 | this = x.parse_winlog()
+    | ~~~~ 
+    |

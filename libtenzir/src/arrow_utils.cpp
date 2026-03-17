@@ -441,9 +441,18 @@ auto partition_array(arrow::ArrayBuilder& true_builder,
       check(fb.Reserve(false_count));
       if constexpr (std::same_as<Ty, string_type>
                     or std::same_as<Ty, blob_type>) {
-        auto total_bytes = typed_array.total_values_length();
-        check(tb.ReserveData(total_bytes));
-        check(fb.ReserveData(total_bytes));
+        auto true_bytes = int64_t{0};
+        auto false_bytes = int64_t{0};
+        for (auto i = int64_t{0}; i < mask.length(); ++i) {
+          auto bytes = typed_array.value_length(i);
+          if (mask.IsValid(i) and mask.Value(i)) {
+            true_bytes += bytes;
+          } else {
+            false_bytes += bytes;
+          }
+        }
+        check(tb.ReserveData(true_bytes));
+        check(fb.ReserveData(false_bytes));
       }
       for_each_run(mask, [&](int64_t begin, int64_t end, bool value) {
         auto& b = value ? tb : fb;
