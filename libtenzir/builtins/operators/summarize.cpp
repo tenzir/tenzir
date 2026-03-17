@@ -252,22 +252,25 @@ public:
       return &it.value();
     };
     auto total_rows = detail::narrow<int64_t>(slice.rows());
-    // Reserve enough capacity before any insertions so that emplace_hint
-    // cannot trigger a rehash during the loop below. tsl::robin_map
-    // invalidates all pointers on rehash, so current_group would dangle
-    // if a new group insertion reallocated the table mid-iteration.
-    groups_.reserve(groups_.size() + static_cast<size_t>(total_rows));
-    auto* current_group = find_or_create_group(0);
+    // Seed the first group before entering the loop.
+    find_or_create_group(0);
+    // Track the current group by its materialized key rather than a raw
+    // pointer. tsl::robin_map invalidates all pointers and iterators on
+    // rehash, so holding &it.value() across an emplace would dangle.
+    // Re-looking up by key only at group-transition points costs one extra
+    // hash lookup per transition but avoids over-reserving capacity for
+    // low-cardinality inputs (e.g. no group-by).
+    auto current_key = materialize(key);
     auto current_begin = int64_t{0};
     for (auto row = int64_t{1}; row < total_rows; ++row) {
-      auto* group = find_or_create_group(row);
-      if (current_group != group) {
-        update_group(*current_group, current_begin, row);
-        current_group = group;
+      find_or_create_group(row);
+      if (!group_by_key_equal{}(key, current_key)) {
+        update_group(groups_.find(current_key).value(), current_begin, row);
+        current_key = materialize(key);
         current_begin = row;
       }
     }
-    update_group(*current_group, current_begin, total_rows);
+    update_group(groups_.find(current_key).value(), current_begin, total_rows);
   }
 
   auto flush(session ctx) -> std::vector<table_slice> {
