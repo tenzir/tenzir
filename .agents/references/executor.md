@@ -75,6 +75,25 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 - `process_task()` dispatches it with `co_match` and updates members.
 - The queue provides backpressure for free.
 
+### Semaphores for capacity limits
+
+Use `folly::fibers::Semaphore` for resource permits. Keep using message queues
+for state coordination.
+
+Acquire the permit before starting the operation that creates or reserves the
+resource. Release permits via RAII in the task that currently owns them. If
+ownership is handed back to the operator via a message, release it from the
+matching operator lifecycle path.
+
+```cpp
+Box<folly::fibers::Semaphore> permits_{std::in_place, limit};
+
+co_await permits_->co_wait();
+auto release = detail::scope_guard{[this]() noexcept { permits_->signal(); }};
+co_await start_work();
+release.disable();
+```
+
 ### Cancellation
 
 Do not customize cancellation unless necessary. The framework will by default

@@ -11,6 +11,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
@@ -27,6 +28,7 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/fibers/Semaphore.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
@@ -57,11 +59,8 @@ struct ServeTcpArgs {
 
 class ServeTcp final : public Operator<table_slice, void> {
 public:
-  struct ConnectionSlot {};
-
   struct Accepted {
     Box<folly::coro::Transport> client;
-    ConnectionSlot slot;
   };
 
   struct Payload {
@@ -72,7 +71,6 @@ public:
 
   using Message = variant<Accepted, Payload, AcceptLoopFinished>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
-  using SlotQueue = folly::coro::BoundedQueue<ConnectionSlot>;
 
   enum class Lifecycle {
     running,
@@ -84,7 +82,8 @@ public:
     : args_{std::move(args)},
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
-      slot_queue_{make_slot_queue(max_connections_)} {
+      connection_slots_{std::in_place,
+                        detail::narrow<size_t>(max_connections_)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
@@ -95,10 +94,6 @@ public:
     }
     if (args_.tls) {
       tls_ = tls_options{*args_.tls, {.is_server = true}};
-    }
-    for (auto i = uint64_t{0}; i < max_connections_; ++i) {
-      auto success = slot_queue_->try_enqueue(ConnectionSlot{});
-      TENZIR_ASSERT(success);
     }
   }
 
@@ -152,14 +147,13 @@ public:
       [&](Accepted accepted) -> Task<void> {
         if (lifecycle_ != Lifecycle::running) {
           close_client(std::move(accepted.client));
-          release_connection_slot(std::move(accepted.slot));
+          release_connection_slot();
           maybe_finish_draining();
           co_return;
         }
         TENZIR_DEBUG("accepted client {}",
                      accepted.client->getPeerAddress().describe());
-        clients_.push_back(
-          Client{std::move(accepted.client), std::move(accepted.slot)});
+        clients_.push_back(std::move(accepted.client));
         co_return;
       },
       [&](Payload payload) -> Task<void> {
@@ -229,17 +223,6 @@ public:
   }
 
 private:
-  struct Client {
-    Box<folly::coro::Transport> transport;
-    ConnectionSlot slot;
-  };
-
-  static auto make_slot_queue(uint64_t max_connections) -> Box<SlotQueue> {
-    TENZIR_ASSERT(max_connections <= std::numeric_limits<uint32_t>::max());
-    return Box<SlotQueue>{std::in_place,
-                          static_cast<uint32_t>(max_connections)};
-  }
-
   static auto close_client(Box<folly::coro::Transport> client) -> void {
     auto* evb = client->getEventBase();
     TENZIR_ASSERT(evb);
@@ -280,32 +263,24 @@ private:
     if (lifecycle_ != Lifecycle::draining) {
       return;
     }
-    // All slots must be returned *and* the accept loop must have finished
-    // (which implies all in-flight finish_accept tasks have completed) before
-    // we can safely transition to done.
+    // All connection permits must be returned *and* the accept loop must have
+    // finished (which implies all in-flight finish_accept tasks have
+    // completed) before we can safely transition to done.
     if (accept_loop_finished_
-        and static_cast<uint64_t>(slot_queue_->size()) == max_connections_) {
+        and static_cast<uint64_t>(connection_slots_->getAvailableTokens())
+              == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
   }
 
-  auto try_acquire_connection_slot() -> Option<ConnectionSlot> {
-    auto slot = slot_queue_->try_dequeue();
-    if (not slot) {
-      return None{};
-    }
-    return std::move(*slot);
-  }
-
-  auto release_connection_slot(ConnectionSlot slot) -> void {
-    auto success = slot_queue_->try_enqueue(std::move(slot));
-    TENZIR_ASSERT(success);
+  auto release_connection_slot() -> void {
+    connection_slots_->signal();
   }
 
   auto close_all_clients() -> void {
     for (auto& client : clients_) {
-      close_client(std::move(client.transport));
-      release_connection_slot(std::move(client.slot));
+      close_client(std::move(client));
+      release_connection_slot();
     }
     clients_.clear();
   }
@@ -333,23 +308,22 @@ private:
       chunk->size(),
     };
     for (size_t i = 0; i < clients_.size();) {
-      auto ok = co_await write_to_client(*clients_[i].transport, data);
+      auto ok = co_await write_to_client(*clients_[i], data);
       if (ok) {
         ++i;
         continue;
       }
-      close_client(std::move(clients_[i].transport));
-      release_connection_slot(std::move(clients_[i].slot));
+      close_client(std::move(clients_[i]));
+      release_connection_slot();
       clients_.erase(clients_.begin() + i);
       maybe_finish_draining();
     }
   }
 
   auto finish_accept(Box<folly::coro::Transport> client, std::string peer,
-                     ConnectionSlot slot, diagnostic_handler& dh)
-    -> Task<void> {
-    auto release_connection_slot_guard = detail::scope_guard{[&]() noexcept {
-      release_connection_slot(std::move(slot));
+                     diagnostic_handler& dh) -> Task<void> {
+    auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
+      release_connection_slot();
     }};
     if (tls_context_) {
       try {
@@ -374,8 +348,7 @@ private:
       co_return;
     }
     TENZIR_DEBUG("serve_tcp: accepted {}", peer);
-    co_await message_queue_->enqueue(
-      Accepted{std::move(client), std::move(slot)});
+    co_await message_queue_->enqueue(Accepted{std::move(client)});
     release_connection_slot_guard.disable();
   }
 
@@ -386,6 +359,12 @@ private:
     co_await async_scope([&](AsyncScope& scope) -> Task<void> {
       while (not cancellation_token.isCancellationRequested()) {
         auto accept_error = Option<std::string>{};
+        co_await folly::coro::co_safe_point;
+        co_await connection_slots_->co_wait();
+        auto release_connection_slot_guard
+          = detail::scope_guard{[this]() noexcept {
+              release_connection_slot();
+            }};
         try {
           auto transport
             = co_await folly::coro::co_withExecutor(evb_, server_->accept());
@@ -396,22 +375,8 @@ private:
             co_return;
           }
           auto peer = client->getPeerAddress().describe();
-          auto slot = try_acquire_connection_slot();
-          if (not slot) {
-            diagnostic::warning(
-              "connection rejected: maximum number of connections reached")
-              .primary(args_.endpoint.source)
-              .note("peer: {}", peer)
-              .note("max_connections: {}", max_connections_)
-              .hint(
-                "increase `max_connections` if this level of concurrency is "
-                "expected")
-              .emit(dh);
-            close_client(std::move(client));
-            continue;
-          }
-          scope.spawn(finish_accept(std::move(client), std::move(peer),
-                                    std::move(*slot), dh));
+          scope.spawn(finish_accept(std::move(client), std::move(peer), dh));
+          release_connection_slot_guard.disable();
         } catch (folly::AsyncSocketException const& ex) {
           // Accept failures are per-connection network errors; keep the
           // listener alive and continue accepting new clients.
@@ -442,9 +407,9 @@ private:
   uint64_t max_connections_ = 128;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  Box<SlotQueue> slot_queue_;
+  Box<folly::fibers::Semaphore> connection_slots_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
-  std::vector<Client> clients_;
+  std::vector<Box<folly::coro::Transport>> clients_;
   bool accept_loop_finished_ = true;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
@@ -486,11 +451,11 @@ public:
             .primary(loc)
             .emit(ctx);
         } else if (max_connections->inner > static_cast<uint64_t>(
-                     std::numeric_limits<uint32_t>::max())) {
+                     std::numeric_limits<size_t>::max())) {
           diagnostic::error("max_connections is too large")
             .primary(loc)
             .note("maximum supported value: {}",
-                  std::numeric_limits<uint32_t>::max())
+                  std::numeric_limits<size_t>::max())
             .emit(ctx);
         }
       }
