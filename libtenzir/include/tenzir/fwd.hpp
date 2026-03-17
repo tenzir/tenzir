@@ -313,6 +313,8 @@ class legacy_deserializer;
 } // namespace detail
 
 using ids = bitmap; // temporary; until we have a real type for 'ids'
+using operand = variant<meta_extractor, field_extractor, type_extractor,
+                        data_extractor, data>;
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
