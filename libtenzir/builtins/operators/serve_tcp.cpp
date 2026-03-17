@@ -22,6 +22,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
@@ -117,7 +118,13 @@ public:
       std::move(socket), address_, listen_backlog);
     accept_loop_finished_ = false;
     ctx.spawn_task([this, &ctx]() -> Task<void> {
-      co_await accept_loop(ctx.dh());
+      try {
+        co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
+                                                  accept_loop(ctx.dh()));
+      } catch (folly::OperationCancelled const&) {
+        // Cancellation is expected during draining; still notify process_task
+        // so the listener can transition to done.
+      }
       co_await message_queue_->enqueue(AcceptLoopFinished{});
     });
     auto pipeline = std::move(args_.printer.inner);
