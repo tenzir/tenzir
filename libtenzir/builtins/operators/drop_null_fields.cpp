@@ -10,6 +10,7 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/table_slice.hpp>

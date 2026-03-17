@@ -8,10 +8,14 @@
 
 #pragma once
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/expression.hpp"
-#include "tenzir/pipeline.hpp"
 #include "tenzir/tql/expression.hpp"
+
+#include <optional>
+#include <string>
+#include <utility>
 
 namespace tenzir {
 
@@ -61,109 +65,35 @@ public:
     : keyword_{std::move(keyword)}, p_{p} {
   }
 
-  auto parse_operator() -> located<operator_ptr> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.parse_operator();
-  }
+  auto parse_operator() -> located<operator_ptr> override;
 
-  auto accept_identifier() -> std::optional<identifier> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.accept_identifier();
-  }
+  auto accept_identifier() -> std::optional<identifier> override;
 
-  auto peek_identifier() -> std::optional<identifier> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.peek_identifier();
-  }
+  auto peek_identifier() -> std::optional<identifier> override;
 
-  auto accept_equals() -> std::optional<location> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.accept_equals();
-  }
+  auto accept_equals() -> std::optional<location> override;
 
-  auto accept_char(char c) -> std::optional<location> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.accept_char(c);
-  }
+  auto accept_char(char c) -> std::optional<location> override;
 
-  auto peek_char(char c) -> std::optional<location> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.peek_char(c);
-  }
+  auto peek_char(char c) -> std::optional<location> override;
 
-  auto parse_expression() -> tql::expression override {
-    if (at_end()) {
-      diagnostic::error("expected expression").primary(current_span()).throw_();
-    }
-    return p_.parse_expression();
-  }
+  auto parse_expression() -> tql::expression override;
 
-  auto accept_shell_arg() -> std::optional<located<std::string>> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.accept_shell_arg();
-  }
+  auto accept_shell_arg() -> std::optional<located<std::string>> override;
 
-  auto peek_shell_arg() -> std::optional<located<std::string>> override {
-    if (at_end()) {
-      return {};
-    }
-    return p_.peek_shell_arg();
-  }
+  auto peek_shell_arg() -> std::optional<located<std::string>> override;
 
-  auto parse_legacy_expression() -> located<tenzir::expression> override {
-    if (at_end()) {
-      diagnostic::error("expected expression").primary(current_span()).throw_();
-    }
-    return p_.parse_legacy_expression();
-  }
+  auto parse_legacy_expression() -> located<tenzir::expression> override;
 
-  auto parse_extractor() -> tql::extractor override {
-    return p_.parse_extractor();
-  }
+  auto parse_extractor() -> tql::extractor override;
 
-  auto parse_data() -> located<tenzir::data> override {
-    if (at_end()) {
-      diagnostic::error("expected data").primary(current_span()).throw_();
-    }
-    return p_.parse_data();
-  }
+  auto parse_data() -> located<tenzir::data> override;
 
-  auto parse_int() -> located<int64_t> override {
-    if (at_end()) {
-      diagnostic::error("expected int64").primary(current_span()).throw_();
-    }
-    return p_.parse_int();
-  }
+  auto parse_int() -> located<int64_t> override;
 
-  auto at_end() -> bool override {
-    if (p_.at_end()) {
-      return true;
-    }
-    if (auto word = p_.peek_identifier()) {
-      if (word == keyword_) {
-        return true;
-      }
-    }
-    return false;
-  }
+  auto at_end() -> bool override;
 
-  auto current_span() -> location override {
-    return p_.current_span();
-  }
+  auto current_span() -> location override;
 
 private:
   std::string keyword_;

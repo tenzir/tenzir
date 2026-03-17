@@ -12,6 +12,7 @@
 #include "tenzir/view3.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 

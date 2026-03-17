@@ -11,6 +11,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>

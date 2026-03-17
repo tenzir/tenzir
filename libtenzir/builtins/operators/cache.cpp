@@ -18,6 +18,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/shared_diagnostic_handler.hpp>

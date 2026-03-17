@@ -12,6 +12,7 @@
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>

@@ -11,12 +11,114 @@
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/tenzir/si.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/pipeline.hpp"
 
 #include <string_view>
 #include <variant>
 
 namespace tenzir {
+
+void argument_parser::add(tenzir::expression& x, std::string meta) {
+  TENZIR_ASSERT(! first_optional_);
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      x = std::move(p.parse_legacy_expression().inner);
+    },
+  });
+}
+
+void argument_parser::add(located<tenzir::expression>& x, std::string meta) {
+  TENZIR_ASSERT(! first_optional_);
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      x = p.parse_legacy_expression();
+    },
+  });
+}
+
+void argument_parser::add(std::optional<tenzir::expression>& x,
+                          std::string meta) {
+  if (! first_optional_) {
+    first_optional_ = positional_.size();
+  }
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      x = std::move(p.parse_legacy_expression().inner);
+    },
+  });
+}
+
+void argument_parser::add(std::optional<located<tenzir::expression>>& x,
+                          std::string meta) {
+  if (! first_optional_) {
+    first_optional_ = positional_.size();
+  }
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      x = p.parse_legacy_expression();
+    },
+  });
+}
+
+void argument_parser::add(tql::expression& x, std::string meta) {
+  TENZIR_ASSERT(! first_optional_);
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      x = p.parse_expression();
+    },
+  });
+}
+
+void argument_parser::add(located<tql::expression>& x, std::string meta) {
+  TENZIR_ASSERT(! first_optional_);
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      auto expr = p.parse_expression();
+      x = {std::move(expr), expr.source};
+    },
+  });
+}
+
+void argument_parser::add(std::optional<tql::expression>& x, std::string meta) {
+  if (! first_optional_) {
+    first_optional_ = positional_.size();
+  }
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      x = p.parse_expression();
+    },
+  });
+}
+
+void argument_parser::add(std::optional<located<tql::expression>>& x,
+                          std::string meta) {
+  if (! first_optional_) {
+    first_optional_ = positional_.size();
+  }
+  positional_.push_back(positional_t{
+    std::move(meta),
+    true,
+    [&x](parser_interface& p) {
+      auto expr = p.parse_expression();
+      x = located<tql::expression>{std::move(expr), expr.source};
+    },
+  });
+}
 
 void argument_parser::parse(parser_interface& p) {
   called_parse_ = true;
@@ -36,8 +138,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
   // not allowing short options if there is a positional expression.
   auto has_positional_expression = std::any_of(
     positional_.begin(), positional_.end(), [](const positional_t& p) {
-      return std::holds_alternative<setter<tql::expression>>(p.set)
-             || std::holds_alternative<setter<tenzir::expression>>(p.set);
+      return p.is_expression;
     });
   if (has_positional_expression) {
     for (const auto& option : named_) {
@@ -119,40 +220,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
         .primary(source)
         .throw_();
     } else {
-      auto f = detail::overload{
-        [&](const setter<std::string>& set) {
-          if (auto arg = p.accept_shell_arg()) {
-            set(std::move(*arg));
-          } else {
-            diagnostic::error("expected positional argument")
-              .primary(p.current_span())
-              .throw_();
-          }
-        },
-        [&](const setter<tql::expression>& set) {
-          auto expr = p.parse_expression();
-          auto source = expr.source;
-          set({std::move(expr), source});
-        },
-        [&](const setter<tenzir::expression>& set) {
-          set(p.parse_legacy_expression());
-        },
-        [&](const setter<uint64_t>& set) {
-          auto arg = p.accept_shell_arg();
-          if (!arg) {
-            diagnostic::error("expected positional argument")
-              .primary(p.current_span())
-              .throw_();
-          }
-          auto it = arg->inner.begin();
-          auto parsed = parsers::count.apply(it, arg->inner.end());
-          if (!parsed || it != arg->inner.end()) {
-            diagnostic::error("expected a number").primary(arg->source).throw_();
-          }
-          set({*parsed, arg->source});
-        },
-      };
-      std::visit(f, positional_[positional].set);
+      positional_[positional].set(p);
       positional += 1;
     }
   }

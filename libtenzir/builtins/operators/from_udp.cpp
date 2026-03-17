@@ -10,6 +10,7 @@
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/posix.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/socket.hpp>

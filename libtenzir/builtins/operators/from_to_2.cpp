@@ -14,6 +14,7 @@
 #include <tenzir/glob.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>

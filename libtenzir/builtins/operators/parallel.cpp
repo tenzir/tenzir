@@ -11,6 +11,7 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>

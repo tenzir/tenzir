@@ -12,6 +12,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/view3.hpp"
 

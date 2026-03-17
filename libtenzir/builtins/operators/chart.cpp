@@ -21,6 +21,7 @@
 #include "tenzir/tql2/resolve.hpp"
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir::plugins::chart {
 

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/url.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"

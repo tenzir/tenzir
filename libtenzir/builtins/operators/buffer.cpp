@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>

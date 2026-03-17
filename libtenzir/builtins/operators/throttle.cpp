@@ -10,6 +10,7 @@
 
 #include <tenzir/checked_math.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>

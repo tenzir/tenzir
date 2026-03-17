@@ -13,6 +13,7 @@
 #include <tenzir/duration_synopsis.hpp>
 #include <tenzir/int64_synopsis.hpp>
 #include <tenzir/partition_synopsis.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>

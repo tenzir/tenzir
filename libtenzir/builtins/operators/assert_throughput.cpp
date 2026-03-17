@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::assert_throughput {

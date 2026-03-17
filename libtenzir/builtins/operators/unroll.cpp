@@ -12,6 +12,7 @@
 #include <tenzir/bitmap.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>

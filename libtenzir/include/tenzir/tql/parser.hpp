@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/pipeline.hpp"
 
 namespace tenzir::tql {
 
