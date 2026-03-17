@@ -60,7 +60,10 @@ _LINK_MULTI_MULTI_PAGE_1 = "/link-pagination/multi-multi/1"
 _LINK_MULTI_MULTI_PAGE_2 = "/link-pagination/multi-multi/2"
 _LINK_MULTI_MULTI_PAGE_3 = "/link-pagination/multi-multi/3"
 _LINK_NONE_PAGE_1 = "/link-pagination/no-link/1"
+_LAMBDA_PAGE_1 = "/lambda-pagination/1"
+_LAMBDA_PAGE_2 = "/lambda-pagination/2"
 _GZIP_EMPTY = "/content-encoding/gzip-empty"
+_CONCURRENCY_PREFIX = "/options/concurrency/"
 
 
 @dataclass(frozen=True)
@@ -120,7 +123,16 @@ def _make_handler(
     errors: list[str],
     request_count: list[int],
 ):
+    concurrency_condition = threading.Condition()
+    concurrency_active = [0]
+    concurrency_peak = [0]
+
     class RecordingEchoHandler(BaseHTTPRequestHandler):
+        def _base_url(self) -> str:
+            scheme = "https" if opts.tls else "http"
+            host, port = self.server.server_address
+            return f"{scheme}://{host}:{port}"
+
         def _validate_request(self, path: str, body: bytes) -> None:
             request_count[0] += 1
             expected_request = opts.expected_request
@@ -255,6 +267,32 @@ def _make_handler(
                     + b"\n"
                 )
                 return
+            if path.startswith(_CONCURRENCY_PREFIX):
+                request_id = path.removeprefix(_CONCURRENCY_PREFIX)
+                with concurrency_condition:
+                    concurrency_active[0] += 1
+                    concurrency_peak[0] = max(
+                        concurrency_peak[0],
+                        concurrency_active[0],
+                    )
+                    if concurrency_active[0] < 2:
+                        concurrency_condition.wait_for(
+                            lambda: concurrency_active[0] >= 2,
+                            timeout=0.5,
+                        )
+                    else:
+                        concurrency_condition.notify_all()
+                    peak = concurrency_peak[0]
+                try:
+                    self._reply(
+                        json.dumps({"id": request_id, "peak": peak}).encode()
+                        + b"\n"
+                    )
+                finally:
+                    with concurrency_condition:
+                        concurrency_active[0] -= 1
+                        concurrency_condition.notify_all()
+                return
             if path == "/status/not-found":
                 self._reply(
                     b'{"error":"not-found"}\n',
@@ -355,6 +393,20 @@ def _make_handler(
             if path == _LINK_NONE_PAGE_1:
                 self._reply(self._page_payload(1))
                 return
+            if path == _LAMBDA_PAGE_1:
+                self._reply(
+                    json.dumps(
+                        {
+                            "page": 1,
+                            "next": f"{self._base_url()}{_LAMBDA_PAGE_2}",
+                        }
+                    ).encode()
+                    + b"\n"
+                )
+                return
+            if path == _LAMBDA_PAGE_2:
+                self._reply(self._page_payload(2))
+                return
             self._reply(body)
 
         def log_message(self, *_: object) -> None:  # noqa: D401
@@ -402,6 +454,7 @@ def _run_server(
             "HTTP_FIXTURE_URL": url,
             "HTTP_FIXTURE_ENDPOINT": url,
             "HTTP_FIXTURE_LINK_URL": f"{base_url}{_LINK_BASIC_PAGE_1}",
+            "HTTP_FIXTURE_LINK_PAGE_2_URL": f"{base_url}{_LINK_BASIC_PAGE_2}",
             "HTTP_FIXTURE_LINK_CHAIN_URL": f"{base_url}{_LINK_CHAIN_PREFIX}1",
             "HTTP_FIXTURE_LINK_EDGE_URL": f"{base_url}{_LINK_EDGE_PAGE_1}",
             "HTTP_FIXTURE_LINK_UNREACHABLE_URL": (
@@ -412,9 +465,11 @@ def _run_server(
             ),
             "HTTP_FIXTURE_LINK_MULTI_MULTI_URL": f"{base_url}{_LINK_MULTI_MULTI_PAGE_1}",
             "HTTP_FIXTURE_LINK_NONE_URL": f"{base_url}{_LINK_NONE_PAGE_1}",
+            "HTTP_FIXTURE_LAMBDA_URL": f"{base_url}{_LAMBDA_PAGE_1}",
             "HTTP_FIXTURE_METHOD_URL": f"{base_url}/options/method",
             "HTTP_FIXTURE_HEADER_URL": f"{base_url}/options/header",
             "HTTP_FIXTURE_BODY_URL": f"{base_url}/options/body",
+            "HTTP_FIXTURE_CONCURRENCY_URL": f"{base_url}/options/concurrency",
             "HTTP_FIXTURE_STATUS_404_URL": f"{base_url}/status/not-found",
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",
             "HTTP_CAPTURE_FILE": str(capture_path),

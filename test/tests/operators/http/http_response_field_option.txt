@@ -1,0 +1,8 @@
+{
+  id: 42,
+  u: "http://127.0.0.1:*/options/method",
+  m: "put",
+  response: {
+    method: "PUT",
+  },
+}

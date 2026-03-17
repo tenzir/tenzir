@@ -1,13 +1,7 @@
-warning: eval not implemented yet for: {params: [`left` @ 100..104, `right` @ 106..111], arrow: 113..115, body: root_field {id: `left` @ 116..120, has_question_mark: false}}
- --> tests/operators/from_http/http_paginate_binary_lambda_rejected.tql:7:22
-  |
-7 | http url, paginate=((left, right) => left) { read_json }
-  |                      ~~~~~~~~~~~~~~~~~~~~ 
-  |
-
-error: expected TODO but got caf.none_t
+error: expected unary lambda
  --> tests/operators/from_http/http_paginate_binary_lambda_rejected.tql:7:22
   |
 7 | http url, paginate=((left, right) => left) { read_json }
   |                      ^^^^^^^^^^^^^^^^^^^^ 
   |
+  = hint: binary lambdas are only supported for `sort(..., cmp=...)`

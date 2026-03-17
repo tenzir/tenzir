@@ -1,0 +1,8 @@
+{
+  page: 1,
+  next: "http://127.0.0.1:*/lambda-pagination/2",
+}
+{
+  page: 2,
+  next: null,
+}

@@ -4,4 +4,4 @@ error: unsupported pagination mode: `invalid`
 5 | http "https://example.org/data.json", paginate="invalid" {
   |                                                ^^^^^^^^^ 
   |
-  = hint: `paginate` must be `"link"`
+  = hint: `paginate` must be `"link"` or a lambda
