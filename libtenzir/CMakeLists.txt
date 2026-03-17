@@ -523,8 +523,22 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   # tree but invisible in export()/install(EXPORT), avoiding a cascade
   # of internal targets leaking into the TenzirTargets export set.
   target_link_libraries(libtenzir PUBLIC $<BUILD_LOCAL_INTERFACE:Folly::folly>)
+  # Wangle's acceptor code reaches into folly's io_uring and fd-socket helpers,
+  # but those archives are not propagated on all bundled static link paths.
+  # Link them directly for local bundled builds so Docker links stay complete
+  # without leaking internal folly targets into the exported package.
+  target_link_libraries(
+    libtenzir
+    PUBLIC $<BUILD_LOCAL_INTERFACE:Folly::folly_io_async_async_io_uring_socket>
+           $<BUILD_LOCAL_INTERFACE:Folly::folly_io_async_fdsock_async_fd_socket>
+  )
 else ()
   target_link_libraries(libtenzir PUBLIC Folly::folly)
+  # System static link paths can also miss these granular folly archives.
+  # Link them explicitly so Nix static builds resolve wangle's transitive uses.
+  target_link_libraries(
+    libtenzir PUBLIC Folly::folly_io_async_async_io_uring_socket
+                     Folly::folly_io_async_fdsock_async_fd_socket)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST
          "\nfind_package(glog CONFIG REQUIRED)")
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
@@ -543,10 +557,10 @@ endif ()
 # the monolithic `proxygen` target, while proxygen_utils_trace still references
 # symbols from proxygen_utils_trace_event_types without declaring that
 # dependency. The HTTP server helpers live in a separate coro-server target.
-target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
-                                        proxygen::proxygen_coro_server
-                                        proxygen_utils_trace_event_types
-                                        proxygen)
+target_link_libraries(
+  libtenzir
+  PRIVATE proxygen::proxygen_coro_client proxygen::proxygen_coro_server
+          proxygen_utils_trace_event_types proxygen)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -557,9 +571,9 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
     PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>
             $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_server>)
 else ()
-  target_link_libraries(libtenzir_builtins
-                        PRIVATE proxygen::proxygen_coro_client
-                                proxygen::proxygen_coro_server)
+  target_link_libraries(
+    libtenzir_builtins PRIVATE proxygen::proxygen_coro_client
+                               proxygen::proxygen_coro_server)
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)
