@@ -1,0 +1,3 @@
+from {x: 0}
+head 0
+summarize count()

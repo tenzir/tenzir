@@ -8,6 +8,7 @@
 
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -111,33 +112,32 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::Mean>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `mean` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN(
+        "failed to restore `mean` aggregation instance: invalid FlatBuffer");
+      return false;
     }
     mean_ = (*fb)->result();
     count_ = (*fb)->count();
     switch ((*fb)->state()) {
       case fbs::aggregation::MeanState::None:
         state_ = state::none;
-        return;
+        return true;
       case fbs::aggregation::MeanState::Failed:
         state_ = state::failed;
-        return;
+        return true;
       case fbs::aggregation::MeanState::Duration:
         state_ = state::dur;
-        return;
+        return true;
       case fbs::aggregation::MeanState::Numeric:
         state_ = state::numeric;
-        return;
+        return true;
     }
-    diagnostic::warning("unknown `state` value")
-      .note("failed to restore `mean` aggregation instance")
-      .emit(ctx);
+    TENZIR_WARN(
+      "failed to restore `mean` aggregation instance: unknown state value");
+    return false;
   }
 
   auto reset() -> void override {

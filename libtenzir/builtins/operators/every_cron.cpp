@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/task.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -20,25 +21,11 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
-#include <folly/coro/Sleep.h>
-
 #include <string_view>
 
 namespace tenzir::plugins::every_cron {
 
 namespace {
-
-auto sleep(duration d) -> Task<void> {
-  return folly::coro::sleep(
-    std::chrono::duration_cast<folly::HighResDuration>(d));
-}
-
-auto sleep_until(time t) -> Task<void> {
-  auto now = time::clock::now();
-  // The check is needed because `-` can overflow and yield unexpected results.
-  auto diff = t < now ? duration{0} : t - now;
-  return sleep(diff);
-}
 
 template <class Input>
 class EveryBase : public Operator<Input, table_slice> {

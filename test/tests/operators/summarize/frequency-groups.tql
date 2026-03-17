@@ -1,0 +1,8 @@
+// Reset mode with a group: verify per-group aggregations reset after each
+// emission. Events are scheduled so the timer fires between them.
+from {ts: 0ms.from_epoch(), g: "a", x: 1},
+     {ts: 90ms.from_epoch(), g: "a", x: 2},
+     {ts: 360ms.from_epoch(), g: "a", x: 3},
+     {ts: 660ms.from_epoch(), g: "a", x: 4}
+delay ts
+summarize total=sum(x), g, options={frequency: 300ms}

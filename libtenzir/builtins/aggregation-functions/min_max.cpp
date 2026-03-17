@@ -9,6 +9,7 @@
 #include <tenzir/data.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -151,55 +152,55 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
+    constexpr auto name = Mode == mode::min ? "min" : "max";
     const auto fb
       = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::min ? "min" : "max")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                  "FlatBuffer",
+                  name);
+      return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      diagnostic::warning("missing field `result`")
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::min ? "min" : "max")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field "
+                  "`result`",
+                  name);
+      return false;
     }
     auto result = data{};
     if (auto err = unpack(*fb_result, result); err.valid()) {
-      diagnostic::warning("{}", err)
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::min ? "min" : "max")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: {}", name, err);
+      return false;
     }
+    auto ok = true;
     match(result, [&]<class T>(const T& x) {
       if constexpr (std::is_same_v<T, caf::none_t>) {
         result_.reset();
       } else if constexpr (result_t::can_have<T>) {
         result_.emplace(x);
       } else {
-        diagnostic::warning("invalid value for field `result`: `{}`", result)
-          .note("failed to restore `{}` aggregation instance",
-                Mode == mode::min ? "min" : "max")
-          .emit(ctx);
+        TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                    "value for field `result`: `{}`",
+                    name, result);
+        ok = false;
       }
     });
+    if (not ok) {
+      return false;
+    }
     const auto* fb_type = (*fb)->type();
     if (not fb_type) {
-      diagnostic::warning("missing field `type`")
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::min ? "min" : "max")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field "
+                  "`type`",
+                  name);
+      return false;
     }
     const auto* fb_type_nested_root = (*fb)->type_nested_root();
     TENZIR_ASSERT(fb_type_nested_root);
     type_ = type{fb->slice(*fb_type_nested_root, *fb_type)};
+    return true;
   }
 
   auto reset() -> void override {

@@ -1,0 +1,6 @@
+error: spread not allowed in options record
+ --> tests/operators/summarize/options-spread-disallowed.tql:6:34
+  |
+6 | summarize count=count(), options={...this}
+  |                                  ^^^^^^^^^ 
+  |

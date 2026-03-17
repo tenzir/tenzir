@@ -1,0 +1,8 @@
+{
+  renamed_a: 1,
+  n: 2,
+}
+{
+  renamed_a: 2,
+  n: 1,
+}

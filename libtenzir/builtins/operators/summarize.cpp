@@ -9,6 +9,9 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/async/task.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -16,11 +19,15 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
+#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/registry.hpp>
@@ -143,19 +150,30 @@ struct config {
   /// corresponds to `aggregates`, otherwise `groups[-index - 1]`.
   std::vector<int64_t> indices;
 
+  /// Unevaluated expression for the `frequency` option. Set by build_config
+  /// when parsing options={frequency: <expr>}. Evaluated and written to
+  /// `frequency` by evaluate_options() after let-bindings are substituted.
+  std::optional<ast::expression> frequency_expr;
+
+  /// Unevaluated expression for the `mode` option. Set by build_config when
+  /// parsing options={mode: <expr>}. Evaluated and written to `mode` by
+  /// evaluate_options() after let-bindings are substituted.
+  std::optional<ast::expression> mode_expr;
+
   /// Optional frequency for periodic emission of aggregation results.
+  /// Populated by evaluate_options().
   std::optional<duration> frequency;
 
   /// Emission mode: "reset", "cumulative", or "update".
-  /// - "reset" (default): Reset aggregations after each emission
-  /// - "cumulative": Accumulate aggregations across emissions
-  /// - "update": Accumulate but only emit when values change
+  /// Populated by evaluate_options(). Defaults to "reset".
   std::string mode = "reset";
 
   friend auto inspect(auto& f, config& x) -> bool {
     return f.object(x).fields(f.field("aggregates", x.aggregates),
                               f.field("groups", x.groups),
                               f.field("indices", x.indices),
+                              f.field("frequency_expr", x.frequency_expr),
+                              f.field("mode_expr", x.mode_expr),
                               f.field("frequency", x.frequency),
                               f.field("mode", x.mode));
   }
@@ -166,40 +184,60 @@ using group_map
   = tsl::robin_map<group_by_key, Value, group_by_key_hash, group_by_key_equal>;
 
 struct bucket2 {
-  std::vector<std::unique_ptr<aggregation_instance>> aggregations{};
+  std::vector<std::unique_ptr<aggregation_instance>> aggregations;
+
+  // Only the saving direction is handled here. Loading is performed at the
+  // implementation2 level via a temporary staging map so that blobs are never
+  // stored as a permanent member of live buckets.
+  friend auto inspect(auto& f, bucket2& x) -> bool {
+    static_assert(not std::remove_reference_t<decltype(f)>::is_loading,
+                  "bucket2 does not support direct loading; use the "
+                  "implementation2 staging path");
+    auto blobs = std::vector<chunk_ptr>{};
+    blobs.reserve(x.aggregations.size());
+    for (const auto& aggr : x.aggregations) {
+      blobs.push_back(aggr->save());
+    }
+    return f.apply(blobs);
+  }
 };
 
 class implementation2 {
 public:
-  explicit implementation2(const config& cfg, session ctx)
-    : cfg_{cfg}, ctx_{ctx} {
+  implementation2() = default;
+
+  explicit implementation2(config cfg) : cfg_{std::move(cfg)} {
   }
 
-  auto make_bucket() -> std::unique_ptr<bucket2> {
-    auto bucket = std::make_unique<bucket2>();
+  auto cfg() const -> const config& {
+    return cfg_;
+  }
+
+  auto make_bucket(session ctx) -> bucket2 {
+    auto bucket = bucket2{};
     for (const auto& aggr : cfg_.aggregates) {
       // We already checked the cast and instantiation before.
       const auto* fn
-        = dynamic_cast<const aggregation_plugin*>(&ctx_.reg().get(aggr.call));
+        = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
       TENZIR_ASSERT(fn);
-      bucket->aggregations.push_back(
-        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx_)
+      bucket.aggregations.push_back(
+        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx)
           .unwrap());
     }
     return bucket;
   }
 
-  void add(const table_slice& slice) {
+  void add(const table_slice& slice, session ctx) {
     saw_input_ = true;
     auto group_values = std::vector<multi_series>{};
     for (auto& group : cfg_.groups) {
-      group_values.push_back(eval(group.expr.inner(), slice, ctx_));
+      group_values.push_back(eval(group.expr.inner(), slice, ctx));
     }
     auto key = group_by_key_view{};
     key.resize(cfg_.groups.size());
     auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
       for (auto&& aggr : group.aggregations) {
-        aggr->update(subslice(slice, begin, end), ctx_);
+        aggr->update(subslice(slice, begin, end), ctx);
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
@@ -209,29 +247,37 @@ public:
       }
       auto it = groups_.find(key);
       if (it == groups_.end()) {
-        it = groups_.emplace_hint(it, materialize(key), make_bucket());
+        it = groups_.emplace_hint(it, materialize(key), make_bucket(ctx));
       }
-      return &*it->second;
+      return &it.value();
     };
     auto total_rows = detail::narrow<int64_t>(slice.rows());
-    auto current_group = find_or_create_group(0);
+    // Seed the first group before entering the loop.
+    find_or_create_group(0);
+    // Track the current group by its materialized key rather than a raw
+    // pointer. tsl::robin_map invalidates all pointers and iterators on
+    // rehash, so holding &it.value() across an emplace would dangle.
+    // Re-looking up by key only at group-transition points costs one extra
+    // hash lookup per transition but avoids over-reserving capacity for
+    // low-cardinality inputs (e.g. no group-by).
+    auto current_key = materialize(key);
     auto current_begin = int64_t{0};
     for (auto row = int64_t{1}; row < total_rows; ++row) {
-      auto group = find_or_create_group(row);
-      if (current_group != group) {
-        update_group(*current_group, current_begin, row);
-        current_group = group;
+      find_or_create_group(row);
+      if (! group_by_key_equal{}(key, current_key)) {
+        update_group(groups_.find(current_key).value(), current_begin, row);
+        current_key = materialize(key);
         current_begin = row;
       }
     }
-    update_group(*current_group, current_begin, total_rows);
+    update_group(groups_.find(current_key).value(), current_begin, total_rows);
   }
 
-  auto flush() -> std::vector<table_slice> {
-    return flush(false);
+  auto flush(session ctx) -> std::vector<table_slice> {
+    return flush(false, ctx);
   }
 
-  auto flush(bool force) -> std::vector<table_slice> {
+  auto flush(bool force, session ctx) -> std::vector<table_slice> {
     // Avoid emitting before any input arrived unless explicitly forced (used
     // for final emission).
     if (not force and not saw_input_) {
@@ -239,102 +285,24 @@ public:
     }
     if (cfg_.mode == "reset") {
       // Emit all groups and reset aggregations
-      auto result = finish_impl();
-      for (auto& [key, bucket] : groups_) {
-        bucket->aggregations.clear();
-        for (const auto& aggr : cfg_.aggregates) {
-          const auto* fn = dynamic_cast<const aggregation_plugin*>(
-            &ctx_.reg().get(aggr.call));
-          TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(
-            fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
-                                 ctx_)
-              .unwrap());
-        }
+      auto result = finish_impl(ctx);
+      for (auto it = groups_.begin(); it != groups_.end(); ++it) {
+        it.value().aggregations = make_bucket(ctx).aggregations;
       }
       return result;
     }
     if (cfg_.mode == "cumulative") {
       // Emit all groups and keep aggregations
-      return finish_impl();
+      return finish_impl(ctx);
     }
     TENZIR_ASSERT(cfg_.mode == "update");
     // Emit only groups where values changed
-    auto emplace = [](record& root, const ast::field_path& sel, data value) {
-      if (sel.path().empty()) {
-        if (auto* rec = try_as<record>(&value)) {
-          root = std::move(*rec);
-        }
-        return;
-      }
-      auto* current = &root;
-      for (const auto& segment : sel.path()) {
-        auto& val = (*current)[segment.id.name];
-        if (&segment == &sel.path().back()) {
-          val = std::move(value);
-        } else {
-          current = try_as<record>(&val);
-          if (not current) {
-            val = record{};
-            current = &as<record>(val);
-          }
-        }
-      }
-    };
-
-    const auto finish_group = [&](const auto& key, const auto& group) {
-      auto result = record{};
-      for (auto index : cfg_.indices) {
-        if (index >= 0) {
-          auto& dest = cfg_.aggregates[index].dest;
-          auto value = group->aggregations[index]->get();
-          if (dest) {
-            emplace(result, *dest, value);
-          } else {
-            auto& call = cfg_.aggregates[index].call;
-            auto arg = std::invoke([&]() -> std::string {
-              if (call.args.empty()) {
-                return "";
-              }
-              if (call.args.size() > 1) {
-                return "...";
-              }
-              auto sel = ast::field_path::try_from(call.args[0]);
-              if (not sel) {
-                return "...";
-              }
-              auto arg = std::string{};
-              if (sel->has_this()) {
-                arg = "this";
-              }
-              for (auto& segment : sel->path()) {
-                if (not arg.empty()) {
-                  arg += '.';
-                }
-                arg += segment.id.name;
-              }
-              return arg;
-            });
-            result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
-                           value);
-          }
-        } else {
-          index = -index - 1;
-          auto& group_def = cfg_.groups[index];
-          auto& dest = group_def.dest ? *group_def.dest : group_def.expr;
-          auto& value = key[index];
-          emplace(result, dest, value);
-        }
-      }
-      return result;
-    };
-
     auto b = series_builder{};
     for (const auto& [key, group] : groups_) {
       // Get current aggregation values.
       auto current_values = std::vector<data>{};
-      current_values.reserve(group->aggregations.size());
-      for (const auto& aggr : group->aggregations) {
+      current_values.reserve(group.aggregations.size());
+      for (const auto& aggr : group.aggregations) {
         current_values.push_back(aggr->get());
       }
       // Check if values changed (or first emission for this group).
@@ -349,98 +317,39 @@ public:
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events.
     if (cfg_.groups.empty() and groups_.empty()) {
-      b.data(finish_group(group_by_key{}, make_bucket()));
+      b.data(finish_group(group_by_key{}, make_bucket(ctx)));
     }
     return b.finish_as_table_slice();
   }
 
-  auto finish() -> std::vector<table_slice> {
+  auto finish(session ctx) -> std::vector<table_slice> {
     if (cfg_.mode == "update") {
       // Reuse flush to honor change detection for the final emission.
-      return flush(true);
+      return flush(true, ctx);
     }
-    return finish_impl();
+    return finish_impl(ctx);
+  }
+
+  auto take_restore_failed() noexcept -> bool {
+    return std::exchange(restore_failed_, false);
+  }
+
+  auto discard_snapshot(bool signal_failure = false) noexcept -> void {
+    groups_.clear();
+    previous_values_.clear();
+    saw_input_ = false;
+    restore_failed_ = signal_failure;
   }
 
 private:
-  auto finish_impl() -> std::vector<table_slice> {
-    auto emplace = [](record& root, const ast::field_path& sel, data value) {
-      if (sel.path().empty()) {
-        // TODO
-        if (auto rec = try_as<record>(&value)) {
-          root = std::move(*rec);
-        }
-        return;
-      }
-      auto current = &root;
-      for (auto& segment : sel.path()) {
-        auto& val = (*current)[segment.id.name];
-        if (&segment == &sel.path().back()) {
-          val = std::move(value);
-        } else {
-          current = try_as<record>(&val);
-          if (not current) {
-            val = record{};
-            current = &as<record>(val);
-          }
-        }
-      }
-    };
-    const auto finish_group = [&](const auto& key, const auto& group) {
-      auto result = record{};
-      for (auto index : cfg_.indices) {
-        if (index >= 0) {
-          auto& dest = cfg_.aggregates[index].dest;
-          auto value = group->aggregations[index]->get();
-          if (dest) {
-            emplace(result, *dest, value);
-          } else {
-            auto& call = cfg_.aggregates[index].call;
-            // TODO: Decide and properly implement this.
-            auto arg = std::invoke([&]() -> std::string {
-              if (call.args.empty()) {
-                return "";
-              }
-              if (call.args.size() > 1) {
-                return "...";
-              }
-              auto sel = ast::field_path::try_from(call.args[0]);
-              if (not sel) {
-                return "...";
-              }
-              auto arg = std::string{};
-              if (sel->has_this()) {
-                arg = "this";
-              }
-              for (auto& segment : sel->path()) {
-                // TODO: This is wrong if the path contains special characters.
-                if (not arg.empty()) {
-                  arg += '.';
-                }
-                arg += segment.id.name;
-              }
-              return arg;
-            });
-            result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
-                           value);
-          }
-        } else {
-          index = -index - 1;
-          auto& group = cfg_.groups[index];
-          auto& dest = group.dest ? *group.dest : group.expr;
-          auto& value = key[index];
-          emplace(result, dest, value);
-        }
-      }
-      return result;
-    };
+  auto finish_impl(session ctx) -> std::vector<table_slice> {
     // Special case: if there are no configured groups, and no groups were
     // created because we didn't get any input events, then we create a new
     // bucket and just finish it. That way, `from [] | summarize count()` will
     // return a single event showing a count of zero.
     if (cfg_.groups.empty() and groups_.empty()) {
       auto b = series_builder{};
-      b.data(finish_group(group_by_key{}, make_bucket()));
+      b.data(finish_group(group_by_key{}, make_bucket(ctx)));
       return b.finish_as_table_slice();
     }
     // TODO: Group by schema again to make this more efficient.
@@ -451,19 +360,358 @@ private:
     return b.finish_as_table_slice();
   }
 
-  const config& cfg_;
-  session ctx_;
-  group_map<std::unique_ptr<bucket2>> groups_;
+  /// Writes @p value into @p root at the path described by @p sel.
+  static auto
+  emplace_value(record& root, const ast::field_path& sel, data value) -> void {
+    if (sel.path().empty()) {
+      // An empty path means the selector refers to `this` (the whole record).
+      // Merge the value into root if it is a record; non-record values are
+      // silently ignored because there is no meaningful field to assign them to.
+      if (auto* rec = try_as<record>(&value)) {
+        root = std::move(*rec);
+      }
+      return;
+    }
+    auto* current = &root;
+    for (const auto& segment : sel.path()) {
+      auto& val = (*current)[segment.id.name];
+      if (&segment == &sel.path().back()) {
+        val = std::move(value);
+      } else {
+        current = try_as<record>(&val);
+        if (not current) {
+          val = record{};
+          current = &as<record>(val);
+        }
+      }
+    }
+  }
+
+  /// Builds the output record for one group bucket.
+  auto finish_group(const group_by_key& key, const bucket2& bucket) const
+    -> record {
+    auto result = record{};
+    for (auto index : cfg_.indices) {
+      if (index >= 0) {
+        const auto& dest = cfg_.aggregates[index].dest;
+        auto value = bucket.aggregations[index]->get();
+        if (dest) {
+          emplace_value(result, *dest, value);
+        } else {
+          const auto& call = cfg_.aggregates[index].call;
+          // TODO: Decide and properly implement this. The format below
+          // produces names like `count()` or `sum(x)`.  It is wrong for
+          // field names that contain special characters (e.g. spaces or
+          // dots), because the segments are joined with '.' without quoting.
+          auto arg = std::invoke([&]() -> std::string {
+            if (call.args.empty()) {
+              return "";
+            }
+            if (call.args.size() > 1) {
+              return "...";
+            }
+            auto sel = ast::field_path::try_from(call.args[0]);
+            if (not sel) {
+              return "...";
+            }
+            auto s = std::string{};
+            if (sel->has_this()) {
+              s = "this";
+            }
+            for (const auto& segment : sel->path()) {
+              // TODO: This is wrong if the path contains special characters.
+              if (not s.empty()) {
+                s += '.';
+              }
+              s += segment.id.name;
+            }
+            return s;
+          });
+          result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
+                         value);
+        }
+      } else {
+        auto group_index = -index - 1;
+        const auto& group_def = cfg_.groups[group_index];
+        const auto& dest = group_def.dest ? *group_def.dest : group_def.expr;
+        emplace_value(result, dest, key[group_index]);
+      }
+    }
+    return result;
+  }
+
+  friend auto inspect(auto& f, implementation2& x) -> bool {
+    if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
+      // Load group blobs into a temporary staging map so that bucket2 objects
+      // in steady state never carry an extra vector<chunk_ptr>. The staging
+      // map is destroyed at the end of this inspect call.
+      auto staging = group_map<std::vector<chunk_ptr>>{};
+      auto on_load = [&]() noexcept {
+        // Use a null diagnostic handler: make_bucket() is called only to
+        // instantiate fresh aggregation objects for restore; the pipeline was
+        // already validated at compile time so no real diagnostics are expected.
+        auto null_dh = null_diagnostic_handler{};
+        auto null_sp = session_provider::make(null_dh);
+        const auto expected
+          = x.make_bucket(null_sp.as_session()).aggregations.size();
+        for (auto it = staging.begin(); it != staging.end(); ++it) {
+          auto& blobs = it.value();
+          if (blobs.size() != expected) {
+            TENZIR_WARN("summarize: snapshot has {} aggregation(s) but "
+                        "pipeline expects {}; discarding snapshot and starting "
+                        "fresh",
+                        blobs.size(), expected);
+            x.discard_snapshot();
+            return true;
+          }
+          auto fresh = x.make_bucket(null_sp.as_session());
+          for (auto i = size_t{0}; i < blobs.size(); ++i) {
+            if (not fresh.aggregations[i]->restore(std::move(blobs[i]))) {
+              TENZIR_WARN("summarize: failed to restore aggregation state; "
+                          "discarding snapshot and starting fresh");
+              x.discard_snapshot(/*signal_failure=*/true);
+              return true;
+            }
+          }
+          x.groups_.emplace(it->first, std::move(fresh));
+        }
+        return true;
+      };
+      return f.object(x).on_load(on_load).fields(
+        f.field("cfg", x.cfg_), f.field("saw_input", x.saw_input_),
+        f.field("groups", staging),
+        f.field("previous_values", x.previous_values_));
+    } else {
+      return f.object(x).fields(f.field("cfg", x.cfg_),
+                                f.field("saw_input", x.saw_input_),
+                                f.field("groups", x.groups_),
+                                f.field("previous_values", x.previous_values_));
+    }
+  }
+
+  friend auto inspect(auto& f, std::unique_ptr<implementation2>& x) -> bool {
+    if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
+      x = std::make_unique<implementation2>();
+    }
+    TENZIR_ASSERT(x);
+    return inspect(f, *x);
+  }
+
+  config cfg_;
+  group_map<bucket2> groups_;
   bool saw_input_ = false;
+  bool restore_failed_ = false;
   /// Previous aggregation values for each group (used in "update" mode)
   group_map<std::vector<data>> previous_values_;
 };
+
+// ---------------------------------------------------------------------------
+// build_config: shared parsing logic used by both plugin2::make() and Summarize
+// ---------------------------------------------------------------------------
+
+/// Classifies a flat list of expressions (as received from inv.args or from
+/// optional_variadic) into a fully-populated config.  The options={...}
+/// positional-assignment syntax is handled here, identical to the old make().
+auto build_config(std::vector<ast::expression> exprs, session ctx)
+  -> failure_or<config> {
+  auto cfg = config{};
+  auto failed = false;
+
+  // Store option field expressions without evaluating them.  Evaluation is
+  // intentionally deferred to evaluate_options(), which is called from
+  // plugin2::make() immediately (non-IR path, let-bindings already resolved)
+  // and from summarize_ir::substitute() after substitution (IR path).  This
+  // mirrors the pattern used for aggregation arguments: build_config stores
+  // the AST, a separate step validates/evaluates it once bindings are known.
+  auto parse_options = [&](const ast::record& rec) {
+    for (const auto& item : rec.items) {
+      const auto* field = try_as<ast::record::field>(item);
+      if (not field) {
+        diagnostic::error("spread not allowed in options record")
+          .primary(rec.get_location())
+          .emit(ctx);
+        failed = true;
+        return;
+      }
+      const auto& name = field->name.name;
+      if (name == "frequency") {
+        cfg.frequency_expr = field->expr;
+      } else if (name == "mode") {
+        cfg.mode_expr = field->expr;
+      } else {
+        diagnostic::error("unknown option `{}`", name)
+          .primary(field->name)
+          .emit(ctx);
+        failed = true;
+        return;
+      }
+    }
+  };
+
+  auto add_aggregate = [&](std::optional<ast::field_path> dest,
+                           ast::function_call call) {
+    auto* fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
+    if (not fn) {
+      diagnostic::error("function does not support aggregations")
+        .primary(call.fn)
+        .hint("if you want to group by this, use assignment before")
+        .docs("https://docs.tenzir.com/operators/summarize")
+        .emit(ctx);
+      failed = true;
+      return;
+    }
+    // Argument validation via make_aggregation is intentionally deferred:
+    // args may contain unresolved let-bindings when called from compile().
+    // Validation is performed by validate_aggregates(), which is called
+    // directly in plugin2::make() and in summarize_ir::substitute() after
+    // substitution has resolved all let-binding references.
+    auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+    cfg.indices.push_back(index);
+    cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+  };
+
+  auto add_group
+    = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
+        auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+        cfg.indices.push_back(index);
+        cfg.groups.emplace_back(std::move(dest), std::move(expr));
+      };
+
+  for (auto& arg : exprs) {
+    arg.match(
+      [&](ast::function_call& arg) {
+        add_aggregate(std::nullopt, std::move(arg));
+      },
+      [&](ast::assignment& arg) {
+        auto* left = try_as<ast::field_path>(arg.left);
+        if (not left) {
+          diagnostic::error("expected data selector, not meta")
+            .primary(arg.left)
+            .emit(ctx);
+          failed = true;
+          return;
+        }
+        // Check for `options=...` named argument
+        if (not left->has_this() and left->path().size() == 1
+            and left->path()[0].id.name == "options") {
+          auto* rec = try_as<ast::record>(arg.right);
+          if (not rec) {
+            diagnostic::error("expected record for `options`")
+              .primary(arg.right)
+              .emit(ctx);
+            failed = true;
+            return;
+          }
+          parse_options(*rec);
+          return;
+        }
+        arg.right.match(
+          [&](ast::function_call& right) {
+            add_aggregate(std::move(*left), std::move(right));
+          },
+          [&](auto&) {
+            auto right = ast::field_path::try_from(arg.right);
+            if (right) {
+              add_group(std::move(*left), std::move(*right));
+            } else {
+              diagnostic::error(
+                "expected selector or aggregation function call")
+                .primary(arg.right)
+                .emit(ctx);
+              failed = true;
+            }
+          });
+      },
+      [&](auto&) {
+        auto selector = ast::field_path::try_from(arg);
+        if (selector) {
+          add_group(std::nullopt, std::move(*selector));
+        } else {
+          diagnostic::error(
+            "expected selector, assignment or aggregation function call")
+            .primary(arg)
+            .emit(ctx);
+          failed = true;
+        }
+      });
+  }
+
+  if (failed) {
+    return failure::promise();
+  }
+  return cfg;
+}
+
+/// Validates each aggregate's arguments by calling make_aggregation with the
+/// fully-resolved function-call AST. Must be called after all let-binding
+/// references have been substituted so that const_eval inside the argument
+/// parsers can evaluate every argument to a concrete value.
+auto validate_aggregates(const config& cfg, session ctx) -> failure_or<void> {
+  for (const auto& aggr : cfg.aggregates) {
+    const auto* fn
+      = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
+    TENZIR_ASSERT(fn); // already verified as aggregation_plugin in build_config
+    TRY(fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx));
+  }
+  return {};
+}
+
+/// Evaluates cfg.frequency_expr and cfg.mode_expr and writes the results into
+/// cfg.frequency and cfg.mode. Must be called after all let-binding references
+/// in the expressions have been substituted. Mirrors validate_aggregates() for
+/// the options field: build_config stores the AST, this step evaluates it.
+auto evaluate_options(config& cfg, session ctx) -> failure_or<void> {
+  if (cfg.frequency_expr) {
+    TRY(auto value, const_eval(*cfg.frequency_expr, ctx));
+    auto* dur = try_as<duration>(value);
+    if (not dur) {
+      diagnostic::error("expected duration for `frequency`")
+        .primary(*cfg.frequency_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (*dur <= duration::zero()) {
+      diagnostic::error("`frequency` must be greater than zero")
+        .primary(*cfg.frequency_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    cfg.frequency = *dur;
+  }
+  if (cfg.mode_expr) {
+    TRY(auto value, const_eval(*cfg.mode_expr, ctx));
+    auto* str = try_as<std::string>(value);
+    if (not str) {
+      diagnostic::error("expected string for `mode`")
+        .primary(*cfg.mode_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (*str == "reset" || *str == "cumulative" || *str == "update") {
+      cfg.mode = *str;
+    } else {
+      diagnostic::error("invalid mode `{}`", *str)
+        .primary(*cfg.mode_expr)
+        .hint("expected `reset`, `cumulative`, or `update`")
+        .emit(ctx);
+      return failure::promise();
+    }
+  }
+  if (cfg.mode_expr and not cfg.frequency) {
+    diagnostic::error("`mode` requires `frequency` to be set")
+      .primary(*cfg.mode_expr)
+      .emit(ctx);
+    return failure::promise();
+  }
+  return {};
+}
 
 class summarize_operator2 final : public crtp_operator<summarize_operator2> {
 public:
   summarize_operator2() = default;
 
-  explicit summarize_operator2(config cfg) : cfg_{std::move(cfg)} {
+  explicit summarize_operator2(config cfg)
+    : impl_{std::make_unique<implementation2>(std::move(cfg))} {
   }
 
   auto name() const -> std::string override {
@@ -473,65 +721,56 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    TENZIR_ASSERT(impl_);
     // TODO: Do not create a new session here.
-    auto info = cfg_.groups.size() == 0 and cfg_.aggregates.size() == 1
-                and cfg_.aggregates[0].dest
-                and cfg_.aggregates[0].dest->path().size() == 1
-                and cfg_.aggregates[0].dest->path()[0].id.name == "foo";
-    if (info) {
-      TENZIR_WARN("spawning summarize");
-    }
-    ctrl.self().attach_functor([info] {
-      if (info) {
-        TENZIR_WARN("destroying summarize");
-      }
-    });
     auto provider = session_provider::make(ctrl.diagnostics());
-    auto impl = implementation2{cfg_, provider.as_session()};
+    auto& impl = *impl_;
 
-    if (cfg_.frequency) {
+    if (impl.cfg().frequency) {
       // Periodic emission mode.
       auto pending_flush = false;
       detail::weak_run_delayed_loop(
-        &ctrl.self(), *cfg_.frequency,
+        &ctrl.self(), *impl.cfg().frequency,
         [&] {
           pending_flush = true;
           ctrl.set_waiting(false);
         },
         false);
-      for (auto slice : input) {
+      auto session = provider.as_session();
+      for (const auto& slice : input) {
         // Drain pending flushes that were scheduled while idle.
         if (std::exchange(pending_flush, false)) {
-          for (auto result : impl.flush()) {
+          for (auto result : impl.flush(session)) {
             co_yield std::move(result);
           }
         }
         if (slice.rows() == 0) {
           co_yield {};
         } else {
-          impl.add(slice);
+          impl.add(slice, session);
         }
       }
       // Flush anything that may have been scheduled while consuming the last
       // slices before producing the final result.
       if (std::exchange(pending_flush, false)) {
-        for (auto result : impl.flush()) {
+        for (auto result : impl.flush(session)) {
           co_yield std::move(result);
         }
       }
       // Final emission when input ends.
-      for (auto result : impl.finish()) {
+      for (auto result : impl.finish(session)) {
         co_yield std::move(result);
       }
     } else {
+      auto session = provider.as_session();
       for (auto&& slice : input) {
         if (slice.rows() == 0) {
           co_yield {};
           continue;
         }
-        impl.add(slice);
+        impl.add(slice, session);
       }
-      for (auto slice : impl.finish()) {
+      for (auto slice : impl.finish(session)) {
         co_yield std::move(slice);
       }
     }
@@ -544,175 +783,207 @@ public:
   }
 
   friend auto inspect(auto& f, summarize_operator2& x) -> bool {
-    return f.apply(x.cfg_);
+    return f.apply(x.impl_);
   }
 
 private:
+  // mutable because operator() is const but impl_ accumulates aggregation state.
+  mutable std::unique_ptr<implementation2> impl_;
+};
+
+class Summarize final : public Operator<table_slice, table_slice> {
+public:
+  explicit Summarize(config cfg)
+    : impl_{std::make_unique<implementation2>(std::move(cfg))} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    provider_.emplace(session_provider::make(ctx.dh()));
+    co_return;
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (impl_->take_restore_failed()) {
+      diagnostic::warning("summarize aggregation state could not be restored "
+                          "from snapshot; restarting from empty state")
+        .emit(provider_->as_session());
+    }
+    co_await flush(push);
+    if (input.rows() == 0) {
+      co_return;
+    }
+    impl_->add(input, provider_->as_session());
+    co_return;
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+    for (auto& slice : impl_->finish(provider_->as_session())) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  /// Drives periodic flushing when `options={frequency: ...}` is set.
+  /// Sleeps until the next scheduled wall-clock deadline and marks a pending
+  /// flush. If process() runs before the scheduled task executes, it will flush
+  /// immediately and clear the pending flag so process_task() can skip it.
+  /// Without a frequency the default implementation waits forever.
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (not impl_->cfg().frequency) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    if (next_flush_ == time::min()) {
+      next_flush_ = time::clock::now() + *impl_->cfg().frequency;
+    } else {
+      next_flush_ += *impl_->cfg().frequency;
+    }
+    co_await sleep_until(next_flush_);
+    pending_flush_ = true;
+    co_return {};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    co_await flush(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("state", *impl_);
+  }
+
+private:
+  // Push a summary if a pending_flush_ is set.
+  // This only happens if frequency is set.
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    if (not std::exchange(pending_flush_, false)) {
+      co_return;
+    }
+    for (auto& slice : impl_->flush(provider_->as_session())) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  std::unique_ptr<implementation2> impl_;
+  // initialised in start() and reused across all calls
+  std::optional<session_provider> provider_;
+  /// Next wall-clock deadline for periodic flush. Mutable because await_task()
+  /// is const but advances the schedule each time it is awaited.
+  mutable time next_flush_ = time::min();
+  /// Set when await_task's sleep completes. If process() runs before
+  /// process_task(), it will perform the flush and clear this flag so the
+  /// scheduled task can skip its flush.
+  mutable bool pending_flush_ = false;
+};
+
+class summarize_ir final : public ir::Operator {
+public:
+  summarize_ir() = default;
+
+  summarize_ir(location self, config cfg) : self_{self}, cfg_{std::move(cfg)} {
+  }
+
+  auto name() const -> std::string override {
+    return "summarize";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    // Substitute through function-call arguments in aggregates; they can
+    // reference let-bindings.  Group field-paths are static identifiers.
+    for (auto& aggregate : cfg_.aggregates) {
+      for (auto& arg : aggregate.call.args) {
+        TRY(arg.substitute(ctx));
+      }
+    }
+    // Substitute through option expressions so that let-binding references
+    // (e.g. options={frequency: $freq}) are resolved before evaluation.
+    if (cfg_.frequency_expr) {
+      TRY(cfg_.frequency_expr->substitute(ctx));
+    }
+    if (cfg_.mode_expr) {
+      TRY(cfg_.mode_expr->substitute(ctx));
+    }
+    // Validate aggregation arguments and evaluate options only when
+    // instantiating, i.e., when all let-bindings are guaranteed to be
+    // resolved.  Both make_aggregation (for aggregates) and const_eval (for
+    // option values) require fully-resolved expressions to succeed.
+    if (instantiate) {
+      auto provider = session_provider::make(ctx);
+      TRY(validate_aggregates(cfg_, provider.as_session()));
+      TRY(evaluate_options(cfg_, provider.as_session()));
+    }
+    return {};
+  }
+
+  auto spawn(element_type_tag input) && -> AnyOperator override {
+    TENZIR_ASSERT(input.is<table_slice>());
+    return Summarize{std::move(cfg_)};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("operator expects events").primary(self_).emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto main_location() const -> location override {
+    return self_;
+  }
+
+  friend auto inspect(auto& f, summarize_ir& x) -> bool {
+    return f.object(x).fields(f.field("self", x.self_), f.field("cfg", x.cfg_));
+  }
+
+private:
+  location self_;
   config cfg_;
 };
 
-class plugin2 final : public operator_plugin2<summarize_operator2> {
+class plugin2 final : public virtual operator_plugin2<summarize_operator2>,
+                      public virtual operator_compiler_plugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto cfg = config{};
-    auto failed = false;
-    auto mode_location = std::optional<location>{};
-
-    // Helper to parse the options record
-    auto parse_options = [&](ast::record& rec) {
-      for (auto& item : rec.items) {
-        auto* field = try_as<ast::record::field>(item);
-        if (not field) {
-          diagnostic::error("spread not allowed in options record")
-            .primary(rec.get_location())
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-        const auto& name = field->name.name;
-        if (name == "frequency") {
-          auto value = const_eval(field->expr, ctx);
-          if (not value) {
-            failed = true;
-            return;
-          }
-          auto* dur = try_as<duration>(*value);
-          if (! dur) {
-            diagnostic::error("expected duration for `frequency`")
-              .primary(field->expr)
-              .emit(ctx);
-            failed = true;
-            return;
-          }
-          cfg.frequency = *dur;
-        } else if (name == "mode") {
-          auto value = const_eval(field->expr, ctx);
-          if (not value) {
-            failed = true;
-            return;
-          }
-          auto* str = try_as<std::string>(*value);
-          if (! str) {
-            diagnostic::error("expected string for `mode`")
-              .primary(field->expr)
-              .emit(ctx);
-            failed = true;
-            return;
-          }
-          if (*str == "reset" || *str == "cumulative" || *str == "update") {
-            cfg.mode = *str;
-            mode_location = field->expr.get_location();
-          } else {
-            diagnostic::error("invalid mode `{}`", *str)
-              .primary(field->expr)
-              .hint("expected `reset`, `cumulative`, or `update`")
-              .emit(ctx);
-            failed = true;
-            return;
-          }
-        } else {
-          diagnostic::error("unknown option `{}`", name)
-            .primary(field->name)
-            .emit(ctx);
-          failed = true;
-          return;
-        }
-      }
-    };
-
-    auto add_aggregate = [&](std::optional<ast::field_path> dest,
-                             ast::function_call call) {
-      // TODO: Improve this and try to forward function handle directly.
-      auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
-      if (not fn) {
-        diagnostic::error("function does not support aggregations")
-          .primary(call.fn)
-          .hint("if you want to group by this, use assignment before")
-          .docs("https://docs.tenzir.com/operators/summarize")
-          .emit(ctx);
-        return;
-      }
-      // We test the arguments by making and discarding it. This is a bit
-      // hacky and should be improved in the future.
-      if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
-        auto index = detail::narrow<int64_t>(cfg.aggregates.size());
-        cfg.indices.push_back(index);
-        cfg.aggregates.emplace_back(std::move(dest), std::move(call));
-      }
-    };
-    auto add_group
-      = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
-          auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
-          cfg.indices.push_back(index);
-          cfg.groups.emplace_back(std::move(dest), std::move(expr));
-        };
-    for (auto& arg : inv.args) {
-      arg.match(
-        [&](ast::function_call& arg) {
-          add_aggregate(std::nullopt, std::move(arg));
-        },
-        [&](ast::assignment& arg) {
-          auto* left = try_as<ast::field_path>(arg.left);
-          if (not left) {
-            // TODO
-            diagnostic::error("expected data selector, not meta")
-              .primary(arg.left)
-              .emit(ctx);
-            return;
-          }
-          // Check for `options=...` named argument
-          if (not left->has_this() and left->path().size() == 1
-              and left->path()[0].id.name == "options") {
-            auto* rec = try_as<ast::record>(arg.right);
-            if (not rec) {
-              diagnostic::error("expected record for `options`")
-                .primary(arg.right)
-                .emit(ctx);
-              failed = true;
-              return;
-            }
-            parse_options(*rec);
-            return;
-          }
-          arg.right.match(
-            [&](ast::function_call& right) {
-              add_aggregate(std::move(*left), std::move(right));
-            },
-            [&](auto&) {
-              auto right = ast::field_path::try_from(arg.right);
-              if (right) {
-                add_group(std::move(*left), std::move(*right));
-              } else {
-                diagnostic::error(
-                  "expected selector or aggregation function call")
-                  .primary(arg.right)
-                  .emit(ctx);
-              }
-            });
-        },
-        [&](auto&) {
-          auto selector = ast::field_path::try_from(arg);
-          if (selector) {
-            add_group(std::nullopt, std::move(*selector));
-          } else {
-            diagnostic::error(
-              "expected selector, assignment or aggregation function call")
-              .primary(arg)
-              .emit(ctx);
-          }
-        });
-    }
-    if (failed) {
-      return failure::promise();
-    }
-    if (mode_location and not cfg.frequency) {
-      diagnostic::error("`mode` requires `frequency` to be set")
-        .primary(*mode_location)
-        .emit(ctx);
-      return failure::promise();
-    }
+    TRY(auto cfg, build_config(std::move(inv.args), ctx));
+    TRY(validate_aggregates(cfg, ctx));
+    TRY(evaluate_options(cfg, ctx));
     return std::make_unique<summarize_operator2>(std::move(cfg));
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<Box<ir::Operator>> override {
+    // We use `operator_compiler_plugin` rather than
+    // `OperatorPlugin`/`Describer` because `GenericIr` unconditionally routes
+    // any `ast::assignment` arg to the named-argument path (look up LHS in a
+    // fixed `desc->named` list, error if absent).  `summarize` uses assignments
+    // *positionally*: the LHS is the output rename and the RHS determines the
+    // kind (aggregate vs. group vs. options). Adding variadic named args to
+    // `Describer` would still pre-split named from positional before
+    // `build_config()` can see them together, requiring awkward reconstruction.
+    // `compile()` receives the raw `inv.args` unchanged, so `build_config()`
+    // can apply its own classification logic directly.
+
+    auto loc = inv.op.get_location();
+    // Bind all arguments except pipeline expressions before parsing.
+    for (auto& arg : inv.args) {
+      if (not is<ast::pipeline_expr>(arg)) {
+        TRY(arg.bind(ctx));
+      }
+    }
+    auto provider = session_provider::make(ctx);
+    TRY(auto cfg, build_config(std::move(inv.args), provider.as_session()));
+    return summarize_ir{loc, std::move(cfg)};
   }
 };
 
@@ -721,3 +992,6 @@ public:
 } // namespace tenzir::plugins::summarize
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin2)
+TENZIR_REGISTER_PLUGIN(
+  (tenzir::inspection_plugin<tenzir::ir::Operator,
+                             tenzir::plugins::summarize::summarize_ir>))

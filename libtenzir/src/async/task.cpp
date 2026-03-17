@@ -10,8 +10,23 @@
 
 #include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
+#include <folly/coro/Sleep.h>
+
+#include <chrono>
 
 namespace tenzir {
+
+auto sleep_for(duration d) -> Task<void> {
+  return folly::coro::sleep(
+    std::chrono::duration_cast<folly::HighResDuration>(d));
+}
+
+auto sleep_until(time t) -> Task<void> {
+  auto now = time::clock::now();
+  // The check is needed because `-` can overflow and yield unexpected results.
+  auto diff = t < now ? duration{0} : t - now;
+  return sleep_for(diff);
+}
 
 auto wait_forever() -> Task<void> {
   // We want to stop this when cancellation occurs, but `Baton` is not

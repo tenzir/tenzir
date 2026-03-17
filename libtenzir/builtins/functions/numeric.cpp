@@ -13,6 +13,7 @@
 #include <tenzir/detail/tdigest.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -189,15 +190,15 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::Count>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `count` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN(
+        "failed to restore `count` aggregation instance: invalid FlatBuffer");
+      return false;
     }
     count_ = (*fb)->result();
+    return true;
   }
 
   auto reset() -> void override {
@@ -341,11 +342,11 @@ public:
     return {};
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     TENZIR_UNUSED(chunk);
-    diagnostic::warning(
-      "restoring `quantile` aggregation instances is not implemented")
-      .emit(ctx);
+    TENZIR_WARN("restoring `quantile` aggregation instance from snapshot is "
+                "not yet implemented");
+    return false;
   }
 
   auto reset() -> void override {
