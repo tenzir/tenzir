@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/aliases.hpp"
-#include "tenzir/type.hpp"
 #include "tenzir/blob.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/printable/print.hpp"
@@ -38,7 +37,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
 
 namespace tenzir {
