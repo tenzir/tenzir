@@ -657,11 +657,6 @@ public:
       auto line = std::move(*json);
       line.push_back('\n');
       co_await message_queue_->enqueue(Payload{std::move(line)});
-      while (backlog_policy_ == BacklogPolicy::block
-             and lifecycle_ == Lifecycle::running and clients_.empty()
-             and not pending_payloads_.empty()) {
-        co_await client_ready_->wait();
-      }
     }
   }
 
