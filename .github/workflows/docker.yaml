@@ -162,6 +162,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Install Cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3
+      - name: Install crane
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e  # v0.4
       - name: Create manifests and sign images
         env:
           BUILDX_GIT_LABELS: full
@@ -184,7 +186,7 @@ jobs:
               # Resolve the tag to a digest for signing. Cosign warns when
               # signing by tag because the tag could be moved between the
               # manifest push and the signing step.
-              digest=$(docker buildx imagetools inspect "${image}" --format '{{.Digest}}')
+              digest=$(crane digest "${image}")
               image_by_digest="${registry}/tenzir/${name}@${digest}"
               # Keyless signing uses GitHub Actions OIDC identity.
               # Verify with:
