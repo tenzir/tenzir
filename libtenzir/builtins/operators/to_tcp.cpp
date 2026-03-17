@@ -123,7 +123,7 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_return;
     }
     co_await message_queue_->enqueue(std::move(chunk));
