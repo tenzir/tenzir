@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   push-manifest:
-    name: Push Manifest
+    name: Push Manifest and Sign
     runs-on: ubuntu-latest
     steps:
       - name: Ensure XDG_RUNTIME_DIR
@@ -49,8 +49,19 @@ jobs:
           dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
-      - name: Create and push manifests
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3
+      - name: Install crane
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e  # v0.4
+      - name: Create manifests and sign images
+        env:
+          COSIGN_PASSWORD: ${{ secrets.CONTAINER_SIGNING_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          trap 'rm -f /tmp/signing-key.pem' EXIT
+          echo "${{ secrets.CONTAINER_SIGNING_KEY }}" > /tmp/signing-key.pem
+          chmod 600 /tmp/signing-key.pem
+
           # Build a regex pattern to strip arch suffixes from tags
           arch_pattern=$(echo '${{ inputs.arch-suffixes }}' | tr ' ' '|')
 
@@ -70,11 +81,40 @@ jobs:
             fi
           done
 
-          # Create each manifest
+          # Create each manifest and sign it
           for manifest_target in "${!manifest_sources[@]}"; do
             sources="${manifest_sources[$manifest_target]}"
             echo "::notice Creating manifest $manifest_target from: $sources"
             docker buildx imagetools create \
               --tag "$manifest_target" \
               $sources
+            # Resolve the tag to a digest for signing.
+            digest=$(crane digest "$manifest_target")
+            # Extract registry/repo from the manifest target (everything before the colon)
+            repo="${manifest_target%%:*}"
+            image_by_digest="${repo}@${digest}"
+            # Keyless signing uses GitHub Actions OIDC identity.
+            # Verify with:
+            #   cosign verify \
+            #     --certificate-identity-regexp="https://github.com/tenzir/tenzir/.*" \
+            #     --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            #     <image>
+            echo "::notice Signing ${image_by_digest} with Cosign (keyless)"
+            cosign sign --yes --recursive "${image_by_digest}" || {
+              echo "::warning Cosign keyless signing failed for ${image_by_digest}"
+              failed=1
+            }
+            # Sigstore-format signing for Podman automatic verification.
+            # Signatures are stored as OCI artifacts directly in the registry.
+            # Users configure /etc/containers/policy.json with the public key
+            # and set use-sigstore-attachments: true in registries.d.
+            echo "::notice Signing ${image_by_digest} with sigstore format for Podman"
+            cosign sign --yes --recursive --key /tmp/signing-key.pem "${image_by_digest}" || {
+              echo "::warning Sigstore signing failed for ${image_by_digest}"
+              failed=1
+            }
           done
+          if [[ "${failed:-0}" -eq 1 ]]; then
+            echo "::error One or more signing operations failed"
+            exit 1
+          fi
