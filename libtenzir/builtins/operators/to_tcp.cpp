@@ -234,8 +234,11 @@ private:
         co_return;
       }
       auto write_error = Option<std::string>{};
+      auto* transport_evb = (**transport_).getEventBase();
+      TENZIR_ASSERT(transport_evb);
       try {
-        co_await folly::coro::co_withExecutor(evb_, (**transport_).write(data));
+        co_await folly::coro::co_withExecutor(transport_evb,
+                                              (**transport_).write(data));
         bytes_write_counter_.add(chunk->size());
         reconnect_backoff_ = connect_initial_backoff;
         co_return;

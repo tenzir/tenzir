@@ -305,8 +305,10 @@ private:
 
   auto write_to_client(folly::coro::Transport& client, folly::ByteRange data)
     -> Task<bool> {
+    auto* client_evb = client.getEventBase();
+    TENZIR_ASSERT(client_evb);
     try {
-      co_await folly::coro::co_withExecutor(evb_, client.write(data));
+      co_await folly::coro::co_withExecutor(client_evb, client.write(data));
       co_return true;
     } catch (folly::AsyncSocketException const&) {
       // TODO: Surface peer disconnects and other routine TCP write failures
