@@ -67,6 +67,36 @@ from {
   </UserData>
 </Event>"#
      },
+     // Event with RenderingInfo: single Keyword becomes a one-element list
+     {
+       x: r#"<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-Security-Auditing"/>
+    <EventID>4624</EventID>
+    <Channel>Security</Channel>
+    <Computer>DC1</Computer>
+  </System>
+  <RenderingInfo Culture="en-US">
+    <Message>An account was successfully logged on.</Message>
+    <Keywords><Keyword>Audit Success</Keyword></Keywords>
+  </RenderingInfo>
+</Event>"#
+     },
+     // Event with RenderingInfo: multiple Keywords remain a list
+     {
+       x: r#"<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-Security-Auditing"/>
+    <EventID>4625</EventID>
+    <Channel>Security</Channel>
+    <Computer>DC1</Computer>
+  </System>
+  <RenderingInfo Culture="en-US">
+    <Message>An account failed to log on.</Message>
+    <Keywords><Keyword>Audit Failure</Keyword><Keyword>Logon</Keyword></Keywords>
+  </RenderingInfo>
+</Event>"#
+     },
      // Malformed XML
      {x: "<Event><System>"}
 this = x.parse_winlog()

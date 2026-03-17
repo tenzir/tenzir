@@ -774,7 +774,7 @@ void append_data_value(Builder builder, const xml_element& data_elem) {
 
 /// Transform EventData for Windows Event Log.
 /// Named Data elements become record fields: {x: "v"}
-/// Unnamed Data elements get numeric keys: {"0": "v1", "1": "v2"}
+/// Unnamed Data elements get underscore-prefixed numeric keys: {"_0": "v1", "_1": "v2"}
 template <typename RecordBuilder>
 void transform_event_data(RecordBuilder record,
                           const std::vector<const xml_element*>& data_elems) {
@@ -783,7 +783,8 @@ void transform_event_data(RecordBuilder record,
     if (const auto* name = data_name_attr(*elem)) {
       append_data_value(record.field(*name), *elem);
     } else {
-      append_data_value(record.field(std::to_string(unnamed_index++)), *elem);
+      append_data_value(record.field(fmt::format("_{}", unnamed_index++)),
+                        *elem);
     }
   }
 }
@@ -873,6 +874,49 @@ void winlog_system_to_record(RecordBuilder record,
   }
 }
 
+/// Handle RenderingInfo element, ensuring Keywords.Keyword is always a list.
+template <typename RecordBuilder>
+void winlog_rendering_info_to_record(RecordBuilder record,
+                                     const xml_element& ri_elem,
+                                     const xml_options& opts) {
+  // Preserve attributes on the RenderingInfo element itself (e.g. Culture="en-US").
+  for (const auto& [name, value] : ri_elem.attributes) {
+    record.field(name).data(value);
+  }
+  for (const auto& child : ri_elem.children) {
+    auto* elem_ptr = try_as<std::unique_ptr<xml_element>>(child);
+    if (not elem_ptr) {
+      continue;
+    }
+    auto& elem = **elem_ptr;
+    if (elem.name == "Keywords") {
+      // Keywords only contains Keyword children; emit directly as a list.
+      auto kw_list = record.field(elem.name).list();
+      for (const auto& kw_child : elem.children) {
+        if (auto* kw_elem = try_as<std::unique_ptr<xml_element>>(kw_child)) {
+          if ((*kw_elem)->name == "Keyword" and (*kw_elem)->children.size() == 1
+              and is<std::string>((*kw_elem)->children[0])) {
+            kw_list.data(as<std::string>((*kw_elem)->children[0]));
+          }
+        }
+      }
+    } else {
+      // Other RenderingInfo children (Message, Level, Task, etc.) are simple
+      // strings.
+      auto field = record.field(elem.name);
+      if (elem.attributes.empty() and elem.children.size() == 1
+          and is<std::string>(elem.children[0])) {
+        field.data(as<std::string>(elem.children[0]));
+      } else if (elem.children.empty() and elem.attributes.empty()) {
+        field.null();
+      } else {
+        auto nested = field.record();
+        element_to_record(nested, elem, opts, 0);
+      }
+    }
+  }
+}
+
 /// Convert Windows Event to record with special EventData handling.
 template <typename RecordBuilder>
 void winlog_to_record(RecordBuilder record, const xml_element& event,
@@ -885,8 +929,6 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
         winlog_system_to_record(system_record, *elem);
       } else if (elem->name == "EventData") {
         std::vector<const xml_element*> data_elems;
-        bool has_named = false;
-        bool has_unnamed = false;
         for (const auto& event_data_child : elem->children) {
           if (auto* data_elem
               = try_as<std::unique_ptr<xml_element>>(event_data_child)) {
@@ -894,26 +936,17 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
               continue;
             }
             data_elems.push_back(data_elem->get());
-            if (data_name_attr(*data_elem->get())) {
-              has_named = true;
-            } else {
-              has_unnamed = true;
-            }
           }
         }
         if (data_elems.empty()) {
           record.field(elem->name).record();
           continue;
         }
-        if (not has_named and has_unnamed) {
-          auto list = record.field(elem->name).list();
-          for (const auto* data_elem : data_elems) {
-            append_data_value(list, *data_elem);
-          }
-        } else {
-          auto event_data_record = record.field(elem->name).record();
-          transform_event_data(event_data_record, data_elems);
-        }
+        auto event_data_record = record.field(elem->name).record();
+        transform_event_data(event_data_record, data_elems);
+      } else if (elem->name == "RenderingInfo") {
+        auto ri_record = record.field(elem->name).record();
+        winlog_rendering_info_to_record(ri_record, *elem, opts);
       } else {
         // Regular element handling
         auto field = record.field(elem->name);
