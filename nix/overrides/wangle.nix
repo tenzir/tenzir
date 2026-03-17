@@ -35,6 +35,14 @@ wangle.overrideAttrs (orig: {
     };
   preConfigure =
     (orig.preConfigure or "")
+    + ''
+      if ! grep -q 'Folly::folly_io_async_async_io_uring_socket' wangle/acceptor/CMakeLists.txt; then
+        sed -i '/Folly::folly_experimental_io_async_io_uring_socket/a\    Folly::folly_io_async_async_io_uring_socket' wangle/acceptor/CMakeLists.txt
+      fi
+      if ! grep -q 'Folly::folly_io_async_fdsock_async_fd_socket' wangle/acceptor/CMakeLists.txt; then
+        sed -i '/Folly::folly_io_async_async_io_uring_socket/a\    Folly::folly_io_async_fdsock_async_fd_socket' wangle/acceptor/CMakeLists.txt
+      fi
+    ''
     + lib.optionalString stdenv.hostPlatform.isx86_64 ''
       cmakeFlagsArray+=("-DCMAKE_CXX_FLAGS=-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2")
     '';
