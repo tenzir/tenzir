@@ -106,6 +106,9 @@ struct partition_transformer_state {
   /// Store id for partitions.
   std::string store_id;
 
+  /// Origin tag for the store metadata ("rebuild", "compaction", etc.).
+  std::string origin = "rebuild";
+
   /// Options for creating new synopses.
   index_config synopsis_opts = {};
 
@@ -145,7 +148,7 @@ auto partition_transformer(
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
   pipeline transform, std::string partition_path_template,
-  std::string synopsis_path_template)
+  std::string synopsis_path_template, std::string origin = "rebuild")
   -> partition_transformer_actor::behavior_type;
 
 } // namespace tenzir

@@ -74,6 +74,20 @@ public:
   /// @returns A chunk containing the serialized store contents, or an error on
   /// failure.
   [[nodiscard]] virtual caf::expected<chunk_ptr> finish() = 0;
+
+  /// Set the origin of this store's data.
+  /// Expected values: "ingest", "rebuild", "compaction".
+  void set_origin(std::string value) {
+    origin_ = std::move(value);
+  }
+
+  /// The origin of this store's data (default: "ingest").
+  [[nodiscard]] auto origin() const -> const std::string& {
+    return origin_;
+  }
+
+private:
+  std::string origin_ = "ingest";
 };
 
 /// Shared state for in-flight queries for both count and extract operations.

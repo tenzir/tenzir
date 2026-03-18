@@ -218,7 +218,7 @@ using index_actor = typed_actor_fwd<
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them.
   auto(atom::apply, pipeline, std::vector<tenzir::partition_info>,
-       keep_original_partition)
+       keep_original_partition, std::string)
     ->caf::result<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,

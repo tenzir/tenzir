@@ -324,7 +324,7 @@ auto partition_transformer(
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
   pipeline transform, std::string partition_path_template,
-  std::string synopsis_path_template)
+  std::string synopsis_path_template, std::string origin)
   -> partition_transformer_actor::behavior_type {
   self->state().synopsis_opts = synopsis_opts;
   self->state().partition_path_template = std::move(partition_path_template);
@@ -338,6 +338,7 @@ auto partition_transformer(
   self->state().catalog = std::move(catalog);
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);
+  self->state().origin = std::move(origin);
   return {
     [self](tenzir::table_slice& slice) {
       // Adjust the import time range iff necessary.
@@ -431,7 +432,7 @@ auto partition_transformer(
             continue;
           }
           auto builder_and_header = store_actor_plugin->make_store_builder(
-            self->state().fs, partition_data.id);
+            self->state().fs, partition_data.id, self->state().origin);
           if (! builder_and_header) {
             self->state().stream_error
               = caf::make_error(ec::invalid_argument,

@@ -497,12 +497,14 @@ auto saver_parser_plugin::supported_uri_schemes() const
 // -- store plugin -------------------------------------------------------------
 
 auto store_plugin::make_store_builder(filesystem_actor fs,
-                                      const tenzir::uuid& id) const
+                                      const tenzir::uuid& id,
+                                      std::string origin) const
   -> caf::expected<store_actor_plugin::builder_and_header> {
   auto store = make_active_store();
   if (not store) {
     return store.error();
   }
+  (*store)->set_origin(std::move(origin));
   auto db_dir = std::filesystem::path{
     caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
                 defaults::state_directory.data())};
