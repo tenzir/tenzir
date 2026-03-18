@@ -366,9 +366,6 @@ private:
           co_await upgrade_transport_to_tls_server(std::move(*transport),
                                                    tls_context_)};
       } catch (folly::AsyncSocketException const& ex) {
-        if (accept_cancel_->getToken().isCancellationRequested()) {
-          co_return;
-        }
         // Peer-driven TLS failures are expected at runtime; keep serving other
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
@@ -379,10 +376,6 @@ private:
           .emit(dh);
         co_return;
       }
-    }
-    if (accept_cancel_->getToken().isCancellationRequested()) {
-      close_transport(std::move(transport));
-      co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
     co_await message_queue_->enqueue(Accepted{std::move(transport)});
