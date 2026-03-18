@@ -135,7 +135,7 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
-      auto parsed_value = value_type::parse(*value_record, package_path);      \
+      auto parsed_value = value_type::parse(*value_record);                    \
       if (not parsed_value) {                                                  \
         return diagnostic::error(parsed_value.error())                         \
           .note("while parsing key {} for field " #name, key)                  \
@@ -164,7 +164,7 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
-      auto parsed_value = value_type::parse(*value_record, package_path);      \
+      auto parsed_value = value_type::parse(*value_record);                    \
       if (not parsed_value) {                                                  \
         return diagnostic::error(parsed_value.error())                         \
           .note("while parsing key {} for field " #name, key)                  \
@@ -241,7 +241,7 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
         .note("invalid package definition")                                    \
         .to_error();                                                           \
     }                                                                          \
-    auto parsed = type::parse(*x, package_path);                               \
+    auto parsed = type::parse(*x);                                             \
     if (not parsed) {                                                          \
       return diagnostic::error(parsed.error())                                 \
         .note("while parsing key {} for field " #name, key)                    \
@@ -269,7 +269,7 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
           .note("got a {} instead", type::infer(materialize(item_view)))       \
           .to_error();                                                         \
       }                                                                        \
-      auto item = inner_type::parse(*item_record, package_path);               \
+      auto item = inner_type::parse(*item_record);                             \
       if (not item) {                                                          \
         return diagnostic::error(item.error())                                 \
           .note("invalid package definition")                                  \
@@ -308,8 +308,7 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
     continue;                                                                  \
   }
 
-auto package_input::parse(const view<record>& data,
-                          std::string_view package_path)
+auto package_input::parse(const view<record>& data)
   -> caf::expected<package_input> {
   auto result = package_input{};
   for (const auto& [key, value] : data) {
@@ -317,16 +316,12 @@ auto package_input::parse(const view<record>& data,
     TRY_ASSIGN_STRING_TO_RESULT(type)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
     TRY_CONVERT_TO_STRING(default, default_);
-    TENZIR_WARN("ignoring unknown key `{}` in `input` entry in package {} "
-                "definition",
-                key, package_path);
   }
   REQUIRED_FIELD(name);
   return result;
 }
 
-auto package_operator_parameter::parse(const view<record>& data,
-                                       std::string_view package_path)
+auto package_operator_parameter::parse(const view<record>& data)
   -> caf::expected<package_operator_parameter> {
   auto result = package_operator_parameter{};
   for (const auto& [key, value] : data) {
@@ -345,25 +340,18 @@ auto package_operator_parameter::parse(const view<record>& data,
       result.default_ = *maybe_string;
       continue;
     }
-    TENZIR_WARN("ignoring unknown key `{}` in `parameter` entry in package {} "
-                "definition",
-                key, package_path);
   }
   REQUIRED_FIELD(name);
   return result;
 }
 
-auto package_source::parse(const view<record>& data,
-                           std::string_view package_path)
+auto package_source::parse(const view<record>& data)
   -> caf::expected<package_source> {
   auto result = package_source{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(repository)
     TRY_ASSIGN_STRING_TO_RESULT(directory)
     TRY_ASSIGN_STRING_TO_RESULT(revision)
-    TENZIR_WARN("ignoring unknown key `{}` in `source` entry in package {} "
-                "definition",
-                key, package_path);
   }
   REQUIRED_FIELD(repository)
   REQUIRED_FIELD(directory)
@@ -371,8 +359,7 @@ auto package_source::parse(const view<record>& data,
   return result;
 }
 
-auto package_config::parse(const view<record>& data,
-                           std::string_view package_path)
+auto package_config::parse(const view<record>& data)
   -> caf::expected<package_config> {
   auto result = package_config{};
   for (const auto& [key, value] : data) {
@@ -382,9 +369,6 @@ auto package_config::parse(const view<record>& data,
     TRY_ASSIGN_RECORD_TO_RESULT(overrides);
     TRY_ASSIGN_RECORD_TO_RESULT(metadata);
     TRY_ASSIGN_BOOL_TO_RESULT(disabled);
-    TENZIR_WARN("ignoring unknown key `{}` in `config` entry in package {} "
-                "definition",
-                key, package_path);
   }
   return result;
 }
@@ -393,8 +377,7 @@ namespace {
 
 template <class Value>
 auto parse_operator_parameter_list(std::string_view field_name,
-                                   const Value& value,
-                                   std::string_view package_path)
+                                   const Value& value)
   -> caf::expected<std::vector<package_operator_parameter>> {
   auto result = std::vector<package_operator_parameter>{};
   if (is<caf::none_t>(value)) {
@@ -414,7 +397,7 @@ auto parse_operator_parameter_list(std::string_view field_name,
         .note("invalid package definition")
         .to_error();
     }
-    TRY(auto param, package_operator_parameter::parse(*rec, package_path));
+    TRY(auto param, package_operator_parameter::parse(*rec));
     result.push_back(std::move(param));
   }
   return result;
@@ -516,8 +499,7 @@ auto load_tql_with_frontmatter(std::string_view input)
 
 } // namespace
 
-auto package_operator::parse(const view<record>& data,
-                             std::string_view package_path)
+auto package_operator::parse(const view<record>& data)
   -> caf::expected<package_operator> {
   auto result = package_operator{};
   auto positional_source = std::optional<std::string>{};
@@ -532,8 +514,7 @@ auto package_operator::parse(const view<record>& data,
         .note("invalid package definition")
         .to_error();
     }
-    TRY(auto parsed,
-        parse_operator_parameter_list(field_name, field_value, package_path));
+    TRY(auto parsed, parse_operator_parameter_list(field_name, field_value));
     target = std::move(parsed);
     source = std::string{field_name};
     return {};
@@ -564,9 +545,6 @@ auto package_operator::parse(const view<record>& data,
             }
             continue;
           }
-          TENZIR_WARN("ignoring unknown key `{}` in `args` entry in package {} "
-                      "definition",
-                      subkey, package_path);
         }
         continue;
       }
@@ -582,23 +560,18 @@ auto package_operator::parse(const view<record>& data,
         .note("invalid package definition")
         .to_error();
     }
-    TENZIR_WARN("ignoring unknown key `{}` in `operator` entry in package {} "
-                "definition",
-                key, package_path);
   }
   REQUIRED_FIELD(definition)
   return result;
 }
 
-auto package_operator::parse(std::string_view input,
-                             std::string_view package_path)
+auto package_operator::parse(std::string_view input)
   -> caf::expected<package_operator> {
   TRY(auto rec, load_tql_with_frontmatter(input));
-  return parse(make_view(rec), package_path);
+  return parse(make_view(rec));
 }
 
-auto package_pipeline::parse(const view<record>& data,
-                             std::string_view package_path)
+auto package_pipeline::parse(const view<record>& data)
   -> caf::expected<package_pipeline> {
   auto result = package_pipeline{};
   for (const auto& [key, value] : data) {
@@ -652,26 +625,25 @@ auto package_pipeline::parse(const view<record>& data,
     if (key == "labels") {
       continue;
     }
-    TENZIR_WARN("ignoring unknown key `{}` in `pipeline` entry in package {} "
-                "definition",
-                key, package_path);
   }
   REQUIRED_FIELD(definition)
   return result;
 }
 
-auto package_pipeline::parse(std::string_view input,
-                             std::string_view package_path)
+auto package_pipeline::parse(const view<record>& data, std::string_view)
   -> caf::expected<package_pipeline> {
-  TRY(auto rec, load_tql_with_frontmatter(input));
-  return parse(make_view(rec), package_path);
+  return parse(data);
 }
 
-auto package_context::parse(const view<record>& data,
-                            std::string_view package_path)
+auto package_pipeline::parse(std::string_view input)
+  -> caf::expected<package_pipeline> {
+  TRY(auto rec, load_tql_with_frontmatter(input));
+  return parse(make_view(rec));
+}
+
+auto package_context::parse(const view<record>& data)
   -> caf::expected<package_context> {
   auto result = package_context{};
-  (void)package_path; // Unused, but needed for macro consistency
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(type);
     TRY_ASSIGN_BOOL_TO_RESULT(disabled);
@@ -682,11 +654,9 @@ auto package_context::parse(const view<record>& data,
   return result;
 }
 
-auto package_example::parse(const view<record>& data,
-                            std::string_view package_path)
+auto package_example::parse(const view<record>& data)
   -> caf::expected<package_example> {
   auto result = package_example{};
-  (void)package_path; // Unused, but needed for macro consistency
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(definition);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name);
@@ -696,15 +666,13 @@ auto package_example::parse(const view<record>& data,
   return result;
 }
 
-auto package_example::parse(std::string_view input,
-                            std::string_view package_path)
+auto package_example::parse(std::string_view input)
   -> caf::expected<package_example> {
   TRY(auto rec, load_tql_with_frontmatter(input));
-  return parse(make_view(rec), package_path);
+  return parse(make_view(rec));
 }
 
-auto package::parse(const view<record>& data, std::string_view package_path)
-  -> caf::expected<package> {
+auto package::parse(const view<record>& data) -> caf::expected<package> {
   auto result = package{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(id);
@@ -720,9 +688,6 @@ auto package::parse(const view<record>& data, std::string_view package_path)
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
     TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
-    TENZIR_WARN("ignoring unknown key `{}` in `package` entry in package {} "
-                "definition",
-                key, package_path);
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
@@ -750,6 +715,11 @@ auto package::parse(const view<record>& data, std::string_view package_path)
     }
   }
   return result;
+}
+
+auto package::parse(const view<record>& data, std::string_view)
+  -> caf::expected<package> {
+  return parse(data);
 }
 
 auto package_module_name(std::string_view package_id) -> std::string {
@@ -796,7 +766,7 @@ auto load_package_part(const std::filesystem::path& file, auto& dh)
     diagnostic::error(content.error()).note("trying to load {}", file).emit(dh);
     return failure::promise();
   }
-  auto result = Type::parse(*content, file.string());
+  auto result = Type::parse(*content);
   if (not result) {
     diagnostic::error("{}", result.error()).note("from file: {}", file).emit(dh);
     return failure::promise();
@@ -862,7 +832,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
     package_record.erase("pipelines");
     package_record.erase("contexts");
   }
-  auto parsed_package = package::parse(make_view(package_record), dir.string());
+  auto parsed_package = package::parse(make_view(package_record));
   if (not parsed_package) {
     diagnostic::error("failed to parse package.yaml")
       .note("in package directory {}", dir)
@@ -895,8 +865,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       had_errors = true;
     }
     TRY(auto config_record, yaml_file_to_record(config_file, dh));
-    auto parsed_config
-      = package_config::parse(make_view(config_record), dir.string());
+    auto parsed_config = package_config::parse(make_view(config_record));
     if (not parsed_config) {
       diagnostic::error("failed to parse package config")
         .note("in package directory {}/", dir)
