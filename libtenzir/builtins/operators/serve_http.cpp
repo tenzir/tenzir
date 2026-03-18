@@ -12,11 +12,11 @@
 #include "tenzir/async.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
-#include "tenzir/atomic.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/http_server_thread.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -31,20 +31,16 @@
 #include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
-#define nsel_CONFIG_SELECT_EXPECTED 1
-#include <folly/io/async/AsyncServerSocket.h>
+#include <folly/fibers/Semaphore.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
-#include <proxygen/lib/http/coro/server/HTTPCoroAcceptor.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
 
 #include <cstdint>
-#include <future>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -194,139 +190,57 @@ enum class ListenerState {
 };
 
 struct ServeHttpServerState {
-  explicit ServeHttpServerState(Arc<MessageQueue> message_queue)
-    : message_queue{std::move(message_queue)} {
+  ServeHttpServerState(Arc<MessageQueue> message_queue,
+                       Option<record> responses, std::string stream_path,
+                       std::string stream_method,
+                       Option<uint64_t> max_connections)
+    : message_queue{std::move(message_queue)},
+      responses_{std::move(responses)},
+      stream_path_{std::move(stream_path)},
+      stream_method_{std::move(stream_method)} {
+    if (max_connections) {
+      connection_slots_ = Box<folly::fibers::Semaphore>{
+        std::in_place, detail::narrow<size_t>(*max_connections)};
+    }
   }
 
-  Arc<MessageQueue> message_queue;
-  Option<record> responses;
-  std::string stream_path = std::string{default_stream_path};
-  std::string stream_method = std::string{default_stream_method};
-  Option<uint64_t> max_connections;
+  auto responses() const -> Option<record> const& {
+    return responses_;
+  }
+
+  auto stream_path() const -> std::string const& {
+    return stream_path_;
+  }
+
+  auto stream_method() const -> std::string const& {
+    return stream_method_;
+  }
 
   auto create_client() -> Option<Arc<ServeHttpClient>> {
-    if (not try_acquire_connection_slot()) {
+    if (connection_slots_ and not(*connection_slots_)->try_wait()) {
       return None{};
     }
     return Arc<ServeHttpClient>{std::in_place};
   }
 
   auto release_connection_slot() -> void {
-    if (not max_connections) {
-      return;
+    if (connection_slots_) {
+      (*connection_slots_)->signal();
     }
-    auto previous
-      = reserved_connections_.fetch_sub(1, std::memory_order_relaxed);
-    TENZIR_ASSERT(previous > 0);
   }
 
+  Arc<MessageQueue> message_queue;
+
 private:
-  auto try_acquire_connection_slot() -> bool {
-    if (not max_connections) {
-      return true;
-    }
-    auto current = reserved_connections_.load(std::memory_order_relaxed);
-    while (current < *max_connections) {
-      if (reserved_connections_.compare_exchange_weak(
-            current, current + 1, std::memory_order_relaxed)) {
-        return true;
-      }
-    }
-    return false;
-  }
+  Option<record> responses_;
+  std::string stream_path_ = std::string{default_stream_path};
+  std::string stream_method_ = std::string{default_stream_method};
 
   // The HTTP handler must decide synchronously whether it can hand out a new
   // streaming response before the operator thread processes the corresponding
-  // `ClientOpened` message, so a minimal atomic reservation counter is the
-  // smallest shared surface that preserves queue-based coordination.
-  Atomic<uint64_t> reserved_connections_{0};
-};
-
-class HttpServerThread final {
-public:
-  HttpServerThread(
-    folly::SocketAddress address,
-    std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config,
-    std::shared_ptr<proxygen::coro::HTTPHandler> handler)
-    : address_{std::move(address)},
-      acceptor_config_{std::move(acceptor_config)},
-      handler_{std::move(handler)} {
-  }
-
-  HttpServerThread(HttpServerThread const&) = delete;
-  auto operator=(HttpServerThread const&) -> HttpServerThread& = delete;
-  HttpServerThread(HttpServerThread&&) = delete;
-  auto operator=(HttpServerThread&&) -> HttpServerThread& = delete;
-
-  ~HttpServerThread() {
-    stop();
-  }
-
-  auto start() -> Option<std::string> {
-    auto ready = std::promise<Option<std::string>>{};
-    auto ready_future = ready.get_future();
-    thread_ = std::thread([this, ready = std::move(ready)]() mutable {
-      try {
-        socket_ = folly::AsyncServerSocket::UniquePtr(
-          new folly::AsyncServerSocket(&event_base_));
-        socket_->bind(address_);
-        socket_->listen(acceptor_config_->acceptBacklog);
-        socket_->startAccepting();
-        acceptor_ = std::make_unique<proxygen::coro::HTTPCoroAcceptor>(
-          acceptor_config_, handler_);
-        acceptor_->init(socket_.get(), &event_base_);
-        ready.set_value(None{});
-        event_base_.loopForever();
-      } catch (std::exception const& ex) {
-        ready.set_value(std::string{ex.what()});
-      }
-    });
-    auto error = ready_future.get();
-    if (error) {
-      if (thread_.joinable()) {
-        thread_.join();
-      }
-    }
-    return error;
-  }
-
-  auto request_stop_accepting() -> void {
-    if (not thread_.joinable()) {
-      return;
-    }
-    event_base_.runInEventBaseThreadAndWait([this] {
-      if (socket_) {
-        socket_->stopAccepting();
-      }
-    });
-  }
-
-  auto stop() -> void {
-    if (not thread_.joinable()) {
-      return;
-    }
-    event_base_.runInEventBaseThreadAndWait([this] {
-      if (acceptor_) {
-        acceptor_->forceStop();
-      }
-      if (socket_) {
-        socket_->stopAccepting();
-      }
-      event_base_.terminateLoopSoon();
-    });
-    thread_.join();
-    std::ignore = acceptor_.release();
-    std::ignore = socket_.release();
-  }
-
-private:
-  folly::SocketAddress address_;
-  std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config_;
-  std::shared_ptr<proxygen::coro::HTTPHandler> handler_;
-  folly::EventBase event_base_;
-  folly::AsyncServerSocket::UniquePtr socket_;
-  std::unique_ptr<proxygen::coro::HTTPCoroAcceptor> acceptor_;
-  std::thread thread_;
+  // `ClientOpened` message, so a small semaphore-backed token pool is the
+  // minimal shared surface that preserves queue-based coordination.
+  Option<Box<folly::fibers::Semaphore>> connection_slots_;
 };
 
 auto notify_client_closed(ClientKey client, Arc<MessageQueue> message_queue)
@@ -435,17 +349,17 @@ public:
       return proxygen::coro::HTTPSourceReader::Continue;
     });
     co_await reader.read();
-    if (state_->responses) {
-      if (auto response
-          = http::lookup_response(*state_->responses, request_path)) {
+    if (auto const& responses = state_->responses(); responses) {
+      if (auto response = http::lookup_response(*responses, request_path)) {
         co_return http::make_fixed_response_source(
           response->code, std::move(response->body), response->content_type);
       }
     }
-    if (request_path != state_->stream_path) {
+    if (request_path != state_->stream_path()) {
       co_return http::make_fixed_response_source(404, std::string{});
     }
-    if (not detail::ascii_icase_equal(request_method, state_->stream_method)) {
+    if (not detail::ascii_icase_equal(request_method,
+                                      state_->stream_method())) {
       co_return http::make_fixed_response_source(405, std::string{});
     }
     auto client = state_->create_client();
@@ -496,19 +410,22 @@ public:
       = args_.tls
           ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
           : tls_options{{.tls_default = false, .is_server = true}};
-    server_state_ = Arc<ServeHttpServerState>{std::in_place, message_queue_};
-    (*server_state_)->responses = args_.responses.transform([](auto const& x) {
-      return x.inner;
-    });
-    (*server_state_)->stream_path
-      = args_.path ? args_.path->inner : std::string{default_stream_path};
-    (*server_state_)->stream_method = std::string{default_stream_method};
+    auto stream_method = std::string{default_stream_method};
     if (args_.method) {
       auto method = http::normalize_http_method(args_.method->inner);
       TENZIR_ASSERT(method);
-      (*server_state_)->stream_method = std::move(*method);
+      stream_method = std::move(*method);
     }
-    (*server_state_)->max_connections = inner(args_.max_connections);
+    server_state_ = Arc<ServeHttpServerState>{
+      std::in_place,
+      message_queue_,
+      args_.responses.transform([](auto const& x) {
+        return x.inner;
+      }),
+      args_.path ? args_.path->inner : std::string{default_stream_path},
+      std::move(stream_method),
+      inner(args_.max_connections),
+    };
     if (args_.on_backlog) {
       auto policy = parse_backlog_policy(args_.on_backlog->inner);
       TENZIR_ASSERT(policy);
@@ -521,9 +438,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Box<HttpServerThread>{std::in_place,
-                                    folly::SocketAddress{host, port, true},
-                                    std::move(*config), handler_};
+    server_ = Box<::tenzir::detail::HttpServerThread>{
+      std::in_place, folly::SocketAddress{host, port, true}, std::move(*config),
+      handler_};
     if (auto error = (*server_)->start()) {
       diagnostic::error("failed to start http server")
         .primary(args_.url)
@@ -773,7 +690,7 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<Arc<ServeHttpServerState>> server_state_;
-  Option<Box<HttpServerThread>> server_;
+  Option<Box<::tenzir::detail::HttpServerThread>> server_;
   std::shared_ptr<ServeHttpHandler> handler_;
   std::unordered_map<ClientKey, Arc<ServeHttpClient>> clients_;
   std::vector<std::string> pending_payloads_;
