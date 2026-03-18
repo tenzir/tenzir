@@ -3,6 +3,7 @@ error: true
 ---
 
 accept_http "127.0.0.1:31337",
+            max_connections=16,
             tls={keyfile: "tests/operators/from_tcp/test.yaml"} {
   read_json
 }

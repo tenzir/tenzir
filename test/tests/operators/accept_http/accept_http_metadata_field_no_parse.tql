@@ -7,7 +7,7 @@ fixtures:
 timeout: 60
 ---
 
-accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), metadata_field=meta
+accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), max_connections=16, metadata_field=meta
 where path == "/meta_no_parse" and method == "POST"
 headers.Host = replace_regex(headers.Host, ":[0-9]+$", ":*")
 meta.headers.Host = replace_regex(meta.headers.Host, ":[0-9]+$", ":*")

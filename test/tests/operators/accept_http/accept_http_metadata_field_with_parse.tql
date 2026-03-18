@@ -7,7 +7,7 @@ fixtures:
 timeout: 60
 ---
 
-accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), metadata_field=meta {
+accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), max_connections=16, metadata_field=meta {
   read_json
   where $request.path == "/meta_parse" and $request.method == "POST"
 }

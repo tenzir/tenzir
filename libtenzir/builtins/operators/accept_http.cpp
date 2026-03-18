@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -13,7 +13,7 @@
 #include "tenzir/box.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/http_server_thread.hpp"
+#include "tenzir/detail/http_server.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
@@ -48,7 +48,6 @@ namespace {
 using namespace tenzir::si_literals;
 
 constexpr auto default_max_request_size = 10_Mi;
-constexpr auto default_listen_backlog = uint32_t{128};
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
 constexpr auto http_1_1 = std::string_view{"http/1.1"};
 
@@ -65,7 +64,7 @@ struct AcceptHttpArgs {
   std::optional<located<record>> responses;
   std::optional<ast::field_path> metadata_field;
   std::optional<located<uint64_t>> max_request_size;
-  std::optional<located<uint64_t>> max_connections;
+  located<uint64_t> max_connections{0, location::unknown};
   std::optional<located<data>> tls;
   std::optional<located<ir::pipeline>> parse;
   let_id request_let;
@@ -77,17 +76,16 @@ struct AcceptHttpArgs {
         .emit(dh);
       return failure::promise();
     }
-    if (max_connections and max_connections->inner == 0) {
+    if (max_connections.inner == 0) {
       diagnostic::error("`max_connections` must not be zero")
-        .primary(max_connections->source)
+        .primary(max_connections.source)
         .emit(dh);
       return failure::promise();
     }
-    if (max_connections
-        and max_connections->inner > std::numeric_limits<uint32_t>::max()) {
+    if (max_connections.inner > detail::max_http_server_connections) {
       diagnostic::error("`max_connections` must be at most {}",
-                        std::numeric_limits<uint32_t>::max())
-        .primary(max_connections->source)
+                        detail::max_http_server_connections)
+        .primary(max_connections.source)
         .emit(dh);
       return failure::promise();
     }
@@ -132,14 +130,12 @@ enum class Lifecycle {
 struct AcceptHttpServerState {
   AcceptHttpServerState(Arc<MessageQueue> message_queue,
                         Option<record> responses, size_t max_request_size,
-                        Option<uint64_t> max_connections)
+                        uint64_t max_connections)
     : message_queue{std::move(message_queue)},
       responses_{std::move(responses)},
-      max_request_size_{max_request_size} {
-    if (max_connections) {
-      connection_slots_ = Box<folly::fibers::Semaphore>{
-        std::in_place, detail::narrow<size_t>(*max_connections)};
-    }
+      max_request_size_{max_request_size},
+      connection_slots_{std::in_place,
+                        detail::narrow<size_t>(max_connections)} {
   }
 
   auto responses() const -> Option<record> const& {
@@ -151,13 +147,11 @@ struct AcceptHttpServerState {
   }
 
   auto try_acquire_connection_slot() -> bool {
-    return not connection_slots_ or (*connection_slots_)->try_wait();
+    return connection_slots_->try_wait();
   }
 
   auto release_connection_slot() -> void {
-    if (connection_slots_) {
-      (*connection_slots_)->signal();
-    }
+    connection_slots_->signal();
   }
 
   Arc<MessageQueue> message_queue;
@@ -170,7 +164,7 @@ private:
   // request slot before the operator thread processes the corresponding
   // `RequestReceived` message, so a small semaphore-backed token pool is the
   // minimal shared surface that preserves queue-based coordination.
-  Option<Box<folly::fibers::Semaphore>> connection_slots_;
+  Box<folly::fibers::Semaphore> connection_slots_;
 };
 
 class ConnectionLimitedSource final : public proxygen::coro::HTTPSourceFilter {
@@ -341,7 +335,7 @@ public:
         return x.inner;
       }),
       inner(args_.max_request_size).value_or(default_max_request_size),
-      inner(args_.max_connections),
+      args_.max_connections.inner,
     };
     handler_ = std::make_shared<AcceptHttpHandler>(*server_state_);
     auto [host, port] = std::move(endpoint).unwrap();
@@ -350,7 +344,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Box<::tenzir::detail::HttpServerThread>{
+    server_ = Box<::tenzir::detail::HttpServerRunner>{
       std::in_place, folly::SocketAddress{host, port, true}, std::move(*config),
       handler_};
     if (auto error = (*server_)->start()) {
@@ -493,11 +487,8 @@ private:
     config->plaintextProtocol = std::string{http_1_1};
     config->forceHTTP1_0_to_1_1 = true;
     config->bindAddress = folly::SocketAddress{host, port, true};
-    config->acceptBacklog = inner(args_.max_connections)
-                              .transform([](auto value) {
-                                return detail::narrow<uint32_t>(value);
-                              })
-                              .value_or(default_listen_backlog);
+    config->acceptBacklog
+      = detail::narrow<uint32_t>(args_.max_connections.inner);
     config->maxNumPendingConnectionsPerWorker = config->acceptBacklog;
     if (not tls_options_.get_tls(nullptr).inner) {
       return config;
@@ -559,7 +550,7 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<Arc<AcceptHttpServerState>> server_state_;
-  Option<Box<::tenzir::detail::HttpServerThread>> server_;
+  Option<Box<::tenzir::detail::HttpServerRunner>> server_;
   std::shared_ptr<AcceptHttpHandler> handler_;
   std::unordered_set<data> active_sub_keys_;
   std::unordered_map<data, record> request_metadata_by_sub_key_;
@@ -607,6 +598,10 @@ struct AcceptHttpPlugin final : public virtual OperatorPlugin {
       }
       if (auto x = ctx.get(max_connections)) {
         args.max_connections = *x;
+      } else {
+        diagnostic::error("`max_connections` is required")
+          .primary(args.op)
+          .emit(ctx);
       }
       if (auto x = ctx.get(tls)) {
         args.tls = *x;

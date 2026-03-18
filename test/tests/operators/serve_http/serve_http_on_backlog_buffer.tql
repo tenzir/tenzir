@@ -12,4 +12,4 @@ timeout: 60
 ---
 
 from {n: 1}, {n: 2}
-serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), on_backlog="buffer"
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), max_connections=16, on_backlog="buffer"

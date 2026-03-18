@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -18,14 +18,18 @@
 #include <proxygen/lib/http/coro/server/HTTPCoroAcceptor.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
 
+#include <limits>
 #include <memory>
 #include <utility>
 
 namespace tenzir::detail {
 
-class HttpServerThread final {
+inline constexpr auto max_http_server_connections
+  = uint64_t{std::numeric_limits<uint32_t>::max()};
+
+class HttpServerRunner final {
 public:
-  HttpServerThread(
+  HttpServerRunner(
     folly::SocketAddress address,
     std::shared_ptr<const proxygen::AcceptorConfiguration> acceptor_config,
     std::shared_ptr<proxygen::coro::HTTPHandler> handler)
@@ -34,12 +38,12 @@ public:
       handler_{std::move(handler)} {
   }
 
-  HttpServerThread(HttpServerThread const&) = delete;
-  auto operator=(HttpServerThread const&) -> HttpServerThread& = delete;
-  HttpServerThread(HttpServerThread&&) = delete;
-  auto operator=(HttpServerThread&&) -> HttpServerThread& = delete;
+  HttpServerRunner(HttpServerRunner const&) = delete;
+  auto operator=(HttpServerRunner const&) -> HttpServerRunner& = delete;
+  HttpServerRunner(HttpServerRunner&&) = delete;
+  auto operator=(HttpServerRunner&&) -> HttpServerRunner& = delete;
 
-  ~HttpServerThread() {
+  ~HttpServerRunner() {
     stop();
   }
 

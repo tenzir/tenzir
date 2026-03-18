@@ -12,6 +12,7 @@ timeout: 60
 from {stream: true}
 serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"),
           path="/stream",
+          max_connections=16,
           responses={
             "/health": {
               code: 200,

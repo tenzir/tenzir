@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -16,7 +16,7 @@
 #include "tenzir/co_match.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/http_server_thread.hpp"
+#include "tenzir/detail/http_server.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -50,7 +50,6 @@ namespace {
 
 using namespace tenzir::si_literals;
 
-constexpr auto default_listen_backlog = uint32_t{128};
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
 constexpr auto default_stream_path = std::string_view{"/"};
 constexpr auto default_stream_method = std::string_view{"GET"};
@@ -93,7 +92,7 @@ struct ServeHttpArgs {
   std::optional<located<std::string>> method;
   std::optional<located<record>> responses;
   std::optional<located<std::string>> on_backlog;
-  std::optional<located<uint64_t>> max_connections;
+  located<uint64_t> max_connections{0, location::unknown};
   std::optional<located<data>> tls;
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
@@ -126,17 +125,16 @@ struct ServeHttpArgs {
         .emit(dh);
       return failure::promise();
     }
-    if (max_connections and max_connections->inner == 0) {
+    if (max_connections.inner == 0) {
       diagnostic::error("`max_connections` must not be zero")
-        .primary(max_connections->source)
+        .primary(max_connections.source)
         .emit(dh);
       return failure::promise();
     }
-    if (max_connections
-        and max_connections->inner > std::numeric_limits<uint32_t>::max()) {
+    if (max_connections.inner > detail::max_http_server_connections) {
       diagnostic::error("`max_connections` must be at most {}",
-                        std::numeric_limits<uint32_t>::max())
-        .primary(max_connections->source)
+                        detail::max_http_server_connections)
+        .primary(max_connections.source)
         .emit(dh);
       return failure::promise();
     }
@@ -192,16 +190,13 @@ enum class ListenerState {
 struct ServeHttpServerState {
   ServeHttpServerState(Arc<MessageQueue> message_queue,
                        Option<record> responses, std::string stream_path,
-                       std::string stream_method,
-                       Option<uint64_t> max_connections)
+                       std::string stream_method, uint64_t max_connections)
     : message_queue{std::move(message_queue)},
       responses_{std::move(responses)},
       stream_path_{std::move(stream_path)},
-      stream_method_{std::move(stream_method)} {
-    if (max_connections) {
-      connection_slots_ = Box<folly::fibers::Semaphore>{
-        std::in_place, detail::narrow<size_t>(*max_connections)};
-    }
+      stream_method_{std::move(stream_method)},
+      connection_slots_{std::in_place,
+                        detail::narrow<size_t>(max_connections)} {
   }
 
   auto responses() const -> Option<record> const& {
@@ -217,16 +212,14 @@ struct ServeHttpServerState {
   }
 
   auto create_client() -> Option<Arc<ServeHttpClient>> {
-    if (connection_slots_ and not(*connection_slots_)->try_wait()) {
+    if (not connection_slots_->try_wait()) {
       return None{};
     }
     return Arc<ServeHttpClient>{std::in_place};
   }
 
   auto release_connection_slot() -> void {
-    if (connection_slots_) {
-      (*connection_slots_)->signal();
-    }
+    connection_slots_->signal();
   }
 
   Arc<MessageQueue> message_queue;
@@ -240,7 +233,7 @@ private:
   // streaming response before the operator thread processes the corresponding
   // `ClientOpened` message, so a small semaphore-backed token pool is the
   // minimal shared surface that preserves queue-based coordination.
-  Option<Box<folly::fibers::Semaphore>> connection_slots_;
+  Box<folly::fibers::Semaphore> connection_slots_;
 };
 
 auto notify_client_closed(ClientKey client, Arc<MessageQueue> message_queue)
@@ -424,7 +417,7 @@ public:
       }),
       args_.path ? args_.path->inner : std::string{default_stream_path},
       std::move(stream_method),
-      inner(args_.max_connections),
+      args_.max_connections.inner,
     };
     if (args_.on_backlog) {
       auto policy = parse_backlog_policy(args_.on_backlog->inner);
@@ -438,7 +431,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Box<::tenzir::detail::HttpServerThread>{
+    server_ = Box<::tenzir::detail::HttpServerRunner>{
       std::in_place, folly::SocketAddress{host, port, true}, std::move(*config),
       handler_};
     if (auto error = (*server_)->start()) {
@@ -604,11 +597,8 @@ private:
     config->plaintextProtocol = std::string{http_1_1};
     config->forceHTTP1_0_to_1_1 = true;
     config->bindAddress = folly::SocketAddress{host, port, true};
-    config->acceptBacklog = inner(args_.max_connections)
-                              .transform([](auto value) {
-                                return detail::narrow<uint32_t>(value);
-                              })
-                              .value_or(default_listen_backlog);
+    config->acceptBacklog
+      = detail::narrow<uint32_t>(args_.max_connections.inner);
     config->maxNumPendingConnectionsPerWorker = config->acceptBacklog;
     if (not tls_options_.get_tls(nullptr).inner) {
       return config;
@@ -690,7 +680,7 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<Arc<ServeHttpServerState>> server_state_;
-  Option<Box<::tenzir::detail::HttpServerThread>> server_;
+  Option<Box<::tenzir::detail::HttpServerRunner>> server_;
   std::shared_ptr<ServeHttpHandler> handler_;
   std::unordered_map<ClientKey, Arc<ServeHttpClient>> clients_;
   std::vector<std::string> pending_payloads_;
@@ -740,6 +730,10 @@ struct ServeHttpPlugin final : public virtual OperatorPlugin {
       }
       if (auto x = ctx.get(max_connections)) {
         args.max_connections = *x;
+      } else {
+        diagnostic::error("`max_connections` is required")
+          .primary(args.op)
+          .emit(ctx);
       }
       if (auto x = ctx.get(tls)) {
         args.tls = *x;

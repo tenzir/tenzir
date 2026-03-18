@@ -12,4 +12,4 @@ timeout: 60
 ---
 
 from {event: "post"}
-serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), path="/events", method="post"
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), path="/events", method="post", max_connections=16

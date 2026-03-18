@@ -3,4 +3,4 @@ error: true
 ---
 
 from {n: 1}
-serve_http "127.0.0.1:31337", on_backlog="invalid"
+serve_http "127.0.0.1:31337", max_connections=16, on_backlog="invalid"

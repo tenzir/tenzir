@@ -9,6 +9,7 @@ timeout: 60
 ---
 
 accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"),
+            max_connections=16,
             tls={
               certfile: env("HTTP_FIXTURE_TLS_CERTFILE"),
               keyfile: env("HTTP_FIXTURE_TLS_KEYFILE"),
