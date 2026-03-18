@@ -27,6 +27,9 @@ namespace tenzir::plugins::clickhouse {
 
 namespace {
 
+constexpr auto clickhouse_plaintext_port = uint64_t{9000};
+constexpr auto clickhouse_tls_port = uint64_t{9440};
+
 class clickhouse_sink_operator final
   : public crtp_operator<clickhouse_sink_operator> {
 public:
@@ -61,8 +64,9 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
     auto& dh = ctrl.diagnostics();
-    const auto default_port
-      = args_.ssl.get_tls(&ctrl).inner ? uint64_t{9440} : uint64_t{9000};
+    auto const tls_enabled = args_.ssl.get_tls(&ctrl).inner;
+    auto const default_port
+      = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
     auto args = easy_client::arguments{
       .host = "",
       .port = args_.port ? *args_.port
@@ -123,9 +127,9 @@ public:
     auto diag = diagnostic::error("ClickHouse error: {}", e.what())
                   .primary(args_.operator_location);
     maybe_add_tls_client_diagnostic_hints(std::move(diag), e.what(),
-                                          args_.ssl.get_tls(&ctrl).inner,
-                                          "ClickHouse", uint64_t{9000},
-                                          uint64_t{9440})
+                                          tls_enabled, "ClickHouse",
+                                          clickhouse_plaintext_port,
+                                          clickhouse_tls_port)
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -181,9 +185,9 @@ public:
                  args_.primary->get_location()};
     }
     auto ssl = args_.tls ? tls_options{*args_.tls} : tls_options{};
-    const auto default_port = ssl.get_tls(&ctx.actor_system().config()).inner
-                                ? uint64_t{9440}
-                                : uint64_t{9000};
+    auto const tls_enabled = ssl.get_tls(&ctx.actor_system().config()).inner;
+    auto const default_port
+      = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
     auto client_args = easy_client::arguments{
       .host = "", // resolved as secret below.
       .port = args_.port ? *args_.port
@@ -216,10 +220,10 @@ public:
       } catch (const std::exception& e) {
         auto diag = diagnostic::error("ClickHouse error: {}", e.what())
                       .primary(args_.operator_location);
-        maybe_add_tls_client_diagnostic_hints(
-          std::move(diag), e.what(),
-          ssl.get_tls(&ctx.actor_system().config()).inner, "ClickHouse",
-          uint64_t{9000}, uint64_t{9440})
+        maybe_add_tls_client_diagnostic_hints(std::move(diag), e.what(),
+                                              tls_enabled, "ClickHouse",
+                                              clickhouse_plaintext_port,
+                                              clickhouse_tls_port)
           .emit(dh);
         state_->done.store(true);
         co_return;
@@ -228,7 +232,7 @@ public:
       /// We need to wait for our workers on shutdown, so need need to keep
       /// their handles.
       state_->worker_handles.push_back(
-        ctx.spawn_task(worker_loop(state_.get(), client)));
+        ctx.spawn_task(worker_loop(state_.get(), client, tls_enabled)));
       /// We can rely on the operator's async scope cancelling our outstanding
       /// ping tasks.
       std::ignore = ctx.spawn_task(ping_loop(state_.get(), std::move(client)));
@@ -292,7 +296,8 @@ public:
 
 private:
   static auto worker_loop(runtime_state* shared_state,
-                          std::shared_ptr<easy_client> client) -> Task<void> {
+                          std::shared_ptr<easy_client> client, bool tls_enabled)
+    -> Task<void> {
     TENZIR_ASSERT(shared_state);
     while (true) {
       auto next = co_await shared_state->input_queue.dequeue();
@@ -320,9 +325,9 @@ private:
       } catch (const std::exception& e) {
         auto diag = diagnostic::error("ClickHouse error: {}", e.what());
         maybe_add_tls_client_diagnostic_hints(std::move(diag), e.what(),
-                                              client->tls_enabled(),
-                                              "ClickHouse", uint64_t{9000},
-                                              uint64_t{9440})
+                                              tls_enabled, "ClickHouse",
+                                              clickhouse_plaintext_port,
+                                              clickhouse_tls_port)
           .emit(client->dh());
       } catch (...) {
         diagnostic::error("unexpected exception").emit(client->dh());
