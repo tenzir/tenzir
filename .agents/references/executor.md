@@ -127,8 +127,7 @@ ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop(
 Do not add a second `stop_` flag—cancellation tokens already express this.
 
 Usually, you do not need to check for cancellation explicitly, as many async
-operations implicitly do so. Insert `co_await folly::coro::co_safe_point` at
-the top of loops only when the loop body would otherwise delay cancellation.
+operations implicitly do so.
 
 Use `Notify` for one-shot wakeups. Do not use `folly::coro::Baton` directly in
 operators, because it is not cancellation-aware.
