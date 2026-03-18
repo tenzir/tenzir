@@ -12,11 +12,14 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/eval_optimizations.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/view3.hpp"
 
 #include <limits>

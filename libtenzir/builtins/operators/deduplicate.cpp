@@ -21,7 +21,7 @@
 #include <tenzir/tql2/set.hpp>
 
 #include <fmt/format.h>
-#include <tsl/robin_hash.h>
+#include <tsl/robin_map.h>
 
 #include <chrono>
 

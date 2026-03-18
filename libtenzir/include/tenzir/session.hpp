@@ -8,9 +8,14 @@
 
 #pragma once
 
-#include "tenzir/tql2/registry.hpp"
+#include "tenzir/diagnostics.hpp"
+
+#include <memory>
+#include <optional>
 
 namespace tenzir {
+
+class registry;
 
 class session_provider {
 public:

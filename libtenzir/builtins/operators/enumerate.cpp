@@ -18,6 +18,7 @@
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/type.h>
+#include <tsl/robin_map.h>
 
 #include <type_traits>
 #include <utility>

@@ -13,6 +13,8 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <tsl/robin_map.h>
+
 #include <numeric>
 
 namespace tenzir::plugins::mode_value_counts_entropy {
