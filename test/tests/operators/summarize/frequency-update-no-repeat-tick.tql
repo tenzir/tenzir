@@ -1,0 +1,6 @@
+// Update mode: a timer tick that fires while no new data has arrived since the
+// last emission should not produce an output record.
+from {ts: 0ms.from_epoch(), x: 1},
+     {ts: 250ms.from_epoch(), x: 1}
+delay ts
+summarize sum=sum(x), options={frequency: 100ms, mode: "update"}

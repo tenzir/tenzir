@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -163,6 +163,11 @@ struct State {
     return false;
   }
 };
+
+/// A robin_map that supports heterogeneous lookup with `data_view`, avoiding
+/// materialization of the key for lookups that hit an existing entry.
+using dedup_map
+  = tsl::robin_map<data, State, std::hash<data_view>, std::equal_to<data_view>>;
 
 auto configuration::make(std::vector<ast::expression> keys,
                          std::optional<located<int64_t>> limit,
@@ -361,8 +366,8 @@ auto configuration::cleanup_duration() const -> duration {
 }
 
 auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
-                       duration cleanup_duration,
-                       tsl::robin_map<data, State>& states, int64_t& row,
+                       duration cleanup_duration, dedup_map& states,
+                       int64_t& row,
                        std::chrono::steady_clock::time_point& last_cleanup_time,
                        diagnostic_handler& dh) -> table_slice {
   const auto now = std::chrono::steady_clock::now();
@@ -393,12 +398,10 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   }
   for (const auto& key : keys.values()) {
     const auto current_row = row + offset++;
-    // FIXME: This needs to materialize the data_view, otherwise this
-    // segfaults.
-    auto k = materialize(key);
-    auto it = states.find(k);
+    auto it = states.find(key);
     if (it == states.end()) {
-      states.emplace_hint(it, std::move(k), State{})
+      // Only materialize when inserting a new key.
+      states.emplace_hint(it, materialize(key), State{})
         .value()
         .reset(current_row, now);
       check(mask_builder.Append(true));
@@ -456,7 +459,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto states = tsl::robin_map<data, State>{};
+    auto states = dedup_map{};
     auto row = int64_t{};
     const auto cleanup_duration = cfg_.cleanup_duration();
     auto last_cleanup_time = std::chrono::steady_clock::now();
@@ -527,7 +530,7 @@ public:
 private:
   configuration cfg_;
   duration cleanup_duration_;
-  tsl::robin_map<data, State> states_;
+  dedup_map states_;
   int64_t row_ = 0;
   std::chrono::steady_clock::time_point last_cleanup_time_
     = std::chrono::steady_clock::now();

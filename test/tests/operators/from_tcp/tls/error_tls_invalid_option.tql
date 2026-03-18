@@ -3,4 +3,6 @@ error: true
 ---
 
 from_tcp "127.0.0.1:31337",
-         tls={bogus_option: true} { read_lines }
+         tls={bogus_option: true} {
+  read_lines
+}

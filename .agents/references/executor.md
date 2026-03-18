@@ -50,6 +50,110 @@ operator class.
 
 Use `co_match` instead of `match` — see `variant-access.md`.
 
+### Message-queue coordination
+
+Helper tasks must not mutate operator members. This in particular applies to
+tasks spawned with `ctx.spawn_task()`, as well as `await_task()`, as those tasks
+run concurrently with the other functions. When more than a single task needs to
+be awaited on, use a bounded queue to read from in `await_task()` which is
+written to by the other tasks. The messages then arrive in `process_task()`,
+which is then allowed to update operator state. Similarly, communication from
+`process_task()` and the other operator functions such as `process()` to
+asynchronous tasks should be done via channels.
+
+References: `accept_tcp.cpp`, `from_tcp.cpp`, `serve_tcp.cpp`, `to_tcp.cpp`.
+
+```cpp
+// Define one message per event kind the operator cares about.
+struct Accepted { folly::coro::Transport client; };
+struct ConnectionClosed { uint64_t conn_id; Option<std::string> error; };
+using Message = variant<Accepted, ConnectionClosed>;
+using MessageQueue = folly::coro::BoundedQueue<Message>;
+```
+
+- `await_task()` dequeues the next message.
+- `process_task()` dispatches it with `co_match` and updates members.
+- The queue provides backpressure for free.
+- Use `tenzir::Mutex<T>` only for small shared helper state that must be
+  touched from multiple tasks.
+
+### Structured concurrency with `async_scope`
+
+Use `async_scope()` for fan-out within a task. If a task spawns child tasks and
+must wait for them before returning, wrap that code in `async_scope()`.
+
+```cpp
+co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+  while (has_more_work()) {
+    scope.spawn(handle_one());
+  }
+});
+```
+
+References: `accept_tcp.cpp`, `serve_tcp.cpp`.
+
+### Semaphores for capacity limits
+
+Use `folly::fibers::Semaphore` for resource permits. Do not use atomics or
+ad-hoc counters for permit accounting. Keep using message queues for state
+coordination.
+
+Acquire the permit before starting the operation that creates or reserves the
+resource. Release permits via RAII in the task that currently owns them. If
+ownership is handed back to the operator via a message, release it from the
+matching operator lifecycle path.
+
+```cpp
+Box<folly::fibers::Semaphore> permits_{std::in_place, limit};
+
+co_await permits_->co_wait();
+auto release = detail::scope_guard{[this]() noexcept { permits_->signal(); }};
+co_await start_work();
+release.disable();
+```
+
+### Cancellation
+
+Do not customize cancellation unless necessary. The framework will by default
+cancel all tasks when the pipeline is stopped. Add custom cancellation only
+when the operator needs a separate shutdown path to behave correctly. For
+example, a HTTP operator that must stop accepting connections should stop the
+`accept` loop with a custom `folly::CancellationSource`.
+
+```cpp
+ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop()));
+```
+
+Do not add a second `stop_` flag—cancellation tokens already express this.
+
+Usually, you do not need to check for cancellation explicitly, as many async
+operations implicitly do so.
+
+Use `Notify` for one-shot wakeups. Do not use `folly::coro::Baton` directly in
+operators, because it is not cancellation-aware.
+
+Do not attempt to catch cancellation, neither as an exception nor with
+`co_awaitTry`, unless truly necessary. Let cancellation propagate to the
+outermost task.
+
+### Retry loops
+
+Use `folly::coro::retryWithExponentialBackoff` for retriable async operations
+such as reconnects. Do not hand-roll sleep / backoff loops.
+
+```cpp
+co_await folly::coro::retryWithExponentialBackoff(
+  std::numeric_limits<uint32_t>::max(),
+  std::chrono::milliseconds{100},
+  std::chrono::seconds{5},
+  0.0,
+  []() -> Task<void> {
+    co_await try_once();
+  });
+```
+
+References: `from_tcp.cpp`, `to_tcp.cpp`.
+
 ## Patterns
 
 ### Streaming (head, filter)

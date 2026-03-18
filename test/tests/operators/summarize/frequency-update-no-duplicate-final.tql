@@ -1,0 +1,7 @@
+// Ensure update mode emits the final state when values changed since the last
+// periodic flush, and does not produce a duplicate if a later tick already
+// covered the same change.
+from {ts: 0ms.from_epoch(), x: 1},
+     {ts: 150ms.from_epoch(), x: 1}
+delay ts
+summarize sum=sum(x), options={frequency: 100ms, mode: "update"}

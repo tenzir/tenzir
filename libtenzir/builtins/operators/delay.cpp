@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -17,17 +18,10 @@
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
-#include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::delay {
 
 namespace {
-using std::chrono::duration_cast;
-
-auto sleep_for(duration d) -> Task<void> {
-  return folly::coro::sleep(duration_cast<folly::HighResDuration>(d));
-}
-
 class delay_operator final : public crtp_operator<delay_operator> {
 public:
   delay_operator() = default;
@@ -280,7 +274,7 @@ public:
         // compute needed delay
         const auto elapsed = std::chrono::steady_clock::now() - *start_time_;
         const auto anchor = *start_ + duration_cast<duration>(elapsed * speed_);
-        const auto delay = duration_cast<duration>(
+        const auto delay = duration_cast<std::chrono::steady_clock::duration>(
           duration_cast<std::chrono::duration<double>>(*time - anchor)
           / speed_);
         // if needed, push & sleep

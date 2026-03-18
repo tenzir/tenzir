@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\\ \\  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/async/task.hpp"
-#include "tenzir/box.hpp"
 
 #include <memory>
 #include <string>
@@ -24,20 +23,22 @@ class Transport;
 
 namespace tenzir {
 
-/// Upgrade an existing connected transport to TLS in-place as a client.
+/// Upgrade an existing connected transport to TLS as a client.
 auto upgrade_transport_to_tls_client(
-  Box<folly::coro::Transport>& transport,
+  folly::coro::Transport transport,
   std::shared_ptr<folly::SSLContext> ssl_context, std::string hostname)
-  -> Task<void>;
+  -> Task<folly::coro::Transport>;
 
-/// Upgrade an existing accepted transport to TLS in-place as a server.
+/// Upgrade an existing accepted transport to TLS as a server.
 auto upgrade_transport_to_tls_server(
-  Box<folly::coro::Transport>& transport,
-  std::shared_ptr<folly::SSLContext> ssl_context) -> Task<void>;
+  folly::coro::Transport transport,
+  std::shared_ptr<folly::SSLContext> ssl_context)
+  -> Task<folly::coro::Transport>;
 
 /// Backward-compatible alias for client-side upgrade.
-auto upgrade_transport_to_tls(Box<folly::coro::Transport>& transport,
+auto upgrade_transport_to_tls(folly::coro::Transport transport,
                               std::shared_ptr<folly::SSLContext> ssl_context,
-                              std::string hostname) -> Task<void>;
+                              std::string hostname)
+  -> Task<folly::coro::Transport>;
 
 } // namespace tenzir

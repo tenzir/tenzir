@@ -77,7 +77,7 @@ jobs:
       - name: Fetch to merge-base
         if: github.event_name == 'pull_request'
         run: |
-          git fetch origin main
+          git fetch --no-recurse-submodules origin main
           base_ref="${GITHUB_BASE_REF:-main}"
           git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
@@ -201,7 +201,7 @@ jobs:
           fi
           # From here on we should be in a pull request.
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
-            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            echo "::error::Unexpected GitHub Event: $GITHUB_EVENT_NAME"
             exit 1
           fi
           echo "::notice Enabling pull request jobs"
@@ -248,7 +248,7 @@ jobs:
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
             tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
-            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            echo "::error::unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
           fi
           docker_config="$(jq -c \
@@ -276,6 +276,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -311,13 +313,27 @@ jobs:
             exit 0
           fi
 
-          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" && "$GITHUB_EVENT_NAME" != "merge_group" ]]; then
+            echo "Skipping submodule bump PR check for event $GITHUB_EVENT_NAME"
+            exit 0
+          fi
 
-          if [ "$plugins_sha" != "$plugins_main_sha" ]; then
+          git fetch --no-recurse-submodules origin main
+          merge_base=$(git merge-base origin/main HEAD)
+          if git diff --quiet "$merge_base" HEAD -- contrib/tenzir-plugins; then
+            echo "Skipping policy check because contrib/tenzir-plugins was not changed"
+            exit 0
+          fi
+
+          # Read the gitlink recorded in the superproject instead of relying on
+          # the submodule being initialized as a nested Git checkout.
+          plugins_sha=$(git rev-parse HEAD:contrib/tenzir-plugins)
+          plugins_main_sha=$(gh api repos/tenzir/tenzir-plugins/commits/main --jq .sha)
+
+          if [[ "$plugins_sha" != "$plugins_main_sha" ]]; then
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
-              --search $plugins_sha --json number -q ".[0].number")
-            [ $pr_number ] # Assert the pr number was non-empty
+              --search "$plugins_sha" --json number -q ".[0].number")
+            [[ -n "$pr_number" ]] # Assert the pr number was non-empty
           fi
 
   docker-tenzir:
@@ -766,6 +782,80 @@ jobs:
         run: |
           uv publish --publish-url https://test.pypi.org/legacy/ --token "${{ secrets.TEST_PYPI_TOKEN }}" dist/*
 
+  update-homebrew-tap:
+    needs:
+      - configure
+      - tenzir-static-arm64-darwin
+    if: github.event_name == 'release'
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Download signed package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: tenzir-signed-pkg-arm64-darwin
+          path: ${{ runner.temp }}/signed-pkg
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1.12.0
+        with:
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: homebrew-tenzir
+      - name: Prepare tap update
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          pkg_path="$(ls "${{ runner.temp }}/signed-pkg/"*.pkg)"
+          sha256="$(shasum -a 256 "$pkg_path" | awk '{print $1}')"
+          version="${RELEASE_TAG#v}"
+          pkgutil_identifier="$(python3 .github/workflows/nix-build.py print-pkgutil-identifier)"
+          {
+            echo "HOMEBREW_TAP_SHA256=$sha256"
+            echo "HOMEBREW_TAP_VERSION=$version"
+            echo "HOMEBREW_TAP_DIR=${{ runner.temp }}/homebrew-tenzir"
+            echo "HOMEBREW_TAP_REPO=tenzir/homebrew-tenzir"
+            echo "HOMEBREW_PKGUTIL_IDENTIFIER=$pkgutil_identifier"
+          } >> "$GITHUB_ENV"
+
+      - name: Clone tap repo
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAP_REPO: ${{ env.HOMEBREW_TAP_REPO }}
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+        run: |
+          git config --global user.name "tenzir-bot"
+          git config --global user.email "engineering@tenzir.com"
+          git clone "https://x-access-token:${APP_TOKEN}@github.com/${TAP_REPO}.git" "$TAP_DIR"
+
+      - name: Render Homebrew cask
+        env:
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+          VERSION: ${{ env.HOMEBREW_TAP_VERSION }}
+          SHA256: ${{ env.HOMEBREW_TAP_SHA256 }}
+          PKGUTIL_IDENTIFIER: ${{ env.HOMEBREW_PKGUTIL_IDENTIFIER }}
+        run: |
+          python3 scripts/update-homebrew-cask.py \
+            --cask "$TAP_DIR/Casks/tenzir.rb" \
+            --version "$VERSION" \
+            --sha256 "$SHA256" \
+            --pkgutil-identifier "$PKGUTIL_IDENTIFIER"
+
+      - name: Commit tap update
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+        run: |
+          if git -C "$TAP_DIR" diff --quiet -- Casks/tenzir.rb; then
+            echo "Homebrew cask is already up to date"
+            exit 0
+          fi
+
+          git -C "$TAP_DIR" add Casks/tenzir.rb
+          git -C "$TAP_DIR" commit -m "Update tenzir cask to ${RELEASE_TAG}"
+          git -C "$TAP_DIR" push origin HEAD
+
   pass-branch-protections:
     needs:
       - configure
@@ -773,6 +863,7 @@ jobs:
       - policy-enforcement
       - python
       - python-package
+      - update-homebrew-tap
       # TODO: Re-enable this after v4.26 was released.
       # - regression-tests
       # TODO: Re-enable this when homebrew is fixed (aws-sdk-cpp issue).

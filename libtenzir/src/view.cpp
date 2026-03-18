@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -70,7 +70,8 @@ bool is_equal(const data& x, const data_view& y) {
       return std::ranges::equal(make_view(lhs), rhs);
     },
     [&](const pattern& lhs, const view<pattern>& rhs) {
-      return lhs.string() == rhs.string();
+      return lhs.string() == rhs.string()
+             && lhs.options().case_insensitive == rhs.case_insensitive();
     },
     [&](const list& lhs, const view<list>& rhs) {
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -9,6 +9,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -65,31 +66,28 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
+    constexpr auto name = Mode == mode::first ? "first" : "last";
     const auto fb
       = flatbuffer<fbs::aggregation::FirstLast>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::first ? "first" : "last")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                  "FlatBuffer",
+                  name);
+      return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      diagnostic::warning("missing field `result`")
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::first ? "first" : "last")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field "
+                  "`result`",
+                  name);
+      return false;
     }
     if (auto err = unpack(*fb_result, result_); err.valid()) {
-      diagnostic::warning("{}", err)
-        .note("failed to restore `{}` aggregation instance",
-              Mode == mode::first ? "first" : "last")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: {}", name, err);
+      return false;
     }
+    return true;
   }
 
   auto reset() -> void override {

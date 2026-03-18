@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -9,6 +9,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -53,28 +54,25 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::Once>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `once` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN(
+        "failed to restore `once` aggregation instance: invalid FlatBuffer");
+      return false;
     }
     done_ = (*fb)->done();
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      diagnostic::warning("missing field `result`")
-        .note("failed to restore `once` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `once` aggregation instance: missing "
+                  "field `result`");
+      return false;
     }
     if (auto err = unpack(*fb_result, result_); err.valid()) {
-      diagnostic::warning("{}", err)
-        .note("failed to restore `once` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `once` aggregation instance: {}", err);
+      return false;
     }
+    return true;
   }
 
   auto reset() -> void override {

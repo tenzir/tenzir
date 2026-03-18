@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -189,12 +189,9 @@ public:
 
   virtual auto reset() -> void = 0;
 
-  /// Save and restore the state of the aggregation instance. Note that the
-  /// restore function should eventually be moved into `aggregation_plugin`, but
-  /// we cannot do that yet as quite a few aggregation instances store
-  /// `ast::expression`, which is not yet serializable.
+  /// Save and restore the state of the aggregation instance.
   virtual auto save() const -> chunk_ptr = 0;
-  virtual auto restore(chunk_ptr chunk, session ctx) -> void = 0;
+  virtual auto restore(chunk_ptr chunk) noexcept -> bool = 0;
 };
 
 class aggregation_plugin : public virtual function_plugin {

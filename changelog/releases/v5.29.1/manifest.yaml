@@ -1,0 +1,6 @@
+created: 2026-03-16
+title: Tenzir Node v5.29.1
+intro: >-
+  This release fixes a scheduling issue introduced in v5.24.0 that could cause the
+  node to become unresponsive when too many pipelines using detached operators were
+  deployed simultaneously.

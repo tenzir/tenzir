@@ -1,6 +1,0 @@
-error: `tls.keyfile` must be a string
- --> tests/operators/from_tcp/tls/error_tls_keyfile_type.tql:6:14
-  |
-6 |          tls={keyfile: true} { read_lines }
-  |              ^^^^^^^^^^^^^^^ 
-  |

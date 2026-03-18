@@ -54,9 +54,25 @@ code should follow the new conventions.
 - Program defensively with `TENZIR_ASSERT` whenever it's not obvious
 - `TENZIR_ASSERT` is enabled in release builds, but don't put side effects there
 
+## Concurrency and async coordination
+
+- One coroutine or callback owns a piece of mutable state. Do not share it.
+- Coordinate through bounded queues and typed message variants, not mutexes and
+  shared fields.
+- Avoid polling asynchronous functions with timeouts.
+- As a corollary, do not use "stop flags" to signal termination for other tasks.
+  Instead, prefer cancellation through `folly::CancellationSource`, or if the
+  other task should not be cancelled, a proper async notification mechanism (for
+  example: event in an async queue, or `Notify`).
+- Atomics and mutexes are a last resort. When unavoidable, keep the shared
+  surface minimal and document why a queue does not work.
+- See `executor.md` for operator-specific patterns.
+
 ## Other
 
 - Use `class` for template parameters; `typename` only for dependent types
+- Use `tenzir/si_literals.hpp` for SI or binary magnitude constants when they
+  model the value clearly, e.g. `64_Ki`, `5_k`, or `100_M`
 - Use `Box<T>` for a `std::unique_ptr<T>` that cannot be null
 - Use `std::optional<Box<T>>` for a `std::unique_ptr<T>` that may be null
 - Use the current year in the copyright notice when creating new files. Do not

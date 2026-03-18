@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -620,10 +620,13 @@ public:
   /// @param fs The actor handle of a filesystem.
   /// @param id The partition id for which we want to create a store. Can be
   /// used as a unique key by the implementation.
+  /// @param origin The origin of the data: "ingest", "rebuild", or
+  /// "compaction".
   /// @returns A handle to the store builder actor to add events to, and a
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual auto
-  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id,
+                     std::string origin = "ingest") const
     -> caf::expected<builder_and_header>
     = 0;
 
@@ -654,7 +657,8 @@ public:
 
 private:
   [[nodiscard]] auto
-  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id,
+                     std::string origin) const
     -> caf::expected<builder_and_header> final;
 
   [[nodiscard]] auto

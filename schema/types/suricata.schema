@@ -440,6 +440,35 @@ type suricata.http = suricata.component.common + record {
   tx_id: uint64 #index=hash
 }
 
+type suricata.http2_setting = record {
+  settings_id: string,
+  settings_value: uint64
+}
+
+type suricata.http2_header = record {
+  name: string,
+  value: string,
+  table_size_update: uint64,
+  error: string
+}
+
+type suricata.http2_stream = record {
+  settings: list<suricata.http2_setting>,
+  headers: list<suricata.http2_header>,
+  error_code: string,
+  has_multiple: bool,
+  priority: uint64
+}
+
+type suricata.http2 = suricata.component.common + record {
+  tx_id: uint64 #index=hash,
+  http2: record {
+    stream_id: uint64,
+    request: suricata.http2_stream,
+    response: suricata.http2_stream
+  }
+}
+
 type suricata.fileinfo = suricata.component.common + record {
   fileinfo: record {
     filename: string,
@@ -487,6 +516,77 @@ type suricata.ikev2 = suricata.component.common + record {
     errors: uint64,
     payload: list<string>,
     notify: list<string>
+  }
+}
+
+type suricata.ike_proposal = record {
+  sa_life_type: string,
+  sa_life_type_raw: uint64,
+  sa_life_duration: string,
+  sa_life_duration_raw: uint64,
+  alg_enc: string,
+  alg_enc_raw: uint64,
+  alg_hash: string,
+  alg_hash_raw: uint64,
+  alg_auth: string,
+  alg_auth_raw: uint64,
+  alg_dh: string,
+  alg_dh_raw: uint64,
+  sa_key_length: string,
+  sa_key_length_raw: uint64
+}
+
+type suricata.ike = suricata.component.common + record {
+  tx_id: uint64 #index=hash,
+  ike: record {
+    version_major: uint64,
+    version_minor: uint64,
+    init_spi: string,
+    resp_spi: string,
+    message_id: uint64,
+    exchange_type: uint64,
+    exchange_type_verbose: string,
+    sa_life_type: string,
+    sa_life_type_raw: uint64,
+    sa_life_duration: string,
+    sa_life_duration_raw: uint64,
+    alg_enc: string,
+    alg_enc_raw: uint64,
+    alg_hash: string,
+    alg_hash_raw: uint64,
+    alg_auth: string,
+    alg_auth_raw: uint64,
+    alg_dh: string,
+    alg_dh_raw: uint64,
+    sa_key_length: string,
+    sa_key_length_raw: uint64,
+    alg_esn: string,
+    alg_esn_raw: uint64,
+    payload: list<string>,
+    server_proposals: list<suricata.ike_proposal>,
+    ikev1: record {
+      doi: uint64,
+      encrypted_payloads: bool,
+      client: record {
+        key_exchange_payload: string,
+        key_exchange_payload_length: uint64,
+        nonce_payload: string,
+        nonce_payload_length: uint64,
+        proposals: list<suricata.ike_proposal>
+      },
+      server: record {
+        key_exchange_payload: string,
+        key_exchange_payload_length: uint64,
+        nonce_payload: string,
+        nonce_payload_length: uint64
+      },
+      vendor_ids: list<string>
+    },
+    ikev2: record {
+      role: string,
+      errors: uint64,
+      notify: list<string>
+    }
   }
 }
 
@@ -687,6 +787,47 @@ type suricata.mqtt = suricata.component.common + record {
   }
 }
 
+type suricata.modbus = suricata.component.common + record {
+  tx_id: uint64 #index=hash,
+  modbus: record {
+    id: uint64,
+    request: record {
+      transaction_id: uint64,
+      protocol_id: uint64,
+      unit_id: uint64,
+      function_code: string,
+      function_raw: uint64,
+      access_type: string,
+      category: string,
+      error_flags: string
+    },
+    response: record {
+      transaction_id: uint64,
+      protocol_id: uint64,
+      unit_id: uint64,
+      function_code: string,
+      function_raw: uint64,
+      access_type: string,
+      category: string,
+      error_flags: string
+    },
+    exception: record {
+      raw: uint64,
+      code: string
+    },
+    diagnostic: record {
+      raw: uint64,
+      code: string,
+      data: string
+    },
+    mei: record {
+      raw: uint64,
+      code: string,
+      data: string
+    }
+  }
+}
+
 type suricata.netflow = suricata.component.common + record {
   netflow: record {
     pkts: uint64,
@@ -742,6 +883,95 @@ type suricata.packet = suricata.component.common + record {
   packet: string,
   packet_info: record {
     linktype: uint64
+  }
+}
+
+type suricata.pgsql_optional_parameter = record {
+  application_name: string,
+  client_encoding: string,
+  database: string,
+  datestyle: string,
+  extra_float_digits: string,
+  options: string,
+  replication: string
+}
+
+type suricata.pgsql_startup_parameters = record {
+  user: string,
+  optional_parameters: list<suricata.pgsql_optional_parameter>
+}
+
+type suricata.pgsql_parameter_status = record {
+  application_name: string,
+  client_encoding: string,
+  date_style: string,
+  integer_datetimes: string,
+  interval_style: string,
+  is_superuser: string,
+  server_encoding: string,
+  server_version: string,
+  session_authorization: string,
+  standard_conforming_strings: string,
+  time_zone: string
+}
+
+type suricata.pgsql_copy_data_in = record {
+  data_size: uint64,
+  msg_count: uint64
+}
+
+type suricata.pgsql_copy_in_response = record {
+  columns: uint64
+}
+
+type suricata.pgsql_copy_out_response = record {
+  columns: uint64
+}
+
+type suricata.pgsql_copy_data_out = record {
+  data_size: uint64,
+  row_count: uint64
+}
+
+type suricata.pgsql = suricata.component.common + record {
+  tx_id: uint64 #index=hash,
+  pgsql: record {
+    request: record {
+      message: string,
+      password: string,
+      password_redacted: bool,
+      process_id: uint64,
+      protocol_version: string,
+      sasl_authentication_mechanism: string,
+      sasl_param: string,
+      sasl_response: string,
+      secret_key: uint64,
+      simple_query: string,
+      startup_parameters: suricata.pgsql_startup_parameters,
+      copy_data_in: suricata.pgsql_copy_data_in
+    },
+    response: record {
+      authentication_md5_password: string,
+      authentication_sasl_final: string,
+      command_completed: string,
+      data_rows: uint64,
+      data_size: uint64,
+      field_count: uint64,
+      message: string,
+      parameter_status: list<suricata.pgsql_parameter_status>,
+      process_id: uint64,
+      secret_key: uint64,
+      ssl_accepted: bool,
+      code: string,
+      file: string,
+      line: string,
+      routine: string,
+      severity_localizable: string,
+      severity_non_localizable: string,
+      copy_in_response: suricata.pgsql_copy_in_response,
+      copy_out_response: suricata.pgsql_copy_out_response,
+      copy_data_out: suricata.pgsql_copy_data_out
+    }
   }
 }
 

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -424,7 +424,8 @@ struct rebuilder_state {
     const auto num_partitions = current_run_partitions.size();
     self
       ->mail(atom::apply_v, std::move(*rebatch),
-             std::move(current_run_partitions), keep_original_partition::no)
+             std::move(current_run_partitions), keep_original_partition::no,
+             std::string{"rebuild"})
       .request(index, caf::infinite)
       .then(
         [this, rp, current_run_events,

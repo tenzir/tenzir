@@ -1,11 +1,12 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/task.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -20,25 +21,14 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
-#include <folly/coro/Sleep.h>
-
+#include <chrono>
 #include <string_view>
 
 namespace tenzir::plugins::every_cron {
 
 namespace {
 
-auto sleep(duration d) -> Task<void> {
-  return folly::coro::sleep(
-    std::chrono::duration_cast<folly::HighResDuration>(d));
-}
-
-auto sleep_until(time t) -> Task<void> {
-  auto now = time::clock::now();
-  // The check is needed because `-` can overflow and yield unexpected results.
-  auto diff = t < now ? duration{0} : t - now;
-  return sleep(diff);
-}
+using std::chrono::steady_clock;
 
 template <class Input>
 class EveryBase : public Operator<Input, table_slice> {
@@ -97,12 +87,11 @@ public:
 
   auto snapshot(Serde& s) -> void override {
     s("next", next_);
-    s("last_started", last_started_);
   }
 
 protected:
   auto spawn_new(OpCtx& ctx) -> Task<void> {
-    last_started_ = time::clock::now();
+    last_started_ = steady_clock::now();
     sleep_done_ = false;
     sub_finished_ = false;
     co_await ctx.spawn_sub(int64_t{next_}, ir_, tag_v<Input>);
@@ -117,7 +106,7 @@ protected:
 
   duration interval_;
   ir::pipeline ir_;
-  time last_started_ = time::min();
+  steady_clock::time_point last_started_ = steady_clock::time_point::min();
   int64_t next_ = 0;
   bool sleep_done_ = false;
   bool sub_finished_ = false;

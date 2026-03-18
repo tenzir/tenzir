@@ -1,0 +1,4 @@
+// Regression test: let-bound mode must not be evaluated during compile().
+let $mode = "cumulative"
+from {x: 1}, {x: 2}, {x: 3}
+| summarize count=count(), options={frequency: 1s, mode: $mode}

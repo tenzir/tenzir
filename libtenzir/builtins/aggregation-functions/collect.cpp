@@ -1,13 +1,14 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -54,40 +55,37 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb
       = flatbuffer<fbs::aggregation::CollectDistinct>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `collect` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN(
+        "failed to restore `collect` aggregation instance: invalid FlatBuffer");
+      return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      diagnostic::warning("missing field `result`")
-        .note("failed to restore `collect` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `collect` aggregation instance: missing "
+                  "field `result`");
+      return false;
     }
     result_.clear();
     result_.reserve(fb_result->size());
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
-        diagnostic::warning("missing element in field `result`")
-          .note("failed to restore `collect` aggregation instance")
-          .emit(ctx);
-        return;
+        TENZIR_WARN("failed to restore `collect` aggregation instance: missing "
+                    "element in field `result`");
+        return false;
       }
       auto element = data{};
       if (auto err = unpack(*fb_element, element); err.valid()) {
-        diagnostic::warning("{}", err)
-          .note("failed to restore `collect` aggregation instance")
-          .emit(ctx);
-        return;
+        TENZIR_WARN("failed to restore `collect` aggregation instance: {}",
+                    err);
+        return false;
       }
       result_.push_back(std::move(element));
     }
+    return true;
   }
 
   auto reset() -> void override {
