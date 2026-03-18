@@ -1222,9 +1222,6 @@ private:
           sub.handle.close_push();
         }
         co_return;
-      },
-      [&](Stop) -> Task<void> {
-        co_await handle_done();
       });
     queue_.spawn(from_control_.recv());
   }
@@ -1469,6 +1466,7 @@ private:
         auto [to_control_sender, to_control_receiver]
           = bounded_channel<ToControl>(16);
         operator_ctrl_.push_back(std::move(from_control_sender));
+        operator_cancel_.emplace_back();
         auto executor = exec_ctx_.make_executor(id_.op(index),
                                                 demangle_op_type(typeid(*op)));
         auto task = run_operator(std::move(op), std::move(input),
@@ -1478,10 +1476,25 @@ private:
                                  exec_ctx_, sys_, dh_);
         LOGI("spawning operator task");
         queue_.spawn([task = std::move(task), index,
-                      executor = std::move(executor)] mutable
+                      executor = std::move(executor),
+                      cancel = operator_cancel_[index].getToken()] mutable
                        -> Task<std::pair<size_t, Terminated>> {
-          co_await folly::coro::co_withExecutor(std::move(executor),
-                                                std::move(task));
+          auto result = AsyncResult{
+            co_await folly::coro::co_awaitTry(folly::coro::co_withExecutor(
+              std::move(executor),
+              // Also wrap operator with custom cancellation sources, since we
+              // need those to cancel preceding operators for `head`.
+              folly::coro::co_withCancellation(
+                folly::cancellation_token_merge(
+                  std::move(cancel),
+                  co_await folly::coro::co_current_cancellation_token),
+                std::move(task))))};
+          // Propagate exceptions, but not cancellation, to the caller.
+          if (result.is_exception()) {
+            std::move(result).unwrap();
+          }
+          // If the outer operator was cancelled we just want to propagate.
+          co_await folly::coro::co_safe_point;
           LOGI("got termination from operator {}", index);
           co_return {index, Terminated{}};
         });
@@ -1538,12 +1551,6 @@ private:
               for (auto& sender : operator_ctrl_) {
                 co_await sender.send(Shutdown{});
               }
-            },
-            [&](Stop) -> Task<void> {
-              // TODO: Is this correct?
-              for (auto& ctrl : operator_ctrl_) {
-                co_await ctrl.send(Stop{});
-              }
             });
         },
         [&](std::pair<size_t, variant<Terminated, Option<ToControl>>> next)
@@ -1580,15 +1587,14 @@ private:
                   }
                   co_return;
                 case ToControl::no_more_input:
-                  // TODO: Inform the preceding operator that we don't need
-                  // any more input.
-                  if (index > 0) {
-                    co_await operator_ctrl_[index - 1].send(Stop{});
-                  } else {
-                    // TODO: What if we don't host the preceding operator?
-                    // Then we need to notify OUR input!
-                    co_await to_control_.send(ToControl::no_more_input);
+                  // Make `head` cancel all of its preceding operators when it's
+                  // done. This could be revisited if we every want to give
+                  // pipelines such as `fork { … } | head` different semantics.
+                  for (auto preceding = size_t{0}; preceding < index;
+                       ++preceding) {
+                    operator_cancel_[preceding].requestCancellation();
                   }
+                  co_await to_control_.send(ToControl::no_more_input);
                   co_return;
                 case ToControl::checkpoint_begin:
                 case ToControl::checkpoint_done:
@@ -1618,6 +1624,7 @@ private:
   DiagHandler& dh_;
 
   std::vector<Sender<FromControl>> operator_ctrl_;
+  std::vector<folly::CancellationSource> operator_cancel_;
 
   QueueScope<variant<
     // Message from our controller.
