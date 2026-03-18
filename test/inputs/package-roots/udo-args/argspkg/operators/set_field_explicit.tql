@@ -1,0 +1,12 @@
+---
+description: "Set a field using explicit set operator"
+args:
+  positional:
+    - name: field
+      type: field
+      description: "The field to set"
+    - name: value
+      type: string
+      description: "The value to set"
+---
+set $field = $value

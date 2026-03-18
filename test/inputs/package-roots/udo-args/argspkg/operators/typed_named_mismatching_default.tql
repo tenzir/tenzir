@@ -1,0 +1,11 @@
+---
+description: "Demonstrate mismatching default for typed named parameter"
+args:
+  named:
+    - name: value
+      type: string
+      default: 42
+      description: "Defaults to a number even though a string is required"
+---
+set operator = "typed_named_mismatching_default"
+set value = $value
