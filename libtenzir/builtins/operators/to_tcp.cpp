@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -24,10 +24,11 @@
 
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Sleep.h>
+#include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
+#include <limits>
 #include <memory>
 
 namespace tenzir::plugins::to_tcp {
@@ -45,9 +46,17 @@ constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 // Cap retries at five seconds to avoid hammering broken endpoints while still
 // keeping recovery reasonably quick once the peer comes back.
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
+// Preserve the current deterministic reconnect timing; if many sinks are
+// expected to flap together, revisit this and add jitter.
+constexpr auto connect_retry_jitter = 0.0;
+constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
 // Leave room for many queued payloads while still applying backpressure when
 // the remote peer falls behind or reconnects take time.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+
+constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
+  return ew.is_compatible_with<folly::AsyncSocketException>();
+};
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -57,6 +66,12 @@ struct ToTcpArgs {
 
 class ToTcp final : public Operator<table_slice, void> {
 public:
+  enum class Lifecycle {
+    running,
+    draining,
+    done,
+  };
+
   explicit ToTcp(ToTcpArgs args) : args_{std::move(args)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -73,7 +88,7 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        request_stop();
+        finish();
         co_return;
       }
       tls_context_ = std::move(*context);
@@ -82,7 +97,7 @@ public:
     TENZIR_ASSERT(evb_);
     auto pipeline = std::move(args_.printer.inner);
     if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      request_stop();
+      finish();
       co_return;
     }
     auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
@@ -92,23 +107,23 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
     auto sub = ctx.get_sub(make_view(sub_key_));
     if (not sub) {
-      request_stop();
+      finish();
       co_return;
     }
     auto pipeline = as<OpenPipeline<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
-      request_stop();
+      finish();
     }
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (done_ or not chunk or chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_return;
     }
     co_await message_queue_->enqueue(std::move(chunk));
@@ -126,33 +141,36 @@ public:
     }
     if (not *chunk) {
       // A null chunk marks end-of-stream after all buffered payloads.
-      request_stop();
-      close_current_transport();
+      finish();
       co_return;
     }
-    if (done_ or (*chunk)->size() == 0) {
+    if (lifecycle_ == Lifecycle::done or (*chunk)->size() == 0) {
       co_return;
     }
     co_await write_chunk(*chunk, ctx);
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    if (done_) {
+    if (lifecycle_ == Lifecycle::done) {
       close_current_transport();
       co_return FinalizeBehavior::done;
     }
-    if (auto sub = ctx.get_sub(make_view(sub_key_))) {
-      auto pipeline = as<OpenPipeline<table_slice>>(*sub);
-      co_await pipeline.close();
-      co_return FinalizeBehavior::continue_;
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining;
+      if (auto sub = ctx.get_sub(make_view(sub_key_))) {
+        auto pipeline = as<OpenPipeline<table_slice>>(*sub);
+        co_await pipeline.close();
+        co_return FinalizeBehavior::continue_;
+      }
+      finish();
+      co_return FinalizeBehavior::done;
     }
-    request_stop();
-    close_current_transport();
-    co_return FinalizeBehavior::done;
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
-    if (done_) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     ctx.spawn_task([this]() -> Task<void> {
@@ -162,17 +180,18 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
   }
 
 private:
   using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
-  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
-    auto* evb = transport->getEventBase();
+  static auto close_transport(folly::coro::Transport transport) -> void {
+    auto* evb = transport.getEventBase();
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-      transport->close();
+      transport.close();
     });
   }
 
@@ -185,42 +204,38 @@ private:
   }
 
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
-    while (not done_) {
-      if (transport_) {
-        co_return;
-      }
-      auto connect_error = Option<std::string>{};
-      try {
-        transport_ = Box<folly::coro::Transport>{co_await connect_tcp_client(
-          evb_, address_,
-          std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
-          tls_context_, host_)};
-        auto peer_addr = (*transport_)->getPeerAddress();
-        bytes_write_counter_ = ctx.make_counter(
-          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    peer_addr.getAddressStr())},
-          MetricsDirection::write, MetricsVisibility::external_);
-        reconnect_backoff_ = connect_initial_backoff;
-        TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
-        co_return;
-      } catch (folly::AsyncSocketException const& ex) {
-        if (done_) {
-          co_return;
-        }
-        connect_error = ex.what();
-      }
-      auto backoff = reconnect_backoff_;
-      reconnect_backoff_
-        = std::min(reconnect_backoff_ * 2, connect_max_backoff);
-      // TODO: Surface connect retries and failures as metrics in a follow-up
-      // that covers all TCP operators.
-      diagnostic::warning("failed to connect to {}", address_.describe())
-        .primary(args_.endpoint.source)
-        .note("reason: {}", *connect_error)
-        .hint("ensure a TCP server is listening on this endpoint")
-        .emit(ctx.dh());
-      co_await folly::coro::sleep(backoff);
+    if (lifecycle_ == Lifecycle::done or transport_) {
+      co_return;
     }
+    transport_ = co_await folly::coro::retryWithExponentialBackoff(
+      connect_max_retries, connect_initial_backoff, connect_max_backoff,
+      connect_retry_jitter,
+      [this, &ctx]() -> Task<folly::coro::Transport> {
+        TENZIR_DEBUG("to_tcp: connecting to {}", address_.describe());
+        try {
+          co_return co_await connect_tcp_client(
+            evb_, address_,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+              connect_timeout),
+            tls_context_, host_);
+        } catch (folly::AsyncSocketException const& ex) {
+          // TODO: Surface connect retries and failures as metrics in a
+          // follow-up that covers all TCP operators.
+          diagnostic::warning("failed to connect to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .hint("ensure a TCP server is listening on this endpoint")
+            .emit(ctx.dh());
+          throw;
+        }
+      },
+      should_retry_connect);
+    auto peer_addr = transport_->getPeerAddress();
+    bytes_write_counter_ = ctx.make_counter(
+      MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                peer_addr.getAddressStr())},
+      MetricsDirection::write, MetricsVisibility::external_);
+    TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
   }
 
   auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
@@ -228,16 +243,18 @@ private:
       reinterpret_cast<unsigned char const*>(chunk->data()),
       chunk->size(),
     };
-    while (not done_) {
+    while (lifecycle_ != Lifecycle::done) {
       co_await ensure_connected(ctx);
-      if (done_ or not transport_) {
+      if (lifecycle_ == Lifecycle::done or not transport_) {
         co_return;
       }
       auto write_error = Option<std::string>{};
+      auto* transport_evb = transport_->getEventBase();
+      TENZIR_ASSERT(transport_evb);
       try {
-        co_await folly::coro::co_withExecutor(evb_, (**transport_).write(data));
+        co_await folly::coro::co_withExecutor(transport_evb,
+                                              transport_->write(data));
         bytes_write_counter_.add(chunk->size());
-        reconnect_backoff_ = connect_initial_backoff;
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
         write_error = ex.what();
@@ -253,8 +270,9 @@ private:
     }
   }
 
-  auto request_stop() -> void {
-    done_ = true;
+  auto finish() -> void {
+    lifecycle_ = Lifecycle::done;
+    close_current_transport();
   }
 
   ToTcpArgs args_;
@@ -266,10 +284,9 @@ private:
   folly::EventBase* evb_ = nullptr;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  Option<Box<folly::coro::Transport>> transport_;
-  std::chrono::milliseconds reconnect_backoff_ = connect_initial_backoff;
+  Option<folly::coro::Transport> transport_;
   MetricsCounter bytes_write_counter_ = {};
-  bool done_ = false;
+  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 class ToTcpPlugin final : public OperatorPlugin {

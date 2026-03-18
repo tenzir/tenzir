@@ -27,11 +27,14 @@
 #include <folly/CancellationToken.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Sleep.h>
+#include <folly/coro/Error.h>
+#include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
+#include <limits>
 #include <memory>
+#include <stdexcept>
 
 namespace tenzir::plugins::from_tcp {
 
@@ -53,9 +56,17 @@ constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
 // Cap retries at five seconds to avoid hammering broken endpoints while still
 // keeping recovery reasonably quick once the peer comes back.
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
+// Preserve the current deterministic reconnect timing; if many connectors are
+// expected to flap together, revisit this and add jitter.
+constexpr auto connect_retry_jitter = 0.0;
+constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
 // Leave room for many in-flight read and close notifications without turning
 // the queue into another large per-connection memory sink.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+
+constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
+  return ew.is_compatible_with<folly::AsyncSocketException>();
+};
 
 struct FromTcpArgs {
   located<std::string> endpoint;
@@ -85,33 +96,29 @@ public:
   using Message = variant<Connected, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
-  explicit FromTcpConnector(FromTcpArgs args)
-    : endpoint_source_{args.endpoint.source},
-      user_pipeline_{std::move(args.user_pipeline)},
-      peer_let_id_{args.peer_info} {
-    auto ep = to<struct endpoint>(args.endpoint.inner);
+  explicit FromTcpConnector(FromTcpArgs args) : args_{std::move(args)} {
+    auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     TENZIR_ASSERT(not ep->host.empty());
     address_.setFromHostPort(ep->host, ep->port->number());
     host_ = ep->host;
-    if (args.tls) {
-      tls_ = tls_options{*args.tls, {.is_server = false}};
+    if (args_.tls) {
+      tls_ = tls_options{*args_.tls, {.is_server = false}};
     }
   }
 
-  FromTcpConnector(const FromTcpConnector&) = delete;
-  FromTcpConnector& operator=(const FromTcpConnector&) = delete;
+  FromTcpConnector(FromTcpConnector const&) = delete;
+  auto operator=(FromTcpConnector const&) -> FromTcpConnector& = delete;
   FromTcpConnector(FromTcpConnector&&) noexcept = default;
-  FromTcpConnector& operator=(FromTcpConnector&&) noexcept = default;
-  ~FromTcpConnector() override = default;
+  auto operator=(FromTcpConnector&&) noexcept -> FromTcpConnector& = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        done_ = true;
-        co_return;
+        co_yield folly::coro::co_error(
+          std::runtime_error{"failed to create TLS context"});
       }
       tls_context_ = std::move(*context);
     }
@@ -121,55 +128,39 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    if (done_) {
-      co_return {};
-    }
     if (current_connection_) {
       co_return co_await message_queue_->dequeue();
     }
-    while (not done_) {
-      TENZIR_DEBUG("connecting to {}", address_.describe());
-      auto connect_error = Option<std::string>{};
-      try {
-        auto transport
-          = Box<folly::coro::Transport>{co_await connect_tcp_client(
+    auto transport = co_await folly::coro::retryWithExponentialBackoff(
+      connect_max_retries, connect_initial_backoff, connect_max_backoff,
+      connect_retry_jitter,
+      [this, &dh]() -> Task<Box<folly::coro::Transport>> {
+        TENZIR_DEBUG("connecting to {}", address_.describe());
+        try {
+          co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
             evb_, address_,
             std::chrono::duration_cast<std::chrono::milliseconds>(
               connect_timeout),
             tls_context_, host_)};
-        TENZIR_DEBUG("connected to {}", address_.describe());
-        co_return Message{Connected{std::move(transport)}};
-      } catch (folly::AsyncSocketException const& ex) {
-        // Connection attempts can fail transiently; treat this as a retriable
-        // network condition and keep the operator alive.
-        connect_error = ex.what();
-      }
-      if (connect_error) {
-        if (done_) {
-          co_return {};
+        } catch (folly::AsyncSocketException const& ex) {
+          // TODO: Surface connect retries and failures as metrics in a
+          // follow-up that covers all TCP operators.
+          diagnostic::warning("failed to connect to {}", address_.describe())
+            .primary(args_.endpoint.source)
+            .note("reason: {}", ex.what())
+            .hint("ensure a TCP server is listening on this endpoint")
+            .emit(dh);
+          throw;
         }
-        // TODO: Surface connect retries and failures as metrics in a
-        // follow-up that covers all TCP operators.
-        diagnostic::warning("failed to connect to {}", address_.describe())
-          .primary(endpoint_source_)
-          .note("reason: {}", *connect_error)
-          .hint("ensure a TCP server is listening on this endpoint")
-          .emit(dh);
-        auto backoff = reconnect_backoff_;
-        reconnect_backoff_
-          = std::min(reconnect_backoff_ * 2, connect_max_backoff);
-        co_await folly::coro::sleep(backoff);
-      }
-    }
-    co_return {};
+      },
+      should_retry_connect);
+    TENZIR_DEBUG("connected to {}", address_.describe());
+    co_return Message{Connected{std::move(transport)}};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    if (done_) {
-      co_return;
-    }
     auto* message = result.try_as<Message>();
     if (not message) {
       co_return;
@@ -180,7 +171,6 @@ public:
         auto transport = std::move(connected.transport);
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
-        reconnect_backoff_ = connect_initial_backoff;
         auto peer_addr = transport->getPeerAddress();
         auto peer_record = record{
           {"ip", peer_addr.getAddressStr()},
@@ -191,9 +181,9 @@ public:
                                     peer_addr.getAddressStr())},
           MetricsDirection::read, MetricsVisibility::external_);
         auto conn_id = next_conn_id_++;
-        auto pipeline_copy = user_pipeline_.inner;
+        auto pipeline_copy = args_.user_pipeline.inner;
         auto env = substitute_ctx::env_t{};
-        env[peer_let_id_] = std::move(peer_record);
+        env[args_.peer_info] = std::move(peer_record);
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
         auto sub_result
@@ -226,7 +216,7 @@ public:
           // TODO: Surface routine TCP read failures and disconnects as metrics
           // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
-            .primary(endpoint_source_)
+            .primary(args_.endpoint.source)
             .note("endpoint: {}", address_.describe())
             .note("reason: {}", *closed.error)
             .emit(ctx);
@@ -255,10 +245,6 @@ public:
       current_conn_id_ = None{};
     }
     co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
@@ -295,7 +281,7 @@ private:
         bytes_read_counter.add((*read_result)->size());
         co_await message_queue->enqueue(
           Payload{conn_id, std::move(*read_result)});
-      } catch (const folly::AsyncSocketException& e) {
+      } catch (folly::AsyncSocketException const& e) {
         // Socket errors are connection-scoped; log and reconnect.
         read_error = e.what();
         break;
@@ -308,11 +294,9 @@ private:
     });
   }
 
-  location endpoint_source_ = location::unknown;
+  FromTcpArgs args_;
   folly::SocketAddress address_;
   std::string host_;
-  located<ir::pipeline> user_pipeline_;
-  let_id peer_let_id_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
@@ -321,8 +305,6 @@ private:
   Option<OpenPipeline<chunk_ptr>> pipeline_;
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
-  bool done_ = false;
-  mutable std::chrono::milliseconds reconnect_backoff_{connect_initial_backoff};
   uint64_t next_conn_id_{0};
 };
 
@@ -367,7 +349,6 @@ public:
       }
       return {};
     });
-
     return d.without_optimize();
   }
 };
