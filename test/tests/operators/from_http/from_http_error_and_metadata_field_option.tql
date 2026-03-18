@@ -1,0 +1,14 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_STATUS_404_URL"),
+          error_field=error,
+          metadata_field=meta
+meta.headers.Server = replace_regex(
+  meta.headers.Server,
+  "Python/[0-9.]+",
+  "Python/*.*.*"
+)
+meta.headers.Date = "*"

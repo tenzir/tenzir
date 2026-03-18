@@ -1,0 +1,13 @@
+---
+fixtures:
+  - http:
+      mode: client
+      method: GET
+      path: /max
+      expected_response_body: |
+        {"max":2}
+timeout: 60
+---
+
+from {max: 2}
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), path="/max", max_connections=2

@@ -215,6 +215,15 @@ auto upgrade_transport_to_tls_server(
   co_return std::move(upgraded_transport);
 }
 
+auto upgrade_transport_to_tls_server(
+  std::unique_ptr<folly::coro::Transport>& transport,
+  std::shared_ptr<folly::SSLContext> ssl_context) -> Task<void> {
+  TENZIR_ASSERT(transport);
+  auto upgraded = co_await upgrade_transport_to_tls_server(
+    std::move(*transport), std::move(ssl_context));
+  transport = std::make_unique<folly::coro::Transport>(std::move(upgraded));
+}
+
 auto upgrade_transport_to_tls(folly::coro::Transport transport,
                               std::shared_ptr<folly::SSLContext> ssl_context,
                               std::string hostname)

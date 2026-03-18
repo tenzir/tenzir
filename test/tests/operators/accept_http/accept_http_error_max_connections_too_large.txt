@@ -1,0 +1,6 @@
+error: `max_connections` must be at most 4294967295
+ --> tests/operators/accept_http/accept_http_error_max_connections_too_large.tql:5:48
+  |
+5 | accept_http "127.0.0.1:31337", max_connections=4294967296 {
+  |                                                ^^^^^^^^^^ 
+  |

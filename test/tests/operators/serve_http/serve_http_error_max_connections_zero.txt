@@ -1,0 +1,6 @@
+error: `max_connections` must not be zero
+ --> tests/operators/serve_http/serve_http_error_max_connections_zero.tql:6:47
+  |
+6 | serve_http "127.0.0.1:31337", max_connections=0
+  |                                               ^ 
+  |

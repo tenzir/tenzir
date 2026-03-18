@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <tenzir/arc.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/result.hpp>
@@ -63,7 +64,7 @@ private:
                     std::string url, HttpPoolConfig config);
 
   struct Impl;
-  std::shared_ptr<Impl> impl_;
+  Arc<Impl> impl_;
 };
 
 /// One-shot HTTP POST without a connection pool.

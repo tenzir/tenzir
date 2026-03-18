@@ -1,0 +1,13 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_CONCURRENCY_URL") + "/1",
+},
+{
+  u: env("HTTP_FIXTURE_CONCURRENCY_URL") + "/2",
+}
+http u, parallel=2
+sort id

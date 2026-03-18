@@ -35,6 +35,11 @@ auto upgrade_transport_to_tls_server(
   std::shared_ptr<folly::SSLContext> ssl_context)
   -> Task<folly::coro::Transport>;
 
+/// Upgrade an existing accepted transport to TLS in-place as a server.
+auto upgrade_transport_to_tls_server(
+  std::unique_ptr<folly::coro::Transport>& transport,
+  std::shared_ptr<folly::SSLContext> ssl_context) -> Task<void>;
+
 /// Backward-compatible alias for client-side upgrade.
 auto upgrade_transport_to_tls(folly::coro::Transport transport,
                               std::shared_ptr<folly::SSLContext> ssl_context,

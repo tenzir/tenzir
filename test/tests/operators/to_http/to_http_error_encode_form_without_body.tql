@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {
+  foo: "bar",
+}
+to_http env("HTTP_FIXTURE_URL"), encode="form"

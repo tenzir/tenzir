@@ -119,7 +119,7 @@ struct HttpPool::Impl {
 
 HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                    std::string url, HttpPoolConfig config)
-  : impl_{std::make_shared<Impl>()} {
+  : impl_{std::in_place} {
   impl_->executor = std::move(executor);
   impl_->evb = impl_->executor->getEventBase();
   impl_->url = proxygen::URL{url};
@@ -160,7 +160,7 @@ auto HttpPool::post(std::string body,
   -> Task<Result<HttpResponse, std::string>> {
   co_return co_await co_withExecutor(
     impl_->evb,
-    [](std::shared_ptr<Impl> impl, std::string body,
+    [](Arc<Impl> impl, std::string body,
        std::map<std::string, std::string> headers)
       -> Task<Result<HttpResponse, std::string>> {
       auto result

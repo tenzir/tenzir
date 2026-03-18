@@ -1,8 +1,0 @@
----
-fixtures: [http]
-timeout: 60
----
-
-from {url: env("HTTP_FIXTURE_LINK_URL")}
-http url, paginate="link" { read_json }
-head 1

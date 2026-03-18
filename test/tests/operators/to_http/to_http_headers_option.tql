@@ -1,0 +1,16 @@
+---
+fixtures:
+  - http:
+      expected_request:
+        count: 1
+        method: POST
+        path: /options/header
+        header_name: X-Test
+        header_value: alpha
+timeout: 60
+---
+
+from {
+  foo: "bar",
+}
+to_http env("HTTP_FIXTURE_HEADER_URL"), headers={"X-Test": "alpha"}

@@ -6,6 +6,7 @@ from __future__ import annotations
 from . import abs  # noqa: F401
 from . import gcs  # noqa: F401
 from . import google_secops  # noqa: F401
+from . import http  # noqa: F401
 from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
@@ -17,6 +18,7 @@ __all__ = [
     "abs",
     "gcs",
     "google_secops",
+    "http",
     "kafka",
     "local_files",
     "mysql",

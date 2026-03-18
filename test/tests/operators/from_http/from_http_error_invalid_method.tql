@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_http "https://example.org/data.json", method="wat" {
+  read_json
+}

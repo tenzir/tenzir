@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http:
+      mode: client
+      path: /max-conn
+      body: '{"n":1}'
+timeout: 60
+---
+
+accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), max_connections=2 {
+  read_json
+  where $request.path == "/max-conn"
+}
+head 1

@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+http "https://example.org/data.json", paginate="invalid" {
+  read_json
+}

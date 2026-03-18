@@ -1,0 +1,14 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  id: 42,
+  u: env("HTTP_FIXTURE_METHOD_URL"),
+  m: "put",
+}
+http u, method=m, response_field=response {
+  read_json
+}
+u = replace_regex(u, ":[0-9]+/", ":*/")

@@ -22,6 +22,14 @@ endif ()
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
+# Some static system-facebook link paths (notably Nix musl) still need these
+# granular folly archives on the final executable link line after libtenzir
+# and the whole-archived builtins.
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
+  target_link_libraries(
+    tenzir PRIVATE Folly::folly_io_async_async_io_uring_socket
+                   Folly::folly_io_async_fdsock_async_fd_socket)
+endif ()
 add_executable(tenzir::tenzir ALIAS tenzir)
 
 if (TARGET AWS::aws-cpp-sdk-core)

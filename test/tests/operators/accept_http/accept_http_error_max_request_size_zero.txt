@@ -1,0 +1,6 @@
+error: `max_request_size` must not be zero
+ --> tests/operators/accept_http/accept_http_error_max_request_size_zero.tql:5:69
+  |
+5 | accept_http "127.0.0.1:31337", max_connections=16, max_request_size=0 {
+  |                                                                     ^ 
+  |

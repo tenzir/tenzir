@@ -1,0 +1,13 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_LAMBDA_URL"),
+}
+http u, paginate=(x => x.next?) {
+  read_json
+}
+next = replace_regex(next?, ":[0-9]+/", ":*/")
+sort page

@@ -1,0 +1,18 @@
+---
+fixtures:
+  - http:
+      expected_request:
+        count: 1
+        method: POST
+        path: /
+        body: |-
+          {
+            "foo": "bar"
+          }
+timeout: 60
+---
+
+from {
+  foo: "bar",
+}
+to_http env("HTTP_FIXTURE_URL")

@@ -1,0 +1,17 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_BODY_URL"),
+  b: {
+    foo: "42",
+    bar: {
+      baz: "baz",
+    },
+  },
+}
+http u, method="post", body=b, encode="form" {
+  read_json
+}

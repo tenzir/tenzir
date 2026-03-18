@@ -1,0 +1,18 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_STATUS_404_URL"),
+}
+http u, error_field=error, metadata_field=meta {
+  read_json
+}
+u = replace_regex(u, ":[0-9]+/", ":*/")
+meta.headers.Server = replace_regex(
+  meta.headers.Server,
+  "Python/[0-9.]+",
+  "Python/*.*.*"
+)
+meta.headers.Date = "*"

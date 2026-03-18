@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {n: 1}
+serve_http "127.0.0.1:31337", max_connections=4294967296

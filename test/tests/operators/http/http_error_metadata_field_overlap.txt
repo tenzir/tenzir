@@ -1,0 +1,9 @@
+error: `error_field` and `metadata_field` must not point to same or nested field
+ --> tests/operators/http/http_error_metadata_field_overlap.tql:8:21
+  |
+8 | http u, error_field=x, metadata_field=x {
+  |                     ^ 
+  ⋮
+8 | http u, error_field=x, metadata_field=x {
+  |                                       ^ 
+  |

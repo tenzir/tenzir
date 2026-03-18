@@ -1,0 +1,17 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_BODY_URL"),
+  b: "retry-ok",
+}
+http u,
+     method="post",
+     body=b,
+     connection_timeout=1s,
+     max_retry_count=2,
+     retry_delay=0s {
+  read_json
+}

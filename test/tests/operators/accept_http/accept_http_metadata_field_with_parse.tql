@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http:
+      mode: client
+      path: /meta_parse
+      body: '{"x":1}'
+timeout: 60
+---
+
+accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), max_connections=16, metadata_field=meta {
+  read_json
+  where $request.path == "/meta_parse" and $request.method == "POST"
+}
+meta.headers.Host = replace_regex(meta.headers.Host, ":[0-9]+$", ":*")
+head 1

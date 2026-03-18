@@ -1,0 +1,22 @@
+---
+fixtures:
+  - http:
+      mode: client
+      method: GET
+      path: /stream
+      expected_response_body: |
+        {"stream":true}
+timeout: 60
+---
+
+from {stream: true}
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"),
+          path="/stream",
+          max_connections=16,
+          responses={
+            "/health": {
+              code: 200,
+              content_type: "text/plain",
+              body: "ok",
+            },
+          }

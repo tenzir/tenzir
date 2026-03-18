@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http:
+      mode: client
+      path: /size
+      body: '{"ok":1}'
+timeout: 60
+---
+
+accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), max_connections=16, max_request_size=128 {
+  read_json
+  where $request.path == "/size"
+}
+head 1
