@@ -187,11 +187,11 @@ public:
 private:
   using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
-  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
-    auto* evb = transport->getEventBase();
+  static auto close_transport(folly::coro::Transport transport) -> void {
+    auto* evb = transport.getEventBase();
     TENZIR_ASSERT(evb);
     evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-      transport->close();
+      transport.close();
     });
   }
 
@@ -210,14 +210,14 @@ private:
     transport_ = co_await folly::coro::retryWithExponentialBackoff(
       connect_max_retries, connect_initial_backoff, connect_max_backoff,
       connect_retry_jitter,
-      [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
+      [this, &ctx]() -> Task<folly::coro::Transport> {
         TENZIR_DEBUG("to_tcp: connecting to {}", address_.describe());
         try {
-          co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
+          co_return co_await connect_tcp_client(
             evb_, address_,
             std::chrono::duration_cast<std::chrono::milliseconds>(
               connect_timeout),
-            tls_context_, host_)};
+            tls_context_, host_);
         } catch (folly::AsyncSocketException const& ex) {
           // TODO: Surface connect retries and failures as metrics in a
           // follow-up that covers all TCP operators.
@@ -230,7 +230,7 @@ private:
         }
       },
       should_retry_connect);
-    auto peer_addr = (*transport_)->getPeerAddress();
+    auto peer_addr = transport_->getPeerAddress();
     bytes_write_counter_ = ctx.make_counter(
       MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                 peer_addr.getAddressStr())},
@@ -249,11 +249,11 @@ private:
         co_return;
       }
       auto write_error = Option<std::string>{};
-      auto* transport_evb = (**transport_).getEventBase();
+      auto* transport_evb = transport_->getEventBase();
       TENZIR_ASSERT(transport_evb);
       try {
         co_await folly::coro::co_withExecutor(transport_evb,
-                                              (**transport_).write(data));
+                                              transport_->write(data));
         bytes_write_counter_.add(chunk->size());
         co_return;
       } catch (folly::AsyncSocketException const& ex) {
@@ -284,7 +284,7 @@ private:
   folly::EventBase* evb_ = nullptr;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  Option<Box<folly::coro::Transport>> transport_;
+  Option<folly::coro::Transport> transport_;
   MetricsCounter bytes_write_counter_ = {};
   Lifecycle lifecycle_ = Lifecycle::running;
 };
