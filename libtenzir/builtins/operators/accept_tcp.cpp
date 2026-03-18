@@ -15,6 +15,7 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/detail/tcp_accept_loop.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -310,8 +311,7 @@ private:
       return;
     }
     // All connection permits must be returned *and* the accept loop must have
-    // finished (which implies all in-flight finish_accept tasks have
-    // completed) before we can safely transition to done.
+    // finished before we can safely transition to done.
     if (accept_loop_finished_
         and static_cast<uint64_t>(connection_slots_->getAvailableTokens())
               == max_connections_) {
@@ -392,49 +392,17 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
-    auto cancellation_token = accept_cancel_->getToken();
-    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
-      while (not cancellation_token.isCancellationRequested()) {
-        std::unique_ptr<folly::coro::Transport> transport;
-        auto accept_error = Option<std::string>{};
-        co_await folly::coro::co_safe_point;
-        co_await connection_slots_->co_wait();
-        auto release_connection_slot_guard
-          = detail::scope_guard{[this]() noexcept {
-              release_connection_slot();
-            }};
-        try {
-          // `await_task` is now queue-based, so accepting runs in this task.
-          transport
-            = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-        } catch (folly::AsyncSocketException const& ex) {
-          // Accept can fail transiently (e.g., client abort/reset). Keep the
-          // listener alive and continue with the next accept attempt.
-          if (cancellation_token.isCancellationRequested()) {
-            co_return;
-          }
-          accept_error = ex.what();
-        }
-        if (accept_error) {
-          diagnostic::warning("failed to accept incoming connection")
-            .primary(args_.endpoint.source)
-            .note("endpoint: {}", address_.describe())
-            .note("reason: {}", *accept_error)
-            .emit(ctx.dh());
-          co_await folly::coro::sleep(accept_retry_delay);
-          continue;
-        }
+    TENZIR_DEBUG("accept_tcp: accept loop started on {}", address_.describe());
+    co_await detail::run_tcp_accept_loop(
+      *server_, evb_, *connection_slots_, args_.endpoint.source,
+      address_.describe(), ctx.dh(), accept_retry_delay,
+      [this, &ctx](std::unique_ptr<folly::coro::Transport> transport) {
         auto boxed
           = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-        if (cancellation_token.isCancellationRequested()) {
-          close_transport(std::move(boxed));
-          co_return;
-        }
         auto peer = boxed->getPeerAddress();
-        scope.spawn(finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
-        release_connection_slot_guard.disable();
-      }
-    });
+        ctx.spawn_task(
+          finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
+      });
   }
 
   static auto
