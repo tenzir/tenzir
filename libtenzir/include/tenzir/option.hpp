@@ -134,6 +134,13 @@ public:
     : storage_{std::move(opt)} {
   }
 
+  /// Constructs from an `Option<U>` that is convertible.
+  template <class U>
+    requires std::convertible_to<U, T>
+  explicit(false) Option(Option<U> other)
+    : storage_{other ? std::optional{std::move(*other)} : std::nullopt} {
+  }
+
   // -- Assignment -------------------------------------------------------------
 
   /// Resets to empty.

@@ -201,6 +201,7 @@ struct SenderReceiver {
   Receiver<T> receiver;
 };
 
+/// Returns a bounded channel with the given capacity.
 template <class T>
 auto channel(size_t capacity) -> SenderReceiver<T> {
   auto shared = std::make_shared<SenderReceiverShared<T>>(capacity);
@@ -225,15 +226,24 @@ private:
 template <class T>
 OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
-/// A type-erased upstream message: either data or a signal.
-using AnyOperatorMsg = variant<table_slice, chunk_ptr, Signal>;
+/// A type-erased stream message: either data or a signal.
+struct AnyOperatorMsg : variant<table_slice, chunk_ptr, Signal> {
+  using variant::variant;
 
-/// Type-erased upstream pull.
+  template <class T>
+  explicit(false) AnyOperatorMsg(OperatorMsg<T> msg)
+    : variant{co_match(std::move(msg), [](auto value) -> AnyOperatorMsg {
+        return value;
+      })} {
+  }
+};
+
+/// Type-erased pull.
 using AnyOpPull
   = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
             Box<Pull<OperatorMsg<table_slice>>>>;
 
-/// Type-erased downstream push.
+/// Type-erased push.
 using AnyOpPush
   = variant<Box<Push<OperatorMsg<void>>>, Box<Push<OperatorMsg<chunk_ptr>>>,
             Box<Push<OperatorMsg<table_slice>>>>;
@@ -523,10 +533,10 @@ public:
     requires(std::is_invocable_r_v<bool, Filter, T const&>)
   auto next(Filter&& filter) -> Task<Option<T>> {
     // First, inspect the existing items to see if one qualifies.
-    for (auto it = existing_.begin(); it != existing_.end(); ++it) {
-      if (std::invoke(filter, std::as_const(*it))) {
-        auto value = std::move(*it);
-        existing_.erase(it);
+    for (auto i = size_t{0}; i < existing_.size(); ++i) {
+      if (std::invoke(filter, std::as_const(existing_[i]))) {
+        auto value = std::move(existing_[i]);
+        existing_.erase(existing_.begin() + static_cast<std::ptrdiff_t>(i));
         co_return value;
       }
     }
@@ -931,7 +941,8 @@ private:
           driver.add(co_match(pull_sub,
                               []<class Out>(Box<Pull<OperatorMsg<Out>>>& pull)
                                 -> Task<Option<AnyOperatorMsg>> {
-                                co_return co_await pull();
+                                co_return Option<AnyOperatorMsg>{
+                                  co_await pull()};
                               }));
           while (auto next = co_await driver.next([&](Event const& event) {
             // Block subpipeline output after receiving its checkpoint.
@@ -978,14 +989,14 @@ private:
               [&](Option<FromControl> from_control) -> Task<void> {
                 // FIXME
                 co_return;
-              },
-              [&](CheckpointDone) -> Task<void> {
-                // TODO: How do we get this message??
-                allow_output = true;
-              });
+              }
+              // ,[&](CheckpointDone) -> Task<void> {
+              //   // TODO: How do we get this message??
+              //   allow_output = true;
+              // }
+            );
           }
         });
-        co_return SubPipelineFinished{};
       });
 #if 1
 #else

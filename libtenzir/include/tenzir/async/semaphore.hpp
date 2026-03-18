@@ -9,12 +9,15 @@
 #pragma once
 
 #include "tenzir/async/task.hpp"
+#include "tenzir/detail/assert.hpp"
 
 #include <folly/fibers/Semaphore.h>
 
 #include <memory>
 
 namespace tenzir {
+
+class SemaphoreGuard;
 
 /// An async semaphore (that is movable unlike Folly's version).
 class Semaphore {
@@ -36,20 +39,72 @@ public:
     return *this;
   }
 
+  /// Returns the number of permits in the pool.
   auto available_permits() const -> size_t {
     return impl_.getAvailableTokens();
   }
 
-  auto signal() -> void {
+  /// Add a new permit to the pool.
+  auto add_permit() -> void {
     impl_.signal();
   }
 
-  auto acquire() -> Task<void> {
-    return impl_.co_wait();
+  /// Acquires a permit and returns a guard that releases it.
+  auto acquire() -> Task<SemaphoreGuard>;
+
+  /// Consumes a permit without returning a guard that restores it.
+  auto consume() -> Task<void> {
+    co_await impl_.co_wait();
   }
 
 private:
+  friend class SemaphoreGuard;
+
   folly::fibers::Semaphore impl_{0};
 };
+
+class [[nodiscard]] SemaphoreGuard {
+public:
+  ~SemaphoreGuard() noexcept {
+    try_release();
+  }
+
+  SemaphoreGuard(SemaphoreGuard&& other) noexcept
+    : acquired_{std::exchange(other.acquired_, nullptr)} {
+  }
+  auto operator=(SemaphoreGuard&& other) noexcept -> SemaphoreGuard& {
+    acquired_ = std::exchange(other.acquired_, nullptr);
+    return *this;
+  }
+  SemaphoreGuard(SemaphoreGuard& other) = delete;
+  auto operator=(SemaphoreGuard& other) = delete;
+
+  /// Releases this guard without adding its permit back.
+  auto forget() -> void {
+    TENZIR_ASSERT(acquired_);
+    acquired_ = nullptr;
+  }
+
+private:
+  friend class Semaphore;
+
+  explicit SemaphoreGuard(Semaphore& acquired) : acquired_{&acquired} {
+  }
+
+  auto try_release() -> void {
+    if (acquired_) {
+      acquired_->add_permit();
+      forget();
+      acquired_ = nullptr;
+    }
+  }
+
+  Semaphore* acquired_;
+};
+
+inline auto Semaphore::acquire() -> Task<SemaphoreGuard> {
+  co_await consume();
+  co_return SemaphoreGuard{*this};
+}
 
 } // namespace tenzir
