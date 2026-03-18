@@ -4,6 +4,8 @@ type: feature
 authors:
   - IyeOnline
   - codex
+  - mavam
+  - raxyte
 pr: 5897
 created: 2026-03-11T22:21:22.602464Z
 ---
