@@ -2138,6 +2138,10 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
             if (not to_control) {
               co_return;
             }
+            if (to_control == ToControl::no_more_input) {
+              // We don't feed it any input either way.
+              co_return;
+            }
             // TODO
             TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
             LOGI("got shutdown request from outermost subpipeline");
