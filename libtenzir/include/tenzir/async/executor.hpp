@@ -101,9 +101,8 @@ private:
 
 struct PostCommit {};
 struct Shutdown {};
-struct Stop {};
 
-using FromControl = variant<PostCommit, Shutdown, Stop>;
+using FromControl = variant<PostCommit, Shutdown>;
 
 TENZIR_ENUM(
   /// A message sent from an operator to the controller.
