@@ -74,7 +74,7 @@ jobs:
             manifest_target=$(echo "$src_image" | sed -E "s/-($arch_pattern)$//")
 
             # Add to the list of sources for this manifest
-            if [[ -n "${manifest_sources[$manifest_target]}" ]]; then
+            if [[ -n "${manifest_sources[$manifest_target]+set}" ]]; then
               manifest_sources[$manifest_target]="${manifest_sources[$manifest_target]} $src_image"
             else
               manifest_sources[$manifest_target]="$src_image"
