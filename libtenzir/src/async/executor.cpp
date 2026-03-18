@@ -693,14 +693,16 @@ public:
       co_await async_scope([&](AsyncScope& operator_scope) -> Task<void> {
         TENZIR_ASSERT(not operator_scope_);
         operator_scope_ = &operator_scope;
-        auto guard = detail::scope_guard{[&] noexcept {
-          operator_scope_ = nullptr;
-        }};
         co_await run();
         // Cancel operator-spawned tasks (e.g., background IO coroutines) so
         // the scope join does not block on them.
         operator_scope.cancel();
       });
+      // We reset the `operator_scope_` outside as concurrent tasks can still
+      // spawn new tasks until they actually terminated due to cancellation.
+      // This does not protect against concurrent access from tasks that are not
+      // spawned within the `operator_scope_`, but that's UB anyway.
+      operator_scope_ = nullptr;
     });
   }
 
