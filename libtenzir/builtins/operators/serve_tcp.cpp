@@ -13,7 +13,6 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/detail/tcp_accept_loop.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -27,7 +26,7 @@
 #include <folly/CancellationToken.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Sleep.h>
+#include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/fibers/Semaphore.h>
 #include <folly/io/async/AsyncServerSocket.h>
@@ -349,16 +348,41 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
-    co_await detail::run_tcp_accept_loop(
-      *server_, evb_, *connection_slots_, args_.endpoint.source,
-      address_.describe(), ctx.dh(), accept_retry_delay,
-      [this, &ctx](std::unique_ptr<folly::coro::Transport> transport) {
-        auto client
-          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-        auto peer = client->getPeerAddress().describe();
-        ctx.spawn_task(
-          finish_accept(std::move(client), std::move(peer), ctx.dh()));
-      });
+    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
+      return ew.is_compatible_with<folly::AsyncSocketException>();
+    };
+    while (true) {
+      co_await connection_slots_->co_wait();
+      auto release_connection_slot_guard
+        = detail::scope_guard{[this]() noexcept {
+            release_connection_slot();
+          }};
+      auto transport = co_await folly::coro::retryWithExponentialBackoff(
+        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+        accept_retry_delay, 0.0,
+        [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
+          try {
+            co_return co_await folly::coro::co_withExecutor(evb_,
+                                                            server_->accept());
+          } catch (folly::AsyncSocketException const& ex) {
+            // Accept failures are per-connection network errors; keep the
+            // listener alive and continue accepting new clients.
+            diagnostic::warning("failed to accept incoming connection")
+              .primary(args_.endpoint.source)
+              .note("endpoint: {}", address_.describe())
+              .note("reason: {}", ex.what())
+              .emit(ctx.dh());
+            throw;
+          }
+        },
+        should_retry_accept);
+      auto client
+        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+      auto peer = client->getPeerAddress().describe();
+      ctx.spawn_task(
+        finish_accept(std::move(client), std::move(peer), ctx.dh()));
+      release_connection_slot_guard.disable();
+    }
   }
 
   ServeTcpArgs args_;
