@@ -133,9 +133,10 @@ public:
       std::move(socket), address_, listen_backlog);
     accept_loop_finished_ = false;
     ctx.spawn_task([this, &ctx]() -> Task<void> {
-      auto notify_finished = detail::scope_guard{[this]() noexcept {
-        auto success = message_queue_->try_enqueue(AcceptLoopFinished{});
-        TENZIR_ASSERT(success);
+      auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
+        ctx.spawn_task([this]() -> Task<void> {
+          co_await message_queue_->enqueue(AcceptLoopFinished{});
+        });
       }};
       co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
                                                 accept_loop(ctx));
