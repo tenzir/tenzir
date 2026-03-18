@@ -64,14 +64,14 @@ jobs:
 
           read -r -a arch_suffixes <<< '${{ inputs.arch-suffixes }}'
           if [[ "${#arch_suffixes[@]}" -eq 0 ]]; then
-            echo "::error No architecture suffixes provided"
+            echo "::error::No architecture suffixes provided"
             exit 1
           fi
           expected_sources_per_manifest="${#arch_suffixes[@]}"
 
           read -r -a source_images <<< '${{ inputs.source-images }}'
           if [[ "${#source_images[@]}" -eq 0 ]]; then
-            echo "::error No source images provided"
+            echo "::error::No source images provided"
             exit 1
           fi
 
@@ -91,11 +91,11 @@ jobs:
               fi
             done
             if [[ -z "$matched_suffix" ]]; then
-              echo "::error Source image '$src_image' does not end with one of the expected suffixes: ${{ inputs.arch-suffixes }}"
+              echo "::error::Source image '$src_image' does not end with one of the expected suffixes: ${{ inputs.arch-suffixes }}"
               exit 1
             fi
             if [[ " ${manifest_arches[$manifest_target]:-} " == *" $matched_suffix "* ]]; then
-              echo "::error Duplicate source image for manifest '$manifest_target' and architecture '$matched_suffix'"
+              echo "::error::Duplicate source image for manifest '$manifest_target' and architecture '$matched_suffix'"
               exit 1
             fi
 
@@ -112,7 +112,7 @@ jobs:
           # Create each manifest and sign it
           for manifest_target in "${!manifest_sources[@]}"; do
             if [[ "${manifest_counts[$manifest_target]}" -ne "$expected_sources_per_manifest" ]]; then
-              echo "::error Manifest '$manifest_target' has ${manifest_counts[$manifest_target]} source image(s), expected $expected_sources_per_manifest (${manifest_arches[$manifest_target]})"
+              echo "::error::Manifest '$manifest_target' has ${manifest_counts[$manifest_target]} source image(s), expected $expected_sources_per_manifest (${manifest_arches[$manifest_target]})"
               exit 1
             fi
             sources="${manifest_sources[$manifest_target]}"
@@ -148,6 +148,6 @@ jobs:
             }
           done
           if [[ "${failed:-0}" -eq 1 ]]; then
-            echo "::error One or more signing operations failed"
+            echo "::error::One or more signing operations failed"
             exit 1
           fi

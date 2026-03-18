@@ -201,7 +201,7 @@ jobs:
           fi
           # From here on we should be in a pull request.
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
-            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            echo "::error::Unexpected GitHub Event: $GITHUB_EVENT_NAME"
             exit 1
           fi
           echo "::notice Enabling pull request jobs"
@@ -248,7 +248,7 @@ jobs:
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
             tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
-            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            echo "::error::unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
           fi
           docker_config="$(jq -c \
