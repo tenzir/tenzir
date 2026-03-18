@@ -1,0 +1,10 @@
+error: ClickHouse error: OpenSSL error: 1 : wrong version number
+Server certificate: No certificate
+ --> tests/operators/to_clickhouse/roundtrip/18_tls_mismatch_error.tql:6:1
+  |
+6 | to_clickhouse table=@name,
+  | ^^^^^^^^^^^^^ 
+  |
+  = note: `tls` is enabled for this connection
+  = note: common ClickHouse ports are `9000` without TLS and `9440` with TLS
+  = hint: if the ClickHouse server expects a plaintext connection, set `tls=false`

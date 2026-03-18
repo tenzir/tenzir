@@ -84,6 +84,7 @@ public:
                        diagnostic_handler& dh, ctor_token)
     : client_{args.make_options(cfg)},
       args_{std::move(args)},
+      tls_enabled_{args_.ssl.get_tls(&cfg).inner},
       dh_{dh, [loc = args_.operator_location](diagnostic diag) -> diagnostic {
             if (not has_location(diag)) {
               diag.annotations.emplace_back(true, std::string{}, loc);
@@ -97,6 +98,10 @@ public:
 
   auto dh() -> diagnostic_handler& {
     return dh_;
+  }
+
+  auto tls_enabled() const -> bool {
+    return tls_enabled_;
   }
 
   void ping();
@@ -130,6 +135,7 @@ private:
   ::clickhouse::Client client_;
   std::mutex client_mutex_;
   arguments args_;
+  bool tls_enabled_ = false;
   transforming_diagnostic_handler dh_;
   detail::heterogeneous_string_hashmap<transformer_record> transformations_;
   dropmask_type dropmask_;

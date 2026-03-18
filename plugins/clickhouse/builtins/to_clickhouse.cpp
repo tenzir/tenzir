@@ -120,8 +120,12 @@ public:
   } catch (const panic_exception& e) {
     throw;
   } catch (const std::exception& e) {
-    diagnostic::error("unexpected error: {}", e.what())
-      .primary(args_.operator_location)
+    auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                  .primary(args_.operator_location);
+    maybe_add_tls_client_diagnostic_hints(std::move(diag), e.what(),
+                                          args_.ssl.get_tls(&ctrl).inner,
+                                          "ClickHouse", uint64_t{9000},
+                                          uint64_t{9440})
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -203,8 +207,23 @@ public:
     }
     state_->worker_handles.reserve(args_.jobs);
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-      auto client
-        = easy_client::make(client_args, ctx.actor_system().config(), dh);
+      auto client = std::shared_ptr<easy_client>{};
+      try {
+        client
+          = easy_client::make(client_args, ctx.actor_system().config(), dh);
+      } catch (const panic_exception&) {
+        throw;
+      } catch (const std::exception& e) {
+        auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                      .primary(args_.operator_location);
+        maybe_add_tls_client_diagnostic_hints(
+          std::move(diag), e.what(),
+          ssl.get_tls(&ctx.actor_system().config()).inner, "ClickHouse",
+          uint64_t{9000}, uint64_t{9440})
+          .emit(dh);
+        state_->done.store(true);
+        co_return;
+      }
       TENZIR_ASSERT(client);
       /// We need to wait for our workers on shutdown, so need need to keep
       /// their handles.
@@ -299,7 +318,12 @@ private:
       } catch (const panic_exception&) {
         throw;
       } catch (const std::exception& e) {
-        diagnostic::error("unexpected error: {}", e.what()).emit(client->dh());
+        auto diag = diagnostic::error("ClickHouse error: {}", e.what());
+        maybe_add_tls_client_diagnostic_hints(std::move(diag), e.what(),
+                                              client->tls_enabled(),
+                                              "ClickHouse", uint64_t{9000},
+                                              uint64_t{9440})
+          .emit(client->dh());
       } catch (...) {
         diagnostic::error("unexpected exception").emit(client->dh());
       }

@@ -2129,10 +2129,18 @@ public:
     }
     // Use the global IO executor's EventBase for async socket I/O.
     auto* evb = folly::getGlobalIOExecutor()->getEventBase();
+    auto const tls_enabled = config.ssl_context != nullptr;
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config));
     if (result.is_err()) {
-      emit_mysql_error(std::move(result).unwrap_err(), ctx);
+      auto err = std::move(result).unwrap_err();
+      auto diag
+        = err.code != 0
+            ? diagnostic::error("MySQL error {}: {}", err.code, err.message)
+            : diagnostic::error("MySQL error: {}", err.message);
+      maybe_add_tls_client_diagnostic_hints(std::move(diag), err.message,
+                                            tls_enabled, "MySQL")
+        .emit(ctx);
       done_ = true;
       co_return;
     }

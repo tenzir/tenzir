@@ -21,6 +21,16 @@ TEST("ASCII case-insensitive equality") {
   CHECK(not ascii_icase_equal("abc", "abd"));
 }
 
+TEST("ASCII case-insensitive substring search") {
+  CHECK(contains_ascii_icase("", ""));
+  CHECK(contains_ascii_icase("Tenzir", "ten"));
+  CHECK(contains_ascii_icase("Kafka-123_[]", "A-123"));
+  CHECK(contains_ascii_icase("wrong version number", "VERSION"));
+  CHECK(not contains_ascii_icase("abc", "abcd"));
+  CHECK(not contains_ascii_icase("abc", "bcd"));
+  CHECK(not contains_ascii_icase("abc", "abd"));
+}
+
 TEST("string byte escaping") {
   // Identities.
   CHECK_EQUAL(byte_escape(""), "");
