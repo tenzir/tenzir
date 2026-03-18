@@ -77,7 +77,7 @@ jobs:
       - name: Fetch to merge-base
         if: github.event_name == 'pull_request'
         run: |
-          git fetch origin main
+          git fetch --no-recurse-submodules origin main
           base_ref="${GITHUB_BASE_REF:-main}"
           git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
@@ -201,7 +201,7 @@ jobs:
           fi
           # From here on we should be in a pull request.
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
-            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            echo "::error::Unexpected GitHub Event: $GITHUB_EVENT_NAME"
             exit 1
           fi
           echo "::notice Enabling pull request jobs"
@@ -248,7 +248,7 @@ jobs:
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
             tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
-            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            echo "::error::unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
           fi
           docker_config="$(jq -c \
@@ -276,6 +276,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -311,13 +313,27 @@ jobs:
             exit 0
           fi
 
-          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" && "$GITHUB_EVENT_NAME" != "merge_group" ]]; then
+            echo "Skipping submodule bump PR check for event $GITHUB_EVENT_NAME"
+            exit 0
+          fi
 
-          if [ "$plugins_sha" != "$plugins_main_sha" ]; then
+          git fetch --no-recurse-submodules origin main
+          merge_base=$(git merge-base origin/main HEAD)
+          if git diff --quiet "$merge_base" HEAD -- contrib/tenzir-plugins; then
+            echo "Skipping policy check because contrib/tenzir-plugins was not changed"
+            exit 0
+          fi
+
+          # Read the gitlink recorded in the superproject instead of relying on
+          # the submodule being initialized as a nested Git checkout.
+          plugins_sha=$(git rev-parse HEAD:contrib/tenzir-plugins)
+          plugins_main_sha=$(gh api repos/tenzir/tenzir-plugins/commits/main --jq .sha)
+
+          if [[ "$plugins_sha" != "$plugins_main_sha" ]]; then
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
-              --search $plugins_sha --json number -q ".[0].number")
-            [ $pr_number ] # Assert the pr number was non-empty
+              --search "$plugins_sha" --json number -q ".[0].number")
+            [[ -n "$pr_number" ]] # Assert the pr number was non-empty
           fi
 
   docker-tenzir:
