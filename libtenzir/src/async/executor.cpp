@@ -454,15 +454,16 @@ public:
   // This has the same lifetime requirements as `async_scope`.
   template <class U>
   auto activate(Task<U> task) -> Task<U> {
+    auto guard = detail::scope_guard{[&] noexcept {
+      // We reset the scope _after_ joining it.
+      scope_ = nullptr;
+    }};
     co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
       scope_ = &scope;
-      auto guard = detail::scope_guard{[&] noexcept {
-        // We assume that the consumer is not interested anymore. Otherwise,
-        // they would have called `next()` until it returns `None`.
-        scope_->cancel();
-        scope_ = nullptr;
-      }};
       co_return co_await std::move(task);
+      // We assume that the consumer is not interested anymore. Otherwise,
+      // they would have called `next()` until it returns `None`.
+      scope_->cancel();
     });
   }
 
@@ -479,12 +480,15 @@ public:
   ///
   /// This is NOT thread safe and must only be used within `activate`.
   auto next() -> Task<Option<T>> {
-    if (running_ == 0) {
-      co_return None{};
+    while (running_ > 0) {
+      auto item = co_await queue_.dequeue();
+      running_ -= 1;
+      // A cancelled task does not return a result.
+      if (item) {
+        co_return item;
+      }
     }
-    auto item = co_await queue_.dequeue();
-    running_ -= 1;
-    co_return item;
+    co_return None{};
   }
 
   /// Add a new task to the set.
@@ -496,7 +500,8 @@ public:
     TENZIR_ASSERT(scope_);
     running_ += 1;
     scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
-      queue_.enqueue(co_await std::move(task));
+      // Propagate cancellation as `None` to wake up `next()`.
+      queue_.enqueue(co_await catch_cancellation(std::move(task)));
     });
   }
 
@@ -509,7 +514,7 @@ public:
 
 private:
   size_t running_{0};
-  folly::coro::UnboundedQueue<T> queue_;
+  folly::coro::UnboundedQueue<Option<T>> queue_;
   AsyncScope* scope_ = nullptr;
 };
 
@@ -527,8 +532,6 @@ public:
   }
 
   /// Wait for the next item that satisfies the filter.
-  ///
-  /// If the no more items
   template <class Filter>
     requires(std::is_invocable_r_v<bool, Filter, T const&>)
   auto next(Filter&& filter) -> Task<Option<T>> {
@@ -549,6 +552,8 @@ public:
     if (existing_.empty()) {
       co_return None{};
     }
+    // TODO: Should we actually panic here? If the inner tasks are cancelled and
+    // we are about to be cancelled as well, then this is a problem.
     panic("got {} outstanding items without progress", existing_.size());
   }
 
@@ -569,8 +574,8 @@ public:
   }
 
 private:
-  std::vector<T> existing_;
   JoinSet<T> set_;
+  std::vector<T> existing_;
 };
 
 /// Core execution logic for a single operator.
@@ -1816,21 +1821,17 @@ private:
                       executor = std::move(executor),
                       cancel = operator_cancel_[index].getToken()] mutable
                        -> Task<std::pair<size_t, Terminated>> {
-          auto result = AsyncResult{
-            co_await folly::coro::co_awaitTry(folly::coro::co_withExecutor(
-              std::move(executor),
-              // Also wrap operator with custom cancellation sources, since we
-              // need those to cancel preceding operators for `head`.
-              folly::coro::co_withCancellation(
-                folly::cancellation_token_merge(
-                  std::move(cancel),
-                  co_await folly::coro::co_current_cancellation_token),
-                std::move(task))))};
           // Propagate exceptions, but not cancellation, to the caller.
-          if (result.is_exception()) {
-            std::move(result).unwrap();
-          }
-          // If the outer operator was cancelled we just want to propagate.
+          co_await catch_cancellation(folly::coro::co_withExecutor(
+            std::move(executor),
+            // Also wrap operator with custom cancellation sources, since we
+            // need those to cancel preceding operators for `head`.
+            folly::coro::co_withCancellation(
+              folly::cancellation_token_merge(
+                std::move(cancel),
+                co_await folly::coro::co_current_cancellation_token),
+              std::move(task))));
+          // If the outer operator itself was cancelled, we do need to propagate.
           co_await folly::coro::co_safe_point;
           LOGI("got termination from operator {}", index);
           co_return {index, Terminated{}};
@@ -2116,8 +2117,9 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         co_return Terminated{};
       });
       driver.add(pull_output());
-      // TODO: We just have this right now to simulate checkpointing.
+      driver.add(to_control_receiver.recv());
 #if 0
+      // TODO: We just have this right now to simulate checkpointing.
       queue.scope().spawn([&] -> Task<std::monostate> {
         while (true) {
           auto checkpoint = Checkpoint{uuid::random()};
@@ -2127,7 +2129,6 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         }
       });
 #endif
-      driver.add(to_control_receiver.recv());
       while (auto next = co_await driver.next()) {
         co_await co_match(
           std::move(*next),
