@@ -77,7 +77,7 @@ jobs:
       - name: Fetch to merge-base
         if: github.event_name == 'pull_request'
         run: |
-          git fetch origin main
+          git fetch --no-recurse-submodules origin main
           base_ref="${GITHUB_BASE_REF:-main}"
           git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
@@ -316,7 +316,7 @@ jobs:
             exit 0
           fi
 
-          git fetch origin main
+          git fetch --no-recurse-submodules origin main
           merge_base=$(git merge-base origin/main HEAD)
           if git diff --quiet "$merge_base" HEAD -- contrib/tenzir-plugins; then
             echo "Skipping policy check because contrib/tenzir-plugins was not changed"
