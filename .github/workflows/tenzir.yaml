@@ -311,13 +311,27 @@ jobs:
             exit 0
           fi
 
-          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" && "$GITHUB_EVENT_NAME" != "merge_group" ]]; then
+            echo "Skipping submodule bump PR check for event $GITHUB_EVENT_NAME"
+            exit 0
+          fi
 
-          if [ "$plugins_sha" != "$plugins_main_sha" ]; then
+          git fetch origin main
+          merge_base=$(git merge-base origin/main HEAD)
+          if git diff --quiet "$merge_base" HEAD -- contrib/tenzir-plugins; then
+            echo "Skipping policy check because contrib/tenzir-plugins was not changed"
+            exit 0
+          fi
+
+          # Read the gitlink recorded in the superproject instead of relying on
+          # the submodule being initialized as a nested Git checkout.
+          plugins_sha=$(git rev-parse HEAD:contrib/tenzir-plugins)
+          plugins_main_sha=$(gh api repos/tenzir/tenzir-plugins/commits/main --jq .sha)
+
+          if [[ "$plugins_sha" != "$plugins_main_sha" ]]; then
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
-              --search $plugins_sha --json number -q ".[0].number")
-            [ $pr_number ] # Assert the pr number was non-empty
+              --search "$plugins_sha" --json number -q ".[0].number")
+            [[ -n "$pr_number" ]] # Assert the pr number was non-empty
           fi
 
   docker-tenzir:
