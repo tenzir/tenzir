@@ -1813,18 +1813,22 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
               control_open = false;
               co_return;
             }
-            if (to_control == ToControl::no_more_input) {
-              // We don't feed it any input either way.
-              co_return;
-            }
-            // TODO
-            TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
-            LOGI("got shutdown request from outermost subpipeline");
-            co_await from_control_sender.send(Shutdown{});
-            // Close the input channel so that operator 0 observes None from
-            // its upstream pull, enabling orderly sequential shutdown.
-            {
-              auto _ = std::move(push_input);
+            switch (*to_control) {
+              case ToControl::no_more_input:
+                // We don't feed it any input either way.
+                break;
+              case ToControl::ready_for_shutdown:
+                LOGI("got shutdown request from outermost subpipeline");
+                co_await from_control_sender.send(Shutdown{});
+                // Close the input channel so that operator 0 observes None from
+                // its upstream pull, enabling orderly sequential shutdown.
+                {
+                  auto _ = std::move(push_input);
+                }
+                break;
+              case ToControl::checkpoint_begin:
+              case ToControl::checkpoint_done:
+                TENZIR_TODO();
             }
             queue.spawn(to_control_receiver.recv());
           },
