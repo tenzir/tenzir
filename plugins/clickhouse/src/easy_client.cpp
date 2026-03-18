@@ -171,6 +171,10 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
                   creation_modifier, table_name, clickhouse_columns, engine,
                   args_.primary->inner);
   auto query = Query{query_text};
+  // Auto-generated CREATE TABLE queries for wide schemas can exceed the
+  // server's default max_query_size (256 KiB). Remove the limit for this
+  // statement, as the query text is derived from the inferred schema.
+  query.SetSetting("max_query_size", {"0", QuerySettingsField::IMPORTANT});
   client_.Execute(query);
   return remote_fetch_schema_transformations(table_name);
 }
