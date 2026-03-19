@@ -12,6 +12,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -240,7 +241,7 @@ struct chart_args {
   auto make_bucket(const plugins_map& plugins, session ctx) const -> bucket {
     auto b = bucket{};
     for (const auto& [plugin, arg] : plugins) {
-      auto inv = aggregation_plugin::invocation{arg};
+      auto inv = function_invocation{arg};
       auto instance = plugin->make_aggregation(std::move(inv), ctx);
       TENZIR_ASSERT(instance);
       b.push_back(std::move(instance).unwrap());
@@ -852,7 +853,7 @@ class chart_plugin : public virtual operator_factory_plugin {
     return fmt::format("chart_{}", to_string(Ty));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = chart_args{};
     args.ty = Ty;

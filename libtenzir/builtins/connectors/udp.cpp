@@ -269,7 +269,7 @@ private:
 };
 
 class load_plugin final : public virtual operator_plugin2<loader> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto parser = argument_parser2::operator_(name());
@@ -290,7 +290,7 @@ class load_plugin final : public virtual operator_plugin2<loader> {
 };
 
 class save_plugin final : public virtual operator_plugin2<saver> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());

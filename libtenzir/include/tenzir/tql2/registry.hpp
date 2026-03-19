@@ -9,7 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
-#include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/plugin_api.hpp"
 #include "tenzir/type.hpp"
 
 #include <memory>
@@ -61,11 +61,11 @@ public:
   }
 
   explicit(false) operator_def(const operator_factory_plugin& plugin)
-    : kind_{native_operator{nullptr, &plugin}} {
+    : kind_{native_operator{nullptr, std::addressof(plugin)}} {
   }
 
   /// Instantiate the operator with the given arguments.
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr>;
 
   // TODO: Remove this?

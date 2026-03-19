@@ -417,7 +417,7 @@ public:
     };
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
     auto org_id = std::optional<located<std::string>>{};

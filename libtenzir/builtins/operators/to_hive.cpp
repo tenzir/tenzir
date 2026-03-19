@@ -404,7 +404,7 @@ public:
 
 class plugin : public virtual operator_plugin2<to_hive> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     using namespace si_literals;
     using namespace std::literals;

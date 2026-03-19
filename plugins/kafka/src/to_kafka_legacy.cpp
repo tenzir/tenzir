@@ -324,7 +324,7 @@ auto to_kafka_operator::optimize(const expression&, event_order) const
   return do_not_optimize(*this);
 }
 
-auto make_to_kafka(operator_factory_plugin::invocation inv, session ctx,
+auto make_to_kafka(operator_factory_invocation inv, session ctx,
                    const record& defaults) -> failure_or<operator_ptr> {
   auto args = to_kafka_args{};
   TRY(resolve_entities(args.message, ctx));

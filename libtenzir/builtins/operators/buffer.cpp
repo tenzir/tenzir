@@ -401,7 +401,7 @@ public:
     return result;
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto capacity = located<uint64_t>{};
     auto policy_str = std::optional<located<std::string>>{};

@@ -270,8 +270,7 @@ auto evaluator::eval(const ast::function_call& x) -> multi_series {
   // TODO: We parse the function call every time we get a new batch here. We
   // could store the result in the AST if that becomes a problem, but that is
   // also not an optimal solution.
-  auto func
-    = ctx_.reg().get(x).make_function(function_plugin::invocation{x}, ctx_);
+  auto func = ctx_.reg().get(x).make_function(function_invocation{x}, ctx_);
   if (not func) {
     return series::null(null_type{}, length_);
   }

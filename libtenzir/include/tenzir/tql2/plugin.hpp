@@ -15,6 +15,7 @@
 #include "tenzir/plugin/printer.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/plugin_api.hpp"
 
 #include <optional>
 
@@ -22,17 +23,7 @@ namespace tenzir {
 
 class operator_factory_plugin : public virtual plugin {
 public:
-  // Separate from `ast::invocation` in case we want to add things.
-  struct invocation {
-    invocation(ast::entity self, std::vector<ast::expression> args)
-      : self{std::move(self)}, args{std::move(args)} {
-    }
-
-    ast::entity self;
-    std::vector<ast::expression> args;
-  };
-
-  virtual auto make(invocation inv, session ctx) const
+  virtual auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr>
     = 0;
 
@@ -160,19 +151,7 @@ class function_plugin : public virtual plugin {
 public:
   using evaluator = function_use::evaluator;
 
-  struct invocation {
-    explicit invocation(const ast::function_call& call) : call{call} {
-    }
-    ~invocation() = default;
-    invocation(const invocation&) = delete;
-    invocation(invocation&&) = default;
-    auto operator=(const invocation&) -> invocation& = delete;
-    auto operator=(invocation&&) -> invocation& = delete;
-
-    const ast::function_call& call;
-  };
-
-  virtual auto make_function(invocation inv, session ctx) const
+  virtual auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr>
     = 0;
 
@@ -198,10 +177,10 @@ public:
 
 class aggregation_plugin : public virtual function_plugin {
 public:
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override;
 
-  virtual auto make_aggregation(invocation inv, session ctx) const
+  virtual auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>>
     = 0;
 };

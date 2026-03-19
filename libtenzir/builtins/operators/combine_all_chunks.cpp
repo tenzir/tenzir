@@ -57,7 +57,8 @@ public:
 class combine_all_chunks final
   : public operator_plugin2<combine_all_chunks_operator> {
 public:
-  auto make(invocation, session) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_invocation, session) const
+    -> failure_or<operator_ptr> override {
     return std::make_unique<combine_all_chunks_operator>();
   }
 };

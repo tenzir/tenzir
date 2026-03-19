@@ -43,10 +43,12 @@ public:
   /// @param fs The actor handle of a filesystem.
   /// @param id The partition id for which we want to create a store. Can be
   /// used as a unique key by the implementation.
+  /// @param origin An origin identifier to embed into the store file.
   /// @returns A handle to the store builder actor to add events to, and a
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual auto
-  make_store_builder(filesystem_actor fs, const uuid& id) const
+  make_store_builder(filesystem_actor fs, const uuid& id,
+                     std::string origin) const
     -> caf::expected<builder_and_header>
     = 0;
 
@@ -76,8 +78,8 @@ public:
     = 0;
 
 private:
-  [[nodiscard]] auto
-  make_store_builder(filesystem_actor fs, const uuid& id) const
+  [[nodiscard]] auto make_store_builder(filesystem_actor fs, const uuid& id,
+                                        std::string origin) const
     -> caf::expected<builder_and_header> final;
 
   [[nodiscard]] auto

@@ -367,8 +367,8 @@ private:
 };
 
 auto parse_http_args(const std::string& name,
-                     const operator_factory_plugin::invocation& inv,
-                     session ctx) -> failure_or<connector_args> {
+                     const operator_factory_invocation& inv, session ctx)
+  -> failure_or<connector_args> {
   auto form = std::optional<location>{};
   auto method = std::optional<std::string>{};
   auto args = connector_args{};
@@ -400,7 +400,7 @@ auto parse_http_args(const std::string& name,
 class load_http_plugin final
   : public virtual operator_plugin2<load_http_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     diagnostic::warning(
       "`load_http` is deprecated and will be removed in a future release")
@@ -415,7 +415,7 @@ public:
 class save_http_plugin final
   : public virtual operator_plugin2<save_http_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto args, parse_http_args("save_http", inv, ctx));
     return std::make_unique<save_http_operator>(std::move(args));
@@ -429,9 +429,8 @@ public:
   }
 };
 
-auto parse_ftp_args(std::string name,
-                    const operator_factory_plugin::invocation& inv, session ctx)
-  -> failure_or<connector_args> {
+auto parse_ftp_args(std::string name, const operator_factory_invocation& inv,
+                    session ctx) -> failure_or<connector_args> {
   auto args = connector_args{};
   auto parser = argument_parser2::operator_(std::move(name));
   parser.positional("url", args.url);
@@ -449,7 +448,7 @@ public:
     return "load_ftp";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto args, parse_ftp_args(name(), inv, ctx));
     return std::make_unique<load_http_operator>(std::move(args));
@@ -469,7 +468,7 @@ public:
     return "save_ftp";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto args, parse_ftp_args(name(), inv, ctx));
     return std::make_unique<save_http_operator>(std::move(args));

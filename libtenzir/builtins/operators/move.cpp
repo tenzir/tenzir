@@ -67,7 +67,7 @@ struct move_operator final : public crtp_operator<move_operator> {
 };
 
 struct move_plugin final : public operator_plugin2<move_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     const auto docs = std::invoke([]() {
       return argument_parser2::operator_("move").docs();

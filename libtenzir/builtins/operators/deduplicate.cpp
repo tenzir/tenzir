@@ -82,7 +82,7 @@ struct configuration {
        std::optional<ast::field_path> count_field, diagnostic_handler& dh)
     -> failure_or<configuration>;
 
-  static auto parse(operator_factory_plugin::invocation inv, session ctx)
+  static auto parse(operator_factory_invocation inv, session ctx)
     -> failure_or<configuration>;
 
   auto cleanup_duration() const -> duration;
@@ -283,7 +283,7 @@ auto configuration::make(std::vector<ast::expression> keys,
   return cfg;
 }
 
-auto configuration::parse(operator_factory_plugin::invocation inv, session ctx)
+auto configuration::parse(operator_factory_invocation inv, session ctx)
   -> failure_or<configuration> {
   auto expressions = std::vector<ast::expression>{};
   auto named_args = std::vector<ast::expression>{};
@@ -345,7 +345,7 @@ auto configuration::parse(operator_factory_plugin::invocation inv, session ctx)
   parser.named("read_timeout", cfg.read_timeout);
   parser.named("count_field", cfg.count_field);
   auto parser_inv
-    = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
+    = operator_factory_invocation{inv.self, std::move(named_args)};
   TRY(parser.parse(parser_inv, ctx));
   return make(std::move(expressions), limit, cfg.distance, cfg.create_timeout,
               cfg.write_timeout, cfg.read_timeout, cfg.count_field, ctx);
@@ -573,7 +573,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto cfg, configuration::parse(std::move(inv), ctx));
     return std::make_unique<deduplicate_operator>(std::move(cfg));

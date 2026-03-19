@@ -151,7 +151,7 @@ private:
 
 class save_abs_plugin final : public operator_plugin2<save_abs_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = save_abs_args{};
     args.op = inv.self.get_location();

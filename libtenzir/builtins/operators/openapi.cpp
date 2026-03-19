@@ -164,7 +164,7 @@ public:
     return {.source = true};
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("openapi").parse(inv, ctx));
     return std::make_unique<openapi_operator>();

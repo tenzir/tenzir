@@ -1590,7 +1590,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -1648,7 +1648,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{"ndjson"};
     args.split_mode = split_at::newline;
@@ -1698,7 +1698,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{"gelf"};
     args.split_mode = split_at::null;
@@ -1760,7 +1760,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{std::string{Name.str()}};
     args.split_mode = split_at::newline;
@@ -1800,7 +1800,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
@@ -2114,7 +2114,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
@@ -2185,7 +2185,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
@@ -2228,7 +2228,7 @@ public:
   print_json_plugin(bool compact) : compact_{compact} {
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto args = printer_args{};

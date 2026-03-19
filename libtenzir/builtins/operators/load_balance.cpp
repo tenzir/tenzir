@@ -364,7 +364,7 @@ private:
 
 class plugin final : public virtual operator_plugin2<load_balance> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipes = std::vector<pipeline>{};
     for (auto& arg : inv.args) {

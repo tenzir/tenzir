@@ -1564,7 +1564,7 @@ public:
     return "ocsf::apply";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto preserve_variants = false;
     argument_parser2::operator_(name())
@@ -1583,7 +1583,7 @@ public:
 class cast_plugin final : public virtual operator_plugin2<cast_operator>,
                           public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto encode_variants = false;
     auto timestamp_to_ms = false;
@@ -1610,7 +1610,7 @@ public:
 class trim_plugin final : public virtual operator_plugin2<trim_operator>,
                           public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     // TODO: Consider using a more intelligent default that is not simply
     // based on attributes being optional.
@@ -1637,7 +1637,7 @@ public:
 class derive_plugin final : public virtual operator_plugin2<derive_operator>,
                             public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_(name()).parse(inv, ctx).ignore();
     return std::make_unique<derive_operator>(inv.self.get_location());

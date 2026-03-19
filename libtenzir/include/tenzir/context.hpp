@@ -206,7 +206,7 @@ private:
 
 class context_plugin : public virtual plugin {
 public:
-  using invocation = operator_factory_plugin::invocation;
+  using invocation = operator_factory_invocation;
 
   [[nodiscard]] virtual auto context_name() const -> std::string {
     return name();
@@ -218,7 +218,8 @@ public:
     -> caf::expected<std::unique_ptr<context>>
     = 0;
 
-  [[nodiscard]] virtual auto make_context(invocation inv, session ctx) const
+  [[nodiscard]] virtual auto
+  make_context(operator_factory_invocation inv, session ctx) const
     -> failure_or<make_context_result>
     = 0;
 
@@ -267,7 +268,7 @@ private:
     return Name;
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> final {
     TRY(auto result, this->make_context(std::move(inv), ctx));
     const auto is_valid_char = [](char ch) {

@@ -16,6 +16,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/util/compression.h>
 #include <boost/url/parse.hpp>
@@ -518,7 +519,7 @@ struct plugin : public virtual operator_plugin2<opensearch_operator> {
     return "to_opensearch";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = opensearch_args{};
     auto p = argument_parser2::operator_(name());

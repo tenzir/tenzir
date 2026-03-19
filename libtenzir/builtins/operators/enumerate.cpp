@@ -165,7 +165,7 @@ private:
 class Plugin final : public virtual operator_plugin2<enumerate_operator>,
                      public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = EnumerateArgs{};
     auto out = ast::field_path::try_from(

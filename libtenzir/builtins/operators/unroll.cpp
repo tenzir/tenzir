@@ -349,7 +349,7 @@ public:
     return std::make_unique<unroll_operator>(std::move(field));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto field = ast::field_path{};
     auto parser

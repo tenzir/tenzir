@@ -25,6 +25,8 @@ class SSLContext;
 
 namespace tenzir {
 
+struct operator_control_plane;
+
 auto parse_curl_tls_version(std::string_view version) -> caf::expected<long>;
 auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int>;
 

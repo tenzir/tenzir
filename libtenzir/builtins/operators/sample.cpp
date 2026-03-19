@@ -243,7 +243,7 @@ public:
     return "sample";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto str = std::optional<located<std::string>>{};
     auto args = operator_args{};

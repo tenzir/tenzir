@@ -868,7 +868,7 @@ using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer>;
 
 class read_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_parser_adapter> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("read_zeek_tsv").parse(inv, ctx));
     return std::make_unique<zeek_tsv_parser_adapter>();
@@ -877,7 +877,7 @@ class read_zeek_tsv final
 
 class write_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_writer_adapter> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = zeek_tsv_printer::args{};
     auto set_separator = std::optional<located<std::string>>{};

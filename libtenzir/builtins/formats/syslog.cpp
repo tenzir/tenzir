@@ -1436,7 +1436,7 @@ public:
 
 class read_syslog final
   : public virtual operator_plugin2<parser_adapter<syslog_parser>> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
     bool octet_counting = false;
@@ -1462,7 +1462,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // nullopt = auto-detect: try octet-counting first, fall back to plain syslog
@@ -1735,7 +1735,7 @@ public:
 };
 
 class write_syslog final : public operator_plugin2<syslog_printer> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.op = inv.self.get_location();

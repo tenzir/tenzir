@@ -120,7 +120,7 @@ auto find_plugins(call_map const& y, session ctx) -> plugins_map {
 auto make_bucket(plugins_map const& plugins, session ctx) -> Bucket {
   auto b = Bucket{};
   for (auto const& [plugin, arg] : plugins) {
-    auto inv = aggregation_plugin::invocation{arg};
+    auto inv = function_invocation{arg};
     auto instance = plugin->make_aggregation(std::move(inv), ctx);
     TENZIR_ASSERT(instance);
     b.instances.push_back(std::move(instance).unwrap());

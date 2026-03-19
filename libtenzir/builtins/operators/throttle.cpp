@@ -224,7 +224,7 @@ private:
 
 class plugin final : public operator_plugin2<throttle_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = throttle_args{};
     TRY(argument_parser2::operator_("throttle")

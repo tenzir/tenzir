@@ -705,7 +705,7 @@ private:
 };
 
 struct parallel final : public operator_plugin2<parallel_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parallel_args{};
     args.op = inv.self.get_location();

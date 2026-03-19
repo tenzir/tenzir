@@ -153,7 +153,7 @@ public:
     return {};
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     if (not enabled_) {
       diagnostic::error("the `{}` operator is disabled ", name())

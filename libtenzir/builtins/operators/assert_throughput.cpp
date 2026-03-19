@@ -92,7 +92,7 @@ private:
 class plugin final
   : public virtual operator_plugin2<assert_throughput_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto min_events = located<uint64_t>{};
     auto within = located<duration>{};

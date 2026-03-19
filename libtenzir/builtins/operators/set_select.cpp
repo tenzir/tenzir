@@ -51,7 +51,7 @@ auto make_select_assignments(std::vector<ast::expression> args,
 
 class set final : public operator_plugin2<set_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto usage = "set <path>=<expr>...";
     auto docs = "https://docs.tenzir.com/reference/operators/set";
@@ -80,7 +80,7 @@ public:
     return "tql2.select";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto assignments,
         make_select_assignments(std::move(inv.args), ctx.dh()));

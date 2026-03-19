@@ -200,7 +200,7 @@ public:
     return "tql2.from";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `uri|events`")
@@ -275,7 +275,7 @@ public:
     return "tql2.to";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `uri`")
@@ -372,7 +372,7 @@ private:
 
 class from_file_plugin : public operator_plugin2<from_file> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_file_args{};
     auto p = argument_parser2::operator_(name());

@@ -114,7 +114,7 @@ private:
 
 class to_clickhouse final : public operator_plugin2<clickhouse_sink_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto args, operator_arguments::try_parse(name(), inv, ctx));
     return std::make_unique<clickhouse_sink_operator>(std::move(args));

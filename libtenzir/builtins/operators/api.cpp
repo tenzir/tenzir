@@ -126,7 +126,7 @@ public:
       std::move(endpoint), request_body ? std::move(*request_body) : "{}");
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto request_body = std::optional<located<record>>{};

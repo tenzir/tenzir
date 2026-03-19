@@ -153,7 +153,7 @@ public:
     return std::make_unique<plugins_operator>();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("plugins").parse(inv, ctx).ignore();
     return std::make_unique<plugins_operator>();

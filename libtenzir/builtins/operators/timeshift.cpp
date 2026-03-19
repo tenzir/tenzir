@@ -170,7 +170,7 @@ private:
 };
 
 struct plugin2 : operator_plugin2<timeshift_operator2>, virtual OperatorPlugin {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};

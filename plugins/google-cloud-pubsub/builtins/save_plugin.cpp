@@ -105,7 +105,7 @@ private:
 
 class save_plugin final : public operator_plugin2<save_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     diagnostic::warning("`save_google_cloud_pubsub` is deprecated; use "
                         "`to_google_cloud_pubsub` instead")
