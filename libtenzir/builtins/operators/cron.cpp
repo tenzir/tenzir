@@ -53,7 +53,7 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(result, push);
     too_early = false;
-    if (not sub_processing_ and not done_) {
+    if (not(sub_processing_ or done_)) {
       co_await spawn(ctx);
     }
   }
@@ -62,7 +62,7 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(key, push);
     sub_processing_ = false;
-    if (not too_early and not done_) {
+    if (not(too_early or done_)) {
       co_await spawn(ctx);
     }
   }
