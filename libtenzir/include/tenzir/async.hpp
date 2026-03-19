@@ -74,25 +74,25 @@ using SubKeyView = data_view;
 template <class T>
 struct OperatorMsg;
 
+/// A handle to a subpipeline. May only be used within the main functions of the
+/// operator that do not run concurrently (so not `await_task` or `process_sub`).
 template <class Input>
 class OpenPipeline {
 public:
   OpenPipeline() noexcept = default;
 
-  explicit OpenPipeline(Option<Box<Push<OperatorMsg<Input>>>>& push) noexcept
-    : push_{&push} {
-  }
-
-  explicit OpenPipeline(None) noexcept {
+  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) noexcept
+    : push_{push} {
   }
 
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>>;
+
   auto close() -> Task<void>
     requires(not std::same_as<Input, void>);
 
 private:
-  Option<Box<Push<OperatorMsg<Input>>>>* push_ = nullptr;
+  Option<Push<OperatorMsg<Input>>&> push_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
