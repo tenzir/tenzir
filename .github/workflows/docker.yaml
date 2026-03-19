@@ -132,6 +132,7 @@ jobs:
           images_file="$(mktemp)"
           trap 'rm -f "$images_file"' EXIT
           cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
+          source_tag='${{ fromJSON(inputs.config).source-tag }}'
           jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
             buildah build \
@@ -143,10 +144,8 @@ jobs:
               --cache-from "${CACHE_REF}" \
               --cache-to "${CACHE_REF}" \
               --tag "img"
-            for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
-              image="${registry}/tenzir/${name}:${tag}-${{ inputs.arch }}"
-              buildah push img "${image}"
-              echo "${image}" >> "$images_file"
-            done
+            image="${registry}/tenzir/${name}:${source_tag}-${{ inputs.arch }}"
+            buildah push img "${image}"
+            echo "${image}" >> "$images_file"
           done
           echo "images=$(paste -sd' ' "$images_file")" >> "$GITHUB_OUTPUT"

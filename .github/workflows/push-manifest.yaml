@@ -10,6 +10,10 @@ on:
         description: 'Space-separated list of architecture suffixes to strip for manifest tags (e.g., "aarch64 x86_64")'
         type: string
         required: true
+      tags:
+        description: 'Optional space-separated list of manifest tags to apply to each source manifest target'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -75,6 +79,8 @@ jobs:
             exit 1
           fi
 
+          read -r -a requested_tags <<< '${{ inputs.tags }}'
+
           # Group source images by their manifest target (image URL without arch suffix)
           declare -A manifest_sources
           declare -A manifest_counts
@@ -117,14 +123,26 @@ jobs:
             fi
             sources="${manifest_sources[$manifest_target]}"
             read -r -a source_refs <<< "$sources"
-            echo "::notice Creating manifest $manifest_target from: $sources"
+            repo="${manifest_target%:*}"
+            canonical_tag="${manifest_target##*:}"
+            manifest_tags=("$canonical_tag")
+            if [[ "${#requested_tags[@]}" -gt 0 ]]; then
+              manifest_tags=("${requested_tags[@]}")
+            fi
+            declare -A seen_tags=()
+            create_args=()
+            for tag in "${manifest_tags[@]}"; do
+              if [[ -n "${tag}" && -z "${seen_tags[$tag]+set}" ]]; then
+                create_args+=(--tag "${repo}:${tag}")
+                seen_tags[$tag]=1
+              fi
+            done
+            echo "::notice Creating manifest ${repo} with tags: ${manifest_tags[*]} from: $sources"
             docker buildx imagetools create \
-              --tag "$manifest_target" \
+              "${create_args[@]}" \
               "${source_refs[@]}"
             # Resolve the tag to a digest for signing.
             digest=$(crane digest "$manifest_target")
-            # Extract registry/repo from the manifest target (everything before the colon)
-            repo="${manifest_target%:*}"
             image_by_digest="${repo}@${digest}"
             # Keyless signing uses GitHub Actions OIDC identity.
             # Verify with:

@@ -239,10 +239,13 @@ jobs:
         if: steps.configure.outputs.run-docker-tenzir == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            source_tag="${{ steps.configure.outputs.head-ref-slug }}"
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            source_tag="${{ github.sha }}"
             tags=('main' "${{ github.sha }}")
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            source_tag="${{ github.sha }}"
             major_minor_patch='${{ steps.configure.outputs.release-version }}'
             major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
@@ -252,9 +255,10 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
+            '."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
             --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
+            --arg source "${source_tag}" \
             --args -- "${tags[@]}")"
           # PRs only publish the community images to GHCR.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
@@ -378,6 +382,7 @@ jobs:
     with:
       source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
       arch-suffixes: "amd64 arm64"
+      tags: "${{ join(fromJSON(needs.configure.outputs.docker-config).tags, ' ') }}"
     secrets: inherit
 
   sync-openapi-to-docs:
