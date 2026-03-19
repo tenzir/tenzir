@@ -10,7 +10,9 @@
 #include <tenzir/async/queue_scope.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <folly/Expected.h>
 

@@ -21,7 +21,6 @@
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/tls_options.hpp"
@@ -356,7 +355,7 @@ auto find_decompression_plugin(std::string_view ext, location op,
                               ext)) {
       TENZIR_TRACE("[http] inferred plugin `{}` for extension `{}`",
                    plugin->name(), ext);
-      auto inv = operator_factory_plugin::invocation{
+      auto inv = operator_factory_invocation{
         ast::entity{
           std::vector{ast::identifier{plugin->name(), op}},
         },
@@ -376,7 +375,7 @@ auto find_parser_plugin(std::string_view ext, location op,
     if (std::ranges::contains(plugin->read_properties().extensions, ext)) {
       TENZIR_TRACE("[http] inferred plugin `{}` for extension `{}`",
                    plugin->name(), ext);
-      auto inv = operator_factory_plugin::invocation{
+      auto inv = operator_factory_invocation{
         ast::entity{
           std::vector{ast::identifier{plugin->name(), op}},
         },
@@ -395,7 +394,7 @@ auto find_plugin_for_mime(std::string_view mime, location op,
   mime = mime.substr(0, mime.find(';'));
   for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
     if (std::ranges::contains(plugin->read_properties().mime_types, mime)) {
-      auto inv = operator_factory_plugin::invocation{
+      auto inv = operator_factory_invocation{
         ast::entity{
           std::vector{ast::identifier{plugin->name(), op}},
         },
@@ -1740,7 +1739,7 @@ private:
   from_http_args args_;
 };
 
-void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
+void warn_deprecated_payload(const operator_factory_invocation& inv,
                              session ctx) {
   for (const auto& arg : inv.args) {
     match(
@@ -1764,7 +1763,7 @@ struct from_http final : public virtual operator_factory_plugin {
     return "tql2.from_http";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_http_args{};
     args.op = inv.self.get_location();
@@ -2533,7 +2532,7 @@ private:
 };
 
 struct http_plugin final : public operator_plugin2<http_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = http_args{};
     args.op = inv.self.get_location();

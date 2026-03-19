@@ -195,7 +195,7 @@ class plugin final : public virtual operator_plugin<sigma_operator>,
     return {.transformation = true};
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto refresh_interval = std::optional<located<duration>>{};
     auto path = std::string{};

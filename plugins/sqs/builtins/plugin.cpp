@@ -33,7 +33,7 @@ namespace {
 template <class Operator>
 class plugin final : public virtual operator_plugin2<Operator> {
 public:
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = connector_args{};
     auto dur = std::optional<located<duration>>{};

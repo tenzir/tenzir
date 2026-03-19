@@ -328,7 +328,7 @@ private:
 
 class from_s3 final : public operator_plugin2<from_s3_operator>,
                       public OperatorPlugin {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_s3_args{};
     // Legacy options for backwards compatibility

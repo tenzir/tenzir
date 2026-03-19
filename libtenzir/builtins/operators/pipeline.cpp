@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/type.h>

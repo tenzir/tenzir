@@ -197,7 +197,7 @@ private:
 class from_plugin final
   : public operator_plugin2<from_google_cloud_pubsub_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_args{};
     auto parser = argument_parser2::operator_(name());

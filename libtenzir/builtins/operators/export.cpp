@@ -329,7 +329,7 @@ public:
       export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto live = false;
     auto retro = false;
@@ -407,7 +407,7 @@ public:
       export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto live = false;
     auto retro = false;
@@ -491,7 +491,7 @@ public:
       export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto name = std::optional<located<std::string>>{};
     auto live = false;

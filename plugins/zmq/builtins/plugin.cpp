@@ -19,7 +19,7 @@ namespace {
 // TODO: Collapse these
 class load_plugin final : public virtual operator_plugin2<zmq_loader> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     TRY(argument_parser2::operator_(name())
@@ -60,7 +60,7 @@ public:
 
 class save_plugin final : public virtual operator_plugin2<zmq_saver> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_(name())

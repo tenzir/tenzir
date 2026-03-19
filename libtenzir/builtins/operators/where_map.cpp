@@ -284,7 +284,7 @@ struct arguments {
 
   static auto parse(const std::string& name, const std::string& lambda_name,
                     const std::string& lambda_hint,
-                    const function_plugin::invocation& inv, session ctx)
+                    const function_invocation& inv, session ctx)
     -> failure_or<arguments> {
     auto dh = collecting_diagnostic_handler{};
     auto sp = session_provider::make(dh);
@@ -330,7 +330,7 @@ struct arguments {
   }
 };
 
-auto make_where_function(function_plugin::invocation inv, session ctx)
+auto make_where_function(function_invocation inv, session ctx)
   -> failure_or<function_ptr> {
   TRY(auto args,
       arguments::parse("where", "predicate", "any => bool", inv, ctx));
@@ -499,7 +499,7 @@ struct where_result_part {
   }
 };
 
-auto make_map_function(function_plugin::invocation inv, session ctx)
+auto make_map_function(function_invocation inv, session ctx)
   -> failure_or<function_ptr> {
   TRY(auto args, arguments::parse("map", "function", "any -> any", inv, ctx));
   return function_use::make([args = std::move(args)](
@@ -765,7 +765,7 @@ public:
     return "tql2.assert";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     auto msg = std::optional<ast::expression>{};
@@ -918,7 +918,7 @@ public:
     return "tql2.where";
   }
 
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::operator_("where")
@@ -937,8 +937,8 @@ public:
     auto loc = inv.op.get_location();
     TRY(argument_parser2::operator_("where")
           .positional("predicate", expr, "bool")
-          .parse(operator_factory_plugin::invocation{std::move(inv.op),
-                                                     std::move(inv.args)},
+          .parse(operator_factory_invocation{std::move(inv.op),
+                                             std::move(inv.args)},
                  provider.as_session()));
     TRY(expr.bind(ctx));
     return where_ir{loc, std::move(expr)};
@@ -948,7 +948,7 @@ public:
     return true;
   }
 
-  auto make_function(function_plugin::invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     return make_where_function(std::move(inv), ctx);
   }
@@ -964,7 +964,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     return make_map_function(std::move(inv), ctx);
   }

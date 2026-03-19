@@ -10,6 +10,7 @@
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -152,7 +153,7 @@ public:
     return {};
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     if (not enabled_) {
       diagnostic::error("the `{}` operator is disabled ", name())

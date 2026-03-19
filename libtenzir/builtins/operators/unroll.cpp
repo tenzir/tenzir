@@ -12,6 +12,7 @@
 #include <tenzir/bitmap.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -348,7 +349,7 @@ public:
     return std::make_unique<unroll_operator>(std::move(field));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto field = ast::field_path{};
     auto parser

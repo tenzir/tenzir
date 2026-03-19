@@ -11,6 +11,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/api.h>

@@ -12,6 +12,7 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
+#include "tenzir/pipeline.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 

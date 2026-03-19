@@ -10,6 +10,7 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/table_slice.hpp>
@@ -303,7 +304,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("drop_null_fields");
     auto selectors = std::vector<ast::field_path>{};

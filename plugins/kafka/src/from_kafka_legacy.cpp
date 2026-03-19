@@ -359,7 +359,7 @@ auto from_kafka_operator::name() const -> std::string {
   return "from_kafka";
 }
 
-auto make_from_kafka(operator_factory_plugin::invocation inv, session ctx,
+auto make_from_kafka(operator_factory_invocation inv, session ctx,
                      const record& defaults) -> failure_or<operator_ptr> {
   auto args = from_kafka_args{};
   args.operator_location = inv.self.get_location();

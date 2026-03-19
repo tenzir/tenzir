@@ -437,7 +437,7 @@ public:
     return std::make_unique<compress_operator>(std::move(args));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{
       .type = {method_name_, location::unknown},
@@ -534,7 +534,7 @@ public:
     return std::make_unique<decompress_operator>(std::move(args));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{
       .type = {method_name_, location::unknown},

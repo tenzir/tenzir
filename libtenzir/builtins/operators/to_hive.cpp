@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/url.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -403,7 +404,7 @@ public:
 
 class plugin : public virtual operator_plugin2<to_hive> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     using namespace si_literals;
     using namespace std::literals;

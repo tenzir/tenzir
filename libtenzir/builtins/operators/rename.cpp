@@ -13,6 +13,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/inspection_common.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
 
@@ -85,7 +86,7 @@ public:
     -> caf::expected<state_type> override {
     // Step 1: Adjust field names.
     auto field_transformations = std::vector<indexed_transformation>{};
-    if (!config_.fields.empty()) {
+    if (! config_.fields.empty()) {
       for (const auto& field : config_.fields) {
         if (auto index = schema.resolve_key_or_concept_once(field.from)) {
           auto transformation
@@ -105,7 +106,7 @@ public:
     }
     // Step 2: Adjust schema names.
     std::optional<type> renamed_schema;
-    if (!config_.schemas.empty()) {
+    if (! config_.schemas.empty()) {
       const auto schema_mapping
         = std::find_if(config_.schemas.begin(), config_.schemas.end(),
                        [&](const auto& name_mapping) noexcept {
@@ -113,7 +114,7 @@ public:
                        });
       if (schema_mapping != config_.schemas.end()) {
         auto rename_schema = [&](const concrete_type auto& pruned_schema) {
-          TENZIR_ASSERT(!schema.has_attributes());
+          TENZIR_ASSERT(! schema.has_attributes());
           return type{schema_mapping->to, pruned_schema};
         };
         renamed_schema = match(schema, rename_schema);
@@ -180,7 +181,7 @@ public:
     const auto p = required_ws_or_comment >> extractor_assignment_list
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::vector<std::tuple<std::string, std::string>> parsed_assignments;
-    if (!p(f, l, parsed_assignments)) {
+    if (! p(f, l, parsed_assignments)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "

@@ -13,6 +13,7 @@
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 

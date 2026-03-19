@@ -13,6 +13,7 @@
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 

@@ -11,12 +11,14 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/type.h>
+#include <tsl/robin_map.h>
 
 #include <type_traits>
 #include <utility>
@@ -163,7 +165,7 @@ private:
 class Plugin final : public virtual operator_plugin2<enumerate_operator>,
                      public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = EnumerateArgs{};
     auto out = ast::field_path::try_from(

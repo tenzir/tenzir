@@ -55,7 +55,7 @@ struct operator_arguments {
   tls_options ssl = {};
 
   static auto try_parse(std::string operator_name,
-                        operator_factory_plugin::invocation inv, session ctx)
+                        operator_factory_invocation inv, session ctx)
     -> failure_or<operator_arguments> {
     auto res = operator_arguments{inv.self.get_location()};
     auto mode_str = located<std::string>{

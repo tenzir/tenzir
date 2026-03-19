@@ -12,8 +12,9 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/tls_options.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/util/compression.h>
@@ -379,7 +380,7 @@ struct plugin final
     return "from_opensearch";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = opensearch_args{};
     args.op = inv.self.get_location();

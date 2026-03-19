@@ -539,10 +539,17 @@ if (_tenzir_folly_include_dirs)
   target_include_directories(libtenzir_builtins BEFORE
                              PRIVATE ${_tenzir_folly_include_dirs})
 endif ()
+if (TARGET proxygen::proxygen_coro_client)
+  set(_tenzir_proxygen_target proxygen::proxygen_coro_client)
+elseif (TARGET proxygen::proxygen)
+  set(_tenzir_proxygen_target proxygen::proxygen)
+else ()
+  message(FATAL_ERROR "No supported proxygen target found")
+endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
-# without declaring the dependency. Linking it explicitly ensures the static
-# linker sees the archive.
-target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
+# without declaring the dependency. Link it explicitly so static links see the
+# archive regardless of whether proxygen comes from bundled or system packages.
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
                                         proxygen_utils_trace_event_types)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
@@ -551,10 +558,9 @@ target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
-    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>)
+    PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_target}>)
 else ()
-  target_link_libraries(libtenzir_builtins
-                        PRIVATE proxygen::proxygen_coro_client)
+  target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)

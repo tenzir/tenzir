@@ -36,8 +36,7 @@ auto get_compression_and_format(located<std::string_view> url,
   -> failure_or<compression_and_format>;
 
 template <bool is_loading>
-auto create_pipeline_from_uri(std::string path,
-                              operator_factory_plugin::invocation inv,
+auto create_pipeline_from_uri(std::string path, operator_factory_invocation inv,
                               session ctx, const char* docs)
   -> failure_or<operator_ptr>;
 } // namespace tenzir

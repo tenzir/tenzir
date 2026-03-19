@@ -12,7 +12,6 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/concept/printable/print.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 

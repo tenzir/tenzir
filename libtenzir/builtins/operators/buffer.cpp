@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
@@ -400,7 +401,7 @@ public:
     return result;
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto capacity = located<uint64_t>{};
     auto policy_str = std::optional<located<std::string>>{};

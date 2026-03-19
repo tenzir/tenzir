@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "tenzir/data.hpp"
 #include "tenzir/parser_interface.hpp"
 
 #include <string_view>
+#include <utility>
 
 namespace tenzir {
 
@@ -24,93 +24,38 @@ public:
     : token_{std::nullopt}, next_{next} {
   }
 
-  auto accept_shell_arg() -> std::optional<located<std::string>> override {
-    if (token_) {
-      auto tmp = make_located_string();
-      token_ = std::nullopt;
-      return tmp;
-    }
-    return next_.accept_shell_arg();
-  }
+  auto accept_shell_arg() -> std::optional<located<std::string>> override;
 
-  auto peek_shell_arg() -> std::optional<located<std::string>> override {
-    if (token_) {
-      return make_located_string();
-    }
-    return next_.peek_shell_arg();
-  }
+  auto peek_shell_arg() -> std::optional<located<std::string>> override;
 
-  auto accept_identifier() -> std::optional<identifier> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_identifier();
-  }
+  auto accept_identifier() -> std::optional<identifier> override;
 
-  auto peek_identifier() -> std::optional<identifier> override {
-    TENZIR_ASSERT(not token_);
-    return next_.peek_identifier();
-  }
+  auto peek_identifier() -> std::optional<identifier> override;
 
-  auto accept_equals() -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_equals();
-  }
+  auto accept_equals() -> std::optional<location> override;
 
-  auto accept_char(char c) -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_char(c);
-  }
+  auto accept_char(char c) -> std::optional<location> override;
 
-  auto peek_char(char c) -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.peek_char(c);
-  }
+  auto peek_char(char c) -> std::optional<location> override;
 
-  auto parse_operator() -> located<operator_ptr> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_operator();
-  }
+  auto parse_operator() -> located<operator_ptr> override;
 
-  auto parse_expression() -> tql::expression override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_expression();
-  }
+  auto parse_expression() -> tql::expression override;
 
-  auto parse_legacy_expression() -> located<expression> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_legacy_expression();
-  }
+  auto parse_legacy_expression() -> located<expression> override;
 
-  auto parse_extractor() -> tql::extractor override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_extractor();
-  }
+  auto parse_extractor() -> tql::extractor override;
 
-  auto parse_data() -> located<tenzir::data> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_data();
-  }
+  auto parse_data() -> located<tenzir::data> override;
 
-  auto parse_int() -> located<int64_t> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_int();
-  }
+  auto parse_int() -> located<int64_t> override;
 
-  auto at_end() -> bool override {
-    return not token_ && next_.at_end();
-  }
+  auto at_end() -> bool override;
 
-  auto current_span() -> location override {
-    if (token_) {
-      return token_->source;
-    }
-    return next_.current_span();
-  }
+  auto current_span() -> location override;
 
 private:
-  auto make_located_string() const -> located<std::string> {
-    TENZIR_ASSERT(token_);
-    return {std::string{token_->inner}, token_->source};
-  }
+  auto make_located_string() const -> located<std::string>;
 
   std::optional<located<std::string_view>> token_;
   parser_interface& next_;

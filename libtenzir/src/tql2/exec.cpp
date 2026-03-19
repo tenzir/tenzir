@@ -438,7 +438,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
       [&](ast::invocation& x) -> failure_or<void> {
         // TODO: Where do we check that this succeeds?
         TRY(auto op, ctx.reg().get(x).make(
-                       operator_factory_plugin::invocation{
+                       operator_factory_invocation{
                          std::move(x.op),
                          std::move(x.args),
                        },
@@ -459,7 +459,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         auto args = std::vector<ast::expression>{};
         args.emplace_back(std::move(x));
         TRY(auto op, plugin->make(
-                       operator_factory_plugin::invocation{
+                       operator_factory_invocation{
                          ast::entity{{ast::identifier{std::string{"set"},
                                                       location::unknown}}},
                          std::move(args),
@@ -484,7 +484,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         TENZIR_ASSERT(plugin);
         TRY(auto op,
             plugin->make(
-              operator_factory_plugin::invocation{
+              operator_factory_invocation{
                 ast::entity{{ast::identifier{std::string{"if"}, x.if_kw}}},
                 std::move(args),
               },

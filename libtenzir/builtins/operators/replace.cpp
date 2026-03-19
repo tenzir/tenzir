@@ -12,7 +12,7 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enumerate.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -326,7 +326,7 @@ private:
 };
 
 struct replace : public virtual operator_plugin2<replace_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = replace_args{};
     auto p = argument_parser2::operator_(name());

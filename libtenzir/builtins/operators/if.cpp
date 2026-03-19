@@ -685,7 +685,7 @@ public:
     return "tql2.if";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     // NOTE: This operator is never called by the user directly. Its arguments
     // are dispatched through the pipeline compilation function. Hence, we can
