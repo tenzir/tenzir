@@ -262,11 +262,11 @@ jobs:
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
               ."image-registries") |= ["ghcr.io"]' \
               <<< "${docker_config}")"
-          # Release builds additionally publish every public image to Docker Hub.
+          # Release builds additionally publish the Docker Hub community images.
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             docker_config="$(jq -c '
               (.editions[]
-               | select((."image-registries" // []) | length > 0)
+               | select(.name == "tenzir" or .name == "tenzir-node")
                | ."image-registries") += ["docker.io"] |
               (.editions[] | ."image-registries") |= unique' \
               <<< "${docker_config}")"
