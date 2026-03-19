@@ -52,8 +52,8 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result, push);
-    too_early = false;
-    if (not(sub_processing_ or done_)) {
+    cron_fired_ = true;
+    if (sub_finished_ and not done_) {
       co_await spawn(ctx);
     }
   }
@@ -61,8 +61,8 @@ public:
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(key, push);
-    sub_processing_ = false;
-    if (not(too_early or done_)) {
+    sub_finished_ = true;
+    if (cron_fired_ and not done_) {
       co_await spawn(ctx);
     }
   }
@@ -76,8 +76,8 @@ public:
 
 protected:
   auto spawn(OpCtx& ctx) -> Task<void> {
-    too_early = true;
-    sub_processing_ = true;
+    cron_fired_ = false;
+    sub_finished_ = false;
     co_await ctx.spawn_sub(next_sub_key_++, args_.pipe.inner, tag_v<void>);
   }
 
@@ -85,8 +85,8 @@ private:
   CronArgs args_;
   detail::cron::cronexpr cronexpr_;
   int64_t next_sub_key_ = 0;
-  bool too_early = true;
-  bool sub_processing_ = false;
+  bool cron_fired_ = false;
+  bool sub_finished_ = true;
   bool done_ = false;
 };
 
