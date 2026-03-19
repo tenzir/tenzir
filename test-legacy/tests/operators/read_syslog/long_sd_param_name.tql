@@ -1,0 +1,5 @@
+from {
+  line: r#"<134>1 2026-03-18T11:00:51.194137+01:00 HOSTNAME abc 9043 23003147 [F5@12276 thx_f5_for_ignoring_the_32_char_limit_in_structured_data="thx"] broken example"#,
+}
+write_lines
+read_syslog
