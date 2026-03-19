@@ -256,12 +256,19 @@ jobs:
             .github/workflows/docker-config-base.json \
             --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
             --args -- "${tags[@]}")"
-          # Clear push repos in case we're in a PR, but push the community
-          # edition to ghcr.
+          # PRs only publish the community images to GHCR.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
               ."image-registries") |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
+          # Release builds additionally publish every public image to Docker Hub.
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            docker_config="$(jq -c '
+              (.editions[]
+               | select((."image-registries" // []) | length > 0)
+               | ."image-registries") += ["docker.io"] |
+              (.editions[] | ."image-registries") |= unique' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
