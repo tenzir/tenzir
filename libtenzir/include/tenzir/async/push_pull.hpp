@@ -11,6 +11,7 @@
 #include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
 
 namespace tenzir {
 
@@ -21,8 +22,9 @@ public:
   /// Destruction must eventually lead the associated `Pull` to return `None`.
   virtual ~Push() = default;
 
+  /// Push an output value. Returns `Err(output)` when downstream has closed.
   /// Unless documented otherwise, this is not safe to call concurrently.
-  virtual auto operator()(T output) -> Task<void> = 0;
+  virtual auto operator()(T output) -> Task<Result<void, T>> = 0;
 };
 
 /// A type-erased, asynchronous receiver.

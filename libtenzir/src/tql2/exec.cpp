@@ -623,7 +623,7 @@ public:
     : sender_{std::move(sender)}, stats_{std::move(stats)} {
   }
 
-  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+  auto operator()(OperatorMsg<T> x) -> Task<Result<void, OperatorMsg<T>>> override {
     stats_->in.bytes.fetch_add(count_bytes(x), std::memory_order::relaxed);
     if (is<Signal>(x)) {
       stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
@@ -632,6 +632,7 @@ public:
       stats_->in.events.fetch_add(count_events(x), std::memory_order::relaxed);
     }
     co_await sender_.send(std::move(x));
+    co_return {};
   }
 
 private:
@@ -802,7 +803,10 @@ public:
       mutex_{Locked{}} {
   }
 
-  auto send(OperatorMsg<T> x) -> Task<void> {
+  auto send(OperatorMsg<T> x) -> Task<Result<void, OperatorMsg<T>>> {
+    if (receiver_closed_.load(std::memory_order::acquire)) {
+      co_return Err{std::move(x)};
+    }
     auto bytes = count_bytes(x);
     // Update profiling counters.
     if (stats_.is_some()) {
@@ -841,6 +845,7 @@ public:
       // The cascade propagates until all eligible senders have exited.
       notify_send_.notify_one();
     }
+    co_return {};
   }
 
   auto receive() -> Task<Option<OperatorMsg<T>>> {
@@ -884,6 +889,11 @@ public:
     notify_receive_.notify_one();
   }
 
+  void close_receiver() {
+    receiver_closed_.store(true, std::memory_order::release);
+    notify_send_.notify_one();
+  }
+
 private:
   struct Locked {
     size_t current_bytes = 0;
@@ -898,7 +908,9 @@ private:
   Notify notify_send_;
   Notify notify_receive_;
   std::atomic<bool> sender_closed_ = false;
+  std::atomic<bool> receiver_closed_ = false;
 };
+
 
 template <class T>
 class OpPush final : public Push<OperatorMsg<T>> {
@@ -917,9 +929,9 @@ public:
   OpPush(const OpPush&) = delete;
   OpPush& operator=(const OpPush&) = delete;
 
-  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+  auto operator()(OperatorMsg<T> x) -> Task<Result<void, OperatorMsg<T>>> override {
     TENZIR_ASSERT(shared_);
-    return shared_->send(std::move(x));
+    co_return co_await shared_->send(std::move(x));
   }
 
 private:
@@ -933,7 +945,11 @@ public:
     : shared_{std::move(shared)} {
   }
 
-  ~OpPull() override = default;
+  ~OpPull() override {
+    if (shared_) {
+      shared_->close_receiver();
+    }
+  }
   OpPull(OpPull&&) = default;
   OpPull& operator=(OpPull&&) = default;
   OpPull(const OpPull&) = delete;

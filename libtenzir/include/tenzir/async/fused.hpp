@@ -119,8 +119,9 @@ public:
   explicit FusedPush(FusedSender<T> sender) : sender_{std::move(sender)} {
   }
 
-  auto operator()(T x) -> Task<void> override {
-    return sender_.send(std::move(x));
+  auto operator()(T x) -> Task<Result<void, T>> override {
+    co_await sender_.send(std::move(x));
+    co_return {};
   }
 
 private:

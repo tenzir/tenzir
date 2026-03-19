@@ -8,22 +8,14 @@
 
 #include "tenzir/async/executor.hpp"
 
-#include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
-#include "tenzir/async/fused.hpp"
 #include "tenzir/async/mail.hpp"
-#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
-#include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
-#include "tenzir/connect_to_node.hpp"
-#include "tenzir/connector.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
-#include "tenzir/time.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
@@ -214,8 +206,12 @@ public:
   explicit OpPushWrapper(Push<OperatorMsg<T>>& push) : push_{push} {
   }
 
-  virtual auto operator()(T output) -> Task<void> override {
-    return push_(std::move(output));
+  auto operator()(T output) -> Task<Result<void, T>> override {
+    auto result = co_await push_(std::move(output));
+    if (result.is_err()) {
+      co_return Err{as<T>(std::move(result).unwrap_err())};
+    }
+    co_return {};
   }
 
 private:
@@ -246,6 +242,10 @@ struct ExplicitAny {
   Any value;
 };
 
+struct FinalizeResult {
+  FinalizeBehavior behavior;
+};
+
 template <class Input>
 struct SubPipeline {
   SubPipeline(Box<Push<OperatorMsg<Input>>> push,
@@ -263,14 +263,13 @@ public:
   using variant::variant;
 
   auto send(Signal signal) -> Task<void> {
-    return co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
-      if (not self.push) {
-        return std::invoke([] -> Task<void> {
-          co_return;
-        });
-      }
-      return (*self.push)(std::move(signal));
-    });
+    co_await co_match(*this,
+                      [&]<class Input>(SubPipeline<Input>& self) -> Task<void> {
+                        if (not self.push) {
+                          co_return;
+                        }
+                        (co_await (*self.push)(std::move(signal))).ignore();
+                      });
   }
 
   auto send(FromControl from_control) -> Task<void> {
@@ -873,10 +872,20 @@ private:
     });
   }
 
+  /// Close the upstream pull handle. This triggers `close_receiver()` on the
+  /// upstream channel, causing the upstream operator's push to return `Err`.
+  void close_pull_upstream() {
+    pull_upstream_ = None{};
+  }
+
   /// Pull one message from upstream, converting to AnyOperatorMsg.
   auto pull_upstream() -> Task<Option<AnyOperatorMsg>> {
-    return co_match(
-      pull_upstream_, [](auto& pull) -> Task<Option<AnyOperatorMsg>> {
+    if (pull_upstream_.is_none()) {
+      co_return {};
+    }
+    auto& pull = pull_upstream_.unwrap();
+    co_return co_await co_match(
+      pull, [](auto& pull) -> Task<Option<AnyOperatorMsg>> {
         auto result = co_await (*pull)();
         if (not result) {
           co_return {};
@@ -892,7 +901,7 @@ private:
     co_await co_match(
       push_downstream_,
       [&]<class T>(Box<Push<OperatorMsg<T>>>& push) -> Task<void> {
-        co_await push(std::move(signal));
+        (co_await push(std::move(signal))).ignore();
       });
   }
 
@@ -1285,9 +1294,18 @@ private:
     if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
-    // Then finalize the operator, which can still produce output.
-    auto b = co_await call_finalize();
-    if (b == FinalizeBehavior::continue_) {
+    // Close the upstream pull handle. This closes the channel from the
+    // receiver side, causing the upstream operator's push to return Err.
+    close_pull_upstream();
+    // Spawn finalize as a queue task so the runner stays responsive to
+    // control messages (e.g. Stop) while finalize runs.
+    queue_.spawn([this] -> Task<FinalizeResult> {
+      co_return FinalizeResult{co_await call_finalize()};
+    });
+  }
+
+  auto process(FinalizeResult result) -> Task<void> {
+    if (result.behavior == FinalizeBehavior::continue_) {
       is_done_ = false;
       co_return;
     }
@@ -1339,7 +1357,7 @@ private:
   }
 
   AnyOperator op_;
-  AnyOpPull pull_upstream_;
+  Option<AnyOpPull> pull_upstream_;
   AnyOpPush push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
@@ -1364,7 +1382,7 @@ private:
   AsyncScope* operator_scope_ = nullptr;
 
   QueueScope<variant<ExplicitAny, Option<AnyOperatorMsg>, Option<FromControl>,
-                     SubPipelineEvent>>
+                     SubPipelineEvent, FinalizeResult>>
     queue_;
   bool got_shutdown_request_ = false;
   bool upstream_done_ = false;
@@ -1448,7 +1466,7 @@ public:
 
 private:
   auto spawn_operators() -> void {
-    auto next_input = std::move(pull_upstream_);
+    auto next_input = std::move(pull_upstream_).unwrap();
     // TODO: Polish this.
     for (auto& op : operators_) {
       auto index = detail::narrow<size_t>(&op - operators_.data());
@@ -1609,7 +1627,7 @@ private:
   }
 
   std::vector<AnyOperator> operators_;
-  AnyOpPull pull_upstream_;
+  Option<AnyOpPull> pull_upstream_;
   AnyOpPush push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;

@@ -30,7 +30,7 @@ auto empty(const table_slice& slice) -> bool {
 }
 
 auto empty(const chunk_ptr& chunk) -> bool {
-  return !chunk || chunk->size() == 0;
+  return ! chunk || chunk->size() == 0;
 }
 
 class repeat_operator final : public crtp_operator<repeat_operator> {
@@ -104,7 +104,7 @@ public:
       buffer_.push_back(input);
     }
     // Always emit the input during first pass
-    co_await push(std::move(input));
+    (co_await push(std::move(input))).ignore();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -113,10 +113,12 @@ public:
     if (buffer_.empty()) {
       co_return FinalizeBehavior::done;
     }
-    // Emit cached data count-1 more times
+    // Emit cached data count-1 more times. Stop early if downstream closed.
     for (auto i = uint64_t{1}; i < count_; ++i) {
       for (const auto& slice : buffer_) {
-        co_await push(slice);
+        if ((co_await push(slice)).is_err()) {
+          co_return FinalizeBehavior::done;
+        }
       }
     }
     co_return FinalizeBehavior::done;
