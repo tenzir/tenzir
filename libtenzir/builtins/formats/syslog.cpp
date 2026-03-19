@@ -132,7 +132,7 @@ struct parameter_parser : parser_base<parameter_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using parsers::printable, parsers::rep, parsers::ch;
     // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
+    auto key = +(printable - '=' - ' ' - ']' - '"');
     // \ is used to escape characters.
     auto esc = ignore(ch<'\\'>);
     // ], ", \ must be escaped.
@@ -207,7 +207,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     using namespace parser_literals;
     // space, =, ", and ] are not allowed in the key of the parameter.
     auto key_char = printable - '='_p - ' '_p - ']'_p - '"'_p;
-    auto key = rep(key_char, 1, 32);
+    auto key = +key_char;
     auto checkpoint_key_char = key_char - ':'_p;
     auto non_terminal_colon = ch<':'> >> ! '"'_p;
     auto checkpoint_key
