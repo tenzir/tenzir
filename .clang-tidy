@@ -21,6 +21,7 @@ Checks: >
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-static-cast-downcast,
   -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-avoid-capturing-lambda-coroutines,
   -fuchsia-*,
   -google-*,
   -hicpp-*,

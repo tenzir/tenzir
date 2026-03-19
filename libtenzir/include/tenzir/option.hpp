@@ -35,10 +35,6 @@ template <class T>
 class OptionStorage {
 public:
   OptionStorage() noexcept = default;
-  explicit OptionStorage(T value) noexcept(
-    std::is_nothrow_move_constructible_v<T>)
-    : inner_{std::move(value)} {
-  }
   explicit OptionStorage(std::optional<T> opt) noexcept(
     std::is_nothrow_move_constructible_v<std::optional<T>>)
     : inner_{std::move(opt)} {
@@ -110,8 +106,9 @@ public:
              and not std::same_as<std::remove_cvref_t<U>, std::optional<T>>)
   explicit(not std::convertible_to<U, T>)
     Option(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>
-                               and std::is_nothrow_constructible_v<Storage, T>)
-    : storage_{T{std::forward<U>(value)}} {
+                               and std::is_nothrow_constructible_v<Storage,
+                                                                    std::optional<T>>)
+    : storage_{std::optional<T>{T{std::forward<U>(value)}}} {
   }
 
   /// Constructs from a reference (reference `T` only).
@@ -132,6 +129,25 @@ public:
   explicit(false) Option(std::optional<U> opt) noexcept(
     std::is_nothrow_constructible_v<Storage, std::optional<U>>)
     : storage_{std::move(opt)} {
+  }
+
+  /// Constructs from an `Option<U>` that is convertible.
+  template <class U>
+    requires std::convertible_to<U&, T>
+  explicit(false) Option(Option<U>& other)
+    : storage_{other ? Storage{static_cast<T>(*other)} : Storage{}} {
+  }
+
+  template <class U>
+    requires std::convertible_to<const U&, T>
+  explicit(false) Option(const Option<U>& other)
+    : storage_{other ? Storage{static_cast<T>(*other)} : Storage{}} {
+  }
+
+  template <class U>
+    requires std::convertible_to<U, T>
+  explicit(false) Option(Option<U>&& other)
+    : storage_{other ? Storage{static_cast<T>(std::move(*other))} : Storage{}} {
   }
 
   // -- Assignment -------------------------------------------------------------

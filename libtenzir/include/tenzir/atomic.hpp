@@ -11,6 +11,7 @@
 
 namespace tenzir {
 
+/// A `std::atomic<T>` that is movable and copyable (with relaxed order).
 template <class T>
 class Atomic {
 public:
@@ -22,7 +23,7 @@ public:
 
   template <class U>
     requires std::constructible_from<T, U>
-  constexpr explicit Atomic(U desired) noexcept
+  constexpr explicit(false) Atomic(U desired) noexcept
     : data_{static_cast<T>(desired)} {
   }
 
