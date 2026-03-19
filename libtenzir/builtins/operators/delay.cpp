@@ -281,7 +281,7 @@ public:
         if (delay > duration::zero()) {
           if (end > begin) {
             // emit data points before current
-            co_await push(subslice(input, begin, end));
+            (co_await push(subslice(input, begin, end))).ignore();
             begin = end;
           }
           co_await sleep_for(delay);
@@ -290,7 +290,7 @@ public:
         ++end;
       }
     }
-    co_await push(subslice(input, begin, end));
+    (co_await push(subslice(input, begin, end))).ignore();
   }
 
   auto snapshot(Serde& serde) -> void override {

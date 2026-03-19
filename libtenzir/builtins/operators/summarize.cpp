@@ -825,7 +825,7 @@ public:
     TENZIR_UNUSED(ctx);
     co_await flush(push);
     for (auto& slice : impl_->finish(provider_->as_session())) {
-      co_await push(std::move(slice));
+      (co_await push(std::move(slice))).ignore();
     }
     co_return FinalizeBehavior::done;
   }
@@ -869,7 +869,7 @@ private:
       co_return;
     }
     for (auto& slice : impl_->flush(provider_->as_session())) {
-      co_await push(std::move(slice));
+      (co_await push(std::move(slice))).ignore();
     }
   }
 

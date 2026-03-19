@@ -90,7 +90,7 @@ public:
     offset_ += rows;
     const auto datum = check(arrow::compute::Take(batch, stride_index));
     TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
-    co_await push(table_slice{datum.record_batch(), input.schema()});
+    (co_await push(table_slice{datum.record_batch(), input.schema()})).ignore();
   }
 
 private:

@@ -50,10 +50,10 @@ public:
       }
       if (skip > 0) {
         // Partial first slice - skip some rows from front
-        co_await push(tenzir::tail(slice, slice.rows() - skip));
+        (co_await push(tenzir::tail(slice, slice.rows() - skip))).ignore();
         skip = 0;
       } else {
-        co_await push(std::move(slice));
+        (co_await push(std::move(slice))).ignore();
       }
     }
     co_return FinalizeBehavior::done;

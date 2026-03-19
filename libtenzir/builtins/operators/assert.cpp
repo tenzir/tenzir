@@ -48,7 +48,7 @@ public:
         continue;
       }
       if (array->true_count() == array->length()) {
-        co_await push(subslice(input, offset, offset + array->length()));
+        (co_await push(subslice(input, offset, offset + array->length()))).ignore();
         offset += array->length();
         continue;
       }
@@ -106,7 +106,7 @@ public:
         print_messages(offset + current_begin, offset + length);
       }
       if (not results.empty()) {
-        co_await push(concatenate(std::move(results)));
+        (co_await push(concatenate(std::move(results)))).ignore();
       }
       offset += length;
     }

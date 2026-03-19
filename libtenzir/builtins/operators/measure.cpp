@@ -183,7 +183,8 @@ public:
     } else {
       metric.field("schema", input.schema().name());
     }
-    co_await push(builder_.finish_assert_one_slice("tenzir.measure.events"));
+    (co_await push(builder_.finish_assert_one_slice("tenzir.measure.events")))
+      .ignore();
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -213,7 +214,8 @@ public:
     metric.field("timestamp", time::clock::now());
     metric.field("bytes", counter_);
 
-    co_await push(builder_.finish_assert_one_slice("tenzir.measure.bytes"));
+    (co_await push(builder_.finish_assert_one_slice("tenzir.measure.bytes")))
+      .ignore();
   }
 
   auto snapshot(Serde& serde) -> void override {

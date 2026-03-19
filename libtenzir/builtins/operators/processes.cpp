@@ -84,7 +84,7 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(result);
     if (auto output = make_processes(ctx.dh())) {
-      co_await push(std::move(*output));
+      (co_await push(std::move(*output))).ignore();
     }
     done_ = true;
   }

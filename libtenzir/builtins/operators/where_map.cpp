@@ -844,7 +844,7 @@ public:
     -> Task<void> override {
     auto output = filter2(input, expr_, ctx, false);
     if (output.rows() > 0) {
-      co_await push(std::move(output));
+      (co_await push(std::move(output))).ignore();
     }
   }
 

@@ -1497,7 +1497,7 @@ public:
       if (out.rows() == 0) {
         continue;
       }
-      co_await push(std::move(out));
+      (co_await push(std::move(out))).ignore();
     }
   }
 
@@ -1525,7 +1525,7 @@ public:
       if (out.rows() == 0) {
         continue;
       }
-      co_await push(std::move(out));
+      (co_await push(std::move(out))).ignore();
     }
   }
 
@@ -1550,7 +1550,7 @@ public:
       if (out.rows() == 0) {
         continue;
       }
-      co_await push(std::move(out));
+      (co_await push(std::move(out))).ignore();
     }
   }
 

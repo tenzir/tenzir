@@ -129,7 +129,7 @@ public:
           .primary(selector_)
           .emit(ctx.dh());
       }
-      co_await push(std::move(input));
+      (co_await push(std::move(input))).ignore();
       co_return;
     }
     // map values
@@ -154,7 +154,7 @@ public:
     auto times = series{time_type{}, finish(*b)};
     // output
     auto output = assign(selector_, std::move(times), input, ctx.dh());
-    co_await push(std::move(output));
+    (co_await push(std::move(output))).ignore();
   }
 
   auto snapshot(Serde& serde) -> void override {

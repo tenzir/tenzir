@@ -105,7 +105,7 @@ public:
                                &table_slice::schema);
     }
     for (auto& result : rebatch(std::move(results))) {
-      co_await push(std::move(result));
+      (co_await push(std::move(result))).ignore();
     }
   }
 

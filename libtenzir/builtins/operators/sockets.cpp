@@ -83,7 +83,7 @@ public:
       done_ = true;
       co_return;
     }
-    co_await push(system->sockets());
+    (co_await push(system->sockets())).ignore();
     done_ = true;
   }
 

@@ -150,7 +150,7 @@ public:
       TENZIR_ASSERT(buffers_.size() == 1);
       auto& entry = buffers_.begin()->second;
       TENZIR_ASSERT(entry.num_buffered < limit_);
-      co_await push(concatenate(std::move(entry.events)));
+      (co_await push(concatenate(std::move(entry.events)))).ignore();
       buffers_.clear();
     }
     // get buffer and append
@@ -164,7 +164,7 @@ public:
       auto result = concatenate(std::move(lhs));
       entry.num_buffered -= result.rows();
       entry.start_time = std::chrono::steady_clock::now();
-      co_await push(std::move(result));
+      (co_await push(std::move(result))).ignore();
       entry.events = std::move(rhs);
     }
     if (entry.num_buffered == 0) {
@@ -222,7 +222,7 @@ private:
     const auto now = std::chrono::steady_clock::now();
     for (auto it = buffers_.begin(); it != buffers_.end();) {
       if (now - it->second.start_time >= timeout_) {
-        co_await push(concatenate(std::exchange(it->second.events, {})));
+        (co_await push(concatenate(std::exchange(it->second.events, {})))).ignore();
         it = buffers_.erase(it);
       } else {
         ++it;
@@ -244,7 +244,7 @@ private:
     // sort by start time for consistent output ordering
     std::ranges::sort(to_flush, {}, &buffer_entry::start_time);
     for (auto& entry : to_flush) {
-      co_await push(concatenate(std::move(entry.events)));
+      (co_await push(concatenate(std::move(entry.events)))).ignore();
     }
   }
 

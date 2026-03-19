@@ -82,7 +82,7 @@ public:
     if (remaining != 0) {
       auto result = head(std::move(input), remaining);
       it->second -= result.rows();
-      co_await push(std::move(result));
+      (co_await push(std::move(result))).ignore();
     }
   }
 

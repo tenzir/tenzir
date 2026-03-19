@@ -518,7 +518,7 @@ public:
     auto output = deduplicate_slice(input, cfg_, cleanup_duration_, states_,
                                     row_, last_cleanup_time_, ctx);
     if (output.rows() > 0) {
-      co_await push(std::move(output));
+      (co_await push(std::move(output))).ignore();
     }
   }
 

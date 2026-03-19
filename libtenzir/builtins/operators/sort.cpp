@@ -702,11 +702,11 @@ public:
     for (auto const& [slice_idx, event_idx] : indices_) {
       if (not batch.empty()
           and batch.back().schema() != events_[slice_idx].schema()) {
-        co_await push(concatenate(std::exchange(batch, {})));
+        (co_await push(concatenate(std::exchange(batch, {})))).ignore();
         batch_rows = 0;
       }
       if (batch_rows >= defaults::import::table_slice_size) {
-        co_await push(concatenate(std::exchange(batch, {})));
+        (co_await push(concatenate(std::exchange(batch, {})))).ignore();
         batch_rows = 0;
       }
       // TODO: This excessive slicing is quite bad for performance. We could
@@ -715,7 +715,7 @@ public:
       batch_rows += 1;
     }
     if (not batch.empty()) {
-      co_await push(concatenate(std::move(batch)));
+      (co_await push(concatenate(std::move(batch)))).ignore();
     }
     co_return FinalizeBehavior::done;
   }

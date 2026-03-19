@@ -129,7 +129,7 @@ public:
                                                       cast->array->fields()),
                              schema};
     read_bytes_counter_.add(slice.approx_bytes());
-    co_await push(std::move(slice));
+    (co_await push(std::move(slice))).ignore();
     next_ += 1;
   }
 

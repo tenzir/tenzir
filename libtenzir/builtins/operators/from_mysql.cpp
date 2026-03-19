@@ -2014,7 +2014,7 @@ private:
         emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         co_return false;
       }
-      co_await push(std::move(*slice_result).unwrap());
+      (co_await push(std::move(*slice_result).unwrap())).ignore();
     }
     co_return true;
   }
@@ -2196,7 +2196,7 @@ public:
         emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         break;
       }
-      co_await push(std::move(*slice_result).unwrap());
+      (co_await push(std::move(*slice_result).unwrap())).ignore();
     }
     done_ = true;
     co_await close_client(ctx);

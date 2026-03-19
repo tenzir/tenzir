@@ -121,7 +121,7 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(result, ctx);
     for (auto&& slice : make_plugins()) {
-      co_await push(std::move(slice));
+      (co_await push(std::move(slice))).ignore();
     }
     done_ = true;
   }

@@ -287,7 +287,7 @@ public:
     }
     auto slices = build_output(ctx.dh());
     for (auto&& slice : slices) {
-      co_await push(std::move(slice));
+      (co_await push(std::move(slice))).ignore();
     }
     co_return FinalizeBehavior::done;
   }

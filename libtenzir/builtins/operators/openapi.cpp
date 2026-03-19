@@ -140,7 +140,7 @@ public:
     TENZIR_UNUSED(result, ctx);
     auto builder = series_builder{};
     builder.data(openapi_record());
-    co_await push(builder.finish_assert_one_slice("tenzir.openapi"));
+    (co_await push(builder.finish_assert_one_slice("tenzir.openapi"))).ignore();
     done_ = true;
   }
 

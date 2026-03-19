@@ -42,7 +42,7 @@ class Pass final : public Operator<table_slice, table_slice> {
 public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    co_await push(std::move(input));
+    (co_await push(std::move(input))).ignore();
   }
 };
 
@@ -1845,6 +1845,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   LOGI("end of data is leaving pipeline");
                 },
                 [&](Checkpoint checkpoint) {
+                  TENZIR_UNUSED(checkpoint);
                   LOGI("checkpoint {} is leaving pipeline", checkpoint.id);
                 });
             });

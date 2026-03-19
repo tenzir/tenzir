@@ -184,7 +184,7 @@ public:
     TENZIR_WARN("processing task with count == {}", count_);
     TENZIR_ASSERT(count_ < total);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
-    co_await push(slice);
+    (co_await push(slice)).ignore();
     count_ += 1;
   }
 

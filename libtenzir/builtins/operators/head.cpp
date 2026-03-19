@@ -29,7 +29,7 @@ public:
     auto result = tenzir::head(input, remaining_);
     TENZIR_ASSERT(result.rows() <= remaining_);
     remaining_ -= result.rows();
-    co_await push(std::move(result));
+    (co_await push(std::move(result))).ignore();
   }
 
   auto state() -> OperatorState override {

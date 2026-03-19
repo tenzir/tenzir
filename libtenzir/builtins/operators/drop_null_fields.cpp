@@ -213,7 +213,7 @@ public:
     -> Task<void> override {
     auto output = drop_null_fields_impl(std::move(input), selectors_, ctx.dh());
     for (auto& slice : output) {
-      co_await push(std::move(slice));
+      (co_await push(std::move(slice))).ignore();
     }
   }
 

@@ -28,7 +28,7 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_await push(std::move(input));
+    (co_await push(std::move(input))).ignore();
   }
 };
 
@@ -40,7 +40,7 @@ public:
   auto process(chunk_ptr input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_await push(std::move(input));
+    (co_await push(std::move(input))).ignore();
   }
 };
 

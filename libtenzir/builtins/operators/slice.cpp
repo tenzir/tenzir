@@ -365,7 +365,7 @@ public:
     // Streaming mode: positive begin, positive end, positive stride
     auto result = process_streaming(std::move(input));
     if (result.rows() > 0) {
-      co_await push(std::move(result));
+      (co_await push(std::move(result))).ignore();
     }
   }
 
@@ -483,7 +483,7 @@ private:
         result = apply_positive_stride(std::move(result), stride);
       }
       if (result.rows() > 0) {
-        co_await push(std::move(result));
+        (co_await push(std::move(result))).ignore();
       }
     }
   }
@@ -513,7 +513,7 @@ private:
         = apply_negative_stride(std::move(slice), stride, reverse_offset);
       reverse_offset += rows;
       if (result.rows() > 0) {
-        co_await push(std::move(result));
+        (co_await push(std::move(result))).ignore();
       }
     }
   }

@@ -1030,7 +1030,7 @@ public:
       done_ = true;
       co_return;
     }
-    co_await push(std::move(*expected));
+    (co_await push(std::move(*expected))).ignore();
     ++read_offset_;
   }
 
@@ -1138,7 +1138,7 @@ public:
       done_ = true;
       co_return;
     }
-    co_await push(std::move(*expected));
+    (co_await push(std::move(*expected))).ignore();
     ++read_offset_;
   }
 
@@ -1178,7 +1178,7 @@ public:
       if (result->rows() == 0) {
         break;
       }
-      co_await push(std::move(*result));
+      (co_await push(std::move(*result))).ignore();
       ++read_offset_;
     }
     done_ = true;

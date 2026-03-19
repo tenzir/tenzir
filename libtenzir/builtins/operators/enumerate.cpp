@@ -148,7 +148,7 @@ public:
     }
     auto output = assign(args_.out, series{int64_type{}, finish(*builder)},
                          input, ctx, assign_position::front);
-    co_await push(std::move(output));
+    (co_await push(std::move(output))).ignore();
   }
 
   auto snapshot(Serde& serde) -> void override {

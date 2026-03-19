@@ -143,12 +143,12 @@ public:
       co_return;
     }
     if (not remainder_) {
-      co_await push(std::move(*expected));
+      (co_await push(std::move(*expected))).ignore();
       co_return;
     }
     auto output = filter2(*expected, *remainder_, ctx, false);
     if (output.rows() > 0) {
-      co_await push(std::move(output));
+      (co_await push(std::move(output))).ignore();
     }
   }
 
