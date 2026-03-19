@@ -1,0 +1,10 @@
+error: `null_value` and `list_separator` conflict
+ --> tests/operators/xsv/error_csv_list_null_overlap.tql:6:44
+  |
+6 |   read_csv list_separator="ab", null_value="a"
+  |                                            ^^^ 
+  ⋮
+6 |   read_csv list_separator="ab", null_value="a"
+  |                           ^^^^ 
+  |
+  = note: `a` is a substring of `ab`
