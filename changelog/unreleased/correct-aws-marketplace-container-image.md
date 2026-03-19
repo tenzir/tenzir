@@ -1,6 +1,6 @@
 ---
 title: Correct AWS Marketplace container image
-type: bugfix
+type: change
 author: lava
 pr: 5925
 created: 2026-03-19T10:11:21.195262Z
