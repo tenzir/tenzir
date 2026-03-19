@@ -121,7 +121,6 @@ public:
 
   /// Cancel all remaining tasks.
   auto cancel() -> void {
-    // TODO: Does this also cancel the main task of the scope?
     data_.cancel_source.requestCancellation();
   }
 
