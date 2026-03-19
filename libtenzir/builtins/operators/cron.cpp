@@ -46,21 +46,25 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     co_await sleep_until_next_cron(cronexpr_);
-    sleep_done_ = true;
     co_return {};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result, push);
-    co_await maybe_spawn(ctx);
+    too_early = false;
+    if (not sub_processing_ and not done_) {
+      co_await spawn(ctx);
+    }
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(key, push);
     sub_processing_ = false;
-    co_await maybe_spawn(ctx);
+    if (not too_early and not done_) {
+      co_await spawn(ctx);
+    }
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -72,22 +76,16 @@ public:
 
 protected:
   auto spawn(OpCtx& ctx) -> Task<void> {
-    sleep_done_ = false;
+    too_early = true;
     sub_processing_ = true;
     co_await ctx.spawn_sub(next_sub_key_++, args_.pipe.inner, tag_v<void>);
-  }
-
-  auto maybe_spawn(OpCtx& ctx) -> Task<void> {
-    if (sleep_done_ and not sub_processing_ and not done_) {
-      co_await spawn(ctx);
-    }
   }
 
 private:
   CronArgs args_;
   detail::cron::cronexpr cronexpr_;
   int64_t next_sub_key_ = 0;
-  mutable bool sleep_done_ = false;
+  bool too_early = true;
   bool sub_processing_ = false;
   bool done_ = false;
 };
