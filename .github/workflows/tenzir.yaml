@@ -65,7 +65,6 @@ jobs:
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
-      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -472,7 +471,7 @@ jobs:
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
-  push-manifest-slim:
+  docker-slim:
     name: Push tenzir-slim docker manifest
     needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
     uses: ./.github/workflows/push-manifest.yaml
