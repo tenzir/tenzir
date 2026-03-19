@@ -133,9 +133,21 @@ public:
 
   /// Constructs from an `Option<U>` that is convertible.
   template <class U>
+    requires std::convertible_to<U&, T>
+  explicit(false) Option(Option<U>& other)
+    : storage_{other ? Storage{static_cast<T>(*other)} : Storage{}} {
+  }
+
+  template <class U>
+    requires std::convertible_to<const U&, T>
+  explicit(false) Option(const Option<U>& other)
+    : storage_{other ? Storage{static_cast<T>(*other)} : Storage{}} {
+  }
+
+  template <class U>
     requires std::convertible_to<U, T>
-  explicit(false) Option(Option<U> other)
-    : storage_{other ? std::optional<T>{std::move(*other)} : std::nullopt} {
+  explicit(false) Option(Option<U>&& other)
+    : storage_{other ? Storage{static_cast<T>(std::move(*other))} : Storage{}} {
   }
 
   // -- Assignment -------------------------------------------------------------
