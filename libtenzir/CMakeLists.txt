@@ -547,14 +547,10 @@ else ()
   message(FATAL_ERROR "No supported proxygen target found")
 endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
-# without declaring the dependency. Linking it explicitly is only necessary for
-# the bundled/static Facebook libs build.
-if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
-  target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
-                                          proxygen_utils_trace_event_types)
-else ()
-  target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
-endif ()
+# without declaring the dependency. Link it explicitly so static links see the
+# archive regardless of whether proxygen comes from bundled or system packages.
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
+                                        proxygen_utils_trace_event_types)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
