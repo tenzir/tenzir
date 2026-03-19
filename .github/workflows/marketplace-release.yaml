@@ -46,7 +46,7 @@ jobs:
           else
             # workflow_run trigger - extract from head_branch
             RELEASE_TAG="${{ github.event.workflow_run.head_branch }}"
-            IMAGE="ghcr.io/tenzir/tenzir:${RELEASE_TAG}"
+            IMAGE="ghcr.io/tenzir/tenzir-node:${RELEASE_TAG}"
           fi
           echo "release_tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
           echo "image=${IMAGE}" >> $GITHUB_OUTPUT
