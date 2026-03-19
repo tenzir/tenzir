@@ -4,11 +4,11 @@ permissions:
   id-token: write
 
 on:
-  # Trigger after the main CI workflow completes for releases
+  # Trigger after the main CI workflow completes.
+  # The job-level `if` condition restricts this to release events.
   workflow_run:
     workflows: ["Tenzir"]
     types: [completed]
-    branches: [main]
 
   # Manual dispatch for testing.
   workflow_dispatch:
