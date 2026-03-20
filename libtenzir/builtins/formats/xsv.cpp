@@ -1074,11 +1074,11 @@ public:
         }
       }
       begin = current + 1;
+      for (auto& slice : msb_->yield_ready_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
     }
     buffer_.append(begin, end);
-    for (auto& slice : msb_->yield_ready_as_table_slice()) {
-      co_await push(std::move(slice));
-    }
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
