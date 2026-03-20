@@ -439,7 +439,7 @@ struct ReadXsvArgs {
   bool schema_only = false;
   bool raw = false;
   std::optional<located<std::string>> unflatten_separator = {};
-  bool merge = false;
+  bool merge = true;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
 };
@@ -1290,32 +1290,31 @@ public:
         (void)check_no_substrings(dh, {{"field_separator", fs},
                                        {"list_separator", ls},
                                        {"null_value", nv}});
-        if (auto qs = ctx.get(common.quotes)) {
-          for (const char q : qs->inner) {
-            if (fs.inner.find(q) != std::string::npos) {
-              diagnostic::error("quote character `{}` conflicts with "
-                                "`field_separator=\"{}\"`",
-                                q, fs.inner)
-                .primary(qs->source)
-                .primary(fs.source)
-                .emit(ctx);
-            }
-            if (ls.inner.find(q) != std::string::npos) {
-              diagnostic::error("quote character `{}` conflicts with "
-                                "`list_separator=\"{}\"`",
-                                q, ls.inner)
-                .primary(qs->source)
-                .primary(ls.source)
-                .emit(ctx);
-            }
-            if (nv.inner.find(q) != std::string::npos) {
-              diagnostic::error("quote character `{}` conflicts with "
-                                "`null_value=\"{}\"`",
-                                q, nv.inner)
-                .primary(qs->source)
-                .primary(nv.source)
-                .emit(ctx);
-            }
+        auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
+        for (const char q : qs.inner) {
+          if (fs.inner.find(q) != std::string::npos) {
+            diagnostic::error("quote character `{}` conflicts with "
+                              "`field_separator=\"{}\"`",
+                              q, fs.inner)
+              .primary(qs.source)
+              .primary(fs.source)
+              .emit(ctx);
+          }
+          if (ls.inner.find(q) != std::string::npos) {
+            diagnostic::error("quote character `{}` conflicts with "
+                              "`list_separator=\"{}\"`",
+                              q, ls.inner)
+              .primary(qs.source)
+              .primary(ls.source)
+              .emit(ctx);
+          }
+          if (nv.inner.find(q) != std::string::npos) {
+            diagnostic::error("quote character `{}` conflicts with "
+                              "`null_value=\"{}\"`",
+                              q, nv.inner)
+              .primary(qs.source)
+              .primary(nv.source)
+              .emit(ctx);
           }
         }
         if (auto sc = ctx.get(common.schema);
@@ -1401,32 +1400,31 @@ public:
         (void)check_no_substrings(ctx, {{"list_separator", *ls},
                                         {"null_value", *nv}});
       }
-      if (auto qs = ctx.get(common.quotes)) {
-        for (const char q : qs->inner) {
-          if (fs_loc.inner.find(q) != std::string::npos) {
-            diagnostic::error("quote character `{}` conflicts with "
-                              "`field_separator=\"{}\"`",
-                              q, fs_loc.inner)
-              .primary(qs->source)
-              .primary(fs_loc.source)
-              .emit(ctx);
-          }
-          if (ls and ls->inner.find(q) != std::string::npos) {
-            diagnostic::error("quote character `{}` conflicts with "
-                              "`list_separator=\"{}\"`",
-                              q, ls->inner)
-              .primary(qs->source)
-              .primary(ls->source)
-              .emit(ctx);
-          }
-          if (nv and nv->inner.find(q) != std::string::npos) {
-            diagnostic::error("quote character `{}` conflicts with "
-                              "`null_value=\"{}\"`",
-                              q, nv->inner)
-              .primary(qs->source)
-              .primary(nv->source)
-              .emit(ctx);
-          }
+      auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
+      for (const char q : qs.inner) {
+        if (fs_loc.inner.find(q) != std::string::npos) {
+          diagnostic::error("quote character `{}` conflicts with "
+                            "`field_separator=\"{}\"`",
+                            q, fs_loc.inner)
+            .primary(qs.source)
+            .primary(fs_loc.source)
+            .emit(ctx);
+        }
+        if (ls and ls->inner.find(q) != std::string::npos) {
+          diagnostic::error("quote character `{}` conflicts with "
+                            "`list_separator=\"{}\"`",
+                            q, ls->inner)
+            .primary(qs.source)
+            .primary(ls->source)
+            .emit(ctx);
+        }
+        if (nv and nv->inner.find(q) != std::string::npos) {
+          diagnostic::error("quote character `{}` conflicts with "
+                            "`null_value=\"{}\"`",
+                            q, nv->inner)
+            .primary(qs.source)
+            .primary(nv->source)
+            .emit(ctx);
         }
       }
       if (auto sc = ctx.get(common.schema);
