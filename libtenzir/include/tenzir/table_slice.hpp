@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -534,6 +535,15 @@ auto columns_of(const table_slice& slice) -> generator<column_view>;
 /// Iterates all top level columns of a `StructArray`
 auto columns_of(const record_type& schema, const arrow::StructArray& array)
   -> generator<column_view>;
+
+/// Returns the configured event timestamp field path for a slice, if any.
+auto event_timestamp_field(const table_slice& slice)
+  -> std::optional<std::string_view>;
+
+/// Returns a copy of the slice with an updated event timestamp field path.
+auto with_event_timestamp_field(const table_slice& slice,
+                                std::optional<std::string_view> field)
+  -> table_slice;
 } // namespace tenzir
 
 #include "tenzir/concept/printable/tenzir/table_slice.hpp"

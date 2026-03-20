@@ -273,14 +273,16 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
       }
       return l;
     },
-    [](const ast::meta& x) -> meta_extractor {
+    [](const ast::meta& x) -> std::optional<operand> {
       switch (x.kind) {
         case ast::meta::name:
-          return meta_extractor::schema;
+          return operand{meta_extractor::schema};
         case ast::meta_kind::import_time:
-          return meta_extractor::import_time;
+          return operand{meta_extractor::import_time};
         case ast::meta_kind::internal:
-          return meta_extractor::internal;
+          return operand{meta_extractor::internal};
+        case ast::meta_kind::timestamp:
+          return std::nullopt;
       }
       TENZIR_UNREACHABLE();
     },

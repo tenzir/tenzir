@@ -12,6 +12,9 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <span>
+#include <vector>
+
 namespace tenzir {
 
 /// Creates a record that maps `path` to `value`.
@@ -26,6 +29,11 @@ namespace tenzir {
 enum class assign_position {
   front,
   back,
+};
+
+struct field_remapping {
+  ast::field_path from;
+  ast::field_path to;
 };
 
 [[nodiscard]] auto assign(std::span<const ast::field_path::segment> left,
@@ -46,8 +54,22 @@ assign(const ast::field_path& left, series right, const table_slice& input,
                           const table_slice& input, diagnostic_handler& diag)
   -> std::vector<table_slice>;
 
+auto assign_timestamp(const ast::expression& right, const table_slice& input,
+                      diagnostic_handler& dh) -> std::vector<table_slice>;
+
 [[nodiscard]] auto resolve_move_keyword(ast::assignment assignment)
   -> std::pair<ast::assignment, std::vector<ast::field_path>>;
+
+auto validate_set_assignment(const ast::assignment& assignment,
+                             diagnostic_handler& dh) -> failure_or<void>;
+
+auto extract_field_remappings(std::span<const ast::assignment> assignments)
+  -> std::vector<field_remapping>;
+
+auto track_event_timestamp_field(const table_slice& original,
+                                 table_slice updated,
+                                 std::span<const field_remapping> remappings)
+  -> table_slice;
 
 [[nodiscard]] auto
 drop(const table_slice& slice, std::span<const ast::field_path> fields,

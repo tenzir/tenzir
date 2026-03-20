@@ -20,6 +20,7 @@
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/user_defined_operator.hpp"
 
+#include <algorithm>
 #include <ranges>
 
 namespace tenzir {
@@ -57,12 +58,24 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> {
+    auto remappings = extract_field_remappings(assignments_);
+    auto has_explicit_timestamp_assignment
+      = std::ranges::any_of(assignments_, [](const auto& assignment) {
+          auto* meta = std::get_if<ast::meta>(&assignment.left);
+          return meta and meta->kind == ast::meta::timestamp;
+        });
     auto slice = std::move(input);
     // The right-hand side is always evaluated with the original input, because
     // side-effects from preceding assignments shall not be reflected when
     // calculating the value of the left-hand side.
     auto values = std::vector<multi_series>{};
     for (const auto& assignment : assignments_) {
+      if (auto* meta = std::get_if<ast::meta>(&assignment.left);
+          meta and meta->kind == ast::meta::timestamp) {
+        values.push_back(
+          series::null(null_type{}, detail::narrow<int64_t>(slice.rows())));
+        continue;
+      }
       values.push_back(eval(assignment.right, slice, ctx));
     }
     slice = drop(slice, moved_fields_, ctx, false);
@@ -75,7 +88,8 @@ public:
       auto end = begin + values_slice[0].length();
       // We could still perform further splits if metadata is assigned.
       auto state = std::vector<table_slice>{};
-      state.push_back(subslice(slice, begin, end));
+      auto original = subslice(slice, begin, end);
+      state.push_back(original);
       begin = end;
       auto new_state = std::vector<table_slice>{};
       for (auto [assignment, value] :
@@ -83,8 +97,14 @@ public:
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
-          auto assigned = assign(assignment.left,
-                                 value.slice(begin, entry_rows), entry, ctx);
+          auto assigned = std::vector<table_slice>{};
+          if (auto* meta = std::get_if<ast::meta>(&assignment.left);
+              meta and meta->kind == ast::meta::timestamp) {
+            assigned = assign_timestamp(assignment.right, entry, ctx);
+          } else {
+            assigned = assign(assignment.left, value.slice(begin, entry_rows),
+                              entry, ctx);
+          }
           begin += entry_rows;
           new_state.insert(new_state.end(),
                            std::move_iterator{assigned.begin()},
@@ -93,7 +113,21 @@ public:
         std::swap(state, new_state);
         new_state.clear();
       }
-      std::ranges::move(state, std::back_inserter(results));
+      if (has_explicit_timestamp_assignment) {
+        std::ranges::move(state, std::back_inserter(results));
+      } else {
+        auto tracked = std::vector<table_slice>{};
+        auto tracked_begin = size_t{0};
+        for (auto& entry : state) {
+          auto tracked_end = tracked_begin + entry.rows();
+          tracked.push_back(track_event_timestamp_field(
+            subslice(original, tracked_begin, tracked_end), std::move(entry),
+            remappings));
+          tracked_begin = tracked_end;
+        }
+        TENZIR_ASSERT(tracked_begin == original.rows());
+        std::ranges::move(tracked, std::back_inserter(results));
+      }
     }
     // TODO: Consider adding a property to function plugins that let's them
     // indicate whether they want their outputs to be strictly ordered. If any

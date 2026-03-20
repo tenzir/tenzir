@@ -22,10 +22,226 @@
 #include <arrow/compute/api_scalar.h>
 #include <caf/detail/is_complete.hpp>
 
+#include <algorithm>
 #include <ranges>
 #include <type_traits>
+#include <utility>
 
 namespace tenzir {
+
+namespace {
+
+auto is_null_constant_expression(const ast::expression& expr) -> bool {
+  const auto* constant = try_as<ast::constant>(expr);
+  return constant and is<caf::none_t>(constant->value);
+}
+
+auto is_timestamp_selector(const ast::selector& selector) -> bool {
+  const auto* meta = std::get_if<ast::meta>(&selector);
+  return meta and meta->kind == ast::meta::timestamp;
+}
+
+auto serialize_timestamp_field(const ast::field_path& path,
+                               diagnostic_handler& dh, location primary)
+  -> std::optional<std::string> {
+  auto result = std::string{};
+  auto add_dot = false;
+  for (const auto& segment : path.path()) {
+    if (segment.has_question_mark) {
+      diagnostic::error("`@timestamp` does not support optional field paths")
+        .primary(primary)
+        .secondary(segment.id)
+        .emit(dh);
+      return std::nullopt;
+    }
+    if (segment.id.name.contains('.')) {
+      diagnostic::error("`@timestamp` field paths must not contain `.` in a "
+                        "segment")
+        .primary(primary)
+        .secondary(segment.id)
+        .emit(dh);
+      return std::nullopt;
+    }
+    if (std::exchange(add_dot, true)) {
+      result += '.';
+    }
+    result += segment.id.name;
+  }
+  if (result.empty()) {
+    diagnostic::error("`@timestamp` requires a field path")
+      .primary(primary)
+      .emit(dh);
+    return std::nullopt;
+  }
+  return result;
+}
+
+auto validate_timestamp_assignment(const ast::assignment& assignment,
+                                   diagnostic_handler& dh) -> failure_or<void> {
+  if (not is_timestamp_selector(assignment.left)) {
+    return {};
+  }
+  if (is_null_constant_expression(assignment.right)) {
+    return {};
+  }
+  auto copy = ast::expression{assignment.right};
+  auto path = ast::field_path::try_from(std::move(copy));
+  if (not path) {
+    diagnostic::error("`@timestamp` expects a field path or `null`")
+      .primary(assignment.right)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (not serialize_timestamp_field(*path, dh,
+                                    assignment.right.get_location())) {
+    return failure::promise();
+  }
+  return {};
+}
+
+} // namespace
+
+auto assign_timestamp(const ast::expression& right, const table_slice& input,
+                      diagnostic_handler& dh) -> std::vector<table_slice> {
+  if (is_null_constant_expression(right)) {
+    return {with_event_timestamp_field(input, std::nullopt)};
+  }
+  auto copy = ast::expression{right};
+  auto path = ast::field_path::try_from(std::move(copy));
+  if (not path) {
+    diagnostic::warning("`@timestamp` expects a field path or `null`")
+      .primary(right)
+      .emit(dh);
+    return {input};
+  }
+  auto serialized = serialize_timestamp_field(*path, dh, right.get_location());
+  if (not serialized) {
+    return {input};
+  }
+  auto resolved = resolve(*path, input.schema());
+  auto* offset = try_as<tenzir::offset>(resolved);
+  if (not offset) {
+    diagnostic::warning("cannot assign `@timestamp` from missing field")
+      .primary(right)
+      .emit(dh);
+    return {input};
+  }
+  auto field_type = as<record_type>(input.schema()).field(*offset).type;
+  if (field_type.kind().is_not<time_type>()) {
+    diagnostic::warning("`@timestamp` requires a `time` field, but got `{}`",
+                        field_type.kind())
+      .primary(right)
+      .emit(dh);
+    return {input};
+  }
+  return {with_event_timestamp_field(input, *serialized)};
+}
+
+namespace {
+
+auto parse_timestamp_field(std::string_view dotted_path)
+  -> std::optional<ast::field_path> {
+  if (dotted_path.empty()) {
+    return std::nullopt;
+  }
+  auto expr = std::optional<ast::expression>{};
+  auto remaining = dotted_path;
+  while (not remaining.empty()) {
+    auto dot = remaining.find('.');
+    auto segment = remaining.substr(0, dot);
+    if (segment.empty()) {
+      return std::nullopt;
+    }
+    auto id = ast::identifier{segment, location::unknown};
+    if (not expr) {
+      expr = ast::expression{ast::root_field{std::move(id), false}};
+    } else {
+      expr = ast::expression{ast::field_access{
+        std::move(*expr),
+        location::unknown,
+        false,
+        std::move(id),
+      }};
+    }
+    if (dot == std::string_view::npos) {
+      break;
+    }
+    if (dot + 1 == remaining.size()) {
+      return std::nullopt;
+    }
+    remaining.remove_prefix(dot + 1);
+  }
+  TENZIR_ASSERT(expr);
+  return ast::field_path::try_from(std::move(*expr));
+}
+
+auto resolves_to_time(const ast::field_path& path, type schema) -> bool {
+  auto resolved = resolve(path, schema);
+  auto* offset = try_as<tenzir::offset>(resolved);
+  if (not offset) {
+    return false;
+  }
+  return as<record_type>(schema).field(*offset).type.kind().is<time_type>();
+}
+
+auto path_has_prefix(std::span<const ast::field_path::segment> path,
+                     std::span<const ast::field_path::segment> prefix) -> bool {
+  if (prefix.size() > path.size()) {
+    return false;
+  }
+  for (auto i = size_t{0}; i < prefix.size(); ++i) {
+    if (path[i].id.name != prefix[i].id.name) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto rewrite_path(const ast::field_path& path, const field_remapping& remapping)
+  -> std::optional<ast::field_path> {
+  if (not path_has_prefix(path.path(), remapping.from.path())) {
+    return std::nullopt;
+  }
+  auto expr = std::optional<ast::expression>{};
+  auto append = [&](const ast::identifier& id) {
+    auto next_id = ast::identifier{id.name, location::unknown};
+    if (not expr) {
+      expr = ast::expression{ast::root_field{std::move(next_id), false}};
+    } else {
+      expr = ast::expression{ast::field_access{
+        std::move(*expr),
+        location::unknown,
+        false,
+        std::move(next_id),
+      }};
+    }
+  };
+  for (const auto& segment : remapping.to.path()) {
+    append(segment.id);
+  }
+  for (const auto& segment :
+       path.path().subspan(remapping.from.path().size())) {
+    append(segment.id);
+  }
+  if (not expr) {
+    return ast::field_path::try_from(ast::this_{location::unknown});
+  }
+  return ast::field_path::try_from(std::move(*expr));
+}
+
+auto serialize_path(const ast::field_path& path) -> std::string {
+  auto result = std::string{};
+  auto add_dot = false;
+  for (const auto& segment : path.path()) {
+    if (std::exchange(add_dot, true)) {
+      result += '.';
+    }
+    result += segment.id.name;
+  }
+  return result;
+}
+
+} // namespace
 
 auto consume_path(std::span<const ast::field_path::segment> path, series value)
   -> series {
@@ -261,6 +477,13 @@ auto assign(const ast::meta& left, const series& right,
         return table_slice{new_batch, std::move(new_type)};
       });
     }
+    case ast::meta::timestamp: {
+      diagnostic::warning("assignment to `@timestamp` requires a field path or "
+                          "`null`")
+        .primary(left)
+        .emit(diag);
+      return original();
+    }
   }
   TENZIR_UNREACHABLE();
 }
@@ -341,6 +564,64 @@ auto resolve_move_keyword(ast::assignment assignment)
   auto f = move_resolver{};
   f.visit(assignment);
   return {std::move(assignment), std::move(f.out)};
+}
+
+auto validate_set_assignment(const ast::assignment& assignment,
+                             diagnostic_handler& dh) -> failure_or<void> {
+  return validate_timestamp_assignment(assignment, dh);
+}
+
+auto extract_field_remappings(std::span<const ast::assignment> assignments)
+  -> std::vector<field_remapping> {
+  auto result = std::vector<field_remapping>{};
+  for (const auto& assignment : assignments) {
+    auto* lhs = std::get_if<ast::field_path>(&assignment.left);
+    if (not lhs) {
+      continue;
+    }
+    auto copy = ast::expression{assignment.right};
+    auto rhs = ast::field_path::try_from(std::move(copy));
+    if (not rhs) {
+      continue;
+    }
+    result.push_back({*rhs, *lhs});
+  }
+  return result;
+}
+
+auto track_event_timestamp_field(const table_slice& original,
+                                 table_slice updated,
+                                 std::span<const field_remapping> remappings)
+  -> table_slice {
+  auto field = event_timestamp_field(original);
+  if (not field) {
+    return updated;
+  }
+  auto original_path = parse_timestamp_field(*field);
+  if (not original_path) {
+    return with_event_timestamp_field(updated, std::nullopt);
+  }
+  if (resolves_to_time(*original_path, updated.schema())) {
+    return with_event_timestamp_field(updated, *field);
+  }
+  auto candidates = std::vector<std::string>{};
+  for (const auto& remapping : remappings) {
+    auto rewritten = rewrite_path(*original_path, remapping);
+    if (not rewritten) {
+      continue;
+    }
+    if (not resolves_to_time(*rewritten, updated.schema())) {
+      continue;
+    }
+    auto serialized = serialize_path(*rewritten);
+    if (std::ranges::find(candidates, serialized) == candidates.end()) {
+      candidates.push_back(std::move(serialized));
+    }
+  }
+  if (candidates.size() == 1) {
+    return with_event_timestamp_field(updated, candidates.front());
+  }
+  return with_event_timestamp_field(updated, std::nullopt);
 }
 
 auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
@@ -426,6 +707,12 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
 auto set_operator::operator()(generator<table_slice> input,
                               operator_control_plane& ctrl) const
   -> generator<table_slice> {
+  auto remappings = extract_field_remappings(assignments_);
+  auto has_explicit_timestamp_assignment
+    = std::ranges::any_of(assignments_, [](const auto& assignment) {
+        auto* meta = std::get_if<ast::meta>(&assignment.left);
+        return meta and meta->kind == ast::meta::timestamp;
+      });
   for (auto&& slice : input) {
     if (slice.rows() == 0) {
       co_yield {};
@@ -440,6 +727,11 @@ auto set_operator::operator()(generator<table_slice> input,
     // calculating the value of the left-hand side.
     auto values = std::vector<multi_series>{};
     for (const auto& assignment : assignments_) {
+      if (is_timestamp_selector(assignment.left)) {
+        values.push_back(
+          series::null(null_type{}, detail::narrow<int64_t>(slice.rows())));
+        continue;
+      }
       values.push_back(eval(assignment.right, slice, ctrl.diagnostics()));
     }
     slice = drop(slice, moved_fields_, ctrl.diagnostics(), false);
@@ -452,7 +744,8 @@ auto set_operator::operator()(generator<table_slice> input,
       auto end = begin + values_slice[0].length();
       // We could still perform further splits if metadata is assigned.
       auto state = std::vector<table_slice>{};
-      state.push_back(subslice(slice, begin, end));
+      auto original = subslice(slice, begin, end);
+      state.push_back(original);
       begin = end;
       auto new_state = std::vector<table_slice>{};
       TENZIR_ASSERT(assignments_.size() == values_slice.size());
@@ -461,9 +754,14 @@ auto set_operator::operator()(generator<table_slice> input,
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
-          auto assigned
-            = assign(assignment.left, value.slice(begin, entry_rows), entry,
-                     ctrl.diagnostics());
+          auto assigned = std::vector<table_slice>{};
+          if (is_timestamp_selector(assignment.left)) {
+            assigned
+              = assign_timestamp(assignment.right, entry, ctrl.diagnostics());
+          } else {
+            assigned = assign(assignment.left, value.slice(begin, entry_rows),
+                              entry, ctrl.diagnostics());
+          }
           begin += entry_rows;
           new_state.insert(new_state.end(),
                            std::move_iterator{assigned.begin()},
@@ -472,7 +770,21 @@ auto set_operator::operator()(generator<table_slice> input,
         std::swap(state, new_state);
         new_state.clear();
       }
-      std::ranges::move(state, std::back_inserter(results));
+      if (has_explicit_timestamp_assignment) {
+        std::ranges::move(state, std::back_inserter(results));
+      } else {
+        auto tracked = std::vector<table_slice>{};
+        auto tracked_begin = size_t{0};
+        for (auto& entry : state) {
+          auto tracked_end = tracked_begin + entry.rows();
+          tracked.push_back(track_event_timestamp_field(
+            subslice(original, tracked_begin, tracked_end), std::move(entry),
+            remappings));
+          tracked_begin = tracked_end;
+        }
+        TENZIR_ASSERT(tracked_begin == original.rows());
+        std::ranges::move(tracked, std::back_inserter(results));
+      }
     }
     // TODO: Consider adding a property to function plugins that let's them
     // indicate whether they want their outputs to be strictly ordered. If any

@@ -56,9 +56,14 @@ public:
     auto usage = "set <path>=<expr>...";
     auto docs = "https://docs.tenzir.com/reference/operators/set";
     auto assignments = std::vector<ast::assignment>{};
+    auto failed = false;
     for (auto& arg : inv.args) {
       arg.match(
         [&](ast::assignment& x) {
+          if (not validate_set_assignment(x, ctx.dh())) {
+            failed = true;
+            return;
+          }
           assignments.push_back(std::move(x));
         },
         [&](auto&) {
@@ -67,7 +72,11 @@ public:
             .usage(usage)
             .docs(docs)
             .emit(ctx.dh());
+          failed = true;
         });
+    }
+    if (failed) {
+      return failure::promise();
     }
     return std::make_unique<set_operator>(std::move(assignments));
   }

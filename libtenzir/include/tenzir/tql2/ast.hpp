@@ -61,7 +61,7 @@ struct identifier {
   tenzir::location location;
 };
 
-TENZIR_ENUM(meta_kind, name, import_time, internal);
+TENZIR_ENUM(meta_kind, name, import_time, internal, timestamp);
 
 struct meta {
   using enum meta_kind;

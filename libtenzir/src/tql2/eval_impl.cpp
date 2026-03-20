@@ -50,6 +50,42 @@ auto suggest_field_name(std::string_view requested_field,
   return best_field;
 }
 
+auto make_field_path(std::string_view dotted_path)
+  -> std::optional<ast::field_path> {
+  if (dotted_path.empty()) {
+    return std::nullopt;
+  }
+  auto expr = std::optional<ast::expression>{};
+  auto remaining = dotted_path;
+  while (not remaining.empty()) {
+    auto dot = remaining.find('.');
+    auto segment = remaining.substr(0, dot);
+    if (segment.empty()) {
+      return std::nullopt;
+    }
+    auto id = ast::identifier{segment, location::unknown};
+    if (not expr) {
+      expr = ast::expression{ast::root_field{std::move(id), false}};
+    } else {
+      expr = ast::expression{ast::field_access{
+        std::move(*expr),
+        location::unknown,
+        false,
+        std::move(id),
+      }};
+    }
+    if (dot == std::string_view::npos) {
+      break;
+    }
+    if (dot + 1 == remaining.size()) {
+      return std::nullopt;
+    }
+    remaining.remove_prefix(dot + 1);
+  }
+  TENZIR_ASSERT(expr);
+  return ast::field_path::try_from(std::move(*expr));
+}
+
 auto evaluator::eval(const ast::record& x) -> multi_series {
   auto arrays = std::vector<multi_series>{};
   for (const auto& item : x.items) {
@@ -574,6 +610,22 @@ auto evaluator::eval(const ast::meta& x) -> multi_series {
     }
     case ast::meta::internal:
       return to_series(input.schema().attribute("internal").has_value());
+    case ast::meta::timestamp: {
+      auto field = event_timestamp_field(input);
+      if (not field) {
+        return series::null(time_type{}, length_);
+      }
+      auto path = make_field_path(*field);
+      if (not path) {
+        return series::null(time_type{}, length_);
+      }
+      auto resolved = resolve(*path, input);
+      auto* series = try_as<tenzir::series>(resolved);
+      if (not series or series->type.kind().is_not<time_type>()) {
+        return series::null(time_type{}, length_);
+      }
+      return std::move(*series);
+    }
   }
   TENZIR_UNREACHABLE();
 }

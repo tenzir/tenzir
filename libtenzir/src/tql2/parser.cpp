@@ -663,6 +663,8 @@ public:
         kind = ast::meta::import_time;
       } else if (ident.name == "internal") {
         kind = ast::meta::internal;
+      } else if (ident.name == "timestamp") {
+        kind = ast::meta::timestamp;
       } else if (ident.name == "schema") {
         diagnostic::error("use `@name` instead")
           .primary(begin.combine(ident))
@@ -674,7 +676,8 @@ public:
       } else {
         diagnostic::error("unknown metadata name `{}`", ident.name)
           .primary(ident)
-          .hint("must be one of `name`, `import_time`, `internal`")
+          .hint("must be one of `name`, `import_time`, `internal`, "
+                "`timestamp`")
           .throw_();
       }
       return ast::meta{kind, begin.combine(ident)};
