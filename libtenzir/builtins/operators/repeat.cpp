@@ -117,6 +117,7 @@ public:
     for (auto i = uint64_t{1}; i < count_; ++i) {
       for (const auto& slice : buffer_) {
         if ((co_await push(slice)).is_err()) {
+          TENZIR_WARN("repeat cannot push");
           co_return FinalizeBehavior::done;
         }
       }

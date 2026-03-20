@@ -729,7 +729,8 @@ private:
           // pushing to the subpipeline due to backpressure, but in order to
           // alleviate the backpressure, we need to pull from it.
           auto saw_end_of_data = false;
-          while (true) {
+          auto downstream_closed = false;
+          while (not downstream_closed) {
             auto output = co_await pull_downstream();
             if (not output) {
               break;
@@ -737,10 +738,12 @@ private:
             co_await co_match(
               std::move(*output),
               [&](table_slice output) -> Task<void> {
-                co_await call_process_sub(make_view(key), std::move(output));
+                downstream_closed
+                  = co_await call_process_sub(make_view(key), std::move(output));
               },
               [&](chunk_ptr output) -> Task<void> {
-                co_await call_process_sub(make_view(key), std::move(output));
+                downstream_closed
+                  = co_await call_process_sub(make_view(key), std::move(output));
               },
               [&](Signal signal) -> Task<void> {
                 co_await co_match(
@@ -758,8 +761,13 @@ private:
                   });
               });
           }
+          // If downstream closed before the sub-pipeline sent EndOfData, we
+          // drop `pull_downstream` here (end of scope), closing the
+          // sub-pipeline's output channel from the receiver side. This causes
+          // the sub-pipeline's last operator's push to return Err, which
+          // cascades backward through the sub-pipeline and terminates it.
           if (not saw_end_of_data) {
-            if (not output_is_void) {
+            if (not output_is_void and not downstream_closed) {
               LOGW("subpipeline channel closed without EndOfData");
             }
             queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
@@ -953,28 +961,32 @@ private:
       });
   }
 
-  auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
-    co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+  auto call_process_sub(SubKeyView key, table_slice slice) -> Task<bool> {
+    co_return co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<bool> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(slice), *this);
+          co_return false;
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->process_sub(key, std::move(slice), wrapper, *this);
+          co_return co_await op->process_sub(key, std::move(slice), wrapper,
+                                             *this);
         }
       });
   }
 
-  auto call_process_sub(SubKeyView key, chunk_ptr chunk) -> Task<void> {
-    co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+  auto call_process_sub(SubKeyView key, chunk_ptr chunk) -> Task<bool> {
+    co_return co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<bool> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(chunk), *this);
+          co_return false;
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->process_sub(key, std::move(chunk), wrapper, *this);
+          co_return co_await op->process_sub(key, std::move(chunk), wrapper,
+                                             *this);
         }
       });
   }
@@ -1599,8 +1611,6 @@ private:
                   }
                   co_return;
                 case ToControl::no_more_input:
-                  // TODO: Inform the preceding operator that we don't need
-                  // any more input.
                   if (index > 0) {
                     co_await operator_ctrl_[index - 1].send(Stop{});
                   } else {

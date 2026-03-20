@@ -237,21 +237,26 @@ public:
 
   /// Process the result of a spawned subpipeline in a *thread-safe* way.
   ///
+  /// Returns true if no further input is needed. Is is typically a
+  /// back-propagation of downstream operators shutting down.
+  ///
   /// Note that, unlike all other functions in the operator interface, this one
   /// may be called in parallel while another call is active.
   virtual auto process_sub(SubKeyView key, table_slice slice,
-                           Push<Output>& push, OpCtx& ctx) -> Task<void> {
+                           Push<Output>& push, OpCtx& ctx) -> Task<bool> {
     TENZIR_UNUSED(key, ctx);
     if constexpr (std::same_as<Output, table_slice>) {
-      co_await push(std::move(slice));
+      co_return (co_await push(std::move(slice))).is_err();
     } else {
       panic("subpipeline result handling is not implemented for this operator");
     }
   }
 
   /// Process byte output from a spawned subpipeline in a *thread-safe* way.
+  ///
+  /// Returns true if no further input is needed.
   virtual auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
-                           OpCtx& ctx) -> Task<void> {
+                           OpCtx& ctx) -> Task<bool> {
     TENZIR_UNUSED(key, chunk, push, ctx);
     panic("subpipeline chunk result handling is not implemented for this "
           "operator");
