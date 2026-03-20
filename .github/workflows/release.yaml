@@ -64,7 +64,7 @@ on:
 jobs:
   release:
     name: Release
-    uses: tenzir/ship/.github/workflows/reusable-release-advanced.yaml@main
+    uses: tenzir/ship/.github/workflows/reusable-release-advanced.yaml@49fe3d4df9785b29bddeb1a83be5e33032ab25a1
     permissions:
       contents: write
     with:
