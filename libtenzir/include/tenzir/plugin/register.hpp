@@ -26,6 +26,8 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
+#include <compare>
 #include <cstdint>
 #include <memory>
 #include <string>
