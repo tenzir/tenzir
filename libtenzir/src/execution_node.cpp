@@ -32,6 +32,7 @@
 #include "tenzir/table_slice.hpp"
 
 #include <arrow/config.h>
+#include <arrow/record_batch.h>
 #include <arrow/util/byte_size.h>
 #include <caf/actor_addr.hpp>
 #include <caf/actor_from_state.hpp>
