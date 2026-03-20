@@ -47,6 +47,7 @@ jobs:
         id: docker
         run: |
           echo '::notice inputs = ${{ toJSON(inputs) }}'
+          source_tag='${{ github.sha }}'
           tags=()
           if [[ '${{ inputs.tag }}' != "" ]]; then
             tags+=('${{ inputs.tag }}')
@@ -61,7 +62,7 @@ jobs:
             '."editions" = [
               if ${{ inputs.push-de-to-ghcr }} then
                 {
-                  "name": "tenzir-de", "target": "tenzir-de", "registries": [
+                  "name": "tenzir-de", "target": "tenzir-de", "image-registries": [
                    "ghcr.io"
                   ]
                 }
@@ -70,7 +71,7 @@ jobs:
               end,
               if ${{ inputs.push-ce-to-ghcr }} then
                 {
-                  "name": "tenzir", "target": "tenzir", "registries": [
+                  "name": "tenzir", "target": "tenzir", "image-registries": [
                    "ghcr.io"
                   ]
                 }
@@ -79,24 +80,51 @@ jobs:
               end,
               if ${{ inputs.push-demo-to-ecr }} then
                 {
-                  "name": "tenzir-demo", "target": "tenzir-demo", "registries": [
+                  "name": "tenzir-demo", "target": "tenzir-demo", "image-registries": [
                    "622024652768.dkr.ecr.eu-west-1.amazonaws.com"
                   ]
                 }
               else
                 empty
               end
-            ] | ."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
+            ] | ."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
             --arg vs "${{ steps.version.outputs.version-build-metadata }}" \
+            --arg source "${source_tag}" \
             --args -- "${tags[@]}")"
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
 
-  docker-tenzir:
+  docker-tenzir-amd64:
     name: Docker
     needs:
       - configure
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
+      runner: ubuntu-latest
+      arch: amd64
+    secrets: inherit
+
+  docker-tenzir-arm64:
+    name: Docker
+    needs:
+      - configure
+    uses: ./.github/workflows/docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+      runner: ubicloud-standard-8-arm
+      arch: arm64
+    secrets: inherit
+
+  docker-tenzir:
+    name: Push Docker Manifest
+    needs:
+      - configure
+      - docker-tenzir-amd64
+      - docker-tenzir-arm64
+    uses: ./.github/workflows/push-manifest.yaml
+    with:
+      source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
+      arch-suffixes: "amd64 arm64"
+      tags: "${{ join(fromJSON(needs.configure.outputs.docker-config).tags, ' ') }}"
     secrets: inherit

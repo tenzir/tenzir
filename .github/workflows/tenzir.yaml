@@ -242,7 +242,11 @@ jobs:
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             source_tag="${{ github.sha }}"
-            tags=('main' "${{ github.sha }}")
+            if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+              tags=('main' "${{ github.sha }}")
+            else
+              tags=("${{ steps.configure.outputs.ref-slug }}" "${{ github.sha }}")
+            fi
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             source_tag="${{ github.sha }}"
             major_minor_patch='${{ steps.configure.outputs.release-version }}'

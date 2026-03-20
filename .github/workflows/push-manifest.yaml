@@ -127,7 +127,7 @@ jobs:
             canonical_tag="${manifest_target##*:}"
             manifest_tags=("$canonical_tag")
             if [[ "${#requested_tags[@]}" -gt 0 ]]; then
-              manifest_tags=("${requested_tags[@]}")
+              manifest_tags=("$canonical_tag" "${requested_tags[@]}")
             fi
             declare -A seen_tags=()
             create_args=()
