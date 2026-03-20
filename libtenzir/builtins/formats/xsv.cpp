@@ -13,6 +13,7 @@
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -880,6 +881,21 @@ public:
       co_return;
     }
     if (args_.schema) {
+      auto schema = modules::get_schema(args_.schema->inner);
+      if (not schema) {
+        if (args_.schema_only) {
+          diagnostic::error("schema `{}` does not exist, but `schema_only` "
+                            "was specified",
+                            args_.schema->inner)
+            .primary(args_.schema->source)
+            .emit(ctx.dh());
+          co_return;
+        }
+        diagnostic::warning("schema `{}` does not exist", args_.schema->inner)
+          .primary(args_.schema->source)
+          .hint("if you know the input's shape, define the schema")
+          .emit(ctx.dh());
+      }
       msb_opts.policy
         = multi_series_builder::policy_schema{args_.schema->inner};
     } else if (args_.selector) {

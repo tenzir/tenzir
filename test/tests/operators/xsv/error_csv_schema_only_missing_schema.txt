@@ -1,0 +1,6 @@
+error: schema `does.not.exist` does not exist, but `schema_only` was specified
+ --> tests/operators/xsv/error_csv_schema_only_missing_schema.tql:6:19
+  |
+6 |   read_csv schema="does.not.exist", schema_only=true
+  |                   ^^^^^^^^^^^^^^^^ 
+  |
