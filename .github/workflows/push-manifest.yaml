@@ -48,6 +48,7 @@ jobs:
         uses: ./.github/actions/registry-login
         with:
           config: ${{ steps.registries.outputs.config }}
+          ghcr-username: ${{ github.actor }}
           ghcr-token: ${{ secrets.GITHUB_TOKEN }}
           dockerhub-user: ${{ vars.DOCKERHUB_USER }}
           dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
