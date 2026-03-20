@@ -1970,4 +1970,35 @@ auto columns_of(const record_type& schema, const arrow::StructArray& array)
   }
 }
 
+auto event_timestamp_field(const table_slice& slice)
+  -> std::optional<std::string_view> {
+  return slice.schema().attribute("tenzir.timestamp");
+}
+
+auto with_event_timestamp_field(const table_slice& slice,
+                                std::optional<std::string_view> field)
+  -> table_slice {
+  auto attributes = std::vector<type::attribute_view>{};
+  for (auto [key, value] : slice.schema().attributes()) {
+    if (key == "tenzir.timestamp") {
+      continue;
+    }
+    attributes.emplace_back(key, value);
+  }
+  if (field and not field->empty()) {
+    attributes.emplace_back("tenzir.timestamp", *field);
+  }
+  auto new_type = type{
+    slice.schema().name(),
+    as<record_type>(slice.schema()),
+    std::move(attributes),
+  };
+  auto new_batch
+    = check(to_record_batch(slice)->ReplaceSchema(new_type.to_arrow_schema()));
+  auto out = table_slice{new_batch, std::move(new_type)};
+  out.import_time(slice.import_time());
+  out.offset(slice.offset());
+  return out;
+}
+
 } // namespace tenzir

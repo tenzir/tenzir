@@ -91,3 +91,20 @@ TEST("tql2 parser: expression stream keeps parsed prefix on hard suffix "
   CHECK(try_as<ast::record>(parsed->expressions[1]));
   CHECK(not dh.empty());
 }
+
+TEST("tql2 parser: parses @timestamp assignment") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto parsed = parse_assignment_with_bad_diagnostics("@timestamp = foo.bar",
+                                                      provider.as_session());
+  REQUIRE(parsed);
+  auto* meta = std::get_if<ast::meta>(&parsed->left);
+  REQUIRE(meta);
+  CHECK_EQUAL(meta->kind, ast::meta::timestamp);
+  auto copy = ast::expression{parsed->right};
+  auto path = ast::field_path::try_from(std::move(copy));
+  REQUIRE(path);
+  CHECK_EQUAL(path->path().size(), size_t{2});
+  CHECK_EQUAL(path->path()[0].id.name, "foo");
+  CHECK_EQUAL(path->path()[1].id.name, "bar");
+}

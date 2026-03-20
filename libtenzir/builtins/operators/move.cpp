@@ -30,11 +30,17 @@ struct move_operator final : public crtp_operator<move_operator> {
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    auto remappings = std::vector<field_remapping>{};
+    remappings.reserve(lhs_.size());
+    for (const auto& [lhs, rhs] : std::views::zip(lhs_, rhs_)) {
+      remappings.push_back({rhs, lhs});
+    }
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      auto original = slice;
       auto rhs_values = std::vector<series>{};
       rhs_values.reserve(rhs_.size());
       for (const auto& field : rhs_) {
@@ -45,6 +51,8 @@ struct move_operator final : public crtp_operator<move_operator> {
       for (const auto& [field, value] : std::views::zip(lhs_, rhs_values)) {
         slice = assign(field, value, slice, ctrl.diagnostics());
       }
+      slice
+        = track_event_timestamp_field(original, std::move(slice), remappings);
       co_yield std::move(slice);
     }
   }
