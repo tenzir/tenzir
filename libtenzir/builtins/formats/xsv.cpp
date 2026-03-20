@@ -441,6 +441,8 @@ struct ReadXsvArgs {
   bool raw = false;
   std::optional<located<std::string>> unflatten_separator;
   bool merge = true;
+  std::optional<duration> batch_timeout;
+  std::optional<uint64_t> batch_size;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
 };
@@ -473,6 +475,8 @@ auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
   auto unflatten_arg
     = d.named("unflatten_separator", &ReadXsvArgs::unflatten_separator);
   d.named("merge", &ReadXsvArgs::merge);
+  d.named("_batch_timeout", &ReadXsvArgs::batch_timeout);
+  d.named("_batch_size", &ReadXsvArgs::batch_size);
   return {quotes_arg,   header_arg, schema_arg,
           selector_arg, so_arg,     unflatten_arg};
 }
@@ -929,6 +933,12 @@ public:
     msb_opts.settings.raw = args_.raw;
     if (args_.unflatten_separator) {
       msb_opts.settings.unnest_separator = args_.unflatten_separator->inner;
+    }
+    if (args_.batch_timeout) {
+      msb_opts.settings.timeout = *args_.batch_timeout;
+    }
+    if (args_.batch_size) {
+      msb_opts.settings.desired_batch_size = *args_.batch_size;
     }
     if (args_.schema and args_.selector) {
       diagnostic::error("`schema` and `selector` are mutually exclusive")
