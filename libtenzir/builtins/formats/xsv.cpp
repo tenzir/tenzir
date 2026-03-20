@@ -797,9 +797,19 @@ public:
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(ctx);
     if (input.rows() == 0) {
       co_return;
+    }
+    if (not args_.no_header) {
+      if (not schema_) {
+        schema_ = input.schema();
+      } else if (*schema_ != input.schema()) {
+        diagnostic::error(
+          "multiple schemas are not supported when header is enabled")
+          .note("got schema `{}` after schema `{}`", input.schema(), *schema_)
+          .emit(ctx);
+        co_return;
+      }
     }
     auto metadata = chunk_metadata{.content_type = content_type()};
     auto printer = xsv_printer_impl{
@@ -838,6 +848,7 @@ private:
 
   WriteXsvArgs args_;
   bool first_ = true;
+  Option<type> schema_;
 };
 
 // ── ReadXsv ─────────────────────────────────────────────────────────────────
