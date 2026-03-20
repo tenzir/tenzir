@@ -1,13 +1,9 @@
----
-skip: flaky in CI
----
-
 let $started = now()
 
 from {id: 0, ts: 1990-01-01T00:00:00},
      {id: 1, ts: 1990-01-01T00:00:00},
      {id: 2, ts: 1990-01-01T00:00:02},
-     {id: 3, ts: 1990-01-01T00:00:03}
+     {id: 3, ts: 1990-01-01T00:00:04}
 delay ts
-batch 2, timeout=500ms
-delayed = round(now() - $started, 500ms)
+batch 2, timeout=200ms
+delayed = round(now() - $started, 2s)
