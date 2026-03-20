@@ -29,6 +29,13 @@ namespace {
 
 constexpr auto clickhouse_plaintext_port = uint64_t{9000};
 constexpr auto clickhouse_tls_port = uint64_t{9440};
+/// Must stay below ClickHouse's server-side `receive_timeout`, which defaults
+/// to 300 seconds in `src/Core/Defines.h` as
+/// `DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC` and is applied to native TCP connections
+/// in `src/Server/TCPHandler.cpp` via `socket().setReceiveTimeout(...)`.
+constexpr auto clickhouse_ping_interval = std::chrono::minutes{3};
+static_assert(clickhouse_ping_interval < std::chrono::minutes{5},
+              "clickhouse_ping_interval must stay below 5 minutes");
 
 auto maybe_add_clickhouse_tls_hints(diagnostic_builder diag,
                                     std::string_view error, bool tls_enabled,
@@ -109,7 +116,7 @@ public:
       co_return;
     }
     auto disp = detail::weak_run_delayed_loop(
-      &ctrl.self(), std::chrono::minutes{10},
+      &ctrl.self(), clickhouse_ping_interval,
       [&client]() {
         client->ping();
       },
@@ -357,7 +364,7 @@ private:
                         std::shared_ptr<easy_client> client) -> Task<void> {
     TENZIR_UNUSED(shared_state);
     while (true) {
-      co_await folly::coro::sleep(std::chrono::minutes{10});
+      co_await folly::coro::sleep(clickhouse_ping_interval);
       client->ping();
     }
   }
