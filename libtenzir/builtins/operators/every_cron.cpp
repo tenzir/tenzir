@@ -7,22 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/task.hpp>
-#include <tenzir/compile_ctx.hpp>
-#include <tenzir/concept/parseable/string/char_class.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/detail/croncpp.hpp>
-#include <tenzir/detail/string_literal.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/parser_interface.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql2/eval.hpp>
-#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
-#include <chrono>
-#include <string_view>
+#include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::every_cron {
 
@@ -30,22 +22,26 @@ namespace {
 
 using std::chrono::steady_clock;
 
+struct EveryArgs {
+  duration interval = {};
+  located<ir::pipeline> pipe;
+};
+
 template <class Input>
 class EveryBase : public Operator<Input, table_slice> {
 public:
-  EveryBase(duration interval, ir::pipeline ir)
-    : interval_{interval}, ir_{std::move(ir)} {
+  explicit EveryBase(EveryArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not ctx.get_sub(int64_t{next_})) {
+    if (next_ == 0) {
       co_await spawn_new(ctx);
     }
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    auto next = last_started_ + interval_;
+    auto next = last_started_ + args_.interval;
     co_await sleep_until(next);
     co_return {};
   }
@@ -61,7 +57,7 @@ public:
     // finishes and triggers finish_sub.
     if constexpr (not std::same_as<Input, void>) {
       TENZIR_ASSERT(next_ > 0);
-      auto sub = ctx.get_sub(int64_t{next_ - 1});
+      auto sub = ctx.get_sub(next_ - 1);
       if (sub) {
         auto& pipe = as<OpenPipeline<Input>>(*sub);
         co_await pipe.close();
@@ -94,7 +90,7 @@ protected:
     last_started_ = steady_clock::now();
     sleep_done_ = false;
     sub_finished_ = false;
-    co_await ctx.spawn_sub(int64_t{next_}, ir_, tag_v<Input>);
+    co_await ctx.spawn_sub(next_, args_.pipe.inner, tag_v<Input>);
     ++next_;
   }
 
@@ -104,8 +100,12 @@ protected:
     }
   }
 
-  duration interval_;
-  ir::pipeline ir_;
+  auto next() const {
+    return next_;
+  }
+
+private:
+  EveryArgs args_;
   steady_clock::time_point last_started_ = steady_clock::time_point::min();
   int64_t next_ = 0;
   bool sleep_done_ = false;
@@ -124,10 +124,10 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    TENZIR_ASSERT(this->next_ > 0);
+    TENZIR_ASSERT(this->next() > 0);
     // TODO: This can drop events at the boundary between closing the old
     // sub-pipeline and spawning the new one.
-    auto sub = ctx.get_sub(int64_t{this->next_ - 1});
+    auto sub = ctx.get_sub(int64_t{this->next() - 1});
     if (not sub) {
       TENZIR_WARN("every: dropping {} rows; sub-pipeline not available",
                   input.rows());
@@ -144,111 +144,44 @@ public:
   using EveryBase<void>::EveryBase;
 };
 
-class every_ir final : public ir::Operator {
-public:
-  every_ir() = default;
-
-  every_ir(ast::expression interval, ir::pipeline pipe)
-    : interval_{std::move(interval)}, pipe_{std::move(pipe)} {
-  }
-
-  auto name() const -> std::string override {
-    return "every_ir";
-  }
-
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    // We know that this succeeds because instantiation must happen before.
-    auto interval = as<duration>(interval_);
-    return match(
-      input,
-      [&]<class Input>(tag<Input>) -> AnyOperator {
-        return Every<Input>{interval, std::move(pipe_)};
-      },
-      [&](tag<chunk_ptr>) -> AnyOperator {
-        TENZIR_UNREACHABLE();
-      });
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    TRY(match(
-      interval_,
-      [&](ast::expression& expr) -> failure_or<void> {
-        TRY(expr.substitute(ctx));
-        if (instantiate or expr.is_deterministic(ctx)) {
-          TRY(auto value, const_eval(expr, ctx));
-          auto cast = try_as<duration>(value);
-          if (not cast) {
-            auto got = match(
-              value,
-              []<class T>(const T&) -> type_kind {
-                return tag_v<data_to_type_t<T>>;
-              },
-              [](const pattern&) -> type_kind {
-                TENZIR_UNREACHABLE();
-              });
-            diagnostic::error("expected `duration`, got `{}`", got)
-              .primary(expr)
-              .emit(ctx);
-            return failure::promise();
-          }
-          // We can also do some extended validation here...
-          if (*cast <= duration::zero()) {
-            diagnostic::error("expected a positive duration")
-              .primary(expr)
-              .emit(ctx);
-            return failure::promise();
-          }
-          interval_ = *cast;
-        }
-        return {};
-      },
-      [&](duration&) -> failure_or<void> {
-        return {};
-      }));
-    TRY(pipe_.substitute(ctx, false));
-    return {};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    return pipe_.infer_type(input, dh);
-  }
-
-  friend auto inspect(auto& f, every_ir& x) -> bool {
-    return f.object(x).fields(f.field("interval", x.interval_),
-                              f.field("pipe", x.pipe_));
-  }
-
-private:
-  variant<ast::expression, duration> interval_;
-  ir::pipeline pipe_;
-};
-
-using every_ir_plugin = inspection_plugin<ir::Operator, every_ir>;
-
-class every_compiler_plugin final : public operator_compiler_plugin {
+class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.every";
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
-    // TODO: Improve this with argument parser.
-    if (inv.args.size() != 2) {
-      diagnostic::error("expected exactly two arguments")
-        .primary(inv.op)
-        .emit(ctx);
-      return failure::promise();
-    }
-    TRY(inv.args[0].bind(ctx));
-    auto pipe = as<ast::pipeline_expr>(inv.args[1]);
-    TRY(auto pipe_ir, std::move(pipe.inner).compile(ctx));
-    return every_ir{
-      std::move(inv.args[0]),
-      std::move(pipe_ir),
-    };
+  auto describe() const -> Description override {
+    auto d = Describer<EveryArgs, Every<void>, Every<table_slice>>{};
+    auto interval = d.positional("interval", &EveryArgs::interval, "duration");
+    auto pipe = d.pipeline(&EveryArgs::pipe);
+    d.validate([interval](DescribeCtx& ctx) -> Empty {
+      if (auto v = ctx.get(interval); v and *v <= duration::zero()) {
+        diagnostic::error("interval must be a positive duration")
+          .primary(ctx.get_location(interval).value())
+          .emit(ctx);
+      }
+      return {};
+    });
+    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+      if constexpr (std::same_as<Input, chunk_ptr>) {
+        return {};
+      } else {
+        TRY(auto p, ctx.get(pipe));
+        TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
+        if (output and *output != tag_v<table_slice>) {
+          diagnostic::error("subpipeline must produce events")
+            .primary(p.source)
+            .emit(ctx);
+          return failure::promise();
+        }
+        return std::function<Box<Operator<Input, table_slice>>(EveryArgs)>{
+          [](EveryArgs args) {
+            return Every<Input>{std::move(args)};
+          }};
+      }
+    });
+    return d.without_optimize();
   }
 };
 
@@ -256,5 +189,4 @@ public:
 
 } // namespace tenzir::plugins::every_cron
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_ir_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_compiler_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::plugin)

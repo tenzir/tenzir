@@ -158,14 +158,6 @@ public:
 
 class Version final : public Operator<void, table_slice> {
 public:
-  auto start(OpCtx& ctx) -> Task<void> override {
-    // diagnostic::warning("HELLO from version").emit(ctx);
-    // auto slice = make_version(caf::content(ctx.actor_system().config()));
-    // co_await push(slice);
-    TENZIR_INFO("leaving Version::start");
-    co_return;
-  }
-
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
@@ -181,7 +173,6 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_WARN("processing task with count == {}", count_);
     TENZIR_ASSERT(count_ < total);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
@@ -193,7 +184,6 @@ public:
   }
 
   auto state() -> OperatorState override {
-    TENZIR_ERROR("querying state of version with {}", count_);
     if (count_ == total) {
       return OperatorState::done;
     }
