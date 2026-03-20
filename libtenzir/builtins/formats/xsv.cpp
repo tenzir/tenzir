@@ -433,12 +433,12 @@ struct ReadXsvArgs {
   bool allow_comments = false;
   std::optional<ast::expression> header;
   // multi_series_builder policy (from docs).
-  std::optional<located<std::string>> schema = {};
-  std::optional<located<std::string>> selector = {};
+  std::optional<located<std::string>> schema;
+  std::optional<located<std::string>> selector;
   // multi_series_builder settings (from docs).
   bool schema_only = false;
   bool raw = false;
-  std::optional<located<std::string>> unflatten_separator = {};
+  std::optional<located<std::string>> unflatten_separator;
   bool merge = true;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
@@ -1373,12 +1373,12 @@ public:
 
   auto describe() const -> Description override {
     // Pre-fill separator defaults; field_separator is fixed and not exposed.
-    auto d = Describer<ReadXsvArgs, ReadXsv>{ReadXsvArgs{
-      .field_separator = {std::string{Sep}, location::unknown},
-      .list_separator = {std::string{ListSep}, location::unknown},
-      .null_value = {std::string{Null}, location::unknown},
-      .name = std::string{Name},
-    }};
+    auto defaults = ReadXsvArgs{};
+    defaults.field_separator = {std::string{Sep}, location::unknown};
+    defaults.list_separator = {std::string{ListSep}, location::unknown};
+    defaults.null_value = {std::string{Null}, location::unknown};
+    defaults.name = std::string{Name};
+    auto d = Describer<ReadXsvArgs, ReadXsv>{std::move(defaults)};
     auto list_sep
       = d.named_optional("list_separator", &ReadXsvArgs::list_separator);
     auto null_val = d.named_optional("null_value", &ReadXsvArgs::null_value);
