@@ -1,0 +1,4 @@
+from {timestamp: 2024-01-01T00:00:00Z, value: 1}
+set @timestamp = timestamp
+select value
+select alias = @timestamp, value

@@ -59,11 +59,6 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> {
     auto remappings = extract_field_remappings(assignments_);
-    auto has_explicit_timestamp_assignment
-      = std::ranges::any_of(assignments_, [](const auto& assignment) {
-          auto* meta = std::get_if<ast::meta>(&assignment.left);
-          return meta and meta->kind == ast::meta::timestamp;
-        });
     auto slice = std::move(input);
     // The right-hand side is always evaluated with the original input, because
     // side-effects from preceding assignments shall not be reflected when
@@ -90,6 +85,16 @@ public:
       auto state = std::vector<table_slice>{};
       auto original = subslice(slice, begin, end);
       state.push_back(original);
+      auto tracking_basis = original;
+      for (const auto& assignment : assignments_) {
+        auto* meta = std::get_if<ast::meta>(&assignment.left);
+        if (not meta or meta->kind != ast::meta::timestamp) {
+          continue;
+        }
+        auto assigned = assign_timestamp(assignment.right, tracking_basis, ctx);
+        TENZIR_ASSERT(assigned.size() == 1);
+        tracking_basis = std::move(assigned.front());
+      }
       begin = end;
       auto new_state = std::vector<table_slice>{};
       for (auto [assignment, value] :
@@ -113,21 +118,17 @@ public:
         std::swap(state, new_state);
         new_state.clear();
       }
-      if (has_explicit_timestamp_assignment) {
-        std::ranges::move(state, std::back_inserter(results));
-      } else {
-        auto tracked = std::vector<table_slice>{};
-        auto tracked_begin = size_t{0};
-        for (auto& entry : state) {
-          auto tracked_end = tracked_begin + entry.rows();
-          tracked.push_back(track_event_timestamp_field(
-            subslice(original, tracked_begin, tracked_end), std::move(entry),
-            remappings));
-          tracked_begin = tracked_end;
-        }
-        TENZIR_ASSERT(tracked_begin == original.rows());
-        std::ranges::move(tracked, std::back_inserter(results));
+      auto tracked = std::vector<table_slice>{};
+      auto tracked_begin = size_t{0};
+      for (auto& entry : state) {
+        auto tracked_end = tracked_begin + entry.rows();
+        tracked.push_back(track_event_timestamp_field(
+          subslice(tracking_basis, tracked_begin, tracked_end),
+          std::move(entry), remappings));
+        tracked_begin = tracked_end;
       }
+      TENZIR_ASSERT(tracked_begin == tracking_basis.rows());
+      std::ranges::move(tracked, std::back_inserter(results));
     }
     // TODO: Consider adding a property to function plugins that let's them
     // indicate whether they want their outputs to be strictly ordered. If any
