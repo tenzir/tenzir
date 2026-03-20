@@ -825,10 +825,6 @@ public:
     co_await push(chunk::make(std::move(buffer), std::move(metadata)));
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    TENZIR_UNUSED(serde);
-  }
-
 private:
   auto content_type() const -> std::string {
     if (args_.field_separator.inner == ",") {
@@ -982,10 +978,10 @@ public:
         continue;
       }
       if (buffer_.empty()) {
-        co_await process_line({begin, current}, push, dh);
+        process_line({begin, current}, dh);
       } else {
         buffer_.append(begin, current);
-        co_await process_line(buffer_, push, dh);
+        process_line(buffer_, dh);
         buffer_.clear();
       }
       if (*current == '\r') {
@@ -1009,7 +1005,7 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (not buffer_.empty()) {
-      co_await process_line(buffer_, push, *dh_);
+      process_line(buffer_, *dh_);
       buffer_.clear();
     }
     for (auto& slice : msb_->finalize_as_table_slice()) {
@@ -1018,29 +1014,24 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    TENZIR_UNUSED(serde);
-  }
-
 private:
-  auto process_line(std::string_view line, Push<table_slice>& push,
-                    diagnostic_handler& dh) -> Task<void> {
+  auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
     ++line_counter_;
     if (line.empty()) {
-      co_return;
+      return;
     }
     if (opts_.allow_comments and line.front() == '#') {
-      co_return;
+      return;
     }
     if (not header_) {
       auto parsed = parse_header(line, location::unknown, opts_, quoting_, dh);
       if (not parsed) {
-        co_return;
+        return;
       }
       header_ = std::move(*parsed);
       original_field_count_ = header_->size();
       opts_.header = std::optional{*header_};
-      co_return;
+      return;
     }
     auto r = msb_->record();
     parse_line(line, *header_, *original_field_count_, r, opts_, line_counter_,
