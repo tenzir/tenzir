@@ -509,7 +509,6 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
 /// @returns The YAML representation of *x*, or an error.
 caf::expected<std::string> to_yaml(const data& x);
 
-
 } // namespace tenzir
 
 #include "tenzir/concept/printable/tenzir/data.hpp" // IWYU pragma: keep

@@ -275,9 +275,10 @@ auto argument_parser2::parse(const ast::entity& self,
             }
             if (not cast) {
               // TODO: Attempt conversion.
-              emit(diagnostic::error(
-                     "expected argument of type `{}`, but got `{}`",
-                     type_kind::of<data_to_type_t<T>>, type_kind_of_data(*value))
+              emit(diagnostic::error("expected argument of type `{}`, but got "
+                                     "`{}`",
+                                     type_kind::of<data_to_type_t<T>>,
+                                     type_kind_of_data(*value))
                      .primary(expr));
               return;
             }
