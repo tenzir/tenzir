@@ -8,6 +8,7 @@
 
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::assert_throughput {

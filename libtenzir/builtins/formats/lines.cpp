@@ -15,6 +15,8 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/plugin/parser.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/split_at_regex.hpp>
 #include <tenzir/split_at_string.hpp>

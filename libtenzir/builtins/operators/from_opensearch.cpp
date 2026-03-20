@@ -13,6 +13,7 @@
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view3.hpp"

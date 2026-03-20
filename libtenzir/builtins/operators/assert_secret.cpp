@@ -11,6 +11,7 @@
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/tql2/plugin.hpp>

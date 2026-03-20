@@ -10,6 +10,7 @@
 #include <tenzir/concept/parseable/tenzir/ip.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/ip.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>

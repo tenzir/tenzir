@@ -13,6 +13,7 @@
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"

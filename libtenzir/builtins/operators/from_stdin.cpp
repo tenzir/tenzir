@@ -11,6 +11,7 @@
 #include "tenzir/async/notify.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
 #include <folly/ScopeGuard.h>
