@@ -76,22 +76,40 @@ auto parse_tls_version(std::string_view version) -> caf::expected<tls_version> {
 }
 
 template <typename T>
+auto query_config(std::string_view name, const caf::actor_system_config* cfg)
+  -> const T* {
+  if (not cfg) {
+    return nullptr;
+  }
+  return caf::get_if<T>(&cfg->content, name);
+}
+
+template <typename T>
+auto query_config_or_null(std::string_view name,
+                          const caf::actor_system_config* cfg)
+  -> std::optional<located<T>> {
+  if (auto* x = query_config<T>(name, cfg)) {
+    return located{*x, location::unknown};
+  }
+  return std::nullopt;
+}
+
+template <typename T>
 auto query_config(std::string_view name, operator_control_plane* ctrl)
   -> const T* {
   if (not ctrl) {
     return nullptr;
   }
-  auto& config = ctrl->self().system().config();
-  return caf::get_if<T>(&config.content, name);
+  return query_config<T>(name, &ctrl->self().system().config());
 }
 
 template <typename T>
 auto query_config_or_null(std::string_view name, operator_control_plane* ctrl)
   -> std::optional<located<T>> {
-  if (auto* x = query_config<T>(name, ctrl)) {
-    return located{*x, location::unknown};
+  if (not ctrl) {
+    return std::nullopt;
   }
-  return std::nullopt;
+  return query_config_or_null<T>(name, &ctrl->self().system().config());
 }
 
 template <typename T>
@@ -102,6 +120,34 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
 };
 
 } // namespace
+
+auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
+                                     std::string_view service_name,
+                                     std::optional<uint64_t> plaintext_port,
+                                     std::optional<uint64_t> tls_port)
+  -> diagnostic_builder {
+  diag = std::move(diag).note("`tls` is {} for this connection",
+                              tls_enabled ? "enabled" : "disabled");
+  if (not service_name.empty() and plaintext_port and tls_port) {
+    diag = std::move(diag).note("common {} ports are `{}` without TLS and `{}` "
+                                "with TLS",
+                                service_name, *plaintext_port, *tls_port);
+  }
+  if (tls_enabled) {
+    if (service_name.empty()) {
+      return std::move(diag).hint(
+        "if the server expects a plaintext connection, set `tls=false`");
+    }
+    return std::move(diag).hint("if the {} server expects a plaintext "
+                                "connection, set `tls=false`",
+                                service_name);
+  }
+  if (service_name.empty()) {
+    return std::move(diag).hint("if the server requires TLS, set `tls=true`");
+  }
+  return std::move(diag).hint("if the {} server requires TLS, set `tls=true`",
+                              service_name);
+}
 
 auto tls_options::get_record_bool(std::string_view key) const
   -> std::optional<located<bool>> {
@@ -419,22 +465,33 @@ auto tls_options::validate(std::string_view url, location url_loc,
 }
 
 auto tls_options::update_from_config(operator_control_plane& ctrl) -> void {
+  update_from_config(&ctrl.self().system().config());
+}
+
+auto tls_options::update_from_config(const caf::actor_system_config* cfg)
+  -> void {
   // Only update tls_ from config if not explicitly set
   if (not tls_) {
-    auto config_tls = get_tls(std::addressof(ctrl));
+    auto config_tls = get_tls(cfg);
     tls_ = located{data{config_tls.inner}, config_tls.source};
   }
-  skip_peer_verification_ = get_skip_peer_verification(std::addressof(ctrl));
-  cacert_ = get_cacert(std::addressof(ctrl));
-  certfile_ = get_certfile(std::addressof(ctrl));
-  keyfile_ = get_keyfile(std::addressof(ctrl));
-  tls_min_version_ = get_tls_min_version(std::addressof(ctrl));
-  tls_ciphers_ = get_tls_ciphers(std::addressof(ctrl));
-  tls_client_ca_ = get_tls_client_ca(std::addressof(ctrl));
-  tls_require_client_cert_ = get_tls_require_client_cert(std::addressof(ctrl));
+  skip_peer_verification_ = get_skip_peer_verification(cfg);
+  cacert_ = get_cacert(cfg);
+  certfile_ = get_certfile(cfg);
+  keyfile_ = get_keyfile(cfg);
+  password_ = get_password(cfg);
+  tls_min_version_ = get_tls_min_version(cfg);
+  tls_ciphers_ = get_tls_ciphers(cfg);
+  tls_client_ca_ = get_tls_client_ca(cfg);
+  tls_require_client_cert_ = get_tls_require_client_cert(cfg);
 }
 
 auto tls_options::get_tls(operator_control_plane* ctrl) const -> located<bool> {
+  return get_tls(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_tls(const caf::actor_system_config* cfg) const
+  -> located<bool> {
   if (tls_) {
     // Handle bool case
     if (const auto* b = try_as<bool>(&tls_->inner)) {
@@ -447,7 +504,7 @@ auto tls_options::get_tls(operator_control_plane* ctrl) const -> located<bool> {
     // Fallback (should not happen after validation)
     return located{true, tls_->source};
   }
-  if (auto* x = query_config<bool>("tenzir.tls.enable", ctrl)) {
+  if (auto* x = query_config<bool>("tenzir.tls.enable", cfg)) {
     return {*x, location::unknown};
   }
   return {true, location::unknown};
@@ -455,6 +512,12 @@ auto tls_options::get_tls(operator_control_plane* ctrl) const -> located<bool> {
 
 auto tls_options::get_skip_peer_verification(operator_control_plane* ctrl) const
   -> located<bool> {
+  return get_skip_peer_verification(ctrl ? &ctrl->self().system().config()
+                                         : nullptr);
+}
+
+auto tls_options::get_skip_peer_verification(
+  const caf::actor_system_config* cfg) const -> located<bool> {
   // Priority 1: Check tls record
   if (auto val = get_record_bool("skip_peer_verification")) {
     return *val;
@@ -464,13 +527,18 @@ auto tls_options::get_skip_peer_verification(operator_control_plane* ctrl) const
     return *skip_peer_verification_;
   }
   // Priority 3: Check config
-  if (auto* x = query_config<bool>("tenzir.tls.skip-peer-verification", ctrl)) {
+  if (auto* x = query_config<bool>("tenzir.tls.skip-peer-verification", cfg)) {
     return {*x, location::unknown};
   }
   return {false, location::unknown};
 }
 
 auto tls_options::get_cacert(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_cacert(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_cacert(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("cacert")) {
@@ -481,14 +549,19 @@ auto tls_options::get_cacert(operator_control_plane* ctrl) const
     return cacert_;
   }
   // Priority 3: Check config
-  if (auto x = query_config<std::string>("tenzir.tls.cacert", ctrl);
+  if (auto x = query_config<std::string>("tenzir.tls.cacert", cfg);
       x and not x->empty()) {
     return located{*x, location::unknown};
   }
-  return query_config_or_null<std::string>("tenzir.cacert", ctrl);
+  return query_config_or_null<std::string>("tenzir.cacert", cfg);
 }
 
 auto tls_options::get_certfile(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_certfile(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_certfile(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("certfile")) {
@@ -499,10 +572,15 @@ auto tls_options::get_certfile(operator_control_plane* ctrl) const
     return certfile_;
   }
   // Priority 3: Check config
-  return query_config_or_null<std::string>("tenzir.tls.certfile", ctrl);
+  return query_config_or_null<std::string>("tenzir.tls.certfile", cfg);
 }
 
 auto tls_options::get_keyfile(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_keyfile(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_keyfile(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("keyfile")) {
@@ -510,13 +588,18 @@ auto tls_options::get_keyfile(operator_control_plane* ctrl) const
   }
   // Priority 2: Check explicit member
   if (keyfile_) {
-    return *keyfile_;
+    return keyfile_;
   }
   // Priority 3: Check config
-  return query_config_or_null<std::string>("tenzir.tls.keyfile", ctrl);
+  return query_config_or_null<std::string>("tenzir.tls.keyfile", cfg);
 }
 
 auto tls_options::get_password(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_password(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_password(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("password")) {
@@ -524,13 +607,18 @@ auto tls_options::get_password(operator_control_plane* ctrl) const
   }
   // Priority 2: Check explicit member
   if (password_) {
-    return *password_;
+    return password_;
   }
   // Priority 3: Check config
-  return query_config_or_null<std::string>("tenzir.tls.password", ctrl);
+  return query_config_or_null<std::string>("tenzir.tls.password", cfg);
 }
 
 auto tls_options::get_tls_min_version(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_tls_min_version(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_tls_min_version(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("min_version")) {
@@ -538,13 +626,18 @@ auto tls_options::get_tls_min_version(operator_control_plane* ctrl) const
   }
   // Priority 2: Check explicit member
   if (tls_min_version_) {
-    return *tls_min_version_;
+    return tls_min_version_;
   }
   // Priority 3: Check config
-  return query_config_or_null<std::string>("tenzir.tls.tls-min-version", ctrl);
+  return query_config_or_null<std::string>("tenzir.tls.tls-min-version", cfg);
 }
 
 auto tls_options::get_tls_ciphers(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_tls_ciphers(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_tls_ciphers(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("ciphers")) {
@@ -552,13 +645,18 @@ auto tls_options::get_tls_ciphers(operator_control_plane* ctrl) const
   }
   // Priority 2: Check explicit member
   if (tls_ciphers_) {
-    return *tls_ciphers_;
+    return tls_ciphers_;
   }
   // Priority 3: Check config
-  return query_config_or_null<std::string>("tenzir.tls.tls-ciphers", ctrl);
+  return query_config_or_null<std::string>("tenzir.tls.tls-ciphers", cfg);
 }
 
 auto tls_options::get_tls_client_ca(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  return get_tls_client_ca(ctrl ? &ctrl->self().system().config() : nullptr);
+}
+
+auto tls_options::get_tls_client_ca(const caf::actor_system_config* cfg) const
   -> std::optional<located<std::string>> {
   // Priority 1: Check tls record
   if (auto val = get_record_string("client_ca")) {
@@ -566,14 +664,20 @@ auto tls_options::get_tls_client_ca(operator_control_plane* ctrl) const
   }
   // Priority 2: Check explicit member
   if (tls_client_ca_) {
-    return *tls_client_ca_;
+    return tls_client_ca_;
   }
   // Priority 3: Check config
-  return query_config_or_null<std::string>("tenzir.tls.tls-client-ca", ctrl);
+  return query_config_or_null<std::string>("tenzir.tls.tls-client-ca", cfg);
 }
 
 auto tls_options::get_tls_require_client_cert(operator_control_plane* ctrl) const
   -> located<bool> {
+  return get_tls_require_client_cert(ctrl ? &ctrl->self().system().config()
+                                          : nullptr);
+}
+
+auto tls_options::get_tls_require_client_cert(
+  const caf::actor_system_config* cfg) const -> located<bool> {
   // Priority 1: Check tls record
   if (auto val = get_record_bool("require_client_cert")) {
     return *val;
@@ -583,7 +687,7 @@ auto tls_options::get_tls_require_client_cert(operator_control_plane* ctrl) cons
     return *tls_require_client_cert_;
   }
   // Priority 3: Check config
-  if (auto* x = query_config<bool>("tenzir.tls.require-client-ca", ctrl)) {
+  if (auto* x = query_config<bool>("tenzir.tls.require-client-cert", cfg)) {
     return {*x, location::unknown};
   }
   return {false, location::unknown};
