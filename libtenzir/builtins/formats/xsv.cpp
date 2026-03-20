@@ -1449,6 +1449,10 @@ public:
 class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>>,
                   public virtual OperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "write_xsv";
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = xsv_printer_options{};
