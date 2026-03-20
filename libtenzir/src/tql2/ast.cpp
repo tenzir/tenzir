@@ -373,7 +373,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
 
 auto is_true_literal(const ast::expression& y) -> bool {
   if (auto* constant = std::get_if<ast::constant>(&*y.kind)) {
-    return constant->as_data() == true;
+    return constant->as_data() == data_view3{true};
   }
   return false;
 }

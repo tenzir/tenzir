@@ -137,7 +137,7 @@ struct BinOpKernel<ast::binary_op::add, secret_type, secret_type> {
 template <>
 struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
   using result = secret;
-  static auto evaluate(view<std::string> l, secret_view r)
+  static auto evaluate(view3<std::string> l, secret_view r)
     -> std::variant<result, const char*> {
     return r.with_prepended(l);
   }
@@ -146,7 +146,7 @@ struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
 template <>
 struct BinOpKernel<ast::binary_op::add, secret_type, string_type> {
   using result = secret;
-  static auto evaluate(secret_view l, view<std::string> r)
+  static auto evaluate(secret_view l, view3<std::string> r)
     -> std::variant<result, const char*> {
     return l.with_appended(r);
   }
@@ -352,7 +352,7 @@ template <ast::binary_op Op, basic_type L, basic_type R>
 struct BinOpKernel<Op, L, R> {
   using result = bool;
 
-  static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
+  static auto evaluate(view3<type_to_data_t<L>> l, view3<type_to_data_t<R>> r)
     -> std::variant<result, const char*> {
     if constexpr (std::same_as<secret_type, L>
                   or std::same_as<secret_type, R>) {
@@ -443,8 +443,8 @@ struct EvalBinOp<Op, L, R> {
         }
         continue;
       }
-      auto lv = value_at(L{}, l, i);
-      auto rv = value_at(R{}, r, i);
+      auto lv = *view_at<L>(l, i);
+      auto rv = *view_at<R>(r, i);
       auto res = kernel::evaluate(lv, rv);
       if (auto r = std::get_if<result>(&res)) {
         check(append_builder(result_type{}, *b, *r));
@@ -514,8 +514,8 @@ struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
         check(b.AppendNull());
         continue;
       }
-      auto ip = value_at(ip_type{}, l, i);
-      auto subnet = value_at(subnet_type{}, r, i);
+      auto ip = *view_at<ip_type>(l, i);
+      auto subnet = *view_at<subnet_type>(r, i);
       auto result = subnet.contains(ip);
       check(b.Append(result));
     }
@@ -535,9 +535,9 @@ struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
         check(b.AppendNull());
         continue;
       }
-      auto left_subnet = value_at(subnet_type{}, l, i);
-      auto right_subnet = value_at(subnet_type{}, r, i);
-      auto result = right_subnet.contains(left_subnet);
+      auto left_subnet = view_at<subnet_type>(l, i);
+      auto right_subnet = view_at<subnet_type>(r, i);
+      auto result = right_subnet->contains(*left_subnet);
       check(b.Append(result));
     }
     return finish(b);
@@ -587,7 +587,7 @@ struct EvalBinOp<Op, ip_type, ip_type> {
       } else if (ln && rn) {
         equal = true;
       } else {
-        equal = value_at(ip_type{}, l, i) == value_at(ip_type{}, r, i);
+        equal = *view_at<ip_type>(l, i) == *view_at<ip_type>(r, i);
       }
       b.UnsafeAppend(equal != invert);
     }

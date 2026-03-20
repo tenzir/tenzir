@@ -1245,10 +1245,10 @@ public:
         format_n("app_name", app, 48, args_.app_name);
         format_n("process_id", pid, 128, args_.process_id);
         format_n("message_id", mid, 32, args_.message_id);
-        if (sd and not sd->empty()) {
+        if (sd and sd->begin() != sd->end()) {
           fmt::format_to(it, " ");
           for (const auto& [name, val] : *sd) {
-            const auto* params = try_as<view<record>>(val);
+            const auto* params = try_as<view3<record>>(val);
             if (not params) {
               diagnostic::warning(
                 "structured data `{}` must be of type `record`", name)
@@ -1276,7 +1276,7 @@ public:
     }
   }
 
-  auto format_val(auto& it, std::string_view k, data_view v,
+  auto format_val(auto& it, std::string_view k, data_view3 v,
                   diagnostic_handler& dh) const -> void {
     match(
       v,
@@ -1286,19 +1286,13 @@ public:
       [&](const concepts::integer auto& x) {
         fmt::format_to(it, "\"{}\"", x);
       },
-      [&](const view<map>&) {
-        TENZIR_UNREACHABLE();
-      },
-      [&](const pattern_view&) {
-        TENZIR_UNREACHABLE();
-      },
-      [&](const view<record>&) {
+      [&](const view3<record>&) {
         diagnostic::warning("`structured_data` field `{}` has type `record`", k)
           .primary(args_.loc(args_.structured_data))
           .emit(dh);
         fmt::format_to(it, "\"\"");
       },
-      [&](const view<list>&) {
+      [&](const view3<list>&) {
         diagnostic::warning("`structured_data` field `{}` has type `list`", k)
           .primary(args_.loc(args_.structured_data))
           .emit(dh);
@@ -1327,7 +1321,7 @@ public:
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh,
                auto make_default) const
-    -> generator<std::optional<view<type_to_data_t<T>>>> {
+    -> generator<std::optional<view3<type_to_data_t<T>>>> {
     auto ms = std::invoke([&] {
       if (expr.get_location()) {
         return eval(expr, slice, dh);
@@ -1345,7 +1339,7 @@ public:
       if (s.type.kind().template is<T>()) {
         for (auto val : s.template values<T>()) {
           if (val) {
-            co_yield std::move(val);
+            co_yield std::move(*val);
           } else {
             co_yield make_default();
           }
@@ -1390,7 +1384,7 @@ public:
   template <typename T>
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh) const
-    -> generator<std::optional<view<type_to_data_t<T>>>> {
+    -> generator<std::optional<view3<type_to_data_t<T>>>> {
     return eval_as<T>(name, expr, slice, dh, [] {
       return std::nullopt;
     });
