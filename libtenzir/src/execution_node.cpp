@@ -9,6 +9,7 @@
 #include "tenzir/execution_node.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/connect_to_node.hpp"
 #include "tenzir/curl.hpp"
