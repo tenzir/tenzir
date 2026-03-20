@@ -122,7 +122,7 @@ public:
   using EveryBase::EveryBase;
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push);
     TENZIR_ASSERT(this->next_ > 0);
     // TODO: This can drop events at the boundary between closing the old
@@ -131,10 +131,11 @@ public:
     if (not sub) {
       TENZIR_WARN("every: dropping {} rows; sub-pipeline not available",
                   input.rows());
-      co_return;
+      co_return false;
     }
     auto& pipe = as<OpenPipeline<table_slice>>(*sub);
     std::ignore = co_await pipe.push(std::move(input));
+    co_return false;
   }
 };
 

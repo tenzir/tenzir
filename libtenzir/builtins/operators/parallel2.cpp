@@ -279,9 +279,10 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push);
-    return impl_.process(std::move(input), ctx);
+    co_await impl_.process(std::move(input), ctx);
+    co_return false; // TODO
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

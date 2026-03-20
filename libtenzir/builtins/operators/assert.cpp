@@ -36,7 +36,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto offset = int64_t{0};
     for (auto& filter : eval(args_.invariant, input, ctx)) {
       auto* array = try_as<arrow::BooleanArray>(*filter.array);
@@ -48,7 +48,10 @@ public:
         continue;
       }
       if (array->true_count() == array->length()) {
-        (co_await push(subslice(input, offset, offset + array->length()))).ignore();
+        if ((co_await push(subslice(input, offset, offset + array->length())))
+              .is_err()) {
+          co_return true;
+        }
         offset += array->length();
         continue;
       }
@@ -106,10 +109,13 @@ public:
         print_messages(offset + current_begin, offset + length);
       }
       if (not results.empty()) {
-        (co_await push(concatenate(std::move(results)))).ignore();
+        if ((co_await push(concatenate(std::move(results)))).is_err()) {
+          co_return true;
+        }
       }
       offset += length;
     }
+    co_return false;
   }
 
   friend auto inspect(auto& f, Assert& x) -> bool {

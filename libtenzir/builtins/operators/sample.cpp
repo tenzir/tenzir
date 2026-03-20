@@ -63,7 +63,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     const auto min_events = args_.min_events.value_or(default_min_events);
     if (auto now = std::chrono::steady_clock::now();
@@ -81,7 +81,7 @@ public:
     }
     if (input.rows() == 0
         || (args_.max_samples && *args_.max_samples <= count_)) {
-      co_return;
+      co_return false;
     }
     count_ += input.rows();
     auto batch = to_record_batch(input);
@@ -90,7 +90,8 @@ public:
     offset_ += rows;
     const auto datum = check(arrow::compute::Take(batch, stride_index));
     TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
-    (co_await push(table_slice{datum.record_batch(), input.schema()})).ignore();
+    co_return (co_await push(table_slice{datum.record_batch(), input.schema()}))
+      .is_err();
   }
 
 private:

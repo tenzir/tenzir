@@ -207,9 +207,9 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto result = tenzir::drop(input, args_.fields, ctx.dh(), true);
-    (co_await push(std::move(result))).ignore();
+    co_return (co_await push(std::move(result))).is_err();
   }
 
 private:

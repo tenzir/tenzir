@@ -139,10 +139,10 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     // for ordered batching, on schema change, push the current buffer
     if (order_ == event_order::ordered and not buffers_.empty()
@@ -150,7 +150,9 @@ public:
       TENZIR_ASSERT(buffers_.size() == 1);
       auto& entry = buffers_.begin()->second;
       TENZIR_ASSERT(entry.num_buffered < limit_);
-      (co_await push(concatenate(std::move(entry.events)))).ignore();
+      if ((co_await push(concatenate(std::move(entry.events)))).is_err()) {
+        co_return true;
+      }
       buffers_.clear();
     }
     // get buffer and append
@@ -164,13 +166,16 @@ public:
       auto result = concatenate(std::move(lhs));
       entry.num_buffered -= result.rows();
       entry.start_time = std::chrono::steady_clock::now();
-      (co_await push(std::move(result))).ignore();
+      if ((co_await push(std::move(result))).is_err()) {
+        co_return true;
+      }
       entry.events = std::move(rhs);
     }
     if (entry.num_buffered == 0) {
       buffers_.erase(it);
     }
     update_next_timeout();
+    co_return false;
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {

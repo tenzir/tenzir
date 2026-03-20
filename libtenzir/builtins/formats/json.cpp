@@ -1184,17 +1184,18 @@ public:
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
-      co_return;
+      co_return false;
     }
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
     parser_->parse(as_bytes(input));
     if (parser_->abort_requested) {
-      co_return;
+      co_return false;
     }
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1288,17 +1289,17 @@ public:
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push, ctx);
     if (not input or input->size() == 0) {
-      co_return;
+      co_return false;
     }
     if (args_.jobs > 0) {
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input));
     }
-    co_return;
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1981,13 +1982,13 @@ public:
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs == 0) {
-      co_await push(print_slice(input));
-      co_return;
+      co_return (co_await push(print_slice(input))).is_err();
     }
     co_await write_input_queue_->enqueue(std::move(input));
+    co_return false;
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {

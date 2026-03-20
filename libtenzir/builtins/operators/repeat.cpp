@@ -93,18 +93,18 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     // If count is 0, we don't emit anything (handled by state() returning done)
     if (count_ == 0) {
-      co_return;
+      co_return true;
     }
     // Cache non-empty slices for repetition
     if (input.rows() > 0 && count_ > 1) {
       buffer_.push_back(input);
     }
     // Always emit the input during first pass
-    (co_await push(std::move(input))).ignore();
+    co_return (co_await push(std::move(input))).is_err();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -117,7 +117,6 @@ public:
     for (auto i = uint64_t{1}; i < count_; ++i) {
       for (const auto& slice : buffer_) {
         if ((co_await push(slice)).is_err()) {
-          TENZIR_WARN("repeat cannot push");
           co_return FinalizeBehavior::done;
         }
       }

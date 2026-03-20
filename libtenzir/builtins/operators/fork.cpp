@@ -296,12 +296,12 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (auto sub = ctx.get_sub(int64_t{0})) {
       auto& pipe = as<OpenPipeline<table_slice>>(*sub);
       std::ignore = co_await pipe.push(input);
     }
-    (co_await push(std::move(input))).ignore();
+    co_return (co_await push(std::move(input))).is_err();
   }
 
 private:

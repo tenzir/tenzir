@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -127,9 +128,9 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     auto builder = int64_type::make_arrow_builder(arrow_memory_pool());
     check(builder->Reserve(detail::narrow_cast<int64_t>(input.rows())));
@@ -148,7 +149,7 @@ public:
     }
     auto output = assign(args_.out, series{int64_type{}, finish(*builder)},
                          input, ctx, assign_position::front);
-    (co_await push(std::move(output))).ignore();
+    co_return (co_await push(std::move(output))).is_err();
   }
 
   auto snapshot(Serde& serde) -> void override {

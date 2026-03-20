@@ -73,7 +73,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto it = schemas_.find(input.schema());
     if (it == schemas_.end()) {
       it = schemas_.emplace(input.schema(), limit_).first;
@@ -82,8 +82,9 @@ public:
     if (remaining != 0) {
       auto result = head(std::move(input), remaining);
       it->second -= result.rows();
-      (co_await push(std::move(result))).ignore();
+      co_return (co_await push(std::move(result))).is_err();
     }
+    co_return false;
   }
 
   auto snapshot(Serde& serde) -> void override {

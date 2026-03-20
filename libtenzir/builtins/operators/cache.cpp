@@ -1083,10 +1083,10 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push);
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     if (not announced_) {
       // Pass monitor=false because the sender is a short-lived companion actor
@@ -1097,7 +1097,7 @@ public:
         diagnostic::error(announce_result.error())
           .note("failed to announce cache operator")
           .emit(ctx);
-        co_return;
+        co_return false;
       }
       announced_ = true;
     }
@@ -1108,11 +1108,12 @@ public:
         .note("failed to write to cache")
         .emit(ctx);
       done_ = true;
-      co_return;
+      co_return false;
     }
     if (not *result) {
       done_ = true;
     }
+    co_return false;
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {

@@ -805,19 +805,21 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (impl_->take_restore_failed()) {
       diagnostic::warning("summarize aggregation state could not be restored "
                           "from snapshot; restarting from empty state")
         .emit(provider_->as_session());
     }
-    co_await flush(push);
+    if (co_await flush(push)) {
+      co_return true;
+    }
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     impl_->add(input, provider_->as_session());
-    co_return;
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -864,13 +866,17 @@ public:
 private:
   // Push a summary if a pending_flush_ is set.
   // This only happens if frequency is set.
-  auto flush(Push<table_slice>& push) -> Task<void> {
+  // Returns true if the downstream push returned Err (downstream is closed).
+  auto flush(Push<table_slice>& push) -> Task<bool> {
     if (not std::exchange(pending_flush_, false)) {
-      co_return;
+      co_return false;
     }
     for (auto& slice : impl_->flush(provider_->as_session())) {
-      (co_await push(std::move(slice))).ignore();
+      if ((co_await push(std::move(slice))).is_err()) {
+        co_return true;
+      }
     }
+    co_return false;
   }
 
   std::unique_ptr<implementation2> impl_;

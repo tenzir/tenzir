@@ -59,9 +59,9 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     // Pass through data (should not be called since we return done)
-    (co_await push(std::move(input))).ignore();
+    co_return (co_await push(std::move(input))).is_err();
   }
 
   auto state() -> OperatorState override {

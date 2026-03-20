@@ -159,10 +159,10 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     auto& events = counters_[input.schema()];
     const auto is_new = events == 0;
@@ -183,8 +183,9 @@ public:
     } else {
       metric.field("schema", input.schema().name());
     }
-    (co_await push(builder_.finish_assert_one_slice("tenzir.measure.events")))
-      .ignore();
+    co_return (co_await push(
+                 builder_.finish_assert_one_slice("tenzir.measure.events")))
+      .is_err();
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -202,10 +203,10 @@ public:
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (not input or input->size() == 0) {
-      co_return;
+      co_return false;
     }
     counter_ = args_.cumulative ? counter_ + input->size() : input->size();
 
@@ -214,8 +215,9 @@ public:
     metric.field("timestamp", time::clock::now());
     metric.field("bytes", counter_);
 
-    (co_await push(builder_.finish_assert_one_slice("tenzir.measure.bytes")))
-      .ignore();
+    co_return (co_await push(
+                 builder_.finish_assert_one_slice("tenzir.measure.bytes")))
+      .is_err();
   }
 
   auto snapshot(Serde& serde) -> void override {

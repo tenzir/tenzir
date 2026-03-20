@@ -186,8 +186,12 @@ template <class Input, class Output>
 class OperatorInputOutputBase {
 public:
   /// Process a single input item. See file-level docs for invariants.
+  ///
+  /// Returns true if no further input is needed. This typically means
+  /// that downstream operator has finished and will cause this operator
+  /// to finalize as well.
   virtual auto process(Input input, Push<Output>& push, OpCtx& ctx)
-    -> Task<void>
+    -> Task<bool>
     = 0;
 
 protected:

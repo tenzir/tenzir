@@ -41,8 +41,8 @@ auto global_registry() -> std::shared_ptr<const registry>;
 class Pass final : public Operator<table_slice, table_slice> {
 public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    (co_await push(std::move(input))).ignore();
+    -> Task<bool> override {
+    co_return (co_await push(std::move(input))).is_err();
   }
 };
 
@@ -305,7 +305,6 @@ struct Terminated {};
 struct SubPipelineFinished {};
 struct SubPipelineReadyForShutdown {};
 struct SubPipelineTerminated {};
-
 struct SubPipelineEvent {
   data key;
   variant<SubPipelineFinished, SubPipelineReadyForShutdown,
@@ -760,12 +759,13 @@ private:
                     co_return;
                   });
               });
+            // When downstream closes, we exit the loop and drop
+            // `pull_downstream`, closing the sub-pipeline's output channel
+            // from the receiver side. The sub-pipeline's operator(s) will
+            // observe Err from their push operations and terminate. The
+            // OpChannel backpressure loop checks receiver_closed_ to avoid
+            // blocking forever when no receiver is consuming.
           }
-          // If downstream closed before the sub-pipeline sent EndOfData, we
-          // drop `pull_downstream` here (end of scope), closing the
-          // sub-pipeline's output channel from the receiver side. This causes
-          // the sub-pipeline's last operator's push to return Err, which
-          // cascades backward through the sub-pipeline and terminates it.
           if (not saw_end_of_data) {
             if (not output_is_void and not downstream_closed) {
               LOGW("subpipeline channel closed without EndOfData");
@@ -1005,16 +1005,17 @@ private:
   }
 
   template <class DataInput>
-  auto call_process(DataInput input) -> Task<void> {
-    co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+  auto call_process(DataInput input) -> Task<bool> {
+    co_return co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<bool> {
         if constexpr (std::same_as<In, DataInput>) {
           if constexpr (std::same_as<Out, void>) {
             co_await op->process(input, *this);
+            co_return false;
           } else {
             auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
             auto wrapper = OpPushWrapper{push};
-            co_await op->process(input, wrapper, *this);
+            co_return co_await op->process(input, wrapper, *this);
           }
         } else {
           TENZIR_UNREACHABLE();
@@ -1122,14 +1123,18 @@ private:
         if (is_done_) {
           co_return;
         }
-        co_await call_process(std::move(input));
+        if (co_await call_process(std::move(input))) {
+          co_await handle_done();
+        }
       },
       [&](chunk_ptr input) -> Task<void> {
         LOGV("got input in {}", op_name());
         if (is_done_) {
           co_return;
         }
-        co_await call_process(std::move(input));
+        if (co_await call_process(std::move(input))) {
+          co_await handle_done();
+        }
       },
       [&](Signal signal) -> Task<void> {
         co_await co_match(

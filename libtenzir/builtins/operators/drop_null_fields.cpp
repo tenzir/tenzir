@@ -210,11 +210,14 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto output = drop_null_fields_impl(std::move(input), selectors_, ctx.dh());
     for (auto& slice : output) {
-      (co_await push(std::move(slice))).ignore();
+      if ((co_await push(std::move(slice))).is_err()) {
+        co_return true;
+      }
     }
+    co_return false;
   }
 
 private:

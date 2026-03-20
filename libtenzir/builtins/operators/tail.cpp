@@ -26,7 +26,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push, ctx);
     buffered_rows_ += input.rows();
     buffer_.push_back(std::move(input));
@@ -35,7 +35,7 @@ public:
       buffered_rows_ -= buffer_.front().rows();
       buffer_.erase(buffer_.begin());
     }
-    co_return;
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

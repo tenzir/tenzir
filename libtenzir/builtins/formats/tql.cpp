@@ -242,9 +242,9 @@ public:
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (done_ || not input || input->size() == 0) {
-      co_return;
+      co_return false;
     }
     // Append new data to buffer
     buffer_.append(reinterpret_cast<const char*>(input->data()), input->size());
@@ -255,10 +255,11 @@ public:
       buffer_.clear();
       buffer_offset_ = 0;
       done_ = true;
-      co_return;
+      co_return false;
     }
     // Process complete records from buffer
     process_buffer(ctx, false);
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

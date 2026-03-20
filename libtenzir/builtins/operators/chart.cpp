@@ -269,15 +269,16 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>&, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (input.rows() == 0 or not prep_) {
-      co_return;
+      co_return false;
     }
     auto slice = filter_input(std::move(input), ctx.dh());
     if (slice.rows() > 0) {
       auto sp = session_provider::make(ctx.dh());
       process_slice(slice, sp.as_session());
     }
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

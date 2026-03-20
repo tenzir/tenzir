@@ -827,7 +827,8 @@ public:
     // exceed the limit, but the sender waits for drain before continuing.
     if (lock->current_bytes > max_bytes_) {
       auto bp_start = std::chrono::steady_clock::now();
-      while (lock->current_bytes > max_bytes_) {
+      while (lock->current_bytes > max_bytes_
+             and not receiver_closed_.load(std::memory_order::acquire)) {
         lock.unlock();
         co_await notify_send_.wait();
         lock = co_await mutex_.lock();
@@ -891,6 +892,9 @@ public:
 
   void close_receiver() {
     receiver_closed_.store(true, std::memory_order::release);
+    // Signal twice: once to wake a sender blocked in the backpressure loop,
+    // and once more in case the first token was consumed by a racing check.
+    notify_send_.notify_one();
     notify_send_.notify_one();
   }
 

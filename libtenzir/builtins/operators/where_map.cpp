@@ -841,11 +841,12 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto output = filter2(input, expr_, ctx, false);
     if (output.rows() > 0) {
-      (co_await push(std::move(output))).ignore();
+      co_return (co_await push(std::move(output))).is_err();
     }
+    co_return false;
   }
 
   friend auto inspect(auto& f, Where& x) -> bool {

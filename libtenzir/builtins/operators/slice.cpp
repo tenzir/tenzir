@@ -355,18 +355,19 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (needs_buffering_) {
       offset_ += static_cast<int64_t>(input.rows());
       buffer_.push_back(std::move(input));
-      co_return;
+      co_return false;
     }
     // Streaming mode: positive begin, positive end, positive stride
     auto result = process_streaming(std::move(input));
     if (result.rows() > 0) {
-      (co_await push(std::move(result))).ignore();
+      co_return (co_await push(std::move(result))).is_err();
     }
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

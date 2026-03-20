@@ -239,9 +239,9 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     if (not start_time_) {
       start_time_ = std::chrono::steady_clock::now();
@@ -281,7 +281,9 @@ public:
         if (delay > duration::zero()) {
           if (end > begin) {
             // emit data points before current
-            (co_await push(subslice(input, begin, end))).ignore();
+            if ((co_await push(subslice(input, begin, end))).is_err()) {
+              co_return true;
+            }
             begin = end;
           }
           co_await sleep_for(delay);
@@ -290,7 +292,7 @@ public:
         ++end;
       }
     }
-    (co_await push(subslice(input, begin, end))).ignore();
+    co_return (co_await push(subslice(input, begin, end))).is_err();
   }
 
   auto snapshot(Serde& serde) -> void override {

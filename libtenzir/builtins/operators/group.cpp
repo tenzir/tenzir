@@ -28,7 +28,7 @@ public:
   }
 
   auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push);
     // TODO
     auto key_value = ast::constant::kind{"hi"};
@@ -42,7 +42,7 @@ public:
       auto sub_ctx = substitute_ctx{ctx, &env};
       auto copy = pipe_;
       if (not copy.substitute(sub_ctx, true)) {
-        co_return;
+        co_return false;
       }
       sub = co_await ctx.spawn_sub(std::move(key_data), std::move(copy),
                                    tag_v<table_slice>);
@@ -50,10 +50,7 @@ public:
     TENZIR_ASSERT(sub);
     auto& cast = as<OpenPipeline<table_slice>>(*sub);
     auto result = co_await cast.push(std::move(input));
-    auto closed = result.is_err();
-    if (closed) {
-      // TODO: Ignore?
-    }
+    co_return false;
   }
 
   auto snapshot(Serde& serde) -> void override {

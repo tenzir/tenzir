@@ -56,7 +56,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> {
+    -> Task<bool> {
     auto slice = std::move(input);
     // The right-hand side is always evaluated with the original input, because
     // side-effects from preceding assignments shall not be reflected when
@@ -105,8 +105,11 @@ public:
                                &table_slice::schema);
     }
     for (auto& result : rebatch(std::move(results))) {
-      (co_await push(std::move(result))).ignore();
+      if ((co_await push(std::move(result))).is_err()) {
+        co_return true;
+      }
     }
+    co_return false;
   }
 
 private:
@@ -222,7 +225,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
-    -> Task<void> {
+    -> Task<bool> {
     // FIXME: If the inner subpipelines terminate and get erased, this can fail.
     auto true_sub = check(ctx.get_sub(true));
     auto consequence = as<OpenPipeline<table_slice>>(std::move(true_sub));
@@ -275,10 +278,13 @@ public:
           alternative_closed_
             = (co_await alternative->push(std::move(slice))).is_err();
         } else if (push) {
-          co_await (*push)(std::move(slice));
+          if ((co_await (*push)(std::move(slice))).is_err()) {
+            co_return true;
+          }
         }
       }
     }
+    co_return false;
   }
 
   auto state() -> OperatorState {
@@ -304,7 +310,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     return impl_.process(std::move(input), ctx, &push);
   }
 
@@ -327,7 +333,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    return impl_.process(std::move(input), ctx);
+    std::ignore = co_await impl_.process(std::move(input), ctx);
   }
 
   auto state() -> OperatorState override {

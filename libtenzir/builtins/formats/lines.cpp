@@ -361,9 +361,9 @@ public:
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (not input or input->size() == 0) {
-      co_return;
+      co_return false;
     }
     if (args_.jobs > 0) {
       co_await process_parallel(std::move(input));
@@ -371,9 +371,11 @@ public:
       process_sequential(std::move(input), ctx);
       // Flush if we've accumulated enough data.
       if (builder_.length() > 0) {
-        co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+        co_return (co_await push(builder_.finish_assert_one_slice("tenzir.line")))
+          .is_err();
       }
     }
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -758,16 +760,16 @@ public:
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(ctx);
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     if (args_.jobs > 0) {
       co_await write_input_queue_->enqueue(std::move(input));
-      co_return;
+      co_return false;
     }
-    co_await push(print_slice(input));
+    co_return (co_await push(print_slice(input))).is_err();
   }
 
   auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)

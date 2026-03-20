@@ -652,7 +652,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     TENZIR_UNUSED(push);
     auto const length = detail::narrow<int64_t>(input.rows());
     indices_.reserve(indices_.size() + input.rows());
@@ -661,7 +661,7 @@ public:
     }
     keys_.push_back(eval(expr_, input, ctx.dh()));
     events_.push_back(std::move(input));
-    co_return;
+    co_return false;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

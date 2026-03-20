@@ -23,13 +23,13 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     // TODO: Do we want to guarantee this?
     TENZIR_ASSERT(remaining_ > 0);
     auto result = tenzir::head(input, remaining_);
     TENZIR_ASSERT(result.rows() <= remaining_);
     remaining_ -= result.rows();
-    (co_await push(std::move(result))).ignore();
+    co_return (co_await push(std::move(result))).is_err();
   }
 
   auto state() -> OperatorState override {

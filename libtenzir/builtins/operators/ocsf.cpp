@@ -1489,7 +1489,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto output = process_cast_slice(input, args_.operator_location, ctx.dh(),
                                      not args_.encode_variants, args_.null_fill,
                                      args_.timestamp_to_ms);
@@ -1497,8 +1497,11 @@ public:
       if (out.rows() == 0) {
         continue;
       }
-      (co_await push(std::move(out))).ignore();
+      if ((co_await push(std::move(out))).is_err()) {
+        co_return true;
+      }
     }
+    co_return false;
   }
 
 private:
@@ -1517,7 +1520,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto output
       = process_trim_slice(input, args_.operator_location, ctx.dh(),
                            args_.drop_optional, args_.drop_recommended);
@@ -1525,8 +1528,11 @@ public:
       if (out.rows() == 0) {
         continue;
       }
-      (co_await push(std::move(out))).ignore();
+      if ((co_await push(std::move(out))).is_err()) {
+        co_return true;
+      }
     }
+    co_return false;
   }
 
 private:
@@ -1543,15 +1549,18 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto output
       = process_derive_slice(input, args_.operator_location, ctx.dh());
     for (auto&& out : output) {
       if (out.rows() == 0) {
         continue;
       }
-      (co_await push(std::move(out))).ignore();
+      if ((co_await push(std::move(out))).is_err()) {
+        co_return true;
+      }
     }
+    co_return false;
   }
 
 private:

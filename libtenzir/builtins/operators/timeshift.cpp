@@ -116,9 +116,9 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     if (input.rows() == 0) {
-      co_return;
+      co_return false;
     }
     // eval
     auto s = eval(selector_, input, ctx.dh());
@@ -129,8 +129,7 @@ public:
           .primary(selector_)
           .emit(ctx.dh());
       }
-      (co_await push(std::move(input))).ignore();
-      co_return;
+      co_return (co_await push(std::move(input))).is_err();
     }
     // map values
     const auto& array = as<arrow::TimestampArray>(*s.array);
@@ -154,7 +153,7 @@ public:
     auto times = series{time_type{}, finish(*b)};
     // output
     auto output = assign(selector_, std::move(times), input, ctx.dh());
-    (co_await push(std::move(output))).ignore();
+    co_return (co_await push(std::move(output))).is_err();
   }
 
   auto snapshot(Serde& serde) -> void override {

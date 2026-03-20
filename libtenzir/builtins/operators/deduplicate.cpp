@@ -514,12 +514,13 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<bool> override {
     auto output = deduplicate_slice(input, cfg_, cleanup_duration_, states_,
                                     row_, last_cleanup_time_, ctx);
     if (output.rows() > 0) {
-      (co_await push(std::move(output))).ignore();
+      co_return (co_await push(std::move(output))).is_err();
     }
+    co_return false;
   }
 
   auto snapshot(Serde& serde) -> void override {
