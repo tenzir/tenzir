@@ -11,10 +11,10 @@
 {
   id: 2,
   ts: 1990-01-01T00:00:02Z,
-  delayed: 2.5s,
+  delayed: 2s,
 }
 {
   id: 3,
-  ts: 1990-01-01T00:00:03Z,
-  delayed: 3s,
+  ts: 1990-01-01T00:00:04Z,
+  delayed: 4s,
 }
