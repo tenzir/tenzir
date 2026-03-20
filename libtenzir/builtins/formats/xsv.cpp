@@ -1412,10 +1412,12 @@ public:
         (void)check_no_substrings(ctx, {{"field_separator", fs_loc},
                                         {"null_value", *nv}});
       }
-      if (ls and nv) {
-        (void)check_no_substrings(ctx, {{"list_separator", *ls},
-                                        {"null_value", *nv}});
-      }
+      auto effective_ls
+        = ls.value_or(located{std::string{ListSep}, location::unknown});
+      auto effective_nv
+        = nv.value_or(located{std::string{Null}, location::unknown});
+      (void)check_no_substrings(ctx, {{"list_separator", effective_ls},
+                                      {"null_value", effective_nv}});
       auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
       for (const char q : qs.inner) {
         if (fs_loc.inner.find(q) != std::string::npos) {
@@ -1561,10 +1563,12 @@ public:
         (void)check_no_substrings(ctx, {{"field_separator", fs_loc},
                                         {"null_value", *nv}});
       }
-      if (ls and nv) {
-        (void)check_no_substrings(ctx, {{"list_separator", *ls},
-                                        {"null_value", *nv}});
-      }
+      auto effective_ls
+        = ls.value_or(located{std::string{ListSep}, location::unknown});
+      auto effective_nv
+        = nv.value_or(located{std::string{Null}, location::unknown});
+      (void)check_no_substrings(ctx, {{"list_separator", effective_ls},
+                                      {"null_value", effective_nv}});
       return {};
     });
     return d.without_optimize();
