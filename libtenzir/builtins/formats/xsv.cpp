@@ -857,6 +857,9 @@ public:
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
     if (input.rows() == 0) {
       co_return;
     }
@@ -868,6 +871,7 @@ public:
           "multiple schemas are not supported when header is enabled")
           .note("got schema `{}` after schema `{}`", input.schema(), *schema_)
           .emit(ctx);
+        failed_ = true;
         co_return;
       }
     }
@@ -908,6 +912,7 @@ private:
 
   WriteXsvArgs args_;
   bool first_ = true;
+  bool failed_ = false;
   Option<type> schema_;
 };
 
