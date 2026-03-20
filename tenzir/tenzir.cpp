@@ -14,7 +14,6 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/eval_optimizations.hpp"
 #include "tenzir/legacy_type.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
@@ -523,17 +522,6 @@ auto main(int argc, char** argv) -> int try {
       }
     });
   auto sys = caf::actor_system{cfg};
-  // Schedule periodic clearing of the eval cache to prevent unbounded growth.
-  {
-    constexpr auto interval = std::chrono::minutes{1};
-    auto reschedule = [&sys, interval](this auto self) {
-      clear_eval_cache();
-      sys.clock().schedule(sys.clock().now() + interval,
-                           caf::make_single_shot_action(self));
-    };
-    sys.clock().schedule(sys.clock().now() + interval,
-                         caf::make_single_shot_action(reschedule));
-  }
   auto run_error = caf::error{};
   if (is_server) {
     // The reflector scope variable cleans up the reflector on destruction.

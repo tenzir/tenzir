@@ -14,7 +14,6 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/eval_optimizations.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -739,7 +738,7 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
 }
 
 auto evaluator::to_series(const data& x) const -> series {
-  return cached_data_to_series(x, length_);
+  return data_to_series(x, length_);
 }
 
 } // namespace tenzir
