@@ -780,22 +780,32 @@ else ()
     target_compile_features(libcaf_core INTERFACE cxx_std_17)
     target_compile_options(
       libcaf_core
-      PRIVATE
-        -Wno-maybe-uninitialized
-        -Wno-unqualified-std-cast-call
-        -Wno-unknown-warning-option
-        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
-        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
+      PRIVATE -Wno-maybe-uninitialized
+              -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option
+              $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+              -Wno-c2y-extensions>
+              $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     TenzirSystemizeTarget(libcaf_io)
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
-      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-                        -Wno-unknown-warning-option)
+      libcaf_io
+      PRIVATE -Wno-maybe-uninitialized
+              -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option
+              $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+              -Wno-c2y-extensions>
+              $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     TenzirSystemizeTarget(libcaf_net)
     set_target_properties(libcaf_net PROPERTIES EXPORT_NAME net)
     target_compile_options(
-      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-                        -Wno-unknown-warning-option)
+      libcaf_net
+      PRIVATE -Wno-maybe-uninitialized
+              -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option
+              $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+              -Wno-c2y-extensions>
+              $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     if (NOT TARGET libcaf_openssl)
       string(
         JOIN " " err_message
