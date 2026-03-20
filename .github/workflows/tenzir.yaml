@@ -226,6 +226,7 @@ jobs:
             "scripts/debian/build-*.sh" \
             "scripts/debian/install-dev-dependencies.sh" \
             ".github/workflows/docker.yaml" \
+            ".github/workflows/push-manifest.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed tenzir-nix \

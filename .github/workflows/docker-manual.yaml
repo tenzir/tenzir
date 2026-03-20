@@ -88,7 +88,7 @@ jobs:
                 empty
               end
             ] | ."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
-            --arg vs "${{ steps.version.outputs.version-build-metadata }}" \
+            --arg vs "${{ steps.version.outputs.tenzir-version-build-metadata }}" \
             --arg source "${source_tag}" \
             --args -- "${tags[@]}")"
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
