@@ -1,0 +1,5 @@
+from_stdin {
+  compress_zstd
+  decompress_zstd
+  read_json
+}
