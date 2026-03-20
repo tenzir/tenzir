@@ -477,6 +477,61 @@ auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
           selector_arg, so_arg,     unflatten_arg};
 }
 
+auto validate_quote_conflicts(
+  DescribeCtx& ctx, const located<std::string>& quotes,
+  const located<std::string>& field_separator,
+  const std::optional<located<std::string>>& list_separator,
+  const std::optional<located<std::string>>& null_value) -> void {
+  for (const char q : quotes.inner) {
+    if (field_separator.inner.find(q) != std::string::npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`field_separator=\"{}\"`",
+                        q, field_separator.inner)
+        .primary(quotes.source)
+        .primary(field_separator.source)
+        .emit(ctx);
+    }
+    if (list_separator and list_separator->inner.find(q) != std::string::npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`list_separator=\"{}\"`",
+                        q, list_separator->inner)
+        .primary(quotes.source)
+        .primary(list_separator->source)
+        .emit(ctx);
+    }
+    if (null_value and null_value->inner.find(q) != std::string::npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`null_value=\"{}\"`",
+                        q, null_value->inner)
+        .primary(quotes.source)
+        .primary(null_value->source)
+        .emit(ctx);
+    }
+  }
+}
+
+auto validate_multi_series_builder_args(DescribeCtx& ctx,
+                                        const ReadXsvCommonHandles& common)
+  -> void {
+  if (auto sc = ctx.get(common.schema);
+      sc.has_value() and ctx.get(common.selector).has_value()) {
+    diagnostic::error("`schema` and `selector` are mutually exclusive")
+      .primary(sc->source)
+      .emit(ctx);
+  }
+  if (auto so = ctx.get(common.schema_only);
+      so.has_value() and *so and not ctx.get(common.schema).has_value()
+      and not ctx.get(common.selector).has_value()) {
+    diagnostic::error("`schema_only` requires `schema` or `selector`").emit(ctx);
+  }
+  if (auto u = ctx.get(common.unflatten_separator);
+      u.has_value() and u->inner.empty()) {
+    diagnostic::error("`unflatten_separator` must not be empty")
+      .primary(u->source)
+      .emit(ctx);
+  }
+}
+
 // WriteXsv and ReadXsv are defined after xsv_printer_impl and parse_line.
 struct xsv_printer_impl {
   xsv_printer_impl(std::string_view sep, std::string_view list_sep,
@@ -1307,50 +1362,9 @@ public:
                                        {"list_separator", ls},
                                        {"null_value", nv}});
         auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
-        for (const char q : qs.inner) {
-          if (fs.inner.find(q) != std::string::npos) {
-            diagnostic::error("quote character `{}` conflicts with "
-                              "`field_separator=\"{}\"`",
-                              q, fs.inner)
-              .primary(qs.source)
-              .primary(fs.source)
-              .emit(ctx);
-          }
-          if (ls.inner.find(q) != std::string::npos) {
-            diagnostic::error("quote character `{}` conflicts with "
-                              "`list_separator=\"{}\"`",
-                              q, ls.inner)
-              .primary(qs.source)
-              .primary(ls.source)
-              .emit(ctx);
-          }
-          if (nv.inner.find(q) != std::string::npos) {
-            diagnostic::error("quote character `{}` conflicts with "
-                              "`null_value=\"{}\"`",
-                              q, nv.inner)
-              .primary(qs.source)
-              .primary(nv.source)
-              .emit(ctx);
-          }
-        }
-        if (auto sc = ctx.get(common.schema);
-            sc.has_value() and ctx.get(common.selector).has_value()) {
-          diagnostic::error("`schema` and `selector` are mutually exclusive")
-            .primary(sc->source)
-            .emit(ctx);
-        }
-        if (auto so = ctx.get(common.schema_only);
-            so.has_value() and *so and not ctx.get(common.schema).has_value()
-            and not ctx.get(common.selector).has_value()) {
-          diagnostic::error("`schema_only` requires `schema` or `selector`")
-            .emit(ctx);
-        }
-        if (auto u = ctx.get(common.unflatten_separator);
-            u.has_value() and u->inner.empty()) {
-          diagnostic::error("`unflatten_separator` must not be empty")
-            .primary(u->source)
-            .emit(ctx);
-        }
+        validate_quote_conflicts(ctx, qs, fs, std::optional{ls},
+                                 std::optional{nv});
+        validate_multi_series_builder_args(ctx, common);
         return {};
       });
     return d.without_optimize();
@@ -1419,50 +1433,8 @@ public:
       (void)check_no_substrings(ctx, {{"list_separator", effective_ls},
                                       {"null_value", effective_nv}});
       auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
-      for (const char q : qs.inner) {
-        if (fs_loc.inner.find(q) != std::string::npos) {
-          diagnostic::error("quote character `{}` conflicts with "
-                            "`field_separator=\"{}\"`",
-                            q, fs_loc.inner)
-            .primary(qs.source)
-            .primary(fs_loc.source)
-            .emit(ctx);
-        }
-        if (ls and ls->inner.find(q) != std::string::npos) {
-          diagnostic::error("quote character `{}` conflicts with "
-                            "`list_separator=\"{}\"`",
-                            q, ls->inner)
-            .primary(qs.source)
-            .primary(ls->source)
-            .emit(ctx);
-        }
-        if (nv and nv->inner.find(q) != std::string::npos) {
-          diagnostic::error("quote character `{}` conflicts with "
-                            "`null_value=\"{}\"`",
-                            q, nv->inner)
-            .primary(qs.source)
-            .primary(nv->source)
-            .emit(ctx);
-        }
-      }
-      if (auto sc = ctx.get(common.schema);
-          sc.has_value() and ctx.get(common.selector).has_value()) {
-        diagnostic::error("`schema` and `selector` are mutually exclusive")
-          .primary(sc->source)
-          .emit(ctx);
-      }
-      if (auto so = ctx.get(common.schema_only);
-          so.has_value() and *so and not ctx.get(common.schema).has_value()
-          and not ctx.get(common.selector).has_value()) {
-        diagnostic::error("`schema_only` requires `schema` or `selector`")
-          .emit(ctx);
-      }
-      if (auto u = ctx.get(common.unflatten_separator);
-          u.has_value() and u->inner.empty()) {
-        diagnostic::error("`unflatten_separator` must not be empty")
-          .primary(u->source)
-          .emit(ctx);
-      }
+      validate_quote_conflicts(ctx, qs, fs_loc, ls, nv);
+      validate_multi_series_builder_args(ctx, common);
       return {};
     });
     return d.without_optimize();
