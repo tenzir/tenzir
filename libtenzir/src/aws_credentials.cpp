@@ -106,8 +106,9 @@ public:
     auto now = std::chrono::system_clock::now();
     if (credentials_.IsEmpty() or now >= expiration_ - refresh_buffer_) {
       // Check if we should retry based on backoff.
-      if (consecutive_failures_ > 0 and now < next_retry_time_) {
-        // Return existing credentials (may be expired but could still work).
+      if (consecutive_failures_ > 0 and now < next_retry_time_
+          and not credentials_.IsEmpty() and now < expiration_) {
+        // Keep serving the cached session only while it is still valid.
         TENZIR_DEBUG("web identity refresh in backoff, returning cached "
                      "credentials");
         return credentials_;
@@ -178,8 +179,11 @@ private:
     if (consecutive_failures_ >= max_consecutive_failures) {
       TENZIR_ERROR("{} (attempt {}/{}, max retries reached)", last_error_,
                    consecutive_failures_, max_consecutive_failures);
-      // Clear credentials only after max retries exceeded.
-      credentials_ = {};
+      // Preserve a still-valid cached session across transient STS outages.
+      if (credentials_.IsEmpty()
+          or std::chrono::system_clock::now() >= expiration_) {
+        credentials_ = {};
+      }
     } else {
       TENZIR_WARN(
         "{} (attempt {}/{}, retrying in {}s)", last_error_,
@@ -195,6 +199,7 @@ private:
   std::optional<std::string> region_;
   std::chrono::seconds refresh_buffer_;
 
+  // AWS SDK credential callbacks are synchronous, so a blocking mutex is fine.
   mutable std::mutex mutex_;
   Aws::Auth::AWSCredentials credentials_;
   std::chrono::system_clock::time_point expiration_;
@@ -370,7 +375,7 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
                           : body;
       return diagnostic::error("HTTP request failed")
         .note("status code: {}", status)
-        .note("endpoint: {}", te.url)
+        .note("endpoint: <redacted token endpoint>")
         .note("response: {}", error_body)
         .to_error();
     }

@@ -219,39 +219,16 @@ auto aws_iam_options::from_record(located<record> config,
       .emit(dh);
     return failure::promise();
   }
-  const auto assign_secret
-    = [&](std::string_view key, std::optional<secret>& x) -> failure_or<void> {
-    if (auto it = config.inner.find(key); it != config.inner.end()) {
-      if (auto* s = try_as<secret>(it->second.get_data())) {
-        x = std::move(*s);
-      } else if (auto* str = try_as<std::string>(it->second.get_data())) {
-        // Allow plain strings as well, convert to literal secret
-        if (str->empty()) {
-          diagnostic::error("'{}' must not be empty", key)
-            .primary(config)
-            .emit(dh);
-          return failure::promise();
-        }
-        x = secret::make_literal(std::move(*str));
-      } else {
-        diagnostic::error("'{}' must be a `string` or `secret`", key)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    return {};
-  };
   auto opts = aws_iam_options{};
   opts.loc = config.source;
-  TRY(assign_secret("region", opts.region));
-  TRY(assign_secret("profile", opts.profile));
-  TRY(assign_secret("assume_role", opts.role));
-  TRY(assign_secret("session_name", opts.session_name));
-  TRY(assign_secret("external_id", opts.external_id));
-  TRY(assign_secret("access_key_id", opts.access_key_id));
-  TRY(assign_secret("secret_access_key", opts.secret_access_key));
-  TRY(assign_secret("session_token", opts.session_token));
+  TRY(assign_secret(config, "region", opts.region, dh));
+  TRY(assign_secret(config, "profile", opts.profile, dh));
+  TRY(assign_secret(config, "assume_role", opts.role, dh));
+  TRY(assign_secret(config, "session_name", opts.session_name, dh));
+  TRY(assign_secret(config, "external_id", opts.external_id, dh));
+  TRY(assign_secret(config, "access_key_id", opts.access_key_id, dh));
+  TRY(assign_secret(config, "secret_access_key", opts.secret_access_key, dh));
+  TRY(assign_secret(config, "session_token", opts.session_token, dh));
   // Parse web_identity as a nested record.
   if (auto it = config.inner.find("web_identity"); it != config.inner.end()) {
     if (auto* r = try_as<record>(it->second.get_data())) {

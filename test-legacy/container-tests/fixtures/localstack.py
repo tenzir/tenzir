@@ -27,6 +27,8 @@ Usage overview:
 - **LOCALSTACK_WEB_IDENTITY_ROLE_ARN** – ARN of a test IAM role for web identity tests.
 - **LOCALSTACK_WEB_IDENTITY_TOKEN_FILE** – Path to a file containing a test JWT token.
 - **LOCALSTACK_WEB_IDENTITY_TOKEN** – The test JWT token value (for direct token tests).
+- **LOCALSTACK_WEB_IDENTITY_TOKEN_ENDPOINT** – Local HTTP endpoint returning a JSON token payload.
+- **LOCALSTACK_WEB_IDENTITY_TOKEN_ENDPOINT_HEADER** – Required header value for the token endpoint.
 
 The fixture uses Podman or Docker to run LocalStack and creates test resources
 automatically. It requires either Podman or Docker to be available in the
@@ -40,8 +42,10 @@ import logging
 import shutil
 import socket
 import subprocess
+import threading
 import time
 import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Iterator
 
 from tenzir_test import fixture
@@ -64,6 +68,60 @@ def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _start_token_endpoint_server(
+    token: str,
+) -> tuple[ThreadingHTTPServer, threading.Thread, str, str]:
+    """Start a tiny local HTTP server that serves the test web identity token."""
+    required_header_name = "X-Test-Authorization"
+    required_header_value = "allow-token"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path != "/token":
+                self.send_response(404)
+                self.end_headers()
+                return
+            if self.headers.get(required_header_name) != required_header_value:
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error":"missing required header"}')
+                return
+            payload = json.dumps({"access_token": token}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format: str, *args: object) -> None:
+            logger.debug("token endpoint: " + format, *args)
+
+    port = _find_free_port()
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return (
+        server,
+        thread,
+        f"http://127.0.0.1:{port}/token",
+        required_header_value,
+    )
+
+
+def _stop_token_endpoint_server(
+    server: ThreadingHTTPServer | None,
+    thread: threading.Thread | None,
+) -> None:
+    """Stop the local HTTP token endpoint."""
+    if server is None:
+        return
+    server.shutdown()
+    server.server_close()
+    if thread is not None:
+        thread.join(timeout=5)
 
 
 def _find_container_runtime() -> str | None:
@@ -335,6 +393,10 @@ def run() -> Iterator[dict[str, str]]:
     endpoint = f"http://127.0.0.1:{port}"
     container_id = None
     temp_dir = None
+    token_endpoint_server = None
+    token_endpoint_thread = None
+    token_endpoint_url = None
+    token_endpoint_header = None
 
     try:
         container_id = _start_localstack(runtime, port)
@@ -355,10 +417,17 @@ def run() -> Iterator[dict[str, str]]:
         temp_dir = tempfile.mkdtemp(prefix="tenzir-localstack-")
         token_file = os.path.join(temp_dir, "web-identity-token")
         # This is a dummy JWT token. LocalStack doesn't validate it.
-        test_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpc3MiOiJ0ZXN0LmV4YW1wbGUuY29tIiwiYXVkIjoic3RzLmFtYXpvbmF3cy5jb20iLCJleHAiOjk5OTk5OTk5OTl9.test-signature"
+        test_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpc3MiOiJ0ZXN0LmV4YW1wbGUuY29tIiwiYXVkIjoic3RzLmFtYXpvbmF3cy5jb20iLCJleHAiOjk5OTk5OTk5OTl9.test-signature"  # noqa: S105
         with open(token_file, "w") as f:
             f.write(test_token)
         logger.info("Created web identity token file: %s", token_file)
+        (
+            token_endpoint_server,
+            token_endpoint_thread,
+            token_endpoint_url,
+            token_endpoint_header,
+        ) = _start_token_endpoint_server(test_token)
+        logger.info("Started web identity token endpoint: %s", token_endpoint_url)
 
         yield {
             # Standard AWS environment variables
@@ -401,8 +470,11 @@ def run() -> Iterator[dict[str, str]]:
             "LOCALSTACK_WEB_IDENTITY_ROLE_ARN": resources["web_identity_role_arn"],
             "LOCALSTACK_WEB_IDENTITY_TOKEN_FILE": token_file,
             "LOCALSTACK_WEB_IDENTITY_TOKEN": test_token,
+            "LOCALSTACK_WEB_IDENTITY_TOKEN_ENDPOINT": token_endpoint_url,
+            "LOCALSTACK_WEB_IDENTITY_TOKEN_ENDPOINT_HEADER": token_endpoint_header,
         }
     finally:
+        _stop_token_endpoint_server(token_endpoint_server, token_endpoint_thread)
         if container_id:
             _stop_localstack(runtime, container_id)
         if temp_dir:

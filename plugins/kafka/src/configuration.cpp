@@ -13,7 +13,6 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
 
-#include <tenzir/aws_credentials.hpp>
 #include <tenzir/concept/printable/tenzir/data.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/data.hpp>
