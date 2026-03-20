@@ -151,8 +151,8 @@ public:
                 .primary(args_.endpoint.source)
                 .note("reason: {}", ex.what())
                 .hint("ensure a TCP server is listening on this endpoint");
-          maybe_add_tls_client_diagnostic_hints(
-            std::move(diag), ex.what(), tls_ and tls_->get_tls(nullptr).inner)
+          add_tls_client_diagnostic_hints(std::move(diag),
+                                          tls_ and tls_->get_tls(nullptr).inner)
             .emit(dh);
           throw;
         }

@@ -8,7 +8,6 @@
 
 #include "tenzir/tls_options.hpp"
 
-#include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/operator_control_plane.hpp"
 
@@ -120,28 +119,13 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
   });
 };
 
-auto contains_tls_hintable_error(std::string_view error) -> bool {
-  constexpr auto needles = std::array<std::string_view, 10>{
-    "connection refused",   "reset by peer",
-    "wrong version number", "unexpected eof",
-    "end of file",          "tls handshake failed",
-    "ssl handshake failed", "fail to connect",
-    "connect failed",       "closed",
-  };
-  return std::ranges::any_of(needles, [&](std::string_view needle) {
-    return detail::contains_ascii_icase(error, needle);
-  });
-}
-
 } // namespace
 
-auto maybe_add_tls_client_diagnostic_hints(
-  diagnostic_builder diag, std::string_view error, bool tls_enabled,
-  std::string_view service_name, std::optional<uint64_t> plaintext_port,
-  std::optional<uint64_t> tls_port) -> diagnostic_builder {
-  if (not contains_tls_hintable_error(error)) {
-    return diag;
-  }
+auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
+                                     std::string_view service_name,
+                                     std::optional<uint64_t> plaintext_port,
+                                     std::optional<uint64_t> tls_port)
+  -> diagnostic_builder {
   diag = std::move(diag).note("`tls` is {} for this connection",
                               tls_enabled ? "enabled" : "disabled");
   if (not service_name.empty() and plaintext_port and tls_port) {

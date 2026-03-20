@@ -35,11 +35,12 @@ auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int>;
 auto parse_caf_tls_version(std::string_view version)
   -> caf::expected<caf::net::ssl::tls>;
 
-auto maybe_add_tls_client_diagnostic_hints(
-  diagnostic_builder diag, std::string_view error, bool tls_enabled,
-  std::string_view service_name = {},
-  std::optional<uint64_t> plaintext_port = std::nullopt,
-  std::optional<uint64_t> tls_port = std::nullopt) -> diagnostic_builder;
+auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
+                                     std::string_view service_name = {},
+                                     std::optional<uint64_t> plaintext_port
+                                     = std::nullopt,
+                                     std::optional<uint64_t> tls_port
+                                     = std::nullopt) -> diagnostic_builder;
 
 class tls_options {
 public:

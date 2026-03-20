@@ -19,30 +19,6 @@
 namespace tenzir {
 namespace detail {
 
-auto contains_ascii_icase(std::string_view haystack,
-                          std::string_view needle) noexcept -> bool {
-  if (needle.empty()) {
-    return true;
-  }
-  if (needle.size() > haystack.size()) {
-    return false;
-  }
-  for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
-    auto matches = true;
-    for (size_t j = 0; j < needle.size(); ++j) {
-      if (ascii_tolower(static_cast<unsigned char>(haystack[i + j]))
-          != ascii_tolower(static_cast<unsigned char>(needle[j]))) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) {
-      return true;
-    }
-  }
-  return false;
-}
-
 auto quoting_escaping_policy::basic_unescape_operation(
   std::string_view::iterator begin, std::string_view::iterator end,
   std::back_insert_iterator<std::string> out) -> std::string_view::iterator {

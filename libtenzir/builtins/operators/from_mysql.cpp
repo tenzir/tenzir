@@ -2138,8 +2138,7 @@ public:
         = err.code != 0
             ? diagnostic::error("MySQL error {}: {}", err.code, err.message)
             : diagnostic::error("MySQL error: {}", err.message);
-      maybe_add_tls_client_diagnostic_hints(std::move(diag), err.message,
-                                            tls_enabled, "MySQL")
+      add_tls_client_diagnostic_hints(std::move(diag), tls_enabled, "MySQL")
         .emit(ctx);
       done_ = true;
       co_return;

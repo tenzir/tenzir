@@ -46,11 +46,6 @@ ascii_icase_equal(std::string_view lhs, std::string_view rhs) noexcept -> bool {
   return true;
 }
 
-/// Returns whether `haystack` contains `needle`, ignoring ASCII case.
-[[nodiscard]] auto contains_ascii_icase(std::string_view haystack,
-                                        std::string_view needle) noexcept
-  -> bool;
-
 /// Trims leading whitespace of string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered
