@@ -1,0 +1,9 @@
+created: 2026-03-20
+title: Tenzir Node v5.29.3
+intro: >-
+  This patch release keeps the 5.29 line moving with a small maintenance update and
+  validates the refreshed release automation. It ships as a clean follow-up release
+  without additional user-facing changes.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.29.2

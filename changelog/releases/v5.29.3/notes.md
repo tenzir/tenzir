@@ -1,0 +1,1 @@
+This patch release keeps the 5.29 line moving with a small maintenance update and validates the refreshed release automation. It ships as a clean follow-up release without additional user-facing changes.
