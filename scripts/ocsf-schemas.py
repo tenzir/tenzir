@@ -84,17 +84,72 @@ def log_section(msg: str):
 
 
 def load_schema(version: Optional[str] = None) -> Schema:
-    url = SERVER
+    base_url = SERVER
     if version is not None:
-        url += "/" + version
-    url += "/export/schema"
+        base_url += "/" + version
+    legacy_url = base_url + "/export/schema"
+    modern_url = base_url + "/export/v2/schema"
+
+    response = _get_json(legacy_url)
+    if response.status_code == 200:
+        return response.json()
+    if response.status_code != 400:
+        response.raise_for_status()
+    error = response.json().get("error")
+    if not isinstance(error, str) or "legacy format" not in error:
+        raise ValueError(f"failed to fetch schema from {legacy_url}: {error!r}")
+    log("Legacy export failed, retrying with modern export format")
+    response = _get_json(modern_url)
+    response.raise_for_status()
+    return normalize_modern_schema(response.json())
+
+
+def _get_json(url: str) -> requests.Response:
     log(f"Fetching schema from {url}")
     for _ in range(5):
         try:
-            return requests.get(url, timeout=5).json()
+            return requests.get(url, timeout=5)
         except requests.exceptions.ConnectTimeout:
             pass
     raise TimeoutError
+
+
+def normalize_modern_schema(schema: Schema) -> Schema:
+    dictionary = schema.get("dictionary")
+    if not isinstance(dictionary, dict):
+        raise ValueError("modern schema is missing a dictionary section")
+    types = dictionary.get("types")
+    if not isinstance(types, dict):
+        raise ValueError("modern schema dictionary is missing types")
+    type_attributes = types.get("attributes")
+    if not isinstance(type_attributes, dict):
+        raise ValueError("modern schema dictionary types are missing attributes")
+    schema["types"] = type_attributes
+    for kind in ("classes", "objects"):
+        entities = schema.get(kind)
+        if not isinstance(entities, dict):
+            raise ValueError(f"modern schema is missing {kind}")
+        for entity_name, entity in entities.items():
+            normalize_profiles(entity_name, entity)
+    return schema
+
+
+def normalize_profiles(entity_name: str, entity: dict) -> None:
+    attributes = entity.get("attributes")
+    if not isinstance(attributes, dict):
+        return
+    for attr_name, attr_def in attributes.items():
+        profiles = attr_def.get("profiles")
+        if not isinstance(profiles, list):
+            continue
+        if len(profiles) == 1:
+            attr_def["profile"] = profiles[0]
+            continue
+        if len(profiles) > 1:
+            log(
+                f"Warning: {entity_name}.{attr_name} has multiple profiles "
+                f"{profiles}; omitting profile annotation"
+            )
 
 
 def patch_types(schema: Schema) -> None:
@@ -239,7 +294,6 @@ def _emit_entity(
 
 def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
     name = "objects" if objects else "classes"
-    types = schema["types"]
     first = True
     for _, entity in sorted(schema[name].items()):
         # For classes, we do not use the given entity name, but instead derive
