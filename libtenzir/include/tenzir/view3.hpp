@@ -226,7 +226,33 @@ private:
 using data_view3_base = detail::tl_apply_t<data_view_viewing_types, variant>;
 
 class data_view3 : public data_view3_base {
-  using data_view3_base::data_view3_base;
+public:
+  data_view3() = default;
+  data_view3(const data_view3&) = default;
+  data_view3(data_view3&&) = default;
+
+  template <data_view3_type T>
+  explicit(false) data_view3(T x) : data_view3_base{std::move(x)} {
+  }
+
+  explicit(false) data_view3(const std::string& x)
+    : data_view3_base{make_view(x)} {
+  }
+
+  explicit(false) data_view3(const char* x)
+    : data_view3_base{make_view(std::string_view{x})} {
+  }
+
+  template <size_t N>
+  explicit(false) data_view3(const char (&x)[N])
+    : data_view3_base{make_view(x)} {
+  }
+
+  explicit(false) data_view3(const blob& x) : data_view3_base{make_view(x)} {
+  }
+
+  explicit(false) data_view3(const secret& x) : data_view3_base{make_view(x)} {
+  }
 };
 
 inline auto operator==(data_view3 l, data_view3 r) -> bool {

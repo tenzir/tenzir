@@ -12,6 +12,7 @@
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -590,7 +591,7 @@ private:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(std::map<data, GroupedBucket>& map, data_view const& x,
+  auto get_groups(std::map<data, GroupedBucket>& map, data_view3 const& x,
                   session ctx) const -> GroupedBucket* {
     auto const xv = materialize(x);
     if (auto it = map.find(xv); it != map.end()) {
@@ -608,7 +609,7 @@ private:
     return &map[xv];
   }
 
-  auto get_bucket(std::map<data, GroupedBucket>& map, data_view const& x,
+  auto get_bucket(std::map<data, GroupedBucket>& map, data_view3 const& x,
                   std::string const& group, session ctx) const
     -> std::pair<Bucket*, bool> {
     if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {
