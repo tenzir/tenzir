@@ -1,0 +1,6 @@
+error: `list_separator` and `null_value` conflict
+  ⋮
+6 |   read_csv null_value=";"
+  |                       ^^^ 
+  |
+  = note: `;` is a substring of `;`

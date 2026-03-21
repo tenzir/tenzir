@@ -1,0 +1,9 @@
+error: quote character `|` conflicts with `list_separator="|"`
+ --> tests/operators/xsv/error_xsv_quotes_vs_list_sep.tql:6:76
+  |
+6 |   read_xsv field_separator=",", list_separator="|", null_value="-", quotes="|"
+  |                                                                            ^^^ 
+  ⋮
+6 |   read_xsv field_separator=",", list_separator="|", null_value="-", quotes="|"
+  |                                                ^^^ 
+  |
