@@ -1,1 +1,0 @@
-This patch release candidate hardens container manifest publishing in GitHub Actions by switching the reusable manifest workflow to the workflow token with correctly paired registry credentials. It also avoids exposing registry secrets on the command line by using stdin-based Docker logins.

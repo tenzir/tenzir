@@ -1,0 +1,10 @@
+created: 2026-03-21
+title: Harden container manifest publishing
+intro: >-
+  This patch release hardens container manifest publishing in GitHub Actions by switching
+  the reusable manifest workflow to the workflow token with correctly paired registry
+  credentials. It also avoids exposing registry secrets on the command line by using
+  stdin-based Docker logins.
+source:
+  mode: promote-prerelease
+  previous_stable: v5.29.3
