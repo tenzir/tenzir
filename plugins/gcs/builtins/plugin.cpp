@@ -9,6 +9,7 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include "tenzir/argument_parser2.hpp"
+#include "tenzir/plugin/register.hpp"
 
 #include "operator.hpp"
 

@@ -11,6 +11,7 @@
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/tql2/exec.hpp"
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <caf/anon_mail.hpp>

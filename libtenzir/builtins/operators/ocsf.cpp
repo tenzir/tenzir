@@ -14,6 +14,7 @@
 #include "tenzir/ocsf_enums.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/value_path.hpp"
 #include "tenzir/view3.hpp"

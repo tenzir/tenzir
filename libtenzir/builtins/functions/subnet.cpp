@@ -9,6 +9,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/subnet.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/subnet.hpp>
 #include <tenzir/tql2/plugin.hpp>

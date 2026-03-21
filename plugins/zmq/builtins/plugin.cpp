@@ -8,6 +8,8 @@
 
 #include "tenzir/tql2/plugin.hpp"
 
+#include "tenzir/plugin/register.hpp"
+
 #include "operator.hpp"
 
 using namespace std::chrono_literals;

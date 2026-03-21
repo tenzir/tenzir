@@ -10,6 +10,7 @@
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 
 #include <arrow/filesystem/localfs.h>

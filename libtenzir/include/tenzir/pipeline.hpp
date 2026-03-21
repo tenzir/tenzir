@@ -11,6 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
@@ -841,7 +842,3 @@ template <>
 inline constexpr auto enable_default_formatter<operator_ptr> = true;
 
 } // namespace tenzir
-
-// This is needed for `plugin_inspect` - but now we just include plugin.hpp
-// at the end (after pipeline definitions) to get full serialization_plugin def
-#include "tenzir/plugin.hpp" // IWYU pragma: keep

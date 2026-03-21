@@ -9,6 +9,7 @@
 #include "tenzir/curl.hpp"
 
 #include <tenzir/format_utils.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/resolve.hpp>

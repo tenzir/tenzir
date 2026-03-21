@@ -9,6 +9,7 @@
 #include "tenzir/execution_node.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/connect_to_node.hpp"
 #include "tenzir/curl.hpp"
@@ -32,6 +33,7 @@
 #include "tenzir/table_slice.hpp"
 
 #include <arrow/config.h>
+#include <arrow/record_batch.h>
 #include <arrow/util/byte_size.h>
 #include <caf/actor_addr.hpp>
 #include <caf/actor_from_state.hpp>
