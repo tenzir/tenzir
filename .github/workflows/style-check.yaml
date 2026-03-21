@@ -133,9 +133,11 @@ jobs:
         run: |
           set -eo pipefail
           base=$(git merge-base origin/main HEAD)
-          if ! git diff --submodule=diff --name-only --no-color --diff-filter=ACM "$base" -- \
-            scripts/ocsf-schemas.py | grep -q .; then
-            echo "scripts/ocsf-schemas.py unchanged, skipping"
+          if ! git diff --submodule=diff --name-only --no-color --diff-filter=ACDMR "$base" -- \
+            scripts/ocsf-schemas.py \
+            schema/types/ocsf \
+            libtenzir/include/tenzir/ocsf_*.inc | grep -q .; then
+            echo "OCSF generator inputs and outputs unchanged, skipping"
             exit 0
           fi
           uv run --script scripts/ocsf-schemas.py

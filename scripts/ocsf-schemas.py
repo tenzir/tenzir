@@ -63,6 +63,9 @@ RECURSIVE_FIELDS: dict[str, dict[str, str]] = {
     "analytic": {"related_analytics": "analytic"},
     "user": {"ldap_person": "ldap_person"},
 }
+MODERN_ATTRIBUTE_FIXUPS: dict[tuple[str, str], dict[str, str]] = {
+    ("process", "auid"): {"extension": "linux"},
+}
 Schema = dict[str, typing.Any]
 TypeMap = dict[str, str]
 
@@ -125,16 +128,23 @@ def normalize_modern_schema(schema: Schema) -> Schema:
     if not isinstance(type_attributes, dict):
         raise ValueError("modern schema dictionary types are missing attributes")
     schema["types"] = type_attributes
+    extensions = schema.get("extensions")
+    if not isinstance(extensions, dict):
+        raise ValueError("modern schema is missing extensions")
+    extension_names = set(extensions)
     for kind in ("classes", "objects"):
         entities = schema.get(kind)
         if not isinstance(entities, dict):
             raise ValueError(f"modern schema is missing {kind}")
         for entity_name, entity in entities.items():
-            normalize_profiles(entity_name, entity)
+            normalize_profiles(entity_name, entity, extension_names)
+            apply_modern_attribute_fixups(entity_name, entity)
     return schema
 
 
-def normalize_profiles(entity_name: str, entity: dict) -> None:
+def normalize_profiles(
+    entity_name: str, entity: dict, extension_names: set[str]
+) -> None:
     attributes = entity.get("attributes")
     if not isinstance(attributes, dict):
         return
@@ -146,10 +156,36 @@ def normalize_profiles(entity_name: str, entity: dict) -> None:
             attr_def["profile"] = profiles[0]
             continue
         if len(profiles) > 1:
-            log(
-                f"Warning: {entity_name}.{attr_name} has multiple profiles "
-                f"{profiles}; omitting profile annotation"
-            )
+            attr_def["profiles"] = "|".join(profiles)
+            profile_extensions = [
+                f"{profile}:{extension}"
+                for profile in profiles
+                if (extension := infer_profile_extension(profile, extension_names))
+                is not None
+            ]
+            if len(profile_extensions) == len(profiles):
+                attr_def["profile_extensions"] = "|".join(profile_extensions)
+
+
+def infer_profile_extension(profile: str, extension_names: set[str]) -> Optional[str]:
+    extension, _, _ = profile.partition("/")
+    if extension in extension_names:
+        return extension
+    return None
+
+
+def apply_modern_attribute_fixups(entity_name: str, entity: dict) -> None:
+    attributes = entity.get("attributes")
+    if not isinstance(attributes, dict):
+        return
+    for attr_name, fixups in MODERN_ATTRIBUTE_FIXUPS.items():
+        if attr_name[0] != entity_name:
+            continue
+        attr_def = attributes.get(attr_name[1])
+        if not isinstance(attr_def, dict):
+            continue
+        for key, value in fixups.items():
+            attr_def.setdefault(key, value)
 
 
 def patch_types(schema: Schema) -> None:
@@ -272,9 +308,15 @@ def _emit_entity(
         attributes = f" #{requirement}"
         if profile is not None:
             attributes += f" #profile={profile}"
+        profiles = attr_def.get("profiles")
+        if isinstance(profiles, str):
+            attributes += f" #profiles={profiles}"
         extension = attr_def.get("extension")
         if extension is not None:
             attributes += f" #extension={extension}"
+        profile_extensions = attr_def.get("profile_extensions")
+        if isinstance(profile_extensions, str):
+            attributes += f" #profile_extensions={profile_extensions}"
         if not objects and attr_name == "unmapped":
             attributes += " #nullify_empty_records"
         if "enum" in attr_def:
