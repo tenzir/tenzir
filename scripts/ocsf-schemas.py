@@ -108,8 +108,8 @@ def _get_json(url: str) -> requests.Response:
     log(f"Fetching schema from {url}")
     for _ in range(5):
         try:
-            return requests.get(url, timeout=5)
-        except requests.exceptions.ConnectTimeout:
+            return requests.get(url, timeout=(5, 30))
+        except requests.exceptions.Timeout:
             pass
     raise TimeoutError
 
