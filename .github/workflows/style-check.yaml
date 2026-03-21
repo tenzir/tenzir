@@ -118,6 +118,34 @@ jobs:
           npm install --no-save markdownlint-cli
           npx markdownlint --ignore libtenzir/aux --ignore node_modules .
 
+  ocsf-schemas:
+    name: ocsf-schemas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Check
+        run: |
+          set -eo pipefail
+          base=$(git merge-base origin/main HEAD)
+          if ! git diff --submodule=diff --name-only --no-color --diff-filter=ACDMR "$base" -- \
+            scripts/ocsf-schemas.py \
+            schema/types/ocsf \
+            libtenzir/include/tenzir/ocsf_*.inc | grep -q .; then
+            echo "OCSF generator inputs and outputs unchanged, skipping"
+            exit 0
+          fi
+          uv run --script scripts/ocsf-schemas.py
+          git diff --submodule=diff --exit-code || {
+            echo '::error title=ocsf-schemas::Please run `uv run --script scripts/ocsf-schemas.py` and commit the generated changes.'
+            git diff --submodule=diff --exit-code
+          }
+
   shellcheck:
     name: shellcheck
     runs-on: ubuntu-latest
@@ -195,6 +223,7 @@ jobs:
       - clang-format
       - cmake-format
       - markdownlint
+      - ocsf-schemas
       - shellcheck
       - shfmt
       - terraform-fmt
