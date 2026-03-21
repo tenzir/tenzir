@@ -96,7 +96,7 @@ runs:
           echo "::error GHCR token required but not provided"
           exit 1
         fi
-        docker login ghcr.io -u "$GHCR_USERNAME" -p "$GHCR_TOKEN"
+        printf '%s\n' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
     - name: Login to Docker Hub
       if: steps.detect.outputs.needs-docker-hub == 'true'
@@ -109,7 +109,7 @@ runs:
           echo "::error Docker Hub credentials required but not provided"
           exit 1
         fi
-        docker login docker.io -u "$DOCKERHUB_USER" -p "$DOCKERHUB_PASSWORD"
+        printf '%s\n' "$DOCKERHUB_PASSWORD" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
 
     - name: Configure AWS Credentials
       if: steps.detect.outputs.needs-ecr == 'true'
