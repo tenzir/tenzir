@@ -48,7 +48,8 @@ jobs:
         uses: ./.github/actions/registry-login
         with:
           config: ${{ steps.registries.outputs.config }}
-          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          ghcr-username: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
           dockerhub-user: ${{ vars.DOCKERHUB_USER }}
           dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Set up Docker Buildx
