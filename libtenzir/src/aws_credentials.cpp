@@ -7,15 +7,30 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aws_credentials.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/curl.hpp>
 #include <tenzir/detail/env.hpp>
+#include <tenzir/detail/load_contents.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/http.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/transfer.hpp>
+#include <tenzir/try_simdjson.hpp>
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/AssumeRoleRequest.h>
+#include <aws/sts/model/AssumeRoleWithWebIdentityRequest.h>
+
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <filesystem>
+#include <mutex>
+#include <simdjson.h>
 
 namespace tenzir {
 
@@ -33,25 +48,177 @@ auto make_default_aws_credentials_provider_chain()
     config);
 }
 
+namespace {
+
+/// Creates an STS client configuration with proper endpoint and proxy settings.
+/// Caches environment variable lookups for efficiency.
+auto make_sts_client_config(const std::optional<std::string>& region)
+  -> Aws::Client::ClientConfiguration {
+  // Cache environment variables to avoid repeated lookups.
+  static const auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL");
+  static const auto endpoint_url_sts = detail::getenv("AWS_ENDPOINT_URL_STS");
+  auto config = Aws::Client::ClientConfiguration{};
+  if (region) {
+    config.region = *region;
+  }
+  config.allowSystemProxy = true;
+  // STS-specific endpoint takes precedence.
+  if (endpoint_url_sts) {
+    config.endpointOverride = *endpoint_url_sts;
+  } else if (endpoint_url) {
+    config.endpointOverride = *endpoint_url;
+  }
+  return config;
+}
+
+/// Custom credentials provider that automatically refreshes credentials
+/// obtained via AssumeRoleWithWebIdentity. This is necessary for long-running
+/// pipelines where the initial STS credentials would otherwise expire.
+///
+/// Features:
+/// - Automatic refresh 5 minutes before expiration
+/// - Retry with exponential backoff on transient failures
+/// - Preserves old credentials on failure (they may still be valid)
+/// - Maximum retry limit to prevent infinite loops
+class web_identity_credentials_provider final
+  : public Aws::Auth::AWSCredentialsProvider {
+public:
+  static constexpr auto max_consecutive_failures = 5;
+  static constexpr auto initial_retry_delay = std::chrono::seconds{1};
+  static constexpr auto max_retry_delay = std::chrono::seconds{60};
+
+  web_identity_credentials_provider(resolved_web_identity web_identity,
+                                    std::string role_arn,
+                                    std::string session_name,
+                                    std::optional<std::string> region,
+                                    std::chrono::seconds refresh_buffer
+                                    = std::chrono::minutes{5})
+    : web_identity_{std::move(web_identity)},
+      role_arn_{std::move(role_arn)},
+      session_name_{std::move(session_name)},
+      region_{std::move(region)},
+      refresh_buffer_{refresh_buffer} {
+  }
+
+  auto GetAWSCredentials() -> Aws::Auth::AWSCredentials override {
+    auto lock = std::unique_lock{mutex_};
+    // Check if we need to refresh credentials.
+    auto now = std::chrono::system_clock::now();
+    if (credentials_.IsEmpty() or now >= expiration_ - refresh_buffer_) {
+      // Check if we should retry based on backoff.
+      if (consecutive_failures_ > 0 and now < next_retry_time_) {
+        // Return existing credentials (may be expired but could still work).
+        TENZIR_DEBUG("web identity refresh in backoff, returning cached "
+                     "credentials");
+        return credentials_;
+      }
+      refresh_credentials();
+    }
+    return credentials_;
+  }
+
+private:
+  auto refresh_credentials() -> void {
+    TENZIR_VERBOSE("refreshing web identity credentials for role: {}",
+                   role_arn_);
+    // Fetch the web identity token.
+    auto token = fetch_web_identity_token(web_identity_);
+    if (not token) {
+      handle_refresh_failure(
+        fmt::format("failed to fetch web identity token: {}", token.error()));
+      return;
+    }
+    // Create anonymous STS client with cached configuration.
+    auto config = make_sts_client_config(region_);
+    auto anonymous_credentials
+      = std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>();
+    auto sts_client
+      = Aws::STS::STSClient{anonymous_credentials, nullptr, config};
+    // Build and execute AssumeRoleWithWebIdentity request.
+    auto request = Aws::STS::Model::AssumeRoleWithWebIdentityRequest{};
+    request.SetRoleArn(role_arn_);
+    request.SetRoleSessionName(session_name_.empty() ? "tenzir-session"
+                                                     : session_name_);
+    request.SetWebIdentityToken(*token);
+    auto outcome = sts_client.AssumeRoleWithWebIdentity(request);
+    if (not outcome.IsSuccess()) {
+      handle_refresh_failure(fmt::format("failed to assume role with web "
+                                         "identity: {}",
+                                         outcome.GetError().GetMessage()));
+      return;
+    }
+    // Success - update cached credentials and reset failure tracking.
+    const auto& result = outcome.GetResult();
+    const auto& creds = result.GetCredentials();
+    credentials_ = Aws::Auth::AWSCredentials{
+      creds.GetAccessKeyId(),
+      creds.GetSecretAccessKey(),
+      creds.GetSessionToken(),
+    };
+    // Convert AWS DateTime to std::chrono::system_clock::time_point.
+    expiration_ = std::chrono::system_clock::from_time_t(
+      static_cast<std::time_t>(creds.GetExpiration().SecondsWithMSPrecision()));
+    consecutive_failures_ = 0;
+    TENZIR_VERBOSE(
+      "web identity credentials refreshed, expires at: {}",
+      creds.GetExpiration().ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+  }
+
+  auto handle_refresh_failure(std::string message) -> void {
+    ++consecutive_failures_;
+    last_error_ = std::move(message);
+    // Calculate exponential backoff delay.
+    auto delay = initial_retry_delay
+                 * (1 << std::min(consecutive_failures_ - 1,
+                                  max_consecutive_failures - 1));
+    if (delay > max_retry_delay) {
+      delay = max_retry_delay;
+    }
+    next_retry_time_ = std::chrono::system_clock::now() + delay;
+    if (consecutive_failures_ >= max_consecutive_failures) {
+      TENZIR_ERROR("{} (attempt {}/{}, max retries reached)", last_error_,
+                   consecutive_failures_, max_consecutive_failures);
+      // Clear credentials only after max retries exceeded.
+      credentials_ = {};
+    } else {
+      TENZIR_WARN(
+        "{} (attempt {}/{}, retrying in {}s)", last_error_,
+        consecutive_failures_, max_consecutive_failures,
+        std::chrono::duration_cast<std::chrono::seconds>(delay).count());
+      // Keep existing credentials - they may still be valid.
+    }
+  }
+
+  resolved_web_identity web_identity_;
+  std::string role_arn_;
+  std::string session_name_;
+  std::optional<std::string> region_;
+  std::chrono::seconds refresh_buffer_;
+
+  mutable std::mutex mutex_;
+  Aws::Auth::AWSCredentials credentials_;
+  std::chrono::system_clock::time_point expiration_;
+  int consecutive_failures_ = 0;
+  std::chrono::system_clock::time_point next_retry_time_;
+  std::string last_error_;
+
+public:
+  /// Returns the last error message from a failed credential refresh.
+  auto last_error() const -> std::string {
+    auto lock = std::unique_lock{mutex_};
+    return last_error_;
+  }
+};
+
+} // namespace
 auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::string& role_arn,
                                   const std::string& session_name,
                                   const std::string& external_id,
                                   const std::optional<std::string>& region)
   -> caf::expected<sts_credentials> {
-  // Create STS client configuration.
-  auto config = Aws::Client::ClientConfiguration{};
-  if (region) {
-    config.region = *region;
-  }
-  // Honor proxy settings and endpoint overrides.
-  config.allowSystemProxy = true;
-  if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
-    config.endpointOverride = *endpoint_url;
-  }
-  if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-    config.endpointOverride = *endpoint_url;
-  }
+  // Create STS client configuration with cached endpoint settings.
+  auto config = make_sts_client_config(region);
   // Create credentials provider from base credentials.
   auto base_credentials
     = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
@@ -103,6 +270,172 @@ auto load_profile_credentials(const std::string& profile)
   };
 }
 
+auto fetch_web_identity_token(const resolved_web_identity& web_identity)
+  -> caf::expected<std::string> {
+  // Case 1: Direct token value.
+  if (not web_identity.token.empty()) {
+    TENZIR_VERBOSE("using direct web identity token");
+    return web_identity.token;
+  }
+  // Case 2: Token from file.
+  if (not web_identity.token_file.empty()) {
+    TENZIR_VERBOSE("reading web identity token from file: {}",
+                   web_identity.token_file);
+    // Validate file path for path traversal attempts.
+    const auto path = std::filesystem::path{web_identity.token_file};
+    if (path.filename().string().find("..") != std::string::npos) {
+      return diagnostic::error("invalid token file path")
+        .note("path contains potentially dangerous components")
+        .to_error();
+    }
+    // Check file size before reading (max 1MB for tokens).
+    constexpr auto max_token_file_size = std::uintmax_t{1024} * 1024;
+    auto ec = std::error_code{};
+    const auto file_size = std::filesystem::file_size(path, ec);
+    if (ec) {
+      return diagnostic::error("failed to check token file size")
+        .note("file: {}", web_identity.token_file)
+        .note("{}", ec.message())
+        .to_error();
+    }
+    if (file_size > max_token_file_size) {
+      return diagnostic::error("token file is too large")
+        .note("file: {}", web_identity.token_file)
+        .note("size: {} bytes, maximum: {} bytes", file_size,
+              max_token_file_size)
+        .to_error();
+    }
+    auto contents = detail::load_contents(web_identity.token_file);
+    if (not contents) {
+      return diagnostic::error("failed to read web identity token file")
+        .note("file: {}", web_identity.token_file)
+        .note("{}", contents.error())
+        .to_error();
+    }
+    // Trim whitespace from token.
+    return detail::trim(*contents);
+  }
+  // Case 3: Token from HTTP endpoint.
+  if (web_identity.token_endpoint) {
+    const auto& te = *web_identity.token_endpoint;
+    TENZIR_VERBOSE("fetching web identity token from endpoint");
+    auto xfer = transfer{};
+    auto req = http::request{};
+    req.uri = te.url;
+    req.method = "GET";
+    // Add custom headers.
+    for (const auto& [name, value] : te.headers) {
+      req.headers.emplace_back(name, value);
+    }
+    if (auto err = xfer.prepare(req); err) {
+      return diagnostic::error("failed to prepare web identity token request")
+        .note("{}", err)
+        .to_error();
+    }
+    // Set timeout (30 seconds) to prevent indefinite hangs.
+    xfer.handle().set(CURLOPT_TIMEOUT, 30L);
+    // Collect response body with size limit (1MB).
+    constexpr auto max_response_size = size_t{1024} * 1024;
+    auto body = std::string{};
+    body.reserve(size_t{16}
+                 * 1024); // Reserve 16KB initially for typical token sizes.
+    for (auto&& chunk : xfer.download_chunks()) {
+      if (not chunk) {
+        return diagnostic::error("failed to fetch web identity token")
+          .note("{}", chunk.error())
+          .to_error();
+      }
+      if (*chunk) {
+        if (body.size() + (*chunk)->size() > max_response_size) {
+          return diagnostic::error("web identity token response too large")
+            .note("maximum size: {} bytes", max_response_size)
+            .to_error();
+        }
+        body.append(reinterpret_cast<const char*>((*chunk)->data()),
+                    (*chunk)->size());
+      }
+    }
+    // Validate HTTP response status code.
+    auto [code, status] = xfer.handle().get<curl::easy::info::response_code>();
+    if (code != curl::easy::code::ok) {
+      return diagnostic::error("failed to get HTTP response status")
+        .note("curl error: {}", to_string(code))
+        .to_error();
+    }
+    if (status < 200 or status >= 300) {
+      // Truncate response body for error message (max 1KB to avoid huge logs).
+      constexpr auto max_error_body_size = size_t{1024};
+      auto error_body = body.size() > max_error_body_size
+                          ? body.substr(0, max_error_body_size) + "..."
+                          : body;
+      return diagnostic::error("HTTP request failed")
+        .note("status code: {}", status)
+        .note("endpoint: {}", te.url)
+        .note("response: {}", error_body)
+        .to_error();
+    }
+    // Check if path is set (JSON response) or nullopt (plain text).
+    if (not te.path) {
+      // Plain text response: return trimmed body.
+      TENZIR_VERBOSE("treating web identity token response as plain text");
+      return detail::trim(body);
+    }
+    // JSON response: extract token using JSON path.
+    TENZIR_VERBOSE("extracting web identity token from JSON path: {}",
+                   *te.path);
+    // Simple JSON path extraction. Only single-level paths like ".access_token"
+    // or ".token" are supported. Nested paths like ".data.token" are not
+    // supported.
+    auto path = *te.path;
+    if (path.starts_with('.')) {
+      path = path.substr(1);
+    }
+    // Validate path characters to prevent simdjson operator injection.
+    // Only allow alphanumeric characters, underscores, and hyphens.
+    const auto is_valid_path_char = [](char c) {
+      return std::isalnum(static_cast<unsigned char>(c)) or c == '_'
+             or c == '-';
+    };
+    if (not std::ranges::all_of(path, is_valid_path_char)) {
+      return diagnostic::error("invalid JSON path for web identity token")
+        .note("path: {}", *te.path)
+        .note("only alphanumeric characters, underscores, and hyphens are "
+              "allowed")
+        .to_error();
+    }
+    if (path.empty()) {
+      return diagnostic::error("invalid JSON path for web identity token")
+        .note("path cannot be empty")
+        .to_error();
+    }
+    auto parser = simdjson::ondemand::parser{};
+    auto padded = simdjson::padded_string{body};
+    auto doc = parser.iterate(padded);
+    if (doc.error() != simdjson::SUCCESS) {
+      return diagnostic::error("failed to parse web identity token response as "
+                               "JSON")
+        .note("error: {}", simdjson::error_message(doc.error()))
+        .to_error();
+    }
+    auto token_value = doc[path];
+    if (token_value.error() != simdjson::SUCCESS) {
+      return diagnostic::error("failed to extract token from JSON response")
+        .note("path: {}", *te.path)
+        .note("error: {}", simdjson::error_message(token_value.error()))
+        .to_error();
+    }
+    auto token_str = token_value.get_string();
+    if (token_str.error() != simdjson::SUCCESS) {
+      return diagnostic::error("web identity token is not a string")
+        .note("path: {}", *te.path)
+        .to_error();
+    }
+    return std::string{token_str.value()};
+  }
+  // Should not reach here if validation was correct.
+  return diagnostic::error("no web identity token source configured").to_error();
+}
+
 auto make_aws_credentials_provider(
   const std::optional<resolved_aws_credentials>& creds,
   const std::optional<std::string>& region)
@@ -113,10 +446,36 @@ auto make_aws_credentials_provider(
   const auto has_explicit_creds = not creds->access_key_id.empty();
   const auto has_role = not creds->role.empty();
   const auto has_profile = not creds->profile.empty();
+  const auto has_web_identity = creds->web_identity.has_value();
   // Get session_name from resolved credentials, default to empty.
   const auto session_name
     = creds->session_name.empty() ? std::string{} : creds->session_name;
 
+  // Web identity + role: use auto-refreshing credentials provider.
+  if (has_web_identity and has_role) {
+    // Do an eager initial credential fetch so errors are returned through
+    // the normal error path (which goes to the diagnostic handler) rather
+    // than being logged to stderr during lazy refresh.
+    auto provider = std::make_shared<web_identity_credentials_provider>(
+      *creds->web_identity, creds->role, session_name, region);
+    // Trigger initial credential fetch to surface any errors early.
+    auto initial_creds = provider->GetAWSCredentials();
+    if (initial_creds.IsEmpty()) {
+      // Include the actual error message from the failed refresh.
+      auto error = provider->last_error();
+      auto diag = diagnostic::error("failed to obtain AWS credentials via web "
+                                    "identity")
+                    .note("role: {}", creds->role);
+      if (not error.empty()) {
+        diag = std::move(diag).note("{}", error);
+      }
+      return std::move(diag)
+        .hint("check that the token endpoint is accessible and the role trust "
+              "policy allows web identity federation")
+        .to_error();
+    }
+    return provider;
+  }
   if (has_explicit_creds and has_role) {
     // Explicit credentials + role: use STS to assume role.
     auto sts_creds = assume_role_with_credentials(
@@ -148,6 +507,7 @@ auto make_aws_credentials_provider(
       .session_token = profile_creds->session_token,
       .role = {},
       .external_id = {},
+      .web_identity = {},
     };
     auto sts_creds = assume_role_with_credentials(
       base_creds, creds->role, session_name, creds->external_id, region);
@@ -170,17 +530,7 @@ auto make_aws_credentials_provider(
   }
   if (has_role) {
     // Role assumption with default credentials - use auto-refreshing provider.
-    auto sts_config = Aws::Client::ClientConfiguration{};
-    if (region) {
-      sts_config.region = *region;
-    }
-    sts_config.allowSystemProxy = true;
-    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
-      sts_config.endpointOverride = *endpoint_url;
-    }
-    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-      sts_config.endpointOverride = *endpoint_url;
-    }
+    auto sts_config = make_sts_client_config(region);
     auto base_credentials = make_default_aws_credentials_provider_chain();
     auto sts_client = std::make_shared<Aws::STS::STSClient>(
       base_credentials, nullptr, sts_config);
