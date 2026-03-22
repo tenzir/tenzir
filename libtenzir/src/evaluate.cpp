@@ -321,9 +321,11 @@ struct column_evaluator {
           continue;
         }
         result.append(false, id - result.size());
-        result.append(match(lhs, [&](const auto& lhs) {
-          return cell_evaluator<Op>::evaluate(lhs, rhs);
-        }), 1u);
+        result.append(match(lhs,
+                            [&](const auto& lhs) {
+                              return cell_evaluator<Op>::evaluate(lhs, rhs);
+                            }),
+                      1u);
       }
     }
     result.append(false, offset + array.length() - result.size());

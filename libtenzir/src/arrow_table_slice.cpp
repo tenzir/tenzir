@@ -234,7 +234,8 @@ auto legacy_value_at([[maybe_unused]] const Type& type,
         value_type at(size_type i) const override {
           TENZIR_ASSERT_EXPENSIVE(! key_array->IsNull(value_offset + i));
           if (item_array->IsNull(value_offset + i)) {
-            return {legacy_value_at(key_type, *key_array, value_offset + i), {}};
+            return {legacy_value_at(key_type, *key_array, value_offset + i),
+                    {}};
           }
           return {
             legacy_value_at(key_type, *key_array, value_offset + i),
@@ -299,8 +300,8 @@ auto legacy_value_at(const Type& type, const arrow::Array& arr, int64_t row)
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
   TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
-    return legacy_value_at(type, *as<type_to_arrow_array_t<Type>>(arr).storage(),
-                           row);
+    return legacy_value_at(
+      type, *as<type_to_arrow_array_t<Type>>(arr).storage(), row);
   } else {
     return legacy_value_at(type, as<type_to_arrow_array_t<Type>>(arr), row);
   }

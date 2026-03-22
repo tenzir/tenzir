@@ -350,8 +350,8 @@ public:
                   check(builder.AppendNull());
                   continue;
                 }
-                auto value = view_at(
-                  static_cast<arrow::Array const&>(data_array), i);
+                auto value
+                  = view_at(static_cast<arrow::Array const&>(data_array), i);
                 if (is<caf::none_t>(value)) {
                   check(builder.AppendNull());
                   continue;

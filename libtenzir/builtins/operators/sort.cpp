@@ -125,9 +125,8 @@ auto sort_list(const series& input, const std::optional<table_slice>& scope,
   auto warning_state = comparator_warning_state{};
   auto fallback_scope = empty_scope_slice();
   auto row = int64_t{0};
-  for (const auto& value :
-       values(type{as<list_type>(input.type)},
-              as<arrow::ListArray>(*input.array))) {
+  for (const auto& value : values(type{as<list_type>(input.type)},
+                                  as<arrow::ListArray>(*input.array))) {
     auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
     ++row;
     if (is<caf::none_t>(value)) {

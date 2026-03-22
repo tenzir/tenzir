@@ -525,7 +525,8 @@ public:
             co_yield {};
             co_return;
           }
-          for (const auto& row : values(type{*pcap_record_type}, *pcap_values)) {
+          for (const auto& row :
+               values(type{*pcap_record_type}, *pcap_values)) {
             TENZIR_ASSERT(not is<caf::none_t>(row));
             const auto* packet = try_as<view<record>>(&row);
             TENZIR_ASSERT(packet);

@@ -696,10 +696,10 @@ auto eval_op_typed(evaluator& self, const ast::binary_expr& x,
                    const basic_series<L>& left, const basic_series<R>& right)
   -> series {
   if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
-    auto oa
-      = EvalBinOp<Op, L, R>::eval(*left.array, *right.array, [&](const char* w) {
-          diagnostic::warning("{}", w).primary(x).emit(self.ctx());
-        });
+    auto oa = EvalBinOp<Op, L, R>::eval(
+      *left.array, *right.array, [&](const char* w) {
+        diagnostic::warning("{}", w).primary(x).emit(self.ctx());
+      });
     auto ot = type::from_arrow(*oa->type());
     return series{std::move(ot), std::move(oa)};
   } else {
@@ -765,10 +765,10 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
   auto left = self.eval(x.left);
   auto right = self.eval(x.right);
   TENZIR_ASSERT_EQ(left.length(), right.length());
-  return map_series(
-    std::move(left), std::move(right), [&](series left, series right) {
-      return dispatch_eval_binary<Op>(self, x, left, right);
-    });
+  return map_series(std::move(left), std::move(right),
+                    [&](series left, series right) {
+                      return dispatch_eval_binary<Op>(self, x, left, right);
+                    });
 }
 
 template <ast::binary_op Op>
