@@ -276,21 +276,6 @@ target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
-set(precompile_headers
-    include/tenzir/argument_parser.hpp
-    include/tenzir/arrow_table_slice.hpp
-    include/tenzir/async.hpp
-    include/tenzir/data.hpp
-    include/tenzir/fwd.hpp
-    include/tenzir/tql2/plugin.hpp
-    include/tenzir/pipeline.hpp
-    include/tenzir/series.hpp
-    include/tenzir/table_slice.hpp
-    include/tenzir/type.hpp)
-
-target_precompile_headers(libtenzir PRIVATE ${precompile_headers})
-target_precompile_headers(libtenzir_builtins PRIVATE ${precompile_headers})
-
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
@@ -738,6 +723,10 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
+
+TenzirConfigurePchReuse(libtenzir BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+TenzirConfigurePchReuse(libtenzir_builtins
+                        BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 
 # TODO: Should we move the bundled schemas to libtenzir?
 if (TARGET tenzir-schema)

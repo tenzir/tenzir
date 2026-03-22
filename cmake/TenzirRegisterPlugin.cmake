@@ -115,6 +115,61 @@ macro (TenzirTargetEnableTooling _target)
   endif ()
 endmacro ()
 
+function (TenzirGetCommonPrecompileHeaders out_var)
+  set(
+    ${out_var}
+    <tenzir/argument_parser.hpp>
+    <tenzir/arrow_table_slice.hpp>
+    <tenzir/async.hpp>
+    <tenzir/data.hpp>
+    <tenzir/fwd.hpp>
+    <tenzir/pipeline.hpp>
+    <tenzir/series.hpp>
+    <tenzir/table_slice.hpp>
+    <tenzir/tql2/plugin.hpp>
+    <tenzir/type.hpp>
+    PARENT_SCOPE)
+endfunction ()
+
+function (TenzirConfigurePchReuse target)
+  cmake_parse_arguments(
+    PCH
+    ""
+    "BINARY_DIR"
+    ""
+    ${ARGN})
+  if (NOT PCH_BINARY_DIR)
+    set(PCH_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+  endif ()
+  TenzirGetCommonPrecompileHeaders(common_precompile_headers)
+  set(pch_target "${target}__pch")
+  file(WRITE "${PCH_BINARY_DIR}/${pch_target}.cpp" "")
+  add_library(${pch_target} OBJECT "${PCH_BINARY_DIR}/${pch_target}.cpp")
+  set_target_properties(${pch_target} PROPERTIES LINKER_LANGUAGE CXX)
+  target_compile_features(${pch_target} PRIVATE cxx_std_23)
+  TenzirTargetEnableTooling(${pch_target})
+  foreach (
+    prop IN ITEMS COMPILE_DEFINITIONS COMPILE_OPTIONS INCLUDE_DIRECTORIES
+                  SYSTEM_INCLUDE_DIRECTORIES LINK_LIBRARIES)
+    get_target_property(values ${target} ${prop})
+    if (values AND NOT values STREQUAL "values-NOTFOUND")
+      if (prop STREQUAL "COMPILE_DEFINITIONS")
+        target_compile_definitions(${pch_target} PRIVATE ${values})
+      elseif (prop STREQUAL "COMPILE_OPTIONS")
+        target_compile_options(${pch_target} PRIVATE ${values})
+      elseif (prop STREQUAL "INCLUDE_DIRECTORIES")
+        target_include_directories(${pch_target} PRIVATE ${values})
+      elseif (prop STREQUAL "SYSTEM_INCLUDE_DIRECTORIES")
+        target_include_directories(${pch_target} SYSTEM PRIVATE ${values})
+      elseif (prop STREQUAL "LINK_LIBRARIES")
+        target_link_libraries(${pch_target} PRIVATE ${values})
+      endif ()
+    endif ()
+  endforeach ()
+  target_precompile_headers(${pch_target} PRIVATE ${common_precompile_headers})
+  target_precompile_headers(${target} REUSE_FROM ${pch_target})
+endfunction ()
+
 macro (make_absolute vars)
   list(GET "${vars}" 0 _glob)
   if ("${_glob}" STREQUAL "GLOB")
@@ -729,6 +784,13 @@ function (TenzirRegisterPlugin)
       INCLUDE_DIRECTORY "${PLUGIN_TARGET}/fbs")
     target_link_libraries(${PLUGIN_TARGET} PUBLIC ${PLUGIN_TARGET}-fbs)
   endif ()
+
+  if (PLUGIN_BUILTINS)
+    set_source_files_properties(${PLUGIN_BUILTINS}
+                                PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+  endif ()
+
+  TenzirConfigurePchReuse(${PLUGIN_TARGET} BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 
   # Install an example configuration file, if it exists at the plugin project
   # root.
