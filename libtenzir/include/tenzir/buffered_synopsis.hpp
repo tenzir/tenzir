@@ -64,7 +64,7 @@ public:
           if (s.array->IsNull(i)) {
             continue;
           }
-          auto y = value_at(tenzir_type{}, *s.array, i);
+          auto y = *view_at<tenzir_type>(*s.array, i);
           unique_values.insert(y);
         }
       }

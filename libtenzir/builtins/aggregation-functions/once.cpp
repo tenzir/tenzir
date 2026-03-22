@@ -38,7 +38,7 @@ public:
     if (arg.length() > 1) {
       warn();
     }
-    result_ = materialize(arg.value_at(0));
+    result_ = materialize(arg.view3_at(0));
     done_ = true;
   }
 

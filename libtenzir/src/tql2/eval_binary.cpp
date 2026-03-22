@@ -660,12 +660,12 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
                 }
               }
             } else {
-              auto lv = value_at(L{}, l, i);
+              auto lv = *view_at<L>(l, i);
               for (auto j = list_begin; j < list_end; ++j) {
                 if (values->IsNull(j)) {
                   continue;
                 }
-                auto rv = value_at(R{}, *values, j);
+                auto rv = *view_at<R>(*values, j);
                 if constexpr (integral_type<L> and integral_type<R>) {
                   found = std::cmp_equal(lv, rv);
                 } else if constexpr (requires { lv == rv; }) {

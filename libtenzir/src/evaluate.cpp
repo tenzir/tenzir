@@ -69,6 +69,14 @@ struct cell_evaluator<relational_operator::equal> {
   static bool evaluate(view<subnet> lhs, const ip& rhs) noexcept {
     return evaluate(rhs, materialize(lhs));
   }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::equivalent;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::equivalent;
+  }
 };
 
 template <>
@@ -95,6 +103,14 @@ struct cell_evaluator<relational_operator::less> {
       return lhs < rhs;
     }
   }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::less;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::less;
+  }
 };
 
 template <>
@@ -113,6 +129,18 @@ struct cell_evaluator<relational_operator::less_equal> {
     } else {
       return lhs <= rhs;
     }
+  }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::less
+           || order == std::partial_ordering::equivalent;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::less
+           || order == std::partial_ordering::equivalent;
   }
 };
 
@@ -133,6 +161,14 @@ struct cell_evaluator<relational_operator::greater> {
       return lhs > rhs;
     }
   }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::greater;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::greater;
+  }
 };
 
 template <>
@@ -151,6 +187,18 @@ struct cell_evaluator<relational_operator::greater_equal> {
     } else {
       return lhs >= rhs;
     }
+  }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::greater
+           || order == std::partial_ordering::equivalent;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::greater
+           || order == std::partial_ordering::equivalent;
   }
 };
 
@@ -211,7 +259,7 @@ struct cell_evaluator<relational_operator::ni> {
     return lhs.contains(rhs);
   }
 
-  static bool evaluate(view<list> lhs, const auto& rhs) noexcept {
+  static bool evaluate(list_view3 lhs, const auto& rhs) noexcept {
     return std::any_of(lhs.begin(), lhs.end(), [rhs](const auto& element) {
       return match(element, [rhs](const auto& element) noexcept {
         return cell_evaluator<relational_operator::equal>::evaluate(element,
@@ -244,8 +292,9 @@ struct column_evaluator {
         continue;
       }
       result.append(false, id - result.size());
-      result.append(
-        cell_evaluator<Op>::evaluate(value_at(type, array, row), rhs), 1u);
+      result.append(match(view_at(array, row), [&](const auto& lhs) {
+        return cell_evaluator<Op>::evaluate(lhs, rhs);
+      }), 1u);
     }
     result.append(false, offset + array.length() - result.size());
     return result;

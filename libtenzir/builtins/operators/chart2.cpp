@@ -1041,7 +1041,7 @@ class chart_plugin : public virtual operator_factory_plugin {
               : check(arrow::compute::CeilTemporal(array, std::move(opts)))
                   .array_as<arrow::TimestampArray>();
         TENZIR_ASSERT(result->length() == 1);
-        return ast::constant{value_at(time_type{}, *result, 0), loc};
+        return ast::constant{*view_at<time_type>(*result, 0), loc};
       },
       [&](const auto& d) -> failure_or<ast::constant> {
         return ast::constant{d, loc};

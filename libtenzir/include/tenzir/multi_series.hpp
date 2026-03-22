@@ -34,12 +34,6 @@ public:
     return result;
   }
 
-  [[deprecated("Use view3_at instead")]] auto value_at(int64_t row) const
-    -> data_view {
-    auto [part, part_row] = resolve(row);
-    return tenzir::value_at(part.get().type, *part.get().array, part_row);
-  }
-
   auto view3_at(int64_t row) const -> data_view3 {
     const auto [part, part_row] = resolve(row);
     return view_at(*part.get().array, part_row);

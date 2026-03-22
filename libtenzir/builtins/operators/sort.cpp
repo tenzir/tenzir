@@ -126,14 +126,17 @@ auto sort_list(const series& input, const std::optional<table_slice>& scope,
   auto fallback_scope = empty_scope_slice();
   auto row = int64_t{0};
   for (const auto& value :
-       values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
+       values(type{as<list_type>(input.type)},
+              as<arrow::ListArray>(*input.array))) {
     auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
     ++row;
-    if (not value) {
+    if (is<caf::none_t>(value)) {
       builder.null();
       continue;
     }
-    auto materialized = materialize(*value);
+    const auto* list_view = try_as<view<list>>(&value);
+    TENZIR_ASSERT(list_view);
+    auto materialized = materialize(*list_view);
     if (cmp) {
       std::stable_sort(materialized.begin(), materialized.end(),
                        [&](const data& lhs, const data& rhs) {

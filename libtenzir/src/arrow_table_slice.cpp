@@ -35,6 +35,22 @@ namespace tenzir {
 
 namespace {
 
+template <concrete_type Type>
+auto legacy_value_at(const Type& type,
+                     const type_to_arrow_array_storage_t<Type>& arr,
+                     int64_t row) -> view<type_to_data_t<Type>>;
+
+template <extension_type Type>
+auto legacy_value_at(const Type& type, const type_to_arrow_array_t<Type>& arr,
+                     int64_t row) -> view<type_to_data_t<Type>>;
+
+template <concrete_type Type>
+auto legacy_value_at(const Type& type, const arrow::Array& arr, int64_t row)
+  -> view<type_to_data_t<Type>>;
+
+auto legacy_value_at(const type& type, const arrow::Array& arr, int64_t row)
+  -> data_view;
+
 template <class Callback>
 class record_batch_listener final : public arrow::ipc::Listener {
 public:
@@ -113,7 +129,203 @@ index_column_arrays(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
   return result;
 }
 
+template <concrete_type Type>
+auto legacy_value_at([[maybe_unused]] const Type& type,
+                     const type_to_arrow_array_storage_t<Type>& arr,
+                     int64_t row) -> view<type_to_data_t<Type>> {
+  TENZIR_ASSERT_EXPENSIVE(row < arr.length(),
+                          "{} is out of bounds for {}-array of length {}", row,
+                          arr.length(), type_kind{tag_v<Type>});
+  TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
+  if constexpr (std::is_same_v<Type, null_type>) {
+    return caf::none;
+  } else if constexpr (detail::is_any_v<Type, bool_type, uint64_type,
+                                        double_type>) {
+    return arr.GetView(row);
+  } else if constexpr (std::is_same_v<Type, int64_type>) {
+    return int64_t{arr.GetView(row)};
+  } else if constexpr (std::is_same_v<Type, duration_type>) {
+    TENZIR_ASSERT_EXPENSIVE(
+      as<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
+      == arrow::TimeUnit::NANO);
+    return duration{arr.GetView(row)};
+  } else if constexpr (std::is_same_v<Type, time_type>) {
+    TENZIR_ASSERT_EXPENSIVE(
+      as<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
+      == arrow::TimeUnit::NANO);
+    return time{} + duration{arr.GetView(row)};
+  } else if constexpr (std::is_same_v<Type, string_type>) {
+    const auto str = arr.GetView(row);
+    return {str.data(), str.size()};
+  } else if constexpr (std::is_same_v<Type, blob_type>) {
+    const auto str = arr.GetView(row);
+    return {reinterpret_cast<const std::byte*>(str.data()), str.size()};
+  } else if constexpr (std::is_same_v<Type, ip_type>) {
+    TENZIR_ASSERT_EXPENSIVE(arr.byte_width() == 16);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    const auto* bytes = arr.raw_values() + (row * 16);
+    return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
+  } else if constexpr (std::is_same_v<Type, subnet_type>) {
+    TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 2);
+    auto network = legacy_value_at(
+      ip_type{}, *as<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(),
+      row);
+    auto length
+      = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
+    return {network, length};
+  } else if constexpr (std::is_same_v<Type, secret_type>) {
+    TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 1);
+    const auto& bin_array = as<arrow::BinaryArray>(*arr.field(0));
+    auto chunk
+      = chunk::make(bin_array.value_data())
+          ->slice(bin_array.value_offset(row), bin_array.value_length(row));
+    auto fbs = detail::secrets::owning_root_fbs_buffer::make(std::move(chunk));
+    TENZIR_ASSERT(fbs);
+    return secret_view{std::move(*fbs).as_child()};
+  } else if constexpr (std::is_same_v<Type, enumeration_type>) {
+    return detail::narrow_cast<view<type_to_data_t<enumeration_type>>>(
+      arr.GetValueIndex(row));
+  } else if constexpr (std::is_same_v<Type, list_type>) {
+    auto f = [&]<concrete_type ValueType>(
+               const ValueType& value_type) -> list_view_handle {
+      struct list_view final : list_view_handle::view_type {
+        list_view(ValueType value_type,
+                  std::shared_ptr<arrow::Array> value_slice) noexcept
+          : value_type{std::move(value_type)},
+            value_slice{std::move(value_slice)} {
+        }
+
+        value_type at(size_type i) const override {
+          const auto row = detail::narrow_cast<int64_t>(i);
+          if (value_slice->IsNull(row)) {
+            return caf::none;
+          }
+          return legacy_value_at(value_type, *value_slice, row);
+        };
+
+        size_type size() const noexcept override {
+          return value_slice->length();
+        };
+
+        ValueType value_type;
+        std::shared_ptr<arrow::Array> value_slice;
+      };
+      return list_view_handle{list_view_ptr{
+        caf::make_counted<list_view>(value_type, arr.value_slice(row))}};
+    };
+    return match(type.value_type(), f);
+  } else if constexpr (std::is_same_v<Type, map_type>) {
+    auto f = [&]<concrete_type KeyType, concrete_type ItemType>(
+               const KeyType& key_type,
+               const ItemType& item_type) -> map_view_handle {
+      struct map_view final : map_view_handle::view_type {
+        map_view(KeyType key_type, ItemType item_type,
+                 std::shared_ptr<arrow::Array> key_array,
+                 std::shared_ptr<arrow::Array> item_array, int64_t value_offset,
+                 int64_t value_length)
+          : key_type{std::move(key_type)},
+            item_type{std::move(item_type)},
+            key_array{std::move(key_array)},
+            item_array{std::move(item_array)},
+            value_offset{value_offset},
+            value_length{value_length} {
+        }
+
+        value_type at(size_type i) const override {
+          TENZIR_ASSERT_EXPENSIVE(! key_array->IsNull(value_offset + i));
+          if (item_array->IsNull(value_offset + i)) {
+            return {legacy_value_at(key_type, *key_array, value_offset + i), {}};
+          }
+          return {
+            legacy_value_at(key_type, *key_array, value_offset + i),
+            legacy_value_at(item_type, *item_array, value_offset + i),
+          };
+        };
+
+        size_type size() const noexcept override {
+          return detail::narrow_cast<size_type>(value_length);
+        };
+
+        KeyType key_type;
+        ItemType item_type;
+        std::shared_ptr<arrow::Array> key_array;
+        std::shared_ptr<arrow::Array> item_array;
+        int64_t value_offset;
+        int64_t value_length;
+      };
+      return map_view_handle{map_view_ptr{caf::make_counted<map_view>(
+        key_type, item_type, arr.keys(), arr.items(), arr.value_offset(row),
+        arr.value_length(row))}};
+    };
+    return match(std::tuple{type.key_type(), type.value_type()}, f);
+  } else if constexpr (std::is_same_v<Type, record_type>) {
+    struct record_view final : record_view_handle::view_type {
+      record_view(record_type type, arrow::ArrayVector fields, int64_t row)
+        : type{std::move(type)}, fields{std::move(fields)}, row{row} {
+      }
+
+      value_type at(size_type i) const override {
+        const auto& field = type.field(i);
+        return {
+          field.name,
+          legacy_value_at(field.type, *fields[i], row),
+        };
+      };
+
+      size_type size() const noexcept override {
+        return type.num_fields();
+      };
+
+      record_type type;
+      arrow::ArrayVector fields;
+      int64_t row;
+    };
+    return record_view_handle{
+      record_view_ptr{caf::make_counted<record_view>(type, arr.fields(), row)}};
+  } else {
+    static_assert(detail::always_false_v<Type>, "unhandled type");
+  }
+}
+
+template <extension_type Type>
+auto legacy_value_at(const Type& type, const type_to_arrow_array_t<Type>& arr,
+                     int64_t row) -> view<type_to_data_t<Type>> {
+  return legacy_value_at(type, *arr.storage(), row);
+}
+
+template <concrete_type Type>
+auto legacy_value_at(const Type& type, const arrow::Array& arr, int64_t row)
+  -> view<type_to_data_t<Type>> {
+  TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
+  TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
+  if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
+    return legacy_value_at(type, *as<type_to_arrow_array_t<Type>>(arr).storage(),
+                           row);
+  } else {
+    return legacy_value_at(type, as<type_to_arrow_array_t<Type>>(arr), row);
+  }
+}
+
+auto legacy_value_at(const type& type, const arrow::Array& arr, int64_t row)
+  -> data_view {
+  TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
+  if (arr.IsNull(row)) {
+    return caf::none;
+  }
+  auto f = [&]<concrete_type Type>(const Type& type) -> data_view {
+    return legacy_value_at(type, arr, row);
+  };
+  return match(type, f);
+}
+
 } // namespace
+
+auto values(const type& type, const arrow::Array& array) noexcept
+  -> generator<data_view> {
+  for (auto i = int64_t{0}; i < array.length(); ++i) {
+    co_yield legacy_value_at(type, array, i);
+  }
+}
 
 // -- constructors, destructors, and assignment operators ----------------------
 
@@ -220,7 +432,7 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
     auto&& array = state_.get_flat_columns()[column];
     const auto& schema = as<record_type>(this->schema());
     auto offset = schema.resolve_flat_index(column);
-    return value_at(schema.field(offset).type, *array, row);
+    return legacy_value_at(schema.field(offset).type, *array, row);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -238,7 +450,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
         .type,
       t));
     auto&& array = state_.get_flat_columns()[column];
-    return value_at(t, *array, row);
+    return legacy_value_at(t, *array, row);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");

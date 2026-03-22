@@ -821,8 +821,10 @@ public:
       auto is_first_schema = not *last_schema;
       auto did_schema_change = *last_schema != input_schema;
       *last_schema = input_schema;
-      for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT(row);
+      for (const auto& row : values(type{input_type}, *array)) {
+        TENZIR_ASSERT(not is<caf::none_t>(row));
+        const auto* record_view = try_as<view<record>>(&row);
+        TENZIR_ASSERT(record_view);
         if (first) {
           if (did_schema_change) {
             if (not is_first_schema) {
@@ -833,7 +835,7 @@ public:
           }
           first = false;
         }
-        const auto ok = printer.print_values(out_iter, *row);
+        const auto ok = printer.print_values(out_iter, *record_view);
         TENZIR_ASSERT(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }

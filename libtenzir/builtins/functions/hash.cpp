@@ -270,7 +270,7 @@ class fun : public virtual function_plugin {
 TENZIR_ENUM(hmac_algorithm, sha256, sha512, sha384, sha1, md5);
 
 template <class Hmac>
-auto hmac_digest(data_view const& data, std::span<std::byte const> key)
+auto hmac_digest(data_view3 data, std::span<std::byte const> key)
   -> std::string {
   auto mac = Hmac{key};
   match(
@@ -287,7 +287,7 @@ auto hmac_digest(data_view const& data, std::span<std::byte const> key)
   return detail::hexify(as_bytes(mac.finish()));
 }
 
-auto compute_hmac(data_view const& data, std::span<std::byte const> key,
+auto compute_hmac(data_view3 data, std::span<std::byte const> key,
                   hmac_algorithm algorithm) -> std::string {
   switch (algorithm) {
     case hmac_algorithm::sha256:
@@ -350,9 +350,8 @@ public:
                   check(builder.AppendNull());
                   continue;
                 }
-                auto value
-                  = value_at(data_values.type,
-                             static_cast<arrow::Array const&>(data_array), i);
+                auto value = view_at(
+                  static_cast<arrow::Array const&>(data_array), i);
                 if (is<caf::none_t>(value)) {
                   check(builder.AppendNull());
                   continue;
