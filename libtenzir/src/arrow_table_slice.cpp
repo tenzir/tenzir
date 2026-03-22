@@ -1089,7 +1089,7 @@ struct GetByteRangesArray {
                     field("length", uint64())});
   }
 
-  static Result<uint64_t> Exec(const ArrayData& input) {
+  static arrow::Result<uint64_t> Exec(const ArrayData& input) {
     GetByteRangesArray self{
       input,
       input.offset,
