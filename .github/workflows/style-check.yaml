@@ -136,11 +136,12 @@ jobs:
           if ! git diff --submodule=diff --name-only --no-color --diff-filter=ACDMR "$base" -- \
             scripts/ocsf-schemas.py \
             schema/types/ocsf \
-            libtenzir/include/tenzir/ocsf_*.inc | grep -q .; then
+            'libtenzir/include/tenzir/ocsf_*.inc' | grep -q .; then
             echo "OCSF generator inputs and outputs unchanged, skipping"
             exit 0
           fi
           uv run --script scripts/ocsf-schemas.py
+          git add --intent-to-add --all
           git diff --submodule=diff --exit-code || {
             echo '::error title=ocsf-schemas::Please run `uv run --script scripts/ocsf-schemas.py` and commit the generated changes.'
             git diff --submodule=diff --exit-code
