@@ -283,18 +283,48 @@ struct column_evaluator {
   static ids evaluate(LhsType type, id offset, const arrow::Array& array,
                       const Rhs& rhs, const ids& selection) noexcept {
     ids result{};
-    for (auto id : select(selection)) {
-      TENZIR_ASSERT(id >= offset);
-      const auto row = detail::narrow_cast<int64_t>(id - offset);
-      // TODO: Instead of this in the loop, do selection &= array.null_bitmap
-      // outside of it.
-      if (array.IsNull(row)) {
-        continue;
+    if constexpr (detail::tl_contains_v<data_view3_owning_types,
+                                        type_to_data_t<LhsType>>) {
+      auto const* typed_array
+        = dynamic_cast<type_to_arrow_array_t<LhsType> const*>(&array);
+      TENZIR_ASSERT(typed_array);
+      for (auto id : select(selection)) {
+        TENZIR_ASSERT(id >= offset);
+        const auto row = detail::narrow_cast<int64_t>(id - offset);
+        // TODO: Instead of this in the loop, do selection &= array.null_bitmap
+        // outside of it.
+        if (array.IsNull(row)) {
+          continue;
+        }
+        result.append(false, id - result.size());
+        auto lhs = view_at(*typed_array, row);
+        TENZIR_ASSERT(lhs);
+        result.append(cell_evaluator<Op>::evaluate(*lhs, rhs), 1u);
       }
-      result.append(false, id - result.size());
-      result.append(match(view_at(array, row), [&](const auto& lhs) {
-        return cell_evaluator<Op>::evaluate(lhs, rhs);
-      }), 1u);
+    } else {
+      auto values_ = values(tenzir::type{type}, array);
+      auto it = values_.begin();
+      auto current_row = int64_t{0};
+      for (auto id : select(selection)) {
+        TENZIR_ASSERT(id >= offset);
+        const auto row = detail::narrow_cast<int64_t>(id - offset);
+        while (current_row < row) {
+          TENZIR_ASSERT(it != values_.end());
+          ++it;
+          ++current_row;
+        }
+        TENZIR_ASSERT(it != values_.end());
+        auto lhs = *it;
+        ++it;
+        ++current_row;
+        if (is<caf::none_t>(lhs)) {
+          continue;
+        }
+        result.append(false, id - result.size());
+        result.append(match(lhs, [&](const auto& lhs) {
+          return cell_evaluator<Op>::evaluate(lhs, rhs);
+        }), 1u);
+      }
     }
     result.append(false, offset + array.length() - result.size());
     return result;
