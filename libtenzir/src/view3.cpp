@@ -176,6 +176,54 @@ auto weak_order(const list_view3 l, const list_view3 r) -> std::weak_ordering {
   return order_impl<std::weak_ordering>(l, r);
 }
 
+template <class T>
+auto materialize(view3<T> v) -> T {
+  if constexpr (std::same_as<view3<T>, T>) {
+    return v;
+  } else {
+    return ::tenzir::materialize(v);
+  }
+}
+
+template auto materialize<caf::none_t>(caf::none_t) -> caf::none_t;
+template auto materialize<bool>(bool) -> bool;
+template auto materialize<int64_t>(int64_t) -> int64_t;
+template auto materialize<uint64_t>(uint64_t) -> uint64_t;
+template auto materialize<double>(double) -> double;
+template auto materialize<duration>(duration) -> duration;
+template auto materialize<time>(time) -> time;
+template auto materialize<std::string>(std::string_view) -> std::string;
+template auto materialize<ip>(ip) -> ip;
+template auto materialize<subnet>(subnet) -> subnet;
+template auto materialize<enumeration>(enumeration) -> enumeration;
+template auto materialize<blob>(blob_view) -> blob;
+template auto materialize<secret>(secret_view) -> secret;
+template auto materialize<list>(list_view3) -> list;
+template auto materialize<record>(record_view3) -> record;
+
+auto materialize(record_view3 v) -> record {
+  auto result = record{};
+  for (auto [name, value] : v) {
+    result.emplace(std::string{name}, materialize(value));
+  }
+  return result;
+}
+
+auto materialize(list_view3 v) -> list {
+  auto result = list{};
+  result.reserve(v.size());
+  for (auto value : v) {
+    result.push_back(materialize(value));
+  }
+  return result;
+}
+
+auto materialize(data_view3 v) -> data {
+  return match(v, [](auto x) -> data {
+    return data{materialize(x)};
+  });
+}
+
 } // namespace tenzir
 
 namespace fmt {

@@ -34,7 +34,8 @@ public:
     return result;
   }
 
-  auto value_at(int64_t row) const -> data_view {
+  [[deprecated("Use view3_at instead")]] auto value_at(int64_t row) const
+    -> data_view {
     auto [part, part_row] = resolve(row);
     return tenzir::value_at(part.get().type, *part.get().array, part_row);
   }
@@ -83,12 +84,8 @@ public:
     return parts_;
   }
 
-  auto values() const -> generator<data_view> {
-    for (auto& part : parts_) {
-      for (auto value : part.values()) {
-        co_yield std::move(value);
-      }
-    }
+  auto values() const -> generator<data_view3> {
+    return values3();
   }
 
   auto values3() const -> generator<data_view3> {

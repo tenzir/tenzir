@@ -163,7 +163,7 @@ struct basic_series {
 
   template <type_or_concrete_type Cast = type>
     requires(std::same_as<Type, type>)
-  auto values() const {
+  [[deprecated("Use values3 instead")]] auto values() const {
     if constexpr (concrete_type<Cast>) {
       const auto* ct = try_as<Cast>(&type);
       TENZIR_ASSERT(ct);
@@ -176,11 +176,35 @@ struct basic_series {
     }
   }
 
-  auto values() const
+  [[deprecated("Use values3 instead")]] auto values() const
     requires(concrete_type<Type>)
   {
     TENZIR_ASSERT(array);
     return tenzir::values(type, *array);
+  }
+
+  template <concrete_type Cast>
+    requires(std::same_as<Type, type>)
+  auto values3() const
+    -> generator<std::optional<view3<type_to_data_t<Cast>>>> {
+    const auto* ct = try_as<Cast>(&type);
+    TENZIR_ASSERT(ct);
+    TENZIR_ASSERT(array);
+    return tenzir::values3(
+      static_cast<const type_to_arrow_array_t<Cast>&>(*array));
+  }
+
+  auto values3() const -> generator<data_view3>
+    requires(std::same_as<Type, type>)
+  {
+    return tenzir::values3(*array);
+  }
+
+  auto values3() const -> generator<std::optional<view3<type_to_data_t<Type>>>>
+    requires(concrete_type<Type>)
+  {
+    TENZIR_ASSERT(array);
+    return tenzir::values3(*array);
   }
 
   [[nodiscard]] auto slice(int64_t begin, int64_t end) const
