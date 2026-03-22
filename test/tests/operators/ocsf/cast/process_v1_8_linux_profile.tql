@@ -1,3 +1,6 @@
+// Linux profile without the linux extension.
+// Expect `process.auid`, `process.egid`, and `process.euid` to be dropped,
+// with diagnostics explaining the missing extension / profile-extension pair.
 from {
   metadata: {
     version: "1.8.0",

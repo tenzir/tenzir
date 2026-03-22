@@ -1,3 +1,5 @@
+// macOS profile with the matching macOS extension enabled.
+// Expect `process.egid` and `process.euid` to be preserved.
 from {
   metadata: {
     version: "1.8.0",
