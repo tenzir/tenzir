@@ -52,9 +52,9 @@
 #include <caf/net/ssl/context.hpp>
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/timespan.hpp>
-#include <openssl/ssl.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
+#include <openssl/ssl.h>
 
 #include <charconv>
 #include <deque>
@@ -303,7 +303,8 @@ auto find_decompression_plugin_name(std::string_view ext)
   return std::nullopt;
 }
 
-auto find_parser_plugin_name(std::string_view ext) -> std::optional<std::string> {
+auto find_parser_plugin_name(std::string_view ext)
+  -> std::optional<std::string> {
   for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
     if (std::ranges::contains(plugin->read_properties().extensions, ext)) {
       TENZIR_TRACE("[http] inferred plugin `{}` for extension `{}`",
@@ -337,8 +338,7 @@ auto make_http_plugin_invocation(std::string_view plugin, location op)
 
 auto infer_http_pipeline_plugin_names(const caf::uri& uri,
                                       const caf_http::response& r,
-                                      location oploc,
-                                      diagnostic_handler& dh)
+                                      location oploc, diagnostic_handler& dh)
   -> failure_or<std::vector<std::string>> {
   if (auto parsed = boost::urls::parse_uri_reference(uri.str())) {
     if (not parsed->segments().empty()) {
@@ -394,8 +394,7 @@ auto infer_http_pipeline_plugin_names(const caf::uri& uri,
 
 auto infer_http_pipeline_plugin_names(const caf::uri& uri,
                                       const tenzir::http::ResponseData& r,
-                                      location oploc,
-                                      diagnostic_handler& dh)
+                                      location oploc, diagnostic_handler& dh)
   -> failure_or<std::vector<std::string>> {
   if (auto parsed = boost::urls::parse_uri_reference(uri.str())) {
     if (not parsed->segments().empty()) {
@@ -426,7 +425,8 @@ auto infer_http_pipeline_plugin_names(const caf::uri& uri,
     diagnostic::error("invalid URI `{}`", uri.str()).primary(oploc).emit(dh);
     return failure::promise();
   }
-  auto content_type = tenzir::http::find_header_value(r.headers, "content-type");
+  auto content_type
+    = tenzir::http::find_header_value(r.headers, "content-type");
   if (content_type.empty()) {
     diagnostic::error(
       "cannot deduce a parser without a valid `Content-Type` header")
@@ -475,7 +475,8 @@ auto make_http_ir_pipeline_from_names(std::vector<std::string> plugin_names,
   for (auto const& name : plugin_names) {
     auto* plugin = plugins::find<operator_compiler_plugin>(name);
     TENZIR_ASSERT(plugin);
-    TRY(auto op, plugin->compile(make_http_plugin_invocation(name, oploc), ctx));
+    TRY(auto op,
+        plugin->compile(make_http_plugin_invocation(name, oploc), ctx));
     ops.push_back(std::move(op));
   }
   return located{ir::pipeline{{}, std::move(ops)}, oploc};
@@ -493,8 +494,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
 }
 
 auto make_ir_pipeline(const std::optional<located<ir::pipeline>>& pipe,
-                      const caf::uri& uri,
-                      const tenzir::http::ResponseData& r,
+                      const caf::uri& uri, const tenzir::http::ResponseData& r,
                       location oploc, diagnostic_handler& dh)
   -> failure_or<located<ir::pipeline>> {
   if (pipe) {
@@ -591,10 +591,10 @@ auto validate_paginate(std::optional<ast::expression> expr,
   }
   if (const auto* lambda = try_as<ast::lambda_expr>(*expr)) {
     if (not lambda->is_unary()) {
-        diagnostic::error("expected unary lambda")
-          .primary(*lambda)
-          .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
-          .emit(dh);
+      diagnostic::error("expected unary lambda")
+        .primary(*lambda)
+        .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+        .emit(dh);
       return failure::promise();
     }
     return std::optional<pagination_spec>{
@@ -606,12 +606,12 @@ auto validate_paginate(std::optional<ast::expression> expr,
     value,
     [&](const std::string& mode) -> failure_or<std::optional<pagination_spec>> {
       if (mode != "link") {
-          diagnostic::error("unsupported pagination mode: `{}`", mode)
-            .primary(*expr)
-            .hint("`paginate` must be `\"link\"` or a lambda")
-            .emit(dh);
-          return failure::promise();
-        }
+        diagnostic::error("unsupported pagination mode: `{}`", mode)
+          .primary(*expr)
+          .hint("`paginate` must be `\"link\"` or a lambda")
+          .emit(dh);
+        return failure::promise();
+      }
       return std::optional<pagination_spec>{
         {tenzir::variant<ast::lambda_expr, std::string>{mode},
          expr->get_location()}};
@@ -649,10 +649,11 @@ struct header_evaluation {
   bool has_accept_header = false;
 };
 
-auto evaluate_http_urls(ast::expression const& url_expr, table_slice const& slice,
+auto evaluate_http_urls(ast::expression const& url_expr,
+                        table_slice const& slice,
                         std::vector<secret_request>& requests,
-                        std::vector<std::string>& urls,
-                        diagnostic_handler& dh) -> void {
+                        std::vector<std::string>& urls, diagnostic_handler& dh)
+  -> void {
   urls.clear();
   urls.reserve(slice.rows());
   auto url_warned = false;
@@ -672,9 +673,9 @@ auto evaluate_http_urls(ast::expression const& url_expr, table_slice const& slic
     if (part.type.kind().is<secret_type>()) {
       for (auto const& value : part.values<secret_type>()) {
         if (value) {
-          requests.emplace_back(make_secret_request(
-            "url", materialize(*value), url_expr.get_location(),
-            urls.emplace_back(), dh));
+          requests.emplace_back(make_secret_request("url", materialize(*value),
+                                                    url_expr.get_location(),
+                                                    urls.emplace_back(), dh));
         } else {
           url_warned = true;
           urls.emplace_back();
@@ -696,10 +697,11 @@ auto evaluate_http_urls(ast::expression const& url_expr, table_slice const& slic
   }
 }
 
-auto evaluate_http_headers(
-  std::optional<ast::expression> const& headers_expr, bool has_body,
-  table_slice const& input, std::vector<secret_request>& requests,
-  std::vector<header_evaluation>& headers, diagnostic_handler& dh) -> void {
+auto evaluate_http_headers(std::optional<ast::expression> const& headers_expr,
+                           bool has_body, table_slice const& input,
+                           std::vector<secret_request>& requests,
+                           std::vector<header_evaluation>& headers,
+                           diagnostic_handler& dh) -> void {
   headers.clear();
   headers.reserve(input.rows());
   if (not headers_expr) {
@@ -831,8 +833,7 @@ auto eval_http_body(std::optional<ast::expression> const& body_expr,
 }
 
 auto eval_http_optional_string(std::optional<ast::expression> const& expr,
-                               table_slice const& slice,
-                               diagnostic_handler& dh)
+                               table_slice const& slice, diagnostic_handler& dh)
   -> generator<std::string_view> {
   if (not expr) {
     for (auto i = size_t{}; i < slice.rows(); ++i) {
@@ -948,8 +949,7 @@ auto make_http_response_metadata_record(const caf_http::response& response)
 }
 
 auto make_http_response_metadata_record(
-  tenzir::http::ResponseData const& response)
-  -> record {
+  tenzir::http::ResponseData const& response) -> record {
   return tenzir::http::make_response_record(response);
 }
 
@@ -983,9 +983,9 @@ auto make_metadata(const caf_http::request& r, const uint64_t len) -> series {
   return sb.finish_assert_one_array();
 }
 
-auto add_http_metadata_field(std::optional<ast::field_path> const& metadata_field,
-                             record const& metadata, table_slice slice,
-                             diagnostic_handler& dh) -> table_slice {
+auto add_http_metadata_field(
+  std::optional<ast::field_path> const& metadata_field, record const& metadata,
+  table_slice slice, diagnostic_handler& dh) -> table_slice {
   if (not metadata_field) {
     return slice;
   }
@@ -1009,8 +1009,7 @@ auto add_http_response_field(ast::field_path const& response_field,
 }
 
 auto make_http_error_slice(record const& row,
-                           ast::field_path const& error_field,
-                           blob const& body,
+                           ast::field_path const& error_field, blob const& body,
                            std::optional<ast::field_path> const& metadata_field,
                            record const& metadata, diagnostic_handler& dh)
   -> table_slice {
@@ -1020,7 +1019,8 @@ auto make_http_error_slice(record const& row,
   error.data(body);
   auto slice = assign(error_field, error.finish_assert_one_array(),
                       base.finish_assert_one_slice(), dh);
-  return add_http_metadata_field(metadata_field, metadata, std::move(slice), dh);
+  return add_http_metadata_field(metadata_field, metadata, std::move(slice),
+                                 dh);
 }
 
 struct from_http_args {
@@ -1584,8 +1584,8 @@ auto queue_pagination_request(
   std::string next_url, bool tls_enabled, const location& op,
   diagnostic_handler& dh, severity diag_severity, std::string_view note = {})
   -> bool {
-  auto next_uri = validate_http_pagination_url(
-    std::move(next_url), tls_enabled, op, dh, diag_severity, note);
+  auto next_uri = validate_http_pagination_url(std::move(next_url), tls_enabled,
+                                               op, dh, diag_severity, note);
   if (not next_uri) {
     return false;
   }
@@ -2179,9 +2179,10 @@ public:
               return;
             }
             auto metadata = make_http_response_metadata_record(r);
-            auto slice = make_http_error_slice(
-              og, *args_.error_field, make_blob(), args_.metadata_field,
-              metadata, ctrl.diagnostics());
+            auto slice
+              = make_http_error_slice(og, *args_.error_field, make_blob(),
+                                      args_.metadata_field, metadata,
+                                      ctrl.diagnostics());
             slices.push_back(std::move(slice));
             return;
           }
@@ -2660,10 +2661,10 @@ public:
         continue;
       }
       if (insert_content_type and not header.has_content_type) {
-        header.values.emplace(
-          "Content-Type", args_.encode and args_.encode->inner == "form"
-                            ? "application/x-www-form-urlencoded"
-                            : "application/json");
+        header.values.emplace("Content-Type",
+                              args_.encode and args_.encode->inner == "form"
+                                ? "application/x-www-form-urlencoded"
+                                : "application/json");
       }
       if (not header.has_accept_header) {
         header.values.emplace("Accept", "application/json, */*;q=0.5");
@@ -2797,12 +2798,12 @@ private:
     return true;
   }
 
-  static auto run_request_task(Arc<message_queue> queue,
-                               std::chrono::milliseconds connect_timeout,
-                               std::chrono::milliseconds retry_delay,
-                               uint64_t retry_count,
-                               std::chrono::milliseconds paginate_delay,
-                               request_state request) -> Task<void> {
+  static auto
+  run_request_task(Arc<message_queue> queue,
+                   std::chrono::milliseconds connect_timeout,
+                   std::chrono::milliseconds retry_delay, uint64_t retry_count,
+                   std::chrono::milliseconds paginate_delay,
+                   request_state request) -> Task<void> {
     if (request.is_pagination
         and paginate_delay > std::chrono::milliseconds::zero()) {
       co_await folly::coro::sleep(
@@ -2854,9 +2855,10 @@ private:
 
   auto queue_paginate(request_state const& request, std::string next_url,
                       diagnostic_handler& dh) -> void {
-    auto next_uri = validate_http_pagination_url(
-      std::move(next_url), request.tls_enabled, args_.op, dh, severity::warning,
-      "skipping request");
+    auto next_uri
+      = validate_http_pagination_url(std::move(next_url), request.tls_enabled,
+                                     args_.op, dh, severity::warning,
+                                     "skipping request");
     if (not next_uri) {
       return;
     }
@@ -2874,8 +2876,7 @@ private:
   }
 
   auto handle_http_response(http_response_message response,
-                            Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> {
+                            Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
     auto request_it = active_requests_.find(response.request_id);
     if (request_it == active_requests_.end()) {
       co_return;
@@ -2898,9 +2899,10 @@ private:
           .hint("specify `error_field` to keep the event")
           .emit(ctx);
       } else {
-        auto slice = make_http_error_slice(
-          request.row, *args_.error_field, response_data.body,
-          args_.metadata_field, response_metadata, ctx.dh());
+        auto slice
+          = make_http_error_slice(request.row, *args_.error_field,
+                                  response_data.body, args_.metadata_field,
+                                  response_metadata, ctx.dh());
         co_await push(std::move(slice));
       }
       finish_request(request.id, ctx);
@@ -2928,9 +2930,8 @@ private:
       finish_request(request.id, ctx);
       co_return;
     }
-    auto pipeline_result
-      = make_ir_pipeline(args_.parse, *request_uri, response_data, args_.op,
-                         ctx.dh());
+    auto pipeline_result = make_ir_pipeline(args_.parse, *request_uri,
+                                            response_data, args_.op, ctx.dh());
     if (not pipeline_result) {
       finish_request(request.id, ctx);
       co_return;
@@ -2940,7 +2941,8 @@ private:
     auto body_view = std::span<std::byte const>{body.data(), body.size()};
     auto encoding = tenzir::http::find_header_value(response_data.headers,
                                                     "content-encoding");
-    if (auto decompressed = try_decompress_body(encoding, body_view, ctx.dh())) {
+    if (auto decompressed
+        = try_decompress_body(encoding, body_view, ctx.dh())) {
       payload = chunk::make(std::move(*decompressed));
     } else {
       payload = chunk::make(std::move(body));
@@ -2958,19 +2960,18 @@ private:
       }
     }
     auto sub_key = next_sub_key_++;
-    active_subpipelines_.emplace(sub_key, active_subpipeline{
-                                          .row = request.row,
-                                          .response_metadata
-                                          = std::move(response_metadata),
-                                          .headers = std::move(request.headers),
-                                          .ssl_context = request.ssl_context,
-                                          .tls_enabled = request.tls_enabled,
-                                        });
+    active_subpipelines_.emplace(
+      sub_key, active_subpipeline{
+                 .row = request.row,
+                 .response_metadata = std::move(response_metadata),
+                 .headers = std::move(request.headers),
+                 .ssl_context = request.ssl_context,
+                 .tls_enabled = request.tls_enabled,
+               });
     active_requests_.erase(request_it);
     auto sub
       = co_await ctx.spawn_sub(data{int64_t{static_cast<int64_t>(sub_key)}},
-                               std::move(pipeline.inner),
-                               tag_v<chunk_ptr>);
+                               std::move(pipeline.inner), tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     auto push_result = co_await open_pipeline.push(std::move(payload));
     if (push_result.is_err()) {
@@ -3017,9 +3018,10 @@ private:
 
   auto queue_paginate(active_subpipeline const& sub, std::string next_url,
                       diagnostic_handler& dh) -> void {
-    auto next_uri = validate_http_pagination_url(
-      std::move(next_url), sub.tls_enabled, args_.op, dh, severity::warning,
-      "skipping request");
+    auto next_uri
+      = validate_http_pagination_url(std::move(next_url), sub.tls_enabled,
+                                     args_.op, dh, severity::warning,
+                                     "skipping request");
     if (not next_uri) {
       return;
     }
@@ -3063,8 +3065,7 @@ auto make_http_executor_description() -> Description {
   d.operator_location(&http_executor_args::op);
   auto url = d.positional("url", &http_executor_args::url, "string");
   auto method = d.named("method", &http_executor_args::method, "string");
-  auto body
-    = d.named("body", &http_executor_args::body, "record|string|blob");
+  auto body = d.named("body", &http_executor_args::body, "record|string|blob");
   auto payload
     = d.named("payload", &http_executor_args::body, "record|string|blob");
   auto encode = d.named("encode", &http_executor_args::encode);
@@ -3073,8 +3074,7 @@ auto make_http_executor_description() -> Description {
     = d.named("response_field", &http_executor_args::response_field);
   auto metadata_field
     = d.named("metadata_field", &http_executor_args::metadata_field);
-  auto error_field
-    = d.named("error_field", &http_executor_args::error_field);
+  auto error_field = d.named("error_field", &http_executor_args::error_field);
   auto paginate = d.named("paginate", &http_executor_args::paginate_expr,
                           "record->string|string");
   auto paginate_delay
@@ -3090,8 +3090,8 @@ auto make_http_executor_description() -> Description {
   auto parse = d.pipeline(&http_executor_args::parse,
                           {{"request", &http_executor_args::request_let},
                            {"response", &http_executor_args::response_let}});
-  const auto build_args = [=](DescribeCtx& ctx)
-    -> failure_or<http_executor_args> {
+  const auto build_args
+    = [=](DescribeCtx& ctx) -> failure_or<http_executor_args> {
     auto args = http_executor_args{};
     args.op = ctx.get_location(url).value_or(location::unknown);
     if (auto x = ctx.get(url)) {
