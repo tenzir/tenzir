@@ -934,7 +934,7 @@ public:
       .backslashes_escape = true,
       .doubled_quotes_escape = true,
     };
-    // ── Build multi_series_builder options from individual args ──────────────
+    // ── Build multi_series_builder options from args_ ─────────────────────────
     auto msb_opts = multi_series_builder::options{};
     msb_opts.settings.default_schema_name
       = fmt::format("tenzir.{}", args_.name);
@@ -983,7 +983,7 @@ public:
       }
       msb_opts.policy = std::move(*parsed);
     }
-    // ── Build xsv_parser_options ─────────────────────────────────────────────
+    // ── Build xsv_parser_options from args_ ───────────────────────────────────
     opts_ = xsv_parser_options{
       .name = args_.name,
       .field_separator = args_.field_separator.inner,
@@ -1046,9 +1046,9 @@ public:
       }
       header_ = std::move(*maybe_header);
       original_field_count_ = header_->size();
-      opts_.header = std::optional{*header_};
+      opts_.header = *header_;
     }
-    // ── Build persistent wrapping diagnostic handler and MSB ─────────────────
+    // ── Build diagnostic handler and MSB ─────────────────────────────────────
     dh_ = std::make_unique<transforming_diagnostic_handler>(
       ctx.dh(), [this](diagnostic d) {
         d.message = fmt::format("{} parser: {}", opts_.name, d.message);
@@ -1058,6 +1058,16 @@ public:
       });
     msb_ = multi_series_builder(opts_.builder_options, *dh_);
     co_return;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // Only truly dynamic state is snapshotted. opts_ and quoting_ are fully
+    // derived from args_ and are rebuilt in start() on every run.
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("header", header_);
+    serde("original_field_count", original_field_count_);
+    serde("line_counter", line_counter_);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
