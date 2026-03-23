@@ -502,12 +502,18 @@ def exclude_version(version: str) -> bool:
 
 def fetch_versions() -> list[str]:
     log(f"Fetching available versions from {SERVER}")
-    body = requests.get(SERVER).content.decode()
-    return sorted(
+    response = requests.get(SERVER, timeout=(5, 30))
+    response.raise_for_status()
+    versions = sorted(
         version
-        for version in re.findall("<option value=[^>]*>v([^<]*)</option>", body)
+        for version in re.findall(
+            "<option value=[^>]*>v([^<]*)</option>", response.text
+        )
         if not exclude_version(version)
     )
+    if not versions:
+        raise ValueError(f"failed to parse any OCSF versions from {SERVER}")
+    return versions
 
 
 def delete_schemas() -> None:
