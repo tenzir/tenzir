@@ -307,9 +307,8 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     return std::nullopt;
   }
   auto result = file_header{};
-  const auto& input_record = as<record_type>(slice.schema());
   auto array = check(to_record_batch(slice)->ToStructArray());
-  auto xs = values(type{input_record}, *array);
+  auto xs = values(slice.schema(), *array);
   auto begin = xs.begin();
   if (begin == xs.end() || is<caf::none_t>(*begin)) {
     return std::nullopt;
@@ -499,7 +498,7 @@ public:
         if (slice.schema().name() == "pcap.packet") {
           auto resolved_slice = resolve_enumerations(slice);
           auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-          for (const auto& row : values(type{input_record}, *array)) {
+          for (const auto& row : values(slice.schema(), *array)) {
             TENZIR_ASSERT(not is<caf::none_t>(row));
             const auto* packet = try_as<view<record>>(&row);
             TENZIR_ASSERT(packet);
@@ -525,8 +524,7 @@ public:
             co_yield {};
             co_return;
           }
-          for (const auto& row :
-               values(type{*pcap_record_type}, *pcap_values)) {
+          for (const auto& row : values(pcap_type, *pcap_values)) {
             TENZIR_ASSERT(not is<caf::none_t>(row));
             const auto* packet = try_as<view<record>>(&row);
             TENZIR_ASSERT(packet);
