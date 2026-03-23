@@ -162,7 +162,11 @@ jobs:
           fi
           nix-shell -p git \
             --run "python3 .github/workflows/nix-build.py build --attribute ${{ inputs.attribute }}.unchecked $release_flag"
-      - name: Run package tests
+
+      # =========================================================================
+      # Test Phase
+      # =========================================================================
+      - name: Run integration tests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
@@ -173,11 +177,7 @@ jobs:
           fi
           nix-shell -p git \
             --run "python3 .github/workflows/nix-build.py build --attribute ${{ inputs.attribute }} $release_flag"
-
-      # =========================================================================
-      # Test Phase
-      # =========================================================================
-      - name: Run integration tests
+      - name: Run package tests
         if: runner.os == 'Linux' && inputs.run-tests
         run: |
           python3 .github/workflows/nix-build.py package-test \
