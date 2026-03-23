@@ -17,7 +17,7 @@
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/query_cursor.hpp"
 #include "tenzir/query_queue.hpp"

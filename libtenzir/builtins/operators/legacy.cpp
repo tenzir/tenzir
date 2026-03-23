@@ -19,7 +19,7 @@ public:
     return "legacy";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto string = located<std::string>{};
     TRY(argument_parser2::operator_(name())

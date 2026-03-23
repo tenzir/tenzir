@@ -9,6 +9,7 @@
 #pragma once
 
 #include <tenzir/chunk.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/uuid.hpp>
 

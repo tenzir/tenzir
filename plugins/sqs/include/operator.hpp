@@ -12,6 +12,7 @@
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/secret_resolution.hpp>

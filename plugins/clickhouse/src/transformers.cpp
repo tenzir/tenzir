@@ -416,7 +416,7 @@ struct transformer_from_trait : transformer {
     -> ::clickhouse::ColumnRef override {
     if constexpr (Nullable) {
       auto columns = traits::template allocate<Nullable>(n);
-      for (size_t i = 0; i < n; ++n) {
+      for (size_t i = 0; i < n; ++i) {
         columns->Append(traits::null_value);
       }
       return columns;
@@ -771,10 +771,6 @@ auto make_record_functions_from_clickhouse(path_type& path,
   }
   add_field(part_start_index, clickhouse_typename.npos);
   for (const auto& [k, t] : fields) {
-    if (not validate_identifier(k)) {
-      emit_invalid_identifier("nested column name", k, location::unknown, dh);
-      return nullptr;
-    }
     path.push_back(k);
     auto functions = make_functions_from_clickhouse(path, t, dh);
     path.pop_back();

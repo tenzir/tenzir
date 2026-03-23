@@ -1,0 +1,15 @@
+// Test various Tenzir types: IP, duration, timestamp, subnet, nested, list.
+from {id: 1,
+      addr: 10.0.0.1,
+      dur: 5s,
+      ts: 2025-01-15,
+      net: 10.0.0.0/8,
+      inner: {a: 1, b: "x"},
+      items: [1, 2, 3]}
+to_clickhouse table="test_types",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

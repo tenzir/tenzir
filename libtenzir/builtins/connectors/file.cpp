@@ -573,7 +573,7 @@ private:
 
 class load_file_plugin final : public operator_plugin2<load_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
@@ -613,7 +613,7 @@ public:
   auto name() const -> std::string override {
     return "load_stdin";
   }
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto timeout = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_(name())
@@ -675,7 +675,7 @@ private:
 
 class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
@@ -746,7 +746,7 @@ public:
     return "save_stdout";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     auto args = saver_args{};

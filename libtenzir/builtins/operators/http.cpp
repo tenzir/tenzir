@@ -27,7 +27,6 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -1881,7 +1880,7 @@ private:
   from_http_args args_;
 };
 
-void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
+void warn_deprecated_payload(const operator_factory_invocation& inv,
                              session ctx) {
   for (const auto& arg : inv.args) {
     match(
@@ -1905,7 +1904,7 @@ struct from_http_compat final : public virtual operator_factory_plugin {
     return "tql2.from_http_compat";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_http_args{};
     args.op = inv.self.get_location();
@@ -3176,7 +3175,7 @@ struct HttpPlugin final : public virtual operator_plugin2<http_operator>,
     return "tql2.http";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = http_args{};
     args.op = inv.self.get_location();

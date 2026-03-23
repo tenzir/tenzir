@@ -16,6 +16,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/drain_bytes.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/compute/cast.h>

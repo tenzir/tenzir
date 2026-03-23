@@ -8,6 +8,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/pipeline.hpp"
 
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/scope_linked.hpp>
@@ -315,7 +316,7 @@ public:
     return "tql2.fork";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};
     TRY(argument_parser2::operator_("fork")

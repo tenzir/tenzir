@@ -224,8 +224,7 @@ public:
         = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
       TENZIR_ASSERT(fn);
       bucket.aggregations.push_back(
-        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx)
-          .unwrap());
+        fn->make_aggregation(function_invocation{aggr.call}, ctx).unwrap());
     }
     return bucket;
   }
@@ -654,7 +653,7 @@ auto validate_aggregates(const config& cfg, session ctx) -> failure_or<void> {
     const auto* fn
       = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
     TENZIR_ASSERT(fn); // already verified as aggregation_plugin in build_config
-    TRY(fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx));
+    TRY(fn->make_aggregation(function_invocation{aggr.call}, ctx));
   }
   return {};
 }
@@ -957,7 +956,7 @@ private:
 class plugin2 final : public virtual operator_plugin2<summarize_operator2>,
                       public virtual operator_compiler_plugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto cfg, build_config(std::move(inv.args), ctx));
     TRY(validate_aggregates(cfg, ctx));

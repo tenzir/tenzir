@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+cron "* * * * * *", {
+  from_file "./this-file-does-not-exist.json" {
+    read_json
+  }
+}

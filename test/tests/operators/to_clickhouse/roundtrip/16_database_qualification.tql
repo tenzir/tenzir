@@ -1,0 +1,12 @@
+// Create a table in a new database via qualified name.
+from {id: 0, v: 42}
+repeat 1000
+batch
+enumerate id
+to_clickhouse table="testdb.test_qualified",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

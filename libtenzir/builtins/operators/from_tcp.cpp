@@ -145,10 +145,14 @@ public:
         } catch (folly::AsyncSocketException const& ex) {
           // TODO: Surface connect retries and failures as metrics in a
           // follow-up that covers all TCP operators.
-          diagnostic::warning("failed to connect to {}", address_.describe())
-            .primary(args_.endpoint.source)
-            .note("reason: {}", ex.what())
-            .hint("ensure a TCP server is listening on this endpoint")
+          auto diag
+            = diagnostic::warning("failed to connect to {}",
+                                  address_.describe())
+                .primary(args_.endpoint.source)
+                .note("reason: {}", ex.what())
+                .hint("ensure a TCP server is listening on this endpoint");
+          add_tls_client_diagnostic_hints(std::move(diag),
+                                          tls_ and tls_->get_tls(nullptr).inner)
             .emit(dh);
           throw;
         }

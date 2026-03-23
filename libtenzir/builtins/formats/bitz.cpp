@@ -204,7 +204,7 @@ class read_bitz_plugin final : public virtual operator_factory_plugin {
     return "read_bitz";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
     return check(pipeline::internal_parse_as_operator("read bitz"));
@@ -216,7 +216,7 @@ class write_bitz_plugin final : public virtual operator_factory_plugin {
     return "write_bitz";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
     return check(pipeline::internal_parse_as_operator("write bitz"));

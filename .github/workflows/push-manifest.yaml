@@ -10,6 +10,10 @@ on:
         description: 'Space-separated list of architecture suffixes to strip for manifest tags (e.g., "aarch64 x86_64")'
         type: string
         required: true
+      tags:
+        description: 'Optional space-separated list of manifest tags to apply to each source manifest target'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -44,7 +48,8 @@ jobs:
         uses: ./.github/actions/registry-login
         with:
           config: ${{ steps.registries.outputs.config }}
-          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          ghcr-username: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
           dockerhub-user: ${{ vars.DOCKERHUB_USER }}
           dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Set up Docker Buildx
@@ -62,36 +67,83 @@ jobs:
           echo "${{ secrets.CONTAINER_SIGNING_KEY }}" > /tmp/signing-key.pem
           chmod 600 /tmp/signing-key.pem
 
-          # Build a regex pattern to strip arch suffixes from tags
-          arch_pattern=$(echo '${{ inputs.arch-suffixes }}' | tr ' ' '|')
+          read -r -a arch_suffixes <<< '${{ inputs.arch-suffixes }}'
+          if [[ "${#arch_suffixes[@]}" -eq 0 ]]; then
+            echo "::error::No architecture suffixes provided"
+            exit 1
+          fi
+          expected_sources_per_manifest="${#arch_suffixes[@]}"
+
+          read -r -a source_images <<< '${{ inputs.source-images }}'
+          if [[ "${#source_images[@]}" -eq 0 ]]; then
+            echo "::error::No source images provided"
+            exit 1
+          fi
+
+          read -r -a requested_tags <<< '${{ inputs.tags }}'
 
           # Group source images by their manifest target (image URL without arch suffix)
           declare -A manifest_sources
+          declare -A manifest_counts
+          declare -A manifest_arches
 
-          for src_image in ${{ inputs.source-images }}; do
-            # Strip the arch suffix to get the manifest target
-            # e.g., ghcr.io/tenzir/tenzir:main-slim-aarch64 -> ghcr.io/tenzir/tenzir:main-slim
-            manifest_target=$(echo "$src_image" | sed -E "s/-($arch_pattern)$//")
+          for src_image in "${source_images[@]}"; do
+            manifest_target=""
+            matched_suffix=""
+            for arch_suffix in "${arch_suffixes[@]}"; do
+              if [[ "$src_image" == *"-$arch_suffix" ]]; then
+                manifest_target="${src_image%-${arch_suffix}}"
+                matched_suffix="$arch_suffix"
+                break
+              fi
+            done
+            if [[ -z "$matched_suffix" ]]; then
+              echo "::error::Source image '$src_image' does not end with one of the expected suffixes: ${{ inputs.arch-suffixes }}"
+              exit 1
+            fi
+            if [[ " ${manifest_arches[$manifest_target]:-} " == *" $matched_suffix "* ]]; then
+              echo "::error::Duplicate source image for manifest '$manifest_target' and architecture '$matched_suffix'"
+              exit 1
+            fi
 
             # Add to the list of sources for this manifest
-            if [[ -n "${manifest_sources[$manifest_target]}" ]]; then
+            if [[ -n "${manifest_sources[$manifest_target]+set}" ]]; then
               manifest_sources[$manifest_target]="${manifest_sources[$manifest_target]} $src_image"
             else
               manifest_sources[$manifest_target]="$src_image"
             fi
+            manifest_counts[$manifest_target]="$(( ${manifest_counts[$manifest_target]:-0} + 1 ))"
+            manifest_arches[$manifest_target]="${manifest_arches[$manifest_target]:+${manifest_arches[$manifest_target]} }$matched_suffix"
           done
 
           # Create each manifest and sign it
           for manifest_target in "${!manifest_sources[@]}"; do
+            if [[ "${manifest_counts[$manifest_target]}" -ne "$expected_sources_per_manifest" ]]; then
+              echo "::error::Manifest '$manifest_target' has ${manifest_counts[$manifest_target]} source image(s), expected $expected_sources_per_manifest (${manifest_arches[$manifest_target]})"
+              exit 1
+            fi
             sources="${manifest_sources[$manifest_target]}"
-            echo "::notice Creating manifest $manifest_target from: $sources"
+            read -r -a source_refs <<< "$sources"
+            repo="${manifest_target%:*}"
+            canonical_tag="${manifest_target##*:}"
+            manifest_tags=("$canonical_tag")
+            if [[ "${#requested_tags[@]}" -gt 0 ]]; then
+              manifest_tags=("$canonical_tag" "${requested_tags[@]}")
+            fi
+            declare -A seen_tags=()
+            create_args=()
+            for tag in "${manifest_tags[@]}"; do
+              if [[ -n "${tag}" && -z "${seen_tags[$tag]+set}" ]]; then
+                create_args+=(--tag "${repo}:${tag}")
+                seen_tags[$tag]=1
+              fi
+            done
+            echo "::notice Creating manifest ${repo} with tags: ${manifest_tags[*]} from: $sources"
             docker buildx imagetools create \
-              --tag "$manifest_target" \
-              $sources
+              "${create_args[@]}" \
+              "${source_refs[@]}"
             # Resolve the tag to a digest for signing.
             digest=$(crane digest "$manifest_target")
-            # Extract registry/repo from the manifest target (everything before the colon)
-            repo="${manifest_target%%:*}"
             image_by_digest="${repo}@${digest}"
             # Keyless signing uses GitHub Actions OIDC identity.
             # Verify with:
@@ -115,6 +167,6 @@ jobs:
             }
           done
           if [[ "${failed:-0}" -eq 1 ]]; then
-            echo "::error One or more signing operations failed"
+            echo "::error::One or more signing operations failed"
             exit 1
           fi

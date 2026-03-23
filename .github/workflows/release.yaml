@@ -4,12 +4,27 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Version bump type
-        required: true
+        description: |
+          Version bump type
+
+          Use `auto` to infer from unreleased changelog entries, or when
+          promoting the latest outstanding release candidate to stable.
+        required: false
+        # workflow_dispatch choice inputs cannot represent an unset value.
+        # `auto` is the explicit sentinel for "infer bump".
+        default: auto
         type: choice
         options:
+          - auto
           - minor
           - patch
+      rc:
+        description: |
+          Create or continue the release-candidate series for the resolved
+          stable version.
+        required: false
+        default: false
+        type: boolean
       intro:
         description: |
           Intro of the release
@@ -27,9 +42,15 @@ on:
   workflow_call:
     inputs:
       bump:
-        description: Version bump type (minor, patch, or major)
-        required: true
+        description: Version bump type (auto, minor, patch, or major)
+        required: false
+        default: auto
         type: string
+      rc:
+        description: Create or continue the release-candidate series for the resolved stable version
+        required: false
+        default: false
+        type: boolean
       intro:
         description: Intro of the release
         required: true
@@ -43,11 +64,12 @@ on:
 jobs:
   release:
     name: Release
-    uses: tenzir/ship/.github/workflows/reusable-release-advanced.yaml@main
+    uses: tenzir/ship/.github/workflows/reusable-release-advanced.yaml@49fe3d4df9785b29bddeb1a83be5e33032ab25a1
     permissions:
       contents: write
     with:
       bump: ${{ inputs.bump }}
+      rc: ${{ inputs.rc }}
       intro: ${{ inputs.intro }}
       title: ${{ inputs.title }}
       pre-publish: |

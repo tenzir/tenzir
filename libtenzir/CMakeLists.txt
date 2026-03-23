@@ -553,14 +553,28 @@ if (_tenzir_folly_include_dirs)
   target_include_directories(libtenzir_builtins BEFORE
                              PRIVATE ${_tenzir_folly_include_dirs})
 endif ()
-# The bundled Proxygen split now leaves some legacy HTTP client symbols only in
-# the monolithic `proxygen` target, while proxygen_utils_trace still references
-# symbols from proxygen_utils_trace_event_types without declaring that
-# dependency. The HTTP server helpers live in a separate coro-server target.
+if (TARGET proxygen::proxygen_coro_client)
+  set(_tenzir_proxygen_target proxygen::proxygen_coro_client)
+elseif (TARGET proxygen::proxygen)
+  set(_tenzir_proxygen_target proxygen::proxygen)
+else ()
+  message(FATAL_ERROR "No supported proxygen target found")
+endif ()
+if (TARGET proxygen::proxygen_coro_server)
+  set(_tenzir_proxygen_server_target proxygen::proxygen_coro_server)
+else ()
+  set(_tenzir_proxygen_server_target "")
+endif ()
+# proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
+# without declaring the dependency. Link it explicitly so static links see the
+# archive regardless of whether proxygen comes from bundled or system packages.
+# The bundled monolithic `proxygen` target also carries legacy HTTP client
+# symbols not present in the split coro targets; link it when available.
 target_link_libraries(
   libtenzir
-  PRIVATE proxygen::proxygen_coro_client proxygen::proxygen_coro_server
-          proxygen_utils_trace_event_types proxygen)
+  PRIVATE ${_tenzir_proxygen_target} ${_tenzir_proxygen_server_target}
+          proxygen_utils_trace_event_types
+          $<$<BOOL:$<TARGET_EXISTS:proxygen>>:proxygen>)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -568,12 +582,12 @@ target_link_libraries(
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
-    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>
-            $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_server>)
+    PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_target}>
+            $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_server_target}>)
 else ()
-  target_link_libraries(
-    libtenzir_builtins PRIVATE proxygen::proxygen_coro_client
-                               proxygen::proxygen_coro_server)
+  target_link_libraries(libtenzir_builtins
+                        PRIVATE ${_tenzir_proxygen_target}
+                                ${_tenzir_proxygen_server_target})
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)

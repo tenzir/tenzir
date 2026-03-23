@@ -833,7 +833,7 @@ private:
 };
 
 class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     args.ssl = tls_options{{.tls_default = false}};

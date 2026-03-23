@@ -18,6 +18,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/shared_diagnostic_handler.hpp>
@@ -1537,7 +1538,7 @@ public:
     return std::make_unique<read_cache_operator>(std::move(id));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto id = located<std::string>{};
     auto mode = std::optional<located<std::string>>{};
@@ -1627,8 +1628,8 @@ public:
           .named("capacity", capacity, "uint64")
           .named("read_timeout", read_timeout, "duration")
           .named("write_timeout", write_timeout, "duration")
-          .parse(operator_factory_plugin::invocation{std::move(inv.op),
-                                                     std::move(inv.args)},
+          .parse(operator_factory_invocation{std::move(inv.op),
+                                             std::move(inv.args)},
                  provider.as_session()));
     TRY(id.bind(ctx));
     if (mode) {

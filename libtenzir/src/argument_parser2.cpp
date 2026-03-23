@@ -12,6 +12,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -27,16 +28,34 @@ namespace {
 template <class T>
 concept data_type = detail::tl_contains_v<data::types, T>;
 
+auto make_pipeline_setter(located<pipeline>& x)
+  -> std::function<failure_or<void>(const ast::pipeline_expr&, session)> {
+  return [&x](const ast::pipeline_expr& expr, session ctx) -> failure_or<void> {
+    TRY(auto pipe, compile(ast::pipeline{expr.inner}, ctx));
+    x = located{std::move(pipe), expr.get_location()};
+    return {};
+  };
+}
+
+auto make_pipeline_setter(std::optional<located<pipeline>>& x)
+  -> std::function<failure_or<void>(const ast::pipeline_expr&, session)> {
+  return [&x](const ast::pipeline_expr& expr, session ctx) -> failure_or<void> {
+    TRY(auto pipe, compile(ast::pipeline{expr.inner}, ctx));
+    x = located{std::move(pipe), expr.get_location()};
+    return {};
+  };
+}
+
 } // namespace
 
-auto argument_parser2::parse(const operator_factory_plugin::invocation& inv,
+auto argument_parser2::parse(const operator_factory_invocation& inv,
                              session ctx) -> failure_or<void> {
   TENZIR_ASSERT(kind_ == kind::op);
   return parse(inv.self, inv.args, ctx);
 }
 
-auto argument_parser2::parse(const function_plugin::invocation& inv,
-                             session ctx) -> failure_or<void> {
+auto argument_parser2::parse(const function_invocation& inv, session ctx)
+  -> failure_or<void> {
   TENZIR_ASSERT(kind_ == kind::fn);
   return parse(inv.call.fn, inv.call.args, ctx);
 }
@@ -168,19 +187,18 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         set(*lambda);
       },
-      [&](setter<located<pipeline>>& set) {
+      [&](pipeline_setter& set) {
         const auto* pipe_expr = try_as<ast::pipeline_expr>(expr);
         if (not pipe_expr) {
           emit(
             diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
-        auto pipe = compile(ast::pipeline{pipe_expr->inner}, ctx);
-        if (pipe.is_error()) {
-          result = pipe.error();
+        auto parsed = set(*pipe_expr, ctx);
+        if (parsed.is_error()) {
+          result = parsed.error();
           return;
         }
-        set(located{std::move(pipe).unwrap(), expr.get_location()});
       });
     ++arg;
   }
@@ -301,19 +319,18 @@ auto argument_parser2::parse(const ast::entity& self,
             }
             set(*lambda);
           },
-          [&](setter<located<pipeline>>& set) {
+          [&](pipeline_setter& set) {
             const auto* pipe_expr = try_as<ast::pipeline_expr>(expr);
             if (not pipe_expr) {
               emit(diagnostic::error("expected a pipeline expression")
                      .primary(expr));
               return;
             }
-            auto pipe = compile(ast::pipeline{pipe_expr->inner}, ctx);
-            if (pipe.is_error()) {
-              result = pipe.error();
+            auto parsed = set(*pipe_expr, ctx);
+            if (parsed.is_error()) {
+              result = parsed.error();
               return;
             }
-            set(located{std::move(pipe).unwrap(), expr.get_location()});
           });
       },
       [&](const ast::pipeline_expr& pipe_expr) {
@@ -323,13 +340,12 @@ auto argument_parser2::parse(const ast::entity& self,
           return;
         }
         positional_[positional_idx].set.match(
-          [&](setter<located<pipeline>>& set) {
-            auto pipe = compile(ast::pipeline{pipe_expr.inner}, ctx);
-            if (pipe.is_error()) {
-              result = pipe.error();
+          [&](pipeline_setter& set) {
+            auto parsed = set(pipe_expr, ctx);
+            if (parsed.is_error()) {
+              result = parsed.error();
               return;
             }
-            set(located{std::move(pipe).unwrap(), pipe_expr.get_location()});
           },
           [&](auto&) {
             // FIXME: This can lead to having two errors for a single parameter
@@ -385,7 +401,7 @@ auto argument_parser2::usage() const -> std::string {
       [](const setter<ast::lambda_expr>&) -> std::string {
         return "lambda";
       },
-      [](const setter<located<pipeline>>&) -> std::string {
+      [](const pipeline_setter&) -> std::string {
         return "{ … }";
       });
   };
@@ -398,7 +414,7 @@ auto argument_parser2::usage() const -> std::string {
     for (auto [idx, positional] : detail::enumerate(positional_)) {
       auto last = idx == positional_.size() - 1;
       auto is_pipeline
-        = std::holds_alternative<setter<located<pipeline>>>(positional.set);
+        = std::holds_alternative<pipeline_setter>(positional.set);
       auto is_optional = first_optional_ && idx >= *first_optional_;
       if (last && is_pipeline && kind_ == kind::op) {
         // We want to print named arguments before, so we skip this for now.
@@ -544,10 +560,37 @@ auto argument_parser2::positional(std::string name, std::optional<T>& x,
   return *this;
 }
 
+auto argument_parser2::positional(std::string name, located<pipeline>& x,
+                                  std::string type) -> argument_parser2& {
+  TENZIR_ASSERT(not first_optional_, "encountered required positional after "
+                                     "optional positional argument");
+  positional_.emplace_back(std::move(name), std::move(type),
+                           make_pipeline_setter(x));
+  return *this;
+}
+
+auto argument_parser2::positional(std::string name,
+                                  std::optional<located<pipeline>>& x,
+                                  std::string type) -> argument_parser2& {
+  if (not first_optional_) {
+    first_optional_ = positional_.size();
+  }
+  positional_.emplace_back(std::move(name), std::move(type),
+                           make_pipeline_setter(x));
+  return *this;
+}
+
 template <argument_parser_type T>
 auto argument_parser2::named(std::string name, T& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), true);
+  return *this;
+}
+
+auto argument_parser2::named(std::string name, located<pipeline>& x,
+                             std::string type) -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
+                      true);
   return *this;
 }
 
@@ -558,10 +601,25 @@ auto argument_parser2::named(std::string name, std::optional<T>& x,
   return *this;
 }
 
+auto argument_parser2::named(std::string name,
+                             std::optional<located<pipeline>>& x,
+                             std::string type) -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
+                      false);
+  return *this;
+}
+
 template <argument_parser_type T>
 auto argument_parser2::named_optional(std::string name, T& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
+  return *this;
+}
+
+auto argument_parser2::named_optional(std::string name, located<pipeline>& x,
+                                      std::string type) -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
+                      false);
   return *this;
 }
 

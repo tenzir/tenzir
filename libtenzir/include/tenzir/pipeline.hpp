@@ -842,5 +842,6 @@ inline constexpr auto enable_default_formatter<operator_ptr> = true;
 
 } // namespace tenzir
 
-// This is needed for `plugin_inspect`.
+// This is needed for `plugin_inspect` - but now we just include plugin.hpp
+// at the end (after pipeline definitions) to get full serialization_plugin def
 #include "tenzir/plugin.hpp" // IWYU pragma: keep

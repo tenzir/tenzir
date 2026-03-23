@@ -651,7 +651,7 @@ public:
     return "read_lines";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     argument_parser2::operator_(name())
@@ -831,7 +831,7 @@ class write_lines final
   : public virtual operator_plugin2<writer_adapter<lines_printer>>,
     public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
     return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
@@ -858,7 +858,7 @@ public:
     return "read_delimited_regex";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
@@ -917,7 +917,7 @@ public:
     return "read_delimited";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
@@ -967,7 +967,7 @@ public:
     return "read_all";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto binary_flag = std::optional<located<bool>>{};
     TRY(argument_parser2::operator_(name())

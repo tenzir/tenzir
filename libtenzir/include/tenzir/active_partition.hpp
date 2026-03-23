@@ -17,7 +17,7 @@
 #include "tenzir/index_config.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/partition_synopsis.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin_fwd.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/type.hpp"

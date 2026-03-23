@@ -9,6 +9,7 @@
 #include "tenzir/collect.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <memory>

@@ -1667,7 +1667,7 @@ public:
     return "from_kafka";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     return legacy::make_from_kafka(std::move(inv), ctx,
                                    source_global_defaults());

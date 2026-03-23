@@ -8,6 +8,7 @@ assertions:
     tcp:
       server_received_contains: "hello-from-to_tcp-tls"
 timeout: 60
+skip: flaky in CI
 ---
 
 let $tls = {

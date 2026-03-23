@@ -1,0 +1,15 @@
+// 10k rows where some values are null (typed nullable).
+from {id: 0, a: int(null), b: "hello"},
+     {id: 0, a: 42, b: string(null)},
+     {id: 0, a: 99, b: "world"}
+repeat 3333
+head 9999
+batch
+enumerate id
+to_clickhouse table="test_nulls",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

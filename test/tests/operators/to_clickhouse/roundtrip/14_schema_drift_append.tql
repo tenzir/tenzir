@@ -1,0 +1,13 @@
+// Append 5k rows with drifted schema {id, x} (missing y).
+// Column y should become NULL for these rows.
+from {id: 0, x: 200}
+repeat 5000
+batch
+enumerate id
+id = id + 5000
+to_clickhouse table="test_drift",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

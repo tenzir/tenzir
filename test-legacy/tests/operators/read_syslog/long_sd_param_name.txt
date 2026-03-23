@@ -1,0 +1,16 @@
+{
+  facility: 16,
+  severity: 6,
+  version: 1,
+  timestamp: 2026-03-18T10:00:51.194137Z,
+  hostname: "HOSTNAME",
+  app_name: "abc",
+  process_id: "9043",
+  message_id: "23003147",
+  structured_data: {
+    "F5@12276": {
+      thx_f5_for_ignoring_the_32_char_limit_in_structured_data: "thx",
+    },
+  },
+  message: "broken example",
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Import modules so their decorators register fixtures on import.
 from . import abs  # noqa: F401
+from . import clickhouse  # noqa: F401
 from . import gcs  # noqa: F401
 from . import google_secops  # noqa: F401
 from . import http  # noqa: F401
@@ -16,6 +17,7 @@ from . import tcp  # noqa: F401
 
 __all__ = [
     "abs",
+    "clickhouse",
     "gcs",
     "google_secops",
     "http",

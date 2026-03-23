@@ -52,13 +52,30 @@ public:
 
   // -- positional arguments --------------------------------------------------
 
+  void add(tenzir::expression& x, std::string meta);
+  void add(located<tenzir::expression>& x, std::string meta);
+  void add(std::optional<tenzir::expression>& x, std::string meta);
+  void add(std::optional<located<tenzir::expression>>& x, std::string meta);
+
+  void add(tql::expression& x, std::string meta);
+  void add(located<tql::expression>& x, std::string meta);
+  void add(std::optional<tql::expression>& x, std::string meta);
+  void add(std::optional<located<tql::expression>>& x, std::string meta);
+
   template <class T>
   void add(T& x, std::string meta) {
     TENZIR_ASSERT(!first_optional_);
     positional_.push_back(positional_t{
       std::move(meta),
-      [&x](located<T> y) {
-        x = std::move(y.inner);
+      false,
+      [&x](parser_interface& p) {
+        if (auto arg = p.accept_shell_arg()) {
+          x = convert_or_throw<T>(std::move(*arg)).inner;
+        } else {
+          diagnostic::error("expected positional argument")
+            .primary(p.current_span())
+            .throw_();
+        }
       },
     });
   }
@@ -68,8 +85,15 @@ public:
     TENZIR_ASSERT(!first_optional_);
     positional_.push_back(positional_t{
       std::move(meta),
-      [&x](located<T> y) {
-        x = std::move(y);
+      false,
+      [&x](parser_interface& p) {
+        if (auto arg = p.accept_shell_arg()) {
+          x = convert_or_throw<T>(std::move(*arg));
+        } else {
+          diagnostic::error("expected positional argument")
+            .primary(p.current_span())
+            .throw_();
+        }
       },
     });
   }
@@ -81,8 +105,15 @@ public:
     }
     positional_.push_back(positional_t{
       std::move(meta),
-      [&x](located<T> y) {
-        x = std::move(y.inner);
+      false,
+      [&x](parser_interface& p) {
+        if (auto arg = p.accept_shell_arg()) {
+          x = convert_or_throw<T>(std::move(*arg)).inner;
+        } else {
+          diagnostic::error("expected positional argument")
+            .primary(p.current_span())
+            .throw_();
+        }
       },
     });
   }
@@ -94,8 +125,15 @@ public:
     }
     positional_.push_back(positional_t{
       std::move(meta),
-      [&x](located<T> y) {
-        x = std::move(y);
+      false,
+      [&x](parser_interface& p) {
+        if (auto arg = p.accept_shell_arg()) {
+          x = convert_or_throw<T>(std::move(*arg));
+        } else {
+          diagnostic::error("expected positional argument")
+            .primary(p.current_span())
+            .throw_();
+        }
       },
     });
   }
@@ -204,9 +242,8 @@ private:
 
   struct positional_t {
     std::string meta;
-    std::variant<setter<std::string>, setter<tenzir::expression>,
-                 setter<tql::expression>, setter<uint64_t>>
-      set;
+    bool is_expression = false;
+    std::function<void(parser_interface&)> set;
   };
 
   struct named_t {

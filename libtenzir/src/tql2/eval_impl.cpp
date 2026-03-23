@@ -12,11 +12,13 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/eval_optimizations.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/view3.hpp"
 
 #include <limits>
@@ -267,8 +269,7 @@ auto evaluator::eval(const ast::function_call& x) -> multi_series {
   // TODO: We parse the function call every time we get a new batch here. We
   // could store the result in the AST if that becomes a problem, but that is
   // also not an optimal solution.
-  auto func
-    = ctx_.reg().get(x).make_function(function_plugin::invocation{x}, ctx_);
+  auto func = ctx_.reg().get(x).make_function(function_invocation{x}, ctx_);
   if (not func) {
     return series::null(null_type{}, length_);
   }
@@ -737,7 +738,7 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
 }
 
 auto evaluator::to_series(const data& x) const -> series {
-  return cached_data_to_series(x, length_);
+  return data_to_series(x, length_);
 }
 
 } // namespace tenzir

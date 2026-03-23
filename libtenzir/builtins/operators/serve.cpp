@@ -1509,7 +1509,7 @@ public:
     return system.spawn(serve_handler, node);
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto id = located<std::string>{};
     auto buffer_size = std::optional<located<uint64_t>>{};

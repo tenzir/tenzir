@@ -8,6 +8,7 @@
 
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
 #include <tenzir/series_builder.hpp>

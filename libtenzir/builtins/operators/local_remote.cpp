@@ -162,12 +162,12 @@ public:
                                                    Location);
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto pipe = pipeline{};
+    auto pipe = located<pipeline>{};
     auto parser = argument_parser2::operator_(name()).positional("{ … }", pipe);
     TRY(parser.parse(inv, ctx));
-    auto ops = std::move(pipe).unwrap();
+    auto ops = std::move(pipe.inner).unwrap();
     for (auto& op : ops) {
       op = std::make_unique<local_remote_operator>(std::move(op), Location);
     }

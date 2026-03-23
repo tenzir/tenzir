@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {name: "tls_error", time: 0}
+to_clickhouse table=@name,
+              primary=time,
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD")

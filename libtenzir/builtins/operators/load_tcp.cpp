@@ -1053,7 +1053,7 @@ public:
     return "load_tcp";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};

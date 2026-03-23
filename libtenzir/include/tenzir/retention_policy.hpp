@@ -11,8 +11,10 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/concept/parseable/tenzir/time.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/time.hpp"
 
 namespace tenzir {
