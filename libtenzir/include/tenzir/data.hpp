@@ -49,6 +49,9 @@ namespace detail {
 struct invalid_data_type {};
 
 template <class T>
+concept complete_type = requires { sizeof(T); };
+
+template <class T>
 constexpr auto to_data_type() {
   if constexpr (std::is_floating_point_v<T>) {
     return double{};
@@ -62,12 +65,16 @@ constexpr auto to_data_type() {
     } else {
       return uint64_t{};
     }
-  } else if constexpr (std::is_convertible_v<T, std::string>) {
-    return std::string{};
   } else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
                                         pattern, ip, subnet, list, map, record,
                                         blob, secret>) {
     return T{};
+  } else if constexpr (complete_type<T>) {
+    if constexpr (std::is_convertible_v<T, std::string>) {
+      return std::string{};
+    } else {
+      return invalid_data_type{};
+    }
   } else {
     return invalid_data_type{};
   }
