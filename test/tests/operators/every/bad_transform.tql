@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {}
+every 1ms {
+  version
+}
