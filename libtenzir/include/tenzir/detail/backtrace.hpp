@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <boost/stacktrace.hpp>
+#include "tenzir/detail/boost_stacktrace.hpp"
 
 namespace tenzir::detail {
 

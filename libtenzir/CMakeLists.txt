@@ -636,21 +636,27 @@ if (LINUX)
   # Use a compiled stacktrace_backtrace if available, otherwise use header only
   # mode.
   if (TARGET Boost::stacktrace_backtrace)
-    target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
-    target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(Boost REQUIRED COMPONENTS stacktrace_backtrace)")
+    set(TENZIR_USE_BOOST_STACKTRACE_LINK 1)
+    set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 0)
+    target_link_libraries(libtenzir PUBLIC Boost::stacktrace_backtrace)
   else ()
     find_package(libbacktrace REQUIRED)
-    target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace dl)
-    target_compile_definitions(libtenzir
-                               PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(libbacktrace REQUIRED)")
+    set(TENZIR_USE_BOOST_STACKTRACE_LINK 0)
+    set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 1)
+    target_link_libraries(libtenzir PUBLIC libbacktrace::libbacktrace)
   endif ()
 else ()
   find_package(Boost COMPONENTS stacktrace_basic)
-  target_link_libraries(libtenzir PRIVATE Boost::stacktrace_basic dl)
-  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(Boost REQUIRED COMPONENTS stacktrace_basic)")
+  set(TENZIR_USE_BOOST_STACKTRACE_LINK 1)
+  set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 0)
+  target_link_libraries(libtenzir PUBLIC Boost::stacktrace_basic)
 endif ()
-target_compile_definitions(libtenzir
-                           PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
 
 if (NOT APPLE)
   target_link_libraries(libtenzir PRIVATE atomic)
