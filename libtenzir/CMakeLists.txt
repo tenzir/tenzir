@@ -550,8 +550,7 @@ endif ()
 # bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
 # requirements propagate directly places the proxygen include roots after
 # /opt/homebrew/include in Clang's effective search order. Add the vendored
-# include roots explicitly and link the proxygen target in LINK_ONLY mode so its
-# include dirs do not get re-added later as system includes.
+# include roots explicitly so they remain the effective first match.
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_include_directories(
     libtenzir BEFORE
@@ -561,18 +560,12 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
     libtenzir_builtins BEFORE
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
             "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
-  set(_tenzir_proxygen_link_target "$<LINK_ONLY:${_tenzir_proxygen_target}>")
-  set(_tenzir_proxygen_trace_link_target
-      "$<LINK_ONLY:proxygen_utils_trace_event_types>")
-else ()
-  set(_tenzir_proxygen_link_target "${_tenzir_proxygen_target}")
-  set(_tenzir_proxygen_trace_link_target proxygen_utils_trace_event_types)
 endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
 # without declaring the dependency. Link it explicitly so static links see the
 # archive regardless of whether proxygen comes from bundled or system packages.
-target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_link_target}
-                                        ${_tenzir_proxygen_trace_link_target})
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
+                                        proxygen_utils_trace_event_types)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -580,7 +573,7 @@ target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_link_target}
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
-    PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_link_target}>)
+    PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_target}>)
 else ()
   target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
 endif ()
