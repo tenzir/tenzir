@@ -152,7 +152,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<EveryArgs, Every<void>, Every<table_slice>>{};
-    auto interval = d.positional("interval", &EveryArgs::interval, "duration");
+    auto interval = d.positional("interval", &EveryArgs::interval);
     auto pipe = d.pipeline(&EveryArgs::pipe);
     d.validate([interval](DescribeCtx& ctx) -> Empty {
       if (auto v = ctx.get(interval); v and *v <= duration::zero()) {
