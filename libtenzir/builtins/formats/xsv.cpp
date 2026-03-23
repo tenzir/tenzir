@@ -1142,7 +1142,7 @@ private:
       }
       header_ = std::move(*parsed);
       original_field_count_ = header_->size();
-      opts_.header = std::optional{*header_};
+      opts_.header = *header_;
       return;
     }
     auto r = msb_->record();
@@ -1153,8 +1153,8 @@ private:
   ReadXsvArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
-  Option<std::vector<std::string>> header_;
-  Option<size_t> original_field_count_;
+  std::optional<std::vector<std::string>> header_;
+  std::optional<size_t> original_field_count_;
   size_t line_counter_ = 0;
   xsv_parser_options opts_;
   detail::quoting_escaping_policy quoting_;
@@ -1463,7 +1463,7 @@ public:
       (void)check_no_substrings(ctx, {{"list_separator", effective_ls},
                                       {"null_value", effective_nv}});
       auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
-      validate_quote_conflicts(ctx, qs, fs_loc, ls, nv);
+      validate_quote_conflicts(ctx, qs, fs_loc, effective_ls, effective_nv);
       validate_multi_series_builder_args(ctx, common);
       return {};
     });

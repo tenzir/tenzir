@@ -1,0 +1,5 @@
+error: quote character `-` conflicts with `null_value="-"`
+ --> tests/operators/xsv/error_tsv_quotes_conflict_with_default_null_value.tql:6:19
+  |
+6 |   read_tsv quotes="-"
+  |                   ^^^ 
