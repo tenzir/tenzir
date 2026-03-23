@@ -101,22 +101,22 @@
   unmapped: null,
 }
 warning: dropping `process.auid` because extension `linux` is not enabled
- --> tests/operators/ocsf/cast/process_v1_8_linux_profile.tql:12:1
-  |
+  --> tests/operators/ocsf/cast/process_v1_8_linux_profile.tql:12:1
+   |
 12 | ocsf::cast null_fill=true
    | ~~~~~~~~~~ 
    |
 
 warning: dropping `process.egid` because no profile/extension pair in `linux/linux_users:linux|macos/macos_users:macos` is enabled
- --> tests/operators/ocsf/cast/process_v1_8_linux_profile.tql:12:1
-  |
+  --> tests/operators/ocsf/cast/process_v1_8_linux_profile.tql:12:1
+   |
 12 | ocsf::cast null_fill=true
    | ~~~~~~~~~~ 
    |
 
 warning: dropping `process.euid` because no profile/extension pair in `linux/linux_users:linux|macos/macos_users:macos` is enabled
- --> tests/operators/ocsf/cast/process_v1_8_linux_profile.tql:12:1
-  |
+  --> tests/operators/ocsf/cast/process_v1_8_linux_profile.tql:12:1
+   |
 12 | ocsf::cast null_fill=true
    | ~~~~~~~~~~ 
    |
