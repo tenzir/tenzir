@@ -387,7 +387,8 @@ private:
             .emit(dh_);
         }
         auto profile_extensions = field_type.attribute("profile_extensions");
-        if (profile_extensions and not is_profile_extension_enabled(field_type)) {
+        if (profile_extensions
+            and not is_profile_extension_enabled(field_type)) {
           diagnostic::warning("dropping `{}` because no profile/extension pair "
                               "in `{}` is enabled",
                               field_path, *profile_extensions)
