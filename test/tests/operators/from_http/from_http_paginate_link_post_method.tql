@@ -1,0 +1,13 @@
+---
+fixtures:
+  - http:
+      expected_request:
+        count: 2
+timeout: 60
+---
+
+// Initial request uses POST; pagination follow-ups must switch to GET.
+from_http env("HTTP_FIXTURE_LINK_URL"), method="post", body="ignored",
+          paginate="link" {
+  read_json
+}

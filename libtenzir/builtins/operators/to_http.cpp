@@ -354,8 +354,14 @@ private:
           std::chrono::duration_cast<folly::HighResDuration>(
             to_chrono(args_.paginate_delay.inner)));
       }
+      // Pagination follow-ups always use GET with no body, matching the
+      // behaviour of the legacy http executor and RFC 5988 link pagination.
+      auto const& page_method
+        = current_request.is_pagination ? std::string{"GET"} : request.method;
+      auto const& page_body
+        = current_request.is_pagination ? std::string{} : request.body;
       auto response_result = co_await perform_request(
-        current_request, request.method, request.body, request.ssl_context);
+        current_request, page_method, page_body, request.ssl_context);
       if (response_result.is_err()) {
         std::ignore = std::move(response_result).unwrap_err();
         break;

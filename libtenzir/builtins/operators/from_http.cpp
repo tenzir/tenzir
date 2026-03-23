@@ -569,12 +569,22 @@ private:
 
   auto perform_request(ExecutorHttpRequest const& request) const
     -> Task<http::HttpResult<http::ResponseData>> {
-    auto request_method = args_.make_method();
-    TENZIR_ASSERT(request_method);
+    // Pagination follow-ups always use GET with no body, matching the
+    // behaviour of the legacy http executor and RFC 5988 link pagination.
+    auto method = std::string{};
+    auto body = std::string{};
+    if (request.is_pagination) {
+      method = "GET";
+    } else {
+      auto request_method = args_.make_method();
+      TENZIR_ASSERT(request_method);
+      method = std::move(*request_method);
+      body = request_body_;
+    }
     auto config = http::ClientRequestConfig{
       .url = request.url,
-      .method = *request_method,
-      .body = request_body_,
+      .method = std::move(method),
+      .body = std::move(body),
       .headers = request.headers,
       .connect_timeout = to_chrono(args_.connection_timeout.inner),
       .ssl_context = ssl_context_,
