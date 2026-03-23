@@ -1060,16 +1060,6 @@ public:
     co_return;
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    // Only truly dynamic state is snapshotted. opts_ and quoting_ are fully
-    // derived from args_ and are rebuilt in start() on every run.
-    serde("buffer", buffer_);
-    serde("ended_on_carriage_return", ended_on_carriage_return_);
-    serde("header", header_);
-    serde("original_field_count", original_field_count_);
-    serde("line_counter", line_counter_);
-  }
-
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (not msb_) {
@@ -1153,8 +1143,8 @@ private:
   ReadXsvArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
-  std::optional<std::vector<std::string>> header_;
-  std::optional<size_t> original_field_count_;
+  Option<std::vector<std::string>> header_;
+  Option<size_t> original_field_count_;
   size_t line_counter_ = 0;
   xsv_parser_options opts_;
   detail::quoting_escaping_policy quoting_;
