@@ -556,11 +556,11 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_include_directories(
     libtenzir BEFORE
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
-            "${CMAKE_BINARY_DIR}/libtenzir/aux/facebook/proxygen/generated")
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
   target_include_directories(
     libtenzir_builtins BEFORE
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
-            "${CMAKE_BINARY_DIR}/libtenzir/aux/facebook/proxygen/generated")
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
   set(_tenzir_proxygen_link_target "$<LINK_ONLY:${_tenzir_proxygen_target}>")
   set(_tenzir_proxygen_trace_link_target
       "$<LINK_ONLY:proxygen_utils_trace_event_types>")
