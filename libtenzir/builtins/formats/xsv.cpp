@@ -517,11 +517,16 @@ auto validate_quote_conflicts(
 auto validate_multi_series_builder_args(DescribeCtx& ctx,
                                         const ReadXsvCommonHandles& common)
   -> void {
-  if (auto sc = ctx.get(common.schema);
-      sc.has_value() and ctx.get(common.selector).has_value()) {
-    diagnostic::error("`schema` and `selector` are mutually exclusive")
-      .primary(sc->source)
-      .emit(ctx);
+  if (auto sc = ctx.get(common.schema)) {
+    if (sc->inner.empty()) {
+      diagnostic::error("`schema` must not be empty")
+        .primary(sc->source)
+        .emit(ctx);
+    } else if (ctx.get(common.selector).has_value()) {
+      diagnostic::error("`schema` and `selector` are mutually exclusive")
+        .primary(sc->source)
+        .emit(ctx);
+    }
   }
   if (auto so = ctx.get(common.schema_only);
       so.has_value() and *so and not ctx.get(common.schema).has_value()
