@@ -730,9 +730,22 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 
-TenzirConfigurePchReuse(libtenzir BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-TenzirConfigurePchReuse(libtenzir_builtins
-                        BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+tenzirconfigurepchreuse(
+  libtenzir
+  BINARY_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  DONOR_TARGET
+  libtenzir__pch
+  SOURCE_TARGET
+  libtenzir)
+tenzirconfigurepchreuse(
+  libtenzir_builtins
+  BINARY_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  DONOR_TARGET
+  libtenzir_builtins__pch
+  SOURCE_TARGET
+  libtenzir_builtins)
 
 # TODO: Should we move the bundled schemas to libtenzir?
 if (TARGET tenzir-schema)
