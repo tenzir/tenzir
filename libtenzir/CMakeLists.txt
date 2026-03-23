@@ -546,6 +546,21 @@ elseif (TARGET proxygen::proxygen)
 else ()
   message(FATAL_ERROR "No supported proxygen target found")
 endif ()
+# Ensure bundled proxygen headers win over Homebrew's proxygen headers. The
+# bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
+# requirements propagate directly places the proxygen include roots after
+# /opt/homebrew/include in Clang's effective search order. Add the vendored
+# include roots explicitly so they remain the effective first match.
+if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  target_include_directories(
+    libtenzir BEFORE
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
+  target_include_directories(
+    libtenzir_builtins BEFORE
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
+endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
 # without declaring the dependency. Link it explicitly so static links see the
 # archive regardless of whether proxygen comes from bundled or system packages.
