@@ -1066,6 +1066,9 @@ public:
       co_return;
     }
     if (not input or input->size() == 0) {
+      for (auto& slice : msb_->yield_ready_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
       co_return;
     }
     auto& dh = *dh_;
