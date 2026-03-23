@@ -11,7 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
-#include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
