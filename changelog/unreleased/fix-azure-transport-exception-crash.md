@@ -2,7 +2,7 @@
 title: Fix crash on Azure SSL/transport errors
 type: bug
 authors:
-  - codex
+  - lava
 created: 2026-03-24T00:00:00.000000Z
 ---
 
