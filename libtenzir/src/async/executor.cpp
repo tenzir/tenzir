@@ -138,6 +138,7 @@ public:
       // Channel is closed and we just popped an element. There must be space.
       auto success = shared_->data.try_enqueue(None{});
       TENZIR_ASSERT(success);
+      drained_ = true;
       co_return None{};
     }
     co_return std::move(*result);
@@ -160,17 +161,22 @@ public:
       auto success = shared_->data.try_enqueue(None{});
       // The queue is empty now, so this must succeed.
       TENZIR_ASSERT(success);
+      drained_ = true;
       return TryRecvError::closed;
     }
     return std::move(**result);
   }
 
-  auto is_closed() -> bool {
-    return shared_->is_closed();
+  /// Returns whether this receiver already consumed the channel's terminal
+  /// `None`, meaning that all senders are gone and this receiver drained all
+  /// data visible to it.
+  auto is_drained() const -> bool {
+    return drained_;
   }
 
 private:
   Arc<SenderReceiverShared<T>> shared_;
+  bool drained_ = false;
 };
 
 template <class T>
@@ -1312,11 +1318,9 @@ private:
     TENZIR_ASSERT(it != subpipelines_.end());
     auto& sub = it->second;
     auto finish_if_closed = [&] -> Task<void> {
-      // TODO: Do we have happens-before here?
-      auto closed
-        = sub.from_sub.is_closed() and sub.to_control_receiver.is_closed();
-      if (closed) {
-        // TODO: This sequence doesn't probably make much sense.
+      auto erase
+        = sub.from_sub.is_drained() and sub.to_control_receiver.is_drained();
+      if (erase) {
         subpipelines_.erase(it);
         co_await call_finish_sub(make_view(message.key));
         // TODO: Can we do without the permissions?
@@ -1350,8 +1354,7 @@ private:
             // TODO: Can we really immediately shut it down? Checkpoints?
             sub.push = None{};
             sub.from_control_sender = None{};
-            // Do not fall through to receiving another control message.
-            co_return;
+            break;
           case ToControl::checkpoint_begin:
           case ToControl::checkpoint_done:
             TENZIR_TODO();
