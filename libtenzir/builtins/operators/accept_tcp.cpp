@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/co_match.hpp>
@@ -92,8 +93,7 @@ public:
     : args_{std::move(args)},
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
-      connection_slots_{std::in_place,
-                        detail::narrow<size_t>(max_connections_)} {
+      connection_slots_{detail::narrow<size_t>(max_connections_)} {
     // Parse endpoint string to SocketAddress (validation already done in
     // describe)
     auto ep = to<struct endpoint>(args_.endpoint.inner);
@@ -312,8 +312,9 @@ private:
     }
     // All connection permits must be returned *and* the accept loop must have
     // finished before we can safely transition to done.
+    // TODO: This is likely
     if (accept_loop_finished_
-        and static_cast<uint64_t>(connection_slots_->getAvailableTokens())
+        and static_cast<uint64_t>(connection_slots_.available_permits())
               == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
@@ -351,7 +352,7 @@ private:
   }
 
   auto release_connection_slot() -> void {
-    connection_slots_->signal();
+    connection_slots_.add_permit();
   }
 
   auto finish_accept(Box<folly::coro::Transport> transport,
@@ -390,7 +391,7 @@ private:
       return ew.is_compatible_with<folly::AsyncSocketException>();
     };
     while (true) {
-      co_await connection_slots_->co_wait();
+      co_await connection_slots_.consume();
       auto release_connection_slot_guard
         = detail::scope_guard{[this]() noexcept {
             release_connection_slot();
@@ -460,7 +461,7 @@ private:
   uint64_t max_connections_ = 128;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  Box<folly::fibers::Semaphore> connection_slots_;
+  Semaphore connection_slots_;
   std::unordered_map<uint64_t, Connection> connections_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   bool accept_loop_finished_ = true;

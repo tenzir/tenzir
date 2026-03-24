@@ -60,7 +60,7 @@ public:
 private:
   friend class SemaphoreGuard;
 
-  folly::fibers::Semaphore impl_{0};
+  folly::fibers::Semaphore impl_;
 };
 
 class [[nodiscard]] SemaphoreGuard {
@@ -76,8 +76,8 @@ public:
     acquired_ = std::exchange(other.acquired_, nullptr);
     return *this;
   }
-  SemaphoreGuard(SemaphoreGuard& other) = delete;
-  auto operator=(SemaphoreGuard& other) = delete;
+  SemaphoreGuard(SemaphoreGuard const& other) = delete;
+  auto operator=(SemaphoreGuard const& other) -> SemaphoreGuard& = delete;
 
   /// Releases this guard if it's still held.
   auto release() -> void {

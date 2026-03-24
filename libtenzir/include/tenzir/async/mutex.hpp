@@ -8,37 +8,21 @@
 
 #pragma once
 
+#include "tenzir/async/semaphore.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/logger.hpp"
 
-#include <folly/fibers/Semaphore.h>
-
 namespace tenzir {
 
 class [[nodiscard]] RawMutexGuard {
-public:
-  RawMutexGuard(folly::fibers::Semaphore& semaphore) : semaphore_{&semaphore} {
-  }
-
-  ~RawMutexGuard() {
-    if (semaphore_) {
-      semaphore_->signal();
-    }
-  }
-
-  RawMutexGuard(const RawMutexGuard&) = delete;
-  RawMutexGuard(RawMutexGuard&& other) noexcept
-    : semaphore_{std::exchange(other.semaphore_, nullptr)} {
-  }
-  RawMutexGuard& operator=(RawMutexGuard&& other) noexcept {
-    semaphore_ = std::exchange(other.semaphore_, nullptr);
-    return *this;
-  }
-  RawMutexGuard& operator=(const RawMutexGuard&) = delete;
-
 private:
-  folly::fibers::Semaphore* semaphore_;
+  explicit RawMutexGuard(SemaphoreGuard guard) : guard_{std::move(guard)} {
+  }
+
+  friend class RawMutex;
+
+  SemaphoreGuard guard_;
 };
 
 /// A cancellable mutex that can be locked asynchronously using 'co_await'.
@@ -50,20 +34,20 @@ public:
   }
 
   auto lock() -> Task<RawMutexGuard> {
-    co_await semaphore_.co_wait();
-    co_return RawMutexGuard{semaphore_};
+    co_return RawMutexGuard{co_await semaphore_.acquire()};
   }
 
   auto lock_unscoped() -> Task<void> {
-    return semaphore_.co_wait();
+    return semaphore_.consume();
   }
 
   auto unlock() -> void {
-    semaphore_.signal();
+    TENZIR_ASSERT(semaphore_.available_permits() == 0);
+    semaphore_.add_permit();
   }
 
 private:
-  folly::fibers::Semaphore semaphore_;
+  Semaphore semaphore_;
 };
 
 template <class T>

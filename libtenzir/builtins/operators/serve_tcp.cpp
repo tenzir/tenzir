@@ -28,7 +28,7 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/fibers/Semaphore.h>
+#include <tenzir/async/semaphore.hpp>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
@@ -82,8 +82,7 @@ public:
     : args_{std::move(args)},
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
-      connection_slots_{std::in_place,
-                        detail::narrow<size_t>(max_connections_)} {
+      connection_slots_{detail::narrow<size_t>(max_connections_)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
@@ -267,14 +266,14 @@ private:
     // All connection permits must be returned *and* the accept loop must have
     // finished before we can safely transition to done.
     if (accept_loop_finished_
-        and static_cast<uint64_t>(connection_slots_->getAvailableTokens())
+        and static_cast<uint64_t>(connection_slots_.available_permits())
               == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
   }
 
   auto release_connection_slot() -> void {
-    connection_slots_->signal();
+    connection_slots_.add_permit();
   }
 
   auto close_all_clients() -> void {
@@ -352,7 +351,7 @@ private:
       return ew.is_compatible_with<folly::AsyncSocketException>();
     };
     while (true) {
-      co_await connection_slots_->co_wait();
+      co_await connection_slots_.consume();
       auto release_connection_slot_guard
         = detail::scope_guard{[this]() noexcept {
             release_connection_slot();
@@ -395,7 +394,7 @@ private:
   uint64_t max_connections_ = 128;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  Box<folly::fibers::Semaphore> connection_slots_;
+  Semaphore connection_slots_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   std::vector<Box<folly::coro::Transport>> clients_;
   bool accept_loop_finished_ = true;
