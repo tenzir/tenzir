@@ -269,41 +269,47 @@ struct SubMessage {
 struct SubPipeline {
   SubPipeline(AnyOpPush push, Receiver<Checkpoint> from_sub,
               Sender<FromControl> from_control_sender,
-              Receiver<ToControl> to_control_receiver)
-    : push{std::move(push)},
+              Receiver<ToControl> to_control_receiver,
+              element_type_tag input)
+    : push{Option<AnyOpPush>{std::move(push)}},
       from_sub{std::move(from_sub)},
-      from_control_sender{std::move(from_control_sender)},
-      to_control_receiver{std::move(to_control_receiver)} {
+      from_control_sender{
+        Option<Sender<FromControl>>{std::move(from_control_sender)}},
+      to_control_receiver{std::move(to_control_receiver)},
+      input{input} {
   }
 
   auto send(Signal signal) -> Task<void> {
-    return co_match(push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
-      return push(std::move(signal));
-    });
+    if (not push) {
+      co_return;
+    }
+    co_return co_await co_match(
+      *push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
+        return push(std::move(signal));
+      });
   }
 
   auto get_handle() -> AnyOpenPipeline {
+    if (closed_data or not push) {
+      return OpenPipeline<table_slice>{None{}};
+    }
     return co_match(
-      push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) -> AnyOpenPipeline {
-        if (closed_data) {
-          return OpenPipeline<In>{None{}};
-        }
+      *push,
+      [&]<class In>(Box<Push<OperatorMsg<In>>>& push) -> AnyOpenPipeline {
         return OpenPipeline<In>{push};
       });
   }
 
   ///
-  AnyOpPush push;
+  Option<AnyOpPush> push;
   ///
   bool closed_data = false;
   /// The channel from subpipeline to parent pipeline.
   Receiver<Checkpoint> from_sub;
   /// Channel to send control messages to the subpipeline chain.
-  Sender<FromControl> from_control_sender;
+  Option<Sender<FromControl>> from_control_sender;
   /// Channel to receive control messages from the subpipeline chain.
   Receiver<ToControl> to_control_receiver;
-  /// Save the instantiated IR because we need that to restore.
-  ir::pipeline ir;
   /// Also need the input type it was spawned with to recreate it.
   element_type_tag input;
   /// True if this subpipeline received the last checkpoint, requiring a commit.
@@ -956,10 +962,23 @@ private:
         };
       });
     auto [to_parent, from_sub] = channel<Checkpoint>(16);
+    auto sub_key = key;
+    // Insert the resulting subpipeline into our internal state before starting
+    // its runner so shutdown paths can already observe and drain it.
+    auto [it, inserted] = subpipelines_.try_emplace(
+      std::move(key), SubPipeline{std::move(push_sub), std::move(from_sub),
+                                  std::move(from_control_sender),
+                                  std::move(to_control_receiver),
+                                  input});
+    if (not inserted) {
+      panic("already have a subpipeline for that key");
+    }
+    add_from_sub_recv(it);
+    add_to_control_recv(it);
     // TODO: Where do we put this?
     TENZIR_ASSERT(operator_scope_);
     operator_scope_->spawn(
-      [this, key = std::move(key), runner = std::move(runner),
+      [this, key = std::move(sub_key), runner = std::move(runner),
        pull_sub = std::move(pull_sub),
        to_parent = std::move(to_parent)]() mutable -> Task<void> {
         // The main loop of the subpipeline (or combiner?).
@@ -1032,16 +1051,6 @@ private:
           // dropping `to_parent` and `to_control_sender`, closing the channels.
         });
       });
-    // Insert the resulting subpipeline into our internal state.
-    auto [it, inserted] = subpipelines_.try_emplace(
-      std::move(key), SubPipeline{std::move(push_sub), std::move(from_sub),
-                                  std::move(from_control_sender),
-                                  std::move(to_control_receiver)});
-    if (not inserted) {
-      panic("already have a subpipeline for that key");
-    }
-    add_from_sub_recv(it);
-    add_to_control_recv(it);
     co_return it->second.get_handle();
   }
 
@@ -1330,7 +1339,6 @@ private:
   auto process(Option<AnyOperatorMsg> message) -> Task<void> {
     if (not message) {
       LOGV("got end of operator messages in {}", op_name());
-      upstream_done_ = true;
       co_return;
     }
     co_await co_match(
@@ -1355,6 +1363,7 @@ private:
           [&](EndOfData) -> Task<void> {
             LOGV("got end of data in {}", op_name());
             TENZIR_ASSERT(not input_is_void_);
+            got_end_of_data_ = true;
             co_await handle_done();
           },
           [&](Checkpoint checkpoint) -> Task<void> {
@@ -1457,9 +1466,7 @@ private:
           co_return;
         }
         LOGE("got hard stop in {}", op_name());
-        TENZIR_ASSERT(operator_scope_);
-        operator_scope_->cancel();
-        co_return;
+        co_await handle_done();
       });
     driver_.add(from_control_.recv());
   }
@@ -1505,8 +1512,9 @@ private:
           case ToControl::ready_for_shutdown: {
             // TODO: We should not leave this dangling!
             // TODO: Can we really immediately shut it down? Checkpoints?
-            auto _push = std::move(it->second.push);
-            auto _control = std::move(it->second.from_control_sender);
+            auto _push = std::exchange(it->second.push, None{});
+            auto _control
+              = std::exchange(it->second.from_control_sender, None{});
             // Do not fall through to receiving another control message.
             co_return;
           }
@@ -1525,8 +1533,8 @@ private:
     }
     LOGV("running done in {}", op_name());
     is_done_ = true;
-    // Immediately inform control that we want no more data.
-    if (not input_is_void_) {
+    // Notify control only if we are stopping before normal end-of-stream.
+    if (not input_is_void_ and not got_end_of_data_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
     // Then finalize the operator, which can still produce output.
@@ -1542,7 +1550,15 @@ private:
     // If we already got a shutdown request, the Shutdown handler already
     // closed the subpipeline push handles, so skip sending EndOfData.
     for (auto& [key, sub] : subpipelines_) {
-      co_await sub.send(EndOfData{});
+      if (not sub.input.is<void>()) {
+        auto push = std::exchange(sub.push, None{});
+        if (push) {
+          co_await co_match(
+            *push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
+              return push(EndOfData{});
+            });
+        }
+      }
     }
     co_await check_done();
   }
@@ -1602,7 +1618,7 @@ private:
   /// Whether we want to exclusively listen for messages from subpipelines.
   bool active_checkpoint_{false};
 
-  bool upstream_done_ = false;
+  bool got_end_of_data_ = false;
   bool is_done_ = false;
   // TODO: Expose this as an atomic for metrics?
   size_t ticks_ = 0;
@@ -1708,8 +1724,10 @@ private:
         auto [from_control_sender, from_control_receiver]
           = channel<FromControl>(16);
         auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
-        op_controls_.push_back(OpControl{std::move(from_control_sender),
-                                         std::move(to_control_receiver)});
+        op_controls_.push_back(OpControl{
+          Option<Sender<FromControl>>{std::move(from_control_sender)},
+          std::move(to_control_receiver),
+        });
         auto executor = exec_ctx_.make_executor(id_.op(index),
                                                 demangle_op_type(typeid(*op)));
         auto task = run_operator(std::move(op), std::move(input),
@@ -1721,15 +1739,9 @@ private:
         driver_.add([task = std::move(task), index,
                      executor = std::move(executor)] mutable
                       -> Task<std::pair<size_t, Terminated>> {
-          auto guard = detail::scope_guard{[] noexcept {
-            LOGE("???");
-          }};
-          auto result = co_await async_result(
-            folly::coro::co_withExecutor(std::move(executor), std::move(task)));
-          LOGI("got termination from operator {} (exception: {}, cancelled: "
-               "{})",
-               index, result.is_exception(), result.is_cancelled());
-          std::move(result).value();
+          co_await folly::coro::co_withExecutor(std::move(executor),
+                                                std::move(task));
+          LOGI("got termination from operator {}", index);
           co_return {index, Terminated{}};
         });
       });
@@ -1766,12 +1778,16 @@ private:
             *from_control,
             [&](PostCommit) -> Task<void> {
               for (auto& ctrl : op_controls_) {
-                co_await ctrl.sender.send(PostCommit{});
+                if (ctrl.sender) {
+                  co_await ctrl.sender->send(PostCommit{});
+                }
               }
             },
             [&](HardStop) -> Task<void> {
               for (auto& ctrl : op_controls_) {
-                co_await ctrl.sender.send(HardStop{});
+                if (ctrl.sender) {
+                  co_await ctrl.sender->send(HardStop{});
+                }
               }
             });
           LOGI("starting FromControl read in chain runner");
@@ -1795,8 +1811,13 @@ private:
               LOGW("got control message from operator {}: {}", id_.op(index),
                    *to_control);
               switch (*to_control) {
-                case ToControl::ready_for_shutdown:
+                case ToControl::ready_for_shutdown: {
                   TENZIR_ASSERT(ready_for_shutdown < operators_.size());
+                  // Once an operator declared shutdown readiness, it must not
+                  // receive further control messages. Closing the sender lets
+                  // its pending control receive drain to `None`.
+                  auto _sender
+                    = std::exchange(op_controls_[index].sender, None{});
                   ready_for_shutdown += 1;
                   if (ready_for_shutdown == operators_.size()) {
                     // Once we are here, we got a request to shutdown from all
@@ -1807,10 +1828,13 @@ private:
                     co_await to_control_.send(ToControl::ready_for_shutdown);
                   }
                   break;
+                }
                 case ToControl::no_more_input:
                   for (auto preceding = size_t{0}; preceding < index;
                        ++preceding) {
-                    co_await op_controls_[preceding].sender.send(HardStop{});
+                    if (op_controls_[preceding].sender) {
+                      co_await op_controls_[preceding].sender->send(HardStop{});
+                    }
                   }
                   co_await to_control_.send(ToControl::no_more_input);
                   break;
@@ -1840,7 +1864,7 @@ private:
   DiagHandler& dh_;
 
   struct OpControl {
-    Sender<FromControl> sender;
+    Option<Sender<FromControl>> sender;
     Receiver<ToControl> receiver;
   };
   std::vector<OpControl> op_controls_;

@@ -184,14 +184,15 @@ public:
                             "running them sequentially")
         .add<bool>("strict",
                    "return a non-zero exit code if any warnings occured")
-        .add<std::string>("profile",
+       .add<std::string>("profile",
                           "write a channel profile to a file (Chrome Trace "
                           "Format, viewable in ui.perfetto.dev)"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
          auto success = exec_command(inv, sys);
-         return caf::make_message(success ? ec::no_error : ec::silent);
+         return caf::make_message(success ? caf::error{}
+                                          : caf::make_error(ec::silent));
        }},
     };
     return {std::move(exec), std::move(factory)};
