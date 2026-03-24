@@ -34,14 +34,6 @@ namespace tenzir {
 // Forward declaration to avoid including registry.hpp.
 auto global_registry() -> std::shared_ptr<const registry>;
 
-class Pass final : public Operator<table_slice, table_slice> {
-public:
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    co_await push(std::move(input));
-  }
-};
-
 enum class TryRecvError {
   empty,
   closed,
@@ -241,9 +233,6 @@ struct ExplicitAny {
 };
 
 struct Terminated {};
-struct SubPipelineFinished {};
-struct SubPipelineReadyForShutdown {};
-struct SubPipelineTerminated {};
 
 /// An message transported from a subpipeline to the parent pipeline.
 ///
@@ -942,6 +931,20 @@ private:
     return operator_scope_->spawn(std::move(task));
   }
 
+  auto add_await_task() -> void {
+    TENZIR_ASSERT(operator_scope_);
+    driver_.add([this] -> Task<Option<ExplicitAny>> {
+      TENZIR_ASSERT(operator_scope_);
+      // `await_task()` belongs to the inner operator lifecycle and must stop
+      // with it, even if the outer driver keeps running to finish framing work.
+      co_return co_await operator_scope_
+        ->spawn([this] -> Task<ExplicitAny> {
+          co_return ExplicitAny{co_await base_op().await_task(*this)};
+        })
+        .try_join();
+    });
+  }
+
   /// Access the OperatorBase interface.
   auto base_op() -> OperatorBase& {
     return match(op_, [](auto& op) -> OperatorBase& {
@@ -1105,15 +1108,7 @@ private:
         }
       }
       co_await base_op().start(*this);
-      driver_.add([this] -> Task<Option<ExplicitAny>> {
-        // Run this also in the operator scope which we can cancel.
-        co_return co_await operator_scope_
-          ->spawn(
-            [task = base_op().await_task(*this)] mutable -> Task<ExplicitAny> {
-              co_return ExplicitAny{co_await std::move(task)};
-            })
-          .try_join();
-      });
+      add_await_task();
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
       co_await main_loop();
@@ -1172,9 +1167,7 @@ private:
     if (base_op().state() == OperatorState::done) {
       co_await handle_done(false);
     } else {
-      driver_.add([this] -> Task<ExplicitAny> {
-        co_return ExplicitAny{co_await base_op().await_task(*this)};
-      });
+      add_await_task();
     }
     LOGV("handled future result in {}", op_name());
   }
