@@ -24,8 +24,8 @@ static_assert(has_variant_traits<Option<int>>);
 static_assert(has_variant_traits<Option<std::string>>);
 static_assert(std::is_convertible_v<int, Option<size_t>>);
 static_assert(std::is_convertible_v<Option<int>, Option<long>>);
-static_assert(std::same_as<decltype(Option<double>{1.0} <=> 2.0),
-                           std::partial_ordering>);
+static_assert(
+  std::same_as<decltype(Option<double>{1.0} <=> 2.0), std::partial_ordering>);
 
 // -- construction -------------------------------------------------------------
 

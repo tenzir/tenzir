@@ -436,9 +436,9 @@ public:
              and not detail::is_option_v<std::remove_cvref_t<U>>
              and detail::ThreeWayComparable<Value, U>)
   auto operator<=>(U const& rhs) const
-    -> std::common_comparison_category_t<
-      decltype(std::declval<Value const&>() <=> std::declval<U const&>()),
-      std::strong_ordering> {
+    -> std::common_comparison_category_t<decltype(std::declval<Value const&>()
+                                                  <=> std::declval<U const&>()),
+                                         std::strong_ordering> {
     using result_type = std::common_comparison_category_t<
       decltype(std::declval<Value const&>() <=> std::declval<U const&>()),
       std::strong_ordering>;
