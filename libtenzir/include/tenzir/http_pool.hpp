@@ -36,6 +36,11 @@ struct HttpPoolConfig {
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
 };
 
+/// Registers well-known system CA bundle paths for Proxygen HTTPS clients.
+///
+/// Safe to call multiple times; initialization is performed once process-wide.
+auto ensure_http_default_ca_paths() -> void;
+
 /// Coroutine-friendly HTTP connection pool backed by proxygen.
 ///
 /// Requests are automatically dispatched on the pool's event base thread.

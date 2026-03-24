@@ -1,0 +1,6 @@
+error: invalid http method: `wat`
+ --> tests/operators/from_http/from_http_error_invalid_method.tql:5:41
+  |
+5 | from_http "http://127.0.0.1:0/", method="wat" {
+  |                                         ^^^^^ 
+  |

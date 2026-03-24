@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_http "http://example.com", max_retry_count=4294967296 { read_json }

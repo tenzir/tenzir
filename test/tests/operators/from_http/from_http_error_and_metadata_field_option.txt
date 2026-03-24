@@ -1,0 +1,12 @@
+{
+  error: b"{\"error\":\"not-found\"}\n",
+  meta: {
+    code: 404,
+    headers: {
+      Server: "BaseHTTP/0.6 Python/*.*.*",
+      Date: "*",
+      "Content-Type": "application/json",
+      "Content-Length": "22",
+    },
+  },
+}

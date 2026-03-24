@@ -1,7 +1,0 @@
----
-fixtures: [http]
-error: true
----
-
-from {url: env("HTTP_FIXTURE_LINK_URL")}
-http url, paginate=((left, right) => left) { read_json }

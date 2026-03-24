@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_http "http://example.com" { pass }

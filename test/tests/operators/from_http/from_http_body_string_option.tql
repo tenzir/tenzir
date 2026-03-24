@@ -1,0 +1,8 @@
+---
+fixtures: [http_server]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_BODY_URL"), method="post", body="hello-world" {
+  read_json
+}

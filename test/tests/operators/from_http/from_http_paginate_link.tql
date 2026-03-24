@@ -1,5 +1,5 @@
 ---
-fixtures: [http]
+fixtures: [http_paginate]
 timeout: 60
 ---
 
