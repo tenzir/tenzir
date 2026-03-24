@@ -371,7 +371,7 @@ public:
     return OperatorState::unspecified;
   }
 
-  /// Called to signal that a source should stop producing data.
+  /// Called to signal that a source should gracefully shut down.
   virtual auto stop(OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(ctx);
     co_return;

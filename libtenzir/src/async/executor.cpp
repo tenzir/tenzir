@@ -279,9 +279,7 @@ struct SubPipeline {
   }
 
   auto send(Signal signal) -> Task<void> {
-    if (not push) {
-      co_return;
-    }
+    TENZIR_ASSERT(push);
     co_return co_await co_match(
       *push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
         return push(std::move(signal));
@@ -299,9 +297,9 @@ struct SubPipeline {
       });
   }
 
-  ///
+  /// We keep the push handle until we begin its shutdown sequence.
   Option<AnyOpPush> push;
-  ///
+  /// Don't send more data after `ToControl::no_more_input` or `close()`.
   bool closed_data = false;
   /// The channel from subpipeline to parent pipeline.
   Receiver<Checkpoint> from_sub;
@@ -1512,17 +1510,15 @@ private:
         switch (*to_control) {
           case ToControl::no_more_input:
             // TODO: What exactly do we need to do here?
-            it->second.closed_data = true;
+            sub.closed_data = true;
             break;
-          case ToControl::ready_for_shutdown: {
+          case ToControl::ready_for_shutdown:
             // TODO: We should not leave this dangling!
             // TODO: Can we really immediately shut it down? Checkpoints?
-            auto _push = std::exchange(it->second.push, None{});
-            auto _control
-              = std::exchange(it->second.from_control_sender, None{});
+            sub.push = None{};
+            sub.from_control_sender = None{};
             // Do not fall through to receiving another control message.
             co_return;
-          }
           case ToControl::checkpoint_begin:
           case ToControl::checkpoint_done:
             TENZIR_TODO();
@@ -1544,12 +1540,11 @@ private:
     }
     LOGV("running done in {}", op_name());
     if (phase_ == Phase::stopping_forced) {
-      co_await base_op().stop(*this);
       for (auto& [_, sub] : subpipelines_) {
-        auto _push = std::exchange(sub.push, None{});
+        sub.push = None{};
         if (sub.from_control_sender) {
-          auto sender = std::exchange(sub.from_control_sender, None{});
-          co_await sender->send(HardStop{});
+          co_await sub.from_control_sender->send(HardStop{});
+          sub.from_control_sender = None{};
         }
       }
       co_await check_done();
@@ -1571,14 +1566,13 @@ private:
     // If we already got a shutdown request, the Shutdown handler already
     // closed the subpipeline push handles, so skip sending EndOfData.
     for (auto& [key, sub] : subpipelines_) {
-      if (not sub.input.is<void>()) {
-        auto push = std::exchange(sub.push, None{});
-        if (push) {
-          co_await co_match(*push,
-                            [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
-                              return push(EndOfData{});
-                            });
-        }
+      // It might be that push is closed if the pipeline is already shutting down.
+      if (sub.push and not sub.input.is<void>()) {
+        sub.closed_data = true;
+        co_await co_match(*sub.push,
+                          [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
+                            return push(EndOfData{});
+                          });
       }
     }
     co_await check_done();
@@ -1845,8 +1839,7 @@ private:
                   // Once an operator declared shutdown readiness, it must not
                   // receive further control messages. Closing the sender lets
                   // its pending control receive drain to `None`.
-                  auto _sender
-                    = std::exchange(op_controls_[index].sender, None{});
+                  op_controls_[index].sender = None{};
                   ready_for_shutdown += 1;
                   if (ready_for_shutdown == operators_.size()) {
                     // Once we are here, we got a request to shutdown from all
