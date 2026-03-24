@@ -58,13 +58,13 @@ public:
     return is<Err<Error>>(value_);
   }
 
-  auto is_success() const -> bool {
+  auto is_ok() const -> bool {
     return not is_err();
   }
 
   template <class F>
   auto map_err(F&& f) && -> Result<Value, std::invoke_result_t<F, Error>> {
-    if (is_success()) [[likely]] {
+    if (is_ok()) [[likely]] {
       return std::move(*this).unwrap_unchecked();
     } else {
       return Err{std::invoke(std::forward<F>(f),

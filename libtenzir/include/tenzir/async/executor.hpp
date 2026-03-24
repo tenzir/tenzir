@@ -104,7 +104,9 @@ struct PostCommit {};
 /// Cancel everything that the inner operator implementation is doing.
 ///
 /// This does not stop the runner itself as we need to continue to forward
-/// checkpoints.
+/// checkpoints. Note that this currently only cancels the inner work when
+/// getting the chance to read from the control channel. Ideally, we would react
+/// to this signal immediately, but we'll leave that for later.
 struct HardStop {};
 
 using FromControl = variant<PostCommit, HardStop>;

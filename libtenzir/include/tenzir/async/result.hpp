@@ -121,7 +121,13 @@ auto async_try(SemiAwaitable&& awaitable)
     co_return Err{std::move(result).exception()};
   }
   // This call will propagate cancellation.
-  co_return std::move(result).value();
+  if constexpr (std::is_void_v<
+                  folly::coro::semi_await_result_t<SemiAwaitable>>) {
+    std::move(result).value();
+    co_return {};
+  } else {
+    co_return std::move(result).value();
+  }
 }
 
 /// Wraps an awaitable to catch cancellation while propagating exceptions.

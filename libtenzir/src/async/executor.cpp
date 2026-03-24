@@ -735,6 +735,17 @@ public:
   }
 
 private:
+  enum class Phase {
+    /// The operator still accepts and processes normal upstream input.
+    running,
+    /// Graceful shutdown is in progress and may still finalize buffered work.
+    stopping_gracefully,
+    /// Forced shutdown is in progress and must not emit more regular output.
+    stopping_forced,
+    /// Shutdown is complete from the operator's perspective.
+    stopped,
+  };
+
   auto actor_system() -> caf::actor_system& override {
     return sys_;
   }
@@ -1295,7 +1306,7 @@ private:
       LOGI("tick {} in {} ({})", ticks_, id_, op_name());
       switch (base_op().state()) {
         case OperatorState::done:
-          co_await handle_done();
+          co_await handle_done(false);
           break;
         case OperatorState::unspecified:
           break;
@@ -1319,7 +1330,7 @@ private:
   auto process(Option<ExplicitAny> message) -> Task<void> {
     // The task provided by the inner implementation completed.
     LOGV("got future result in {}", op_name());
-    if (is_done_) {
+    if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
       co_return;
     }
     // If we are not done, then the operator scope is not cancelled, which means
@@ -1327,7 +1338,7 @@ private:
     TENZIR_ASSERT(message);
     co_await call_process_task(std::move(message->value));
     if (base_op().state() == OperatorState::done) {
-      co_await handle_done();
+      co_await handle_done(false);
     } else {
       driver_.add([this] -> Task<ExplicitAny> {
         co_return ExplicitAny{co_await base_op().await_task(*this)};
@@ -1345,14 +1356,14 @@ private:
       std::move(*message),
       [&](table_slice input) -> Task<void> {
         LOGV("got input in {}", op_name());
-        if (is_done_) {
+        if (phase_ != Phase::running) {
           co_return;
         }
         co_await call_process(std::move(input));
       },
       [&](chunk_ptr input) -> Task<void> {
         LOGV("got input in {}", op_name());
-        if (is_done_) {
+        if (phase_ != Phase::running) {
           co_return;
         }
         co_await call_process(std::move(input));
@@ -1364,7 +1375,7 @@ private:
             LOGV("got end of data in {}", op_name());
             TENZIR_ASSERT(not input_is_void_);
             got_end_of_data_ = true;
-            co_await handle_done();
+            co_await handle_done(false);
           },
           [&](Checkpoint checkpoint) -> Task<void> {
             co_await begin_checkpoint(checkpoint);
@@ -1461,12 +1472,11 @@ private:
         co_await base_op().post_commit(*this);
       },
       [&](HardStop) -> Task<void> {
-        // Forcefully transition the operator to a "done" state.
-        if (is_done_) {
+        if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
           co_return;
         }
         LOGE("got hard stop in {}", op_name());
-        co_await handle_done();
+        co_await handle_done(true);
       });
     driver_.add(from_control_.recv());
   }
@@ -1526,13 +1536,30 @@ private:
       });
   }
 
-  auto handle_done() -> Task<void> {
-    // We want to run this code once.
-    if (is_done_) {
+  auto handle_done(bool force) -> Task<void> {
+    if (force) {
+      if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
+        co_return;
+      }
+      phase_ = Phase::stopping_forced;
+    } else if (phase_ == Phase::running) {
+      phase_ = Phase::stopping_gracefully;
+    } else if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
       co_return;
     }
     LOGV("running done in {}", op_name());
-    is_done_ = true;
+    if (phase_ == Phase::stopping_forced) {
+      co_await base_op().stop(*this);
+      for (auto& [_, sub] : subpipelines_) {
+        auto _push = std::exchange(sub.push, None{});
+        if (sub.from_control_sender) {
+          auto sender = std::exchange(sub.from_control_sender, None{});
+          co_await sender->send(HardStop{});
+        }
+      }
+      co_await check_done();
+      co_return;
+    }
     // Notify control only if we are stopping before normal end-of-stream.
     if (not input_is_void_ and not got_end_of_data_) {
       co_await to_control_.send(ToControl::no_more_input);
@@ -1540,7 +1567,6 @@ private:
     // Then finalize the operator, which can still produce output.
     auto b = co_await call_finalize();
     if (b == FinalizeBehavior::continue_) {
-      is_done_ = false;
       co_return;
     }
     // Tell all subpipelines to shut down. Note that the previous step could
@@ -1564,13 +1590,17 @@ private:
   }
 
   auto check_done() -> Task<void> {
-    if (is_done_ and subpipelines_.empty()) {
+    if (phase_ == Phase::stopped) {
+      co_return;
+    }
+    if (phase_ != Phase::running and subpipelines_.empty()) {
       TENZIR_ASSERT(operator_scope_);
       operator_scope_->cancel();
-      if (not output_is_void_) {
+      if (phase_ == Phase::stopping_gracefully and not output_is_void_) {
         LOGW("sending end of data from {}", id_);
         co_await push_signal(EndOfData{});
       }
+      phase_ = Phase::stopped;
       LOGW("sending ready to shutdown from {}", id_);
       co_await to_control_.send(ToControl::ready_for_shutdown);
     }
@@ -1619,7 +1649,7 @@ private:
   bool active_checkpoint_{false};
 
   bool got_end_of_data_ = false;
-  bool is_done_ = false;
+  Phase phase_ = Phase::running;
   // TODO: Expose this as an atomic for metrics?
   size_t ticks_ = 0;
 };
@@ -1761,6 +1791,7 @@ private:
 
   auto run_until_shutdown() -> Task<void> {
     auto ready_for_shutdown = size_t{0};
+    auto got_ready_for_shutdown = std::vector<bool>(operators_.size(), false);
     LOGI("starting FromControl read in chain runner");
     driver_.add(from_control_.recv());
     LOGE("next() in chain runner ({} running)", driver_.running());
@@ -1812,6 +1843,9 @@ private:
                    *to_control);
               switch (*to_control) {
                 case ToControl::ready_for_shutdown: {
+                  TENZIR_ASSERT(index < got_ready_for_shutdown.size());
+                  TENZIR_ASSERT(not got_ready_for_shutdown[index]);
+                  got_ready_for_shutdown[index] = true;
                   TENZIR_ASSERT(ready_for_shutdown < operators_.size());
                   // Once an operator declared shutdown readiness, it must not
                   // receive further control messages. Closing the sender lets
@@ -2007,7 +2041,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
     = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
-  try {
+  auto result = co_await async_try([&]() -> Task<void> {
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
@@ -2084,19 +2118,17 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
           });
       }
     });
-  } catch (panic_exception& e) {
-    dh.emit(to_diagnostic(e));
-    // TODO: Return failure?
-    co_return;
-  } catch (std::exception& e) {
-    diagnostic::error("uncaught exception in pipeline: {}", e.what()).emit(dh);
-    // TODO: Return failure?
-    co_return;
-  } catch (...) {
-    diagnostic::error("uncaught exception in pipeline").emit(dh);
-    // TODO: Return failure?
+  }());
+  if (result.is_ok()) {
     co_return;
   }
+  auto exception = std::move(result).unwrap_err();
+  if (exception.is_compatible_with<panic_exception>()) {
+    dh.emit(to_diagnostic(*exception.get_exception<panic_exception>()));
+    co_return;
+  }
+  diagnostic::error("uncaught exception in pipeline: {}", exception.what())
+    .emit(dh);
 }
 
 } // namespace tenzir
