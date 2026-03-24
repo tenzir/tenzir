@@ -184,7 +184,7 @@ public:
                             "running them sequentially")
         .add<bool>("strict",
                    "return a non-zero exit code if any warnings occured")
-       .add<std::string>("profile",
+        .add<std::string>("profile",
                           "write a channel profile to a file (Chrome Trace "
                           "Format, viewable in ui.perfetto.dev)"));
     auto factory = command::factory{

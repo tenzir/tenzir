@@ -312,7 +312,7 @@ private:
     }
     // All connection permits must be returned *and* the accept loop must have
     // finished before we can safely transition to done.
-    // TODO: This is likely
+    // TODO: This might be racing with the other usages of the semaphore.
     if (accept_loop_finished_
         and static_cast<uint64_t>(connection_slots_.available_permits())
               == max_connections_) {
