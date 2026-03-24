@@ -10,30 +10,18 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
-#include "tenzir/async/fused.hpp"
 #include "tenzir/async/join_set.hpp"
 #include "tenzir/async/log.hpp"
 #include "tenzir/async/mail.hpp"
-#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
-#include "tenzir/connect_to_node.hpp"
-#include "tenzir/connector.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/substitute_ctx.hpp"
-#include "tenzir/time.hpp"
 
-#include <boost/unordered/unordered_flat_map.hpp>
-#include <caf/actor_registry.hpp>
 #include <folly/Demangle.h>
-#include <folly/Executor.h>
-#include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Sleep.h>
-#include <folly/executors/CPUThreadPoolExecutor.h>
 
 // TODO: Why does this not report line numbers correctly?
 #undef TENZIR_UNREACHABLE
