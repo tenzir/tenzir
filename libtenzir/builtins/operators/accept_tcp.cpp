@@ -137,8 +137,10 @@ public:
           co_await message_queue_->enqueue(AcceptLoopFinished{});
         });
       }};
-      co_await folly::coro::co_withCancellation(accept_cancel_->getToken(),
-                                                accept_loop(ctx));
+      auto token = folly::cancellation_token_merge(
+        co_await folly::coro::co_current_cancellation_token,
+        accept_cancel_->getToken());
+      co_await folly::coro::co_withCancellation(token, accept_loop(ctx));
     });
     co_return;
   }
