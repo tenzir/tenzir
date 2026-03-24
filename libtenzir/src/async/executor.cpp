@@ -1773,7 +1773,7 @@ private:
         });
       });
     }
-    for (auto [index, _] : detail::enumerate(operators_)) {
+    for (auto index = size_t{0}; index < operators_.size(); ++index) {
       add_control_read(index);
     }
   }
