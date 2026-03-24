@@ -137,6 +137,7 @@ series or slice first, then iterate only when row-wise access is necessary.
 - [functions.md](.agents/references/functions.md): TQL function plugins
 - [operators.md](.agents/references/operators.md): TQL operator plugins and secrets
 - [executor.md](.agents/references/executor.md): Executor and pipeline execution
+- [operator-porting.md](.agents/references/operator-porting.md): Porting operators from `crtp_operator` to `Operator<Input, Output>`
 
 ### Rust-inspired vocabulary and helpers
 
