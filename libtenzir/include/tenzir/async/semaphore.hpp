@@ -66,7 +66,7 @@ private:
 class [[nodiscard]] SemaphoreGuard {
 public:
   ~SemaphoreGuard() noexcept {
-    try_release();
+    release();
   }
 
   SemaphoreGuard(SemaphoreGuard&& other) noexcept
@@ -79,6 +79,14 @@ public:
   SemaphoreGuard(SemaphoreGuard& other) = delete;
   auto operator=(SemaphoreGuard& other) = delete;
 
+  /// Releases this guard if it's still held.
+  auto release() -> void {
+    if (acquired_) {
+      acquired_->add_permit();
+      forget();
+    }
+  }
+
   /// Releases this guard without adding its permit back.
   auto forget() -> void {
     TENZIR_ASSERT(acquired_);
@@ -89,14 +97,6 @@ private:
   friend class Semaphore;
 
   explicit SemaphoreGuard(Semaphore& acquired) : acquired_{&acquired} {
-  }
-
-  auto try_release() -> void {
-    if (acquired_) {
-      acquired_->add_permit();
-      forget();
-      acquired_ = nullptr;
-    }
   }
 
   Semaphore* acquired_;
