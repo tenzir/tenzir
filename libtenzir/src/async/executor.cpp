@@ -550,8 +550,6 @@ public:
     }
     // All tasks are done. If some of it is unprocessed by now, we would deadlock.
     if (not existing_.empty()) {
-      // TODO: Should we actually panic here? If the inner tasks are cancelled
-      // and we are about to be cancelled as well, then this is a problem.
       panic("got {} outstanding items without progress", existing_.size());
     }
     co_return None{};

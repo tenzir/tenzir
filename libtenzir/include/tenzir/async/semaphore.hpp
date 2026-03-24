@@ -73,7 +73,10 @@ public:
     : acquired_{std::exchange(other.acquired_, nullptr)} {
   }
   auto operator=(SemaphoreGuard&& other) noexcept -> SemaphoreGuard& {
-    acquired_ = std::exchange(other.acquired_, nullptr);
+    if (this != &other) {
+      release();
+      acquired_ = std::exchange(other.acquired_, nullptr);
+    }
     return *this;
   }
   SemaphoreGuard(SemaphoreGuard const& other) = delete;

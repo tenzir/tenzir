@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -203,7 +204,7 @@ private:
   }
 
   auto schedule_replay(OpCtx& ctx) -> void {
-    ctx.spawn_task([queue = replay_queue_]() -> Task<void> {
+    ctx.spawn_task([queue = replay_queue_]() mutable -> Task<void> {
       co_await queue->enqueue(ReplayTick{});
     });
   }
@@ -219,8 +220,7 @@ private:
   Phase phase_ = Phase::input;
   uint64_t remaining_repetitions_ = 0;
   uint64_t next_index_ = 0;
-  mutable std::shared_ptr<ReplayQueue> replay_queue_
-    = std::make_shared<ReplayQueue>(1);
+  mutable Arc<ReplayQueue> replay_queue_{std::in_place, 1};
 };
 
 class plugin final : public virtual operator_plugin<repeat_operator>,

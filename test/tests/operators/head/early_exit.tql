@@ -1,4 +1,4 @@
-// Make sure that we exit `every` and it's subpipelines.
+// Make sure that we exit `every` and its subpipelines.
 every 1s {
   from {}
   repeat

@@ -24,6 +24,8 @@ static_assert(has_variant_traits<Option<int>>);
 static_assert(has_variant_traits<Option<std::string>>);
 static_assert(std::is_convertible_v<int, Option<size_t>>);
 static_assert(std::is_convertible_v<Option<int>, Option<long>>);
+static_assert(std::same_as<decltype(Option<double>{1.0} <=> 2.0),
+                           std::partial_ordering>);
 
 // -- construction -------------------------------------------------------------
 
@@ -217,6 +219,13 @@ TEST("unwrap panics on none") {
 TEST("expect on some") {
   auto opt = Option<int>{42};
   CHECK_EQUAL(opt.expect("should have value"), 42);
+}
+
+TEST("three-way comparison with partial ordering type") {
+  auto some = Option<double>{1.0};
+  auto none = Option<double>{};
+  CHECK((some <=> 2.0) == std::partial_ordering::less);
+  CHECK((none <=> 2.0) == std::partial_ordering::less);
 }
 
 TEST("expect panics with message on none") {
