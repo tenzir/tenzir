@@ -100,9 +100,14 @@ private:
 };
 
 struct PostCommit {};
-struct Shutdown {};
 
-using FromControl = variant<PostCommit, Shutdown>;
+/// Cancel everything that the inner operator implementation is doing.
+///
+/// This does not stop the runner itself as we need to continue to forward
+/// checkpoints.
+struct HardStop {};
+
+using FromControl = variant<PostCommit, HardStop>;
 
 TENZIR_ENUM(
   /// A message sent from an operator to the controller.

@@ -92,6 +92,7 @@ public:
     requires(not std::same_as<Input, void>);
 
 private:
+  /// When this is `None`, then the pipeline is closed.
   Option<Push<OperatorMsg<Input>>&> push_;
 };
 
