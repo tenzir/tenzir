@@ -13,6 +13,7 @@
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/env.hpp>
 #include <tenzir/detail/installdirs.hpp>
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/detail/posix.hpp>
@@ -40,10 +41,12 @@
 #include <caf/settings.hpp>
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <iterator>
 #include <string_view>
 #include <system_error>
+#include <unistd.h>
 
 #if __has_include(<boost/process/v1/child.hpp>)
 
@@ -178,6 +181,28 @@ auto drain_pipe(bp::ipstream& pipe) -> std::string {
   return result;
 }
 
+auto process_path_env() -> std::vector<bp::filesystem::path> {
+  auto result = std::vector<bp::filesystem::path>{};
+  auto raw_path = detail::getenv("PATH");
+  if (not raw_path) {
+    return result;
+  }
+  auto path = std::string_view{*raw_path};
+  while (true) {
+    auto separator = path.find(':');
+    auto entry
+      = separator == std::string_view::npos ? path : path.substr(0, separator);
+    if (not entry.empty()) {
+      result.emplace_back(std::string{entry});
+    }
+    if (separator == std::string_view::npos) {
+      break;
+    }
+    path.remove_prefix(separator + 1);
+  }
+  return result;
+}
+
 using code_or_path_t = located<std::variant<std::filesystem::path, secret>>;
 
 class python_operator final : public crtp_operator<python_operator> {
@@ -290,7 +315,8 @@ public:
       bp::pipe std_out;
       bp::pipe std_in;
       bp::ipstream std_err;
-      auto python_executable = bp::search_path("python3");
+      auto process_path = process_path_env();
+      auto python_executable = bp::search_path("python3", process_path);
       auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
@@ -340,7 +366,7 @@ public:
 #if TENZIR_ENABLE_BUNDLED_UV
         auto uv_executable = detail::install_libexecdir() / "uv";
 #else
-        auto uv_executable = bp::search_path("uv");
+        auto uv_executable = bp::search_path("uv", process_path);
 #endif
         if (uv_executable.empty()) {
           diagnostic::error("Failed to find uv").emit(ctrl.diagnostics());
