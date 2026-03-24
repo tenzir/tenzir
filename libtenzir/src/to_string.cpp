@@ -15,14 +15,14 @@
 
 namespace tenzir {
 
-auto to_string(data_view v, location loc, diagnostic_handler& dh)
+auto to_string(data_view3 v, location loc, diagnostic_handler& dh)
   -> std::optional<std::string> {
   using ret_t = std::optional<std::string>;
   const auto f = detail::overload{
     [](view<caf::none_t>) -> ret_t {
       return std::nullopt;
     },
-    [loc, &dh](view<blob> b) -> ret_t {
+    [loc, &dh](view3<blob> b) -> ret_t {
       const auto* begin = reinterpret_cast<const uint8_t*>(b.data());
       const auto size = detail::narrow<int>(b.size());
       if (arrow::util::ValidateUTF8(begin, size)) {
@@ -36,7 +36,7 @@ auto to_string(data_view v, location loc, diagnostic_handler& dh)
         .emit(dh);
       return std::nullopt;
     },
-    [](const view<std::string>& s) -> ret_t {
+    [](const view3<std::string>& s) -> ret_t {
       return std::string{s};
     },
     [](const auto& v) -> ret_t {

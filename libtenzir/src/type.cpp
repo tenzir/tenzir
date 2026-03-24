@@ -58,6 +58,16 @@ auto to_string(type_kind x) -> std::string_view {
   return std::visit(f, x);
 }
 
+auto type_kind_of_data(const data& x) -> type_kind {
+  return match(x, []<class T>(const T&) -> type_kind {
+    if constexpr (caf::detail::one_of<T, pattern>) {
+      TENZIR_UNREACHABLE();
+    } else {
+      return type_kind::of<data_to_type_t<T>>;
+    }
+  });
+}
+
 namespace {
 
 constexpr size_t reserved_string_size(std::string_view str) {

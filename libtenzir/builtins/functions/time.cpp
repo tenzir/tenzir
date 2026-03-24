@@ -121,7 +121,7 @@ public:
                 }
                 check(append_builder(
                   duration_type{}, *b,
-                  value_at(time_type{}, arg, i).time_since_epoch()));
+                  view_at<time_type>(arg, i)->time_since_epoch()));
               }
             },
             [&](const auto&) {
@@ -224,7 +224,7 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                auto&& value = value_at(time_type{}, arg, i);
+                auto value = *view_at<time_type>(arg, i);
                 const std::chrono::year_month_day ymd{
                   std::chrono::floor<std::chrono::days>(value)};
                 auto result = int64_t{0};
@@ -301,7 +301,7 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                auto&& value = value_at(time_type{}, arg, i);
+                auto value = *view_at<time_type>(arg, i);
                 auto duration_since_day_start
                   = value - std::chrono::floor<std::chrono::days>(value);
                 auto hours = std::chrono::duration_cast<std::chrono::hours>(
@@ -324,7 +324,7 @@ public:
                 check(b.AppendNull());
                 continue;
               }
-              auto&& value = value_at(time_type{}, arg, i);
+              auto value = *view_at<time_type>(arg, i);
               const auto duration_since_day_start
                 = value - std::chrono::floor<std::chrono::days>(value);
               const auto hours = std::chrono::duration_cast<std::chrono::hours>(

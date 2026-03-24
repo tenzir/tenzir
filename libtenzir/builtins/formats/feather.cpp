@@ -44,7 +44,14 @@ namespace {
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
-  return value_at(time_type{}, *time_col, time_col->length() - 1);
+  if (not time_col || time_col->length() == 0) {
+    return time{};
+  }
+  auto const row = time_col->length() - 1;
+  if (time_col->IsNull(row)) {
+    return time{};
+  }
+  return *view_at<time_type>(*time_col, row);
 }
 
 /// Extract event column from record batch and transform into new record batch.

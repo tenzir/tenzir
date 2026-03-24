@@ -347,7 +347,7 @@ public:
             {"right", right_null ? type{} : right_list->type.value_type()},
           }}}};
           const auto make_nulls =
-            [](int64_t count) -> generator<std::optional<view<tenzir::list>>> {
+            [](int64_t count) -> generator<std::optional<view3<tenzir::list>>> {
             for (auto i = int64_t{0}; i < count; ++i) {
               co_yield {};
             }
@@ -373,10 +373,10 @@ public:
             for (auto i = size_t{0}; i < max_length; ++i) {
               auto record_builder = list_builder.record();
               if (left_value and i < left_value->size()) {
-                record_builder.field("left").data((*left_value)->at(i));
+                record_builder.field("left").data(left_value->at(i));
               }
               if (right_value and i < right_value->size()) {
-                record_builder.field("right").data((*right_value)->at(i));
+                record_builder.field("right").data(right_value->at(i));
               }
             }
           }

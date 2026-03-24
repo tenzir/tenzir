@@ -277,9 +277,11 @@ public:
         out->SetNullFormat(YAML::LowerNull);
         out->SetIndent(2);
         for (const auto& row :
-             values(as<record_type>(resolved_slice.schema()), *array)) {
-          TENZIR_ASSERT(row);
-          print_document(*out, *row);
+             values(type{as<record_type>(resolved_slice.schema())}, *array)) {
+          TENZIR_ASSERT(not is<caf::none_t>(row));
+          const auto* record_view = try_as<view<record>>(&row);
+          TENZIR_ASSERT(record_view);
+          print_document(*out, *record_view);
         }
         // If the output failed, then we either failed to allocate memory or
         // had a mismatch between BeginSeq and EndSeq or BeginMap and EndMap;

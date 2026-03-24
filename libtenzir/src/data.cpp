@@ -338,7 +338,9 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
                      return rhs.contains(lhs);
                    },
                    [](const auto& lhs, const list& rhs) {
-                     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
+                     const data value{lhs};
+                     return std::find(rhs.begin(), rhs.end(), value)
+                            != rhs.end();
                    },
                  });
   };

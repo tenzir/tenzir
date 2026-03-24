@@ -37,7 +37,7 @@ auto comparable(const type& x, const type& y) -> bool {
   });
 }
 
-auto equals(const data_view& l, const data& r) -> bool {
+auto equals(const data_view3& l, const data& r) -> bool {
   return match(
     std::tie(l, r),
     [](const concepts::integer auto& x, const concepts::integer auto& y) {
@@ -74,7 +74,7 @@ auto find_splits(const series& in, std::set<int64_t>& indices,
   if (comparable(in.type, what_type)) {
     auto replace = false;
     for (const auto& [curr, val] :
-         detail::enumerate<int64_t>(values(in.type, *in.array))) {
+         detail::enumerate<int64_t>(values3(*in.array))) {
       if (equals(val, what) != replace) {
         indices.insert(curr);
         replace = not replace;
@@ -100,7 +100,7 @@ auto replace_split_series(series in, const std::vector<ast::field_path>& paths,
                           const std::size_t idx, const type& what_type,
                           const data& what, const data& with) -> series {
   if (comparable(in.type, what_type)) {
-    const auto val = value_at(in.type, *in.array, 0);
+    const auto val = view_at(*in.array, 0);
     if (equals(val, what)) {
       return data_to_series(with, in.length());
     }

@@ -119,6 +119,7 @@ jobs:
             # versions that should not run in regression tests.
             known_bad_versions=(
               "v5.27.3"
+              "v5.29.3"
             )
             filtered_versions=$(printf "%s\n" "$dated_versions" | awk -F# -v limit="$dated_limit_version" '$0>=limit{print$2}')
             for bad_version in "${known_bad_versions[@]}"; do

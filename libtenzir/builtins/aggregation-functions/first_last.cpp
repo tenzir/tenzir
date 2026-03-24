@@ -40,14 +40,14 @@ public:
       if constexpr (Mode == mode::first) {
         for (int64_t i = 0; i < arg.array->length(); ++i) {
           if (arg.array->IsValid(i)) {
-            result_ = materialize(value_at(arg.type, *arg.array, i));
+            result_ = materialize(view_at(*arg.array, i));
             break;
           }
         }
       } else {
         for (int64_t i = arg.array->length() - 1; i >= 0; --i) {
           if (arg.array->IsValid(i)) {
-            result_ = materialize(value_at(arg.type, *arg.array, i));
+            result_ = materialize(view_at(*arg.array, i));
             break;
           }
         }

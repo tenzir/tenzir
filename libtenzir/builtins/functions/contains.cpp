@@ -7,10 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/array/builder_primitive.h>
 #include <arrow/array/data.h>
@@ -40,7 +42,7 @@ auto comparable(const type& x, const type& y) -> bool {
   });
 }
 
-auto equals(const data_view& l, const data& r, bool exact) -> bool {
+auto equals(data_view3 l, const data& r, bool exact) -> bool {
   return match(
     std::tie(l, r),
     [](const concepts::integer auto& x, const concepts::integer auto& y) {

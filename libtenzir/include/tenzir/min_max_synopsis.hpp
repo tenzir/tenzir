@@ -30,7 +30,7 @@ public:
       if (array->IsNull(i)) {
         continue;
       }
-      auto y = value_at(tenzir_type{}, *array, i);
+      auto y = *view_at<tenzir_type>(*array, i);
       if (y < min_) {
         min_ = y;
       }

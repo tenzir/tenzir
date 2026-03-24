@@ -10,6 +10,7 @@
 
 #include "tenzir/collect.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -289,7 +290,19 @@ private:
 
   auto is_profile_enabled(const type& ty) -> bool {
     auto profile = ty.attribute("profile");
-    return not profile or profiles_.contains(*profile);
+    if (profile) {
+      return profiles_.contains(*profile);
+    }
+    auto profiles = ty.attribute("profiles");
+    if (not profiles) {
+      return true;
+    }
+    for (auto name : detail::split(*profiles, "|")) {
+      if (profiles_.contains(name)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   auto is_extension_enabled(const type& ty) -> bool {
@@ -297,8 +310,25 @@ private:
     return not extension or extensions_.contains(*extension);
   }
 
+  auto is_profile_extension_enabled(const type& ty) -> bool {
+    auto profile_extensions = ty.attribute("profile_extensions");
+    if (not profile_extensions) {
+      return true;
+    }
+    for (auto profile_extension : detail::split(*profile_extensions, "|")) {
+      auto [profile, extension] = detail::split_once(profile_extension, ":");
+      TENZIR_ASSERT(not profile.empty());
+      TENZIR_ASSERT(not extension.empty());
+      if (profiles_.contains(profile) and extensions_.contains(extension)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   auto is_enabled(const type& ty) -> bool {
-    return is_profile_enabled(ty) and is_extension_enabled(ty);
+    return is_profile_enabled(ty) and is_extension_enabled(ty)
+           and is_profile_extension_enabled(ty);
   }
 
   auto cast(basic_series<record_type> input, const record_type& ty,
@@ -341,11 +371,28 @@ private:
             .primary(self_)
             .emit(dh_);
         }
+        auto profiles = field_type.attribute("profiles");
+        if (profiles and not is_profile_enabled(field_type)) {
+          diagnostic::warning("dropping `{}` because none of the profiles "
+                              "`{}` are enabled",
+                              field_path, *profiles)
+            .primary(self_)
+            .emit(dh_);
+        }
         auto extension = field_type.attribute("extension");
         if (extension and not extensions_.contains(*extension)) {
           diagnostic::warning("dropping `{}` because extension `{}` is not "
                               "enabled",
                               field_path, *extension)
+            .primary(self_)
+            .emit(dh_);
+        }
+        auto profile_extensions = field_type.attribute("profile_extensions");
+        if (profile_extensions
+            and not is_profile_extension_enabled(field_type)) {
+          diagnostic::warning("dropping `{}` because no profile/extension pair "
+                              "in `{}` is enabled",
+                              field_path, *profile_extensions)
             .primary(self_)
             .emit(dh_);
         }

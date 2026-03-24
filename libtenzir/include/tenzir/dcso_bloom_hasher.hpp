@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/view3.hpp"
+
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/concept/printable/tenzir/view.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
@@ -65,12 +67,14 @@ public:
 
   /// Computes *k* hash digests over anything that can be interpreted as bytes.
   template <class T, class Ts>
+    requires(not concepts::one_of<T, view<data>, data_view3>)
   auto hash(const T& x, Ts& xs) -> void {
     hash(as_bytes(x), xs);
   }
 
-  template <class Ts>
-  auto hash(view<data> x, Ts& xs) -> void {
+  template <class View, class Ts>
+    requires(concepts::one_of<View, view<data>, data_view3>)
+  auto hash(View x, Ts& xs) -> void {
     // DCSO's bloom can only handle strings, so everything that's not a string
     // needs to be converted here.
     auto h = [this, &xs](auto&& value) {
@@ -91,7 +95,8 @@ public:
       } else if constexpr (detail::is_any_v<view_type, view<pattern>>) {
         h(value.string());
       } else if constexpr (detail::is_any_v<view_type, view<list>, view<map>,
-                                            view<record>>) {
+                                            view<record>, view3<record>,
+                                            view3<list>>) {
         // For compound values, we assume that users provide values in JSON to
         // Bloom.
         auto json = to_json(materialize(value));

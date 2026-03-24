@@ -148,6 +148,7 @@ set(TENZIR_UNIT_TEST_TIMEOUT
 # -- library flavor ------------------------------------------------------------
 
 option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
+option(TENZIR_ENABLE_PCH "Enable precompiled headers" ON)
 
 # -- relocatable installations -------------------------------------------------
 
