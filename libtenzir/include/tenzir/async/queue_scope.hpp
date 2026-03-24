@@ -46,9 +46,10 @@ public:
       auto guard = detail::scope_guard{[&] noexcept {
         scope_ = nullptr;
       }};
+      auto cancel_guard = detail::scope_guard{[&] noexcept {
+        scope.cancel();
+      }};
       co_return co_await std::move(task);
-      // TODO: What about the queue at this point?
-      // TODO: Should we cancel the outstanding tasks here?
     });
   }
 

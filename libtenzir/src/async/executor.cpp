@@ -94,12 +94,15 @@ public:
       auto previous = shared_->senders.fetch_sub(1);
       TENZIR_ASSERT(previous > 0);
       if (previous == 1) {
+        LOGV("closed sender (last one)");
         // FIXME: If this happens while the channel is full, then we can't push
         // anything and need a different way to signal it.
         auto success = shared_->data.try_enqueue(None{});
         if (not success) {
           TENZIR_TODO();
         }
+      } else {
+        LOGV("closed sender");
       }
     }
   }
@@ -146,6 +149,7 @@ public:
   /// Returns `None` if channel is closed.
   auto recv() -> Task<Option<T>> {
     auto result = co_await shared_->data.dequeue();
+    LOGE("dequeue of {} successful: {}", typeid(T).name(), result.is_some());
     if (not result) {
       TENZIR_ASSERT(shared_->is_closed());
       // Channel is closed and we just popped an element. There must be space.
@@ -180,15 +184,6 @@ public:
 
   auto is_closed() -> bool {
     return shared_->is_closed();
-  }
-
-  auto into_generator() && -> AsyncGenerator<T> {
-    return folly::coro::co_invoke(
-      [self = std::move(*this)] mutable -> AsyncGenerator<T> {
-        while (auto result = co_await self.recv()) {
-          co_yield std::move(*result);
-        }
-      });
   }
 
 private:
@@ -448,10 +443,12 @@ public:
     }};
     co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
       scope_ = &scope;
+      auto cancel_guard = detail::scope_guard{[&] noexcept {
+        // We assume that the consumer is not interested anymore. Otherwise,
+        // they would have called `next()` until it returns `None`.
+        scope.cancel();
+      }};
       co_return co_await std::move(task);
-      // We assume that the consumer is not interested anymore. Otherwise,
-      // they would have called `next()` until it returns `None`.
-      scope_->cancel();
     });
   }
 
@@ -490,6 +487,7 @@ public:
     scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
       // Propagate cancellation as `None` to wake up `next()`.
       queue_.enqueue(co_await catch_cancellation(std::move(task)));
+      LOGV("got value {} in JoinSet", typeid(U).name());
     });
   }
 
@@ -498,6 +496,13 @@ public:
       folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
   auto add(F&& f) -> void {
     add(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  /// Returns the number of outstanding tasks.
+  ///
+  /// This is NOT thread-safe and may only be used within `activate`.
+  auto running() const -> size_t {
+    return running_;
   }
 
 private:
@@ -532,17 +537,19 @@ public:
       }
     }
     // If nothing was found, wait for new items to arrive.
-    auto value = co_await set_.next();
-    if (value) {
-      co_return value;
+    while (auto value = co_await set_.next()) {
+      if (std::invoke(filter, std::as_const(*value))) {
+        co_return value;
+      }
+      existing_.push_back(std::move(*value));
     }
     // All tasks are done. If some of it is unprocessed by now, we would deadlock.
-    if (existing_.empty()) {
-      co_return None{};
+    if (not existing_.empty()) {
+      // TODO: Should we actually panic here? If the inner tasks are cancelled
+      // and we are about to be cancelled as well, then this is a problem.
+      panic("got {} outstanding items without progress", existing_.size());
     }
-    // TODO: Should we actually panic here? If the inner tasks are cancelled and
-    // we are about to be cancelled as well, then this is a problem.
-    panic("got {} outstanding items without progress", existing_.size());
+    co_return None{};
   }
 
   /// Add a new task to the set.
@@ -559,6 +566,10 @@ public:
       folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
   auto add(F&& f) -> void {
     return set_.add(std::forward<F>(f));
+  }
+
+  auto running() const -> size_t {
+    return set_.running();
   }
 
 private:
@@ -691,8 +702,11 @@ public:
   ~Runner() override = default;
 
   auto run_to_completion() && -> Task<void> {
+    auto cancellation_token
+      = co_await folly::coro::co_current_cancellation_token;
     auto guard = detail::scope_guard{[&] noexcept {
-      LOGW("returning from operator runner {}", id_);
+      LOGW("returning from operator runner {} (cancelled = {})", id_,
+           cancellation_token.isCancellationRequested());
     }};
     LOGV("creating runner scope");
     co_await driver_.activate([&] -> Task<void> {
@@ -1088,7 +1102,7 @@ private:
           co_return {};
         }
         co_return match(std::move(*result), [](auto x) -> AnyOperatorMsg {
-          return std::move(x);
+          return x;
         });
       });
   }
@@ -1217,6 +1231,8 @@ private:
     //     LOGW("shutdown done for {}", typeid(*self->op_).name());
     //   },
     //   this);
+    auto& cancellation_token
+      = co_await folly::coro::co_current_cancellation_token;
     try {
       LOGI("-> pre start");
       {
@@ -1235,14 +1251,23 @@ private:
       }
       co_await base_op().start(*this);
       LOGI("-> post start");
-      driver_.add([this] -> Task<ExplicitAny> {
-        co_return ExplicitAny{co_await base_op().await_task(*this)};
+      driver_.add([this] -> Task<Option<ExplicitAny>> {
+        // Run this also in the operator scope which we can cancel.
+        co_return co_await operator_scope_
+          ->spawn(
+            [task = base_op().await_task(*this)] mutable -> Task<ExplicitAny> {
+              co_return ExplicitAny{co_await std::move(task)};
+            })
+          .try_join();
       });
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
       co_await main_loop();
     } catch (folly::OperationCancelled) {
-      LOGV("shutting down operator after cancellation");
+      // Sanity check: We should only propagate this if we actually got cancelled.
+      auto cancelled = cancellation_token.isCancellationRequested();
+      LOGV("shutting down operator after cancellation: {}", cancelled);
+      TENZIR_ASSERT(cancelled);
       throw;
     } catch (std::exception& e) {
       LOGE("shutting down operator after uncaught exception: {}", e.what());
@@ -1266,7 +1291,8 @@ private:
         case OperatorState::unspecified:
           break;
       }
-      LOGV("waiting in {} for message", op_name());
+      LOGV("waiting in {} for message ({} running)", op_name(),
+           driver_.running());
       auto message = co_await driver_.next([&](Event const& event) {
         // When there is an active checkpoint, we only allow
         // subpipeline messages.
@@ -1281,13 +1307,16 @@ private:
     }
   }
 
-  auto process(ExplicitAny message) -> Task<void> {
+  auto process(Option<ExplicitAny> message) -> Task<void> {
     // The task provided by the inner implementation completed.
     LOGV("got future result in {}", op_name());
-    if (is_done_ or got_shutdown_request_) {
+    if (is_done_) {
       co_return;
     }
-    co_await call_process_task(std::move(message.value));
+    // If we are not done, then the operator scope is not cancelled, which means
+    // that this should always have a value.
+    TENZIR_ASSERT(message);
+    co_await call_process_task(std::move(message->value));
     if (base_op().state() == OperatorState::done) {
       co_await handle_done();
     } else {
@@ -1300,6 +1329,7 @@ private:
 
   auto process(Option<AnyOperatorMsg> message) -> Task<void> {
     if (not message) {
+      LOGV("got end of operator messages in {}", op_name());
       upstream_done_ = true;
       co_return;
     }
@@ -1412,6 +1442,7 @@ private:
 
   auto process(Option<FromControl> message) -> Task<void> {
     if (not message) {
+      LOGV("got end of FromControl in {}", op_name());
       co_return;
     }
     co_await co_match(
@@ -1421,7 +1452,13 @@ private:
         co_await base_op().post_commit(*this);
       },
       [&](HardStop) -> Task<void> {
-        // FIXME: Forcefully transition the operator to a "done" state.
+        // Forcefully transition the operator to a "done" state.
+        if (is_done_) {
+          co_return;
+        }
+        LOGE("got hard stop in {}", op_name());
+        TENZIR_ASSERT(operator_scope_);
+        operator_scope_->cancel();
         co_return;
       });
     driver_.add(from_control_.recv());
@@ -1440,8 +1477,7 @@ private:
         subpipelines_.erase(it);
         co_await call_finish_sub(make_view(message.key));
         // TODO: Can we do without the permissions?
-        co_await try_send_end_of_data();
-        co_await try_ready_for_shutdown();
+        co_await check_done();
       }
     };
     co_await co_match(
@@ -1508,21 +1544,17 @@ private:
     for (auto& [key, sub] : subpipelines_) {
       co_await sub.send(EndOfData{});
     }
-    co_await try_send_end_of_data();
-    co_await try_ready_for_shutdown();
+    co_await check_done();
   }
 
-  auto try_send_end_of_data() -> Task<void> {
-    if (is_done_ or subpipelines_.empty()) {
+  auto check_done() -> Task<void> {
+    if (is_done_ and subpipelines_.empty()) {
+      TENZIR_ASSERT(operator_scope_);
+      operator_scope_->cancel();
       if (not output_is_void_) {
         LOGW("sending end of data from {}", id_);
         co_await push_signal(EndOfData{});
       }
-    }
-  }
-
-  auto try_ready_for_shutdown() -> Task<void> {
-    if (is_done_ and subpipelines_.empty()) {
       LOGW("sending ready to shutdown from {}", id_);
       co_await to_control_.send(ToControl::ready_for_shutdown);
     }
@@ -1560,8 +1592,8 @@ private:
     Option<AnyOperatorMsg>,
     // Control message.
     Option<FromControl>,
-    // Result of `await_task()`.
-    ExplicitAny,
+    // Result of `await_task()` or `None` if cancelled.
+    Option<ExplicitAny>,
     // Anything coming from a subpipeline.
     SubMessage>;
 
@@ -1570,7 +1602,6 @@ private:
   /// Whether we want to exclusively listen for messages from subpipelines.
   bool active_checkpoint_{false};
 
-  bool got_shutdown_request_ = false;
   bool upstream_done_ = false;
   bool is_done_ = false;
   // TODO: Expose this as an atomic for metrics?
@@ -1587,7 +1618,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Sender<ToControl> to_control, OpId id, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
-  co_await Runner{
+  auto runner = Runner{
     AnyOperator{std::move(op)},
     AnyOpPull{std::move(pull_upstream)},
     AnyOpPush{std::move(push_downstream)},
@@ -1597,8 +1628,13 @@ auto run_operator(Box<Operator<Input, Output>> op,
     exec_ctx,
     sys,
     dh,
-  }
-    .run_to_completion();
+  };
+  auto result
+    = co_await catch_cancellation(std::move(runner).run_to_completion());
+  // Ensure that we only cancel if cancellation was requested from outside.
+  co_await folly::coro::co_safe_point;
+  TENZIR_ASSERT(result);
+  co_return;
 }
 
 /// Demangle a C++ type name and strip the namespace prefix.
@@ -1685,35 +1721,47 @@ private:
         driver_.add([task = std::move(task), index,
                      executor = std::move(executor)] mutable
                       -> Task<std::pair<size_t, Terminated>> {
-          // Propagate exceptions, but not cancellation, to the caller.
-          co_await folly::coro::co_withExecutor(std::move(executor),
-                                                std::move(task));
-          LOGI("got termination from operator {}", index);
+          auto guard = detail::scope_guard{[] noexcept {
+            LOGE("???");
+          }};
+          auto result = co_await async_result(
+            folly::coro::co_withExecutor(std::move(executor), std::move(task)));
+          LOGI("got termination from operator {} (exception: {}, cancelled: "
+               "{})",
+               index, result.is_exception(), result.is_cancelled());
+          std::move(result).value();
           co_return {index, Terminated{}};
         });
-        LOGI("inserting control receiver task");
-        add_control_read(index);
       });
+    }
+    for (auto [index, _] : detail::enumerate(operators_)) {
+      add_control_read(index);
     }
   }
 
   auto add_control_read(size_t index) -> void {
-    driver_.add(
-      std::invoke([this, index] -> Task<std::pair<size_t, Option<ToControl>>> {
-        co_return {index, co_await op_controls_[index].receiver.recv()};
-      }));
+    LOGI("inserting control receiver task");
+    driver_.add([this, index] -> Task<std::pair<size_t, Option<ToControl>>> {
+      TENZIR_ASSERT(index < op_controls_.size());
+      co_return {index, co_await op_controls_[index].receiver.recv()};
+    });
   }
 
   auto run_until_shutdown() -> Task<void> {
     auto ready_for_shutdown = size_t{0};
+    LOGI("starting FromControl read in chain runner");
     driver_.add(from_control_.recv());
+    LOGE("next() in chain runner ({} running)", driver_.running());
     while (auto next = co_await driver_.next()) {
+      LOGE("finished next() in chain runner");
       co_await co_match(
-        *next,
+        std::move(*next),
         [&](Option<FromControl> from_control) -> Task<void> {
           if (not from_control) {
+            LOGI("got FromControl end in chain runner");
             co_return;
           }
+          LOGI("got FromControl message in chain runner");
           co_await co_match(
             *from_control,
             [&](PostCommit) -> Task<void> {
@@ -1726,6 +1774,7 @@ private:
                 co_await ctrl.sender.send(HardStop{});
               }
             });
+          LOGI("starting FromControl read in chain runner");
           driver_.add(from_control_.recv());
         },
         [&](std::pair<size_t, variant<Terminated, Option<ToControl>>> next)
@@ -1740,6 +1789,7 @@ private:
             },
             [&](Option<ToControl> to_control) -> Task<void> {
               if (not to_control) {
+                LOGI("got ToControl end in chain runner");
                 co_return;
               }
               LOGW("got control message from operator {}: {}", id_.op(index),
@@ -1753,6 +1803,7 @@ private:
                     // operators. However, since we might be running in a
                     // subpipeline that is not ready to shutdown yet, we first
                     // have to ask control whether we are allowed to.
+                    LOGW("got ready to shutdown from all in chain");
                     co_await to_control_.send(ToControl::ready_for_shutdown);
                   }
                   break;
@@ -1771,8 +1822,8 @@ private:
               }
               add_control_read(index);
             });
-          co_return;
         });
+      LOGE("next() in chain runner ({} running)", driver_.running());
     }
     LOGW("left main loop of {}", id_);
     TENZIR_ASSERT(ready_for_shutdown == operators_.size());
@@ -1977,7 +2028,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                 // We don't feed it any input either way.
                 break;
               case ToControl::ready_for_shutdown:
-                LOGI("got shutdown request from outermost subpipeline");
+                LOGE("got ready to shutdown in outermost subpipeline");
                 {
                   // FIXME: We should not leave this dangling.
                   auto _input = std::move(push_input);

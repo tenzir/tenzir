@@ -22,6 +22,8 @@ static_assert(std::is_move_constructible_v<Option<int>>);
 static_assert(std::is_default_constructible_v<Option<int>>);
 static_assert(has_variant_traits<Option<int>>);
 static_assert(has_variant_traits<Option<std::string>>);
+static_assert(std::is_convertible_v<int, Option<size_t>>);
+static_assert(std::is_convertible_v<Option<int>, Option<long>>);
 
 // -- construction -------------------------------------------------------------
 
@@ -73,6 +75,43 @@ TEST("construction with move-only type") {
   auto opt = Option<std::unique_ptr<int>>{std::make_unique<int>(42)};
   REQUIRE(opt.is_some());
   CHECK_EQUAL(**opt, 42);
+}
+
+TEST("conversion from option preserves none") {
+  auto opt = Option<long>{Option<int>{}};
+  CHECK(opt.is_none());
+}
+
+TEST("conversion from option converts payload") {
+  auto opt = Option<long>{Option<int>{42}};
+  REQUIRE(opt.is_some());
+  CHECK_EQUAL(*opt, 42);
+}
+
+TEST("nested conversion from value remains implicit") {
+  auto opt = Option<Option<int>>{42};
+  REQUIRE(opt.is_some());
+  REQUIRE((*opt).is_some());
+  CHECK_EQUAL(**opt, 42);
+}
+
+TEST("nested wrapping from option reifies none") {
+  auto opt = Option<Option<int>>{Option<int>{}};
+  REQUIRE(opt.is_some());
+  CHECK((*opt).is_none());
+}
+
+TEST("nested wrapping from option preserves inner value") {
+  auto opt = Option<Option<int>>{Option<int>{42}};
+  REQUIRE(opt.is_some());
+  REQUIRE((*opt).is_some());
+  CHECK_EQUAL(**opt, 42);
+}
+
+TEST("deeper nested wrapping reifies none recursively") {
+  auto opt = Option<Option<Option<int>>>{Option<Option<int>>{}};
+  REQUIRE(opt.is_some());
+  CHECK((*opt).is_none());
 }
 
 // -- reference option ---------------------------------------------------------

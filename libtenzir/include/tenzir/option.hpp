@@ -28,7 +28,26 @@ struct None {
   friend auto operator==(None, None) -> bool = default;
 };
 
+template <class T>
+class Option;
+
 namespace detail {
+
+template <class T>
+inline constexpr auto is_option_v = false;
+
+template <class T>
+inline constexpr auto is_option_v<Option<T>> = true;
+
+template <class T, class U>
+concept EqualityComparable = requires(T const& a, U const& b) {
+  { a == b } -> std::convertible_to<bool>;
+};
+
+template <class T, class U>
+concept ThreeWayComparable = requires(T const& a, U const& b) {
+  { a <=> b };
+};
 
 /// Storage backend for `Option<T>` when `T` is a value type.
 template <class T>
@@ -99,16 +118,48 @@ public:
   }
 
   /// Constructs from a value (non-reference `T` only).
-  template <class U = T>
+  template <class U>
     requires(not std::is_reference_v<T> and std::constructible_from<T, U>
              and not std::same_as<std::remove_cvref_t<U>, None>
              and not std::same_as<std::remove_cvref_t<U>, Option>
              and not std::same_as<std::remove_cvref_t<U>, std::optional<T>>)
-  explicit(not std::convertible_to<U, T>)
-    Option(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>
-                               and std::is_nothrow_constructible_v<Storage,
-                                                                    std::optional<T>>)
-    : storage_{std::optional<T>{T{std::forward<U>(value)}}} {
+  explicit(not std::convertible_to<U, T>) Option(U&& value) noexcept(
+    std::is_nothrow_constructible_v<T, U&&>
+    and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
+    : storage_{std::optional<T>{std::in_place, std::forward<U>(value)}} {
+  }
+
+  /// Constructs an engaged option in-place.
+  template <class... Args>
+    requires(not std::is_reference_v<T> and std::constructible_from<T, Args...>)
+  explicit Option(std::in_place_t, Args&&... args) noexcept(
+    std::is_nothrow_constructible_v<T, Args&&...>
+    and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
+    : storage_{std::optional<T>{std::in_place, std::forward<Args>(args)...}} {
+  }
+
+  /// Constructs from another option while preserving the outer shape.
+  template <class U>
+    requires(not std::is_reference_v<T> and not detail::is_option_v<std::remove_cvref_t<T>>
+             and std::constructible_from<T, U const&>)
+  explicit(not std::convertible_to<U const&, T>) Option(Option<U> const& other)
+    noexcept(std::is_nothrow_constructible_v<T, U const&>
+             and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
+    : storage_{other.is_some()
+                 ? std::optional<T>{std::in_place, *other}
+                 : std::optional<T>{}} {
+  }
+
+  /// Constructs from another option while preserving the outer shape.
+  template <class U>
+    requires(not std::is_reference_v<T> and not detail::is_option_v<std::remove_cvref_t<T>>
+             and std::constructible_from<T, U>)
+  explicit(not std::convertible_to<U, T>) Option(Option<U>&& other) noexcept(
+    std::is_nothrow_constructible_v<T, U>
+    and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
+    : storage_{other.is_some()
+                 ? std::optional<T>{std::in_place, *std::move(other)}
+                 : std::optional<T>{}} {
   }
 
   /// Constructs from a reference (reference `T` only).
@@ -131,24 +182,6 @@ public:
     : storage_{std::move(opt)} {
   }
 
-  /// Constructs from an `Option<U>` that is convertible.
-  template <class U>
-    requires std::convertible_to<U&, T>
-  explicit(false) Option(Option<U>& other)
-    : storage_{other ? Storage{static_cast<T>(*other)} : Storage{}} {
-  }
-
-  template <class U>
-    requires std::convertible_to<const U&, T>
-  explicit(false) Option(const Option<U>& other)
-    : storage_{other ? Storage{static_cast<T>(*other)} : Storage{}} {
-  }
-
-  template <class U>
-    requires std::convertible_to<U, T>
-  explicit(false) Option(Option<U>&& other)
-    : storage_{other ? Storage{static_cast<T>(std::move(*other))} : Storage{}} {
-  }
 
   // -- Assignment -------------------------------------------------------------
 
@@ -356,9 +389,7 @@ public:
 
   /// Two options are equal if both are None, or both are Some with equal values.
   template <class U>
-    requires requires(Value const& a, std::remove_reference_t<U> const& b) {
-      { a == b } -> std::convertible_to<bool>;
-    }
+    requires detail::EqualityComparable<Value, std::remove_reference_t<U>>
   friend auto operator==(Option const& lhs, Option<U> const& rhs) -> bool {
     if (lhs.is_some() != rhs.is_some()) {
       return false;
@@ -377,19 +408,15 @@ public:
   /// An option equals a value iff it is Some and the values are equal.
   template <class U>
     requires(not std::same_as<std::remove_cvref_t<U>, None>
-             and not std::same_as<std::remove_cvref_t<U>, Option>
-             and requires(Value const& a, U const& b) {
-               { a == b } -> std::convertible_to<bool>;
-             })
-  friend auto operator==(Option const& lhs, U const& rhs) -> bool {
-    return lhs.is_some() and *lhs == rhs;
+             and not detail::is_option_v<std::remove_cvref_t<U>>
+             and detail::EqualityComparable<Value, U>)
+  auto operator==(U const& rhs) const -> bool {
+    return is_some() and **this == rhs;
   }
 
   /// Orders two options. None is less than any Some.
   template <class U>
-    requires requires(Value const& a, std::remove_reference_t<U> const& b) {
-      { a <=> b };
-    }
+    requires detail::ThreeWayComparable<Value, std::remove_reference_t<U>>
   friend auto operator<=>(Option const& lhs, Option<U> const& rhs) {
     if (lhs.is_some() and rhs.is_some()) {
       return *lhs <=> *rhs;
@@ -405,13 +432,11 @@ public:
   /// Compares directly against a value. None is less than any value.
   template <class U>
     requires(not std::same_as<std::remove_cvref_t<U>, None>
-             and not std::same_as<std::remove_cvref_t<U>, Option>
-             and requires(Value const& a, U const& b) {
-               { a <=> b };
-             })
-  friend auto operator<=>(Option const& lhs, U const& rhs) {
-    if (lhs.is_some()) {
-      return *lhs <=> rhs;
+             and not detail::is_option_v<std::remove_cvref_t<U>>
+             and detail::ThreeWayComparable<Value, U>)
+  auto operator<=>(U const& rhs) const {
+    if (is_some()) {
+      return **this <=> rhs;
     }
     return std::strong_ordering::less;
   }

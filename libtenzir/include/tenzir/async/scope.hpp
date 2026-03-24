@@ -32,17 +32,23 @@ public:
   ///
   /// This will panic if the underlying task was cancelled.
   auto join() -> Task<T> {
+    auto result = co_await try_join();
+    if (not result) {
+      panic("joining a task that got cancelled");
+    }
+    if constexpr (not std::is_void_v<T>) {
+      co_return std::move(*result);
+    }
+  }
+
+  /// Like `join()`, but returns `None` on cancellation.
+  auto try_join() -> Task<Option<VoidToUnit<T>>> {
     TENZIR_ASSERT(state_);
     TENZIR_ASSERT(not state_->joined);
     co_await state_->notify.wait();
     TENZIR_ASSERT(not state_->joined);
     state_->joined = true;
-    if (not state_->value) {
-      panic("joining a task that got cancelled");
-    }
-    if constexpr (not std::is_void_v<T>) {
-      co_return std::move(*state_->value);
-    }
+    co_return std::move(state_->value);
   }
 
 private:
@@ -51,7 +57,7 @@ private:
   struct State {
     bool joined = false;
     Notify notify;
-    std::optional<VoidToUnit<T>> value;
+    Option<VoidToUnit<T>> value;
   };
 
   explicit AsyncHandle(std::shared_ptr<State> state)
@@ -81,14 +87,14 @@ public:
                                 awaitable = std::forward<SemiAwaitable>(
                                   awaitable)] mutable -> Task<void> {
           auto result = co_await async_result(folly::coro::co_withCancellation(
-            data_.cancel_token, std::move(awaitable)));
+            data_.children_cancel_token, std::move(awaitable)));
           if (result.is_exception()) {
             auto lock = std::scoped_lock{data_.exception_mutex};
             if (not data_.exception) {
               LOGE("remembering exception for scope {}: {}", fmt::ptr(this),
                    result.exception().what());
               data_.exception = std::move(result).exception();
-              data_.cancel_source.requestCancellation();
+              data_.main_cancel_source.requestCancellation();
             } else {
               LOGE("dropping exception for scope {}: {}", fmt::ptr(this),
                    result.exception().what());
@@ -99,7 +105,7 @@ public:
             if constexpr (std::is_void_v<Result>) {
               state->value = Unit{};
             } else {
-              state->value = std::move(result).unwrap();
+              state->value = std::move(result).value();
             }
           } else {
             LOGV("task of scope {} got cancelled", fmt::ptr(this));
@@ -118,21 +124,23 @@ public:
     return spawn(folly::coro::co_invoke(std::forward<F>(f)));
   }
 
-  /// Cancel all remaining tasks.
+  /// Cancel all spawned tasks without cancelling the main task.
   auto cancel() -> void {
-    data_.cancel_source.requestCancellation();
+    data_.children_cancel_source.requestCancellation();
   }
 
   auto is_cancelled() const -> bool {
-    return data_.cancel_token.isCancellationRequested();
+    return data_.children_cancel_token.isCancellationRequested();
   }
 
 private:
   struct Data {
     folly::ExecutorKeepAlive<> executor;
     folly::coro::AsyncScope scope;
-    folly::CancellationSource cancel_source;
-    folly::CancellationToken cancel_token;
+    folly::CancellationSource main_cancel_source;
+    folly::CancellationToken main_cancel_token;
+    folly::CancellationSource children_cancel_source;
+    folly::CancellationToken children_cancel_token;
     folly::exception_wrapper exception;
     std::mutex exception_mutex;
   };
@@ -173,8 +181,10 @@ private:
 /// ```
 ///
 /// If the function is cancelled, then all spawned tasks will be cancelled as
-/// well and cancellation will be propagated. If just a spawned task is
-/// cancelled, execution will continue normally.
+/// well and cancellation will be propagated. If a caller explicitly calls
+/// `scope.cancel()`, only the spawned tasks are cancelled and the main task may
+/// keep running. If just a spawned task is cancelled, execution will continue
+/// normally.
 ///
 /// If the function or a spawned tasks fails with an exception, then everything
 /// is cancelled and the exception is propagated.
@@ -186,9 +196,12 @@ template <class F>
 auto async_scope(F&& f) -> Task<
   folly::coro::semi_await_result_t<std::invoke_result_t<F, AsyncScope&>>> {
   auto data = AsyncScope::Data{};
-  data.cancel_token = folly::cancellation_token_merge(
+  data.main_cancel_token = folly::cancellation_token_merge(
     co_await folly::coro::co_current_cancellation_token,
-    data.cancel_source.getToken());
+    data.main_cancel_source.getToken());
+  data.children_cancel_token = folly::cancellation_token_merge(
+    data.main_cancel_token,
+    data.children_cancel_source.getToken());
   data.executor = co_await folly::coro::co_current_executor;
   auto scope = AsyncScope{data};
   LOGV("created scope {}", fmt::ptr(&scope));
@@ -204,19 +217,18 @@ auto async_scope(F&& f) -> Task<
     std::terminate();
   }};
   auto result = co_await async_result(folly::coro::co_withCancellation(
-    data.cancel_token, std::invoke(std::forward<F>(f), scope)));
-  // We only cancel the jobs if the given function failed or was cancelled.
+    data.main_cancel_token, std::invoke(std::forward<F>(f), scope)));
+  // If the main task failed or got cancelled, we must tear down the child
+  // tasks before joining the scope.
   if (not result.is_value()) {
-    if (not data.cancel_token.isCancellationRequested()) {
-      LOGV("cancelling async scope because of exception/cancellation");
-      data.cancel_source.requestCancellation();
-    }
+    LOGV("cancelling child tasks in async scope because of main task failure");
+    data.children_cancel_source.requestCancellation();
   }
   // Provide a custom cancellation token to ensure that cancellation doesn't
   // abort the join. Because we did not ask the scope itself to store and throw
   // exceptions, this should always succeed (if it returns at all).
   LOGV("joining scope {} (cancelled = {})", fmt::ptr(&scope),
-       data.cancel_token.isCancellationRequested());
+       data.children_cancel_token.isCancellationRequested());
   auto join_result = co_await async_result(
     folly::coro::co_withCancellation({}, data.scope.joinAsync()));
   LOGV("joined scope {}", fmt::ptr(&scope));

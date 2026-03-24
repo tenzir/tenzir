@@ -2079,7 +2079,7 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
         cancel_source.getToken(), run_plan(std::move(chain), sys, diag_handler,
                                            std::move(profiler), false)));
     });
-#if 0
+#if 1
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
 #else
