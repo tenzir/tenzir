@@ -10,8 +10,8 @@
 
 #include "tenzir/async/result.hpp"
 #include "tenzir/async/scope.hpp"
-#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 
 #include <concepts>
 #include <cstddef>

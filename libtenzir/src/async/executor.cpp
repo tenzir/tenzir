@@ -81,15 +81,12 @@ public:
       auto previous = shared_->senders.fetch_sub(1);
       TENZIR_ASSERT(previous > 0);
       if (previous == 1) {
-        LOGV("closed sender (last one)");
         // FIXME: If this happens while the channel is full, then we can't push
         // anything and need a different way to signal it.
         auto success = shared_->data.try_enqueue(None{});
         if (not success) {
           TENZIR_TODO();
         }
-      } else {
-        LOGV("closed sender");
       }
     }
   }
@@ -136,7 +133,6 @@ public:
   /// Returns `None` if channel is closed.
   auto recv() -> Task<Option<T>> {
     auto result = co_await shared_->data.dequeue();
-    LOGE("dequeue of {} successful: {}", typeid(T).name(), result.is_some());
     if (not result) {
       TENZIR_ASSERT(shared_->is_closed());
       // Channel is closed and we just popped an element. There must be space.
@@ -1088,7 +1084,6 @@ private:
     auto& cancellation_token
       = co_await folly::coro::co_current_cancellation_token;
     try {
-      LOGI("-> pre start");
       {
         // TODO: What if we don't restore? No data? Flag?
         auto data = co_await this->load_checkpoint();
@@ -1104,7 +1099,6 @@ private:
         }
       }
       co_await base_op().start(*this);
-      LOGI("-> post start");
       driver_.add([this] -> Task<Option<ExplicitAny>> {
         // Run this also in the operator scope which we can cancel.
         co_return co_await operator_scope_
@@ -1145,8 +1139,6 @@ private:
         case OperatorState::unspecified:
           break;
       }
-      LOGV("waiting in {} for message ({} running)", op_name(),
-           driver_.running());
       auto message = co_await driver_.next([&](Event const& event) {
         // When there is an active checkpoint, we only allow
         // subpipeline messages.
@@ -1612,7 +1604,6 @@ private:
   }
 
   auto add_control_read(size_t index) -> void {
-    LOGI("inserting control receiver task");
     driver_.add([this, index] -> Task<std::pair<size_t, Option<ToControl>>> {
       TENZIR_ASSERT(index < op_controls_.size());
       co_return {index, co_await op_controls_[index].receiver.recv()};
@@ -1622,19 +1613,14 @@ private:
   auto run_until_shutdown() -> Task<void> {
     auto ready_for_shutdown = size_t{0};
     auto got_ready_for_shutdown = std::vector<bool>(operators_.size(), false);
-    LOGI("starting FromControl read in chain runner");
     driver_.add(from_control_.recv());
-    LOGE("next() in chain runner ({} running)", driver_.running());
     while (auto next = co_await driver_.next()) {
-      LOGE("finished next() in chain runner");
       co_await co_match(
         std::move(*next),
         [&](Option<FromControl> from_control) -> Task<void> {
           if (not from_control) {
-            LOGI("got FromControl end in chain runner");
             co_return;
           }
-          LOGI("got FromControl message in chain runner");
           co_await co_match(
             *from_control,
             [&](PostCommit) -> Task<void> {
@@ -1651,7 +1637,6 @@ private:
                 }
               }
             });
-          LOGI("starting FromControl read in chain runner");
           driver_.add(from_control_.recv());
         },
         [&](std::pair<size_t, variant<Terminated, Option<ToControl>>> next)
@@ -1666,7 +1651,6 @@ private:
             },
             [&](Option<ToControl> to_control) -> Task<void> {
               if (not to_control) {
-                LOGI("got ToControl end in chain runner");
                 co_return;
               }
               LOGW("got control message from operator {}: {}", id_.op(index),
@@ -1710,7 +1694,6 @@ private:
               add_control_read(index);
             });
         });
-      LOGE("next() in chain runner ({} running)", driver_.running());
     }
     LOGW("left main loop of {}", id_);
     TENZIR_ASSERT(ready_for_shutdown == operators_.size());
