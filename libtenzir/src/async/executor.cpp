@@ -11,11 +11,11 @@
 #include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/fused.hpp"
+#include "tenzir/async/join_set.hpp"
 #include "tenzir/async/log.hpp"
 #include "tenzir/async/mail.hpp"
 #include "tenzir/async/mutex.hpp"
-#include "tenzir/async/queue_scope.hpp"
-#include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/async/select_set.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/connect_to_node.hpp"
@@ -33,7 +33,6 @@
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
-#include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
 // TODO: Why does this not report line numbers correctly?
@@ -431,152 +430,6 @@ auto run_chain_fused(OperatorChain<Input, Output> chain,
                      std::move(push_downstream), std::move(from_control),
                      std::move(to_control), std::move(id), fused_ctx, sys, dh);
 }
-
-template <class T>
-class JoinSet {
-public:
-  // Activate the set over the scope of a task.
-  //
-  // This has the same lifetime requirements as `async_scope`.
-  template <class U>
-  auto activate(Task<U> task) -> Task<U> {
-    auto guard = detail::scope_guard{[&] noexcept {
-      // We reset the scope _after_ joining it.
-      scope_ = nullptr;
-    }};
-    co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
-      scope_ = &scope;
-      auto cancel_guard = detail::scope_guard{[&] noexcept {
-        // We assume that the consumer is not interested anymore. Otherwise,
-        // they would have called `next()` until it returns `None`.
-        scope.cancel();
-      }};
-      co_return co_await std::move(task);
-    });
-  }
-
-  // Activate the queue over the scope of a function.
-  //
-  // This has the same lifetime requirements as `async_scope`.
-  template <class F>
-  auto activate(F&& f)
-    -> Task<folly::coro::semi_await_result_t<std::invoke_result_t<F>>> {
-    return activate(folly::coro::co_invoke(std::forward<F>(f)));
-  }
-
-  /// Return the next result, or `None` if we are done.
-  ///
-  /// This is NOT thread safe and must only be used within `activate`.
-  auto next() -> Task<Option<T>> {
-    while (running_ > 0) {
-      auto item = co_await queue_.dequeue();
-      running_ -= 1;
-      // A cancelled task does not return a result.
-      if (item) {
-        co_return item;
-      }
-    }
-    co_return None{};
-  }
-
-  /// Add a new task to the set.
-  ///
-  /// This is NOT thread safe and must only be used within `activate`.
-  template <class U>
-    requires std::convertible_to<U, T>
-  auto add(Task<U> task) -> void {
-    TENZIR_ASSERT(scope_);
-    running_ += 1;
-    scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
-      // Propagate cancellation as `None` to wake up `next()`.
-      queue_.enqueue(co_await catch_cancellation(std::move(task)));
-      LOGV("got value {} in JoinSet", typeid(U).name());
-    });
-  }
-
-  template <class F>
-    requires std::convertible_to<
-      folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
-  auto add(F&& f) -> void {
-    add(folly::coro::co_invoke(std::forward<F>(f)));
-  }
-
-  /// Returns the number of outstanding tasks.
-  ///
-  /// This is NOT thread-safe and may only be used within `activate`.
-  auto running() const -> size_t {
-    return running_;
-  }
-
-private:
-  size_t running_{0};
-  folly::coro::UnboundedQueue<Option<T>> queue_;
-  AsyncScope* scope_ = nullptr;
-};
-
-/// A `JoinSet` that the consumer can select/filter over.
-template <class T>
-class SelectSet {
-public:
-  // Activate the set over the scope of a function.
-  //
-  // This has the same lifetime requirements as `async_scope`.
-  template <class F>
-  auto activate(F&& f)
-    -> Task<folly::coro::semi_await_result_t<std::invoke_result_t<F>>> {
-    return set_.activate(std::forward<F>(f));
-  }
-
-  /// Wait for the next item that satisfies the filter.
-  template <class Filter>
-    requires(std::is_invocable_r_v<bool, Filter, T const&>)
-  auto next(Filter&& filter) -> Task<Option<T>> {
-    // First, inspect the existing items to see if one qualifies.
-    for (auto i = size_t{0}; i < existing_.size(); ++i) {
-      if (std::invoke(filter, std::as_const(existing_[i]))) {
-        auto value = std::move(existing_[i]);
-        existing_.erase(existing_.begin() + static_cast<std::ptrdiff_t>(i));
-        co_return value;
-      }
-    }
-    // If nothing was found, wait for new items to arrive.
-    while (auto value = co_await set_.next()) {
-      if (std::invoke(filter, std::as_const(*value))) {
-        co_return value;
-      }
-      existing_.push_back(std::move(*value));
-    }
-    // All tasks are done. If some of it is unprocessed by now, we would deadlock.
-    if (not existing_.empty()) {
-      panic("got {} outstanding items without progress", existing_.size());
-    }
-    co_return None{};
-  }
-
-  /// Add a new task to the set.
-  ///
-  /// This is NOT thread safe and must only be used within `activate`.
-  template <class U>
-    requires std::convertible_to<U, T>
-  auto add(Task<U> task) -> void {
-    return set_.add(std::move(task));
-  }
-
-  template <class F>
-    requires std::convertible_to<
-      folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
-  auto add(F&& f) -> void {
-    return set_.add(std::forward<F>(f));
-  }
-
-  auto running() const -> size_t {
-    return set_.running();
-  }
-
-private:
-  JoinSet<T> set_;
-  std::vector<T> existing_;
-};
 
 /// Core execution logic for a single operator.
 ///
