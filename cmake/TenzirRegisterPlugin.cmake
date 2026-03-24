@@ -115,6 +115,83 @@ macro (TenzirTargetEnableTooling _target)
   endif ()
 endmacro ()
 
+function (TenzirGetCommonPrecompileHeaders out_var)
+  set(${out_var}
+      <tenzir/data.hpp> <tenzir/fwd.hpp> <tenzir/table_slice.hpp>
+      <tenzir/type.hpp> <tenzir/view3.hpp>
+      PARENT_SCOPE)
+endfunction ()
+
+function (TenzirConfigurePchReuse target)
+  if (NOT TENZIR_ENABLE_PCH)
+    return()
+  endif ()
+  cmake_parse_arguments(PCH "" "BINARY_DIR;DONOR_TARGET;SOURCE_TARGET"
+                        "LINK_LIBRARIES" ${ARGN})
+  if (NOT PCH_BINARY_DIR)
+    set(PCH_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+  endif ()
+  if (NOT PCH_DONOR_TARGET)
+    set(PCH_DONOR_TARGET "tenzir_common__pch")
+  endif ()
+  tenzirgetcommonprecompileheaders(common_precompile_headers)
+  if (NOT TARGET ${PCH_DONOR_TARGET})
+    file(WRITE "${PCH_BINARY_DIR}/${PCH_DONOR_TARGET}.cpp" "")
+    add_library(${PCH_DONOR_TARGET} OBJECT
+                "${PCH_BINARY_DIR}/${PCH_DONOR_TARGET}.cpp")
+    set_target_properties(${PCH_DONOR_TARGET} PROPERTIES LINKER_LANGUAGE CXX)
+    target_compile_features(${PCH_DONOR_TARGET} PRIVATE cxx_std_23)
+    TenzirTargetEnableTooling(${PCH_DONOR_TARGET})
+    if (PCH_SOURCE_TARGET)
+      foreach (
+        prop IN
+        ITEMS COMPILE_DEFINITIONS
+              COMPILE_OPTIONS
+              INCLUDE_DIRECTORIES
+              SYSTEM_INCLUDE_DIRECTORIES
+              LINK_LIBRARIES
+              INTERFACE_COMPILE_DEFINITIONS
+              INTERFACE_COMPILE_OPTIONS
+              INTERFACE_INCLUDE_DIRECTORIES
+              INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+              INTERFACE_LINK_LIBRARIES)
+        get_target_property(values ${PCH_SOURCE_TARGET} ${prop})
+        if (values AND NOT values STREQUAL "values-NOTFOUND")
+          if (prop STREQUAL "COMPILE_DEFINITIONS")
+            target_compile_definitions(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "COMPILE_OPTIONS")
+            target_compile_options(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "INCLUDE_DIRECTORIES")
+            target_include_directories(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "SYSTEM_INCLUDE_DIRECTORIES")
+            target_include_directories(${PCH_DONOR_TARGET} SYSTEM
+                                       PRIVATE ${values})
+          elseif (prop STREQUAL "LINK_LIBRARIES")
+            target_link_libraries(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "INTERFACE_COMPILE_DEFINITIONS")
+            target_compile_definitions(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "INTERFACE_COMPILE_OPTIONS")
+            target_compile_options(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "INTERFACE_INCLUDE_DIRECTORIES")
+            target_include_directories(${PCH_DONOR_TARGET} PRIVATE ${values})
+          elseif (prop STREQUAL "INTERFACE_SYSTEM_INCLUDE_DIRECTORIES")
+            target_include_directories(${PCH_DONOR_TARGET} SYSTEM
+                                       PRIVATE ${values})
+          elseif (prop STREQUAL "INTERFACE_LINK_LIBRARIES")
+            target_link_libraries(${PCH_DONOR_TARGET} PRIVATE ${values})
+          endif ()
+        endif ()
+      endforeach ()
+    endif ()
+    if (PCH_LINK_LIBRARIES)
+      target_link_libraries(${PCH_DONOR_TARGET} PRIVATE ${PCH_LINK_LIBRARIES})
+    endif ()
+    target_precompile_headers(${PCH_DONOR_TARGET} PRIVATE
+                              ${common_precompile_headers})
+  endif ()
+  target_precompile_headers(${target} REUSE_FROM ${PCH_DONOR_TARGET})
+endfunction ()
+
 macro (make_absolute vars)
   list(GET "${vars}" 0 _glob)
   if ("${_glob}" STREQUAL "GLOB")
@@ -729,6 +806,24 @@ function (TenzirRegisterPlugin)
       INCLUDE_DIRECTORY "${PLUGIN_TARGET}/fbs")
     target_link_libraries(${PLUGIN_TARGET} PUBLIC ${PLUGIN_TARGET}-fbs)
   endif ()
+
+  if (PLUGIN_BUILTINS)
+    set_source_files_properties(${PLUGIN_BUILTINS}
+                                PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+  endif ()
+
+  # Share one plugin donor across plugin object targets. The donor only sees
+  # the public libtenzir interface plus tenzir::internal, so it avoids
+  # libtenzir's private compile definitions that invalidate the PCH elsewhere.
+  tenzirconfigurepchreuse(
+    ${PLUGIN_TARGET}
+    BINARY_DIR
+    "${CMAKE_BINARY_DIR}"
+    DONOR_TARGET
+    tenzir_plugins__pch
+    LINK_LIBRARIES
+    tenzir::libtenzir
+    tenzir::internal)
 
   # Install an example configuration file, if it exists at the plugin project
   # root.

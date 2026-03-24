@@ -13,7 +13,7 @@
 
 namespace tenzir {
 
-auto to_string(data_view v, location loc, diagnostic_handler& dh)
+auto to_string(data_view3 v, location loc, diagnostic_handler& dh)
   -> std::optional<std::string>;
 
 /// Converts the given series into strings, using TQL-style printing.

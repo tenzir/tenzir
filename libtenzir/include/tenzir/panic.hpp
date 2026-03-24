@@ -9,8 +9,8 @@
 #pragma once
 
 #include "tenzir/config.hpp"
+#include "tenzir/detail/boost_stacktrace.hpp"
 
-#include <boost/stacktrace/stacktrace.hpp>
 #include <fmt/format.h>
 
 #include <dlfcn.h>

@@ -608,6 +608,8 @@ struct data_view2
   }
 };
 
+class data_view3;
+
 } // namespace tenzir
 
 namespace std {
@@ -619,6 +621,8 @@ struct hash<tenzir::data_view> {
   auto operator()(const tenzir::data_view& x) const {
     return tenzir::hash(x);
   }
+
+  auto operator()(tenzir::data_view3) const -> std::size_t;
 
   auto operator()(const tenzir::data& x) const {
     // The hash computation for `data` and `data_view` is subtly different when
@@ -641,10 +645,10 @@ struct equal_to<tenzir::data_view> {
   template <class Lhs, class Rhs>
   constexpr bool operator()(const Lhs& lhs, const Rhs& rhs) const
     noexcept(noexcept(lhs == rhs)) {
-    static_assert(
-      tenzir::detail::is_any_v<Lhs, tenzir::data, tenzir::data_view>);
-    static_assert(
-      tenzir::detail::is_any_v<Rhs, tenzir::data, tenzir::data_view>);
+    static_assert(tenzir::detail::is_any_v<Lhs, tenzir::data, tenzir::data_view,
+                                           tenzir::data_view3>);
+    static_assert(tenzir::detail::is_any_v<Rhs, tenzir::data, tenzir::data_view,
+                                           tenzir::data_view3>);
     return lhs == rhs;
   }
 };

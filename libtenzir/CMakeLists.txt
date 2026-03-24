@@ -279,11 +279,11 @@ add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
-# Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
-# that libtenzir is considered to have an unstable API and ABI. The +7 is a
-# remnant of Tenzir using CalVer before 2022, with the last CalVer release having
-# the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger SOVERSION than
-# the last CalVer release.
+# Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to
+# indicate that libtenzir is considered to have an unstable API and ABI. The +7
+# is a remnant of Tenzir using CalVer before 2022, with the last CalVer release
+# having the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger
+# SOVERSION than the last CalVer release.
 math(EXPR TENZIR_SOVERSION_MAJOR
      "256 * (${Tenzir_VERSION_MAJOR} + 7) + ${Tenzir_VERSION_MINOR}")
 set(TENZIR_SOVERSION_MINOR "${Tenzir_VERSION_PATCH}")
@@ -651,21 +651,27 @@ if (LINUX)
   # Use a compiled stacktrace_backtrace if available, otherwise use header only
   # mode.
   if (TARGET Boost::stacktrace_backtrace)
-    target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
-    target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(Boost REQUIRED COMPONENTS stacktrace_backtrace)")
+    set(TENZIR_USE_BOOST_STACKTRACE_LINK 1)
+    set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 0)
+    target_link_libraries(libtenzir PUBLIC Boost::stacktrace_backtrace)
   else ()
     find_package(libbacktrace REQUIRED)
-    target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace dl)
-    target_compile_definitions(libtenzir
-                               PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(libbacktrace REQUIRED)")
+    set(TENZIR_USE_BOOST_STACKTRACE_LINK 0)
+    set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 1)
+    target_link_libraries(libtenzir PUBLIC libbacktrace::libbacktrace)
   endif ()
 else ()
   find_package(Boost COMPONENTS stacktrace_basic)
-  target_link_libraries(libtenzir PRIVATE Boost::stacktrace_basic dl)
-  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(Boost REQUIRED COMPONENTS stacktrace_basic)")
+  set(TENZIR_USE_BOOST_STACKTRACE_LINK 1)
+  set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 0)
+  target_link_libraries(libtenzir PUBLIC Boost::stacktrace_basic)
 endif ()
-target_compile_definitions(libtenzir
-                           PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
 
 if (NOT APPLE)
   target_link_libraries(libtenzir PRIVATE atomic)
@@ -738,6 +744,23 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
+
+tenzirconfigurepchreuse(
+  libtenzir
+  BINARY_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  DONOR_TARGET
+  libtenzir__pch
+  SOURCE_TARGET
+  libtenzir)
+tenzirconfigurepchreuse(
+  libtenzir_builtins
+  BINARY_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  DONOR_TARGET
+  libtenzir_builtins__pch
+  SOURCE_TARGET
+  libtenzir_builtins)
 
 # TODO: Should we move the bundled schemas to libtenzir?
 if (TARGET tenzir-schema)

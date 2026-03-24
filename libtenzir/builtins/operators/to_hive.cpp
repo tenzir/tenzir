@@ -266,7 +266,7 @@ public:
         auto key = list{};
         for (auto& partition_point : by) {
           TENZIR_ASSERT(row < partition_point.length());
-          key.push_back(materialize(partition_point.value_at(row)));
+          key.push_back(materialize(partition_point.view3_at(row)));
         }
         auto key_data = data{std::move(key)};
         auto it = groups.find(key_data);

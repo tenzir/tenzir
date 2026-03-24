@@ -274,7 +274,7 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
       if (array.IsNull(row)) {
         TRY(builder.AppendNull());
       } else {
-        TRY(append_builder(ty, builder, value_at(ty, *array.storage(), row)));
+        TRY(append_builder(ty, builder, *view_at<Ty>(array, row)));
       }
     }
   } else if constexpr (std::same_as<Ty, record_type>) {

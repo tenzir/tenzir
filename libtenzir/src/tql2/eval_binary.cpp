@@ -137,7 +137,7 @@ struct BinOpKernel<ast::binary_op::add, secret_type, secret_type> {
 template <>
 struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
   using result = secret;
-  static auto evaluate(view<std::string> l, secret_view r)
+  static auto evaluate(view3<std::string> l, secret_view r)
     -> std::variant<result, const char*> {
     return r.with_prepended(l);
   }
@@ -146,7 +146,7 @@ struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
 template <>
 struct BinOpKernel<ast::binary_op::add, secret_type, string_type> {
   using result = secret;
-  static auto evaluate(secret_view l, view<std::string> r)
+  static auto evaluate(secret_view l, view3<std::string> r)
     -> std::variant<result, const char*> {
     return l.with_appended(r);
   }
@@ -352,7 +352,7 @@ template <ast::binary_op Op, basic_type L, basic_type R>
 struct BinOpKernel<Op, L, R> {
   using result = bool;
 
-  static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
+  static auto evaluate(view3<type_to_data_t<L>> l, view3<type_to_data_t<R>> r)
     -> std::variant<result, const char*> {
     if constexpr (std::same_as<secret_type, L>
                   or std::same_as<secret_type, R>) {
@@ -443,8 +443,8 @@ struct EvalBinOp<Op, L, R> {
         }
         continue;
       }
-      auto lv = value_at(L{}, l, i);
-      auto rv = value_at(R{}, r, i);
+      auto lv = *view_at<L>(l, i);
+      auto rv = *view_at<R>(r, i);
       auto res = kernel::evaluate(lv, rv);
       if (auto r = std::get_if<result>(&res)) {
         check(append_builder(result_type{}, *b, *r));
@@ -514,8 +514,8 @@ struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
         check(b.AppendNull());
         continue;
       }
-      auto ip = value_at(ip_type{}, l, i);
-      auto subnet = value_at(subnet_type{}, r, i);
+      auto ip = *view_at<ip_type>(l, i);
+      auto subnet = *view_at<subnet_type>(r, i);
       auto result = subnet.contains(ip);
       check(b.Append(result));
     }
@@ -535,9 +535,9 @@ struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
         check(b.AppendNull());
         continue;
       }
-      auto left_subnet = value_at(subnet_type{}, l, i);
-      auto right_subnet = value_at(subnet_type{}, r, i);
-      auto result = right_subnet.contains(left_subnet);
+      auto left_subnet = view_at<subnet_type>(l, i);
+      auto right_subnet = view_at<subnet_type>(r, i);
+      auto result = right_subnet->contains(*left_subnet);
       check(b.Append(result));
     }
     return finish(b);
@@ -587,7 +587,7 @@ struct EvalBinOp<Op, ip_type, ip_type> {
       } else if (ln && rn) {
         equal = true;
       } else {
-        equal = value_at(ip_type{}, l, i) == value_at(ip_type{}, r, i);
+        equal = *view_at<ip_type>(l, i) == *view_at<ip_type>(r, i);
       }
       b.UnsafeAppend(equal != invert);
     }
@@ -660,12 +660,12 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
                 }
               }
             } else {
-              auto lv = value_at(L{}, l, i);
+              auto lv = *view_at<L>(l, i);
               for (auto j = list_begin; j < list_end; ++j) {
                 if (values->IsNull(j)) {
                   continue;
                 }
-                auto rv = value_at(R{}, *values, j);
+                auto rv = *view_at<R>(*values, j);
                 if constexpr (integral_type<L> and integral_type<R>) {
                   found = std::cmp_equal(lv, rv);
                 } else if constexpr (requires { lv == rv; }) {
@@ -691,40 +691,84 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
   }
 };
 
+template <ast::binary_op Op, concrete_type L, concrete_type R>
+auto eval_op_typed(evaluator& self, const ast::binary_expr& x,
+                   const basic_series<L>& left, const basic_series<R>& right)
+  -> series {
+  if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
+    auto oa = EvalBinOp<Op, L, R>::eval(
+      *left.array, *right.array, [&](const char* w) {
+        diagnostic::warning("{}", w).primary(x).emit(self.ctx());
+      });
+    auto ot = type::from_arrow(*oa->type());
+    return series{std::move(ot), std::move(oa)};
+  } else {
+    diagnostic::warning("binary operator `{}` not implemented for `{}` and "
+                        "`{}`",
+                        x.op.inner, to_string(type_kind::of<L>),
+                        to_string(type_kind::of<R>))
+      .primary(x)
+      .hint("the result of this expression is `null`")
+      .emit(self.ctx());
+    return series::null(null_type{}, left.length());
+  }
+}
+
+#define TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(X)                                 \
+  X(null_type)                                                                 \
+  X(bool_type)                                                                 \
+  X(int64_type)                                                                \
+  X(uint64_type)                                                               \
+  X(double_type)                                                               \
+  X(duration_type)                                                             \
+  X(time_type)                                                                 \
+  X(string_type)                                                               \
+  X(ip_type)                                                                   \
+  X(subnet_type)                                                               \
+  X(enumeration_type)                                                          \
+  X(list_type)                                                                 \
+  X(map_type)                                                                  \
+  X(record_type)                                                               \
+  X(blob_type)                                                                 \
+  X(secret_type)
+
+template <ast::binary_op Op, concrete_type L>
+auto dispatch_eval_rhs(evaluator& self, const ast::binary_expr& x,
+                       const basic_series<L>& left, const series& right)
+  -> series {
+#define TENZIR_TQL2_DISPATCH_RHS(Type)                                         \
+  if (auto typed = right.as<Type>()) {                                         \
+    return eval_op_typed<Op>(self, x, left, *typed);                           \
+  }
+  TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_RHS);
+#undef TENZIR_TQL2_DISPATCH_RHS
+  TENZIR_UNREACHABLE();
+}
+
+template <ast::binary_op Op>
+auto dispatch_eval_binary(evaluator& self, const ast::binary_expr& x,
+                          const series& left, const series& right) -> series {
+#define TENZIR_TQL2_DISPATCH_LHS(Type)                                         \
+  if (auto typed = left.as<Type>()) {                                          \
+    return dispatch_eval_rhs<Op>(self, x, *typed, right);                      \
+  }
+  TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_LHS);
+#undef TENZIR_TQL2_DISPATCH_LHS
+  TENZIR_UNREACHABLE();
+}
+
+#undef TENZIR_TQL2_DISPATCH_CONCRETE_TYPES
+
 template <ast::binary_op Op>
 auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
   TENZIR_ASSERT_EQ(x.op.inner, Op);
   auto left = self.eval(x.left);
   auto right = self.eval(x.right);
   TENZIR_ASSERT_EQ(left.length(), right.length());
-  return map_series(
-    std::move(left), std::move(right), [&](series left, series right) {
-      return match(
-        std::tie(left.type, right.type),
-        [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
-          if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
-            using LA = type_to_arrow_array_t<L>;
-            using RA = type_to_arrow_array_t<R>;
-            auto& la = as<LA>(*left.array);
-            auto& ra = as<RA>(*right.array);
-            auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
-              diagnostic::warning("{}", w).primary(x).emit(self.ctx());
-            });
-            auto ot = type::from_arrow(*oa->type());
-            return series{std::move(ot), std::move(oa)};
-          } else {
-            // TODO: Not possible?
-            // TODO: Where coercion? => coercion is done in kernel.
-            diagnostic::warning("binary operator `{}` not implemented for `{}` "
-                                "and `{}`",
-                                x.op.inner, left.type.kind(), right.type.kind())
-              .primary(x)
-              .hint("the result of this expression is `null`")
-              .emit(self.ctx());
-            return series::null(null_type{}, left.length());
-          }
-        });
-    });
+  return map_series(std::move(left), std::move(right),
+                    [&](series left, series right) {
+                      return dispatch_eval_binary<Op>(self, x, left, right);
+                    });
 }
 
 template <ast::binary_op Op>

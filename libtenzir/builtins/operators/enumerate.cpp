@@ -45,7 +45,8 @@ struct EnumerateArgs {
 
 using GroupMap = tsl::robin_map<data, int64_t>;
 
-auto find_group(GroupMap& groups, data_view const value) -> GroupMap::iterator {
+auto find_group(GroupMap& groups, data_view3 const value)
+  -> GroupMap::iterator {
   auto key = materialize(value);
   auto it = groups.find(key);
   match(

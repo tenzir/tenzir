@@ -12,6 +12,7 @@
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -232,7 +233,7 @@ auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
             : check(arrow::compute::CeilTemporal(array, std::move(opts)))
                 .template array_as<arrow::TimestampArray>();
       TENZIR_ASSERT(result->length() == 1);
-      return ast::constant{value_at(time_type{}, *result, 0), loc};
+      return ast::constant{*view_at<time_type>(*result, 0), loc};
     },
     [&](auto const& d) -> failure_or<ast::constant> {
       return ast::constant{d, loc};
@@ -388,7 +389,7 @@ private:
           }
           return std::string{};
         }
-        return std::string{value_at(string_type{}, *gs.array, idx)};
+        return std::string{*view_at<string_type>(*gs.array, idx)};
       });
       auto [newb, new_bucket] = get_bucket(groups_, x, group_name, ctx);
       if (b != newb or new_bucket) {
@@ -590,7 +591,7 @@ private:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(std::map<data, GroupedBucket>& map, data_view const& x,
+  auto get_groups(std::map<data, GroupedBucket>& map, data_view3 const& x,
                   session ctx) const -> GroupedBucket* {
     auto const xv = materialize(x);
     if (auto it = map.find(xv); it != map.end()) {
@@ -608,7 +609,7 @@ private:
     return &map[xv];
   }
 
-  auto get_bucket(std::map<data, GroupedBucket>& map, data_view const& x,
+  auto get_bucket(std::map<data, GroupedBucket>& map, data_view3 const& x,
                   std::string const& group, session ctx) const
     -> std::pair<Bucket*, bool> {
     if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {

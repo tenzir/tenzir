@@ -193,10 +193,10 @@ private:
     // Find runs of same-bucket rows and push subslices.
     auto begin = int64_t{0};
     while (begin < num_rows) {
-      auto bucket = std::hash<data_view>{}(values.value_at(begin)) % jobs_;
+      auto bucket = std::hash<data_view3>{}(values.view3_at(begin)) % jobs_;
       auto end = begin + 1;
       while (end < num_rows
-             and std::hash<data_view>{}(values.value_at(end)) % jobs_
+             and std::hash<data_view3>{}(values.view3_at(end)) % jobs_
                    == bucket) {
         ++end;
       }

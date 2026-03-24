@@ -38,7 +38,7 @@ public:
       }
       for (int64_t i = 0; i < arg.array->length(); ++i) {
         if (arg.array->IsValid(i)) {
-          const auto& view = value_at(arg.type, *arg.array, i);
+          const auto view = view_at(*arg.array, i);
           auto it = counts_.find(view);
           if (it == counts_.end()) {
             counts_.emplace_hint(it, materialize(view), 1);
