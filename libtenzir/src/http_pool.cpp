@@ -165,21 +165,19 @@ auto HttpPool::post(std::string body,
     [](std::shared_ptr<Impl> impl, std::string body,
        std::map<std::string, std::string> headers)
       -> Task<Result<HttpResponse, std::string>> {
-      co_return (
-        co_await async_try(
-          std::invoke([&]() -> Task<HttpResponse> {
-            auto sr = co_await impl->pool->getSessionWithReservation();
-            TENZIR_ASSERT_ALWAYS(sr.session);
-            auto* source
-              = make_request_source(impl->url, proxygen::HTTPMethod::POST,
-                                    std::move(headers), std::move(body));
-            auto resp = proxygen::coro::HTTPClient::Response{};
-            co_await proxygen::coro::HTTPClient::request(
-              sr.session, std::move(sr.reservation), source,
-              proxygen::coro::HTTPClient::makeDefaultReader(resp),
-              impl->config.request_timeout);
-            co_return to_http_response(resp);
-          })))
+      co_return (co_await async_try(std::invoke([&]() -> Task<HttpResponse> {
+        auto sr = co_await impl->pool->getSessionWithReservation();
+        TENZIR_ASSERT_ALWAYS(sr.session);
+        auto* source
+          = make_request_source(impl->url, proxygen::HTTPMethod::POST,
+                                std::move(headers), std::move(body));
+        auto resp = proxygen::coro::HTTPClient::Response{};
+        co_await proxygen::coro::HTTPClient::request(
+          sr.session, std::move(sr.reservation), source,
+          proxygen::coro::HTTPClient::makeDefaultReader(resp),
+          impl->config.request_timeout);
+        co_return to_http_response(resp);
+      })))
         .map_err([](folly::exception_wrapper const& e) {
           return e.what().toStdString();
         });
@@ -197,34 +195,32 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
        std::map<std::string, std::string> headers,
        std::chrono::milliseconds timeout)
       -> Task<Result<HttpResponse, std::string>> {
-      co_return (
-        co_await async_try([&]() -> Task<HttpResponse> {
-          auto parsed = proxygen::URL{url};
-          if (not parsed.isValid() or not parsed.hasHost()) {
-            throw std::runtime_error(fmt::format("invalid url: {}", url));
+      co_return (co_await async_try([&]() -> Task<HttpResponse> {
+        auto parsed = proxygen::URL{url};
+        if (not parsed.isValid() or not parsed.hasHost()) {
+          throw std::runtime_error(fmt::format("invalid url: {}", url));
+        }
+        auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
+          evb, parsed.getHost(), parsed.getPort(), parsed.isSecure(), false,
+          timeout, timeout);
+        auto holder = session->acquireKeepAlive();
+        SCOPE_EXIT {
+          if (auto* s = holder.get()) {
+            s->initiateDrain();
           }
-          auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
-            evb, parsed.getHost(), parsed.getPort(), parsed.isSecure(), false,
-            timeout, timeout);
-          auto holder = session->acquireKeepAlive();
-          SCOPE_EXIT {
-            if (auto* s = holder.get()) {
-              s->initiateDrain();
-            }
-          };
-          auto reservation = session->reserveRequest();
-          if (reservation.hasException()) {
-            co_yield folly::coro::co_error(std::move(reservation.exception()));
-          }
-          auto* source
-            = make_request_source(parsed, proxygen::HTTPMethod::POST,
-                                  std::move(headers), std::move(body));
-          auto resp = proxygen::coro::HTTPClient::Response{};
-          co_await proxygen::coro::HTTPClient::request(
-            session, std::move(*reservation), source,
-            proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
-          co_return to_http_response(resp);
-        }()))
+        };
+        auto reservation = session->reserveRequest();
+        if (reservation.hasException()) {
+          co_yield folly::coro::co_error(std::move(reservation.exception()));
+        }
+        auto* source = make_request_source(parsed, proxygen::HTTPMethod::POST,
+                                           std::move(headers), std::move(body));
+        auto resp = proxygen::coro::HTTPClient::Response{};
+        co_await proxygen::coro::HTTPClient::request(
+          session, std::move(*reservation), source,
+          proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
+        co_return to_http_response(resp);
+      }()))
         .map_err([](folly::exception_wrapper const& e) {
           return e.what().toStdString();
         });

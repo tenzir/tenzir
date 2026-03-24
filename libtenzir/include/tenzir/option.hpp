@@ -140,19 +140,21 @@ public:
 
   /// Constructs from another option while preserving the outer shape.
   template <class U>
-    requires(not std::is_reference_v<T> and not detail::is_option_v<std::remove_cvref_t<T>>
+    requires(not std::is_reference_v<T>
+             and not detail::is_option_v<std::remove_cvref_t<T>>
              and std::constructible_from<T, U const&>)
-  explicit(not std::convertible_to<U const&, T>) Option(Option<U> const& other)
-    noexcept(std::is_nothrow_constructible_v<T, U const&>
-             and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
-    : storage_{other.is_some()
-                 ? std::optional<T>{std::in_place, *other}
-                 : std::optional<T>{}} {
+  explicit(not std::convertible_to<U const&, T>)
+    Option(Option<U> const& other) noexcept(
+      std::is_nothrow_constructible_v<T, U const&>
+      and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
+    : storage_{other.is_some() ? std::optional<T>{std::in_place, *other}
+                               : std::optional<T>{}} {
   }
 
   /// Constructs from another option while preserving the outer shape.
   template <class U>
-    requires(not std::is_reference_v<T> and not detail::is_option_v<std::remove_cvref_t<T>>
+    requires(not std::is_reference_v<T>
+             and not detail::is_option_v<std::remove_cvref_t<T>>
              and std::constructible_from<T, U>)
   explicit(not std::convertible_to<U, T>) Option(Option<U>&& other) noexcept(
     std::is_nothrow_constructible_v<T, U>
@@ -181,7 +183,6 @@ public:
     std::is_nothrow_constructible_v<Storage, std::optional<U>>)
     : storage_{std::move(opt)} {
   }
-
 
   // -- Assignment -------------------------------------------------------------
 

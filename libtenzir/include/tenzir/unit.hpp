@@ -36,7 +36,7 @@ auto unit_to_void(T&& value) -> UnitToVoid<T> {
 /// Forwards a value, converting `void` to `Unit`.
 ///
 /// This takes a function to invoke as there are no `void` parameters.
-template<class F>
+template <class F>
 auto void_to_unit(F&& f) -> VoidToUnit<std::invoke_result_t<F>> {
   if constexpr (std::is_void_v<std::invoke_result_t<F>>) {
     std::invoke(std::forward<F>(f));

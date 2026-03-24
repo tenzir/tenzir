@@ -16,9 +16,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <folly/coro/BoundedQueue.h>
-
 #include <arrow/type.h>
+#include <folly/coro/BoundedQueue.h>
 
 #include <limits>
 #include <string>
@@ -32,7 +31,7 @@ auto empty(const table_slice& slice) -> bool {
 }
 
 auto empty(const chunk_ptr& chunk) -> bool {
-  return !chunk || chunk->size() == 0;
+  return ! chunk || chunk->size() == 0;
 }
 
 class repeat_operator final : public crtp_operator<repeat_operator> {

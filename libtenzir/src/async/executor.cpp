@@ -269,8 +269,7 @@ struct SubMessage {
 struct SubPipeline {
   SubPipeline(AnyOpPush push, Receiver<Checkpoint> from_sub,
               Sender<FromControl> from_control_sender,
-              Receiver<ToControl> to_control_receiver,
-              element_type_tag input)
+              Receiver<ToControl> to_control_receiver, element_type_tag input)
     : push{Option<AnyOpPush>{std::move(push)}},
       from_sub{std::move(from_sub)},
       from_control_sender{
@@ -979,8 +978,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), SubPipeline{std::move(push_sub), std::move(from_sub),
                                   std::move(from_control_sender),
-                                  std::move(to_control_receiver),
-                                  input});
+                                  std::move(to_control_receiver), input});
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -988,80 +986,79 @@ private:
     add_to_control_recv(it);
     // TODO: Where do we put this?
     TENZIR_ASSERT(operator_scope_);
-    operator_scope_->spawn(
-      [this, key = std::move(sub_key), runner = std::move(runner),
-       pull_sub = std::move(pull_sub),
-       to_parent = std::move(to_parent)]() mutable -> Task<void> {
-        // The main loop of the subpipeline (or combiner?).
-        using Event = variant<Terminated, Option<AnyOperatorMsg>>;
-        // TODO: Fully implement checkpointing with `allow_output`.
-        auto allow_output = true;
-        auto driver = SelectSet<Event>{};
-        co_await driver.activate([&] -> Task<void> {
-          auto add_pull = [&] {
-            driver.add(co_match(pull_sub,
-                                []<class Out>(Box<Pull<OperatorMsg<Out>>>& pull)
-                                  -> Task<Option<AnyOperatorMsg>> {
-                                  co_return Option<AnyOperatorMsg>{
-                                    co_await pull()};
-                                }));
-          };
-          add_pull();
-          driver.add([runner = std::move(runner)] mutable -> Task<Terminated> {
-            co_await std::move(runner);
-            co_return Terminated{};
-          });
-          while (auto next = co_await driver.next([&](Event const& event) {
-            // Block subpipeline output after receiving its checkpoint.
-            return allow_output or not is<Option<AnyOperatorMsg>>(event);
-          })) {
-            co_await co_match(
-              *next,
-              [&](Option<AnyOperatorMsg> output) -> Task<void> {
-                if (not output) {
-                  // Subpipeline closed its output channel.
-                  co_return;
-                }
-                TENZIR_ASSERT(allow_output);
-                co_await co_match(
-                  std::move(*output),
-                  [&](chunk_ptr output) -> Task<void> {
-                    co_await call_process_sub(make_view(key),
-                                              std::move(output));
-                  },
-                  [&](table_slice output) -> Task<void> {
-                    co_await call_process_sub(make_view(key),
-                                              std::move(output));
-                  },
-                  [&](Signal signal) -> Task<void> {
-                    co_await co_match(
-                      signal,
-                      [&](EndOfData) -> Task<void> {
-                        // We currently only notify the parent pipeline once the
-                        // pipeline terminates.
-                        co_return;
-                      },
-                      [&](Checkpoint checkpoint) -> Task<void> {
-                        // Notify our parent that we got the checkpoint.
-                        co_await to_parent.send(std::move(checkpoint));
-                        // Block all future output until the checkpoint of the
-                        // parent operator is done.
-                        allow_output = false;
-                        co_return;
-                      });
-                  });
-                add_pull();
-              },
-              [&](Terminated) -> Task<void> {
-                // We wait with informing the parent until everything is done to
-                // ensure that we don't send anything anymore.
-                co_return;
-              });
-          }
-          // Now is the time to notify the parent. For now, this happens just by
-          // dropping `to_parent` and `to_control_sender`, closing the channels.
+    operator_scope_->spawn([this, key = std::move(sub_key),
+                            runner = std::move(runner),
+                            pull_sub = std::move(pull_sub),
+                            to_parent
+                            = std::move(to_parent)]() mutable -> Task<void> {
+      // The main loop of the subpipeline (or combiner?).
+      using Event = variant<Terminated, Option<AnyOperatorMsg>>;
+      // TODO: Fully implement checkpointing with `allow_output`.
+      auto allow_output = true;
+      auto driver = SelectSet<Event>{};
+      co_await driver.activate([&] -> Task<void> {
+        auto add_pull = [&] {
+          driver.add(co_match(pull_sub,
+                              []<class Out>(Box<Pull<OperatorMsg<Out>>>& pull)
+                                -> Task<Option<AnyOperatorMsg>> {
+                                co_return Option<AnyOperatorMsg>{
+                                  co_await pull()};
+                              }));
+        };
+        add_pull();
+        driver.add([runner = std::move(runner)] mutable -> Task<Terminated> {
+          co_await std::move(runner);
+          co_return Terminated{};
         });
+        while (auto next = co_await driver.next([&](Event const& event) {
+          // Block subpipeline output after receiving its checkpoint.
+          return allow_output or not is<Option<AnyOperatorMsg>>(event);
+        })) {
+          co_await co_match(
+            *next,
+            [&](Option<AnyOperatorMsg> output) -> Task<void> {
+              if (not output) {
+                // Subpipeline closed its output channel.
+                co_return;
+              }
+              TENZIR_ASSERT(allow_output);
+              co_await co_match(
+                std::move(*output),
+                [&](chunk_ptr output) -> Task<void> {
+                  co_await call_process_sub(make_view(key), std::move(output));
+                },
+                [&](table_slice output) -> Task<void> {
+                  co_await call_process_sub(make_view(key), std::move(output));
+                },
+                [&](Signal signal) -> Task<void> {
+                  co_await co_match(
+                    signal,
+                    [&](EndOfData) -> Task<void> {
+                      // We currently only notify the parent pipeline once the
+                      // pipeline terminates.
+                      co_return;
+                    },
+                    [&](Checkpoint checkpoint) -> Task<void> {
+                      // Notify our parent that we got the checkpoint.
+                      co_await to_parent.send(std::move(checkpoint));
+                      // Block all future output until the checkpoint of the
+                      // parent operator is done.
+                      allow_output = false;
+                      co_return;
+                    });
+                });
+              add_pull();
+            },
+            [&](Terminated) -> Task<void> {
+              // We wait with informing the parent until everything is done to
+              // ensure that we don't send anything anymore.
+              co_return;
+            });
+        }
+        // Now is the time to notify the parent. For now, this happens just by
+        // dropping `to_parent` and `to_control_sender`, closing the channels.
       });
+    });
     co_return it->second.get_handle();
   }
 
@@ -1579,10 +1576,10 @@ private:
       if (not sub.input.is<void>()) {
         auto push = std::exchange(sub.push, None{});
         if (push) {
-          co_await co_match(
-            *push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
-              return push(EndOfData{});
-            });
+          co_await co_match(*push,
+                            [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
+                              return push(EndOfData{});
+                            });
         }
       }
     }

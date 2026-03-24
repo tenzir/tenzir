@@ -200,8 +200,7 @@ auto async_scope(F&& f) -> Task<
     co_await folly::coro::co_current_cancellation_token,
     data.main_cancel_source.getToken());
   data.children_cancel_token = folly::cancellation_token_merge(
-    data.main_cancel_token,
-    data.children_cancel_source.getToken());
+    data.main_cancel_token, data.children_cancel_source.getToken());
   data.executor = co_await folly::coro::co_current_executor;
   auto scope = AsyncScope{data};
   LOGV("created scope {}", fmt::ptr(&scope));

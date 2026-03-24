@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -28,7 +29,6 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <tenzir/async/semaphore.hpp>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
