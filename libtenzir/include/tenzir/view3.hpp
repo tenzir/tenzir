@@ -455,44 +455,38 @@ private:
 
 auto make_view_wrapper(data_view2 x) -> view_wrapper;
 
-inline auto legacy_data_view_hash_type_tag(data_view3 v) noexcept -> uint8_t {
-  return match(v, [](auto value) -> uint8_t {
-    using T = std::decay_t<decltype(value)>;
-    if constexpr (std::same_as<T, caf::none_t>) {
-      return 0;
-    } else if constexpr (std::same_as<T, bool>) {
-      return 1;
-    } else if constexpr (std::same_as<T, int64_t>) {
-      return 2;
-    } else if constexpr (std::same_as<T, uint64_t>) {
-      return 3;
-    } else if constexpr (std::same_as<T, double>) {
-      return 4;
-    } else if constexpr (std::same_as<T, duration>) {
-      return 5;
-    } else if constexpr (std::same_as<T, time>) {
-      return 6;
-    } else if constexpr (std::same_as<T, std::string_view>) {
-      return 7;
-    } else if constexpr (std::same_as<T, ip>) {
-      return 9;
-    } else if constexpr (std::same_as<T, subnet>) {
-      return 10;
-    } else if constexpr (std::same_as<T, enumeration>) {
-      return 11;
-    } else if constexpr (std::same_as<T, list_view3>) {
-      return 12;
-    } else if constexpr (std::same_as<T, record_view3>) {
-      return 14;
-    } else if constexpr (std::same_as<T, blob_view>) {
-      return 15;
-    } else if constexpr (std::same_as<T, secret_view>) {
-      return 16;
-    } else {
-      static_assert(detail::always_false_v<T>, "unexpected data_view3 type");
-    }
-  });
-}
+template <class T>
+struct view3_to_data {
+  using type = T;
+};
+
+template <>
+struct view3_to_data<std::string_view> {
+  using type = std::string;
+};
+
+template <>
+struct view3_to_data<blob_view> {
+  using type = blob;
+};
+
+template <>
+struct view3_to_data<secret_view> {
+  using type = secret;
+};
+
+template <>
+struct view3_to_data<list_view3> {
+  using type = list;
+};
+
+template <>
+struct view3_to_data<record_view3> {
+  using type = record;
+};
+
+template <class T>
+using view3_to_data_t = typename view3_to_data<T>::type;
 
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, list_view3 l) noexcept {
@@ -514,9 +508,21 @@ void hash_append(HashAlgorithm& h, record_view3 r) noexcept {
 
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, data_view3 v) noexcept {
-  auto type_tag = legacy_data_view_hash_type_tag(v);
-  hash_append(h, type_tag);
   match(v, [&](auto value) {
+    using T = std::decay_t<decltype(value)>;
+    using data_type = view3_to_data_t<T>;
+    constexpr auto type_tag = [] {
+      auto tag = data_to_type_t<data_type>::type_index;
+      // Legacy data/data_view hashing tags do not include the internal
+      // enriched_type schema slot, so blob/secret must be shifted back by one
+      // to stay compatible with heterogeneous lookups against data keys.
+      if constexpr (std::same_as<data_type, blob>
+                    or std::same_as<data_type, secret>) {
+        --tag;
+      }
+      return tag;
+    }();
+    hash_append(h, type_tag);
     hash_append(h, value);
   });
 }
