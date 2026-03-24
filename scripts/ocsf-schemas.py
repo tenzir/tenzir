@@ -63,6 +63,9 @@ RECURSIVE_FIELDS: dict[str, dict[str, str]] = {
     "analytic": {"related_analytics": "analytic"},
     "user": {"ldap_person": "ldap_person"},
 }
+MODERN_ATTRIBUTE_FIXUPS: dict[tuple[str, str], dict[str, str]] = {
+    ("process", "auid"): {"extension": "linux"},
+}
 Schema = dict[str, typing.Any]
 TypeMap = dict[str, str]
 
@@ -84,17 +87,105 @@ def log_section(msg: str):
 
 
 def load_schema(version: Optional[str] = None) -> Schema:
-    url = SERVER
+    base_url = SERVER
     if version is not None:
-        url += "/" + version
-    url += "/export/schema"
+        base_url += "/" + version
+    legacy_url = base_url + "/export/schema"
+    modern_url = base_url + "/export/v2/schema"
+
+    response = _get_json(legacy_url)
+    if response.status_code == 200:
+        return response.json()
+    if response.status_code != 400:
+        response.raise_for_status()
+    error = response.json().get("error")
+    if not isinstance(error, str) or "legacy format" not in error:
+        raise ValueError(f"failed to fetch schema from {legacy_url}: {error!r}")
+    log("Legacy export failed, retrying with modern export format")
+    response = _get_json(modern_url)
+    response.raise_for_status()
+    return normalize_modern_schema(response.json())
+
+
+def _get_json(url: str) -> requests.Response:
     log(f"Fetching schema from {url}")
     for _ in range(5):
         try:
-            return requests.get(url, timeout=5).json()
-        except requests.exceptions.ConnectTimeout:
+            return requests.get(url, timeout=(5, 30))
+        except requests.exceptions.Timeout:
             pass
     raise TimeoutError
+
+
+def normalize_modern_schema(schema: Schema) -> Schema:
+    dictionary = schema.get("dictionary")
+    if not isinstance(dictionary, dict):
+        raise ValueError("modern schema is missing a dictionary section")
+    types = dictionary.get("types")
+    if not isinstance(types, dict):
+        raise ValueError("modern schema dictionary is missing types")
+    type_attributes = types.get("attributes")
+    if not isinstance(type_attributes, dict):
+        raise ValueError("modern schema dictionary types are missing attributes")
+    schema["types"] = type_attributes
+    extensions = schema.get("extensions")
+    if not isinstance(extensions, dict):
+        raise ValueError("modern schema is missing extensions")
+    extension_names = set(extensions)
+    for kind in ("classes", "objects"):
+        entities = schema.get(kind)
+        if not isinstance(entities, dict):
+            raise ValueError(f"modern schema is missing {kind}")
+        for entity_name, entity in entities.items():
+            normalize_profiles(entity_name, entity, extension_names)
+            apply_modern_attribute_fixups(entity_name, entity)
+    return schema
+
+
+def normalize_profiles(
+    entity_name: str, entity: dict, extension_names: set[str]
+) -> None:
+    attributes = entity.get("attributes")
+    if not isinstance(attributes, dict):
+        return
+    for attr_name, attr_def in attributes.items():
+        profiles = attr_def.get("profiles")
+        if not isinstance(profiles, list):
+            continue
+        if len(profiles) == 1:
+            attr_def["profile"] = profiles[0]
+            continue
+        if len(profiles) > 1:
+            attr_def["profiles"] = "|".join(profiles)
+            profile_extensions = [
+                f"{profile}:{extension}"
+                for profile in profiles
+                if (extension := infer_profile_extension(profile, extension_names))
+                is not None
+            ]
+            if len(profile_extensions) == len(profiles):
+                attr_def["profile_extensions"] = "|".join(profile_extensions)
+
+
+def infer_profile_extension(profile: str, extension_names: set[str]) -> Optional[str]:
+    extension, _, _ = profile.partition("/")
+    if extension in extension_names:
+        return extension
+    return None
+
+
+def apply_modern_attribute_fixups(entity_name: str, entity: dict) -> None:
+    attributes = entity.get("attributes")
+    if not isinstance(attributes, dict):
+        return
+    for attr_name, fixups in MODERN_ATTRIBUTE_FIXUPS.items():
+        if attr_name[0] != entity_name:
+            continue
+        attr_def = attributes.get(attr_name[1])
+        if not isinstance(attr_def, dict):
+            continue
+        for key, value in fixups.items():
+            attr_def.setdefault(key, value)
 
 
 def patch_types(schema: Schema) -> None:
@@ -217,9 +308,15 @@ def _emit_entity(
         attributes = f" #{requirement}"
         if profile is not None:
             attributes += f" #profile={profile}"
+        profiles = attr_def.get("profiles")
+        if isinstance(profiles, str):
+            attributes += f" #profiles={profiles}"
         extension = attr_def.get("extension")
         if extension is not None:
             attributes += f" #extension={extension}"
+        profile_extensions = attr_def.get("profile_extensions")
+        if isinstance(profile_extensions, str):
+            attributes += f" #profile_extensions={profile_extensions}"
         if not objects and attr_name == "unmapped":
             attributes += " #nullify_empty_records"
         if "enum" in attr_def:
@@ -239,7 +336,6 @@ def _emit_entity(
 
 def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
     name = "objects" if objects else "classes"
-    types = schema["types"]
     first = True
     for _, entity in sorted(schema[name].items()):
         # For classes, we do not use the given entity name, but instead derive
@@ -406,12 +502,18 @@ def exclude_version(version: str) -> bool:
 
 def fetch_versions() -> list[str]:
     log(f"Fetching available versions from {SERVER}")
-    body = requests.get(SERVER).content.decode()
-    return sorted(
+    response = requests.get(SERVER, timeout=(5, 30))
+    response.raise_for_status()
+    versions = sorted(
         version
-        for version in re.findall("<option value=[^>]*>v([^<]*)</option>", body)
+        for version in re.findall(
+            "<option value=[^>]*>v([^<]*)</option>", response.text
+        )
         if not exclude_version(version)
     )
+    if not versions:
+        raise ValueError(f"failed to parse any OCSF versions from {SERVER}")
+    return versions
 
 
 def delete_schemas() -> None:

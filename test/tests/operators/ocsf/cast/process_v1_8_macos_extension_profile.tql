@@ -1,0 +1,12 @@
+// macOS profile with the matching macOS extension enabled.
+// Expect `process.egid` and `process.euid` to be preserved.
+from {
+  metadata: {
+    version: "1.8.0",
+    extensions: [{name: "macos"}],
+    profiles: ["macos/macos_users"],
+  },
+  class_uid: 1007,
+  process: { egid: 0, euid: 1 }
+}
+ocsf::cast null_fill=true

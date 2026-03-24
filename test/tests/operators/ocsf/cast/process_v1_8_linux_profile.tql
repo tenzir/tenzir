@@ -1,0 +1,12 @@
+// Linux profile without the linux extension.
+// Expect `process.auid`, `process.egid`, and `process.euid` to be dropped,
+// with diagnostics explaining the missing extension / profile-extension pair.
+from {
+  metadata: {
+    version: "1.8.0",
+    profiles: ["linux/linux_users"],
+  },
+  class_uid: 1007,
+  process: { auid: 0, egid: 1, euid: 2 }
+}
+ocsf::cast null_fill=true
