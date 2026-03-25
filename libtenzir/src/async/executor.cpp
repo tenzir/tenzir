@@ -1333,7 +1333,7 @@ private:
       phase_ = Phase::stopping_forced;
     } else if (phase_ == Phase::running) {
       phase_ = Phase::stopping_gracefully;
-    } else if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
+    } else {
       co_return;
     }
     LOGV("running done in {}", op_name());
