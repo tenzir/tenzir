@@ -44,7 +44,14 @@ namespace {
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
-  return value_at(time_type{}, *time_col, time_col->length() - 1);
+  if (not time_col || time_col->length() == 0) {
+    return time{};
+  }
+  auto const row = time_col->length() - 1;
+  if (time_col->IsNull(row)) {
+    return time{};
+  }
+  return *view_at<time_type>(*time_col, row);
 }
 
 /// Extract event column from record batch and transform into new record batch.
@@ -658,7 +665,7 @@ private:
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<feather_parser>> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<parser_adapter<feather_parser>>(feather_parser{});
@@ -672,7 +679,7 @@ public:
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<feather_printer>> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto options = feather_options{};
     TRY(argument_parser2::operator_(name())

@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::tune {
@@ -125,13 +126,13 @@ private:
 
 class plugin final : public virtual operator_plugin2<tune_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = tune_args{};
     // TODO: This is only optional because of a bug in the argument parser,
     // which fails for operators that have no positional arguments except for a
     // required pipeline, and have at least one named argument.
-    auto pipe = std::optional<pipeline>{};
+    auto pipe = std::optional<located<pipeline>>{};
     auto parser = argument_parser2::operator_(name());
     parser.named("idle_after", args.idle_after);
     parser.named("min_demand_elements", args.min_demand_elements);
@@ -221,7 +222,7 @@ public:
     if (failed) {
       return failure::promise();
     }
-    auto ops = std::move(*pipe).unwrap();
+    auto ops = std::move(pipe->inner).unwrap();
     for (auto& op : ops) {
       op = std::make_unique<tune_operator>(std::move(op), args);
     }

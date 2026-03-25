@@ -1,0 +1,12 @@
+// Create table with schema {id, x, y}.
+from {id: 0, x: 100, y: "hello"}
+repeat 5000
+batch
+enumerate id
+to_clickhouse table="test_drift",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

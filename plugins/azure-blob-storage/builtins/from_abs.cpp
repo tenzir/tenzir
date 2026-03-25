@@ -12,6 +12,7 @@
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -228,6 +229,11 @@ protected:
           .primary(args_.url)
           .note("{}", e.what())
           .emit(dh);
+      } catch (Azure::Core::Http::TransportException const& e) {
+        diagnostic::warning("failed to delete `{}`", path)
+          .primary(args_.url)
+          .note("{}", e.what())
+          .emit(dh);
       }
     });
   }
@@ -239,7 +245,7 @@ private:
 
 class from_abs final : public operator_plugin2<from_abs_operator>,
                        public OperatorPlugin {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_abs_args{};
     auto p = argument_parser2::operator_(name());

@@ -62,6 +62,23 @@
 
 namespace tenzir {
 
+// -- operator_parser_plugin ---------------------------------------------------
+
+auto operator_parser_plugin::make_operator(std::string_view pipeline) const
+  -> std::pair<std::string_view, caf::expected<operator_ptr>> {
+  return {pipeline,
+          caf::make_error(ec::unspecified, "this operator does not support "
+                                           "the legacy parsing API")};
+}
+
+auto operator_parser_plugin::parse_operator(parser_interface& p) const
+  -> operator_ptr {
+  // TODO: Remove this default implementation and adjust `parser.cpp`
+  // accordingly when all operators are converted.
+  (void)p;
+  return nullptr;
+}
+
 // -- plugin singleton ---------------------------------------------------------
 
 namespace plugins {

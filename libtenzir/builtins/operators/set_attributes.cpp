@@ -8,6 +8,7 @@
 
 #include <tenzir/cast.hpp>
 #include <tenzir/parser_interface.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 namespace tenzir::plugins::set_attributes {

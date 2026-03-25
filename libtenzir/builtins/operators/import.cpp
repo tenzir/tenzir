@@ -17,6 +17,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
@@ -275,7 +276,7 @@ public:
     return std::make_unique<import_operator>();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("import").parse(inv, ctx).ignore();
     return std::make_unique<import_operator>();

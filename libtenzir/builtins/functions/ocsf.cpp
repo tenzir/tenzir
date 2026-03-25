@@ -11,6 +11,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/ocsf.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::ocsf {
@@ -35,7 +36,7 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name_)

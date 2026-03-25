@@ -21,6 +21,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/api.h>
 
@@ -1295,6 +1296,64 @@ auto builder_ref::try_data(data_view2 value) -> caf::expected<void> {
   return std::visit(f, value);
 }
 
+template <std::same_as<data_view3> T>
+auto builder_ref::try_data(T value) -> caf::expected<void> {
+  auto f = detail::overload{
+    [&](view3<tenzir::record> r) -> caf::expected<void> {
+      return try_data(r);
+    },
+    [&](view3<tenzir::list> l) -> caf::expected<void> {
+      return try_data(l);
+    },
+    [&]<atom_view_type AT>(const AT& x) -> caf::expected<void> {
+      return try_atom(x);
+    },
+  };
+  return match(value, f);
+}
+
+template <std::same_as<data_view3> T>
+void builder_ref::data(T value) {
+  auto result = try_data(std::move(value));
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
+}
+
+template auto builder_ref::try_data<data_view3>(data_view3)
+  -> caf::expected<void>;
+template void builder_ref::data<data_view3>(data_view3);
+
+auto builder_ref::try_data(record_view3 value) -> caf::expected<void> {
+  auto rb = record();
+  for (const auto& [k, v] : value) {
+    auto result = rb.field(k).try_data(v);
+    if (not result) {
+      return result.error();
+    }
+  }
+  return {};
+}
+
+auto builder_ref::try_data(list_view3 value) -> caf::expected<void> {
+  auto lb = list();
+  for (const auto& v : value) {
+    auto result = lb.try_data(v);
+    if (not result) {
+      return result.error();
+    }
+  }
+  return {};
+}
+
+void builder_ref::data(record_view3 value) {
+  auto result = try_data(value);
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
+}
+
+void builder_ref::data(list_view3 value) {
+  auto result = try_data(value);
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
+}
+
 auto builder_ref::list() -> builder_ref {
   return dispatch([&](auto& ref) {
     return ref.list();
@@ -1357,6 +1416,32 @@ auto series_builder::try_data(data_view2 value) -> caf::expected<void> {
 
 void series_builder::data(data_view2 value) {
   builder_ref{*this}.data(std::move(value));
+}
+
+template <std::same_as<data_view3> T>
+auto series_builder::try_data(T value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(std::move(value));
+}
+
+template <std::same_as<data_view3> T>
+void series_builder::data(T value) {
+  builder_ref{*this}.data(std::move(value));
+}
+
+template auto series_builder::try_data<data_view3>(data_view3)
+  -> caf::expected<void>;
+template void series_builder::data<data_view3>(data_view3);
+
+auto series_builder::try_data(record_view3 value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(value);
+}
+
+auto series_builder::try_data(list_view3 value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(value);
+}
+
+void series_builder::data(list_view3 value) {
+  builder_ref{*this}.data(value);
 }
 
 auto series_builder::record() -> record_ref {

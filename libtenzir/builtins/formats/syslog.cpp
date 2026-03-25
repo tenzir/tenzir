@@ -132,7 +132,7 @@ struct parameter_parser : parser_base<parameter_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using parsers::printable, parsers::rep, parsers::ch;
     // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
+    auto key = +(printable - '=' - ' ' - ']' - '"');
     // \ is used to escape characters.
     auto esc = ignore(ch<'\\'>);
     // ], ", \ must be escaped.
@@ -207,7 +207,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     using namespace parser_literals;
     // space, =, ", and ] are not allowed in the key of the parameter.
     auto key_char = printable - '='_p - ' '_p - ']'_p - '"'_p;
-    auto key = rep(key_char, 1, 32);
+    auto key = +key_char;
     auto checkpoint_key_char = key_char - ':'_p;
     auto non_terminal_colon = ch<':'> >> ! '"'_p;
     auto checkpoint_key
@@ -1245,10 +1245,10 @@ public:
         format_n("app_name", app, 48, args_.app_name);
         format_n("process_id", pid, 128, args_.process_id);
         format_n("message_id", mid, 32, args_.message_id);
-        if (sd and not sd->empty()) {
+        if (sd and sd->begin() != sd->end()) {
           fmt::format_to(it, " ");
           for (const auto& [name, val] : *sd) {
-            const auto* params = try_as<view<record>>(val);
+            const auto* params = try_as<view3<record>>(val);
             if (not params) {
               diagnostic::warning(
                 "structured data `{}` must be of type `record`", name)
@@ -1276,7 +1276,7 @@ public:
     }
   }
 
-  auto format_val(auto& it, std::string_view k, data_view v,
+  auto format_val(auto& it, std::string_view k, data_view3 v,
                   diagnostic_handler& dh) const -> void {
     match(
       v,
@@ -1286,19 +1286,13 @@ public:
       [&](const concepts::integer auto& x) {
         fmt::format_to(it, "\"{}\"", x);
       },
-      [&](const view<map>&) {
-        TENZIR_UNREACHABLE();
-      },
-      [&](const pattern_view&) {
-        TENZIR_UNREACHABLE();
-      },
-      [&](const view<record>&) {
+      [&](const view3<record>&) {
         diagnostic::warning("`structured_data` field `{}` has type `record`", k)
           .primary(args_.loc(args_.structured_data))
           .emit(dh);
         fmt::format_to(it, "\"\"");
       },
-      [&](const view<list>&) {
+      [&](const view3<list>&) {
         diagnostic::warning("`structured_data` field `{}` has type `list`", k)
           .primary(args_.loc(args_.structured_data))
           .emit(dh);
@@ -1327,7 +1321,7 @@ public:
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh,
                auto make_default) const
-    -> generator<std::optional<view<type_to_data_t<T>>>> {
+    -> generator<std::optional<view3<type_to_data_t<T>>>> {
     auto ms = std::invoke([&] {
       if (expr.get_location()) {
         return eval(expr, slice, dh);
@@ -1345,7 +1339,7 @@ public:
       if (s.type.kind().template is<T>()) {
         for (auto val : s.template values<T>()) {
           if (val) {
-            co_yield std::move(val);
+            co_yield std::move(*val);
           } else {
             co_yield make_default();
           }
@@ -1390,7 +1384,7 @@ public:
   template <typename T>
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh) const
-    -> generator<std::optional<view<type_to_data_t<T>>>> {
+    -> generator<std::optional<view3<type_to_data_t<T>>>> {
     return eval_as<T>(name, expr, slice, dh, [] {
       return std::nullopt;
     });
@@ -1436,7 +1430,7 @@ public:
 
 class read_syslog final
   : public virtual operator_plugin2<parser_adapter<syslog_parser>> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
     bool octet_counting = false;
@@ -1462,7 +1456,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // nullopt = auto-detect: try octet-counting first, fall back to plain syslog
@@ -1735,7 +1729,7 @@ public:
 };
 
 class write_syslog final : public operator_plugin2<syslog_printer> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.op = inv.self.get_location();

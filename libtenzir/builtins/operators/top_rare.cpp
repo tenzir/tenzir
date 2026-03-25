@@ -34,7 +34,7 @@ class top_rare_plugin final : public virtual operator_factory_plugin {
     return Mode == mode::top ? "top" : "rare";
   }
 
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto selector = ast::field_path{};
     const auto loc = inv.self.get_location();

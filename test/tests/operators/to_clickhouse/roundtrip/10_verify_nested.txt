@@ -1,0 +1,5 @@
+total=5000
+id	Int64
+meta	Tuple(\n    source Nullable(String),\n    location Tuple(\n        building Nullable(String),\n        floor Nullable(Int64)))
+reading	Nullable(Float64)
+ok

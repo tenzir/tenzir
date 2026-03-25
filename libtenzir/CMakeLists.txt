@@ -279,11 +279,11 @@ add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
-# Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
-# that libtenzir is considered to have an unstable API and ABI. The +7 is a
-# remnant of Tenzir using CalVer before 2022, with the last CalVer release having
-# the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger SOVERSION than
-# the last CalVer release.
+# Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to
+# indicate that libtenzir is considered to have an unstable API and ABI. The +7
+# is a remnant of Tenzir using CalVer before 2022, with the last CalVer release
+# having the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger
+# SOVERSION than the last CalVer release.
 math(EXPR TENZIR_SOVERSION_MAJOR
      "256 * (${Tenzir_VERSION_MAJOR} + 7) + ${Tenzir_VERSION_MINOR}")
 set(TENZIR_SOVERSION_MINOR "${Tenzir_VERSION_PATCH}")
@@ -539,10 +539,32 @@ if (_tenzir_folly_include_dirs)
   target_include_directories(libtenzir_builtins BEFORE
                              PRIVATE ${_tenzir_folly_include_dirs})
 endif ()
+if (TARGET proxygen::proxygen_coro_client)
+  set(_tenzir_proxygen_target proxygen::proxygen_coro_client)
+elseif (TARGET proxygen::proxygen)
+  set(_tenzir_proxygen_target proxygen::proxygen)
+else ()
+  message(FATAL_ERROR "No supported proxygen target found")
+endif ()
+# Ensure bundled proxygen headers win over Homebrew's proxygen headers. The
+# bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
+# requirements propagate directly places the proxygen include roots after
+# /opt/homebrew/include in Clang's effective search order. Add the vendored
+# include roots explicitly so they remain the effective first match.
+if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  target_include_directories(
+    libtenzir BEFORE
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
+  target_include_directories(
+    libtenzir_builtins BEFORE
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
+endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
-# without declaring the dependency. Linking it explicitly ensures the static
-# linker sees the archive.
-target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
+# without declaring the dependency. Link it explicitly so static links see the
+# archive regardless of whether proxygen comes from bundled or system packages.
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
                                         proxygen_utils_trace_event_types)
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
@@ -551,10 +573,9 @@ target_link_libraries(libtenzir PRIVATE proxygen::proxygen_coro_client
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
-    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygen_coro_client>)
+    PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_target}>)
 else ()
-  target_link_libraries(libtenzir_builtins
-                        PRIVATE proxygen::proxygen_coro_client)
+  target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)
@@ -630,21 +651,27 @@ if (LINUX)
   # Use a compiled stacktrace_backtrace if available, otherwise use header only
   # mode.
   if (TARGET Boost::stacktrace_backtrace)
-    target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
-    target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(Boost REQUIRED COMPONENTS stacktrace_backtrace)")
+    set(TENZIR_USE_BOOST_STACKTRACE_LINK 1)
+    set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 0)
+    target_link_libraries(libtenzir PUBLIC Boost::stacktrace_backtrace)
   else ()
     find_package(libbacktrace REQUIRED)
-    target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace dl)
-    target_compile_definitions(libtenzir
-                               PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(libbacktrace REQUIRED)")
+    set(TENZIR_USE_BOOST_STACKTRACE_LINK 0)
+    set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 1)
+    target_link_libraries(libtenzir PUBLIC libbacktrace::libbacktrace)
   endif ()
 else ()
   find_package(Boost COMPONENTS stacktrace_basic)
-  target_link_libraries(libtenzir PRIVATE Boost::stacktrace_basic dl)
-  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(Boost REQUIRED COMPONENTS stacktrace_basic)")
+  set(TENZIR_USE_BOOST_STACKTRACE_LINK 1)
+  set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 0)
+  target_link_libraries(libtenzir PUBLIC Boost::stacktrace_basic)
 endif ()
-target_compile_definitions(libtenzir
-                           PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
 
 if (NOT APPLE)
   target_link_libraries(libtenzir PRIVATE atomic)
@@ -717,6 +744,23 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
+
+tenzirconfigurepchreuse(
+  libtenzir
+  BINARY_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  DONOR_TARGET
+  libtenzir__pch
+  SOURCE_TARGET
+  libtenzir)
+tenzirconfigurepchreuse(
+  libtenzir_builtins
+  BINARY_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  DONOR_TARGET
+  libtenzir_builtins__pch
+  SOURCE_TARGET
+  libtenzir_builtins)
 
 # TODO: Should we move the bundled schemas to libtenzir?
 if (TARGET tenzir-schema)

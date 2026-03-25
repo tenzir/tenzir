@@ -12,6 +12,7 @@
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>

@@ -1,0 +1,13 @@
+// Test load_sqs with web identity using direct token value.
+// Uses AssumeRoleWithWebIdentity with a token provided directly.
+// Each test uses its own queue to avoid message consumption conflicts.
+load_sqs env("LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_TOKEN"), aws_iam={
+  region: "us-east-1",
+  assume_role: env("LOCALSTACK_WEB_IDENTITY_ROLE_ARN"),
+  web_identity: {
+    token: env("LOCALSTACK_WEB_IDENTITY_TOKEN")
+  }
+}
+read_json
+head 3
+sort id

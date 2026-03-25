@@ -10,6 +10,7 @@
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::kafka {
@@ -52,7 +53,7 @@ public:
     return caf::none;
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     diagnostic::warning(
       "`load_kafka` is deprecated and will be removed in a future release")
@@ -178,7 +179,7 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
     return caf::none;
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     diagnostic::warning(
       "`save_kafka` is deprecated and will be removed in a future release")

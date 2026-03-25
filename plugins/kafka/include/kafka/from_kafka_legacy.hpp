@@ -70,7 +70,7 @@ private:
   record config_;
 };
 
-auto make_from_kafka(operator_factory_plugin::invocation inv, session ctx,
+auto make_from_kafka(operator_factory_invocation inv, session ctx,
                      const record& defaults) -> failure_or<operator_ptr>;
 
 } // namespace tenzir::plugins::kafka::legacy

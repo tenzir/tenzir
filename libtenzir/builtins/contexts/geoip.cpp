@@ -733,7 +733,7 @@ class plugin : public virtual context_factory_plugin<"geoip"> {
                                            std::move(mapped_mmdb.value()));
   }
 
-  auto make_context(invocation inv, session ctx) const
+  auto make_context(operator_factory_invocation inv, session ctx) const
     -> failure_or<make_context_result> override {
     auto name = located<std::string>{};
     auto db_path = std::optional<located<std::string>>{};

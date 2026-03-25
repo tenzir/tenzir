@@ -405,7 +405,7 @@ private:
 
 class plugin final : public virtual operator_plugin2<dns_lookup_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto field = ast::expression{};
     auto result = ast::field_path::try_from(

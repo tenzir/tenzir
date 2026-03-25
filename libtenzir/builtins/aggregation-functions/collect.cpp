@@ -32,7 +32,7 @@ public:
         if (arg.array->IsNull(i)) {
           continue;
         }
-        result_.push_back(materialize(value_at(arg.type, *arg.array, i)));
+        result_.push_back(materialize(view_at(*arg.array, i)));
       }
     }
   }
@@ -106,7 +106,7 @@ class plugin : public virtual aggregation_plugin {
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())

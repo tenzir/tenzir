@@ -245,7 +245,7 @@ public:
                                               schema::name_only);
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     bool real_time = false;
     bool cumulative = false;

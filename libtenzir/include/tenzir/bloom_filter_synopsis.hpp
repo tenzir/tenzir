@@ -42,7 +42,7 @@ public:
       if (array->IsNull(i)) {
         continue;
       }
-      auto y = value_at(tenzir_type{}, *array, i);
+      auto y = *view_at<tenzir_type>(*array, i);
       bloom_filter_.add(y);
     }
   }

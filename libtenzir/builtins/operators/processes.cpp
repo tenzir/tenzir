@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/os.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -108,7 +109,7 @@ public:
     return {.source = true};
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("processes").parse(inv, ctx));
     return std::make_unique<processes_operator>();

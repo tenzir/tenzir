@@ -14,6 +14,7 @@
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
@@ -81,6 +82,7 @@ public:
       const auto has_explicit_creds = not resolved_creds->access_key_id.empty();
       const auto has_role = not resolved_creds->role.empty();
       const auto has_profile = not resolved_creds->profile.empty();
+      const auto has_web_identity = resolved_creds->web_identity.has_value();
       // Get session_name from resolved credentials, default to empty
       const auto session_name = resolved_creds->session_name.empty()
                                   ? std::string{}
@@ -90,7 +92,25 @@ public:
                             ? std::optional<std::string>{}
                             : std::optional{resolved_creds->region};
 
-      if (has_explicit_creds and has_role) {
+      if (has_web_identity and has_role) {
+        // Web identity + role: fetch token and assume role
+        auto provider
+          = tenzir::make_aws_credentials_provider(resolved_creds, region);
+        if (not provider) {
+          diagnostic::error(provider.error()).emit(dh);
+          co_return;
+        }
+        // Get credentials from the provider (triggers web identity flow)
+        auto aws_creds = (*provider)->GetAWSCredentials();
+        if (aws_creds.IsEmpty()) {
+          diagnostic::error("failed to obtain AWS credentials via web identity")
+            .emit(dh);
+          co_return;
+        }
+        opts->ConfigureAccessKey(aws_creds.GetAWSAccessKeyId(),
+                                 aws_creds.GetAWSSecretKey(),
+                                 aws_creds.GetSessionToken());
+      } else if (has_explicit_creds and has_role) {
         // Explicit credentials + role: use STS to assume role
         auto sts_creds = tenzir::assume_role_with_credentials(
           *resolved_creds, resolved_creds->role, session_name,
@@ -124,6 +144,7 @@ public:
           .session_token = profile_creds->session_token,
           .role = {},
           .external_id = {},
+          .web_identity = {},
         };
         auto sts_creds = tenzir::assume_role_with_credentials(
           base_creds, resolved_creds->role, session_name,
@@ -328,7 +349,7 @@ private:
 
 class from_s3 final : public operator_plugin2<from_s3_operator>,
                       public OperatorPlugin {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_s3_args{};
     // Legacy options for backwards compatibility

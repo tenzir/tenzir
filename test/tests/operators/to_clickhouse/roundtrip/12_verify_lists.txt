@@ -1,0 +1,6 @@
+total=5000
+id	Int64
+tags	Array(Nullable(String))
+scores	Array(Nullable(Float64))
+avg_tags_length=3.0
+ok

@@ -8,6 +8,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -193,10 +194,10 @@ private:
     // Find runs of same-bucket rows and push subslices.
     auto begin = int64_t{0};
     while (begin < num_rows) {
-      auto bucket = std::hash<data_view>{}(values.value_at(begin)) % jobs_;
+      auto bucket = std::hash<data_view3>{}(values.view3_at(begin)) % jobs_;
       auto end = begin + 1;
       while (end < num_rows
-             and std::hash<data_view>{}(values.value_at(end)) % jobs_
+             and std::hash<data_view3>{}(values.view3_at(end)) % jobs_
                    == bucket) {
         ++end;
       }

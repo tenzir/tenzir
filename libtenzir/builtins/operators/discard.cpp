@@ -12,6 +12,7 @@
 #include "tenzir/view3.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -135,7 +136,7 @@ public:
     return std::make_unique<discard_operator>();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("discard").parse(inv, ctx).ignore();
     return std::make_unique<discard_operator>();

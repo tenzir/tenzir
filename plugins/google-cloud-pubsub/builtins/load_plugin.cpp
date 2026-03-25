@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <google/cloud/pubsub/subscriber.h>
@@ -144,7 +145,7 @@ private:
 
 class load_plugin final : public operator_plugin2<load_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     diagnostic::warning("`load_google_cloud_pubsub` is deprecated; use "
                         "`from_google_cloud_pubsub` instead")

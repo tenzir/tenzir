@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 namespace tenzir::plugins::otherwise {
@@ -23,7 +24,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto primary = ast::expression{};
     auto fallback = ast::expression{};

@@ -277,9 +277,11 @@ public:
         out->SetNullFormat(YAML::LowerNull);
         out->SetIndent(2);
         for (const auto& row :
-             values(as<record_type>(resolved_slice.schema()), *array)) {
-          TENZIR_ASSERT(row);
-          print_document(*out, *row);
+             values(type{as<record_type>(resolved_slice.schema())}, *array)) {
+          TENZIR_ASSERT(not is<caf::none_t>(row));
+          const auto* record_view = try_as<view<record>>(&row);
+          TENZIR_ASSERT(record_view);
+          print_document(*out, *record_view);
         }
         // If the output failed, then we either failed to allocate memory or
         // had a mismatch between BeginSeq and EndSeq or BeginMap and EndMap;
@@ -350,7 +352,7 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
 
 class read_yaml final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_yaml");
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -380,7 +382,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple yaml values.
@@ -432,7 +434,7 @@ public:
 
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<yaml_printer>>(yaml_printer{});
@@ -452,7 +454,7 @@ class print_yaml final : public virtual function_plugin {
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto include_document_markers = std::optional<location>{};

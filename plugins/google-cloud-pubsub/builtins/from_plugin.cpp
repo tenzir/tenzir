@@ -10,6 +10,7 @@
 
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -197,7 +198,7 @@ private:
 class from_plugin final
   : public operator_plugin2<from_google_cloud_pubsub_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_args{};
     auto parser = argument_parser2::operator_(name());

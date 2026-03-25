@@ -23,6 +23,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 

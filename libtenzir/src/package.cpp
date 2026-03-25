@@ -17,11 +17,13 @@
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
+#include <ranges>
 #include <string_view>
 #include <type_traits>
 #include <unordered_set>

@@ -1,0 +1,15 @@
+// Test from_s3 with web identity using a token_endpoint.
+// Uses AssumeRoleWithWebIdentity with a token fetched from an HTTP endpoint.
+from_s3 env("LOCALSTACK_S3_TEST_URI"), aws_iam={
+  region: "us-east-1",
+  assume_role: env("LOCALSTACK_WEB_IDENTITY_ROLE_ARN"),
+  web_identity: {
+    token_endpoint: {
+      url: env("LOCALSTACK_WEB_IDENTITY_TOKEN_ENDPOINT"),
+      headers: {
+        "X-Test-Authorization": env("LOCALSTACK_WEB_IDENTITY_TOKEN_ENDPOINT_HEADER")
+      },
+      path: ".access_token"
+    }
+  }
+}

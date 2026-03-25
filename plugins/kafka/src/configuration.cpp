@@ -22,7 +22,6 @@
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
-#include <aws/core/auth/SSOCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
@@ -70,32 +69,6 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
     url,
     Aws::Http::HttpMethod::HTTP_GET,
   };
-  // Determine base credentials provider: explicit, profile, or default chain.
-  auto base_provider
-    = std::invoke([&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-        if (creds_ and not creds_->access_key_id.empty()) {
-          return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-            creds_->access_key_id, creds_->secret_access_key,
-            creds_->session_token);
-        }
-        if (creds_ and not creds_->profile.empty()) {
-          class profile_provider_chain final
-            : public Aws::Auth::AWSCredentialsProviderChain {
-          public:
-            explicit profile_provider_chain(std::string_view profile) {
-              AddProvider(std::make_shared<
-                          Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
-                profile.data()));
-              AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(
-                Aws::String{profile.data()}));
-            }
-          };
-          // Support both static profiles (~/.aws/credentials) and AWS SSO
-          // profiles (~/.aws/config) when `aws_iam.profile` is specified.
-          return std::make_shared<profile_provider_chain>(creds_->profile);
-        }
-        return make_default_aws_credentials_provider_chain();
-      });
   const auto emit_credentials_unavailable = [&](std::string_view reason) {
     auto const is_truthy = [](std::string_view value) {
       return value == "1" or value == "true" or value == "TRUE"
@@ -145,40 +118,23 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
         .emit(dh_);
     }
   };
-  auto provider = base_provider;
-  if (has_role) {
-    // AssumeRole requires source credentials first (explicit, profile, or
-    // default chain). Validate this separately so diagnostics can point at the
-    // exact failing stage instead of reporting one generic "empty credentials"
-    // message.
-    if (auto base_creds = base_provider->GetAWSCredentials();
-        base_creds.IsEmpty()) {
-      emit_credentials_unavailable(
-        "source credentials are unavailable before `sts:AssumeRole`");
-      report_refresh_failure(fmt::format("empty source AWS credentials before "
-                                         "assume-role (mode={}, region={})",
-                                         auth_mode, region));
-      return;
-    } else if (base_creds.IsExpired()) {
-      emit_credentials_unavailable(
-        "source credentials are expired before `sts:AssumeRole`");
-      report_refresh_failure(fmt::format("expired source AWS credentials "
-                                         "before assume-role (mode={}, "
-                                         "region={})",
-                                         auth_mode, region));
-      return;
+  // Use the shared credential provider which handles all auth methods including
+  // web identity.
+  auto provider_result
+    = tenzir::make_aws_credentials_provider(creds_, std::optional{region});
+  if (not provider_result) {
+    diagnostic::error(provider_result.error()).emit(dh_);
+    auto err
+      = handle->oauthbearer_set_token_failure("failed to create credentials "
+                                              "provider");
+    if (err != RdKafka::ERR_NO_ERROR) {
+      diagnostic::error("failed to set oauthbearer token failure")
+        .note("{}", RdKafka::err2str(err))
+        .emit(dh_);
     }
-    auto sts_config = Aws::Client::ClientConfiguration{};
-    sts_config.region = region;
-    auto sts_client = std::make_shared<Aws::STS::STSClient>(
-      base_provider, nullptr, sts_config);
-    const auto session_name = creds_->session_name.empty()
-                                ? std::string{"tenzir-session"}
-                                : creds_->session_name;
-    provider = std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-      creds_->role, session_name, creds_->external_id,
-      Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+    return;
   }
+  auto provider = std::move(*provider_result);
   if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
     emit_credentials_unavailable(has_role
                                    ? "assume-role provider returned empty "

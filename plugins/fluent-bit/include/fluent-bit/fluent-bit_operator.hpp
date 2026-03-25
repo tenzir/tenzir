@@ -21,6 +21,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/record_batch.h>

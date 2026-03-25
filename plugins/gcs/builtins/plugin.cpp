@@ -9,6 +9,7 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include "tenzir/argument_parser2.hpp"
+#include "tenzir/plugin/register.hpp"
 
 #include "operator.hpp"
 
@@ -18,7 +19,7 @@ namespace {
 struct load_gcs : public operator_plugin2<gcs_loader> {
   load_gcs() = default;
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = gcs_args{};
     TRY(argument_parser2::operator_(name())
@@ -36,7 +37,7 @@ struct load_gcs : public operator_plugin2<gcs_loader> {
 struct save_gcs : public operator_plugin2<gcs_saver> {
   save_gcs() = default;
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = gcs_args{};
     TRY(argument_parser2::operator_(name())

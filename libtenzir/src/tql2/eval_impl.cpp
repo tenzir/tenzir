@@ -12,11 +12,13 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/eval_optimizations.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/view3.hpp"
 
 #include <limits>
@@ -188,7 +190,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
         // TODO: This is not very performant.
         result.match(
           [&](const series& s) {
-            l.data(value_at(s.type, *s.array, row));
+            l.data(view_at(*s.array, row));
           },
           [&](const basic_series<list_type>& s) {
             const auto& values = s.array->values();
@@ -196,7 +198,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
             auto begin = s.array->value_offset(row);
             auto end = s.array->value_offset(row + 1);
             for (auto i = begin; i < end; ++i) {
-              l.data(value_at(value_ty, *values, i));
+              l.data(view_at(*values, i));
             }
           });
       }
@@ -267,8 +269,7 @@ auto evaluator::eval(const ast::function_call& x) -> multi_series {
   // TODO: We parse the function call every time we get a new batch here. We
   // could store the result in the AST if that becomes a problem, but that is
   // also not an optimal solution.
-  auto func
-    = ctx_.reg().get(x).make_function(function_plugin::invocation{x}, ctx_);
+  auto func = ctx_.reg().get(x).make_function(function_invocation{x}, ctx_);
   if (not func) {
     return series::null(null_type{}, length_);
   }
@@ -380,7 +381,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             b.null();
             continue;
           }
-          auto name = value_at(string_type{}, *str->array, i);
+          auto name = *view_at<string_type>(*str->array, i);
           if (auto it = field_map.find(name); it != field_map.end()) {
             const auto& field = it->second;
             if (field.type.kind().is_not<null_type>()
@@ -390,7 +391,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
               }
               last_type = field.type;
             }
-            auto v = value_at(field.type, *field.array, i);
+            auto v = view_at(*field.array, i);
             b.data(v);
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
@@ -679,7 +680,7 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
           add_column_to_row(s);
         },
         [this, &add_column_to_row, i](const multi_series& ms) {
-          const auto v = ms.value_at(i);
+          const auto v = ms.view3_at(i);
           if (const auto* sec = try_as<view<secret>>(v)) {
             add_column_to_row(*sec);
             return;
@@ -737,7 +738,7 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
 }
 
 auto evaluator::to_series(const data& x) const -> series {
-  return cached_data_to_series(x, length_);
+  return data_to_series(x, length_);
 }
 
 } // namespace tenzir

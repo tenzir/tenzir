@@ -11,6 +11,7 @@
 #include "tenzir/concept/parseable/tenzir/si.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 namespace tenzir::plugins::float_ {
@@ -27,7 +28,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())

@@ -58,7 +58,7 @@ struct group_by_key : std::vector<data> {
 };
 
 /// A view on a group-by key.
-struct group_by_key_view : std::vector<data_view> {
+struct group_by_key_view : std::vector<data_view3> {
   using vector::vector;
 
   /// Materializes a view on a group-by key.
@@ -102,7 +102,7 @@ struct group_by_key_equal {
   operator()(const group_by_key_view& x, const group_by_key& y) const noexcept {
     return std::equal(x.begin(), x.end(), y.begin(), y.end(),
                       [](const auto& lhs, const auto& rhs) {
-                        return lhs == make_view(rhs);
+                        return lhs == rhs;
                       });
   }
 
@@ -110,7 +110,7 @@ struct group_by_key_equal {
   operator()(const group_by_key& x, const group_by_key_view& y) const noexcept {
     return std::equal(x.begin(), x.end(), y.begin(), y.end(),
                       [](const auto& lhs, const auto& rhs) {
-                        return make_view(lhs) == rhs;
+                        return lhs == rhs;
                       });
   }
 
@@ -224,8 +224,7 @@ public:
         = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
       TENZIR_ASSERT(fn);
       bucket.aggregations.push_back(
-        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx)
-          .unwrap());
+        fn->make_aggregation(function_invocation{aggr.call}, ctx).unwrap());
     }
     return bucket;
   }
@@ -237,17 +236,19 @@ public:
       group_values.push_back(eval(group.expr.inner(), slice, ctx));
     }
     auto key = group_by_key_view{};
-    key.resize(cfg_.groups.size());
+    key.reserve(cfg_.groups.size());
+    auto fill_key = [&](int64_t row) {
+      key.clear();
+      for (auto&& group : group_values) {
+        key.emplace_back(group.view3_at(row));
+      }
+    };
     auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
       for (auto&& aggr : group.aggregations) {
         aggr->update(subslice(slice, begin, end), ctx);
       }
     };
-    auto find_or_create_group = [&](int64_t row) -> bucket2* {
-      TENZIR_ASSERT(key.size() == group_values.size());
-      for (auto&& [key_value, group] : std::views::zip(key, group_values)) {
-        key_value = group.value_at(row);
-      }
+    auto find_or_create_group = [&](const group_by_key_view& key) -> bucket2* {
       auto it = groups_.find(key);
       if (it == groups_.end()) {
         it = groups_.emplace_hint(it, materialize(key), make_bucket(ctx));
@@ -256,7 +257,8 @@ public:
     };
     auto total_rows = detail::narrow<int64_t>(slice.rows());
     // Seed the first group before entering the loop.
-    find_or_create_group(0);
+    fill_key(0);
+    find_or_create_group(key);
     // Track the current group by its materialized key rather than a raw
     // pointer. tsl::robin_map invalidates all pointers and iterators on
     // rehash, so holding &it.value() across an emplace would dangle.
@@ -266,7 +268,8 @@ public:
     auto current_key = materialize(key);
     auto current_begin = int64_t{0};
     for (auto row = int64_t{1}; row < total_rows; ++row) {
-      find_or_create_group(row);
+      fill_key(row);
+      find_or_create_group(key);
       if (! group_by_key_equal{}(key, current_key)) {
         update_group(groups_.find(current_key).value(), current_begin, row);
         current_key = materialize(key);
@@ -654,7 +657,7 @@ auto validate_aggregates(const config& cfg, session ctx) -> failure_or<void> {
     const auto* fn
       = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(aggr.call));
     TENZIR_ASSERT(fn); // already verified as aggregation_plugin in build_config
-    TRY(fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx));
+    TRY(fn->make_aggregation(function_invocation{aggr.call}, ctx));
   }
   return {};
 }
@@ -957,7 +960,7 @@ private:
 class plugin2 final : public virtual operator_plugin2<summarize_operator2>,
                       public virtual operator_compiler_plugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto cfg, build_config(std::move(inv.args), ctx));
     TRY(validate_aggregates(cfg, ctx));

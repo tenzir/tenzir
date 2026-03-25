@@ -10,6 +10,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -29,7 +30,7 @@ class encrypt_cryptopan : public virtual function_plugin {
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};

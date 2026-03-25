@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tls_options.hpp"
 
 #include "fluent-bit/fluent-bit_operator.hpp"
@@ -34,8 +35,8 @@ public:
     return caf::none;
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     located<std::string> plugin;
     std::optional<tenzir::record> plugin_options;
@@ -89,8 +90,8 @@ public:
     return caf::none;
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     located<std::string> plugin;
     std::optional<tenzir::record> plugin_options;

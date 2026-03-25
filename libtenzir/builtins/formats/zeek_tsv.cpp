@@ -22,7 +22,8 @@
 #include "tenzir/detail/zeekify.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/modules.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin/parser.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -822,8 +823,10 @@ public:
       auto is_first_schema = not *last_schema;
       auto did_schema_change = *last_schema != input_schema;
       *last_schema = input_schema;
-      for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT(row);
+      for (const auto& row : values(type{input_type}, *array)) {
+        TENZIR_ASSERT(not is<caf::none_t>(row));
+        const auto* record_view = try_as<view<record>>(&row);
+        TENZIR_ASSERT(record_view);
         if (first) {
           if (did_schema_change) {
             if (not is_first_schema) {
@@ -834,7 +837,7 @@ public:
           }
           first = false;
         }
-        const auto ok = printer.print_values(out_iter, *row);
+        const auto ok = printer.print_values(out_iter, *record_view);
         TENZIR_ASSERT(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
@@ -869,7 +872,7 @@ using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer>;
 
 class read_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_parser_adapter> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("read_zeek_tsv").parse(inv, ctx));
     return std::make_unique<zeek_tsv_parser_adapter>();
@@ -878,7 +881,7 @@ class read_zeek_tsv final
 
 class write_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_writer_adapter> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = zeek_tsv_printer::args{};
     auto set_separator = std::optional<located<std::string>>{};

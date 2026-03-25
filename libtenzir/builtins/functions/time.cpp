@@ -9,6 +9,7 @@
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -35,7 +36,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("time")
@@ -95,7 +96,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -120,7 +121,7 @@ public:
                 }
                 check(append_builder(
                   duration_type{}, *b,
-                  value_at(time_type{}, arg, i).time_since_epoch()));
+                  view_at<time_type>(arg, i)->time_since_epoch()));
               }
             },
             [&](const auto&) {
@@ -148,7 +149,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -200,7 +201,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -223,7 +224,7 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                auto&& value = value_at(time_type{}, arg, i);
+                auto value = *view_at<time_type>(arg, i);
                 const std::chrono::year_month_day ymd{
                   std::chrono::floor<std::chrono::days>(value)};
                 auto result = int64_t{0};
@@ -272,7 +273,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -300,7 +301,7 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                auto&& value = value_at(time_type{}, arg, i);
+                auto value = *view_at<time_type>(arg, i);
                 auto duration_since_day_start
                   = value - std::chrono::floor<std::chrono::days>(value);
                 auto hours = std::chrono::duration_cast<std::chrono::hours>(
@@ -323,7 +324,7 @@ public:
                 check(b.AppendNull());
                 continue;
               }
-              auto&& value = value_at(time_type{}, arg, i);
+              auto value = *view_at<time_type>(arg, i);
               const auto duration_since_day_start
                 = value - std::chrono::floor<std::chrono::days>(value);
               const auto hours = std::chrono::duration_cast<std::chrono::hours>(
@@ -367,7 +368,7 @@ public:
     return false;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     TRY(argument_parser2::function("now").parse(inv, ctx));
     return function_use::make([](evaluator eval, session ctx) -> series {
@@ -392,7 +393,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
@@ -450,7 +451,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};

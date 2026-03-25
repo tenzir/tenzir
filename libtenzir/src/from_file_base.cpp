@@ -10,8 +10,10 @@
 #include <tenzir/format_utils.hpp>
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/filesystem/api.h>
@@ -172,6 +174,8 @@ auto delete_file_azure(arrow::fs::AzureFileSystem* fs, const std::string& path)
   try {
     blob_client.Delete();
   } catch (const Azure::Storage::StorageException& e) {
+    return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
+  } catch (const Azure::Core::Http::TransportException& e) {
     return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
   }
   return arrow::Status::OK();

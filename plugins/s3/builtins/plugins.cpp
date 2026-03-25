@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include "operator.hpp"
@@ -81,7 +82,7 @@ public:
     return {};
   }
 
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = s3_args{};
     // Legacy options for backwards compatibility

@@ -69,6 +69,14 @@ struct cell_evaluator<relational_operator::equal> {
   static bool evaluate(view<subnet> lhs, const ip& rhs) noexcept {
     return evaluate(rhs, materialize(lhs));
   }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::equivalent;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::equivalent;
+  }
 };
 
 template <>
@@ -95,6 +103,14 @@ struct cell_evaluator<relational_operator::less> {
       return lhs < rhs;
     }
   }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::less;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::less;
+  }
 };
 
 template <>
@@ -113,6 +129,18 @@ struct cell_evaluator<relational_operator::less_equal> {
     } else {
       return lhs <= rhs;
     }
+  }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::less
+           || order == std::partial_ordering::equivalent;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::less
+           || order == std::partial_ordering::equivalent;
   }
 };
 
@@ -133,6 +161,14 @@ struct cell_evaluator<relational_operator::greater> {
       return lhs > rhs;
     }
   }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::greater;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    return partial_order(lhs, rhs) == std::partial_ordering::greater;
+  }
 };
 
 template <>
@@ -151,6 +187,18 @@ struct cell_evaluator<relational_operator::greater_equal> {
     } else {
       return lhs >= rhs;
     }
+  }
+
+  static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::greater
+           || order == std::partial_ordering::equivalent;
+  }
+
+  static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
+    const auto order = partial_order(lhs, rhs);
+    return order == std::partial_ordering::greater
+           || order == std::partial_ordering::equivalent;
   }
 };
 
@@ -211,7 +259,7 @@ struct cell_evaluator<relational_operator::ni> {
     return lhs.contains(rhs);
   }
 
-  static bool evaluate(view<list> lhs, const auto& rhs) noexcept {
+  static bool evaluate(list_view3 lhs, const auto& rhs) noexcept {
     return std::any_of(lhs.begin(), lhs.end(), [rhs](const auto& element) {
       return match(element, [rhs](const auto& element) noexcept {
         return cell_evaluator<relational_operator::equal>::evaluate(element,
@@ -235,17 +283,50 @@ struct column_evaluator {
   static ids evaluate(LhsType type, id offset, const arrow::Array& array,
                       const Rhs& rhs, const ids& selection) noexcept {
     ids result{};
-    for (auto id : select(selection)) {
-      TENZIR_ASSERT(id >= offset);
-      const auto row = detail::narrow_cast<int64_t>(id - offset);
-      // TODO: Instead of this in the loop, do selection &= array.null_bitmap
-      // outside of it.
-      if (array.IsNull(row)) {
-        continue;
+    if constexpr (detail::tl_contains_v<data_view3_owning_types,
+                                        type_to_data_t<LhsType>>) {
+      auto const* typed_array
+        = dynamic_cast<type_to_arrow_array_t<LhsType> const*>(&array);
+      TENZIR_ASSERT(typed_array);
+      for (auto id : select(selection)) {
+        TENZIR_ASSERT(id >= offset);
+        const auto row = detail::narrow_cast<int64_t>(id - offset);
+        // TODO: Instead of this in the loop, do selection &= array.null_bitmap
+        // outside of it.
+        if (array.IsNull(row)) {
+          continue;
+        }
+        result.append(false, id - result.size());
+        auto lhs = view_at(*typed_array, row);
+        TENZIR_ASSERT(lhs);
+        result.append(cell_evaluator<Op>::evaluate(*lhs, rhs), 1u);
       }
-      result.append(false, id - result.size());
-      result.append(
-        cell_evaluator<Op>::evaluate(value_at(type, array, row), rhs), 1u);
+    } else {
+      auto values_ = values(tenzir::type{type}, array);
+      auto it = values_.begin();
+      auto current_row = int64_t{0};
+      for (auto id : select(selection)) {
+        TENZIR_ASSERT(id >= offset);
+        const auto row = detail::narrow_cast<int64_t>(id - offset);
+        while (current_row < row) {
+          TENZIR_ASSERT(it != values_.end());
+          ++it;
+          ++current_row;
+        }
+        TENZIR_ASSERT(it != values_.end());
+        auto lhs = *it;
+        ++it;
+        ++current_row;
+        if (is<caf::none_t>(lhs)) {
+          continue;
+        }
+        result.append(false, id - result.size());
+        result.append(match(lhs,
+                            [&](const auto& lhs) {
+                              return cell_evaluator<Op>::evaluate(lhs, rhs);
+                            }),
+                      1u);
+      }
     }
     result.append(false, offset + array.length() - result.size());
     return result;

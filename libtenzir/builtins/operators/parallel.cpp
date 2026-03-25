@@ -11,6 +11,7 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -704,7 +705,7 @@ private:
 };
 
 struct parallel final : public operator_plugin2<parallel_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parallel_args{};
     args.op = inv.self.get_location();

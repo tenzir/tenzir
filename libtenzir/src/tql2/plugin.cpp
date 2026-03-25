@@ -39,7 +39,8 @@ auto function_use::evaluator::operator()(
   return static_cast<tenzir::evaluator*>(self_)->eval(expr, input);
 }
 
-auto aggregation_plugin::make_function(invocation inv, session ctx) const
+auto aggregation_plugin::make_function(function_invocation inv,
+                                       session ctx) const
   -> failure_or<function_ptr> {
   if (inv.call.args.empty()) {
     diagnostic::error("aggregation functions need at least one list argument "
@@ -54,7 +55,7 @@ auto aggregation_plugin::make_function(invocation inv, session ctx) const
   auto inner_selector
     = ast::root_field{ast::identifier{"x", subject_arg.get_location()}};
   adjusted_call.args.front() = inner_selector;
-  TRY(auto fn, this->make_aggregation(invocation{adjusted_call}, ctx));
+  TRY(auto fn, this->make_aggregation(function_invocation{adjusted_call}, ctx));
   return function_use::make(
     [fn = std::move(fn), subject_arg = std::move(subject_arg)](
       evaluator eval, session ctx) mutable -> multi_series {

@@ -44,6 +44,8 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/passive_partition.hpp"
+#include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/store.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"

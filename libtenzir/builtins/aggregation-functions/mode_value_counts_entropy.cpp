@@ -10,8 +10,11 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <tsl/robin_map.h>
 
 #include <numeric>
 
@@ -36,7 +39,7 @@ public:
       }
       for (int64_t i = 0; i < arg.array->length(); ++i) {
         if (arg.array->IsValid(i)) {
-          const auto& view = value_at(arg.type, *arg.array, i);
+          const auto view = view_at(*arg.array, i);
           auto it = counts_.find(view);
           if (it == counts_.end()) {
             counts_.emplace_hint(it, materialize(view), 1);
@@ -177,7 +180,7 @@ class plugin : public virtual aggregation_plugin {
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());

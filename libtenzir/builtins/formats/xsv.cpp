@@ -17,7 +17,6 @@
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/parser_interface.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql/basic.hpp"
@@ -925,7 +924,7 @@ public:
   auto name() const -> std::string override {
     return "read_xsv";
   }
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto opt_parser = xsv_common_parser_options_parser{name()};
@@ -949,7 +948,7 @@ public:
     return fmt::format("read_{}", Name);
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto opt_parser = xsv_common_parser_options_parser{
@@ -975,7 +974,7 @@ public:
 
 class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = xsv_printer_options{};
     auto parser = argument_parser2::operator_(name());
@@ -996,7 +995,7 @@ public:
     return fmt::format("write_{}", Name);
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto opts = xsv_printer_options{
       .field_separator = located{std::string{Sep}, inv.self.get_location()},
@@ -1057,7 +1056,7 @@ class parse_xsv : public function_plugin {
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
@@ -1090,7 +1089,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
@@ -1168,7 +1167,7 @@ class print_xsv : public function_plugin {
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto opts = xsv_printer_options{
@@ -1195,7 +1194,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto opts = xsv_printer_options{

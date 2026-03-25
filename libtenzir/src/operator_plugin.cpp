@@ -12,6 +12,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -498,12 +499,9 @@ public:
             [&]<class T>(const Setter<located<T>>&) -> failure_or<Arg> {
               auto* cast = try_as<T>(value);
               if (not cast) {
-                diagnostic::error("expected {} but got {}", "TODO",
-                                  match(value,
-                                        []<class U>(const U& x) {
-                                          // TODO: Proper type.
-                                          return detail::pretty_type_name(x);
-                                        }))
+                diagnostic::error(
+                  "expected argument of type `{}`, but got `{}`",
+                  type_kind::of<data_to_type_t<T>>, type_kind_of_data(value))
                   .primary(expr)
                   .emit(ctx);
                 return failure::promise();

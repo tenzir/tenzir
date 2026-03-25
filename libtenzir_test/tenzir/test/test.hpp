@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "tenzir/data.hpp"
 #include "tenzir/span.hpp"
+#include "tenzir/view3.hpp"
 
 #include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/detail/stringification_inspector.hpp>
@@ -26,11 +28,64 @@
 
 namespace tenzir::test::detail {
 
+template <class T>
+concept data_like = std::same_as<std::remove_cvref_t<T>, tenzir::data>
+                    || std::same_as<std::remove_cvref_t<T>, tenzir::data_view3>;
+
+template <class T>
+concept non_data_like = not data_like<T>;
+
+inline auto equal_for_test(const auto& lhs, const auto& rhs) -> bool {
+  using tenzir::operator==;
+  return lhs == rhs;
+}
+
+inline auto equal_for_test(const tenzir::data& lhs, const tenzir::data& rhs)
+  -> bool {
+  return lhs == rhs;
+}
+
+inline auto equal_for_test(const tenzir::data_view3& lhs,
+                           const tenzir::data_view3& rhs) -> bool {
+  return lhs == rhs;
+}
+
+inline auto
+equal_for_test(const tenzir::data& lhs, const tenzir::data_view3& rhs) -> bool {
+  return lhs == rhs;
+}
+
+inline auto
+equal_for_test(const tenzir::data_view3& lhs, const tenzir::data& rhs) -> bool {
+  return lhs == rhs;
+}
+
+template <non_data_like T>
+inline auto equal_for_test(const tenzir::data& lhs, const T& rhs) -> bool {
+  return lhs == tenzir::data{rhs};
+}
+
+template <non_data_like T>
+inline auto equal_for_test(const T& lhs, const tenzir::data& rhs) -> bool {
+  return tenzir::data{lhs} == rhs;
+}
+
+template <non_data_like T>
+inline auto equal_for_test(const tenzir::data_view3& lhs, const T& rhs)
+  -> bool {
+  return lhs == tenzir::data{rhs};
+}
+
+template <non_data_like T>
+inline auto equal_for_test(const T& lhs, const tenzir::data_view3& rhs)
+  -> bool {
+  return tenzir::data{lhs} == rhs;
+}
+
 struct equality_compare {
   template <class T1, class T2>
   bool operator()(const T1& t1, const T2& t2) {
-    using tenzir::operator==;
-    return t1 == t2;
+    return equal_for_test(t1, t2);
   }
 };
 
@@ -85,7 +140,7 @@ template <class T0, class T1>
 bool check_eq(const T0& lhs, const T1& rhs,
               std::source_location location = std::source_location::current()) {
   // Adapted from CAF, but without safety checks.
-  if (lhs == rhs) {
+  if (equal_for_test(lhs, rhs)) {
     caf::test::reporter::instance().pass(location);
     return true;
   }

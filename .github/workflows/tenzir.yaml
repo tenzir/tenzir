@@ -65,7 +65,6 @@ jobs:
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
-      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -120,6 +119,7 @@ jobs:
             # versions that should not run in regression tests.
             known_bad_versions=(
               "v5.27.3"
+              "v5.29.3"
             )
             filtered_versions=$(printf "%s\n" "$dated_versions" | awk -F# -v limit="$dated_limit_version" '$0>=limit{print$2}')
             for bad_version in "${known_bad_versions[@]}"; do
@@ -227,6 +227,7 @@ jobs:
             "scripts/debian/build-*.sh" \
             "scripts/debian/install-dev-dependencies.sh" \
             ".github/workflows/docker.yaml" \
+            ".github/workflows/push-manifest.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed tenzir-nix \
@@ -239,10 +240,17 @@ jobs:
         if: steps.configure.outputs.run-docker-tenzir == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            source_tag="${{ steps.configure.outputs.head-ref-slug }}"
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            tags=('main' "${{ github.sha }}")
+            source_tag="${{ github.sha }}"
+            if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+              tags=('main' "${{ github.sha }}")
+            else
+              tags=("${{ steps.configure.outputs.ref-slug }}" "${{ github.sha }}")
+            fi
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            source_tag="${{ github.sha }}"
             major_minor_patch='${{ steps.configure.outputs.release-version }}'
             major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
@@ -252,16 +260,24 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
+            '."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
             --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
+            --arg source "${source_tag}" \
             --args -- "${tags[@]}")"
-          # Clear push repos in case we're in a PR, but push the community
-          # edition to ghcr.
+          # PRs only publish the community images to GHCR.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
               ."image-registries") |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
+          # Release builds additionally publish the Docker Hub community images.
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            docker_config="$(jq -c '
+              (.editions[]
+               | select(.name == "tenzir" or .name == "tenzir-node")
+               | ."image-registries") += ["docker.io"] |
+              (.editions[] | ."image-registries") |= unique' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
@@ -336,7 +352,7 @@ jobs:
             [[ -n "$pr_number" ]] # Assert the pr number was non-empty
           fi
 
-  docker-tenzir:
+  docker-tenzir-amd64:
     name: Docker
     needs:
       - configure
@@ -344,6 +360,34 @@ jobs:
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
+      runner: ubuntu-latest
+      arch: amd64
+    secrets: inherit
+
+  docker-tenzir-arm64:
+    name: Docker
+    needs:
+      - configure
+    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    uses: ./.github/workflows/docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+      runner: ubicloud-standard-8-arm
+      arch: arm64
+    secrets: inherit
+
+  docker-tenzir:
+    name: Push Docker Manifest
+    needs:
+      - configure
+      - docker-tenzir-amd64
+      - docker-tenzir-arm64
+    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    uses: ./.github/workflows/push-manifest.yaml
+    with:
+      source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
+      arch-suffixes: "amd64 arm64"
+      tags: "${{ join(fromJSON(needs.configure.outputs.docker-config).tags, ' ') }}"
     secrets: inherit
 
   sync-openapi-to-docs:
@@ -433,7 +477,7 @@ jobs:
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
-  push-manifest-slim:
+  docker-slim:
     name: Push tenzir-slim docker manifest
     needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
     uses: ./.github/workflows/push-manifest.yaml

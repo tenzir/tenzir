@@ -8,6 +8,10 @@ inputs:
   ghcr-token:
     description: 'GitHub token for GHCR authentication'
     required: false
+  ghcr-username:
+    description: 'Username for GHCR authentication'
+    required: false
+    default: 'tenzir-bot'
   dockerhub-user:
     description: 'Docker Hub username'
     required: false
@@ -86,12 +90,13 @@ runs:
       shell: bash
       env:
         GHCR_TOKEN: ${{ inputs.ghcr-token }}
+        GHCR_USERNAME: ${{ inputs.ghcr-username }}
       run: |
         if [[ -z "$GHCR_TOKEN" ]]; then
           echo "::error GHCR token required but not provided"
           exit 1
         fi
-        docker login ghcr.io -u tenzir-bot -p "$GHCR_TOKEN"
+        printf '%s\n' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
     - name: Login to Docker Hub
       if: steps.detect.outputs.needs-docker-hub == 'true'
@@ -104,7 +109,7 @@ runs:
           echo "::error Docker Hub credentials required but not provided"
           exit 1
         fi
-        docker login docker.io -u "$DOCKERHUB_USER" -p "$DOCKERHUB_PASSWORD"
+        printf '%s\n' "$DOCKERHUB_PASSWORD" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
 
     - name: Configure AWS Credentials
       if: steps.detect.outputs.needs-ecr == 'true'

@@ -10,6 +10,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -39,14 +40,14 @@ public:
       if constexpr (Mode == mode::first) {
         for (int64_t i = 0; i < arg.array->length(); ++i) {
           if (arg.array->IsValid(i)) {
-            result_ = materialize(value_at(arg.type, *arg.array, i));
+            result_ = materialize(view_at(*arg.array, i));
             break;
           }
         }
       } else {
         for (int64_t i = arg.array->length() - 1; i >= 0; --i) {
           if (arg.array->IsValid(i)) {
-            result_ = materialize(value_at(arg.type, *arg.array, i));
+            result_ = materialize(view_at(*arg.array, i));
             break;
           }
         }
@@ -110,7 +111,7 @@ public:
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
