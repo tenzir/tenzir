@@ -1125,12 +1125,9 @@ private:
       co_await folly::coro::co_safe_point;
       ticks_ += 1;
       LOGI("tick {} in {} ({})", ticks_, id_, op_name());
-      switch (base_op().state()) {
-        case OperatorState::done:
-          co_await handle_done(false);
-          break;
-        case OperatorState::unspecified:
-          break;
+      if (phase_ == Phase::running
+          and base_op().state() == OperatorState::done) {
+        co_await handle_done(false);
       }
       auto message = co_await driver_.next([&](Event const& event) {
         // When there is an active checkpoint, we only allow
@@ -1333,7 +1330,7 @@ private:
       phase_ = Phase::stopping_forced;
     } else if (phase_ == Phase::running) {
       phase_ = Phase::stopping_gracefully;
-    } else {
+    } else if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
       co_return;
     }
     LOGV("running done in {}", op_name());
