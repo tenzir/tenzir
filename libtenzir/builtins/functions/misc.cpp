@@ -13,6 +13,7 @@
 #include <tenzir/detail/enumerate.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/stable_map.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>

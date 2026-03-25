@@ -11,6 +11,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/ocsf.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::ocsf {

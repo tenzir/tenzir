@@ -15,6 +15,7 @@
 #include "tenzir/error.hpp"
 #include "tenzir/execution_node.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>

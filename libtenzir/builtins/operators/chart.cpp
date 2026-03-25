@@ -16,6 +16,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"

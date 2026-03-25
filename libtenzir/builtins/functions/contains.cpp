@@ -9,6 +9,7 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/multi_series.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"

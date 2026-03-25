@@ -10,6 +10,7 @@
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::kafka {

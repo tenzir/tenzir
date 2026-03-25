@@ -12,6 +12,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"

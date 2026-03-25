@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
 

@@ -10,7 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/data.hpp"
+#include "tenzir/aliases.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/plugin/inspect.hpp"
 

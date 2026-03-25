@@ -9,6 +9,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/scope_linked.hpp>

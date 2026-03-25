@@ -11,6 +11,7 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 

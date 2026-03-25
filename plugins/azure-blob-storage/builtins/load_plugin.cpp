@@ -8,6 +8,7 @@
 
 #include "tenzir/secret_resolution.hpp"
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 

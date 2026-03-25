@@ -22,6 +22,8 @@
 #include "tenzir/detail/zeekify.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/plugin/parser.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/plugin.hpp"

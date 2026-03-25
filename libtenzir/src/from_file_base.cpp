@@ -10,8 +10,10 @@
 #include <tenzir/format_utils.hpp>
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/filesystem/api.h>

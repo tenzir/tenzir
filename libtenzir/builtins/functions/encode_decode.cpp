@@ -13,6 +13,7 @@
 #include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type_fwd.h>
