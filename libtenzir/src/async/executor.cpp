@@ -891,7 +891,9 @@ private:
   auto add_from_sub_recv(std::unordered_map<data, SubPipeline>::iterator it)
     -> void {
     TENZIR_ASSERT(it != subpipelines_.end());
-    // TODO: This requires `from_sub` to be pinned. Can we do that?
+    // `std::unordered_map` guarantees reference stability on insertions, so
+    // `from_sub` remains valid until the entry is erased. Erasure only happens
+    // in `finish_if_closed` after this task fires and finds the channel drained.
     driver_.add([key = it->first,
                  &from_sub = it->second.from_sub] mutable -> Task<SubMessage> {
       co_return SubMessage{std::move(key), co_await from_sub.recv()};
