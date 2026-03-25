@@ -96,8 +96,8 @@ def _start_token_endpoint_server(
             self.end_headers()
             self.wfile.write(payload)
 
-        def log_message(self, format: str, *args: object) -> None:
-            logger.debug("token endpoint: " + format, *args)
+        def log_message(self, fmt: str, *args: object) -> None:
+            logger.debug("token endpoint: %s", fmt % args if args else fmt)
 
     port = _find_free_port()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)

@@ -317,13 +317,7 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   if (not web_identity.token_file.empty()) {
     TENZIR_VERBOSE("reading web identity token from file: {}",
                    web_identity.token_file);
-    // Validate file path for path traversal attempts.
     const auto path = std::filesystem::path{web_identity.token_file};
-    if (path.filename().string().find("..") != std::string::npos) {
-      return diagnostic::error("invalid token file path")
-        .note("path contains potentially dangerous components")
-        .to_error();
-    }
     // Check file size before reading (max 1MB for tokens).
     constexpr auto max_token_file_size = std::uintmax_t{1024} * 1024;
     auto ec = std::error_code{};
@@ -406,7 +400,7 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
                           : body;
       return diagnostic::error("HTTP request failed")
         .note("status code: {}", status)
-        .note("endpoint: <redacted token endpoint>")
+        .note("endpoint: {}", te.url)
         .note("response: {}", error_body)
         .to_error();
     }

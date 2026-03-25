@@ -15,7 +15,7 @@ You can authenticate with AWS resources using OpenID Connect tokens from externa
 Configure web identity authentication in any AWS operator by specifying a token source and target role:
 
 ```
-load_s3 "s3://bucket/path", aws_iam={
+from_s3 "s3://bucket/path", aws_iam={
   region: "us-east-1",
   assume_role: "arn:aws:iam::123456789012:role/cross-cloud-role",
   web_identity: {
