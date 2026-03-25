@@ -159,13 +159,6 @@ public:
     return std::move(**result);
   }
 
-  /// Returns whether this receiver already consumed the channel's terminal
-  /// `None`, meaning that all senders are gone and this receiver drained all
-  /// data visible to it.
-  auto is_drained() const -> bool {
-    return drained_;
-  }
-
 private:
   Arc<SenderReceiverShared<T>> shared_;
   bool drained_ = false;
@@ -287,6 +280,10 @@ struct SubPipeline {
   element_type_tag input;
   /// True if this subpipeline received the last checkpoint, requiring a commit.
   bool wants_commit = false;
+  /// Set when process(SubMessage) observes the from_sub channel drain.
+  bool from_sub_done = false;
+  /// Set when process(SubMessage) observes the to_control channel drain.
+  bool to_control_done = false;
 };
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
@@ -1310,20 +1307,27 @@ private:
     auto it = subpipelines_.find(message.key);
     TENZIR_ASSERT(it != subpipelines_.end());
     auto& sub = it->second;
+    // Erases the sub and notifies the operator once both channels have drained.
+    // Uses explicit flags rather than is_drained() to avoid a race where both
+    // tasks fire and sit in the driver queue simultaneously: the first would
+    // see both channels drained and erase the entry, leaving the second with a
+    // dangling key.
     auto finish_if_closed = [&] -> Task<void> {
-      auto erase
-        = sub.from_sub.is_drained() and sub.to_control_receiver.is_drained();
-      if (erase) {
-        subpipelines_.erase(it);
-        co_await call_finish_sub(make_view(message.key));
-        // TODO: Can we do without the permissions?
-        co_await check_done();
+      if (not (sub.from_sub_done and sub.to_control_done)) {
+        co_return;
       }
+      subpipelines_.erase(it);
+      if (phase_ != Phase::stopping_forced) {
+        co_await call_finish_sub(make_view(message.key));
+      }
+      // TODO: Can we do without the permissions?
+      co_await check_done();
     };
     co_await co_match(
       std::move(message.event),
       [&](Option<Checkpoint> checkpoint) -> Task<void> {
         if (not checkpoint) {
+          sub.from_sub_done = true;
           co_await finish_if_closed();
           co_return;
         }
@@ -1334,6 +1338,7 @@ private:
       },
       [&](Option<ToControl> to_control) -> Task<void> {
         if (not to_control) {
+          sub.to_control_done = true;
           co_await finish_if_closed();
           co_return;
         }
