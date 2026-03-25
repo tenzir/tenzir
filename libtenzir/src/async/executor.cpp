@@ -265,14 +265,12 @@ struct SubPipeline {
   }
 
   auto get_handle() -> AnyOpenPipeline {
-    if (closed_data or not push) {
-      return OpenPipeline<table_slice>{None{}};
-    }
-    return co_match(
-      *push,
-      [&]<class In>(Box<Push<OperatorMsg<In>>>& push) -> AnyOpenPipeline {
-        return OpenPipeline<In>{push};
-      });
+    return match(input, [&]<class In>(tag<In>) -> AnyOpenPipeline {
+      if (closed_data or not push) {
+        return OpenPipeline<In>{None{}};
+      }
+      return OpenPipeline<In>{as<Box<Push<OperatorMsg<In>>>>(*push)};
+    });
   }
 
   /// We keep the push handle until we begin its shutdown sequence.
