@@ -1,0 +1,6 @@
+error: separator must not be empty
+ --> tests/operators/read_delimited/empty_separator.tql:9:16
+  |
+9 | read_delimited ""
+  |                ^^ 
+  |

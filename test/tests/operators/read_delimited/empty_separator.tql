@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {
+  line: "abc"
+}
+write_lines
+read_delimited ""

@@ -1,0 +1,163 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include <tenzir/as_bytes.hpp>
+#include <tenzir/defaults.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/series_builder.hpp>
+
+#include <arrow/util/utf8.h>
+
+#include <cstddef>
+
+namespace tenzir::plugins::read_delimited {
+
+namespace {
+
+struct ReadDelimitedArgs {
+  located<data> separator;
+  std::optional<bool> binary;
+  bool include_separator = false;
+};
+
+class ReadDelimited final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadDelimited(ReadDelimitedArgs args) : args_{std::move(args)} {
+    match(
+      args_.separator.inner,
+      [&](const std::string& s) {
+        separator_ = s;
+      },
+      [&](const blob& b) {
+        separator_.assign(reinterpret_cast<const char*>(b.data()), b.size());
+      },
+      [](const auto&) {
+        TENZIR_UNREACHABLE();
+      });
+    // Auto-resolve binary mode: true for blob separators, false for string.
+    binary_ = args_.binary.value_or(is<blob>(args_.separator.inner));
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    buffer_.append(reinterpret_cast<const char*>(input->data()), input->size());
+    auto consumed = size_t{0};
+    while (true) {
+      const auto pos = buffer_.find(separator_, consumed);
+      if (pos == std::string::npos) {
+        break;
+      }
+      if (pos + separator_.size() == buffer_.size()) {
+        break;
+      }
+      const auto seg
+        = args_.include_separator
+            ? std::string_view{buffer_.data() + consumed,
+                               pos + separator_.size() - consumed}
+            : std::string_view{buffer_.data() + consumed, pos - consumed};
+      emit(seg, ctx);
+      consumed = pos + separator_.size();
+    }
+    buffer_ = buffer_.substr(consumed);
+    if (builder_.length()
+        >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.data"));
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    // invariant from `process()`: `buffer_` contains no separator except
+    // optionally one trailing separator at the very end.
+    auto remainder = std::string_view{buffer_};
+    if (not args_.include_separator and buffer_.size() >= separator_.size()) {
+      const auto tail = buffer_.substr(buffer_.size() - separator_.size());
+      if (tail == separator_) {
+        remainder.remove_suffix(separator_.size());
+      }
+    }
+    if (not remainder.empty()) {
+      emit(remainder, ctx);
+    }
+    buffer_.clear();
+    // push
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.data"));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+  }
+
+private:
+  auto emit(std::string_view segment, OpCtx& ctx) -> void {
+    if (binary_) {
+      builder_.record().field("data", as_bytes(segment));
+    } else {
+      if (not arrow::util::ValidateUTF8(segment)) {
+        diagnostic::warning("got invalid UTF-8")
+          .hint("use `binary=true` if you are reading binary data")
+          .emit(ctx);
+        return;
+      }
+      builder_.record().field("data", segment);
+    }
+  }
+
+  ReadDelimitedArgs args_;
+  std::string separator_;
+  bool binary_ = false;
+  std::string buffer_;
+  series_builder builder_;
+};
+
+class plugin final : public virtual OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.read_delimited";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadDelimitedArgs, ReadDelimited>{};
+    auto sep
+      = d.positional("separator", &ReadDelimitedArgs::separator, "string|blob");
+    d.named("binary", &ReadDelimitedArgs::binary);
+    d.named("include_separator", &ReadDelimitedArgs::include_separator);
+    d.validate([sep](DescribeCtx& ctx) -> Empty {
+      TRY(auto s, ctx.get(sep));
+      if (not is<std::string>(s.inner) and not is<blob>(s.inner)) {
+        diagnostic::error("separator must be a `string` or `blob`")
+          .primary(s.source)
+          .emit(ctx);
+        return {};
+      }
+      const auto size = is<std::string>(s.inner)
+                          ? as<std::string>(s.inner).size()
+                          : as<blob>(s.inner).size();
+      if (size == 0) {
+        diagnostic::error("separator must not be empty")
+          .primary(s.source)
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+};
+
+} // namespace
+
+} // namespace tenzir::plugins::read_delimited
+
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::read_delimited::plugin)

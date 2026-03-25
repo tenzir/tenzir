@@ -1,0 +1,12 @@
+{
+  data: "foo",
+}
+{
+  data: "",
+}
+{
+  data: "bar",
+}
+{
+  data: "baz\n",
+}
