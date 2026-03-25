@@ -1262,24 +1262,31 @@ private:
             .note("got {}", *int_value)
             .emit(dh_);
         }
-        auto expected_int = reverse_lookup.find(*string_value);
-        if (expected_int == reverse_lookup.end()) {
-          diagnostic::warning("found invalid value for `{}`", string_path)
-            .primary(self_)
-            .note("got {:?}", *string_value)
-            .emit(dh_);
-        }
-        if (expected_string != enum_lookup.end()
-            and expected_int != reverse_lookup.end()) {
-          if (*int_value != expected_int->second
-              or *string_value != expected_string->second) {
-            diagnostic::warning("found inconsistency between `{}` and `{}`",
-                                int_path, string_path)
+        // When the integer maps to "Other" (typically 99), the string sibling
+        // is explicitly a free-form, source-specific value per the OCSF spec.
+        // Do not validate it against the enum lookup or check consistency.
+        auto is_other = expected_string != enum_lookup.end()
+                        and expected_string->second == "Other";
+        if (not is_other) {
+          auto expected_int = reverse_lookup.find(*string_value);
+          if (expected_int == reverse_lookup.end()) {
+            diagnostic::warning("found invalid value for `{}`", string_path)
               .primary(self_)
-              .note("got {} ({:?}) and {:?} ({})", *int_value,
-                    expected_string->second, *string_value,
-                    expected_int->second)
+              .note("got {:?}", *string_value)
               .emit(dh_);
+          }
+          if (expected_string != enum_lookup.end()
+              and expected_int != reverse_lookup.end()) {
+            if (*int_value != expected_int->second
+                or *string_value != expected_string->second) {
+              diagnostic::warning("found inconsistency between `{}` and `{}`",
+                                  int_path, string_path)
+                .primary(self_)
+                .note("got {} ({:?}) and {:?} ({})", *int_value,
+                      expected_string->second, *string_value,
+                      expected_int->second)
+                .emit(dh_);
+            }
           }
         }
       } else if (int_value and not string_value) {

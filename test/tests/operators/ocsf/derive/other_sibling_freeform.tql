@@ -1,0 +1,13 @@
+// Test that the "Other" (99) enum value allows a free-form sibling string.
+// Per OCSF spec, when _id is 99 (Other), the sibling string must be populated
+// with the source-specific value and must NOT be validated against the enum.
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 99,          // Other -> look at activity_name for source value
+  activity_name: "CustomOp", // Free-form source value, not a known enum caption
+}
+ocsf::derive
