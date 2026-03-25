@@ -476,6 +476,18 @@ auto wait_for_exit(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
   }
 }
 
+auto process_exit_error(const folly::ProcessReturnCode& return_code)
+  -> std::optional<std::string> {
+  if (return_code.exited()) {
+    auto exit_code = return_code.exitStatus();
+    if (exit_code == 0) {
+      return std::nullopt;
+    }
+    return fmt::format("child process exited with exit-code {}", exit_code);
+  }
+  return fmt::format("child process {}", return_code.str());
+}
+
 class ShellSource final : public Operator<void, chunk_ptr> {
 public:
   explicit ShellSource(ShellArgs args) : args_{std::move(args)} {
@@ -526,7 +538,7 @@ public:
       },
       [&](ProcessExited exited) -> Task<void> {
         child_exited_ = true;
-        exit_code_ = exited.return_code.exitStatus();
+        exit_error_ = process_exit_error(exited.return_code);
         co_await finish_if_ready(ctx.dh());
       },
       [&](TaskFailed failure) -> Task<void> {
@@ -555,8 +567,8 @@ private:
       co_return;
     }
     lifecycle_ = Lifecycle::done;
-    if (exit_code_ != 0) {
-      diagnostic::error("child process exited with exit-code {}", exit_code_)
+    if (exit_error_) {
+      diagnostic::error("{}", *exit_error_)
         .note("child process execution failed")
         .emit(dh);
     }
@@ -569,7 +581,7 @@ private:
     = std::make_shared<MessageQueue>(message_queue_capacity);
   bool stdout_closed_ = false;
   bool child_exited_ = false;
-  int exit_code_ = 0;
+  std::optional<std::string> exit_error_ = std::nullopt;
 };
 
 class ShellTransform final : public Operator<chunk_ptr, chunk_ptr> {
@@ -644,7 +656,7 @@ public:
       },
       [&](ProcessExited exited) -> Task<void> {
         child_exited_ = true;
-        exit_code_ = exited.return_code.exitStatus();
+        exit_error_ = process_exit_error(exited.return_code);
         co_await finish_if_ready(ctx.dh());
       },
       [&](TaskFailed failure) -> Task<void> {
@@ -701,8 +713,8 @@ private:
       co_return;
     }
     lifecycle_ = Lifecycle::done;
-    if (exit_code_ != 0) {
-      diagnostic::error("child process exited with exit-code {}", exit_code_)
+    if (exit_error_) {
+      diagnostic::error("{}", *exit_error_)
         .note("child process execution failed")
         .emit(dh);
     }
@@ -715,7 +727,7 @@ private:
     = std::make_shared<MessageQueue>(message_queue_capacity);
   bool stdout_closed_ = false;
   bool child_exited_ = false;
-  int exit_code_ = 0;
+  std::optional<std::string> exit_error_ = std::nullopt;
 };
 
 class plugin final : public virtual operator_plugin2<shell_operator>,

@@ -287,11 +287,6 @@ auto make_subprocess_env(const python_runtime& runtime)
   append_missing("VIRTUAL_ENV", runtime.virtual_env);
   append_missing("UV_CACHE_DIR", runtime.uv_cache_dir);
   append_missing("UV_PYTHON", runtime.uv_python);
-  if (result.empty()) {
-    for (auto [key, value] : detail::environment()) {
-      result.push_back(fmt::format("{}={}", key, value));
-    }
-  }
   return result;
 }
 
@@ -352,6 +347,11 @@ auto prepare_runtime(const config& config, std::string_view requirements,
     return failure::promise();
   }
   runtime.venv = std::filesystem::path{venv};
+  auto cleanup_venv
+    = detail::scope_guard{[venv_path = *runtime.venv]() noexcept {
+        auto ignored = std::error_code{};
+        std::filesystem::remove_all(venv_path, ignored);
+      }};
   runtime.env["VIRTUAL_ENV"] = venv;
   runtime.virtual_env = venv;
   runtime.uv_cache_dir
@@ -429,6 +429,7 @@ auto prepare_runtime(const config& config, std::string_view requirements,
                     "failed to install additional requirements"));
   }
   runtime.python_executable = venv_python;
+  cleanup_venv.disable();
   return runtime;
 }
 
@@ -867,9 +868,14 @@ public:
       }
       auto requirements
         = args_.requirements ? args_.requirements->inner : std::string{};
-      auto runtime
-        = prepare_runtime(config_, requirements, ctx.dh(),
-                          caf::content(ctx.actor_system().config()));
+      auto config = config_;
+      auto system_config = caf::content(ctx.actor_system().config());
+      auto runtime = co_await spawn_blocking(
+        [config = std::move(config), requirements = std::move(requirements),
+         dh = diagnostic_handler_ref{ctx.dh()},
+         system_config = std::move(system_config)]() mutable {
+          return prepare_runtime(config, requirements, dh, system_config);
+        });
       if (not runtime) {
         lifecycle_ = Lifecycle::done;
         co_return;
@@ -895,6 +901,8 @@ public:
       subprocess_ = co_await Subprocess::spawn(std::move(spec));
       auto code_pipe = subprocess_->input_pipe(code_pipe_child_fd);
       TENZIR_ASSERT(code_pipe.is_some());
+      // Keep `input` non-empty so the scaffold always receives a code payload,
+      // even when `code` resolves to the empty string.
       auto input = code->empty() ? std::string{" "} : *code;
       auto bytes = std::span{
         reinterpret_cast<const std::byte*>(input.data()),
@@ -968,16 +976,24 @@ public:
     try {
       if (subprocess_) {
         if (auto stdin_pipe = subprocess_->stdin_pipe();
-            stdin_pipe.is_some() and not (*stdin_pipe).is_closed()) {
+            stdin_pipe.is_some() and not(*stdin_pipe).is_closed()) {
           co_await (*stdin_pipe).close();
         }
         auto return_code = co_await subprocess_->wait();
-        if (return_code.exitStatus() != 0) {
+        auto process_failed
+          = not return_code.exited() or return_code.exitStatus() != 0;
+        if (process_failed) {
           auto error = co_await drain_error_pipe();
           if (error.empty()) {
-            error = "python process exited with error";
+            error = fmt::format("python process {}", return_code.str());
           }
-          diagnostic::error("{}", error).emit(ctx.dh());
+          if (not return_code.exited()) {
+            diagnostic::error("{}", error)
+              .note("python process {}", return_code.str())
+              .emit(ctx.dh());
+          } else {
+            diagnostic::error("{}", error).emit(ctx.dh());
+          }
         }
       }
     } catch (const std::exception& ex) {
@@ -1018,8 +1034,9 @@ private:
 
   auto ensure_child_running() -> Task<bool> {
     TENZIR_ASSERT(subprocess_);
-    auto result = co_await subprocess_->wait_timeout(std::chrono::milliseconds{
-      0});
+    // `ensure_child_running` polls with `wait_timeout(0ms)` and never blocks.
+    auto result
+      = co_await subprocess_->wait_timeout(std::chrono::milliseconds{0});
     co_return result.running();
   }
 

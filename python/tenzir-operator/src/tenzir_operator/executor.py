@@ -8,7 +8,7 @@ import traceback
 from collections import defaultdict
 from collections.abc import Generator, Iterable
 from contextlib import suppress
-from types import CodeType, MethodType, ModuleType
+from types import CodeType, MethodType, ModuleType, TracebackType
 from typing import (
     Any,
     Dict,
@@ -52,6 +52,38 @@ def add_note(e: Optional[BaseException], msg: str) -> None:
     args = e.args
     arg0 = f"{args[0]}\n{msg}" if args else msg
     e.args = (arg0,) + args[1:]
+
+
+def _normalize_traceback_filename(filename: str) -> tuple[str, bool]:
+    suffix = os.path.join("tenzir_operator", "executor.py")
+    if filename.endswith(suffix):
+        return "tenzir_operator/executor.py", True
+    return filename, False
+
+
+def print_stable_exception(
+    exc_type: type[BaseException] | None,
+    exc: BaseException | None,
+    tb: TracebackType | None,
+    file,
+) -> None:
+    if exc_type is None or exc is None:
+        return
+    if tb is not None:
+        print("Traceback (most recent call last):", file=file)
+        for frame in traceback.extract_tb(tb):
+            filename, is_executor_frame = _normalize_traceback_filename(frame.filename)
+            if is_executor_frame:
+                print(f'  File "{filename}", in {frame.name}', file=file)
+            else:
+                print(
+                    f'  File "{filename}", line {frame.lineno}, in {frame.name}',
+                    file=file,
+                )
+            if frame.line:
+                print(f"    {frame.line}", file=file)
+    for line in traceback.format_exception_only(exc_type, exc):
+        print(line, end="", file=file)
 
 
 T = TypeVar("T")
@@ -433,9 +465,10 @@ def main() -> int:
             t = inner.__class__ if inner else None
             tb = inner.__traceback__ if inner else None
             tb = tb.tb_next if tb else tb
-            traceback.print_exception(t, inner, tb, file=errpipe)
+            print_stable_exception(t, inner, tb, errpipe)
             return 1
         except BaseException:
-            traceback.print_exc(file=errpipe)
+            exc_type, exc, tb = sys.exc_info()
+            print_stable_exception(exc_type, exc, tb, errpipe)
             return 1
     return 0

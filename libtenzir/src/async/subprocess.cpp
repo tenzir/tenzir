@@ -393,7 +393,7 @@ auto Subprocess::send_signal_to_process_group(int signal) -> Task<void> {
       throw std::logic_error{"cannot signal a finished subprocess group"};
     }
     auto result = ::kill(-pid, signal);
-    if (result != 0) {
+    if (result != 0 and errno != ESRCH) {
       throw_last_system_error("kill");
     }
   });
