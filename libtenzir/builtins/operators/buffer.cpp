@@ -101,15 +101,6 @@
 // with bounded buffering. The sequential constraint between process() and
 // process_task() makes it structurally impossible to accept new data and
 // push buffered data at the same time.
-//
-// Full decoupling requires two independent operators in the pipeline (as
-// the legacy crtp_operator path does with write_buffer_operator and
-// read_buffer_operator connected by an actor side-channel). The Describer/
-// spawner mechanism would need to be extended to support returning a
-// pipeline of two operators from describe().
-//
-// The current implementation uses approach (3) as the best available
-// compromise within a single operator.
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/async/mutex.hpp>
