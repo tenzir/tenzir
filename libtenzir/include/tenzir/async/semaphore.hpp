@@ -14,6 +14,7 @@
 #include <folly/fibers/Semaphore.h>
 
 #include <memory>
+#include <utility>
 
 namespace tenzir {
 
