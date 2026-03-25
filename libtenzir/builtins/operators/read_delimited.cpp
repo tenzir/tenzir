@@ -56,9 +56,6 @@ public:
       if (pos == std::string::npos) {
         break;
       }
-      if (pos + separator_.size() == buffer_.size()) {
-        break;
-      }
       const auto seg
         = args_.include_separator
             ? std::string_view{buffer_.data() + consumed,
@@ -76,17 +73,10 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    // invariant from `process()`: `buffer_` contains no separator except
-    // optionally one trailing separator at the very end.
-    auto remainder = std::string_view{buffer_};
-    if (not args_.include_separator and buffer_.size() >= separator_.size()) {
-      const auto tail = buffer_.substr(buffer_.size() - separator_.size());
-      if (tail == separator_) {
-        remainder.remove_suffix(separator_.size());
-      }
-    }
-    if (not remainder.empty()) {
-      emit(remainder, ctx);
+    // `buffer_` holds only data after the last separator (i.e., no complete
+    // separator remains in it); emit it as a final partial record if non-empty.
+    if (not buffer_.empty()) {
+      emit(buffer_, ctx);
     }
     buffer_.clear();
     // push
