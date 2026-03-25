@@ -1348,7 +1348,9 @@ private:
             sub.closed_data = true;
             break;
           case ToControl::ready_for_shutdown:
-            // TODO: We should not leave this dangling!
+            // Safe to drop: OpenPipeline may only be used inside main-loop
+            // operator functions (not await_task / process_sub), so no handle
+            // outlives this event.
             // TODO: Can we really immediately shut it down? Checkpoints?
             sub.push = None{};
             sub.from_control_sender = None{};
