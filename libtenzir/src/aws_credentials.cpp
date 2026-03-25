@@ -20,6 +20,7 @@
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <aws/core/auth/SSOCredentialsProvider.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/AssumeRoleRequest.h>
@@ -69,6 +70,40 @@ auto make_sts_client_config(const std::optional<std::string>& region)
     config.endpointOverride = *endpoint_url;
   }
   return config;
+}
+
+class profile_credentials_provider_chain final
+  : public Aws::Auth::AWSCredentialsProviderChain {
+public:
+  explicit profile_credentials_provider_chain(std::string const& profile) {
+    AddProvider(
+      std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
+        profile.c_str()));
+    AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(
+      Aws::String{profile.c_str()}));
+  }
+};
+
+auto make_profile_aws_credentials_provider(std::string const& profile)
+  -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
+  return std::make_shared<profile_credentials_provider_chain>(profile);
+}
+
+auto get_profile_credentials(Aws::Auth::AWSCredentialsProvider& provider,
+                             std::string_view profile)
+  -> caf::expected<Aws::Auth::AWSCredentials> {
+  auto creds = provider.GetAWSCredentials();
+  if (creds.IsEmpty()) {
+    return diagnostic::error("failed to load credentials from profile")
+      .note("profile: {}", profile)
+      .to_error();
+  }
+  if (creds.IsExpired()) {
+    return diagnostic::error("loaded expired credentials from profile")
+      .note("profile: {}", profile)
+      .to_error();
+  }
+  return creds;
 }
 
 /// Custom credentials provider that automatically refreshes credentials
@@ -259,19 +294,15 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
 auto load_profile_credentials(const std::string& profile)
   -> caf::expected<sts_credentials> {
   TENZIR_VERBOSE("using AWS profile {}", profile);
-  auto provider = Aws::Auth::ProfileConfigFileAWSCredentialsProvider{
-    profile.c_str(),
-  };
-  auto creds = provider.GetAWSCredentials();
-  if (creds.IsEmpty()) {
-    return diagnostic::error("failed to load credentials from profile")
-      .note("profile: {}", profile)
-      .to_error();
+  auto provider = make_profile_aws_credentials_provider(profile);
+  auto creds = get_profile_credentials(*provider, profile);
+  if (not creds) {
+    return creds.error();
   }
   return sts_credentials{
-    .access_key_id = creds.GetAWSAccessKeyId(),
-    .secret_access_key = creds.GetAWSSecretKey(),
-    .session_token = creds.GetSessionToken(),
+    .access_key_id = creds->GetAWSAccessKeyId(),
+    .secret_access_key = creds->GetAWSSecretKey(),
+    .session_token = creds->GetSessionToken(),
   };
 }
 
@@ -498,40 +529,48 @@ auto make_aws_credentials_provider(
       creds->access_key_id, creds->secret_access_key, creds->session_token);
   }
   if (has_profile and has_role) {
-    // Profile + role: load profile credentials, then assume role.
-    auto profile_creds = load_profile_credentials(creds->profile);
-    if (not profile_creds) {
-      return profile_creds.error();
+    // Profile + role: keep the profile provider chain so SSO-backed profiles
+    // and refresh semantics survive the STS assume-role hop.
+    auto base_provider = make_profile_aws_credentials_provider(creds->profile);
+    auto base_creds = get_profile_credentials(*base_provider, creds->profile);
+    if (not base_creds) {
+      return base_creds.error();
     }
-    auto base_creds = resolved_aws_credentials{
-      .region = {},
-      .profile = {},
-      .session_name = {},
-      .access_key_id = profile_creds->access_key_id,
-      .secret_access_key = profile_creds->secret_access_key,
-      .session_token = profile_creds->session_token,
-      .role = {},
-      .external_id = {},
-      .web_identity = {},
-    };
-    auto sts_creds = assume_role_with_credentials(
-      base_creds, creds->role, session_name, creds->external_id, region);
-    if (not sts_creds) {
-      return sts_creds.error();
+    auto sts_config = make_sts_client_config(region);
+    auto sts_client = std::make_shared<Aws::STS::STSClient>(
+      base_provider, nullptr, sts_config);
+    auto session = session_name.empty() ? "tenzir-session" : session_name;
+    auto provider
+      = std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
+        creds->role, session, creds->external_id,
+        Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+    auto assumed_creds = provider->GetAWSCredentials();
+    if (assumed_creds.IsEmpty()) {
+      return diagnostic::error("failed to assume role with profile credentials")
+        .note("profile: {}", creds->profile)
+        .note("role ARN: {}", creds->role)
+        .hint("check that the profile resolves credentials and can call "
+              "`sts:AssumeRole`")
+        .to_error();
     }
-    return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-      sts_creds->access_key_id, sts_creds->secret_access_key,
-      sts_creds->session_token);
+    if (assumed_creds.IsExpired()) {
+      return diagnostic::error(
+               "assume-role provider returned expired credentials")
+        .note("profile: {}", creds->profile)
+        .note("role ARN: {}", creds->role)
+        .to_error();
+    }
+    return provider;
   }
   if (has_profile) {
-    // Profile-based credentials only.
-    auto profile_creds = load_profile_credentials(creds->profile);
+    // Profile-based credentials only: keep the provider chain so SSO-backed
+    // profiles can refresh credentials.
+    auto provider = make_profile_aws_credentials_provider(creds->profile);
+    auto profile_creds = get_profile_credentials(*provider, creds->profile);
     if (not profile_creds) {
       return profile_creds.error();
     }
-    return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-      profile_creds->access_key_id, profile_creds->secret_access_key,
-      profile_creds->session_token);
+    return provider;
   }
   if (has_role) {
     // Role assumption with default credentials - use auto-refreshing provider.

@@ -22,7 +22,6 @@
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
-#include <aws/core/auth/SSOCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>

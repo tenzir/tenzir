@@ -35,7 +35,7 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::optional<std::string>& region)
   -> caf::expected<sts_credentials>;
 
-/// Loads credentials from an AWS CLI profile.
+/// Loads credentials from an AWS CLI profile, including SSO-backed profiles.
 auto load_profile_credentials(const std::string& profile)
   -> caf::expected<sts_credentials>;
 
