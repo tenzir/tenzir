@@ -6,6 +6,111 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+// ## Buffer Operator — Design Notes
+//
+// ### Goal
+//
+// The buffer operator decouples upstream from downstream using a bounded
+// queue of configurable capacity. The requirements are:
+//
+//   (R1) Upstream must be able to continue producing data while downstream
+//        is slow, as long as the buffer has free capacity.
+//   (R2) Buffered data must be forwarded downstream even when no new input
+//        arrives (active draining).
+//   (R3) The total amount of buffered data must be bounded by the configured
+//        capacity (no unbounded secondary queues).
+//   (R4) The operator must terminate after upstream ends and all buffered
+//        data has been delivered.
+//
+// ### Why a single Operator<T, T> cannot satisfy all requirements
+//
+// The executor schedules operator methods as follows:
+//
+//   - process() and process_task() are SEQUENTIAL: the executor never runs
+//     them concurrently. One must complete before the other can start.
+//   - await_task() runs CONCURRENTLY with process() and process_task().
+//   - Spawned tasks (ctx.spawn_task) run concurrently with everything, but
+//     do not have access to Push<T>, so they cannot emit data downstream.
+//   - Push<T> is only available inside process(), process_task(),
+//     finalize(), and prepare_snapshot().
+//
+// A true decoupling buffer needs two concurrent activities:
+//
+//   (A) A producer that accepts upstream data into the buffer.
+//       → This is process().
+//   (B) A consumer that drains the buffer to downstream.
+//       → This must call push(), so it can only be process_task()
+//         (or finalize/prepare_snapshot, but those are one-shot).
+//
+// Because (A) and (B) are sequential, they block each other:
+//
+//   - If process_task() blocks on push() (downstream slow), process()
+//     cannot run, so upstream stalls even when the buffer has free space.
+//     This violates (R1).
+//
+//   - If process() blocks waiting for buffer space, process_task() cannot
+//     run to drain the buffer, because it is sequential with process().
+//     This deadlocks.
+//
+// ### Approaches explored
+//
+// 1. await_task/process_task drain loop (original new-executor attempt)
+//
+//    process() writes to the buffer and blocks when full (waiting on a
+//    Notify). await_task() wakes when data is available and returns it.
+//    process_task() pushes it downstream.
+//
+//    FAILS: When process() blocks on a full buffer, process_task() cannot
+//    run (sequential), so the buffer never drains. Deadlocks when a single
+//    input batch exceeds ~2× the buffer capacity.
+//
+// 2. Spawned drain task with output queue
+//
+//    A ctx.spawn_task() background coroutine moves data from the buffer
+//    into a BoundedQueue. await_task() dequeues from the BoundedQueue and
+//    process_task() pushes downstream.
+//
+//    FAILS: The drain task eventually blocks on the BoundedQueue (full
+//    because process_task is blocked on push). Once blocked, the drain task
+//    can no longer free buffer space. process() blocks waiting for space,
+//    process_task() can't run → deadlock. Increasing the BoundedQueue
+//    capacity only raises the threshold, doesn't eliminate it, and violates
+//    (R3).
+//
+// 3. Overflow push from process()
+//
+//    process() adds input to the buffer, then pushes the oldest items
+//    directly downstream (via its own push reference) until the buffer is
+//    back at capacity. await_task()/process_task() actively drain the
+//    buffer between process() calls.
+//
+//    PARTIALLY WORKS: No deadlock — process() only blocks on downstream
+//    push, never on internal state. Buffer capacity is respected. Active
+//    draining via process_task() ensures buffered data flows when no new
+//    input arrives.
+//
+//    LIMITATION: When process_task() blocks on push() (slow downstream),
+//    process() cannot run (sequential), so upstream stalls. This violates
+//    (R1): the buffer cannot absorb new data while the consumer side is
+//    blocked on downstream backpressure. The operator degrades to a FIFO
+//    pipe with capacity-sized latency rather than a true decoupling buffer.
+//
+// ### Conclusion
+//
+// A single Operator<T, T> cannot fully decouple upstream from downstream
+// with bounded buffering. The sequential constraint between process() and
+// process_task() makes it structurally impossible to accept new data and
+// push buffered data at the same time.
+//
+// Full decoupling requires two independent operators in the pipeline (as
+// the legacy crtp_operator path does with write_buffer_operator and
+// read_buffer_operator connected by an actor side-channel). The Describer/
+// spawner mechanism would need to be extended to support returning a
+// pipeline of two operators from describe().
+//
+// The current implementation uses approach (3) as the best available
+// compromise within a single operator.
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/async/mutex.hpp>
 #include <tenzir/async/notify.hpp>
