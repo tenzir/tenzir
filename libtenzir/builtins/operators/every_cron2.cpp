@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -14,6 +14,7 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -823,7 +824,7 @@ private:
 using every_operator = every_cron_operator<"every">;
 
 struct every_plugin final : public operator_plugin2<every_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = every_cron_args{};
     args.op = inv.self.get_location();
@@ -850,7 +851,7 @@ struct every_plugin final : public operator_plugin2<every_operator> {
 using cron_operator = every_cron_operator<"cron">;
 
 struct cron_plugin final : public operator_plugin2<cron_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = every_cron_args{};
     args.op = inv.self.get_location();

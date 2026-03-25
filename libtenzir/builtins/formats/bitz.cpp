@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -204,7 +204,7 @@ class read_bitz_plugin final : public virtual operator_factory_plugin {
     return "read_bitz";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
     return check(pipeline::internal_parse_as_operator("read bitz"));
@@ -216,7 +216,7 @@ class write_bitz_plugin final : public virtual operator_factory_plugin {
     return "write_bitz";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
     return check(pipeline::internal_parse_as_operator("write bitz"));

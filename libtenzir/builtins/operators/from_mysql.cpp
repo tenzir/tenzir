@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -815,8 +815,9 @@ public:
   auto upgrade_to_tls(std::shared_ptr<folly::SSLContext> ctx,
                       std::string const& hostname) -> Task<MysqlResult<void>> {
     try {
-      co_await upgrade_transport_to_tls_client(transport_, std::move(ctx),
-                                               std::string{hostname});
+      transport_
+        = Box<folly::coro::Transport>{co_await upgrade_transport_to_tls_client(
+          std::move(*transport_), std::move(ctx), std::string{hostname})};
     } catch (std::exception const& ex) {
       co_return Err{
         mysql_error{0, fmt::format("TLS handshake failed: {}", ex.what())}};
@@ -2128,10 +2129,17 @@ public:
     }
     // Use the global IO executor's EventBase for async socket I/O.
     auto* evb = folly::getGlobalIOExecutor()->getEventBase();
+    auto const tls_enabled = config.ssl_context != nullptr;
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config));
     if (result.is_err()) {
-      emit_mysql_error(std::move(result).unwrap_err(), ctx);
+      auto err = std::move(result).unwrap_err();
+      auto diag
+        = err.code != 0
+            ? diagnostic::error("MySQL error {}: {}", err.code, err.message)
+            : diagnostic::error("MySQL error: {}", err.message);
+      add_tls_client_diagnostic_hints(std::move(diag), tls_enabled, "MySQL")
+        .emit(ctx);
       done_ = true;
       co_return;
     }

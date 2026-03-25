@@ -26,3 +26,15 @@ type syslog.rfc3164 = record {
 	process_id: string,
 	content: string,
 }
+
+// legacy syslog with a structured-data prefix extracted from content
+type syslog.rfc3164.structured = record {
+	facility: uint64,
+	severity: uint64,
+	timestamp: string,
+	hostname: string,
+	app_name: string,
+	process_id: string,
+	structured_data: record{},
+	content: string,
+}

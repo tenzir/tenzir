@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\\ \\  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -21,7 +21,11 @@ namespace tenzir {
 
 namespace {
 
-/// Coroutine-friendly callback for SSL/TLS handshake completion.
+// Give certificate exchange and verification enough time to complete on a
+// healthy peer, but fail fast enough that broken TLS setup feeds back into the
+// caller's reconnect logic promptly.
+constexpr auto tls_handshake_timeout = std::chrono::seconds{5};
+
 class client_ssl_handshake_callback
   : public folly::coro::TransportCallbackBase,
     public folly::AsyncSSLSocket::HandshakeCB {
@@ -43,11 +47,9 @@ private:
     if (not preverify_ok) {
       return false;
     }
-    // Only verify hostname on the leaf certificate (depth 0).
-    if (X509_STORE_CTX_get_error_depth(ctx) != 0) {
+    if (hostname_.empty() or X509_STORE_CTX_get_error_depth(ctx) != 0) {
       return true;
     }
-    // Verify that the certificate's CN or SAN matches the target hostname.
     auto* cert = X509_STORE_CTX_get_current_cert(ctx);
     if (not cert) {
       return false;
@@ -71,7 +73,6 @@ private:
   std::string hostname_;
 };
 
-/// Coroutine-friendly callback for server-side SSL/TLS handshake completion.
 class server_ssl_handshake_callback
   : public folly::coro::TransportCallbackBase,
     public folly::AsyncSSLSocket::HandshakeCB {
@@ -98,81 +99,128 @@ private:
   folly::AsyncSSLSocket& socket_;
 };
 
+auto get_socket_transport(folly::coro::Transport& transport)
+  -> folly::AsyncSocket* {
+  auto* raw_transport = transport.getTransport();
+  auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
+  if (not socket) {
+    throw folly::AsyncSocketException{
+      folly::AsyncSocketException::INTERNAL_ERROR,
+      "transport is not backed by AsyncSocket",
+    };
+  }
+  return socket;
+}
+
+auto close_transport(folly::coro::Transport transport) -> void {
+  auto* evb = transport.getEventBase();
+  TENZIR_ASSERT(evb);
+  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+    transport.close();
+  });
+}
+
 } // namespace
 
 auto upgrade_transport_to_tls_client(
-  Box<folly::coro::Transport>& transport,
+  folly::coro::Transport transport,
   std::shared_ptr<folly::SSLContext> ssl_context, std::string hostname)
-  -> Task<void> {
-  auto* evb = transport->getEventBase();
+  -> Task<folly::coro::Transport> {
+  auto* evb = transport.getEventBase();
   TENZIR_ASSERT(evb);
-  co_await folly::coro::co_withExecutor(
-    evb, folly::coro::co_invoke([&transport, evb, ctx = std::move(ssl_context),
-                                 hostname = std::move(
-                                   hostname)]() mutable -> Task<void> {
-      // Get the underlying socket and detach its fd.
-      auto* raw_transport = transport->getTransport();
-      auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
-      TENZIR_ASSERT(socket);
-      auto fd = socket->detachNetworkSocket();
-      // Create an SSL socket wrapping the existing fd.
-      auto ssl_socket
-        = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb, fd,
-                                           /*server=*/false,
-                                           /*deferSecurityNegotiation=*/true);
-      auto* ssl_ptr = ssl_socket.get();
-      // Replace the transport with one wrapping the SSL socket.
-      transport = Box<folly::coro::Transport>{
-        std::in_place, evb,
-        folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
-      // Perform the TLS handshake.
-      auto cb = client_ssl_handshake_callback{*ssl_ptr, std::move(hostname)};
-      ssl_ptr->sslConn(&cb);
-      co_await cb.wait();
-      // Re-throw handshake errors captured in the callback.
-      if (cb.error()) {
-        cb.error().throw_exception();
-      }
-      co_return;
-    }));
+  auto [upgraded_transport, callback] = co_await folly::coro::co_withExecutor(
+    evb,
+    folly::coro::co_invoke(
+      [transport = std::move(transport), evb, ctx = std::move(ssl_context),
+       hostname = std::move(hostname)]() mutable
+        -> Task<std::pair<folly::coro::Transport,
+                          std::shared_ptr<client_ssl_handshake_callback>>> {
+        auto* old_socket = get_socket_transport(transport);
+        auto ssl_socket = folly::AsyncSSLSocket::UniquePtr{
+          new folly::AsyncSSLSocket{
+            std::move(ctx),
+            old_socket,
+            /*server=*/false,
+            /*deferSecurityNegotiation=*/true,
+          },
+        };
+        auto* ssl_ptr = ssl_socket.get();
+        if (not hostname.empty()) {
+          ssl_ptr->setServerName(hostname);
+        }
+        transport = folly::coro::Transport{
+          evb,
+          folly::AsyncTransport::UniquePtr{ssl_socket.release()},
+        };
+        auto callback = std::make_shared<client_ssl_handshake_callback>(
+          *ssl_ptr, std::move(hostname));
+        ssl_ptr->sslConn(callback.get(), tls_handshake_timeout);
+        co_return std::pair{std::move(transport), std::move(callback)};
+      }));
+  try {
+    co_await callback->wait();
+  } catch (...) {
+    close_transport(std::move(upgraded_transport));
+    throw;
+  }
+  if (callback->error()) {
+    close_transport(std::move(upgraded_transport));
+    callback->error().throw_exception();
+  }
+  co_return std::move(upgraded_transport);
 }
 
 auto upgrade_transport_to_tls_server(
-  Box<folly::coro::Transport>& transport,
-  std::shared_ptr<folly::SSLContext> ssl_context) -> Task<void> {
-  auto* evb = transport->getEventBase();
+  folly::coro::Transport transport,
+  std::shared_ptr<folly::SSLContext> ssl_context)
+  -> Task<folly::coro::Transport> {
+  auto* evb = transport.getEventBase();
   TENZIR_ASSERT(evb);
-  co_await folly::coro::co_withExecutor(
+  auto [upgraded_transport, callback] = co_await folly::coro::co_withExecutor(
     evb,
     folly::coro::co_invoke(
-      [&transport, evb, ctx = std::move(ssl_context)]() mutable -> Task<void> {
-        auto* raw_transport = transport->getTransport();
-        auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
-        TENZIR_ASSERT(socket);
-        auto fd = socket->detachNetworkSocket();
-        auto ssl_socket
-          = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb, fd,
-                                             /*server=*/true,
-                                             /*deferSecurityNegotiation=*/true);
+      [transport = std::move(transport), evb,
+       ctx = std::move(ssl_context)]() mutable
+        -> Task<std::pair<folly::coro::Transport,
+                          std::shared_ptr<server_ssl_handshake_callback>>> {
+        auto* old_socket = get_socket_transport(transport);
+        auto ssl_socket = folly::AsyncSSLSocket::UniquePtr{
+          new folly::AsyncSSLSocket{
+            std::move(ctx),
+            old_socket,
+            /*server=*/true,
+            /*deferSecurityNegotiation=*/true,
+          },
+        };
         auto* ssl_ptr = ssl_socket.get();
-        transport = Box<folly::coro::Transport>{
-          std::in_place, evb,
-          folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
-        auto cb = server_ssl_handshake_callback{*ssl_ptr};
-        ssl_ptr->sslAccept(&cb);
-        co_await cb.wait();
-        if (cb.error()) {
-          cb.error().throw_exception();
-        }
-        co_return;
+        transport = folly::coro::Transport{
+          evb,
+          folly::AsyncTransport::UniquePtr{ssl_socket.release()},
+        };
+        auto callback
+          = std::make_shared<server_ssl_handshake_callback>(*ssl_ptr);
+        ssl_ptr->sslAccept(callback.get(), tls_handshake_timeout);
+        co_return std::pair{std::move(transport), std::move(callback)};
       }));
+  try {
+    co_await callback->wait();
+  } catch (...) {
+    close_transport(std::move(upgraded_transport));
+    throw;
+  }
+  if (callback->error()) {
+    close_transport(std::move(upgraded_transport));
+    callback->error().throw_exception();
+  }
+  co_return std::move(upgraded_transport);
 }
 
-auto upgrade_transport_to_tls(Box<folly::coro::Transport>& transport,
+auto upgrade_transport_to_tls(folly::coro::Transport transport,
                               std::shared_ptr<folly::SSLContext> ssl_context,
-                              std::string hostname) -> Task<void> {
+                              std::string hostname)
+  -> Task<folly::coro::Transport> {
   co_return co_await upgrade_transport_to_tls_client(
-    transport, std::move(ssl_context), std::move(hostname));
+    std::move(transport), std::move(ssl_context), std::move(hostname));
 }
 
 } // namespace tenzir

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -313,6 +313,8 @@ class legacy_deserializer;
 } // namespace detail
 
 using ids = bitmap; // temporary; until we have a real type for 'ids'
+using operand = variant<meta_extractor, field_extractor, type_extractor,
+                        data_extractor, data>;
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;

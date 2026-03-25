@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -84,13 +84,15 @@ struct load_tcp_args {
   std::optional<located<uint64_t>> max_buffered_chunks = {};
   std::optional<located<class pipeline>> pipeline = {};
   std::optional<ast::field_path> peer_field = {};
+  bool resolve_hostnames = false;
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
     return f.object(x).fields(
       f.field("ssl", x.ssl), f.field("endpoint", x.endpoint),
       f.field("parallel", x.parallel), f.field("connect", x.connect),
       f.field("max_buffered_chunks", x.max_buffered_chunks),
-      f.field("pipeline", x.pipeline), f.field("peer_field", x.peer_field));
+      f.field("pipeline", x.pipeline), f.field("peer_field", x.peer_field),
+      f.field("resolve_hostnames", x.resolve_hostnames));
   }
 };
 
@@ -211,16 +213,14 @@ public:
     const connection_manager_actor<Elements>& connection_manager,
     std::optional<ast::field_path> peer_field,
     const boost::asio::ip::tcp::socket::endpoint_type& peer,
-    const boost::asio::ip::tcp::resolver::results_type& resolved_peer)
+    std::optional<std::string> peer_hostname)
     : connection_manager_{connection_manager},
       peer_field_{std::move(peer_field)},
       peer_ip_{peer.address().is_v4()
                  ? ip::v4(as_bytes(peer.address().to_v4().to_bytes()))
                  : ip::v6(as_bytes(peer.address().to_v6().to_bytes()))},
-      peer_port_{peer.port()} {
-    if (not resolved_peer.empty()) {
-      peer_hostname_ = resolved_peer.begin()->host_name();
-    }
+      peer_port_{peer.port()},
+      peer_hostname_{std::move(peer_hostname)} {
   }
 
   auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
@@ -317,6 +317,7 @@ struct connection_manager_state {
     = {};
   inline static const uuid tcp_metrics_id = uuid::random();
   uint64_t operator_id = {};
+  bool peer_resolution_warning_emitted = false;
 
   // Everything required for the I/O worker.
   std::vector<std::thread> io_workers = {};
@@ -734,8 +735,27 @@ struct connection_manager_state {
     }
     // Resolve the peer endpoint.
     const auto& peer_endpoint = connection->socket->remote_endpoint();
-    auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
-    const auto resolved_peer = resolver.resolve(peer_endpoint);
+    auto peer_hostname = std::optional<std::string>{};
+    if (args.resolve_hostnames) {
+      auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
+      auto ec = boost::system::error_code{};
+      const auto resolved_peer = resolver.resolve(peer_endpoint, ec);
+      if (ec) {
+        TENZIR_DEBUG("failed to resolve peer hostname on handle `{}`: {}",
+                     connection->socket->native_handle(), ec.message());
+        if (not peer_resolution_warning_emitted) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to resolve peer hostname")
+            .note(
+              "set `resolve_hostnames=false` to disable hostname resolution")
+            .primary(args.endpoint.source)
+            .emit(diagnostics);
+          peer_resolution_warning_emitted = true;
+        }
+      } else if (not resolved_peer.empty()) {
+        peer_hostname = resolved_peer.begin()->host_name();
+      }
+    }
     // Set up and spawn the nested pipeline.
     auto pipeline = args.pipeline->inner;
     auto source = std::make_unique<load_tcp_source_operator>(
@@ -743,7 +763,7 @@ struct connection_manager_state {
     pipeline.prepend(std::move(source));
     auto sink = std::make_unique<load_tcp_sink_operator<Elements>>(
       connection_manager_actor<Elements>{self}, args.peer_field, peer_endpoint,
-      resolved_peer);
+      std::move(peer_hostname));
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
@@ -1033,7 +1053,7 @@ public:
     return "load_tcp";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
@@ -1043,6 +1063,7 @@ public:
                     .named("parallel", parallel)
                     .named("max_buffered_chunks", args.max_buffered_chunks)
                     .named("peer_field", args.peer_field)
+                    .named("resolve_hostnames", args.resolve_hostnames)
                     .positional("{ … }", args.pipeline);
     args.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));

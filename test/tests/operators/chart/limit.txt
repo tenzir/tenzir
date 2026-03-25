@@ -1,0 +1,16 @@
+{
+  x: 1,
+  value: 1.0,
+}
+{
+  x: 2,
+  value: 1.0,
+}
+warning: got more than 2 data points
+ --> tests/operators/chart/limit.tql:4:13
+  |
+4 | chart_pie x=x, y=count(), _limit=2
+  |             ~ 
+  |
+  = note: skipping excess data points
+  = hint: consider filtering data or aggregating over a bigger `resolution`

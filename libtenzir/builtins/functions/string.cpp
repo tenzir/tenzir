@@ -1,12 +1,13 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/to_string.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -36,7 +37,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
@@ -96,7 +97,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
@@ -162,7 +163,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
@@ -225,7 +226,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto length_expr = ast::expression{};
@@ -378,7 +379,7 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     // TODO: Use `result_arrow_ty` to derive type name.
@@ -454,7 +455,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
@@ -532,7 +533,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     if constexpr (Deprecated) {
       diagnostic::warning("`str` has been renamed to `string`")
@@ -566,7 +567,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
@@ -642,7 +643,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     // TODO: Technically, this could be an expression and not just a constant

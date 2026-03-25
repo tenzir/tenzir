@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -76,6 +76,9 @@ auto make_record_series(std::span<const series_field> fields,
 
 auto make_list_series(const series& values, const arrow::ListArray& origin)
   -> basic_series<list_type> {
+  /// If this triggers, most likely your `values` were not directly generated
+  /// from `origin.values()`.
+  TENZIR_ASSERT_GEQ(values.array->length(), origin.values()->length());
   return {
     list_type{values.type},
     std::make_shared<arrow::ListArray>(
@@ -83,6 +86,37 @@ auto make_list_series(const series& values, const arrow::ListArray& origin)
       origin.value_offsets(), values.array, origin.null_bitmap(),
       origin.data()->null_count, origin.offset()),
   };
+}
+
+auto rebase_list_array_buffers(const arrow::ListArray& list)
+  -> rebased_list_buffers {
+  const auto n = list.length();
+  const auto base = list.value_offset(0);
+  // Fast path: buffer is already zero-based.
+  if (base == 0 && list.offset() == 0) {
+    return {list.value_offsets(), list.null_bitmap()};
+  }
+  // General case: build normalized offsets and (optionally) null bitmap.
+  auto offset_builder
+    = arrow::TypedBufferBuilder<int32_t>{tenzir::arrow_memory_pool()};
+  check(offset_builder.Reserve(n + 1));
+  std::shared_ptr<arrow::Buffer> null_bitmap = nullptr;
+  if (list.null_bitmap()) {
+    auto null_builder
+      = arrow::TypedBufferBuilder<bool>{tenzir::arrow_memory_pool()};
+    check(null_builder.Reserve(n));
+    for (auto i = int64_t{0}; i < n; ++i) {
+      offset_builder.UnsafeAppend(list.value_offset(i) - base);
+      null_builder.UnsafeAppend(list.IsValid(i));
+    }
+    null_bitmap = check(null_builder.FinishWithLength(n));
+  } else {
+    for (auto i = int64_t{0}; i < n; ++i) {
+      offset_builder.UnsafeAppend(list.value_offset(i) - base);
+    }
+  }
+  offset_builder.UnsafeAppend(list.value_offset(n) - base);
+  return {check(offset_builder.Finish()), std::move(null_bitmap)};
 }
 
 } // namespace tenzir

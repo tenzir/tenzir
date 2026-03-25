@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/series_builder_view3.hpp"
 
 #include <ranges>
 
@@ -193,8 +194,8 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy) const
       }
       continue;
     }
-    for (auto event : part.values()) {
-      if (not b.try_data(event)) {
+    for (auto event : part.values3()) {
+      if (not try_add_to_builder(b, event)) {
         return {{}, to_series_result::status::fail};
       }
     }

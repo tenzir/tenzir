@@ -1,12 +1,13 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <google/cloud/pubsub/publisher.h>
@@ -71,6 +72,7 @@ public:
         diagnostic::error("google-cloud-publisher: {}", id.status().message())
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 
@@ -104,7 +106,7 @@ private:
 
 class save_plugin final : public operator_plugin2<save_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     diagnostic::warning("`save_google_cloud_pubsub` is deprecated; use "
                         "`to_google_cloud_pubsub` instead")

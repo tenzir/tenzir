@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -15,6 +15,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
 
@@ -319,7 +320,7 @@ public:
       >> end_of_pipeline_operator;
     // clang-format on
     auto config = configuration{};
-    if (!p(f, l, config.extractor_to_operand)) {
+    if (! p(f, l, config.extractor_to_operand)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,

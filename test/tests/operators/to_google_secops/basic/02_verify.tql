@@ -1,0 +1,3 @@
+// Verify the captured payloads sent to the mock ingestion server.
+from_file env("GOOGLE_SECOPS_CAPTURE_FILE") { read_json }
+sort log_type

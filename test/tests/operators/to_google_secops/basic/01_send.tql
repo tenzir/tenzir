@@ -1,0 +1,12 @@
+from {text: "hello world", type: "WINEVTLOG", ns: "test-ns"},
+     {text: "second event", type: "WINEVTLOG", ns: "test-ns"},
+     {text: "other type", type: "OKTA", ns: "test-ns"}
+to_google_secops log_text=text,
+                 log_type=type,
+                 namespace=ns,
+                 private_key=env("GOOGLE_SECOPS_PRIVATE_KEY"),
+                 client_email=env("GOOGLE_SECOPS_CLIENT_EMAIL"),
+                 customer_id="test-customer-123",
+                 _token_url=env("GOOGLE_SECOPS_TOKEN_URL"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL"),
+                 batch_timeout=1s

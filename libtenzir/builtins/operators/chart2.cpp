@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -12,6 +12,8 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -240,7 +242,7 @@ struct chart_args {
   auto make_bucket(const plugins_map& plugins, session ctx) const -> bucket {
     auto b = bucket{};
     for (const auto& [plugin, arg] : plugins) {
-      auto inv = aggregation_plugin::invocation{arg};
+      auto inv = function_invocation{arg};
       auto instance = plugin->make_aggregation(std::move(inv), ctx);
       TENZIR_ASSERT(instance);
       b.push_back(std::move(instance).unwrap());
@@ -369,7 +371,9 @@ public:
             }
             return *gnames.emplace("").first;
           }
-          return *gnames.emplace(value_at(string_type{}, *gs.array, idx)).first;
+          return *gnames
+                    .emplace(materialize(*view_at<string_type>(*gs.array, idx)))
+                    .first;
         });
         auto [newb, new_bucket] = get_bucket(groups, x, group_name, s);
         if (b != newb or new_bucket) {
@@ -524,7 +528,8 @@ public:
       .numeric_durations = true,
     }};
     auto it = std::back_inserter(result);
-    TENZIR_ASSERT(printer.print(it, make_view_wrapper(d)));
+    auto success = printer.print(it, make_view_wrapper(d));
+    TENZIR_ASSERT(success);
     return result;
   }
 
@@ -578,7 +583,7 @@ public:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(group_map& map, const data_view& x, session ctx) const
+  auto get_groups(group_map& map, data_view3 x, session ctx) const
     -> grouped_bucket* {
     // PERF: Maybe we only need to materialize when inserting new
     const auto xv = materialize(x);
@@ -597,9 +602,8 @@ public:
     return &map[xv];
   }
 
-  auto get_bucket(group_map& map, const data_view& x,
-                  const std::string_view group, session ctx) const
-    -> std::pair<bucket*, bool> {
+  auto get_bucket(group_map& map, data_view3 x, const std::string_view group,
+                  session ctx) const -> std::pair<bucket*, bool> {
     if (args_.ty != chart_type::bar and args_.ty != chart_type::pie) {
       if (is<caf::none_t>(x)) {
         diagnostic::warning("x-axis cannot be `null`")
@@ -851,7 +855,7 @@ class chart_plugin : public virtual operator_factory_plugin {
     return fmt::format("chart_{}", to_string(Ty));
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = chart_args{};
     args.ty = Ty;
@@ -1038,7 +1042,7 @@ class chart_plugin : public virtual operator_factory_plugin {
               : check(arrow::compute::CeilTemporal(array, std::move(opts)))
                   .array_as<arrow::TimestampArray>();
         TENZIR_ASSERT(result->length() == 1);
-        return ast::constant{value_at(time_type{}, *result, 0), loc};
+        return ast::constant{*view_at<time_type>(*result, 0), loc};
       },
       [&](const auto& d) -> failure_or<ast::constant> {
         return ast::constant{d, loc};

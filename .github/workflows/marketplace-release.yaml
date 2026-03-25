@@ -4,11 +4,11 @@ permissions:
   id-token: write
 
 on:
-  # Trigger after the main CI workflow completes for releases
+  # Trigger after the main CI workflow completes.
+  # The job-level `if` condition restricts this to release events.
   workflow_run:
     workflows: ["Tenzir"]
     types: [completed]
-    branches: [main]
 
   # Manual dispatch for testing.
   workflow_dispatch:
@@ -46,7 +46,7 @@ jobs:
           else
             # workflow_run trigger - extract from head_branch
             RELEASE_TAG="${{ github.event.workflow_run.head_branch }}"
-            IMAGE="ghcr.io/tenzir/tenzir:${RELEASE_TAG}"
+            IMAGE="ghcr.io/tenzir/tenzir-node:${RELEASE_TAG}"
           fi
           echo "release_tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
           echo "image=${IMAGE}" >> $GITHUB_OUTPUT

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -73,8 +73,9 @@ struct transformer {
 
   /// Creates a column of nulls. This is used if an output column is nullable,
   /// but not present in the input.
-  [[nodiscard]] virtual auto
-  create_null_column(size_t n) const -> ::clickhouse::ColumnRef = 0;
+  [[nodiscard]] virtual auto create_null_column(size_t n) const
+    -> ::clickhouse::ColumnRef
+    = 0;
 
   /// Transforms an Arrow Array to a ClickHouse's Column API type, so that they
   /// can be used with the `::clickhouse::Client::Insert` function.
@@ -104,8 +105,8 @@ struct transformer_record : transformer {
                                const arrow::Array& array, dropmask_ref dropmask,
                                tenzir::diagnostic_handler& dh) -> drop override;
 
-  virtual auto
-  create_null_column(size_t n) const -> ::clickhouse::ColumnRef override;
+  virtual auto create_null_column(size_t n) const
+    -> ::clickhouse::ColumnRef override;
 
   virtual auto create_column(path_type& path, const tenzir::type& type,
                              const arrow::Array& array, dropmask_cref dropmask,

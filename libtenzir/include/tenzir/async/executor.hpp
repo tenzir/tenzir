@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -212,6 +212,19 @@ public:
     }
   }
 
+  template <class T>
+  auto make_fused_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+    if constexpr (std::same_as<T, void>) {
+      return make_fused_void(std::move(id));
+    } else if constexpr (std::same_as<T, table_slice>) {
+      return make_fused_events(std::move(id));
+    } else if constexpr (std::same_as<T, chunk_ptr>) {
+      return make_fused_bytes(std::move(id));
+    } else {
+      static_assert(false, "unknown type");
+    }
+  }
+
   /// Returns a per-operator CPU executor.
   virtual auto make_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<>
@@ -230,6 +243,9 @@ public:
                             MetricsVisibility visibility) -> MetricsCounter
     = 0;
 
+  /// Returns whether the pipeline is hidden.
+  virtual auto is_hidden() const -> bool = 0;
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
@@ -237,6 +253,16 @@ protected:
     = 0;
 
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
+
+  virtual auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
+
+  virtual auto make_fused_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>>
+    = 0;
+
+  virtual auto make_fused_bytes(ChannelId id)
+    -> PushPull<OperatorMsg<chunk_ptr>>
+    = 0;
 };
 
 /// A diagnostic handler that is guaranteed to be thread-safe.

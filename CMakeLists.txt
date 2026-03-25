@@ -13,7 +13,7 @@ include(TenzirVersion)
 project(
   Tenzir
   VERSION "${TENZIR_VERSION_MMP}"
-  DESCRIPTION "Visibility Across Space and Time"
+  DESCRIPTION "Data Pipeline Engine for Security Teams"
   HOMEPAGE_URL "https://tenzir.com"
   LANGUAGES C CXX)
 
@@ -148,6 +148,7 @@ set(TENZIR_UNIT_TEST_TIMEOUT
 # -- library flavor ------------------------------------------------------------
 
 option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
+option(TENZIR_ENABLE_PCH "Enable precompiled headers" ON)
 
 # -- relocatable installations -------------------------------------------------
 
@@ -280,6 +281,9 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
                          INTERFACE -Wno-unknown-warning-option)
   target_compile_options(libtenzir_internal
                          INTERFACE -Wno-unknown-warning-option)
+  if (CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 22)
+    add_compile_options(-Wno-c2y-extensions)
+  endif ()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning)
 endif ()
@@ -777,22 +781,32 @@ else ()
     target_compile_features(libcaf_core INTERFACE cxx_std_17)
     target_compile_options(
       libcaf_core
-      PRIVATE
-        -Wno-maybe-uninitialized
-        -Wno-unqualified-std-cast-call
-        -Wno-unknown-warning-option
-        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
-        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
+      PRIVATE -Wno-maybe-uninitialized
+              -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option
+              $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+              -Wno-c2y-extensions>
+              $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     TenzirSystemizeTarget(libcaf_io)
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
-      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-                        -Wno-unknown-warning-option)
+      libcaf_io
+      PRIVATE -Wno-maybe-uninitialized
+              -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option
+              $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+              -Wno-c2y-extensions>
+              $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     TenzirSystemizeTarget(libcaf_net)
     set_target_properties(libcaf_net PROPERTIES EXPORT_NAME net)
     target_compile_options(
-      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-                        -Wno-unknown-warning-option)
+      libcaf_net
+      PRIVATE -Wno-maybe-uninitialized
+              -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option
+              $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+              -Wno-c2y-extensions>
+              $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     if (NOT TARGET libcaf_openssl)
       string(
         JOIN " " err_message

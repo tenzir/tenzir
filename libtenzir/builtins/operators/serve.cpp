@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -991,7 +991,7 @@ struct serve_handler_state {
       auto resolved_slice = resolve_enumerations(slice);
       auto type = as<record_type>(resolved_slice.schema());
       auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-      for (const auto& row : values(type, *array)) {
+      for (const auto& row : values(tenzir::type{type}, *array)) {
         if (first) {
           out_iter = fmt::format_to(out_iter, "{{");
         } else {
@@ -1000,8 +1000,10 @@ struct serve_handler_state {
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
-        TENZIR_ASSERT(row);
-        const auto ok = printer.print(out_iter, *row);
+        TENZIR_ASSERT(not is<caf::none_t>(row));
+        const auto* record_view = try_as<view<record>>(&row);
+        TENZIR_ASSERT(record_view);
+        const auto ok = printer.print(out_iter, *record_view);
         TENZIR_ASSERT(ok);
       }
     }
@@ -1509,7 +1511,7 @@ public:
     return system.spawn(serve_handler, node);
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto id = located<std::string>{};
     auto buffer_size = std::optional<located<uint64_t>>{};

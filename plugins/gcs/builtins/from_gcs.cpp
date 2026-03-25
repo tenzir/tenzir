@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -12,6 +12,7 @@
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -219,7 +220,7 @@ private:
 
 class from_gcs final : public operator_plugin2<from_gcs_operator>,
                        public OperatorPlugin {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_gcs_args{};
     auto p = argument_parser2::operator_(name());

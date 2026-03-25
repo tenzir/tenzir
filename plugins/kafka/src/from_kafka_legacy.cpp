@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -359,7 +359,7 @@ auto from_kafka_operator::name() const -> std::string {
   return "from_kafka";
 }
 
-auto make_from_kafka(operator_factory_plugin::invocation inv, session ctx,
+auto make_from_kafka(operator_factory_invocation inv, session ctx,
                      const record& defaults) -> failure_or<operator_ptr> {
   auto args = from_kafka_args{};
   args.operator_location = inv.self.get_location();

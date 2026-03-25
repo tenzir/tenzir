@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -737,7 +737,8 @@ private:
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
   auto emit_or_throw(tenzir::diagnostic_builder&& builder) -> void;
   auto emit_mismatch_warning(const type_kind& value_type, const type& seed_type,
-                             const value_path& path) -> void;
+                             const value_path& path,
+                             bool is_repeat_key_list = false) -> void;
 };
 
 namespace detail::data_builder {

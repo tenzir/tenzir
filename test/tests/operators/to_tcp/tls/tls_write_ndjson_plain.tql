@@ -1,0 +1,24 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+      tls: true
+assertions:
+  fixtures:
+    tcp:
+      server_received_contains: "hello-from-to_tcp-tls"
+timeout: 60
+skip: flaky in CI
+---
+
+let $tls = {
+  cacert: env("TCP_CAFILE"),
+  skip_peer_verification: true,
+}
+
+from {
+  line: "hello-from-to_tcp-tls"
+}
+to_tcp env("TCP_ENDPOINT"), tls=$tls {
+  write_ndjson
+}

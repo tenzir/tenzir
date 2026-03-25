@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -731,7 +731,7 @@ public:
     return "tql2.read_grok";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto pattern_definitions_expression = std::optional<ast::expression>{};
@@ -774,7 +774,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto pattern = located<std::string>{};

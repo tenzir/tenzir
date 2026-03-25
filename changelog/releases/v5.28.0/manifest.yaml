@@ -1,0 +1,7 @@
+created: 2026-03-06
+title: Tenzir Node v5.28.0
+intro: >-
+  This release adds support for parsing Check Point syslog structured-data dialects
+  that deviate from RFC 5424, improving out-of-the-box interoperability with Check
+  Point exports. It also makes DNS hostname resolution in the load_tcp operator opt-in
+  and fixes several parser bugs related to schema changes between events.

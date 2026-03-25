@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -133,6 +133,7 @@ public:
       for (auto chunk : input) {
         if (not chunk || chunk->size() == 0) {
           co_yield {};
+          continue;
         }
         // When sending a MIME message, we set the mail headers via
         // CURLOPT_HTTPHEADER as opposed to building the entire message
@@ -159,6 +160,7 @@ public:
             .note("{}", err)
             .emit(ctrl.diagnostics());
         }
+        co_yield {};
       };
     }
     for (auto chunk : input) {
@@ -188,6 +190,7 @@ public:
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     };
   }
 
@@ -213,7 +216,7 @@ private:
 };
 
 class save_plugin final : public virtual operator_plugin2<saver> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto endpoint = std::optional<std::string>{default_smtp_server};

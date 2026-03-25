@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -103,12 +103,12 @@ private:
 };
 
 struct strict : public virtual operator_plugin2<strict_operator> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto pipe = pipeline{};
+    auto pipe = located<pipeline>{};
     auto parser = argument_parser2::operator_(name()).positional("{ … }", pipe);
     TRY(parser.parse(inv, ctx));
-    auto ops = std::move(pipe).unwrap();
+    auto ops = std::move(pipe.inner).unwrap();
     for (auto& op : ops) {
       op = std::make_unique<strict_operator>(std::move(op));
     }

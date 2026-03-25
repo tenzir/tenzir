@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from_tcp "127.0.0.1:31337",
+         tls={client_ca: "tests/operators/from_tcp/test.yaml"} {
+  read_lines
+}

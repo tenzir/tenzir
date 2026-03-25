@@ -1,15 +1,17 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/tql2/exec.hpp"
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <caf/anon_mail.hpp>
@@ -363,7 +365,7 @@ private:
 
 class plugin final : public virtual operator_plugin2<load_balance> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipes = std::vector<pipeline>{};
     for (auto& arg : inv.args) {

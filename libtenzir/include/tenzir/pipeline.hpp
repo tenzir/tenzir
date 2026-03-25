@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -11,6 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
@@ -841,6 +842,3 @@ template <>
 inline constexpr auto enable_default_formatter<operator_ptr> = true;
 
 } // namespace tenzir
-
-// This is needed for `plugin_inspect`.
-#include "tenzir/plugin.hpp" // IWYU pragma: keep

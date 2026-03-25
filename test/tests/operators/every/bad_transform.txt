@@ -1,0 +1,6 @@
+error: expected void, got events
+ --> tests/operators/every/bad_transform.tql:7:3
+  |
+7 |   version
+  |   ^^^^^^^ 
+  |

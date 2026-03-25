@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -17,7 +17,7 @@
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/query_cursor.hpp"
 #include "tenzir/query_queue.hpp"

@@ -1,13 +1,14 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -76,30 +77,29 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb
       = flatbuffer<fbs::aggregation::AnyAll>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `any` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN(
+        "failed to restore `any` aggregation instance: invalid FlatBuffer");
+      return false;
     }
     any_ = (*fb)->result();
     switch ((*fb)->state()) {
       case fbs::aggregation::AnyAllState::None:
         state_ = state::none;
-        return;
+        return true;
       case fbs::aggregation::AnyAllState::Failed:
         state_ = state::failed;
-        return;
+        return true;
       case fbs::aggregation::AnyAllState::Nulled:
         state_ = state::nulled;
-        return;
+        return true;
     }
-    diagnostic::warning("unknown `state` value")
-      .note("failed to restore `any` aggregation instance")
-      .emit(ctx);
+    TENZIR_WARN(
+      "failed to restore `any` aggregation instance: unknown state value");
+    return false;
   }
 
   auto reset() -> void override {
@@ -122,7 +122,7 @@ class plugin : public virtual aggregation_plugin {
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())

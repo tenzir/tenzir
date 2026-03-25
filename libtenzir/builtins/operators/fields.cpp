@@ -1,13 +1,14 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/catalog.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -226,7 +227,7 @@ public:
     return std::make_unique<fields_operator>();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("fields").parse(inv, ctx).ignore();
     return std::make_unique<fields_operator>();

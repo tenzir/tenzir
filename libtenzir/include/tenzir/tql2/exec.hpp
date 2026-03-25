@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -82,6 +82,7 @@ auto parse_and_compile(std::string_view source, session ctx)
 
 /// Run a closed pipeline from a list of operators.
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler) -> Task<failure_or<void>>;
+              DiagHandler& dh, Profiler profiler, bool is_hidden)
+  -> Task<failure_or<void>>;
 
 } // namespace tenzir

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -13,6 +13,7 @@
 #include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type_fwd.h>
@@ -33,7 +34,7 @@ class plugin final : public function_plugin {
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())

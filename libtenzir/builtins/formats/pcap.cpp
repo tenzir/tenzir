@@ -1,8 +1,7 @@
-
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -308,14 +307,16 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     return std::nullopt;
   }
   auto result = file_header{};
-  const auto& input_record = as<record_type>(slice.schema());
   auto array = check(to_record_batch(slice)->ToStructArray());
-  auto xs = values(input_record, *array);
+  auto xs = values(slice.schema(), *array);
   auto begin = xs.begin();
-  if (begin == xs.end() || *begin == std::nullopt) {
+  if (begin == xs.end() || is<caf::none_t>(*begin)) {
     return std::nullopt;
   }
-  for (const auto& [key, value] : **begin) {
+  const auto row = *begin;
+  const auto* row_view = try_as<view<record>>(&row);
+  TENZIR_ASSERT(row_view);
+  for (const auto& [key, value] : **row_view) {
     // TODO: Make this more robust, and give a helpful error message if the
     // types are not as expected. This also applies to `to_packet_record`.
     if (key == "magic_number") {
@@ -497,9 +498,11 @@ public:
         if (slice.schema().name() == "pcap.packet") {
           auto resolved_slice = resolve_enumerations(slice);
           auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-          for (const auto& row : values(input_record, *array)) {
-            TENZIR_ASSERT(row);
-            if (auto diag = process_packet_row(*row)) {
+          for (const auto& row : values(slice.schema(), *array)) {
+            TENZIR_ASSERT(not is<caf::none_t>(row));
+            const auto* packet = try_as<view<record>>(&row);
+            TENZIR_ASSERT(packet);
+            if (auto diag = process_packet_row(*packet)) {
               ctrl.diagnostics().emit(std::move(*diag));
               co_return;
             }
@@ -521,9 +524,11 @@ public:
             co_yield {};
             co_return;
           }
-          for (const auto& row : values(*pcap_record_type, *pcap_values)) {
-            TENZIR_ASSERT(row);
-            if (auto diag = process_packet_row(*row)) {
+          for (const auto& row : values(pcap_type, *pcap_values)) {
+            TENZIR_ASSERT(not is<caf::none_t>(row));
+            const auto* packet = try_as<view<record>>(&row);
+            TENZIR_ASSERT(packet);
+            if (auto diag = process_packet_row(*packet)) {
               ctrl.diagnostics().emit(std::move(*diag));
               co_return;
             }
@@ -602,7 +607,7 @@ private:
 
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<pcap_parser>> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     TRY(argument_parser2::operator_(name())
@@ -620,7 +625,7 @@ class read_plugin final
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<pcap_printer>> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});

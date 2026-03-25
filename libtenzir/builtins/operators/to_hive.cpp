@@ -1,12 +1,14 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/url.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -265,7 +267,7 @@ public:
         auto key = list{};
         for (auto& partition_point : by) {
           TENZIR_ASSERT(row < partition_point.length());
-          key.push_back(materialize(partition_point.value_at(row)));
+          key.push_back(materialize(partition_point.view3_at(row)));
         }
         auto key_data = data{std::move(key)};
         auto it = groups.find(key_data);
@@ -403,7 +405,7 @@ public:
 
 class plugin : public virtual operator_plugin2<to_hive> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     using namespace si_literals;
     using namespace std::literals;

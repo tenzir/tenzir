@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -15,6 +15,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"

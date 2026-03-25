@@ -1,0 +1,5 @@
+// Regression test: let-bound frequency must not be evaluated during compile().
+// All input arrives before the timer fires, so only the final emission appears.
+let $freq = 1s
+from {x: 1}, {x: 2}, {x: 3}
+| summarize count=count(), options={frequency: $freq}

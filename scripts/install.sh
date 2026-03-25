@@ -18,6 +18,16 @@ check() {
   command -v "$1" >/dev/null 2>&1
 }
 
+require_root() {
+  if [ "${can_root}" = "1" ]; then
+    return
+  fi
+  echo "Could not find ${bold}sudo${normal} or ${bold}doas${normal}."
+  echo "This installer needs to run commands as the ${bold}root${normal} user."
+  echo "Re-run this script as root or set up sudo/doas."
+  exit 1
+}
+
 beginswith() {
   case $2 in "$1"*) true ;; *) false ;; esac
 }
@@ -100,23 +110,28 @@ elif check doas; then
   can_root=1
   sudo="doas"
 fi
-if [ "$can_root" != "1" ]; then
-  echo "Could not find ${bold}sudo${normal} or ${bold}doas${normal}."
-  echo "This installer needs to run commands as the ${bold}root${normal} user."
-  echo "Re-run this script as root or set up sudo/doas."
-  exit 1
-fi
 
 # The caller can supply a package URL with an environment variable. This should
 # only be used for testing modifications to the packaging.
+install_method=package
 if [ -n "${TENZIR_PACKAGE_URL:-}" ]; then
   package_url="${TENZIR_PACKAGE_URL}"
 else
   : "${TENZIR_PACKAGE_TAG:=latest}"
-  # Select appropriate package.
+  # Select appropriate package or Homebrew cask.
   action "Identifying package"
+  if [ "${package_format}" = "macOS" ] &&
+    [ "${arch}" = "arm64" ] &&
+    [ "${TENZIR_PACKAGE_TAG}" = "latest" ] &&
+    [ "$(id -u)" != 0 ] &&
+    check brew; then
+    install_method=homebrew
+    homebrew_cask="tenzir/tenzir/tenzir"
+  fi
   package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
-  if [ "${package_format}" = "RPM" ]; then
+  if [ "${install_method}" = "homebrew" ]; then
+    :
+  elif [ "${package_format}" = "RPM" ]; then
     package_url="${package_url_base}/rpm/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.rpm"
   elif [ "${package_format}" = "DEB" ]; then
     # Convert to Debian arch naming: x86_64 -> amd64, aarch64 -> arm64
@@ -151,24 +166,28 @@ else
     exit 1
   fi
 fi
-package="$(basename "${package_url}")"
-echo "Using ${package}"
-
-# Download package.
-tmpdir="$(dirname "$(mktemp -u)")"
-action "Downloading ${package_url}"
-rm -f "${tmpdir}/${package}"
-# Wget does not support the file:// URL scheme.
-if check wget && beginswith "${package_url}" "https://"; then
-  wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
-elif check curl; then
-  curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
+if [ "${install_method}" = "homebrew" ]; then
+  echo "Using Homebrew cask ${homebrew_cask}"
 else
-  echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
-    "found in \$PATH."
-  exit 1
+  package="$(basename "${package_url}")"
+  echo "Using ${package}"
+
+  # Download package.
+  tmpdir="$(dirname "$(mktemp -u)")"
+  action "Downloading ${package_url}"
+  rm -f "${tmpdir}/${package}"
+  # Wget does not support the file:// URL scheme.
+  if check wget && beginswith "${package_url}" "https://"; then
+    wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
+  elif check curl; then
+    curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
+  else
+    echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
+      "found in \$PATH."
+    exit 1
+  fi
+  echo "Successfully downloaded ${package}"
 fi
-echo "Successfully downloaded ${package}"
 
 # Get platform config.
 open_source=
@@ -201,6 +220,7 @@ fi
 # Trigger installation.
 action "Installing package into ${prefix}"
 if [ "${package_format}" = "RPM" ]; then
+  require_root
   cmd1="$sudo yum -y --nogpgcheck localinstall \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -213,6 +233,7 @@ if [ "${package_format}" = "RPM" ]; then
   action "Checking node status"
   eval "${cmd2}"
 elif [ "${package_format}" = "DEB" ]; then
+  require_root
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -225,6 +246,7 @@ elif [ "${package_format}" = "DEB" ]; then
   action "Checking node status"
   eval "${cmd2}"
 elif [ "${package_format}" = "tarball" ]; then
+  require_root
   cmd1="$sudo tar xzf \"${tmpdir}/${package}\" -C /"
   cmd2="$sudo echo 'export PATH=\$PATH:/opt/tenzir/bin' > /etc/profile.d/tenzir.sh"
   echo "This script is about to run the following command:"
@@ -237,17 +259,27 @@ elif [ "${package_format}" = "tarball" ]; then
   action "Adding /opt/tenzir/bin to the system path"
   eval "${cmd2}"
 elif [ "${package_format}" = "macOS" ]; then
-  cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"
+  if [ "${install_method}" = "homebrew" ]; then
+    cmd1="brew install --cask ${homebrew_cask}"
+  else
+    require_root
+    cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"
+  fi
   echo "This script is about to run the following command:"
   echo
   echo "  - ${cmd1}"
   confirm
-  action "Installing Tenzir"
+  if [ "${install_method}" = "homebrew" ]; then
+    action "Installing Tenzir via Homebrew"
+  else
+    action "Installing Tenzir"
+  fi
   eval "${cmd1}"
 fi
 
 # Configure token if TENZIR_TOKEN is set.
 if [ -n "${TENZIR_TOKEN:-}" ]; then
+  require_root
   action "Configuring node token"
   config_file="${prefix}/etc/tenzir/tenzir.yaml"
   config_dir="$(dirname "${config_file}")"

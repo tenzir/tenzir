@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -265,7 +265,7 @@ public:
   friend void hash_append(Hasher& h, container_view_handle xs) {
     // TODO: include the concrete view type in the hash digest so that it
     // guarantees the absense of collisions between view types.
-    if (!xs) {
+    if (! xs) {
       return hash_append(h, caf::none);
     }
     for (auto x : *xs) {
@@ -281,10 +281,10 @@ public:
 
   friend bool
   operator<(const container_view_handle& x, const container_view_handle& y) {
-    if (!x) {
+    if (! x) {
       return static_cast<bool>(y);
     }
-    if (!y) {
+    if (! y) {
       return false;
     }
     return *x < *y;
@@ -518,7 +518,7 @@ data_view make_data_view(const T& x) {
 /// @relates view_trait
 template <class T>
 data_view make_data_view(const std::optional<T>& x) {
-  if (!x) {
+  if (! x) {
     return make_view(caf::none);
   }
   return make_view(*x);
@@ -608,15 +608,21 @@ struct data_view2
   }
 };
 
+class data_view3;
+
 } // namespace tenzir
 
 namespace std {
 
 template <>
 struct hash<tenzir::data_view> {
+  using is_transparent = void;
+
   auto operator()(const tenzir::data_view& x) const {
     return tenzir::hash(x);
   }
+
+  auto operator()(tenzir::data_view3) const -> std::size_t;
 
   auto operator()(const tenzir::data& x) const {
     // The hash computation for `data` and `data_view` is subtly different when
@@ -639,10 +645,10 @@ struct equal_to<tenzir::data_view> {
   template <class Lhs, class Rhs>
   constexpr bool operator()(const Lhs& lhs, const Rhs& rhs) const
     noexcept(noexcept(lhs == rhs)) {
-    static_assert(
-      tenzir::detail::is_any_v<Lhs, tenzir::data, tenzir::data_view>);
-    static_assert(
-      tenzir::detail::is_any_v<Rhs, tenzir::data, tenzir::data_view>);
+    static_assert(tenzir::detail::is_any_v<Lhs, tenzir::data, tenzir::data_view,
+                                           tenzir::data_view3>);
+    static_assert(tenzir::detail::is_any_v<Rhs, tenzir::data, tenzir::data_view,
+                                           tenzir::data_view3>);
     return lhs == rhs;
   }
 };

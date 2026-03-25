@@ -1,0 +1,6 @@
+error: cannot use `...` here
+ --> tests/operators/chart/pie_spread_error.tql:6:18
+  |
+6 | chart_pie x=x, y={...v}
+  |                  ^^^^^^ 
+  |

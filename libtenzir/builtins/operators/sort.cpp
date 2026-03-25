@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -94,7 +94,7 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
     }
     return false;
   }
-  auto value = materialize(result.value_at(0));
+  auto value = materialize(result.view3_at(0));
   if (auto* boolean = try_as<bool>(&value)) {
     return *boolean;
   }
@@ -125,15 +125,17 @@ auto sort_list(const series& input, const std::optional<table_slice>& scope,
   auto warning_state = comparator_warning_state{};
   auto fallback_scope = empty_scope_slice();
   auto row = int64_t{0};
-  for (const auto& value :
-       values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
+  for (const auto& value : values(type{as<list_type>(input.type)},
+                                  as<arrow::ListArray>(*input.array))) {
     auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
     ++row;
-    if (not value) {
+    if (is<caf::none_t>(value)) {
       builder.null();
       continue;
     }
-    auto materialized = materialize(*value);
+    const auto* list_view = try_as<view<list>>(&value);
+    TENZIR_ASSERT(list_view);
+    auto materialized = materialize(*list_view);
     if (cmp) {
       std::stable_sort(materialized.begin(), materialized.end(),
                        [&](const data& lhs, const data& rhs) {
@@ -732,7 +734,7 @@ class plugin2 final : public virtual operator_plugin2<sort_operator2>,
                       public virtual OperatorPlugin,
                       public virtual function_plugin {
 public:
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(ctx);
     if (inv.args.empty()) {
@@ -770,7 +772,7 @@ public:
     return true;
   }
 
-  auto make_function(function_plugin::invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto descending = false;

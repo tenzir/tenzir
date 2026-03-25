@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -352,7 +352,7 @@ public:
   auto name() const -> std::string override {
     return "read_leef";
   }
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -374,7 +374,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());
@@ -507,7 +507,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -33,7 +33,6 @@ void mail_with_callback(Handle receiver, F f, Ts&&... xs) {
   auto companion = receiver->home_system().make_companion();
   auto& registry = companion->home_system().registry();
   auto companion_id = companion->id();
-  auto receiver_id = static_cast<uint64_t>(receiver->id());
   auto* companion_ptr = companion.get();
   auto request_id = companion->new_request_id(caf::message_priority::normal);
   auto response_id = request_id.response_id();
@@ -47,25 +46,22 @@ void mail_with_callback(Handle receiver, F f, Ts&&... xs) {
           return;
         }
         std::invoke(*fn, std::move(res));
+        // Remove any registry entry that may keep the temporary companion
+        // alive (e.g., when CAF registers it for remote routing).
         registry.erase(companion_id);
       };
-  companion->on_exit([companion_id, receiver_id, companion_ptr, finish] {
+  companion->on_exit([companion_ptr, finish] {
     finish(caf::expected<Result>{companion_ptr->fail_state()});
   });
-  auto receiver_monitor = std::make_shared<caf::disposable>(companion->monitor(
-    receiver, [companion_id, receiver_id, finish](caf::error err) mutable {
-      TENZIR_UNUSED(companion_id, receiver_id);
-      finish(caf::expected<Result>{std::move(err)});
-    }));
-  companion->on_enqueue([response_id, companion_id, receiver_id, finish,
-                         receiver_monitor](
-                          caf::mailbox_element_ptr ptr) mutable {
-    TENZIR_UNUSED(receiver_monitor);
-    if (not ptr) {
+  companion->on_enqueue([response_id,
+                         finish](caf::mailbox_element_ptr ptr) mutable {
+    TENZIR_ASSERT(ptr);
+    if (ptr->payload.match_element<caf::down_msg>(0)) {
+      auto dm = ptr->payload.get_as<caf::down_msg>(0);
+      finish(caf::expected<Result>{std::move(dm.reason)});
       return;
     }
     if (ptr->mid != response_id) {
-      TENZIR_UNUSED(companion_id, receiver_id);
       return;
     }
     if (ptr->payload.match_elements<caf::error>()) {
@@ -86,6 +82,7 @@ void mail_with_callback(Handle receiver, F f, Ts&&... xs) {
         caf::make_error(ec::logic_error, "unexpected response payload type")});
     }
   });
+  companion->monitor(receiver);
   auto* actor = caf::actor_cast<caf::abstract_actor*>(receiver);
   if (not actor) {
     finish(caf::expected<Result>{

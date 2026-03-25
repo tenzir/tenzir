@@ -1,15 +1,18 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async/executor.hpp"
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
@@ -18,6 +21,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/time.hpp"
 
@@ -347,6 +351,88 @@ private:
   secret_censor censor_;
 };
 
+/// Decorator over any `ExecCtx` that produces fused channels and shares a
+/// single executor across all operators. This gives run-to-completion
+/// semantics per slice: a push blocks until the downstream operator has
+/// finished processing the item and is ready for the next.
+class FusedExecCtx final : public ExecCtx {
+public:
+  explicit FusedExecCtx(ExecCtx& inner) : inner_{inner} {
+  }
+
+  auto make_executor(OpId id, std::string name)
+    -> folly::Executor::KeepAlive<> override {
+    return inner_.make_executor(std::move(id), std::move(name));
+  }
+
+  auto make_io_executor(OpId id)
+    -> folly::Executor::KeepAlive<folly::IOExecutor> override {
+    return inner_.make_io_executor(std::move(id));
+  }
+
+  auto metrics_receiver() const -> metrics_receiver_actor override {
+    return inner_.metrics_receiver();
+  }
+
+  auto make_counter(MetricsLabel label, MetricsDirection direction,
+                    MetricsVisibility visibility) -> MetricsCounter override {
+    return inner_.make_counter(label, direction, visibility);
+  }
+
+  auto is_hidden() const -> bool override {
+    return inner_.is_hidden();
+  }
+
+protected:
+  auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return inner_.make_fused_channel<void>(std::move(id));
+  }
+
+  auto make_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return inner_.make_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return inner_.make_fused_channel<chunk_ptr>(std::move(id));
+  }
+
+  auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return inner_.make_fused_channel<void>(std::move(id));
+  }
+
+  auto make_fused_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return inner_.make_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_fused_bytes(ChannelId id)
+    -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return inner_.make_fused_channel<chunk_ptr>(std::move(id));
+  }
+
+private:
+  ExecCtx& inner_;
+};
+
+/// Run a pipeline with fused (run-to-completion) semantics.
+///
+/// Each input slice is fully processed through the entire operator chain
+/// before the next input is pulled. Internally creates a `FusedExecCtx` that
+/// replaces buffered channels with fused channels.
+template <class Input, class Output>
+auto run_chain_fused(OperatorChain<Input, Output> chain,
+                     Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                     Box<Push<OperatorMsg<Output>>> push_downstream,
+                     Receiver<FromControl> from_control,
+                     Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                     caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+  auto fused_ctx = FusedExecCtx{exec_ctx};
+  co_await run_chain(std::move(chain), std::move(pull_upstream),
+                     std::move(push_downstream), std::move(from_control),
+                     std::move(to_control), std::move(id), fused_ctx, sys, dh);
+}
+
 class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
@@ -433,6 +519,10 @@ private:
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return exec_ctx_.metrics_receiver();
+  }
+
+  auto is_hidden() const -> bool override {
+    return exec_ctx_.is_hidden();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)
@@ -548,8 +638,23 @@ private:
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, false);
+  }
+
+  auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline> override {
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, true);
+  }
+
+  auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
+                      bool fused) -> Task<AnyOpenPipeline> {
     auto sub_id = id_.sub(next_subpipeline_id_);
-    next_subpipeline_id_ += 1;
+    if (not fused) {
+      // For the parallel operator, which is currently the only user of the
+      // fused execution mode, we want to associate all subpipelines with the
+      // same executor such that all legs contribute to the same metrics.
+      next_subpipeline_id_ += 1;
+    }
     // Instantiate for the case where it was not instantiated yet.
     if (not pipe.substitute(substitute_ctx{base_ctx{dh_, *reg_}, nullptr},
                             true)) {
@@ -574,19 +679,26 @@ private:
     }
     auto spawned = std::move(pipe).spawn(input);
     using AnySubChain = variant<
-      OperatorChain<void, table_slice>, OperatorChain<void, void>,
-      OperatorChain<table_slice, table_slice>, OperatorChain<table_slice, void>,
-      OperatorChain<chunk_ptr, table_slice>, OperatorChain<chunk_ptr, void>>;
+      OperatorChain<void, table_slice>, OperatorChain<void, chunk_ptr>,
+      OperatorChain<void, void>, OperatorChain<table_slice, table_slice>,
+      OperatorChain<table_slice, chunk_ptr>, OperatorChain<table_slice, void>,
+      OperatorChain<chunk_ptr, table_slice>,
+      OperatorChain<chunk_ptr, chunk_ptr>, OperatorChain<chunk_ptr, void>>;
     auto chain = match(input, [&]<class In>(tag<In>) -> AnySubChain {
       auto chain1
         = OperatorChain<In, table_slice>::try_from(std::move(spawned));
       if (chain1) {
         return std::move(chain1).unwrap();
       }
-      auto chain2
-        = OperatorChain<In, void>::try_from(std::move(chain1).unwrap_err());
+      auto chain2 = OperatorChain<In, chunk_ptr>::try_from(
+        std::move(chain1).unwrap_err());
       if (chain2) {
         return std::move(chain2).unwrap();
+      }
+      auto chain3
+        = OperatorChain<In, void>::try_from(std::move(chain2).unwrap_err());
+      if (chain3) {
+        return std::move(chain3).unwrap();
       }
       TENZIR_UNREACHABLE();
     });
@@ -601,62 +713,72 @@ private:
         -> std::pair<Task<void>, variant<Box<Push<OperatorMsg<void>>>,
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
+        // Empty chains are currently not supported by `run_chain`. We should
+        // eventually support it there and then remove this assertion.
+        TENZIR_ASSERT(chain.size() > 0);
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+        auto last_op = sub_id.op(chain.size() - 1);
         auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<Out>(last_op.to(id_));
         auto output_is_void = std::same_as<Out, void>;
-        queue_.scope().spawn(
-          [this, key, end_of_data, output_is_void,
-           pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
-            // Pulling from the subpipeline needs to happen independently from
-            // the main operator logic. This is because we might block when
-            // pushing to the subpipeline due to backpressure, but in order to
-            // alleviate the backpressure, we need to pull from it.
-            auto saw_end_of_data = false;
-            while (true) {
-              auto output = co_await pull_downstream();
-              if (not output) {
-                break;
-              }
-              co_await co_match(
-                std::move(*output),
-                [&](table_slice output) -> Task<void> {
-                  co_await call_process_sub(make_view(key), std::move(output));
-                },
-                [&](Signal signal) -> Task<void> {
-                  co_await co_match(
-                    signal,
-                    [&](EndOfData) -> Task<void> {
-                      saw_end_of_data = true;
-                      co_await queue_.insert(
-                        SubPipelineEvent{key, SubPipelineFinished{}});
-                      // TODO: Can we do this?
-                      end_of_data->notify_one();
-                    },
-                    [&](Checkpoint) -> Task<void> {
-                      // TODO: Handle checkpoint.
-                      co_return;
-                    });
-                });
+        queue_.scope().spawn([this, key, end_of_data, output_is_void,
+                              pull_downstream = std::move(
+                                pull_downstream)] mutable -> Task<void> {
+          // Pulling from the subpipeline needs to happen independently from
+          // the main operator logic. This is because we might block when
+          // pushing to the subpipeline due to backpressure, but in order to
+          // alleviate the backpressure, we need to pull from it.
+          auto saw_end_of_data = false;
+          while (true) {
+            auto output = co_await pull_downstream();
+            if (not output) {
+              break;
             }
-            if (not saw_end_of_data) {
-              if (not output_is_void) {
-                LOGW("subpipeline channel closed without EndOfData");
-              }
-              co_await queue_.insert(
-                SubPipelineEvent{key, SubPipelineFinished{}});
+            co_await co_match(
+              std::move(*output),
+              [&](table_slice output) -> Task<void> {
+                co_await call_process_sub(make_view(key), std::move(output));
+              },
+              [&](chunk_ptr output) -> Task<void> {
+                co_await call_process_sub(make_view(key), std::move(output));
+              },
+              [&](Signal signal) -> Task<void> {
+                co_await co_match(
+                  signal,
+                  [&](EndOfData) -> Task<void> {
+                    saw_end_of_data = true;
+                    queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
+                    // TODO: Can we do this?
+                    end_of_data->notify_one();
+                    co_return;
+                  },
+                  [&](Checkpoint) -> Task<void> {
+                    // TODO: Handle checkpoint.
+                    co_return;
+                  });
+              });
+          }
+          if (not saw_end_of_data) {
+            if (not output_is_void) {
+              LOGW("subpipeline channel closed without EndOfData");
             }
-            end_of_data->notify_one();
-          });
-        return {
-          run_chain(std::move(chain), std::move(pull_upstream),
-                    std::move(push_downstream),
-                    std::move(from_control_receiver),
-                    std::move(to_control_sender), std::move(sub_id), exec_ctx_,
-                    sys_, dh_),
-          std::move(push_upstream),
-        };
+            queue_.insert(SubPipelineEvent{key, SubPipelineFinished{}});
+          }
+          end_of_data->notify_one();
+        });
+        auto runner_task
+          = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
+                                    std::move(push_downstream),
+                                    std::move(from_control_receiver),
+                                    std::move(to_control_sender),
+                                    std::move(sub_id), exec_ctx_, sys_, dh_)
+                  : run_chain(std::move(chain), std::move(pull_upstream),
+                              std::move(push_downstream),
+                              std::move(from_control_receiver),
+                              std::move(to_control_sender), std::move(sub_id),
+                              exec_ctx_, sys_, dh_);
+        return {std::move(runner_task), std::move(push_upstream)};
       });
     // TODO: Should this even be a concurrent task?
     auto control_handle
@@ -675,7 +797,7 @@ private:
                 // doesn't want anymore input?
                 continue;
               case ToControl::ready_for_shutdown:
-                co_await queue_.insert(
+                queue_.insert(
                   SubPipelineEvent{key, SubPipelineReadyForShutdown{}});
                 co_return;
               case ToControl::checkpoint_begin:
@@ -710,7 +832,7 @@ private:
                            panic("already have a subpipeline for that key");
                          }
                          auto& subpipe = as<SubPipeline<In>>(it->second.handle);
-                         return OpenPipeline<In>{*subpipe.push};
+                         return OpenPipeline<In>{subpipe.push};
                        });
   }
 
@@ -725,7 +847,7 @@ private:
       sub.handle,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
         if (subpipeline.push) {
-          return OpenPipeline<In>{*subpipeline.push};
+          return OpenPipeline<In>{subpipeline.push};
         }
         // Pipeline is still alive but pushing things will be ignored.
         return OpenPipeline<In>{None{}};
@@ -809,6 +931,19 @@ private:
       });
   }
 
+  auto call_prepare_snapshot() -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->prepare_snapshot(*this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->prepare_snapshot(wrapper, *this);
+        }
+      });
+  }
+
   auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
@@ -818,6 +953,19 @@ private:
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
           co_await op->process_sub(key, std::move(slice), wrapper, *this);
+        }
+      });
+  }
+
+  auto call_process_sub(SubKeyView key, chunk_ptr chunk) -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->process_sub(key, std::move(chunk), *this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->process_sub(key, std::move(chunk), wrapper, *this);
         }
       });
   }
@@ -1023,6 +1171,7 @@ private:
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
     LOGI("got checkpoint {} in {}", checkpoint.id, op_name());
     co_await to_control_.send(ToControl::checkpoint_begin);
+    co_await call_prepare_snapshot();
     {
       auto buffer = caf::byte_buffer{};
       auto f = caf::binary_serializer{buffer};
@@ -1558,6 +1707,29 @@ run_chain(OperatorChain<chunk_ptr, void> chain,
           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
   -> Task<void>;
 
+template auto
+run_chain(OperatorChain<void, chunk_ptr> chain,
+          Box<Pull<OperatorMsg<void>>> pull_upstream,
+          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<chunk_ptr, chunk_ptr> chain,
+          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<table_slice, chunk_ptr> chain,
+          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
 /// Run a potentially-open pipeline without external control.
 template <class Output>
   requires(not std::same_as<Output, void>)

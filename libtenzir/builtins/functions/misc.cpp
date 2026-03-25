@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -13,6 +13,7 @@
 #include <tenzir/detail/enumerate.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/stable_map.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -41,7 +42,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("type_id")
@@ -76,7 +77,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("type_of")
@@ -117,7 +118,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("env")
@@ -199,7 +200,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -252,7 +253,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -321,7 +322,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -378,7 +379,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto needle = ast::expression{};
@@ -486,7 +487,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -566,7 +567,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -623,7 +624,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto str = located<std::string>{};
@@ -783,7 +784,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto record1 = ast::expression{};
     auto record2 = ast::expression{};
@@ -814,7 +815,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject = ast::expression{};
     auto field = ast::expression{};

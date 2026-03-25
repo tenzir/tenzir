@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -74,7 +74,7 @@ private:
   record config_;
 };
 
-auto make_to_kafka(operator_factory_plugin::invocation inv, session ctx,
+auto make_to_kafka(operator_factory_invocation inv, session ctx,
                    const record& defaults) -> failure_or<operator_ptr>;
 
 } // namespace tenzir::plugins::kafka::legacy

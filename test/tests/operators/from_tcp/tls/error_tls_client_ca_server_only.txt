@@ -1,0 +1,6 @@
+error: `tls.client_ca` is only valid for server mode
+ --> tests/operators/from_tcp/tls/error_tls_client_ca_server_only.tql:6:14
+  |
+6 |          tls={client_ca: "tests/operators/from_tcp/test.yaml"} {
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

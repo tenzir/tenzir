@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -14,7 +14,6 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/eval_optimizations.hpp"
 #include "tenzir/legacy_type.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
@@ -54,12 +53,40 @@
 
 namespace {
 
-auto is_server_from_app_path(std::string_view app_path) {
+auto is_server_from_app_path(std::string_view app_path) -> bool {
   const auto last_slash = app_path.find_last_of('/');
   const auto app_name = last_slash == std::string_view::npos
                           ? app_path
                           : app_path.substr(last_slash + 1);
   return app_name == "tenzir-node";
+}
+
+auto enrich_with_actor(tenzir::diagnostic diag, caf::scheduled_actor* actor)
+  -> tenzir::diagnostic {
+  if (actor) {
+    diag.message
+      = fmt::format("from actor: `{}`: {}", actor->name(), diag.message);
+  }
+  return diag;
+}
+
+auto emit_diagnostic(tenzir::diagnostic diag, bool is_server) -> void {
+  if (not is_server) {
+    auto dh = make_diagnostic_printer(
+      std::nullopt, tenzir::color_diagnostics::yes, std::cerr);
+    dh->emit(diag);
+  } else {
+    auto buffer = std::stringstream{};
+    buffer << "internal error\n";
+    auto printer = make_diagnostic_printer(
+      std::nullopt, tenzir::color_diagnostics::no, buffer);
+    printer->emit(diag);
+    auto string = std::move(buffer).str();
+    if (not string.empty() and string.back() == '\n') {
+      string.pop_back();
+    }
+    fmt::println(stderr, "{}", string);
+  }
 }
 
 #if TENZIR_HAS_AWS_SDK
@@ -466,18 +493,35 @@ auto main(int argc, char** argv) -> int try {
   cfg.set_clock_factory([](caf::actor_system& sys) {
     return std::make_unique<cleaning_actor_clock>(sys);
   });
+  // Set a default exception handler for CAF actors.
+  cfg.exception_handler(
+    [server = is_server_from_app_path(argv[0])](
+      caf::scheduled_actor* actor, std::exception_ptr& ptr) -> caf::error {
+      try {
+        std::rethrow_exception(ptr);
+      } catch (tenzir::panic_exception& panic) {
+        auto diag = to_diagnostic(panic);
+        diag = enrich_with_actor(std::move(diag), actor);
+        emit_diagnostic(diag, server);
+        return diag.to_error();
+      } catch (tenzir::diagnostic& diag) {
+        diag = enrich_with_actor(diag, actor);
+        emit_diagnostic(diag, server);
+        return diag.to_error();
+      } catch (const std::exception& err) {
+        auto diag
+          = diagnostic::error("unhandled exception: {}", err.what()).done();
+        diag = enrich_with_actor(std::move(diag), actor);
+        emit_diagnostic(diag, server);
+        return diag.to_error();
+      } catch (...) {
+        auto diag = diagnostic::error("unhandled exception").done();
+        diag = enrich_with_actor(std::move(diag), actor);
+        emit_diagnostic(diag, server);
+        return diag.to_error();
+      }
+    });
   auto sys = caf::actor_system{cfg};
-  // Schedule periodic clearing of the eval cache to prevent unbounded growth.
-  {
-    constexpr auto interval = std::chrono::minutes{1};
-    auto reschedule = [&sys, interval](this auto self) {
-      clear_eval_cache();
-      sys.clock().schedule(sys.clock().now() + interval,
-                           caf::make_single_shot_action(self));
-    };
-    sys.clock().schedule(sys.clock().now() + interval,
-                         caf::make_single_shot_action(reschedule));
-  }
   auto run_error = caf::error{};
   if (is_server) {
     // The reflector scope variable cleans up the reflector on destruction.
@@ -570,24 +614,11 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
+} catch (tenzir::diagnostic& d) {
+  emit_diagnostic(std::move(d), is_server_from_app_path(argv[0]));
+  return EXIT_FAILURE;
 } catch (tenzir::panic_exception& e) {
-  auto diagnostic = to_diagnostic(e);
-  const auto is_server = is_server_from_app_path(argv[0]);
-  if (not is_server) {
-    auto dh = make_diagnostic_printer(
-      std::nullopt, tenzir::color_diagnostics::yes, std::cerr);
-    dh->emit(std::move(diagnostic));
-  } else {
-    auto buffer = std::stringstream{};
-    buffer << "internal error\n";
-    auto printer = make_diagnostic_printer(
-      std::nullopt, tenzir::color_diagnostics::no, buffer);
-    printer->emit(diagnostic);
-    auto string = std::move(buffer).str();
-    if (not string.empty() and string.back() == '\n') {
-      string.pop_back();
-    }
-    fmt::println(stderr, "{}", string);
-  }
+  auto d = to_diagnostic(e);
+  emit_diagnostic(std::move(d), is_server_from_app_path(argv[0]));
   return EXIT_FAILURE;
 }

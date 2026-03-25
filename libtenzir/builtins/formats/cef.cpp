@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -82,66 +82,76 @@ auto unescape_string(std::string_view in) -> std::string {
   return result;
 }
 
-/// Parses the CEF extension field as a sequence of key-value pairs.
-/// This works by finding the kv separator ('=') and then using everything
-/// between a (not quoted) whitespace and that separator as the key. The value
-/// is simply the text after the separator before the start of the next key.
-/// @param extension The string value of the extension field.
-/// @returns A vector of key-value pairs with properly unescaped values.
-auto parse_extension(std::string_view extension, auto builder,
-                     detail::quoting_escaping_policy quoting)
+/// Checks whether a character is valid in a CEF extension key name.
+/// The spec says alphanumeric, but real-world producers commonly use
+/// underscores, dots, and hyphens.
+auto is_cef_key_char(char c) -> bool {
+  return std::isalnum(static_cast<unsigned char>(c)) or c == '_' or c == '.'
+         or c == '-';
+}
+
+/// Unescapes a CEF extension value, removing surrounding double quotes if
+/// present. Fast path avoids allocation when there are no special characters.
+auto cef_unescape_value(std::string_view text) -> std::string {
+  text = detail::trim(text);
+  auto is_quoted
+    = text.size() >= 2 and text.front() == '"' and text.back() == '"';
+  if (is_quoted) {
+    text.remove_prefix(1);
+    text.remove_suffix(1);
+  }
+  // Fast path: no backslashes means no escaping needed.
+  if (text.find('\\') == text.npos) {
+    return std::string{text};
+  }
+  auto result = std::string{};
+  result.reserve(text.size());
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (text[i] == '\\' and i + 1 < text.size()) {
+      switch (text[i + 1]) {
+        case 'n':
+          result += '\n';
+          ++i;
+          continue;
+        case 'r':
+          result += '\r';
+          ++i;
+          continue;
+        case '=':
+          result += '=';
+          ++i;
+          continue;
+        case '\\':
+          result += '\\';
+          ++i;
+          continue;
+        case '"':
+          result += '"';
+          ++i;
+          continue;
+        default:
+          break;
+      }
+    }
+    result += text[i];
+  }
+  return result;
+}
+
+/// Parses the CEF extension field as a sequence of key-value pairs in a single
+/// pass over the input. Tracks quoting (double quotes only) and backslash
+/// escaping inline rather than delegating to the generic
+/// quoting_escaping_policy machinery.
+///
+/// The algorithm finds '=' separators and uses the heuristic that a real
+/// separator must be preceded by whitespace + a valid key name, to distinguish
+/// from unescaped '=' embedded in values (e.g., DN strings "CN=foo,O=bar").
+auto parse_extension(std::string_view ext, auto builder)
   -> std::optional<diagnostic> {
-  if (extension.empty()) {
+  if (ext.empty()) {
     return {};
   }
-  // Find the first not quoted, not escaped kv separator.
-  auto kv_sep = quoting.find_not_in_quotes(extension, '=', 0, true);
-  if (kv_sep == extension.npos) {
-    return diagnostic::warning(
-             "extension field did not contain a key-value separator")
-      .done();
-  }
-  while (not extension.empty()) {
-    auto key = unescape_string(detail::trim(extension.substr(0, kv_sep)));
-    extension.remove_prefix(kv_sep + 1);
-    // Find the next '=' that is an actual key-value separator rather than a
-    // literal '=' embedded in a value (e.g., DN strings like "CN=foo,O=bar").
-    // The CEF spec requires equal signs in values to be escaped as '\=', but
-    // real-world producers like Gigamon don't do this. To handle unescaped
-    // equals, we require that a separator '=' is preceded by whitespace and a
-    // valid key name. The spec says keys are alphanumeric, but producers
-    // commonly use underscores, so we also accept dots and hyphens to be
-    // extra lenient.
-    auto value_end = extension.npos;
-    kv_sep = extension.npos;
-    auto search_start = size_t{0};
-    while (search_start < extension.size()) {
-      auto eq_pos
-        = quoting.find_not_in_quotes(extension, '=', search_start, true);
-      if (eq_pos == extension.npos) {
-        break;
-      }
-      auto ws = extension.find_last_of(" \t", eq_pos);
-      if (ws != extension.npos) {
-        auto key_candidate = extension.substr(ws + 1, eq_pos - ws - 1);
-        auto valid_key = not key_candidate.empty();
-        for (auto c : key_candidate) {
-          if (not std::isalnum(static_cast<unsigned char>(c)) and c != '_'
-              and c != '.' and c != '-') {
-            valid_key = false;
-            break;
-          }
-        }
-        if (valid_key) {
-          kv_sep = eq_pos;
-          value_end = ws;
-          break;
-        }
-      }
-      search_start = eq_pos + 1;
-    }
-    auto value
-      = quoting.unquote_unescape(detail::trim(extension.substr(0, value_end)));
+  auto emit_pair = [&](std::string key, std::string value) {
     if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
       auto field = builder.unflattened_field(key);
@@ -155,17 +165,84 @@ auto parse_extension(std::string_view extension, auto builder,
         field.data(std::move(value));
       }
     }
-    if (value_end == extension.npos) {
+  };
+  // Single pass: scan for unescaped, unquoted '=' characters.
+  auto in_quotes = false;
+  size_t i = 0;
+  // Find the first '=' — this is always a real separator.
+  for (; i < ext.size(); ++i) {
+    auto c = ext[i];
+    if (c == '\\') {
+      ++i;
+      continue;
+    }
+    if (c == '"') {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == '=' and not in_quotes) {
       break;
     }
-    kv_sep -= value_end + 1;
-    extension.remove_prefix(value_end + 1);
   }
+  if (i >= ext.size()) {
+    return diagnostic::warning(
+             "extension field did not contain a key-value separator")
+      .done();
+  }
+  auto current_key = unescape_string(detail::trim(ext.substr(0, i)));
+  auto value_start = i + 1;
+  ++i;
+  // Scan the rest for subsequent separator '=' characters.
+  for (; i < ext.size(); ++i) {
+    auto c = ext[i];
+    if (c == '\\') {
+      ++i;
+      continue;
+    }
+    if (c == '"') {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c != '=' or in_quotes) {
+      continue;
+    }
+    // Found an unescaped, unquoted '=' at position i.
+    // Check if this is a real key-value separator by looking backward for
+    // whitespace followed by a valid key name.
+    // Find the last whitespace before this '=' (searching within the value).
+    for (auto j = i - 1; j >= value_start; --j) {
+      if (ext[j] != ' ' and ext[j] != '\t') {
+        continue;
+      }
+      // Validate key candidate: ext[j+1 .. i)
+      auto key_candidate = ext.substr(j + 1, i - j - 1);
+      auto valid_key = not key_candidate.empty();
+      for (auto ch : key_candidate) {
+        if (not is_cef_key_char(ch)) {
+          valid_key = false;
+          break;
+        }
+      }
+      if (not valid_key) {
+        continue;
+      }
+      // This is a real separator. Emit the previous key-value pair.
+      auto raw_value = ext.substr(value_start, j - value_start);
+      emit_pair(std::move(current_key), cef_unescape_value(raw_value));
+      current_key = unescape_string(detail::trim(key_candidate));
+      value_start = i + 1;
+      break;
+    }
+    // If no whitespace was found before this '=', it's not a real separator
+    // (e.g., "CN=foo" inside a DN value). Skip it.
+  }
+  // Emit the final key-value pair.
+  auto raw_value = ext.substr(value_start);
+  emit_pair(std::move(current_key), cef_unescape_value(raw_value));
   return {};
 }
 
-[[nodiscard]] auto parse_line(std::string_view line, location loc, auto& msb,
-                              const detail::quoting_escaping_policy& quoting)
+[[nodiscard]] auto parse_line(std::string_view line, location loc, auto& msb)
   -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
@@ -198,7 +275,7 @@ auto parse_extension(std::string_view extension, auto builder,
   r.field("name").data(std::move(fields[5]));
   r.field("severity").data(std::move(fields[6]));
   if (fields.size() == 8) {
-    auto d = parse_extension(fields[7], r.field("extension").record(), quoting);
+    auto d = parse_extension(fields[7], r.field("extension").record());
     if (d) {
       msb.remove_last();
       return d;
@@ -221,9 +298,6 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       return d;
     },
   };
-  auto quoting = detail::quoting_escaping_policy{
-    .unescape_operation = unescape,
-  };
   auto msb = multi_series_builder{
     std::move(options),
     dh,
@@ -241,7 +315,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, loc, msb, quoting);
+    auto d = parse_line(*line, loc, msb);
     if (d) {
       dh.emit(std::move(*d));
     }
@@ -311,7 +385,7 @@ public:
     return "read_cef";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -333,7 +407,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());
@@ -354,15 +428,12 @@ public:
           },
           [&](const arrow::StringArray& arg) {
             auto b = multi_series_builder{msb_opts, ctx};
-            auto quoting = detail::quoting_escaping_policy{
-              .unescape_operation = unescape,
-            };
             for (auto string : arg) {
               if (not string) {
                 b.null();
                 continue;
               }
-              auto diag = parse_line(*string, call, b, quoting);
+              auto diag = parse_line(*string, call, b);
               if (diag) {
                 ctx.dh().emit(std::move(*diag));
                 b.null();
@@ -470,7 +541,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());

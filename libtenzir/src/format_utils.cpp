@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -9,6 +9,7 @@
 #include "tenzir/curl.hpp"
 
 #include <tenzir/format_utils.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/resolve.hpp>
@@ -303,8 +304,7 @@ auto get_compression_and_format(located<std::string_view> url,
 };
 
 template <bool is_loading>
-auto create_pipeline_from_uri(std::string path,
-                              operator_factory_plugin::invocation inv,
+auto create_pipeline_from_uri(std::string path, operator_factory_invocation inv,
                               session ctx, const char* docs)
   -> failure_or<operator_ptr> {
   using traits = from_to_trait<is_loading>;
@@ -450,16 +450,14 @@ auto create_pipeline_from_uri(std::string path,
   return std::make_unique<pipeline>(std::move(compiled_pipeline));
 }
 
-template auto
-create_pipeline_from_uri<false>(std::string path,
-                                operator_factory_plugin::invocation inv,
-                                session ctx, const char* docs)
+template auto create_pipeline_from_uri<false>(std::string path,
+                                              operator_factory_invocation inv,
+                                              session ctx, const char* docs)
   -> failure_or<operator_ptr>;
 
-template auto
-create_pipeline_from_uri<true>(std::string path,
-                               operator_factory_plugin::invocation inv,
-                               session ctx, const char* docs)
+template auto create_pipeline_from_uri<true>(std::string path,
+                                             operator_factory_invocation inv,
+                                             session ctx, const char* docs)
   -> failure_or<operator_ptr>;
 
 } // namespace tenzir

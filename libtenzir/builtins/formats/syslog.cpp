@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -121,7 +121,7 @@ struct header_parser : parser_base<header_parser> {
 };
 
 /// A parameter of a structured data element.
-using parameter = std::pair<std::string, data>;
+using parameter = std::pair<std::string, std::string>;
 
 /// Parser for one structured data element parameter.
 /// @relates parameter
@@ -132,7 +132,7 @@ struct parameter_parser : parser_base<parameter_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using parsers::printable, parsers::rep, parsers::ch;
     // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
+    auto key = +(printable - '=' - ' ' - ']' - '"');
     // \ is used to escape characters.
     auto esc = ignore(ch<'\\'>);
     // ], ", \ must be escaped.
@@ -142,14 +142,10 @@ struct parameter_parser : parser_base<parameter_parser> {
     auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
     auto not_escaped = printable - ('"' >> can_come_after_quote);
     auto value = escaped | not_escaped;
-    auto value_data = (*value)->*[](std::string val) {
-      data d{};
-      if (not parsers::simple_data(val, d)) {
-        return data{std::move(val)};
-      }
-      return d;
-    };
-    auto p = ' ' >> key >> '=' >> '"' >> value_data >> '"';
+    auto quoted_value = '"' >> *value >> '"';
+    // Some emitters omit quotes around PARAM-VALUE entirely.
+    auto bare_value = ! ch<'"'> >> +(printable - ' ' - ';' - ']');
+    auto p = ' ' >> key >> '=' >> (quoted_value | bare_value);
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
@@ -161,7 +157,7 @@ struct parameter_parser : parser_base<parameter_parser> {
 /// A structured data element.
 struct structured_data_element {
   std::string id;
-  record params;
+  std::vector<parameter> params;
 };
 
 /// Parser for structured data elements.
@@ -182,19 +178,13 @@ struct structured_data_element_parser
 /// Parser for structured data of a Syslog message.
 /// @relates structured_data
 struct structured_data_parser : parser_base<structured_data_parser> {
-  using attribute = record;
+  using attribute = std::vector<structured_data_element>;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
-    auto sd
-      = structured_data_element_parser{}->*[&](structured_data_element in) {
-          if constexpr (not std::is_same_v<Attribute, unused_type>) {
-            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
-          }
-        };
-    auto p = maybe_null(+sd);
-    return p(f, l, unused);
+    auto p = maybe_null(+structured_data_element_parser{});
+    return p(f, l, x);
   }
 };
 
@@ -217,7 +207,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     using namespace parser_literals;
     // space, =, ", and ] are not allowed in the key of the parameter.
     auto key_char = printable - '='_p - ' '_p - ']'_p - '"'_p;
-    auto key = rep(key_char, 1, 32);
+    auto key = +key_char;
     auto checkpoint_key_char = key_char - ':'_p;
     auto non_terminal_colon = ch<':'> >> ! '"'_p;
     auto checkpoint_key
@@ -232,15 +222,11 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     auto value_terminator
       = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
     auto value_char = escaped | (! value_terminator >> printable);
-    auto value_data = (*value_char)->*[](std::string val) {
-      data d{};
-      if (not parsers::simple_data(val, d)) {
-        return data{std::move(val)};
-      }
-      return d;
-    };
-    auto rfc_parameter = key >> '='_p >> '"'_p >> value_data >> '"'_p;
-    auto checkpoint_parameter = checkpoint_key >> '"'_p >> value_data >> '"'_p;
+    auto quoted_value = '"'_p >> *value_char >> '"'_p;
+    // Some emitters omit quotes around PARAM-VALUE entirely.
+    auto bare_value = ! '"'_p >> +(printable - ' '_p - ';'_p - ']'_p);
+    auto rfc_parameter = key >> '='_p >> (quoted_value | bare_value);
+    auto checkpoint_parameter = checkpoint_key >> (quoted_value | bare_value);
     auto p = rfc_parameter | checkpoint_parameter;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
@@ -255,7 +241,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
 /// Example:
 /// - `action:"Accept"; conn_direction:"Incoming"; flags:"8667398"`
 struct checkpoint_params : parser_base<checkpoint_params> {
-  using attribute = record;
+  using attribute = std::vector<parameter>;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
@@ -297,20 +283,13 @@ struct checkpoint_structured_data_element_parser
 /// @relates structured_data
 struct checkpoint_structured_data_parser
   : parser_base<checkpoint_structured_data_parser> {
-  using attribute = record;
+  using attribute = std::vector<structured_data_element>;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
-    auto sd
-      = checkpoint_structured_data_element_parser{}->*
-        [&](structured_data_element in) {
-          if constexpr (not std::is_same_v<Attribute, unused_type>) {
-            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
-          }
-        };
-    auto p = maybe_null(+sd);
-    return p(f, l, unused);
+    auto p = maybe_null(+checkpoint_structured_data_element_parser{});
+    return p(f, l, x);
   }
 };
 
@@ -323,19 +302,66 @@ struct message_content_parser : parser_base<message_content_parser> {
   using attribute = message_content;
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parser_literals;
-    auto bom = "\xEF\xBB\xBF"_p;
-    auto p = (bom >> +parsers::any) | +parsers::any | parsers::eoi;
-    return p(f, l, x);
+    if (f == l) {
+      return false;
+    }
+    auto remaining = std::string_view{&*f, static_cast<size_t>(l - f)};
+    auto bom = std::string_view{"\xEF\xBB\xBF"};
+    if (remaining.starts_with(bom)) {
+      remaining.remove_prefix(bom.size());
+    }
+    if (remaining.empty()) {
+      return false;
+    }
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      x = std::string{remaining};
+    }
+    f = l;
+    return true;
   }
 };
 
 /// A Syslog message.
 struct message {
   header hdr;
-  record data;
+  std::vector<structured_data_element> data;
   std::optional<message_content> msg;
 };
+
+auto merge_duplicate_sd_ids(std::vector<structured_data_element>& data)
+  -> void {
+  // Combine duplicate SD element IDs. Deduplicate param keys (last value wins)
+  // to avoid writing the same field twice to the builder.
+  // Typically 0-3 elements, so linear scan is optimal.
+  for (size_t i = 1; i < data.size();) {
+    auto merged = false;
+    for (size_t j = 0; j < i; ++j) {
+      if (data[j].id == data[i].id) {
+        auto& target = data[j].params;
+        auto& source = data[i].params;
+        for (auto& [sk, sv] : source) {
+          auto found = false;
+          for (auto& [tk, tv] : target) {
+            if (tk == sk) {
+              tv = std::move(sv);
+              found = true;
+              break;
+            }
+          }
+          if (not found) {
+            target.emplace_back(std::move(sk), std::move(sv));
+          }
+        }
+        data.erase(data.begin() + detail::narrow_cast<ptrdiff_t>(i));
+        merged = true;
+        break;
+      }
+    }
+    if (not merged) {
+      ++i;
+    }
+  }
+}
 
 /// Parser for Syslog messages.
 /// @relates message
@@ -364,6 +390,7 @@ struct legacy_message {
   std::optional<std::string> host;
   std::optional<std::string> tag;
   std::optional<std::string> process_id;
+  std::vector<structured_data_element> data;
   std::string content;
 };
 
@@ -509,7 +536,20 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
         x.tag = std::nullopt;
         x.process_id = std::nullopt;
       }
-      x.content.assign(begin, end);
+      // Some RFC 3164 emitters prefix CONTENT with RFC 5424-style structured
+      // data.
+      const auto structured_data_prefix
+        = &'['_p
+          >> (structured_data_parser{} | checkpoint_structured_data_parser{})
+          >> -(' '_p >> message_content_parser{}) >> *' '_p >> parsers::eoi;
+      auto data = std::vector<structured_data_element>{};
+      auto msg = std::optional<message_content>{};
+      if (structured_data_prefix(begin, end, data, msg)) {
+        x.data = std::move(data);
+        x.content = std::move(msg).value_or("");
+      } else {
+        x.content.assign(begin, end);
+      }
     }
     return true;
   }
@@ -551,6 +591,7 @@ public:
                  std::optional<ast::field_path> raw_message_field
                  = std::nullopt)
     : timeout{opts.settings.timeout},
+      merge{opts.settings.merge},
       builder{std::move(opts), dh},
       raw_message_field_{std::move(raw_message_field)} {
   }
@@ -623,7 +664,16 @@ public:
     r.exact_field("app_name").data(std::move(row.hdr.app_name));
     r.exact_field("process_id").data(std::move(row.hdr.process_id));
     r.exact_field("message_id").data(std::move(row.hdr.msg_id));
-    r.exact_field("structured_data").data(std::move(row.data));
+    if (merge) {
+      merge_duplicate_sd_ids(row.data);
+    }
+    auto sd = r.exact_field("structured_data").record();
+    for (auto& elem : row.data) {
+      auto elem_rec = sd.field(elem.id).record();
+      for (auto& [k, v] : elem.params) {
+        elem_rec.field(k).data_unparsed(std::move(v));
+      }
+    }
     r.exact_field("message").data(std::move(row.msg));
     if (raw_message_field_) {
       r.field(*raw_message_field_).data(std::move(last_message->raw_message));
@@ -632,6 +682,7 @@ public:
   }
 
   duration timeout;
+  bool merge;
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
@@ -646,10 +697,12 @@ public:
   legacy_syslog_builder(multi_series_builder::options opts,
                         diagnostic_handler& dh,
                         std::optional<ast::field_path> raw_message_field
-                        = std::nullopt)
+                        = std::nullopt,
+                        bool emit_structured_data = false)
     : timeout{opts.settings.timeout},
       builder{std::move(opts), dh},
-      raw_message_field_{std::move(raw_message_field)} {
+      raw_message_field_{std::move(raw_message_field)},
+      emit_structured_data_{emit_structured_data} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -707,6 +760,7 @@ public:
   auto finish_last() -> void {
     TENZIR_ASSERT(last_message);
     auto& msg = last_message->parsed;
+    TENZIR_ASSERT(emit_structured_data_ or msg.data.empty());
     auto r = builder.record();
     r.exact_field("facility").data(msg.facility);
     r.exact_field("severity").data(msg.severity);
@@ -714,6 +768,16 @@ public:
     r.exact_field("hostname").data(std::move(msg.host));
     r.exact_field("app_name").data(std::move(msg.tag));
     r.exact_field("process_id").data(std::move(msg.process_id));
+    if (emit_structured_data_) {
+      merge_duplicate_sd_ids(msg.data);
+      auto sd = r.exact_field("structured_data").record();
+      for (auto& elem : msg.data) {
+        auto elem_rec = sd.field(elem.id).record();
+        for (auto& [k, v] : elem.params) {
+          elem_rec.field(k).data_unparsed(std::move(v));
+        }
+      }
+    }
     r.exact_field("content").data(msg.content);
     if (raw_message_field_) {
       r.field(*raw_message_field_).data(std::move(last_message->raw_message));
@@ -726,6 +790,7 @@ public:
   time last_message_time;
   std::optional<row_type> last_message{};
   std::optional<ast::field_path> raw_message_field_;
+  bool emit_structured_data_;
 };
 
 struct unknown_syslog_builder {
@@ -760,8 +825,14 @@ public:
 enum class builder_tag {
   syslog_builder,
   legacy_syslog_builder,
+  legacy_structured_syslog_builder,
   unknown_syslog_builder,
 };
+
+auto get_legacy_builder_tag(legacy_message const& msg) -> builder_tag {
+  return msg.data.empty() ? builder_tag::legacy_syslog_builder
+                          : builder_tag::legacy_structured_syslog_builder;
+}
 
 auto infuse_new_schema(multi_series_builder::options o)
   -> multi_series_builder::options {
@@ -775,6 +846,15 @@ auto infuse_legacy_schema(multi_series_builder::options o)
   -> multi_series_builder::options {
   if (try_as<multi_series_builder::policy_default>(o.policy)) {
     o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc3164");
+  }
+  return o;
+}
+
+auto infuse_legacy_structured_schema(multi_series_builder::options o)
+  -> multi_series_builder::options {
+  if (try_as<multi_series_builder::policy_default>(o.policy)) {
+    o.policy.emplace<multi_series_builder::policy_schema>(
+      "syslog.rfc3164.structured");
   }
   return o;
 }
@@ -794,6 +874,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     = syslog_builder{infuse_new_schema(opts), dh, raw_message_field};
   auto legacy_builder
     = legacy_syslog_builder{infuse_legacy_schema(opts), dh, raw_message_field};
+  auto legacy_structured_builder = legacy_syslog_builder{
+    infuse_legacy_structured_schema(opts), dh, raw_message_field, true};
   auto unknown_builder = unknown_syslog_builder{opts, dh};
   auto last = builder_tag::unknown_syslog_builder;
   const auto maybe_flush
@@ -810,6 +892,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         return new_builder.finalize_as_table_slice();
       case legacy_syslog_builder:
         return legacy_builder.finalize_as_table_slice();
+      case legacy_structured_syslog_builder:
+        return legacy_structured_builder.finalize_as_table_slice();
       case unknown_syslog_builder:
         return unknown_builder.finalize_as_table_slice();
     }
@@ -822,6 +906,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       co_yield std::move(s);
     }
     for (auto&& s : legacy_builder.yield_ready()) {
+      co_yield std::move(s);
+    }
+    for (auto&& s : legacy_structured_builder.yield_ready()) {
       co_yield std::move(s);
     }
     for (auto&& s : unknown_builder.yield_ready()) {
@@ -851,21 +938,35 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       }
     } else if (auto legacy_parser = legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
-      for (auto&& s : maybe_flush(builder_tag::legacy_syslog_builder)) {
+      auto tag = get_legacy_builder_tag(legacy_msg);
+      for (auto&& s : maybe_flush(tag)) {
         co_yield std::move(s);
       }
-      last = builder_tag::legacy_syslog_builder;
-      if (raw_message_field) {
-        legacy_builder.add_new(
-          {std::move(legacy_msg), line_nr, std::string{*line}});
+      last = tag;
+      if (tag == builder_tag::legacy_syslog_builder) {
+        if (raw_message_field) {
+          legacy_builder.add_new(
+            {std::move(legacy_msg), line_nr, std::string{*line}});
+        } else {
+          legacy_builder.add_new({std::move(legacy_msg), line_nr});
+        }
       } else {
-        legacy_builder.add_new({std::move(legacy_msg), line_nr});
+        TENZIR_ASSERT(tag == builder_tag::legacy_structured_syslog_builder);
+        if (raw_message_field) {
+          legacy_structured_builder.add_new(
+            {std::move(legacy_msg), line_nr, std::string{*line}});
+        } else {
+          legacy_structured_builder.add_new({std::move(legacy_msg), line_nr});
+        }
       }
     } else if (last == builder_tag::syslog_builder
                and new_builder.add_line_to_latest(*line)) {
       continue;
     } else if (last == builder_tag::legacy_syslog_builder
                and legacy_builder.add_line_to_latest(*line)) {
+      continue;
+    } else if (last == builder_tag::legacy_structured_syslog_builder
+               and legacy_structured_builder.add_line_to_latest(*line)) {
       continue;
     } else {
       for (auto&& s : maybe_flush(builder_tag::unknown_syslog_builder)) {
@@ -879,6 +980,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     co_yield std::move(s);
   }
   for (auto&& s : legacy_builder.finalize_as_table_slice()) {
+    co_yield std::move(s);
+  }
+  for (auto&& s : legacy_structured_builder.finalize_as_table_slice()) {
     co_yield std::move(s);
   }
   for (auto&& s : unknown_builder.finalize_as_table_slice()) {
@@ -1141,10 +1245,10 @@ public:
         format_n("app_name", app, 48, args_.app_name);
         format_n("process_id", pid, 128, args_.process_id);
         format_n("message_id", mid, 32, args_.message_id);
-        if (sd and not sd->empty()) {
+        if (sd and sd->begin() != sd->end()) {
           fmt::format_to(it, " ");
           for (const auto& [name, val] : *sd) {
-            const auto* params = try_as<view<record>>(val);
+            const auto* params = try_as<view3<record>>(val);
             if (not params) {
               diagnostic::warning(
                 "structured data `{}` must be of type `record`", name)
@@ -1172,7 +1276,7 @@ public:
     }
   }
 
-  auto format_val(auto& it, std::string_view k, data_view v,
+  auto format_val(auto& it, std::string_view k, data_view3 v,
                   diagnostic_handler& dh) const -> void {
     match(
       v,
@@ -1182,19 +1286,13 @@ public:
       [&](const concepts::integer auto& x) {
         fmt::format_to(it, "\"{}\"", x);
       },
-      [&](const view<map>&) {
-        TENZIR_UNREACHABLE();
-      },
-      [&](const pattern_view&) {
-        TENZIR_UNREACHABLE();
-      },
-      [&](const view<record>&) {
+      [&](const view3<record>&) {
         diagnostic::warning("`structured_data` field `{}` has type `record`", k)
           .primary(args_.loc(args_.structured_data))
           .emit(dh);
         fmt::format_to(it, "\"\"");
       },
-      [&](const view<list>&) {
+      [&](const view3<list>&) {
         diagnostic::warning("`structured_data` field `{}` has type `list`", k)
           .primary(args_.loc(args_.structured_data))
           .emit(dh);
@@ -1223,7 +1321,7 @@ public:
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh,
                auto make_default) const
-    -> generator<std::optional<view<type_to_data_t<T>>>> {
+    -> generator<std::optional<view3<type_to_data_t<T>>>> {
     auto ms = std::invoke([&] {
       if (expr.get_location()) {
         return eval(expr, slice, dh);
@@ -1241,7 +1339,7 @@ public:
       if (s.type.kind().template is<T>()) {
         for (auto val : s.template values<T>()) {
           if (val) {
-            co_yield std::move(val);
+            co_yield std::move(*val);
           } else {
             co_yield make_default();
           }
@@ -1286,7 +1384,7 @@ public:
   template <typename T>
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh) const
-    -> generator<std::optional<view<type_to_data_t<T>>>> {
+    -> generator<std::optional<view3<type_to_data_t<T>>>> {
     return eval_as<T>(name, expr, slice, dh, [] {
       return std::nullopt;
     });
@@ -1332,7 +1430,7 @@ public:
 
 class read_syslog final
   : public virtual operator_plugin2<parser_adapter<syslog_parser>> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
     bool octet_counting = false;
@@ -1358,7 +1456,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // nullopt = auto-detect: try octet-counting first, fall back to plain syslog
@@ -1387,6 +1485,9 @@ public:
               auto builder = syslog_builder{infuse_new_schema(msb_opts), ctx};
               auto legacy_builder
                 = legacy_syslog_builder{infuse_legacy_schema(msb_opts), ctx};
+              auto legacy_structured_builder = legacy_syslog_builder{
+                infuse_legacy_structured_schema(msb_opts), ctx, std::nullopt,
+                true};
               auto last = builder_tag::syslog_builder;
               auto res = multi_series{};
               /// flushes the current builder, if its not the same as
@@ -1405,6 +1506,11 @@ public:
                     res.append(multi_series{legacy_builder.finalize()});
                     break;
                   }
+                  case legacy_structured_syslog_builder: {
+                    res.append(
+                      multi_series{legacy_structured_builder.finalize()});
+                    break;
+                  }
                   case unknown_syslog_builder:
                     TENZIR_UNREACHABLE();
                 }
@@ -1419,6 +1525,10 @@ public:
                   }
                   case legacy_syslog_builder: {
                     legacy_builder.builder.null();
+                    break;
+                  }
+                  case legacy_structured_syslog_builder: {
+                    legacy_structured_builder.builder.null();
                     break;
                   }
                   case unknown_syslog_builder:
@@ -1438,7 +1548,7 @@ public:
                 }
                 f = input.begin();
                 if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
-                  return builder_tag::legacy_syslog_builder;
+                  return get_legacy_builder_tag(legacy_msg);
                 }
                 return builder_tag::unknown_syslog_builder;
               };
@@ -1456,6 +1566,12 @@ public:
                     maybe_flush(legacy_syslog_builder);
                     legacy_builder.add_new({std::move(legacy_msg), 0});
                     last = legacy_syslog_builder;
+                    break;
+                  case legacy_structured_syslog_builder:
+                    maybe_flush(legacy_structured_syslog_builder);
+                    legacy_structured_builder.add_new(
+                      {std::move(legacy_msg), 0});
+                    last = legacy_structured_syslog_builder;
                     break;
                   case unknown_syslog_builder:
                     TENZIR_UNREACHABLE();
@@ -1613,7 +1729,7 @@ public:
 };
 
 class write_syslog final : public operator_plugin2<syslog_printer> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.op = inv.self.get_location();

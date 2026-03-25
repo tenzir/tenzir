@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -10,6 +10,7 @@
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::int_ {
@@ -32,7 +33,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto base = located<uint64_t>{10, location::unknown};

@@ -1,0 +1,5 @@
+created: 2026-03-19
+title: Parsing and query fixes
+intro: >-
+  This patch release fixes several correctness and performance issues across parsing,
+  querying, and storage, and completes Suricata 8 schema coverage.

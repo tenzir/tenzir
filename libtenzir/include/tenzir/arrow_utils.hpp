@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -161,5 +161,14 @@ auto append_array(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
                   const type_to_arrow_array_t<Ty>& array) -> arrow::Status {
   return append_array_slice(builder, ty, array, 0, array.length());
 }
+
+/// Partitions an array into two builders based on a boolean mask. Rows where
+/// the mask value bit is true go to `true_builder`, others to `false_builder`.
+/// The null bitmap of the mask is ignored. Walks the type tree column-by-column
+/// for cache efficiency.
+auto partition_array(arrow::ArrayBuilder& true_builder,
+                     arrow::ArrayBuilder& false_builder, const type& ty,
+                     const arrow::Array& array, const arrow::BooleanArray& mask)
+  -> void;
 
 } // namespace tenzir

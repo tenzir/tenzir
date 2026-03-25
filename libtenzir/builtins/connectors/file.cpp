@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -238,6 +238,7 @@ public:
     -> std::optional<generator<chunk_ptr>> override {
     auto make = [](std::chrono::milliseconds timeout, fd_wrapper fd,
                    bool following) -> generator<chunk_ptr> {
+      co_yield {};
       auto in_buf = detail::fdinbuf(fd, max_chunk_size);
       in_buf.read_timeout() = timeout;
       auto current_data = std::vector<std::byte>{};
@@ -572,7 +573,7 @@ private:
 
 class load_file_plugin final : public operator_plugin2<load_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
@@ -612,7 +613,7 @@ public:
   auto name() const -> std::string override {
     return "load_stdin";
   }
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto timeout = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_(name())
@@ -674,7 +675,7 @@ private:
 
 class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
@@ -745,7 +746,7 @@ public:
     return "save_stdout";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     auto args = saver_args{};

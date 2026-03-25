@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -48,7 +48,7 @@ private:
 auto make_operator_name(const ast::entity& entity) -> std::string;
 
 auto instantiate_user_defined_operator(const user_defined_operator& udo,
-                                       operator_factory_plugin::invocation& inv,
+                                       operator_factory_invocation& inv,
                                        session ctx, udo_diagnostic_handler& dh)
   -> failure_or<ast::pipeline>;
 

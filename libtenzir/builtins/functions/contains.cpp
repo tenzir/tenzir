@@ -1,16 +1,18 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/multi_series.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/array/builder_primitive.h>
 #include <arrow/array/data.h>
@@ -40,7 +42,7 @@ auto comparable(const type& x, const type& y) -> bool {
   });
 }
 
-auto equals(const data_view& l, const data& r, bool exact) -> bool {
+auto equals(data_view3 l, const data& r, bool exact) -> bool {
   return match(
     std::tie(l, r),
     [](const concepts::integer auto& x, const concepts::integer auto& y) {
@@ -101,7 +103,7 @@ class plugin final : public function_plugin {
     return "contains";
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto target = located<data>{};

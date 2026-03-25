@@ -1,0 +1,9 @@
+id	Int64
+addr	Nullable(IPv6)
+dur	Nullable(Int64)
+ts	Nullable(DateTime64(9))
+net	Tuple(\n    ip Nullable(IPv6),\n    length Nullable(UInt8))
+inner	Tuple(\n    a Nullable(Int64),\n    b Nullable(String))
+items	Array(Nullable(Int64))
+---
+1	::ffff:10.0.0.1	5000000000	2025-01-15 00:00:00.000000000	('::ffff:10.0.0.0',104)	(1,'x')	[1,2,3]

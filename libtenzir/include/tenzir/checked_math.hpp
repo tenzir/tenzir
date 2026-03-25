@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -21,7 +21,7 @@ constexpr auto max = std::numeric_limits<T>::max();
 template <std::integral T>
 constexpr auto min = std::numeric_limits<T>::lowest();
 
-#define CHECK(x)                                                               \
+#define TENZIR_CHECKED_MATH_CHECK(x)                                           \
   if (not(x)) {                                                                \
     return std::nullopt;                                                       \
   }
@@ -35,10 +35,10 @@ constexpr auto checked_add(X x, Y y)
     static_assert(std::is_signed_v<R>);
     if (x > 0 && y > 0) {
       // -> x + y <= max<R>
-      CHECK(x <= max<R> - y);
+      TENZIR_CHECKED_MATH_CHECK(x <= max<R> - y);
     } else if (x < 0 && y < 0) {
       // -> min<R> <= x + y
-      CHECK(min<R> - y <= x);
+      TENZIR_CHECKED_MATH_CHECK(min<R> - y <= x);
     } else {
       // Cannot overflow due to mixed signs.
     }
@@ -53,13 +53,13 @@ constexpr auto checked_add(X x, Y y)
       if (y < 0) {
         // -> -y <= x
         auto minus_y = y == min<Y> ? R(max<Y>) + 1 : R(-y);
-        CHECK(minus_y <= x);
+        TENZIR_CHECKED_MATH_CHECK(minus_y <= x);
       }
     }
     // -> x + y <= max<R>
     if (y >= 0) {
       // -> y <= max<R> - x
-      CHECK(R(y) <= max<R> - x);
+      TENZIR_CHECKED_MATH_CHECK(R(y) <= max<R> - x);
     }
     return x + R(y);
   }
@@ -74,12 +74,12 @@ constexpr auto checked_sub(X x, Y y) -> std::optional<X> {
     // -> min<X> + y <= x
     // Check whether we can convert `y` to `X`.
     if (y <= Y(max<X>)) {
-      CHECK(min<X> + X(y) <= x);
+      TENZIR_CHECKED_MATH_CHECK(min<X> + X(y) <= x);
       return x - X(y);
     }
     // We know `y > max<X>` and thus `min<X> + y >= 0`.
-    CHECK(x >= 0);
-    CHECK(Y(min<X>) + y <= Y(x));
+    TENZIR_CHECKED_MATH_CHECK(x >= 0);
+    TENZIR_CHECKED_MATH_CHECK(Y(min<X>) + y <= Y(x));
     return X(Y(x) - Y(y));
   }
   // We know `y < 0` (which implies that Y is signed).
@@ -87,15 +87,15 @@ constexpr auto checked_sub(X x, Y y) -> std::optional<X> {
   if (y == min<Y>) {
     // -> x <= max<X> + min<Y>
     if constexpr (std::is_signed_v<X>) {
-      CHECK(x <= -1);
+      TENZIR_CHECKED_MATH_CHECK(x <= -1);
       return x - y;
     } else {
       // -> x <= max<U> + min<S>
-      CHECK(x <= max<X> - max<Y> - 1);
+      TENZIR_CHECKED_MATH_CHECK(x <= max<X> - max<Y> - 1);
       return X(Y(x) - Y(y));
     }
   }
-  CHECK(x <= max<X> - X(-y));
+  TENZIR_CHECKED_MATH_CHECK(x <= max<X> - X(-y));
   return x + X(-y);
 }
 
@@ -112,21 +112,21 @@ constexpr auto checked_mul(X x, Y y)
   } else if constexpr (std::is_unsigned_v<X>) {
     static_assert(std::is_unsigned_v<Y>);
     // -> x * y <= max<X>;
-    CHECK(x <= max<X> / y);
+    TENZIR_CHECKED_MATH_CHECK(x <= max<X> / y);
     return x * y;
   } else if constexpr (std::is_unsigned_v<Y>) {
     if (x == -1 && y == Y(max<X>) + 1) {
       return min<X>;
     }
-    CHECK(y <= Y(max<X>));
+    TENZIR_CHECKED_MATH_CHECK(y <= Y(max<X>));
     return checked_mul(x, X(y));
   } else {
     static_assert(std::same_as<X, Y>);
     // -> x * y <= max<X>
     if (y > 0) {
-      CHECK(x <= max<X> / y);
+      TENZIR_CHECKED_MATH_CHECK(x <= max<X> / y);
     } else {
-      CHECK(x >= max<X> / y);
+      TENZIR_CHECKED_MATH_CHECK(x >= max<X> / y);
     }
     // -> min<X> <= x * y
     if (y == -1) {
@@ -136,14 +136,14 @@ constexpr auto checked_mul(X x, Y y)
       std::swap(x, y);
     }
     if (y > 0) {
-      CHECK(min<X> / y <= x);
+      TENZIR_CHECKED_MATH_CHECK(min<X> / y <= x);
     } else {
-      CHECK(min<X> / y >= x);
+      TENZIR_CHECKED_MATH_CHECK(min<X> / y >= x);
     }
     return x * y;
   }
 }
 
-#undef CHECK
+#undef TENZIR_CHECKED_MATH_CHECK
 
 } // namespace tenzir

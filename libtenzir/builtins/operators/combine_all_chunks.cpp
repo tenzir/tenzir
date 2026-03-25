@@ -1,14 +1,15 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/plugin.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 namespace tenzir::plugins::combine_all_chunks {
@@ -57,7 +58,8 @@ public:
 class combine_all_chunks final
   : public operator_plugin2<combine_all_chunks_operator> {
 public:
-  auto make(invocation, session) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_invocation, session) const
+    -> failure_or<operator_ptr> override {
     return std::make_unique<combine_all_chunks_operator>();
   }
 };

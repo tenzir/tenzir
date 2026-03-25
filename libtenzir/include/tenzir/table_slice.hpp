@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -12,9 +12,9 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/concept/printable/print.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -183,10 +183,10 @@ public:
   // -- data access ------------------------------------------------------------
 
   /// Get all values in the slice, iterating row-wise.
-  auto values() const -> generator<view<record>>;
+  auto values() const -> generator<view3<record>>;
 
   /// Get all values for the given path.
-  auto values(const struct offset& path) const -> generator<view<data>>;
+  auto values(const struct offset& path) const -> generator<data_view3>;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
@@ -400,6 +400,21 @@ filter(const table_slice& slice, const expression& expr);
 ///          expression.
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
+
+/// Filters a table slice by a boolean mask, keeping only rows where the mask
+/// value bit is true. The null bitmap of the mask is ignored. Returns an empty
+/// table slice if no rows are kept.
+/// @pre `slice.rows() == mask.length()`
+[[nodiscard]] auto filter(const table_slice& slice,
+                          const arrow::BooleanArray& mask) -> table_slice;
+
+/// Partitions a table slice into two based on a boolean mask. Rows where the
+/// mask value bit is true go to the first result, others to the second.
+/// The null bitmap of the mask is ignored.
+/// @pre `slice.rows() == mask.length()`
+[[nodiscard]] auto
+partition(const table_slice& slice, const arrow::BooleanArray& mask)
+  -> std::pair<table_slice, table_slice>;
 
 /// Resolves all enumeration columns in a table slice to string columns. Note
 /// that this does not go into records inside lists or maps.

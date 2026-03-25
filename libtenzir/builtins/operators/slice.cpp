@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -563,7 +563,7 @@ public:
     return {.transformation = true};
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto begin = std::optional<int64_t>{};
     auto end = std::optional<int64_t>{};
@@ -602,7 +602,7 @@ public:
     return "tql2.reverse";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("reverse").parse(inv, ctx));
     return std::make_unique<slice_operator>(std::nullopt, std::nullopt, -1);
@@ -623,7 +623,7 @@ public:
     return Mode == mode::head ? "tql2.head" : "tql2.tail";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto n = std::optional<int64_t>{10};
     TRY(argument_parser2::operator_(name()).positional("n", n).parse(inv, ctx));

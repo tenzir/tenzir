@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -32,6 +32,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/filter.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
@@ -75,19 +76,36 @@ public:
       co_return;
     }
     diag_queue_ = std::make_shared<UnboundedQueue<diagnostic>>();
-    // TODO: Figure out whether this makes sense.
-    auto legacy_conjunction = conjunction{};
-    auto rest = ir::optimize_filter{};
-    for (auto& filter : args_.filter) {
-      auto [legacy, remainder] = split_legacy_expression(args_.filter[0]);
-    }
-    auto expr = expression{
+    auto legacy_clauses = std::vector<expression>{};
+    legacy_clauses.push_back(expression{
       predicate{
         meta_extractor{meta_extractor::internal},
         relational_operator::equal,
         data{args_.internal},
       },
-    };
+    });
+    for (const auto& filter : args_.filter) {
+      auto [legacy, remainder] = split_legacy_expression(filter);
+      if (legacy != trivially_true_expression()) {
+        legacy_clauses.push_back(std::move(legacy));
+      }
+      if (not is_true_literal(remainder)) {
+        if (not remainder_) {
+          remainder_ = std::move(remainder);
+        } else {
+          remainder_ = ast::expression{
+            ast::binary_expr{
+              std::move(*remainder_),
+              {ast::binary_op::and_, location::unknown},
+              std::move(remainder),
+            },
+          };
+        }
+      }
+    }
+    auto expr = legacy_clauses.size() == 1
+                  ? std::move(legacy_clauses[0])
+                  : expression{conjunction{std::move(legacy_clauses)}};
     auto mode = export_mode{args_.live ? args_.retro : true, args_.live,
                             args_.internal, args_.parallel};
     auto result
@@ -124,7 +142,14 @@ public:
       done_ = true;
       co_return;
     }
-    co_await push(std::move(*expected));
+    if (not remainder_) {
+      co_await push(std::move(*expected));
+      co_return;
+    }
+    auto output = filter2(*expected, *remainder_, ctx, false);
+    if (output.rows() > 0) {
+      co_await push(std::move(output));
+    }
   }
 
   auto state() -> OperatorState override {
@@ -145,6 +170,7 @@ private:
   ExportArgs args_;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
+  std::optional<ast::expression> remainder_ = std::nullopt;
   bool done_ = false;
 };
 
@@ -303,7 +329,7 @@ public:
       export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto live = false;
     auto retro = false;
@@ -381,7 +407,7 @@ public:
       export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto live = false;
     auto retro = false;
@@ -465,7 +491,7 @@ public:
       export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto name = std::optional<located<std::string>>{};
     auto live = false;

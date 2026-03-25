@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -23,6 +23,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 
@@ -438,6 +439,7 @@ public:
       // It's advised to call poll periodically to tell Kafka "you can flush
       // buffered messages if you like".
       client->poll(0ms);
+      co_yield {};
     }
   }
 

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -153,12 +153,12 @@ arrow::Status
 append_builder(const subnet_type&,
                type_to_arrow_builder_t<subnet_type>& builder,
                const view<type_to_data_t<subnet_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok()) {
+  if (auto status = builder.Append(); ! status.ok()) {
     return status;
   }
   if (auto status
       = append_builder(ip_type{}, builder.ip_builder(), view.network());
-      !status.ok()) {
+      ! status.ok()) {
     return status;
   }
   return builder.length_builder().Append(view.length());
@@ -187,14 +187,14 @@ arrow::Status
 append_builder(const list_type& hint,
                type_to_arrow_builder_t<list_type>& builder,
                const view<type_to_data_t<list_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok()) {
+  if (auto status = builder.Append(); ! status.ok()) {
     return status;
   }
   auto append_values = [&](const concrete_type auto& value_type) noexcept {
     auto& value_builder = *builder.value_builder();
     for (const auto& value_view : view) {
       if (auto status = append_builder(value_type, value_builder, value_view);
-          !status.ok()) {
+          ! status.ok()) {
         return status;
       }
     }
@@ -206,7 +206,7 @@ append_builder(const list_type& hint,
 arrow::Status
 append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
                const view<type_to_data_t<map_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok()) {
+  if (auto status = builder.Append(); ! status.ok()) {
     return status;
   }
   auto append_values = [&](const concrete_type auto& key_type,
@@ -215,11 +215,11 @@ append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
     auto& item_builder = *builder.item_builder();
     for (const auto& [key_view, item_view] : view) {
       if (auto status = append_builder(key_type, key_builder, key_view);
-          !status.ok()) {
+          ! status.ok()) {
         return status;
       }
       if (auto status = append_builder(item_type, item_builder, item_view);
-          !status.ok()) {
+          ! status.ok()) {
         return status;
       }
     }
@@ -232,13 +232,13 @@ arrow::Status
 append_builder(const record_type& hint,
                type_to_arrow_builder_t<record_type>& builder,
                const view<type_to_data_t<record_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok()) {
+  if (auto status = builder.Append(); ! status.ok()) {
     return status;
   }
   for (int index = 0; const auto& [_, field_type] : hint.fields()) {
     if (auto status = append_builder(field_type, *builder.field_builder(index),
                                      view->at(index).second);
-        !status.ok()) {
+        ! status.ok()) {
       return status;
     }
     ++index;
@@ -274,7 +274,7 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
       if (array.IsNull(row)) {
         TRY(builder.AppendNull());
       } else {
-        TRY(append_builder(ty, builder, value_at(ty, *array.storage(), row)));
+        TRY(append_builder(ty, builder, *view_at<Ty>(array, row)));
       }
     }
   } else if constexpr (std::same_as<Ty, record_type>) {
@@ -333,5 +333,133 @@ struct instantiate_append_array_slice {
 };
 
 template struct instantiate_append_array_slice<std::monostate{}>;
+
+namespace {
+
+template <typename F>
+void for_each_true_run(const arrow::BooleanArray& mask, F&& fn) {
+  auto i = int64_t{0};
+  auto len = mask.length();
+  while (i < len) {
+    while (i < len && not(mask.IsValid(i) and mask.Value(i))) {
+      ++i;
+    }
+    if (i >= len) {
+      break;
+    }
+    auto begin = i;
+    while (i < len && mask.IsValid(i) && mask.Value(i)) {
+      ++i;
+    }
+    fn(begin, i);
+  }
+}
+
+/// Iterates contiguous runs in a boolean mask, calling fn(begin, end, value)
+/// for each run.
+template <typename F>
+void for_each_run(const arrow::BooleanArray& mask, F&& fn) {
+  auto len = mask.length();
+  if (len == 0) {
+    return;
+  }
+  auto run_begin = int64_t{0};
+  auto run_value = mask.IsValid(0) and mask.Value(0);
+  for (auto i = int64_t{1}; i < len; ++i) {
+    auto value = mask.IsValid(i) and mask.Value(i);
+    if (value != run_value) {
+      fn(run_begin, i, run_value);
+      run_begin = i;
+      run_value = value;
+    }
+  }
+  fn(run_begin, len, run_value);
+}
+
+} // namespace
+
+auto partition_array(arrow::ArrayBuilder& true_builder,
+                     arrow::ArrayBuilder& false_builder, const type& ty,
+                     const arrow::Array& array, const arrow::BooleanArray& mask)
+  -> void {
+  TENZIR_ASSERT(array.length() == mask.length());
+  auto true_count = mask.true_count();
+  auto false_count = mask.length() - true_count;
+  match(ty, [&]<class Ty>(const Ty& ty) {
+    auto* typed_array_ptr
+      = dynamic_cast<const type_to_arrow_array_t<Ty>*>(&array);
+    TENZIR_ASSERT(typed_array_ptr);
+    auto& typed_array = *typed_array_ptr;
+    if constexpr (std::same_as<Ty, record_type>) {
+      auto* tbp = dynamic_cast<arrow::StructBuilder*>(&true_builder);
+      auto* fbp = dynamic_cast<arrow::StructBuilder*>(&false_builder);
+      TENZIR_ASSERT(tbp);
+      TENZIR_ASSERT(fbp);
+      auto& tb = *tbp;
+      auto& fb = *fbp;
+      check(tb.Reserve(true_count));
+      check(fb.Reserve(false_count));
+      for (auto i = int64_t{0}; i < mask.length(); ++i) {
+        auto& b = (mask.IsValid(i) and mask.Value(i)) ? tb : fb;
+        check(b.Append(typed_array.IsValid(i)));
+      }
+      for (auto field = 0; field < tb.num_fields(); ++field) {
+        partition_array(*tb.field_builder(field), *fb.field_builder(field),
+                        ty.field(field).type, *typed_array.field(field), mask);
+      }
+    } else if constexpr (std::same_as<Ty, list_type>) {
+      auto* tbp = dynamic_cast<arrow::ListBuilder*>(&true_builder);
+      auto* fbp = dynamic_cast<arrow::ListBuilder*>(&false_builder);
+      TENZIR_ASSERT(tbp);
+      TENZIR_ASSERT(fbp);
+      auto& tb = *tbp;
+      auto& fb = *fbp;
+      check(tb.Reserve(true_count));
+      check(fb.Reserve(false_count));
+      for (auto i = int64_t{0}; i < mask.length(); ++i) {
+        auto& b = (mask.IsValid(i) and mask.Value(i)) ? tb : fb;
+        auto valid = typed_array.IsValid(i);
+        check(b.Append(valid));
+        if (valid) {
+          auto list_begin = typed_array.value_offset(i);
+          auto list_end = typed_array.value_offset(i + 1);
+          check(append_array_slice(*b.value_builder(), type{ty.value_type()},
+                                   *typed_array.values(), list_begin,
+                                   list_end - list_begin));
+        }
+      }
+    } else if constexpr (std::same_as<Ty, map_type>) {
+      TENZIR_UNREACHABLE();
+    } else {
+      auto* tbp = dynamic_cast<type_to_arrow_builder_t<Ty>*>(&true_builder);
+      auto* fbp = dynamic_cast<type_to_arrow_builder_t<Ty>*>(&false_builder);
+      TENZIR_ASSERT(tbp);
+      TENZIR_ASSERT(fbp);
+      auto& tb = *tbp;
+      auto& fb = *fbp;
+      check(tb.Reserve(true_count));
+      check(fb.Reserve(false_count));
+      if constexpr (std::same_as<Ty, string_type>
+                    or std::same_as<Ty, blob_type>) {
+        auto true_bytes = int64_t{0};
+        auto false_bytes = int64_t{0};
+        for (auto i = int64_t{0}; i < mask.length(); ++i) {
+          auto bytes = typed_array.value_length(i);
+          if (mask.IsValid(i) and mask.Value(i)) {
+            true_bytes += bytes;
+          } else {
+            false_bytes += bytes;
+          }
+        }
+        check(tb.ReserveData(true_bytes));
+        check(fb.ReserveData(false_bytes));
+      }
+      for_each_run(mask, [&](int64_t begin, int64_t end, bool value) {
+        auto& b = value ? tb : fb;
+        check(append_array_slice(b, ty, typed_array, begin, end - begin));
+      });
+    }
+  });
+}
 
 } // namespace tenzir

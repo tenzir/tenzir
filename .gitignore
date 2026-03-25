@@ -55,3 +55,9 @@ CLAUDE-TODOS.md
 
 # Files created by the workaround of the Claude plugins bug
 .claude/*/dev:*
+
+# Skills are managed by npx
+.agents/skills/
+.claude/skills/
+.pi/skills/
+skills-lock.json

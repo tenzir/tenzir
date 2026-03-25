@@ -1,0 +1,23 @@
+{
+  customer_id: "test-customer-123",
+  entries: [
+    {
+      log_text: "other type",
+    },
+  ],
+  log_type: "OKTA",
+  namespace: "test-ns",
+}
+{
+  customer_id: "test-customer-123",
+  entries: [
+    {
+      log_text: "hello world",
+    },
+    {
+      log_text: "second event",
+    },
+  ],
+  log_type: "WINEVTLOG",
+  namespace: "test-ns",
+}

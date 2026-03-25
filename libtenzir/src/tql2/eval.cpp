@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -164,7 +164,7 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
       TENZIR_ASSERT(result.length() == 1);
       TENZIR_ASSERT(result.parts().size() == 1);
       auto& part = result.part(0);
-      return materialize(value_at(part.type, *part.array, 0));
+      return materialize(view_at(*part.array, 0));
     } catch (failure fail) {
       return fail;
     }
@@ -279,7 +279,7 @@ auto eval(const ast::lambda_expr& lambda, const data& input,
     const auto result = eval(lambda, data_to_series(input, int64_t{1}), dh);
     TENZIR_ASSERT(result.parts().size() == 1);
     TENZIR_ASSERT(result.part(0).length() == 1);
-    return materialize(value_at(result.part(0).type, *result.part(0).array, 0));
+    return materialize(view_at(*result.part(0).array, 0));
   });
 }
 

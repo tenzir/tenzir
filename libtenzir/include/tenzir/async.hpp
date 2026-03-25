@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -25,6 +25,8 @@
 /// - `await_task()` - Returns Task<Any> the executor awaits. Sources use
 ///   this to produce data; non-sources typically sleep forever (the default).
 /// - `process_task(result, push, ctx)` - Called when `await_task()` completes.
+/// - `prepare_snapshot(push, ctx)` - Called when checkpointing to let
+///   operators push buffered output before state serialization.
 /// - `finalize(push, ctx)` - Called exactly once when upstream signals
 ///   end-of-data. Use for buffering operators (tail, sort, aggregations) that
 ///   must see all input before producing output.
@@ -75,7 +77,13 @@ struct OperatorMsg;
 template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) : push_{push} {
+  OpenPipeline() noexcept = default;
+
+  explicit OpenPipeline(Option<Box<Push<OperatorMsg<Input>>>>& push) noexcept
+    : push_{&push} {
+  }
+
+  explicit OpenPipeline(None) noexcept {
   }
 
   template <std::same_as<Input> In>
@@ -84,7 +92,7 @@ public:
     requires(not std::same_as<Input, void>);
 
 private:
-  Option<Push<OperatorMsg<Input>>&> push_;
+  Option<Box<Push<OperatorMsg<Input>>>>* push_ = nullptr;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
@@ -109,6 +117,10 @@ public:
     -> Task<failure_or<void>>
     = 0;
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline>
+    = 0;
+  virtual auto
+  spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline>
     = 0;
   virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
@@ -149,6 +161,9 @@ public:
 
   /// Returns the metrics receiver actor handle, if available.
   virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
+
+  /// Returns whether the pipeline is hidden.
+  virtual auto is_hidden() const -> bool = 0;
 };
 
 enum class OperatorState {
@@ -212,6 +227,14 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  /// Called when checkpointing starts, before serializing operator state.
+  ///
+  /// Operators can emit buffered output here to keep snapshots small.
+  virtual auto prepare_snapshot(Push<Output>& push, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(push, ctx);
+    co_return;
+  }
+
   /// Process the result of a spawned subpipeline in a *thread-safe* way.
   ///
   /// Note that, unlike all other functions in the operator interface, this one
@@ -224,6 +247,14 @@ public:
     } else {
       panic("subpipeline result handling is not implemented for this operator");
     }
+  }
+
+  /// Process byte output from a spawned subpipeline in a *thread-safe* way.
+  virtual auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
+                           OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, chunk, push, ctx);
+    panic("subpipeline chunk result handling is not implemented for this "
+          "operator");
   }
 
   /// This is *not* required to be thread-safe.
@@ -252,9 +283,20 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  virtual auto prepare_snapshot(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
+    co_return;
+  }
+
   virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)
     -> Task<void> {
     TENZIR_UNUSED(key, slice, ctx);
+    TENZIR_UNREACHABLE();
+  }
+
+  virtual auto process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(key, chunk, ctx);
     TENZIR_UNREACHABLE();
   }
 

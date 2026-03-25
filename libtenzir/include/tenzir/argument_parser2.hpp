@@ -1,18 +1,19 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
+#include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/plugin_api.hpp"
 
 #include <caf/detail/concepts.hpp>
 #include <caf/detail/type_list.hpp>
@@ -34,10 +35,10 @@ using argument_parser_data_types
   = detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
                      as_located>;
 
-using argument_parser_full_types = detail::tl_concat_t<
-  argument_parser_data_types,
-  detail::type_list<located<pipeline>, ast::expression, ast::field_path,
-                    ast::lambda_expr, located<data>>>;
+using argument_parser_full_types
+  = detail::tl_concat_t<argument_parser_data_types,
+                        detail::type_list<ast::expression, ast::field_path,
+                                          ast::lambda_expr, located<data>>>;
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
@@ -86,6 +87,11 @@ public:
   auto positional(std::string name, std::optional<T>& x,
                   std::string type = maybe_default<T>) -> argument_parser2&;
 
+  auto positional(std::string name, located<pipeline>& x, std::string type = "")
+    -> argument_parser2&;
+  auto positional(std::string name, std::optional<located<pipeline>>& x,
+                  std::string type = "") -> argument_parser2&;
+
   // ------------------------------------------------------------------------
 
   /// Adds a required named argument.
@@ -99,12 +105,20 @@ public:
   auto named(std::string name, std::optional<T>& x,
              std::string type = maybe_default<T>) -> argument_parser2&;
 
+  auto named(std::string name, located<pipeline>& x, std::string type = "")
+    -> argument_parser2&;
+  auto named(std::string name, std::optional<located<pipeline>>& x,
+             std::string type = "") -> argument_parser2&;
+
   /// Adds an optional named argument. Use this if you have an object with a
   /// default value.
   template <argument_parser_type T>
   auto
   named_optional(std::string name, T& x, std::string type = maybe_default<T>)
     -> argument_parser2&;
+
+  auto named_optional(std::string name, located<pipeline>& x,
+                      std::string type = "") -> argument_parser2&;
 
   /// Adds an optional named argument.
   auto named(std::string name, std::optional<location>& x,
@@ -116,11 +130,10 @@ public:
 
   // ------------------------------------------------------------------------
 
-  auto parse(const operator_factory_plugin::invocation& inv, session ctx)
+  auto parse(const operator_factory_invocation& inv, session ctx)
     -> failure_or<void>;
   auto parse(const ast::function_call& call, session ctx) -> failure_or<void>;
-  auto parse(const function_plugin::invocation& inv, session ctx)
-    -> failure_or<void>;
+  auto parse(const function_invocation& inv, session ctx) -> failure_or<void>;
   auto parse(const ast::entity& self, std::span<ast::expression const> args,
              session ctx) -> failure_or<void>;
 
@@ -154,8 +167,11 @@ private:
   template <class T>
   using setter = std::function<void(T)>;
 
+  using pipeline_setter
+    = std::function<failure_or<void>(const ast::pipeline_expr&, session)>;
+
   template <class... Ts>
-  using setter_variant = variant<setter<Ts>...>;
+  using setter_variant = variant<pipeline_setter, setter<Ts>...>;
 
   using any_setter
     = detail::tl_apply_t<argument_parser_full_types, setter_variant>;

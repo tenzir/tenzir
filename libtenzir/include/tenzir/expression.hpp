@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -129,10 +129,6 @@ auto inspect(Inspector& f, data_extractor& x) {
     .pretty_name("data_extractor")
     .fields(f.field("type", x.type), f.field("column", x.column));
 }
-
-/// The operand of a predicate, which can be either LHS or RHS.
-using operand = tenzir::variant<meta_extractor, field_extractor, type_extractor,
-                                data_extractor, data>;
 
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {

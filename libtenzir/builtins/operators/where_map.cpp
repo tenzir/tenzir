@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -31,6 +31,7 @@
 #include <tenzir/tql/basic.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/filter.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
@@ -144,47 +145,6 @@ public:
     return std::make_unique<where_operator>(std::move(expr));
   }
 };
-
-auto filter2(const table_slice& slice, const ast::expression& expr,
-             diagnostic_handler& dh, bool warn) -> std::vector<table_slice> {
-  auto results = std::vector<table_slice>{};
-  auto offset = int64_t{0};
-  for (auto& filter : eval(expr, slice, dh)) {
-    auto array = try_as<arrow::BooleanArray>(&*filter.array);
-    if (not array) {
-      diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-        .primary(expr)
-        .emit(dh);
-      offset += filter.array->length();
-      continue;
-    }
-    if (array->true_count() == array->length()) {
-      results.push_back(subslice(slice, offset, offset + array->length()));
-      offset += array->length();
-      continue;
-    }
-    if (warn) {
-      diagnostic::warning("assertion failure").primary(expr).emit(dh);
-    }
-    auto length = array->length();
-    auto current_value = array->Value(0);
-    auto current_begin = int64_t{0};
-    // We add an artificial `false` at index `length` to flush.
-    for (auto i = int64_t{1}; i < length + 1; ++i) {
-      const auto next = i != length && array->IsValid(i) && array->Value(i);
-      if (current_value == next) {
-        continue;
-      }
-      if (current_value) {
-        results.push_back(subslice(slice, offset + current_begin, offset + i));
-      }
-      current_value = next;
-      current_begin = i;
-    }
-    offset += length;
-  }
-  return results;
-}
 
 class where_assert_operator final
   : public crtp_operator<where_assert_operator> {
@@ -324,7 +284,7 @@ struct arguments {
 
   static auto parse(const std::string& name, const std::string& lambda_name,
                     const std::string& lambda_hint,
-                    const function_plugin::invocation& inv, session ctx)
+                    const function_invocation& inv, session ctx)
     -> failure_or<arguments> {
     auto dh = collecting_diagnostic_handler{};
     auto sp = session_provider::make(dh);
@@ -370,7 +330,7 @@ struct arguments {
   }
 };
 
-auto make_where_function(function_plugin::invocation inv, session ctx)
+auto make_where_function(function_invocation inv, session ctx)
   -> failure_or<function_ptr> {
   TRY(auto args,
       arguments::parse("where", "predicate", "any => bool", inv, ctx));
@@ -428,8 +388,11 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
                   ids.append_bits(false, result.length());
                 });
             }
-            TENZIR_ASSERT(list_values.length()
-                          == detail::narrow<int64_t>(ids.size()));
+            const auto offset_begin = lists.array->value_offset(0);
+            const auto offset_end
+              = lists.array->value_offset(lists.array->length());
+            TENZIR_ASSERT_EQ(offset_end - offset_begin,
+                             detail::narrow<int64_t>(ids.size()));
             if (all_true) {
               return field;
             }
@@ -451,15 +414,14 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
                 const auto offset = lists.array->value_offset(i);
                 const auto length = lists.array->value_length(i);
                 for (auto j = offset; j < offset + length; ++j) {
-                  if (not ids[j]) {
+                  if (not ids[j - offset_begin]) {
                     continue;
                   }
                   if (list_values.array->IsNull(j)) {
                     list_builder.null();
                     continue;
                   }
-                  list_builder.data(
-                    value_at(list_values_type, *list_values.array, j));
+                  list_builder.data(view_at(*list_values.array, j));
                 }
               }
             });
@@ -536,7 +498,7 @@ struct where_result_part {
   }
 };
 
-auto make_map_function(function_plugin::invocation inv, session ctx)
+auto make_map_function(function_invocation inv, session ctx)
   -> failure_or<function_ptr> {
   TRY(auto args, arguments::parse("map", "function", "any -> any", inv, ctx));
   return function_use::make([args = std::move(args)](
@@ -552,15 +514,29 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           .emit(ctx);
         return series::null(null_type{}, field.length());
       }
-      // The list array may be a slice of a larger backing array, so we must
-      // use the offsets to determine the actual values range.
-      auto values_start = field_list->array->value_offset(0);
-      auto values_end
+      // Handle all-empty lists. The `eval` call below would return an empty
+      // multi-series for it. The list array may be a slice of a larger backing
+      // array, so we must use the offsets to determine the actual values range.
+      auto const values_start = field_list->array->value_offset(0);
+      auto const values_end
         = field_list->array->value_offset(field_list->array->length());
       auto values_length = values_end - values_start;
       if (values_length == 0) {
-        return make_list_series(series::null(null_type{}, field_list->length()),
-                                *field_list->array);
+        /// TODO: theoretically it would be good to return the expected result
+        /// type here. However, we have no real way of obtaining it, given that
+        /// we dont have a value to run the lambda on. For _some_ cases it would
+        /// be possible to statically analyze the type.
+        /// As a reasonable stopgap, we simply return a list[null] array.
+        const auto t = type{list_type{null_type{}}};
+        auto b = series_builder{&t};
+        for (auto v : values3(*field_list->array)) {
+          if (not v) {
+            b.null();
+            continue;
+          }
+          b.list();
+        }
+        return b.finish_assert_one_array();
       }
       auto ms = eval(args.lambda, *field_list);
       TENZIR_ASSERT(not ms.parts().empty());
@@ -570,13 +546,14 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
       const auto n_parts = ms.parts().size();
       if (n_parts == 1) {
         auto& values = ms.parts().front();
+        auto [offsets, null_bitmap]
+          = rebase_list_array_buffers(*field_list->array);
         return series{
           list_type{values.type},
           std::make_shared<arrow::ListArray>(
             list_type{values.type}.to_arrow_type(), field_list->array->length(),
-            field_list->array->value_offsets(), values.array,
-            field_list->array->null_bitmap(), field_list->array->null_count(),
-            field_list->array->offset()),
+            std::move(offsets), values.array, std::move(null_bitmap),
+            field_list->array->null_count()),
         };
       }
       // If there is more than one part, we need to rebuild batches by merging
@@ -636,7 +613,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           continue;
         }
         const auto event_start_offset
-          = field_list->array->value_offset(event_index);
+          = field_list->array->value_offset(event_index) - values_start;
         const auto event_list_size
           = static_cast<int64_t>(field_list->array->value_length(event_index));
         const auto event_end_offset = event_start_offset + event_list_size;
@@ -787,7 +764,7 @@ public:
     return "tql2.assert";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     auto msg = std::optional<ast::expression>{};
@@ -864,7 +841,8 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    for (auto output : filter2(input, expr_, ctx, false)) {
+    auto output = filter2(input, expr_, ctx, false);
+    if (output.rows() > 0) {
       co_await push(std::move(output));
     }
   }
@@ -939,7 +917,7 @@ public:
     return "tql2.where";
   }
 
-  auto make(operator_factory_plugin::invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::operator_("where")
@@ -958,8 +936,8 @@ public:
     auto loc = inv.op.get_location();
     TRY(argument_parser2::operator_("where")
           .positional("predicate", expr, "bool")
-          .parse(operator_factory_plugin::invocation{std::move(inv.op),
-                                                     std::move(inv.args)},
+          .parse(operator_factory_invocation{std::move(inv.op),
+                                             std::move(inv.args)},
                  provider.as_session()));
     TRY(expr.bind(ctx));
     return where_ir{loc, std::move(expr)};
@@ -969,7 +947,7 @@ public:
     return true;
   }
 
-  auto make_function(function_plugin::invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     return make_where_function(std::move(inv), ctx);
   }
@@ -985,7 +963,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     return make_map_function(std::move(inv), ctx);
   }

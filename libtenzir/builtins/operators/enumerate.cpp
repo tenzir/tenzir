@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -11,12 +11,14 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/type.h>
+#include <tsl/robin_map.h>
 
 #include <type_traits>
 #include <utility>
@@ -43,7 +45,8 @@ struct EnumerateArgs {
 
 using GroupMap = tsl::robin_map<data, int64_t>;
 
-auto find_group(GroupMap& groups, data_view const value) -> GroupMap::iterator {
+auto find_group(GroupMap& groups, data_view3 const value)
+  -> GroupMap::iterator {
   auto key = materialize(value);
   auto it = groups.find(key);
   match(
@@ -163,7 +166,7 @@ private:
 class Plugin final : public virtual operator_plugin2<enumerate_operator>,
                      public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = EnumerateArgs{};
     auto out = ast::field_path::try_from(

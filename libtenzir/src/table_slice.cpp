@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -29,6 +29,7 @@
 #include "tenzir/type.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
@@ -828,21 +829,23 @@ bool table_slice::is_serialized() const noexcept {
 
 // -- data access --------------------------------------------------------------
 
-auto table_slice::values() const -> generator<view<record>> {
+auto table_slice::values() const -> generator<view3<record>> {
   auto path = tenzir::offset{};
   auto [type, array] = path.get(*this);
   const auto as_series = series{std::move(type), std::move(array)};
-  for (auto&& value : as_series.values<record_type>()) {
+  for (auto&& value : as_series.values3<record_type>()) {
     TENZIR_ASSERT_EXPENSIVE(value);
     co_yield std::move(*value);
   }
 }
 
 auto table_slice::values(const struct offset& path) const
-  -> generator<view<data>> {
+  -> generator<view3<data>> {
   auto [type, array] = path.get(*this);
   const auto as_series = series{std::move(type), std::move(array)};
-  return as_series.values();
+  for (auto&& value : as_series.values3()) {
+    co_yield std::move(value);
+  }
 }
 
 data_view table_slice::at(table_slice::size_type row,
@@ -1107,6 +1110,118 @@ filter(const table_slice& slice, const expression& expr) {
 
 std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
   return filter(slice, expression{}, hints);
+}
+
+auto filter(const table_slice& slice, const arrow::BooleanArray& mask)
+  -> table_slice {
+  TENZIR_ASSERT(detail::narrow_cast<int64_t>(slice.rows()) == mask.length());
+  if (mask.true_count() == 0) {
+    return {};
+  }
+  if (mask.null_count() == 0 and mask.true_count() == mask.length()) {
+    return slice;
+  }
+  auto schema = slice.schema();
+  auto batch = to_record_batch(slice);
+  auto datum = check(arrow::compute::Filter(batch, mask));
+  auto result_batch = datum.record_batch();
+  if (result_batch->num_rows() == 0) {
+    return {};
+  }
+  auto result = table_slice{result_batch, schema};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  return result;
+}
+
+namespace {
+
+/// Creates an Arrow ArrayBuilder from an existing DataType, avoiding the
+/// expensive recursive `to_arrow_type()` reconstruction.
+auto make_builder_with_type(const std::shared_ptr<arrow::DataType>& arrow_ty,
+                            arrow::MemoryPool* pool)
+  -> std::shared_ptr<arrow::ArrayBuilder> {
+  switch (arrow_ty->id()) {
+    case arrow::Type::STRUCT: {
+      auto field_builders = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
+      for (auto i = 0; i < arrow_ty->num_fields(); ++i) {
+        field_builders.push_back(
+          make_builder_with_type(arrow_ty->field(i)->type(), pool));
+      }
+      return std::make_shared<arrow::StructBuilder>(arrow_ty, pool,
+                                                    std::move(field_builders));
+    }
+    case arrow::Type::LIST: {
+      auto list_ty = std::static_pointer_cast<arrow::ListType>(arrow_ty);
+      auto value_builder = make_builder_with_type(list_ty->value_type(), pool);
+      return std::make_shared<arrow::ListBuilder>(
+        pool, std::move(value_builder), arrow_ty);
+    }
+    case arrow::Type::EXTENSION: {
+      if (dynamic_cast<const ip_type::arrow_type*>(arrow_ty.get())) {
+        return ip_type::make_arrow_builder(pool);
+      }
+      if (dynamic_cast<const subnet_type::arrow_type*>(arrow_ty.get())) {
+        return subnet_type::make_arrow_builder(pool);
+      }
+      if (dynamic_cast<const secret_type::arrow_type*>(arrow_ty.get())) {
+        return secret_type::make_arrow_builder(pool);
+      }
+      if (dynamic_cast<const enumeration_type::arrow_type*>(arrow_ty.get())) {
+        return std::make_shared<enumeration_type::builder_type>(
+          std::static_pointer_cast<enumeration_type::arrow_type>(arrow_ty),
+          pool);
+      }
+      TENZIR_UNREACHABLE();
+    }
+    default: {
+      auto builder = check(arrow::MakeBuilder(arrow_ty, pool));
+      return std::shared_ptr<arrow::ArrayBuilder>{std::move(builder)};
+    }
+  }
+}
+
+} // namespace
+
+// Note: This uses a custom builder-based approach instead of calling
+// `arrow::compute::Filter` twice (with mask and inverted mask). Benchmarking
+// showed that calling `Filter` twice is ~50% slower.
+auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
+  -> std::pair<table_slice, table_slice> {
+  TENZIR_ASSERT(detail::narrow_cast<int64_t>(slice.rows()) == mask.length());
+  auto true_count = mask.true_count();
+  if (true_count == 0) {
+    return {{}, slice};
+  }
+  if (true_count == mask.length()) {
+    return {slice, {}};
+  }
+  auto schema = slice.schema();
+  auto rt = as<record_type>(schema);
+  auto batch = to_record_batch(slice);
+  auto struct_array = check(batch->ToStructArray());
+  auto struct_type = struct_array->type();
+  auto true_builder = make_builder_with_type(struct_type, arrow_memory_pool());
+  auto false_builder = make_builder_with_type(struct_type, arrow_memory_pool());
+  partition_array(*true_builder, *false_builder, type{rt}, *struct_array, mask);
+  auto arrow_schema = batch->schema();
+  auto finish_slice = [&](arrow::StructBuilder& builder) -> table_slice {
+    auto rows = builder.length();
+    if (rows == 0) {
+      return {};
+    }
+    auto array = finish(builder);
+    auto result_batch
+      = arrow::RecordBatch::Make(arrow_schema, rows, array->fields());
+    auto result = table_slice{result_batch, schema};
+    result.offset(slice.offset());
+    result.import_time(slice.import_time());
+    return result;
+  };
+  return {
+    finish_slice(dynamic_cast<arrow::StructBuilder&>(*true_builder)),
+    finish_slice(dynamic_cast<arrow::StructBuilder&>(*false_builder)),
+  };
 }
 
 uint64_t count_matching(const table_slice& slice, const expression& expr,
@@ -1427,6 +1542,17 @@ auto flatten_record(
   }
   auto struct_array
     = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
+  // When we are inside a list (list_offsets non-empty), the transformations
+  // will wrap leaf arrays in lists, changing their length. This causes
+  // transform_columns to hit a fallback path that drops the struct's null
+  // bitmap. To avoid losing null information, we pre-flatten the struct to
+  // merge its null bitmap into the children before transforming.
+  if (not list_offsets.empty() && struct_array->null_bitmap()) {
+    auto flat_children
+      = check(struct_array->Flatten(tenzir::arrow_memory_pool()));
+    struct_array = std::make_shared<arrow::StructArray>(
+      struct_array->type(), struct_array->length(), std::move(flat_children));
+  }
   const auto next_name_prefix
     = fmt::format("{}{}{}", name_prefix, field.name, separator);
   auto transformations = std::vector<indexed_transformation>{};
@@ -1442,11 +1568,13 @@ auto flatten_record(
   auto result = indexed_transformation::result_type{};
   result.reserve(output_struct_array->num_fields());
   const auto& output_rt = as<record_type>(output_type);
+  auto flattened_children
+    = check(output_struct_array->Flatten(tenzir::arrow_memory_pool()));
   for (int i = 0; i < output_struct_array->num_fields(); ++i) {
     const auto field_view = output_rt.field(i);
     result.push_back({
       {std::string{field_view.name}, field_view.type},
-      output_struct_array->field(i),
+      std::move(flattened_children[i]),
     });
   }
   return result;

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -1317,7 +1317,7 @@ public:
         co_await read_input_queue_->enqueue(std::move(batch));
       }
       // Close the input queue and drain until all workers signaled completion.
-      co_await read_input_queue_->enqueue(std::nullopt);
+      co_await read_input_queue_->enqueue(None{});
       co_return FinalizeBehavior::continue_;
     } else {
       // Non-parallel code path.
@@ -1468,7 +1468,7 @@ private:
         // Use a timed dequeue so we periodically flush buffered events even
         // when input is slow. On timeout, yield_ready_as_table_slice() emits
         // any slices whose MSB timeout has expired.
-        auto next = std::optional<chunk_ptr>{};
+        auto next = Option<chunk_ptr>{};
         try {
           next = co_await read_input_queue_->co_try_dequeue_for(
             std::chrono::duration_cast<folly::Duration>(
@@ -1485,7 +1485,7 @@ private:
         }
         if (not next) {
           // Pass the stop sentinel to the next worker.
-          co_await read_input_queue_->enqueue(std::nullopt);
+          co_await read_input_queue_->enqueue(None{});
           break;
         }
         auto const* begin = reinterpret_cast<char const*>((*next)->data());
@@ -1552,7 +1552,7 @@ private:
     }
   }
 
-  using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+  using ReadInputQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
   /// The output queue is unbounded. This is intentional to avoid a theoretical
   /// deadlock, where the "main thread" wants to push to a full input queue and
   /// hence waits, while all workers want to push to a full output queue and
@@ -1590,7 +1590,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -1648,7 +1648,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{"ndjson"};
     args.split_mode = split_at::newline;
@@ -1698,7 +1698,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{"gelf"};
     args.split_mode = split_at::null;
@@ -1760,7 +1760,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{std::string{Name.str()}};
     args.split_mode = split_at::newline;
@@ -1800,7 +1800,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
@@ -2023,7 +2023,7 @@ public:
     draining_ = true;
     if (args_.jobs > 0 and finished_workers_ < args_.jobs) {
       // Close the input queue and drain until all workers signaled completion.
-      co_await write_input_queue_->enqueue(std::nullopt);
+      co_await write_input_queue_->enqueue(None{});
       co_return FinalizeBehavior::continue_;
     }
     TENZIR_UNUSED(ctx);
@@ -2048,7 +2048,7 @@ private:
         auto next = co_await write_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
-          co_await write_input_queue_->enqueue(std::nullopt);
+          co_await write_input_queue_->enqueue(None{});
           break;
         }
         write_output_queue_->enqueue(print_slice(*next));
@@ -2058,7 +2058,7 @@ private:
     write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
+  using WriteInputQueue = folly::coro::BoundedQueue<Option<table_slice>>;
   /// @ref ReadOutputQueue
   using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
@@ -2114,7 +2114,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
@@ -2185,7 +2185,7 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
@@ -2228,7 +2228,7 @@ public:
   print_json_plugin(bool compact) : compact_{compact} {
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto args = printer_args{};

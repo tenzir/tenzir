@@ -1,13 +1,15 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/coro/Sleep.h>
@@ -155,7 +157,7 @@ class plugin final
   : public virtual operator_plugin2<assert_throughput_operator>,
     public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto min_events = located<uint64_t>{};
     auto within = located<duration>{};

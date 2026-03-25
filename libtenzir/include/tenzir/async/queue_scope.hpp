@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -66,8 +66,9 @@ public:
     TENZIR_ASSERT(scope_);
     remaining_ += 1;
     scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
-      co_await results_.enqueue(
-        co_await folly::coro::co_awaitTry(std::move(task)));
+      auto item = Option<AsyncResult<T>>{
+        AsyncResult<T>{co_await folly::coro::co_awaitTry(std::move(task))}};
+      co_await results_.enqueue(std::move(item));
     });
   }
 
@@ -101,8 +102,9 @@ public:
     TENZIR_ASSERT(scope_);
     remaining_ += 1;
     scope_->spawn([this, f = std::forward<F>(f)] mutable -> Task<void> {
-      co_await results_.enqueue(
-        co_await folly::coro::co_awaitTry(std::invoke(std::move(f))));
+      auto item = Option<AsyncResult<T>>{AsyncResult<T>{
+        co_await folly::coro::co_awaitTry(std::invoke(std::move(f)))}};
+      co_await results_.enqueue(std::move(item));
     });
   }
 
@@ -128,12 +130,11 @@ public:
     });
   }
 
-  /// Directly insert something into the queue without a task.
-  ///
-  /// Use this if you need to ensure that some item is ordered before others.
-  auto insert(T x) -> Task<void> {
-    remaining_ += 1;
-    co_await results_.enqueue(std::move(x));
+  /// Insert a value into the queue without blocking the caller.
+  void insert(T x) {
+    spawn([x = std::move(x)]() mutable -> Task<T> {
+      co_return std::move(x);
+    });
   }
 
   /// Cancel all remaining tasks.

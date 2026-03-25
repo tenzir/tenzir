@@ -1,0 +1,7 @@
+error: unknown key `bogus_option` in `tls` record
+ --> tests/operators/serve_tcp/tls/error_tls_invalid_option.tql:6:15
+  |
+6 |           tls={bogus_option: true} {
+  |               ^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = hint: valid keys are: skip_peer_verification, cacert, certfile, keyfile, min_version, ciphers, client_ca, require_client_cert

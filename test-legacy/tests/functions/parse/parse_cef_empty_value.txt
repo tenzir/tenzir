@@ -1,0 +1,33 @@
+{
+  x: "CEF:0|V|P|1.0|1|test|5|key1= key2=value2",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      key1: "",
+      key2: "value2",
+    },
+  },
+}
+{
+  x: "CEF:0|V|P|1.0|1|test|5|a=1 b= c=3",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      a: 1,
+      b: "",
+      c: 3,
+    },
+  },
+}

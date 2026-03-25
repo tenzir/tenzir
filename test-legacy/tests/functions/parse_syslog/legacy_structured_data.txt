@@ -1,0 +1,74 @@
+{
+  x: {
+    facility: 20,
+    severity: 6,
+    timestamp: "2026-02-11T18:01:45.587Z",
+    hostname: "esxi-01.example.invalid",
+    app_name: "Hostd",
+    process_id: "2099494",
+    structured_data: {
+      "Originator@6876": {
+        sub: "Vimsvc.TaskManager",
+        opID: "11111111-2222-3333-4444-555555555555",
+        sid: "abc12345",
+        user: "vpxuser:EXAMPLE.LOCAL\\vpxd-extension-11111111-2222-3333-4444-555555555555",
+      },
+    },
+    content: "Task Completed : example-task Status success",
+  },
+}
+{
+  x: {
+    facility: 20,
+    severity: 6,
+    timestamp: "2026-02-11T18:01:45.587Z",
+    hostname: "esxi-01.example.invalid",
+    app_name: "Hostd",
+    process_id: "2099494",
+    structured_data: {
+      "Originator@6876": {
+        sub: "Vimsvc.TaskManager",
+      },
+    },
+    content: "",
+  },
+}
+{
+  x: {
+    facility: 20,
+    severity: 6,
+    timestamp: "2026-02-11T18:01:45.587Z",
+    hostname: "esxi-01.example.invalid",
+    app_name: "Hostd",
+    process_id: "2099494",
+    content: "[foo bar] Task Completed",
+  },
+}
+{
+  x: {
+    facility: 20,
+    severity: 6,
+    timestamp: "2026-02-11T18:01:45.587Z",
+    hostname: "esxi-01.example.invalid",
+    app_name: "Hostd",
+    process_id: "2099494",
+    structured_data: {
+      "Originator@6876": {
+        sub: "Vimsvc.TaskManager",
+        opID: "11111111-2222-3333-4444-555555555555",
+      },
+    },
+    content: "Task Completed",
+  },
+}
+{
+  x: {
+    facility: 20,
+    severity: 6,
+    timestamp: "2026-02-11T18:01:45.587Z",
+    hostname: "esxi-01.example.invalid",
+    app_name: "Hostd",
+    process_id: "2099494",
+    content: "[Originator@6876 sub=\"broken] Task Completed",
+  },
+}

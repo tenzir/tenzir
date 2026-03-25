@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -12,6 +12,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -157,14 +158,6 @@ public:
 
 class Version final : public Operator<void, table_slice> {
 public:
-  auto start(OpCtx& ctx) -> Task<void> override {
-    // diagnostic::warning("HELLO from version").emit(ctx);
-    // auto slice = make_version(caf::content(ctx.actor_system().config()));
-    // co_await push(slice);
-    TENZIR_INFO("leaving Version::start");
-    co_return;
-  }
-
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
@@ -180,7 +173,6 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_WARN("processing task with count == {}", count_);
     TENZIR_ASSERT(count_ < total);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
@@ -192,7 +184,6 @@ public:
   }
 
   auto state() -> OperatorState override {
-    TENZIR_ERROR("querying state of version with {}", count_);
     if (count_ == total) {
       return OperatorState::done;
     }
@@ -264,7 +255,7 @@ public:
     return std::make_unique<version_operator>();
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("version").parse(inv, ctx).ignore();
     return std::make_unique<version_operator>();

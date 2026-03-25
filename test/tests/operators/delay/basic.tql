@@ -1,0 +1,5 @@
+from {id: 0, ts: 2025-03-03T12:12:10},
+     {id: 1, ts: 2025-03-03T12:12:11},
+     {id: 2, ts: 2025-03-03T12:12:12}
+batch
+delay (null if id == 1 else ts), start=2025-03-03T12:12:07, speed=2.0

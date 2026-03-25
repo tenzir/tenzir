@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -13,6 +13,8 @@
 #include <tenzir/detail/tdigest.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -37,7 +39,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("sqrt")
@@ -110,7 +112,7 @@ public:
     return false;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
@@ -189,15 +191,15 @@ public:
     return chunk::make(fbb.Release());
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::Count>::make(std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `count` aggregation instance")
-        .emit(ctx);
-      return;
+      TENZIR_WARN(
+        "failed to restore `count` aggregation instance: invalid FlatBuffer");
+      return false;
     }
     count_ = (*fb)->result();
+    return true;
   }
 
   auto reset() -> void override {
@@ -220,7 +222,7 @@ public:
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = std::optional<ast::expression>{};
     TRY(argument_parser2::function("count")
@@ -240,7 +242,7 @@ public:
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     auto lambda = ast::lambda_expr{};
@@ -341,11 +343,11 @@ public:
     return {};
   }
 
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     TENZIR_UNUSED(chunk);
-    diagnostic::warning(
-      "restoring `quantile` aggregation instances is not implemented")
-      .emit(ctx);
+    TENZIR_WARN("restoring `quantile` aggregation instance from snapshot is "
+                "not yet implemented");
+    return false;
   }
 
   auto reset() -> void override {
@@ -371,7 +373,7 @@ public:
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     // TODO: Reconsider whether we want a default here. Maybe positional?
@@ -438,7 +440,7 @@ public:
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     // TODO: Reconsider whether we want a default here. Maybe positional?

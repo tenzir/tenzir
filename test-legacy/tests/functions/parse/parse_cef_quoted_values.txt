@@ -1,0 +1,81 @@
+{
+  x: "CEF:0|V|P|1.0|1|test|5|a=\"hello world\" b=plain",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      a: "hello world",
+      b: "plain",
+    },
+  },
+}
+{
+  x: "CEF:0|V|P|1.0|1|test|5|a=foo \"bar\" b=val",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      a: "foo \"bar\"",
+      b: "val",
+    },
+  },
+}
+{
+  x: "CEF:0|V|P|1.0|1|test|5|a=\"\" b=val",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      a: "",
+      b: "val",
+    },
+  },
+}
+{
+  x: "CEF:0|V|P|1.0|1|test|5|a=\"multi word value\" b=\"another quoted\" c=unquoted",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      a: "multi word value",
+      b: "another quoted",
+      c: "unquoted",
+    },
+  },
+}
+{
+  x: "CEF:0|V|P|1.0|1|test|5|a=foo \\\"bar\\\" b=val",
+  y: {
+    cef_version: 0,
+    device_vendor: "V",
+    device_product: "P",
+    device_version: "1.0",
+    signature_id: "1",
+    name: "test",
+    severity: "5",
+    extension: {
+      a: "foo \"bar\"",
+      b: "val",
+    },
+  },
+}

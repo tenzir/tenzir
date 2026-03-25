@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -9,8 +9,12 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <tsl/robin_map.h>
 
 #include <numeric>
 
@@ -35,7 +39,7 @@ public:
       }
       for (int64_t i = 0; i < arg.array->length(); ++i) {
         if (arg.array->IsValid(i)) {
-          const auto& view = value_at(arg.type, *arg.array, i);
+          const auto view = view_at(*arg.array, i);
           auto it = counts_.find(view);
           if (it == counts_.end()) {
             counts_.emplace_hint(it, materialize(view), 1);
@@ -113,47 +117,47 @@ public:
     fbb.Finish(fb_min_max);
     return chunk::make(fbb.Release());
   }
-  auto restore(chunk_ptr chunk, session ctx) -> void override {
+  auto restore(chunk_ptr chunk) noexcept -> bool override {
     const auto fb = flatbuffer<fbs::aggregation::ModeValueCountsEntropy>::make(
       std::move(chunk));
     if (not fb) {
-      diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `{}` aggregation instance", Kind)
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: invalid "
+                  "FlatBuffer",
+                  Kind);
+      return false;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
-      diagnostic::warning("missing field `result`")
-        .note("failed to restore `{}` aggregation instance", Kind)
-        .emit(ctx);
-      return;
+      TENZIR_WARN("failed to restore `{}` aggregation instance: missing field "
+                  "`result`",
+                  Kind);
+      return false;
     }
     counts_.clear();
     counts_.reserve(fb_result->size());
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
-        diagnostic::warning("missing element in field `result`")
-          .note("failed to restore `{}` aggregation instance", Kind)
-          .emit(ctx);
-        return;
+        TENZIR_WARN("failed to restore `{}` aggregation instance: missing "
+                    "element in field `result`",
+                    Kind);
+        return false;
       }
       const auto* fb_element_value = fb_element->value();
       if (not fb_element_value) {
-        diagnostic::warning("missing value for element in field `result`")
-          .note("failed to restore `{}` aggregation instance", Kind)
-          .emit(ctx);
-        return;
+        TENZIR_WARN("failed to restore `{}` aggregation instance: missing "
+                    "value for element in field `result`",
+                    Kind);
+        return false;
       }
       auto value = data{};
       if (auto err = unpack(*fb_element_value, value); err.valid()) {
-        diagnostic::warning("{}", err)
-          .note("failed to restore `{}` aggregation instance", Kind)
-          .emit(ctx);
-        return;
+        TENZIR_WARN("failed to restore `{}` aggregation instance: {}", Kind,
+                    err);
+        return false;
       }
       counts_.emplace(std::move(value), fb_element->count());
     }
+    return true;
   }
 
   auto reset() -> void override {
@@ -176,7 +180,7 @@ class plugin : public virtual aggregation_plugin {
     return true;
   }
 
-  auto make_aggregation(invocation inv, session ctx) const
+  auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());

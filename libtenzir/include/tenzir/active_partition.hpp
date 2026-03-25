@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -17,7 +17,7 @@
 #include "tenzir/index_config.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/partition_synopsis.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin_fwd.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/type.hpp"

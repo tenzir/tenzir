@@ -1,0 +1,4 @@
+from {x: 1, v: 10},
+     {x: 2, v: 20},
+     {x: 3, v: 30}
+chart_pie x=x, y=count(), _limit=2

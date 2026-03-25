@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -13,6 +13,7 @@
 #include "tenzir/type.hpp"
 #include "tenzir/variant.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/type_fwd.h>
 
@@ -110,6 +111,20 @@ public:
   /// Same as `try_data(value)`, but asserts success.
   void data(data_view2 value);
 
+  /// Attempts to add the given Arrow-backed data to the builder.
+  ///
+  /// The template constraint prevents implicit construction from primitive
+  /// types, which would otherwise create ambiguity with `try_data(data_view2)`.
+  template <std::same_as<data_view3> T>
+  auto try_data(T value) -> caf::expected<void>;
+  auto try_data(record_view3 value) -> caf::expected<void>;
+  auto try_data(list_view3 value) -> caf::expected<void>;
+
+  /// Same as `try_data(value)`, but asserts success.
+  template <std::same_as<data_view3> T>
+  void data(T value);
+  void data(list_view3 value);
+
   /// Begins building a new record.
   ///
   /// Unlike `data(record{...})`, the record fields can be specified on-the-fly.
@@ -134,8 +149,8 @@ public:
   /// used for initialization (if it had a name), and `tenzir.json` otherwise.
   ///
   /// @pre all top-level elements must be records
-  auto
-  finish_as_table_slice(std::string_view name = "") -> std::vector<table_slice>;
+  auto finish_as_table_slice(std::string_view name = "")
+    -> std::vector<table_slice>;
 
   /// Same as `finish_as_table_slice(name)`, but asserts that there is only one
   /// result.
@@ -218,6 +233,16 @@ public:
 
   auto try_data(data_view2 value) -> caf::expected<void>;
 
+  template <std::same_as<data_view3> T>
+  void data(T value);
+  void data(record_view3 value);
+  void data(list_view3 value);
+
+  template <std::same_as<data_view3> T>
+  auto try_data(T value) -> caf::expected<void>;
+  auto try_data(record_view3 value) -> caf::expected<void>;
+  auto try_data(list_view3 value) -> caf::expected<void>;
+
   auto list() -> builder_ref;
 
   auto record() -> record_ref;
@@ -255,9 +280,21 @@ public:
     return detail::field_ref{origin_, name};
   }
 
-  /// SAme as `field(name).data(value)`.
+  /// Same as `field(name).data(value)`.
   void field(std::string_view name, data_view2 value) {
     field(name).data(std::move(value));
+  }
+
+  /// Same as `field(name).data(value)`.
+  template <std::same_as<data_view3> T>
+  void field(std::string_view name, T value) {
+    field(name).data(std::move(value));
+  }
+  void field(std::string_view name, record_view3 value) {
+    field(name).data(value);
+  }
+  void field(std::string_view name, list_view3 value) {
+    field(name).data(value);
   }
 
 private:

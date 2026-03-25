@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -10,6 +10,7 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/async/executor.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
@@ -437,7 +438,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
       [&](ast::invocation& x) -> failure_or<void> {
         // TODO: Where do we check that this succeeds?
         TRY(auto op, ctx.reg().get(x).make(
-                       operator_factory_plugin::invocation{
+                       operator_factory_invocation{
                          std::move(x.op),
                          std::move(x.args),
                        },
@@ -458,7 +459,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         auto args = std::vector<ast::expression>{};
         args.emplace_back(std::move(x));
         TRY(auto op, plugin->make(
-                       operator_factory_plugin::invocation{
+                       operator_factory_invocation{
                          ast::entity{{ast::identifier{std::string{"set"},
                                                       location::unknown}}},
                          std::move(args),
@@ -483,7 +484,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         TENZIR_ASSERT(plugin);
         TRY(auto op,
             plugin->make(
-              operator_factory_plugin::invocation{
+              operator_factory_invocation{
                 ast::entity{{ast::identifier{std::string{"if"}, x.if_kw}}},
                 std::move(args),
               },
@@ -614,6 +615,60 @@ private:
   std::vector<BackpressureEvent> backpressure_events_;
 };
 
+/// Push wrapper for fused channels that tracks channel metrics.
+template <class T>
+class MeteredFusedPush final : public Push<OperatorMsg<T>> {
+public:
+  MeteredFusedPush(FusedSender<OperatorMsg<T>> sender, Arc<ChannelStats> stats)
+    : sender_{std::move(sender)}, stats_{std::move(stats)} {
+  }
+
+  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+    stats_->in.bytes.fetch_add(count_bytes(x), std::memory_order::relaxed);
+    if (is<Signal>(x)) {
+      stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
+    } else {
+      stats_->in.batches.fetch_add(1, std::memory_order::relaxed);
+      stats_->in.events.fetch_add(count_events(x), std::memory_order::relaxed);
+    }
+    co_await sender_.send(std::move(x));
+  }
+
+private:
+  FusedSender<OperatorMsg<T>> sender_;
+  Arc<ChannelStats> stats_;
+};
+
+/// Pull wrapper for fused channels that tracks channel metrics.
+template <class T>
+class MeteredFusedPull final : public Pull<OperatorMsg<T>> {
+public:
+  MeteredFusedPull(FusedReceiver<OperatorMsg<T>> receiver,
+                   Arc<ChannelStats> stats)
+    : receiver_{std::move(receiver)}, stats_{std::move(stats)} {
+  }
+
+  auto operator()() -> Task<Option<OperatorMsg<T>>> override {
+    auto result = co_await receiver_.recv();
+    if (result.is_some()) {
+      stats_->out.bytes.fetch_add(count_bytes(*result),
+                                  std::memory_order::relaxed);
+      if (is<Signal>(*result)) {
+        stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
+      } else {
+        stats_->out.batches.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.events.fetch_add(count_events(*result),
+                                     std::memory_order::relaxed);
+      }
+    }
+    co_return result;
+  }
+
+private:
+  FusedReceiver<OperatorMsg<T>> receiver_;
+  Arc<ChannelStats> stats_;
+};
+
 /// Monotonic counters for profiling per-operator CPU usage.
 struct ExecutorStats {
   std::atomic<int64_t> wall_ns{0};
@@ -681,10 +736,9 @@ public:
         auto wall_end = std::chrono::steady_clock::now();
         struct timespec cpu_end = {};
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
-        auto wall_delta
-          = std::chrono::duration_cast<std::chrono::microseconds>(wall_end
-                                                                  - wall_start)
-              .count();
+        auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+                            wall_end - wall_start)
+                            .count();
         auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
                          + (cpu_end.tv_nsec - cpu_start.tv_nsec);
         if (wall_delta > 1'000'000) {
@@ -933,12 +987,13 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 
 class TestExecCtx final : public ExecCtx {
 public:
-  explicit TestExecCtx(Profiler const& profiler)
+  explicit TestExecCtx(Profiler const& profiler, bool is_hidden = false)
     : profiling_{not is<NoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
       metrics_receiver_{try_as<NodeProfiler>(profiler)
                           ? try_as<NodeProfiler>(profiler)->metrics
-                          : metrics_receiver_actor{}} {
+                          : metrics_receiver_actor{}},
+      is_hidden_{is_hidden} {
   }
 
   /// Return the current set of channel profiles.
@@ -978,7 +1033,7 @@ public:
   auto make_io_executor(OpId id)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     return wrap_executor<folly::IOExecutor>(std::move(id),
-                                             folly::getGlobalIOExecutor());
+                                            folly::getGlobalIOExecutor());
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -988,6 +1043,10 @@ public:
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
     return metrics_receiver_;
+  }
+
+  auto is_hidden() const -> bool override {
+    return is_hidden_;
   }
 
   auto take_metrics_snapshot() -> std::vector<MetricsSnapshotEntry> {
@@ -1006,6 +1065,20 @@ protected:
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
     return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
+  }
+
+  auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return make_profiled_fused_channel<void>(std::move(id));
+  }
+
+  auto make_fused_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return make_profiled_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_fused_bytes(ChannelId id)
+    -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return make_profiled_fused_channel<chunk_ptr>(std::move(id));
   }
 
 private:
@@ -1048,20 +1121,57 @@ private:
     -> PushPull<OperatorMsg<T>> {
     auto stats = Option<Arc<ChannelStats>>{};
     if (profiling_) {
-      stats = Arc<ChannelStats>{std::in_place};
-      (*stats)->record_backpressure = record_backpressure_;
       auto lock = std::scoped_lock{mutex_};
-      channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
+      // Look for an existing channel with the same ID to share stats with.
+      for (auto& c : channels_) {
+        if (c.id == id) {
+          stats = c.stats;
+          break;
+        }
+      }
+      if (stats.is_none()) {
+        stats = Arc<ChannelStats>{std::in_place};
+        (*stats)->record_backpressure = record_backpressure_;
+        channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
+      }
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
     return {OpPush<T>{shared}, OpPull<T>{shared}};
   }
 
+  /// Create a fused channel and collect its profile.
+  template <class T>
+  auto make_profiled_fused_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+    auto stats = Option<Arc<ChannelStats>>{};
+    if (profiling_) {
+      auto lock = std::scoped_lock{mutex_};
+      for (auto& c : channels_) {
+        if (c.id == id) {
+          stats = c.stats;
+          break;
+        }
+      }
+      if (stats.is_none()) {
+        stats = Arc<ChannelStats>{std::in_place};
+        channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
+      }
+    }
+    auto [sender, receiver] = fused_channel<OperatorMsg<T>>();
+    if (stats.is_some()) {
+      return {MeteredFusedPush<T>{std::move(sender), *stats},
+              MeteredFusedPull<T>{std::move(receiver), *stats}};
+    }
+    return FusedSenderReceiver<OperatorMsg<T>>{std::move(sender),
+                                               std::move(receiver)}
+      .into_push_pull();
+  }
+
   Arc<PipelineMetrics> metrics_{std::in_place};
   bool profiling_;
   bool record_backpressure_;
   metrics_receiver_actor metrics_receiver_;
+  bool is_hidden_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
@@ -1739,6 +1849,9 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     }
   }
   auto elapsed = now - start_time;
+  // FIXME: This doesn't work if a pipeline mixes internal and external ingress
+  // or egress. The diff that will be maintained in the pipeline manager will
+  // mix up the two values.
   if (external_read_bytes > 0) {
     auto m = operator_metric{};
     m.operator_index = 0;
@@ -1761,9 +1874,12 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
   }
-  if (num_ops > 0 and external_write_bytes > 0) {
+  if (external_write_bytes > 0) {
     auto m = operator_metric{};
-    m.operator_index = num_ops - 1;
+    // We use operator index 1 such that a pipeline with a single operator will
+    // still use two different operator indices for ingress and egress. The code
+    // in the pipeline manager cannot handle the case where it's the same.
+    m.operator_index = 1;
     m.operator_name = "sink";
     m.internal = false;
     m.inbound_measurement.unit = "bytes";
@@ -1772,9 +1888,9 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
   }
-  if (num_ops > 0 and internal_write_bytes > 0) {
+  if (internal_write_bytes > 0) {
     auto m = operator_metric{};
-    m.operator_index = num_ops - 1;
+    m.operator_index = 1;
     m.operator_name = "sink";
     m.internal = true;
     m.inbound_measurement.unit = "bytes";
@@ -1898,10 +2014,11 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
 } // namespace
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler) -> Task<failure_or<void>> {
+              DiagHandler& dh, Profiler profiler, bool is_hidden)
+  -> Task<failure_or<void>> {
   auto num_ops = chain.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto exec_ctx = TestExecCtx{profiler};
+  auto exec_ctx = TestExecCtx{profiler, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
@@ -1956,13 +2073,12 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   }
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke(
-    [&] -> Task<AsyncResult<failure_or<void>>> {
-      co_return co_await folly::coro::co_awaitTry(
-        folly::coro::co_withCancellation(
-          cancel_source.getToken(),
-          run_plan(std::move(chain), sys, diag_handler, std::move(profiler))));
-    });
+  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+    co_return co_await folly::coro::co_awaitTry(
+      folly::coro::co_withCancellation(
+        cancel_source.getToken(), run_plan(std::move(chain), sys, diag_handler,
+                                           std::move(profiler), false)));
+  });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));

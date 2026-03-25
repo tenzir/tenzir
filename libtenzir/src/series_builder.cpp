@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -21,6 +21,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/api.h>
 
@@ -1177,40 +1178,25 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
     using FromType = atom_view_to_type_t<FromData>;
     static_assert(atom_type<ToType>);
     static_assert(atom_type<FromType>);
-    auto full_ty = type();
-    auto ty = as<ToType>(full_ty);
-    // TODO: Refactor this logic.
     if constexpr (std::same_as<FromType, enumeration_type>) {
-      // We have to special case this, because we cannot construct a proper
-      // `FromType` instance just from the data.
-      if constexpr (std::same_as<ToType, enumeration_type>) {
-        if (ty.field(value).empty()) {
-          return caf::make_error(ec::invalid_argument,
-                                 fmt::format("enumeration type {} does not "
-                                             "accept value {}",
-                                             full_ty, value));
-        }
-        return value;
-      } else {
-        // TODO: We could consider allowing some conversions from enumeration.
-        // However, this code path is normally not taken anyway. For example,
-        // the JSON parser first has to resolve the enumeration string, which
-        // requires this having enumeration type.
-        return caf::make_error(ec::convert_error,
-                               fmt::format("cannot convert enumeration to {}",
-                                           type_kind::of<ToType>));
-      }
+      // TODO: We could consider allowing some conversions from enumeration.
+      // However, this code path is normally not taken anyway. For example,
+      // the JSON parser first has to resolve the enumeration string, which
+      // requires this having enumeration type.
+      return caf::make_error(ec::convert_error,
+                             fmt::format("cannot convert enumeration to {}",
+                                         type_kind::of<ToType>));
     } else if constexpr (std::same_as<ToType, duration_type>) {
-      // TODO: Should we prefer to error if no unit was specified?
-      auto unit = full_ty.attribute("unit").value_or("s");
-      if constexpr (
-        // TODO: These special cases were extracted from `cast.hpp`.
-        // We should make it so that this is not necessary.
-        std::same_as<FromType, int64_type>
-        || std::same_as<FromType, uint64_type>
-        || std::same_as<FromType, double_type>) {
-        return cast_value(FromType{}, value, ty, unit);
+      if constexpr (std::same_as<FromType, int64_type>
+                    || std::same_as<FromType, uint64_type>
+                    || std::same_as<FromType, double_type>) {
+        auto full_ty = type();
+        auto unit = full_ty.attribute("unit").value_or("s");
+        return cast_value(FromType{}, value, as<ToType>(full_ty), unit);
       } else if constexpr (std::same_as<FromType, string_type>) {
+        auto full_ty = type();
+        auto ty = as<ToType>(full_ty);
+        auto unit = full_ty.attribute("unit").value_or("s");
         auto result = cast_value(FromType{}, value, ty);
         if (not result) {
           result
@@ -1222,6 +1208,7 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
       if constexpr (std::same_as<FromType, int64_type>
                     || std::same_as<FromType, uint64_type>
                     || std::same_as<FromType, double_type>) {
+        auto full_ty = type();
         auto unit = full_ty.attribute("unit");
         if (unit) {
           auto since_epoch
@@ -1233,20 +1220,26 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
         }
       }
     }
-    return cast_value(FromType{}, value, ty);
+    return cast_value(FromType{}, value, as<ToType>(type()));
   };
   auto insert = [&]<class ToType>(tag<ToType>) -> caf::expected<void> {
     if constexpr (atom_type<ToType>) {
-      auto result = std::visit(
-        [&](auto& value) {
-          return cast(value, tag_v<ToType>);
+      return std::visit(
+        [&]<class FromData>(const FromData& value) -> caf::expected<void> {
+          using FromType = atom_view_to_type_t<FromData>;
+          if constexpr (std::same_as<FromType, ToType>) {
+            atom(detail::atom_view{value});
+            return {};
+          } else {
+            auto result = cast(value, tag_v<ToType>);
+            if (not result) {
+              return result.error();
+            }
+            atom(detail::atom_view{*result});
+            return {};
+          }
         },
         value);
-      if (not result) {
-        return result.error();
-      }
-      atom(detail::atom_view{*result});
-      return {};
     } else {
       auto from_kind = value.match([]<class T>(const T&) {
         return type_kind::of<atom_view_to_type_t<T>>;
@@ -1301,6 +1294,64 @@ auto builder_ref::try_data(data_view2 value) -> caf::expected<void> {
     },
   };
   return std::visit(f, value);
+}
+
+template <std::same_as<data_view3> T>
+auto builder_ref::try_data(T value) -> caf::expected<void> {
+  auto f = detail::overload{
+    [&](view3<tenzir::record> r) -> caf::expected<void> {
+      return try_data(r);
+    },
+    [&](view3<tenzir::list> l) -> caf::expected<void> {
+      return try_data(l);
+    },
+    [&]<atom_view_type AT>(const AT& x) -> caf::expected<void> {
+      return try_atom(x);
+    },
+  };
+  return match(value, f);
+}
+
+template <std::same_as<data_view3> T>
+void builder_ref::data(T value) {
+  auto result = try_data(std::move(value));
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
+}
+
+template auto builder_ref::try_data<data_view3>(data_view3)
+  -> caf::expected<void>;
+template void builder_ref::data<data_view3>(data_view3);
+
+auto builder_ref::try_data(record_view3 value) -> caf::expected<void> {
+  auto rb = record();
+  for (const auto& [k, v] : value) {
+    auto result = rb.field(k).try_data(v);
+    if (not result) {
+      return result.error();
+    }
+  }
+  return {};
+}
+
+auto builder_ref::try_data(list_view3 value) -> caf::expected<void> {
+  auto lb = list();
+  for (const auto& v : value) {
+    auto result = lb.try_data(v);
+    if (not result) {
+      return result.error();
+    }
+  }
+  return {};
+}
+
+void builder_ref::data(record_view3 value) {
+  auto result = try_data(value);
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
+}
+
+void builder_ref::data(list_view3 value) {
+  auto result = try_data(value);
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
 }
 
 auto builder_ref::list() -> builder_ref {
@@ -1365,6 +1416,32 @@ auto series_builder::try_data(data_view2 value) -> caf::expected<void> {
 
 void series_builder::data(data_view2 value) {
   builder_ref{*this}.data(std::move(value));
+}
+
+template <std::same_as<data_view3> T>
+auto series_builder::try_data(T value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(std::move(value));
+}
+
+template <std::same_as<data_view3> T>
+void series_builder::data(T value) {
+  builder_ref{*this}.data(std::move(value));
+}
+
+template auto series_builder::try_data<data_view3>(data_view3)
+  -> caf::expected<void>;
+template void series_builder::data<data_view3>(data_view3);
+
+auto series_builder::try_data(record_view3 value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(value);
+}
+
+auto series_builder::try_data(list_view3 value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(value);
+}
+
+void series_builder::data(list_view3 value) {
+  builder_ref{*this}.data(value);
 }
 
 auto series_builder::record() -> record_ref {

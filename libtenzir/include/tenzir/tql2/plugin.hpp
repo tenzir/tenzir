@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -10,9 +10,12 @@
 
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/multi_series.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/operator.hpp"
+#include "tenzir/plugin/printer.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/plugin_api.hpp"
 
 #include <optional>
 
@@ -20,17 +23,7 @@ namespace tenzir {
 
 class operator_factory_plugin : public virtual plugin {
 public:
-  // Separate from `ast::invocation` in case we want to add things.
-  struct invocation {
-    invocation(ast::entity self, std::vector<ast::expression> args)
-      : self{std::move(self)}, args{std::move(args)} {
-    }
-
-    ast::entity self;
-    std::vector<ast::expression> args;
-  };
-
-  virtual auto make(invocation inv, session ctx) const
+  virtual auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr>
     = 0;
 
@@ -158,19 +151,7 @@ class function_plugin : public virtual plugin {
 public:
   using evaluator = function_use::evaluator;
 
-  struct invocation {
-    explicit invocation(const ast::function_call& call) : call{call} {
-    }
-    ~invocation() = default;
-    invocation(const invocation&) = delete;
-    invocation(invocation&&) = default;
-    auto operator=(const invocation&) -> invocation& = delete;
-    auto operator=(invocation&&) -> invocation& = delete;
-
-    const ast::function_call& call;
-  };
-
-  virtual auto make_function(invocation inv, session ctx) const
+  virtual auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr>
     = 0;
 
@@ -189,20 +170,17 @@ public:
 
   virtual auto reset() -> void = 0;
 
-  /// Save and restore the state of the aggregation instance. Note that the
-  /// restore function should eventually be moved into `aggregation_plugin`, but
-  /// we cannot do that yet as quite a few aggregation instances store
-  /// `ast::expression`, which is not yet serializable.
+  /// Save and restore the state of the aggregation instance.
   virtual auto save() const -> chunk_ptr = 0;
-  virtual auto restore(chunk_ptr chunk, session ctx) -> void = 0;
+  virtual auto restore(chunk_ptr chunk) noexcept -> bool = 0;
 };
 
 class aggregation_plugin : public virtual function_plugin {
 public:
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override;
 
-  virtual auto make_aggregation(invocation inv, session ctx) const
+  virtual auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>>
     = 0;
 };

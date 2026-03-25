@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -44,6 +44,8 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/passive_partition.hpp"
+#include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/store.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
@@ -1602,8 +1604,8 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](atom::apply, pipeline pipe,
            std::vector<partition_info> selected_partitions,
-           keep_original_partition keep)
-      -> caf::result<std::vector<partition_info>> {
+           keep_original_partition keep,
+           std::string origin) -> caf::result<std::vector<partition_info>> {
       const auto current_sender = self->current_sender();
       if (selected_partitions.empty()) {
         return caf::make_error(ec::invalid_argument, "no partitions given");
@@ -1647,12 +1649,11 @@ index(index_actor::stateful_pointer<index_state> self,
       auto partition_synopsis_path_template
         = self->state().transformer_partition_synopsis_path_template();
       /// Yummy. Partitioned Foam. :)
-      partition_transformer_actor partition_transfomer
-        = self->spawn(partition_transformer, store_id,
-                      self->state().synopsis_opts, self->state().index_opts,
-                      self->state().catalog, self->state().filesystem, pipe,
-                      std::move(partition_path_template),
-                      std::move(partition_synopsis_path_template));
+      partition_transformer_actor partition_transfomer = self->spawn(
+        partition_transformer, store_id, self->state().synopsis_opts,
+        self->state().index_opts, self->state().catalog,
+        self->state().filesystem, pipe, std::move(partition_path_template),
+        std::move(partition_synopsis_path_template), std::move(origin));
       /// Monitor the actor to remove it from the collection of active
       /// transformers.
       auto partition_transformer_addr = partition_transfomer->address();

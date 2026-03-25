@@ -1,0 +1,12 @@
+// 5k rows with nested records.
+from {id: 0, meta: {source: "sensor_a", location: {building: "HQ", floor: 3}}, reading: 25.5}
+repeat 5000
+batch
+enumerate id
+to_clickhouse table="test_nested",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

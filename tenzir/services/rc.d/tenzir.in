@@ -17,7 +17,7 @@
 . /etc/rc.subr
 
 name="tenzir"
-desc="Visibility Across Space and Time"
+desc="Data Pipeline Engine for Security Teams"
 rcvar="${name}_enable"
 start_precmd="${name}_prestart"
 extra_commands="check"

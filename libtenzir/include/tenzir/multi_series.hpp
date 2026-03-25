@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -32,11 +32,6 @@ public:
       result += part.length();
     }
     return result;
-  }
-
-  auto value_at(int64_t row) const -> data_view {
-    auto [part, part_row] = resolve(row);
-    return tenzir::value_at(part.get().type, *part.get().array, part_row);
   }
 
   auto view3_at(int64_t row) const -> data_view3 {
@@ -83,12 +78,8 @@ public:
     return parts_;
   }
 
-  auto values() const -> generator<data_view> {
-    for (auto& part : parts_) {
-      for (auto value : part.values()) {
-        co_yield std::move(value);
-      }
-    }
+  auto values() const -> generator<data_view3> {
+    return values3();
   }
 
   auto values3() const -> generator<data_view3> {

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -58,8 +58,8 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
 
 } // namespace
 
-auto operator_def::make(operator_factory_plugin::invocation inv,
-                        session ctx) const -> failure_or<operator_ptr> {
+auto operator_def::make(operator_factory_invocation inv, session ctx) const
+  -> failure_or<operator_ptr> {
   return match(
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {

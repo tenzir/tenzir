@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -255,7 +255,7 @@ active_partition_actor::behavior_type active_partition(
   self->state().taxonomies = taxonomies;
   self->state().data.store_id = self->state().store_plugin->name();
   auto builder_and_header = self->state().store_plugin->make_store_builder(
-    self->state().filesystem, self->state().data.id);
+    self->state().filesystem, self->state().data.id, "ingest");
   if (! builder_and_header) {
     TENZIR_ERROR("{} failed to create a store builder: {}", *self,
                  builder_and_header.error());

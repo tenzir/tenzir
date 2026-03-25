@@ -23,10 +23,11 @@ pkgs.mkShell (
         pkgs.nixfmt
         pkgs.speeve
         pkgs.libsodium
-        pkgs.shfmt
+        pkgs.markdownlint-cli
         pkgs.poetry
         pkgs.python3Packages.spdx-tools
         pkgs.ruff
+        pkgs.shfmt
         pkgs.uv
         (pkgs.python3.withPackages (
           ps: with ps; [
@@ -41,6 +42,7 @@ pkgs.mkShell (
             python-box
           ]
         ))
+        pkgs.clangbuildanalyzer
       ]
       ++ package.tenzir-integration-test-deps
       ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [

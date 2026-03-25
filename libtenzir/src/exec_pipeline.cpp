@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -12,6 +12,7 @@
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>

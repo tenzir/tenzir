@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -49,7 +49,7 @@ TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
   };
   auto result = eval(*expr, make_input_slice(std::move(row)), dh);
   REQUIRE_EQUAL(result.length(), int64_t{1});
-  auto value = materialize(result.value_at(0));
+  auto value = materialize(result.view3_at(0));
   auto* sorted = try_as<list>(&value);
   REQUIRE(sorted);
   CHECK_EQUAL(*sorted, (list{int64_t{3}, int64_t{1}, int64_t{2}}));

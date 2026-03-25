@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -896,7 +896,7 @@ class plugin : public virtual context_factory_plugin<"lookup-table"> {
     return std::make_unique<lookup_table_context>();
   }
 
-  auto make_context(invocation inv, session ctx) const
+  auto make_context(operator_factory_invocation inv, session ctx) const
     -> failure_or<make_context_result> override {
     auto name = located<std::string>{};
     auto parser = argument_parser2::context("lookup-table");

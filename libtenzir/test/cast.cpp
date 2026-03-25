@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -616,7 +616,7 @@ TEST("cast value type erased 3") {
                          tenzir::data{tenzir::ip::v4(uint32_t{0x01'02'03'04})},
                          tenzir::type{tenzir::string_type{}});
   REQUIRE(out);
-  CHECK_EQUAL(*out, "1.2.3.4");
+  CHECK_EQUAL(*out, data{"1.2.3.4"});
 }
 
 TEST("cast lists") {
@@ -680,10 +680,10 @@ TEST("cast int64_t array to a string builder") {
     views.push_back(val);
   }
   REQUIRE_EQUAL(views.size(), 4u);
-  CHECK_EQUAL(materialize(views[0]), "1");
-  CHECK_EQUAL(materialize(views[1]), "2");
-  CHECK_EQUAL(materialize(views[2]), caf::none);
-  CHECK_EQUAL(materialize(views[3]), "3");
+  CHECK_EQUAL(materialize(views[0]), data{"1"});
+  CHECK_EQUAL(materialize(views[1]), data{"2"});
+  CHECK_EQUAL(materialize(views[2]), data{caf::none});
+  CHECK_EQUAL(materialize(views[3]), data{"3"});
 }
 
 TEST("casting builder with no compatible types results in an error") {
@@ -718,9 +718,9 @@ TEST("casting int64_t array to uint64_t builder works when all values can be "
     views.push_back(val);
   }
   REQUIRE_EQUAL(views.size(), 3u);
-  CHECK_EQUAL(materialize(views[0]), uint64_t{1});
-  CHECK_EQUAL(materialize(views[1]), uint64_t{2});
-  CHECK_EQUAL(materialize(views[2]), uint64_t{3});
+  CHECK_EQUAL(materialize(views[0]), data{uint64_t{1}});
+  CHECK_EQUAL(materialize(views[1]), data{uint64_t{2}});
+  CHECK_EQUAL(materialize(views[2]), data{uint64_t{3}});
 }
 
 TEST("casting int64_t array to uint64_t builder fails due to negative value") {

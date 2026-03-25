@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -11,8 +11,10 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/concept/parseable/tenzir/time.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/time.hpp"
 
 namespace tenzir {

@@ -1,7 +1,5 @@
 {
   "packages": [
-    "npm:pi-formatter",
-    "npm:pi-tenzir-dev",
-    "npm:pi-tenzir-ship"
+    "npm:pi-formatter"
   ]
 }

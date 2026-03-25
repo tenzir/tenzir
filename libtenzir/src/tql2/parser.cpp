@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -400,7 +400,7 @@ public:
           }
           auto body = parse_expression();
           expr = lambda_expr{
-            std::vector<identifier>{std::move(left->id)},
+            std::vector<ast::identifier>{std::move(left->id)},
             arrow.location,
             std::move(body),
           };
@@ -445,7 +445,7 @@ public:
   }
 
   auto parse_entity(ast::identifier root) -> ast::entity {
-    auto path = std::vector<identifier>{};
+    auto path = std::vector<ast::identifier>{};
     path.push_back(std::move(root));
     while (accept(tk::colon_colon)) {
       path.push_back(expect(tk::identifier).as_identifier());
@@ -604,7 +604,7 @@ public:
       auto last_stash = last_;
       auto tries_stash = tries_;
       if (auto first_param = accept(tk::identifier)) {
-        auto params = std::vector<identifier>{};
+        auto params = std::vector<ast::identifier>{};
         params.push_back(first_param.as_identifier());
         while (accept(tk::comma)) {
           params.push_back(expect(tk::identifier).as_identifier());

@@ -1,13 +1,14 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -26,6 +27,7 @@ constexpr auto fairness_factor = 2.0;
 struct ParallelArgs {
   std::optional<located<uint64_t>> jobs;
   std::optional<ast::expression> route_by;
+  bool fuse = true;
   located<ir::pipeline> pipe;
 };
 
@@ -141,6 +143,7 @@ public:
               : std::max(uint64_t{1}, static_cast<uint64_t>(
                                         std::thread::hardware_concurrency()))},
       route_by_{std::move(args.route_by)},
+      fuse_{args.fuse},
       pipe_{std::move(args.pipe.inner)} {
   }
 
@@ -152,8 +155,13 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy),
-                             tag_v<table_slice>);
+      if (fuse_) {
+        co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
+                                     tag_v<table_slice>);
+      } else {
+        co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy),
+                               tag_v<table_slice>);
+      }
     }
   }
 
@@ -186,10 +194,10 @@ private:
     // Find runs of same-bucket rows and push subslices.
     auto begin = int64_t{0};
     while (begin < num_rows) {
-      auto bucket = std::hash<data_view>{}(values.value_at(begin)) % jobs_;
+      auto bucket = std::hash<data_view3>{}(values.view3_at(begin)) % jobs_;
       auto end = begin + 1;
       while (end < num_rows
-             and std::hash<data_view>{}(values.value_at(end)) % jobs_
+             and std::hash<data_view3>{}(values.view3_at(end)) % jobs_
                    == bucket) {
         ++end;
       }
@@ -218,6 +226,7 @@ private:
 
   uint64_t jobs_;
   std::optional<ast::expression> route_by_;
+  bool fuse_;
   ir::pipeline pipe_;
   std::vector<uint64_t> rows_assigned_;
 };
@@ -230,6 +239,7 @@ public:
               ? args.jobs->inner
               : std::max(uint64_t{1}, static_cast<uint64_t>(
                                         std::thread::hardware_concurrency()))},
+      fuse_{args.fuse},
       pipe_{std::move(args.pipe.inner)} {
   }
 
@@ -240,12 +250,18 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy), tag_v<void>);
+      if (fuse_) {
+        co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
+                                     tag_v<void>);
+      } else {
+        co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy), tag_v<void>);
+      }
     }
   }
 
 private:
   uint64_t jobs_;
+  bool fuse_;
   ir::pipeline pipe_;
 };
 
@@ -364,6 +380,7 @@ public:
     auto d = Describer<ParallelArgs>{};
     auto jobs = d.positional("jobs", &ParallelArgs::jobs);
     auto route_by = d.named("route_by", &ParallelArgs::route_by, "any");
+    d.named_optional("_fuse", &ParallelArgs::fuse);
     auto pipe = d.pipeline(&ParallelArgs::pipe);
     d.validate([jobs](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and j->inner == 0) {

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -161,26 +161,47 @@ struct basic_series {
     }
   }
 
-  template <type_or_concrete_type Cast = type>
+  template <concrete_type Cast>
     requires(std::same_as<Type, type>)
-  auto values() const {
-    if constexpr (concrete_type<Cast>) {
-      const auto* ct = try_as<Cast>(&type);
-      TENZIR_ASSERT(ct);
-      TENZIR_ASSERT(array);
-      return tenzir::values(
-        *ct, static_cast<const type_to_arrow_array_t<Cast>&>(*array));
-    } else {
-      TENZIR_ASSERT(array);
-      return tenzir::values(type, *array);
-    }
+  auto values3() const
+    -> generator<std::optional<view3<type_to_data_t<Cast>>>> {
+    const auto* ct = try_as<Cast>(&type);
+    TENZIR_ASSERT(ct);
+    TENZIR_ASSERT(array);
+    return tenzir::values3(
+      static_cast<const type_to_arrow_array_t<Cast>&>(*array));
   }
 
-  auto values() const
+  auto values3() const -> generator<data_view3>
+    requires(std::same_as<Type, type>)
+  {
+    return tenzir::values3(*array);
+  }
+
+  auto values3() const -> generator<std::optional<view3<type_to_data_t<Type>>>>
     requires(concrete_type<Type>)
   {
     TENZIR_ASSERT(array);
-    return tenzir::values(type, *array);
+    return tenzir::values3(*array);
+  }
+
+  template <type_or_concrete_type Cast = tenzir::type>
+    requires(std::same_as<Type, tenzir::type>
+             && std::same_as<Cast, tenzir::type>)
+  auto values() const -> generator<data_view3> {
+    return values3();
+  }
+
+  template <concrete_type Cast>
+    requires(std::same_as<Type, tenzir::type>)
+  auto values() const -> generator<std::optional<view3<type_to_data_t<Cast>>>> {
+    return values3<Cast>();
+  }
+
+  auto values() const -> generator<std::optional<view3<type_to_data_t<Type>>>>
+    requires(concrete_type<Type>)
+  {
+    return values3();
   }
 
   [[nodiscard]] auto slice(int64_t begin, int64_t end) const
@@ -240,8 +261,24 @@ auto make_record_series(std::span<const series_field> fields,
 
 /// Returns a list series with the given inner values, and the list structure
 /// derived from an existing `arrow::ListArray`.
+/// BE CAREFUL WHEN USING THIS FUNCTION.
+/// `values` must be directly derived from `origin.values()` with no slicing.
+/// Otherwise this breaks for a sliced `origin`
 auto make_list_series(const series& values, const arrow::ListArray& origin)
   -> basic_series<list_type>;
+
+/// Buffers needed to construct a zero-based `arrow::ListArray` from a
+/// (possibly sliced) source `arrow::ListArray`.  Pass these with `offset=0`
+/// to the `ListArray` constructor together with the new values array.
+struct rebased_list_buffers {
+  std::shared_ptr<arrow::Buffer> offsets;     // length+1 Int32 entries, [0]==0
+  std::shared_ptr<arrow::Buffer> null_bitmap; // nullptr if source has no nulls
+};
+
+/// Produces zero-based offset and null-bitmap buffers for `list`, suitable for
+/// constructing a new `arrow::ListArray` whose values array starts at index 0.
+auto rebase_list_array_buffers(const arrow::ListArray& list)
+  -> rebased_list_buffers;
 
 /// @related flatten
 struct flatten_series_result {

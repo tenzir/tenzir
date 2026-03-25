@@ -65,7 +65,6 @@ jobs:
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
-      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -77,7 +76,7 @@ jobs:
       - name: Fetch to merge-base
         if: github.event_name == 'pull_request'
         run: |
-          git fetch origin main
+          git fetch --no-recurse-submodules origin main
           base_ref="${GITHUB_BASE_REF:-main}"
           git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
@@ -94,27 +93,45 @@ jobs:
       - name: Configure
         id: configure
         run: |
-          # Create a matrix with Tenzir versions greater or equal than
-          # limit_version. If the version does not exist yet (e.g., because of
-          # an intentional break), only check latest. We usually set this to the
-          # minimum supported version.
-          limit_version=v5.16.0
-          if git rev-parse "${limit_version}" --; then
-            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
-            dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
-            # We filter out versions older than limit_version.
-            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v5.20.2')
-            version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
-          else
-            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
-          fi
-          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
           version="v$(jq -r '."tenzir-version"' version.json)"
           id_sha="${{ github.sha }}"
           release_version="${version}"
           build_version="${version}+g${id_sha:0:10}"
+
+          # Create a matrix with Tenzir versions greater or equal than
+          # limit_version. We derive limit_version from the current release by
+          # going back 5 minor versions.
+          major_minor_patch="${version#v}"
+          major="${major_minor_patch%%.*}"
+          minor_patch="${major_minor_patch#*.}"
+          minor="${minor_patch%%.*}"
+          limit_minor=$((minor - 5))
+          if ((limit_minor < 0)); then
+            limit_minor=0
+          fi
+          limit_version="v${major}.${limit_minor}.0"
+          if git rev-parse "${limit_version}" -- >/dev/null 2>&1; then
+            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
+            dated_limit_version=$(printf "%s\n" "$dated_versions" | awk -F# -v version="$limit_version" '$2==version{print; exit}')
+            # We filter out versions older than limit_version and known bad
+            # versions that should not run in regression tests.
+            known_bad_versions=(
+              "v5.27.3"
+              "v5.29.3"
+            )
+            filtered_versions=$(printf "%s\n" "$dated_versions" | awk -F# -v limit="$dated_limit_version" '$0>=limit{print$2}')
+            for bad_version in "${known_bad_versions[@]}"; do
+              filtered_versions=$(printf "%s\n" "$filtered_versions" | grep -Fvx "$bad_version" || true)
+            done
+            version_matrix="$(printf "%s\n" "$filtered_versions" latest | sed '/^$/d' | jq -R | jq -sc 'map({version: .})')"
+          else
+            # If the computed limit does not exist (e.g., because of an
+            # intentional break), only check latest.
+            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
+          fi
+          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
@@ -184,7 +201,7 @@ jobs:
           fi
           # From here on we should be in a pull request.
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
-            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            echo "::error::Unexpected GitHub Event: $GITHUB_EVENT_NAME"
             exit 1
           fi
           echo "::notice Enabling pull request jobs"
@@ -210,6 +227,7 @@ jobs:
             "scripts/debian/build-*.sh" \
             "scripts/debian/install-dev-dependencies.sh" \
             ".github/workflows/docker.yaml" \
+            ".github/workflows/push-manifest.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed tenzir-nix \
@@ -222,29 +240,44 @@ jobs:
         if: steps.configure.outputs.run-docker-tenzir == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            source_tag="${{ steps.configure.outputs.head-ref-slug }}"
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            tags=('main' "${{ github.sha }}")
+            source_tag="${{ github.sha }}"
+            if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+              tags=('main' "${{ github.sha }}")
+            else
+              tags=("${{ steps.configure.outputs.ref-slug }}" "${{ github.sha }}")
+            fi
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            source_tag="${{ github.sha }}"
             major_minor_patch='${{ steps.configure.outputs.release-version }}'
             major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
             tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
-            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            echo "::error::unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
+            '."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
             --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
+            --arg source "${source_tag}" \
             --args -- "${tags[@]}")"
-          # Clear push repos in case we're in a PR, but push the community
-          # edition to ghcr.
+          # PRs only publish the community images to GHCR.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
               ."image-registries") |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
+          # Release builds additionally publish the Docker Hub community images.
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            docker_config="$(jq -c '
+              (.editions[]
+               | select(.name == "tenzir" or .name == "tenzir-node")
+               | ."image-registries") += ["docker.io"] |
+              (.editions[] | ."image-registries") |= unique' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
@@ -259,6 +292,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -294,16 +329,30 @@ jobs:
             exit 0
           fi
 
-          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
-
-          if [ "$plugins_sha" != "$plugins_main_sha" ]; then
-            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
-              --search $plugins_sha --json number -q ".[0].number")
-            [ $pr_number ] # Assert the pr number was non-empty
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" && "$GITHUB_EVENT_NAME" != "merge_group" ]]; then
+            echo "Skipping submodule bump PR check for event $GITHUB_EVENT_NAME"
+            exit 0
           fi
 
-  docker-tenzir:
+          git fetch --no-recurse-submodules origin main
+          merge_base=$(git merge-base origin/main HEAD)
+          if git diff --quiet "$merge_base" HEAD -- contrib/tenzir-plugins; then
+            echo "Skipping policy check because contrib/tenzir-plugins was not changed"
+            exit 0
+          fi
+
+          # Read the gitlink recorded in the superproject instead of relying on
+          # the submodule being initialized as a nested Git checkout.
+          plugins_sha=$(git rev-parse HEAD:contrib/tenzir-plugins)
+          plugins_main_sha=$(gh api repos/tenzir/tenzir-plugins/commits/main --jq .sha)
+
+          if [[ "$plugins_sha" != "$plugins_main_sha" ]]; then
+            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
+              --search "$plugins_sha" --json number -q ".[0].number")
+            [[ -n "$pr_number" ]] # Assert the pr number was non-empty
+          fi
+
+  docker-tenzir-amd64:
     name: Docker
     needs:
       - configure
@@ -311,6 +360,34 @@ jobs:
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
+      runner: ubuntu-latest
+      arch: amd64
+    secrets: inherit
+
+  docker-tenzir-arm64:
+    name: Docker
+    needs:
+      - configure
+    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    uses: ./.github/workflows/docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+      runner: ubicloud-standard-8-arm
+      arch: arm64
+    secrets: inherit
+
+  docker-tenzir:
+    name: Push Docker Manifest
+    needs:
+      - configure
+      - docker-tenzir-amd64
+      - docker-tenzir-arm64
+    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    uses: ./.github/workflows/push-manifest.yaml
+    with:
+      source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
+      arch-suffixes: "amd64 arm64"
+      tags: "${{ join(fromJSON(needs.configure.outputs.docker-config).tags, ' ') }}"
     secrets: inherit
 
   sync-openapi-to-docs:
@@ -400,7 +477,7 @@ jobs:
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
-  push-manifest-slim:
+  docker-slim:
     name: Push tenzir-slim docker manifest
     needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
     uses: ./.github/workflows/push-manifest.yaml
@@ -749,6 +826,80 @@ jobs:
         run: |
           uv publish --publish-url https://test.pypi.org/legacy/ --token "${{ secrets.TEST_PYPI_TOKEN }}" dist/*
 
+  update-homebrew-tap:
+    needs:
+      - configure
+      - tenzir-static-arm64-darwin
+    if: github.event_name == 'release'
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Download signed package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: tenzir-signed-pkg-arm64-darwin
+          path: ${{ runner.temp }}/signed-pkg
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547  # v1.12.0
+        with:
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: homebrew-tenzir
+      - name: Prepare tap update
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          pkg_path="$(ls "${{ runner.temp }}/signed-pkg/"*.pkg)"
+          sha256="$(shasum -a 256 "$pkg_path" | awk '{print $1}')"
+          version="${RELEASE_TAG#v}"
+          pkgutil_identifier="$(python3 .github/workflows/nix-build.py print-pkgutil-identifier)"
+          {
+            echo "HOMEBREW_TAP_SHA256=$sha256"
+            echo "HOMEBREW_TAP_VERSION=$version"
+            echo "HOMEBREW_TAP_DIR=${{ runner.temp }}/homebrew-tenzir"
+            echo "HOMEBREW_TAP_REPO=tenzir/homebrew-tenzir"
+            echo "HOMEBREW_PKGUTIL_IDENTIFIER=$pkgutil_identifier"
+          } >> "$GITHUB_ENV"
+
+      - name: Clone tap repo
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAP_REPO: ${{ env.HOMEBREW_TAP_REPO }}
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+        run: |
+          git config --global user.name "tenzir-bot"
+          git config --global user.email "engineering@tenzir.com"
+          git clone "https://x-access-token:${APP_TOKEN}@github.com/${TAP_REPO}.git" "$TAP_DIR"
+
+      - name: Render Homebrew cask
+        env:
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+          VERSION: ${{ env.HOMEBREW_TAP_VERSION }}
+          SHA256: ${{ env.HOMEBREW_TAP_SHA256 }}
+          PKGUTIL_IDENTIFIER: ${{ env.HOMEBREW_PKGUTIL_IDENTIFIER }}
+        run: |
+          python3 scripts/update-homebrew-cask.py \
+            --cask "$TAP_DIR/Casks/tenzir.rb" \
+            --version "$VERSION" \
+            --sha256 "$SHA256" \
+            --pkgutil-identifier "$PKGUTIL_IDENTIFIER"
+
+      - name: Commit tap update
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
+        run: |
+          if git -C "$TAP_DIR" diff --quiet -- Casks/tenzir.rb; then
+            echo "Homebrew cask is already up to date"
+            exit 0
+          fi
+
+          git -C "$TAP_DIR" add Casks/tenzir.rb
+          git -C "$TAP_DIR" commit -m "Update tenzir cask to ${RELEASE_TAG}"
+          git -C "$TAP_DIR" push origin HEAD
+
   pass-branch-protections:
     needs:
       - configure
@@ -756,6 +907,7 @@ jobs:
       - policy-enforcement
       - python
       - python-package
+      - update-homebrew-tap
       # TODO: Re-enable this after v4.26 was released.
       # - regression-tests
       # TODO: Re-enable this when homebrew is fixed (aws-sdk-cpp issue).

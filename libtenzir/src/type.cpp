@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -56,6 +56,16 @@ auto to_string(type_kind x) -> std::string_view {
     },
   };
   return std::visit(f, x);
+}
+
+auto type_kind_of_data(const data& x) -> type_kind {
+  return match(x, []<class T>(const T&) -> type_kind {
+    if constexpr (caf::detail::one_of<T, pattern>) {
+      TENZIR_UNREACHABLE();
+    } else {
+      return type_kind::of<data_to_type_t<T>>;
+    }
+  });
 }
 
 namespace {

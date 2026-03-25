@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -27,6 +27,15 @@ constexpr auto max_simdjson_batch_size = 2_G;
 static_assert(initial_simdjson_batch_size <= max_simdjson_batch_size);
 static_assert(max_simdjson_batch_size <= 4_G,
               "simdjson specifies 4G as an upper bound for the batch_size");
+
+/// Adds a `context:` note to `b` showing up to `window` bytes around `loc`
+/// in `source`, with a `^` pointer on the line below indicating the exact
+/// position. If `loc` carries an error, `b` is returned unchanged.
+/// Control characters are replaced with '?'. Ellipsis markers are added
+/// when the context was truncated by the window.
+auto with_surrounding_bytes(diagnostic_builder b, std::string_view source,
+                            simdjson::simdjson_result<const char*> loc,
+                            size_t window = 40) -> diagnostic_builder;
 
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
@@ -229,15 +238,18 @@ private:
                                          std::move(note));
       return;
     }
-    diagnostic::warning("failed to parse {} in the JSON document",
-                        std::move(expected))
-      .note(note)
+    with_surrounding_bytes(diagnostic::warning("failed to parse {} in the JSON "
+                                               "document",
+                                               std::move(expected))
+                             .note(note),
+                           parsed_document_, v.current_location())
       .emit(diag_);
   }
 
   void report_parse_err_with_parsed_lines(auto& v, std::string description,
                                           std::string note) {
-    if (v.current_location().error()) {
+    auto loc = v.current_location();
+    if (loc.error()) {
       diagnostic::warning("failed to parse {} in the JSON document",
                           std::move(description))
         .note("line {}", *parsed_lines_)
@@ -245,10 +257,14 @@ private:
         .emit(diag_);
       return;
     }
-    auto column = v.current_location().value_unsafe() - parsed_document_.data();
-    auto b = diagnostic::warning("failed to parse {} in the JSON document",
-                                 std::move(description))
-               .note("line {} column {}", *parsed_lines_, column);
+    auto pos = loc.value_unsafe();
+    auto b
+      = with_surrounding_bytes(diagnostic::warning("failed to parse {} in the "
+                                                   "JSON document",
+                                                   std::move(description))
+                                 .note("line {} column {}", *parsed_lines_,
+                                       pos - parsed_document_.data()),
+                               parsed_document_, loc);
     if (not note.empty()) {
       b = std::move(b).note("{}", note);
     }

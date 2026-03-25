@@ -7,6 +7,7 @@ building modular pipelines that process structured event data.
 
 ### Project structure
 
+- `.agents/` - Agent-specific configuration and reference material
 - `.claude/` - Claude Code configuration
 - `.docs/` - Optional local clone of the `tenzir/docs` repository
 - `.github/` - GitHub configuration and CI/CD workflows
@@ -109,3 +110,63 @@ When changing existing behavior or adding user-facing functionality, update
 
 Skip this process for internal refactorings that do not affect the user-facing
 TQL surface or command line tools.
+
+## C++ development
+
+Read the relevant references below before writing or planning any C++ code.
+Do not assume patterns from surrounding code—older code may deviate from
+current conventions.
+
+### Core principle
+
+Tenzir processes data in columns via Apache Arrow. Evaluate expressions per
+series or slice first, then iterate only when row-wise access is necessary.
+
+### Style
+
+- [coding-conventions.md](.agents/references/coding-conventions.md): Formatting, structure, and idioms
+- [naming-conventions.md](.agents/references/naming-conventions.md): Naming patterns
+
+### APIs
+
+- [data-access.md](.agents/references/data-access.md): Reading and iterating columnar data
+- [data-building.md](.agents/references/data-building.md): Constructing series and table slices
+- [data-conversion.md](.agents/references/data-conversion.md): Type-to-type conversion
+- [variant-access.md](.agents/references/variant-access.md): Variants and match dispatch
+- [error-handling.md](.agents/references/error-handling.md): TRY, check, and failure_or
+- [functions.md](.agents/references/functions.md): TQL function plugins
+- [operators.md](.agents/references/operators.md): TQL operator plugins and secrets
+- [executor.md](.agents/references/executor.md): Executor and pipeline execution
+- [operator-porting.md](.agents/references/operator-porting.md): Porting operators from `crtp_operator` to `Operator<Input, Output>`
+
+### Rust-inspired vocabulary and helpers
+
+Prefer these Tenzir abstractions over direct standard-library use in new code
+when they model the same concept.
+
+#### Vocabulary types
+
+| Prefer      | Header                   | Instead of                   | Notes                                                     |
+| ----------- | ------------------------ | ---------------------------- | --------------------------------------------------------- |
+| `Arc<T>`    | `tenzir/arc.hpp`         | `std::shared_ptr<T>`         | Non-null, const-propagating shared ownership              |
+| `Box<T>`    | `tenzir/box.hpp`         | `std::unique_ptr<T>`         | Non-null owning indirection with copy support             |
+| `Option<T>` | `tenzir/option.hpp`      | `std::optional<T>`           | Optional value with reference support and monadic helpers |
+| `Atomic<T>` | `tenzir/atomic.hpp`      | `std::atomic<T>`             | Copyable and movable atomic wrapper                       |
+| `Ref<T>`    | `tenzir/ref.hpp`         | `std::reference_wrapper<T>`  | Non-owning reference with `->` and `*`                    |
+| `Mutex<T>`  | `tenzir/async/mutex.hpp` | `std::mutex` + separate data | Async/fiber mutex guarding owned data                     |
+
+#### Companion helpers
+
+| Prefer           | Header              | Instead of               | Notes                                                              |
+| ---------------- | ------------------- | ------------------------ | ------------------------------------------------------------------ |
+| `None`           | `tenzir/option.hpp` | `std::nullopt`           | Empty `Option` tag                                                 |
+| `panic(...)`     | `tenzir/panic.hpp`  | ad-hoc fatal checks      | Fails fast with formatted message, source location, and stacktrace |
+| `TRY` / `CO_TRY` | `tenzir/try.hpp`    | manual error propagation | Rust `?`-style propagation for supported result types              |
+
+### Tooling
+
+- [external-files.md](.agents/references/external-files.md): Third-party code integration
+- [utilities.md](.agents/references/utilities.md): Helpers in tenzir::detail
+- [hashing.md](.agents/references/hashing.md): Hashing infrastructure
+- [parser-combinators.md](.agents/references/parser-combinators.md): Parser combinator framework
+- [common-types.md](.agents/references/common-types.md): Reusable types and abstractions

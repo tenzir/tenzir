@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -631,11 +631,10 @@ public:
 
 private:
   /// Queue item type for source-stage handoff.
-  using MessageQueue = folly::coro::BoundedQueue<std::optional<MessageBatch>>;
+  using MessageQueue = folly::coro::BoundedQueue<Option<MessageBatch>>;
 
   /// Queue item type for build-stage handoff.
-  using TableSliceQueue
-    = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
+  using TableSliceQueue = folly::coro::BoundedQueue<Option<TableSliceFrame>>;
 
   /// Bundles one configured consumer with callback-lifetime ownership.
   struct SourceConsumer {
@@ -1187,7 +1186,7 @@ private:
       co_return;
     }
     for (size_t i = 0; i < worker_count_; ++i) {
-      co_await runtime_.message_queue->enqueue(std::nullopt);
+      co_await runtime_.message_queue->enqueue(None{});
     }
   }
 
@@ -1355,8 +1354,7 @@ private:
     if (perf_enabled_) {
       enqueue_started = std::chrono::steady_clock::now();
     }
-    co_await runtime_.message_queue->enqueue(
-      std::optional<MessageBatch>{std::move(fetched)});
+    co_await runtime_.message_queue->enqueue(std::move(fetched));
     if (perf_enabled_) {
       add_perf_counter(
         perf_.fetched_enqueue_wait_ns,
@@ -1525,7 +1523,7 @@ private:
     }
     if (runtime_.live_builders.fetch_sub(1) == 1
         and runtime_.table_slice_queue) {
-      co_await runtime_.table_slice_queue->enqueue(std::nullopt);
+      co_await runtime_.table_slice_queue->enqueue(None{});
     }
   }
 
@@ -1669,7 +1667,7 @@ public:
     return "from_kafka";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     return legacy::make_from_kafka(std::move(inv), ctx,
                                    source_global_defaults());

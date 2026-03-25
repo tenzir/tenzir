@@ -1,0 +1,4 @@
+from {a: 1, b: "x"},
+     {a: 1, b: "y"},
+     {a: 2, b: "x"}
+summarize renamed_a=a, n=count()

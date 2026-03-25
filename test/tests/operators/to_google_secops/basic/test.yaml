@@ -1,0 +1,6 @@
+suite: basic
+fixtures:
+  - google_secops
+timeout: 60
+skip:
+  on: fixture-unavailable

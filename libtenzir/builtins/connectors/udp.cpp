@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -53,6 +53,7 @@ struct saver_args {
 
 auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   -> generator<chunk_ptr> {
+  co_yield {};
   // A UDP packet contains its length as 16-bit field in the header, giving
   // rise to packets sized up to 65,535 bytes (including the header). When we
   // go over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
@@ -242,6 +243,7 @@ public:
           .note("got {} bytes but sent only {}", sent_bytes, chunk->size())
           .emit(ctrl.diagnostics());
       }
+      co_yield {};
     }
   }
 
@@ -267,7 +269,7 @@ private:
 };
 
 class load_plugin final : public virtual operator_plugin2<loader> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto parser = argument_parser2::operator_(name());
@@ -288,7 +290,7 @@ class load_plugin final : public virtual operator_plugin2<loader> {
 };
 
 class save_plugin final : public virtual operator_plugin2<saver> {
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());

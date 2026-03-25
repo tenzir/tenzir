@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -270,6 +270,7 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
         continue;
       }
       worker->send(slice);
+      co_yield {};
     }
   } else {
     // Multi-threaded path.
@@ -323,7 +324,7 @@ auto to_kafka_operator::optimize(const expression&, event_order) const
   return do_not_optimize(*this);
 }
 
-auto make_to_kafka(operator_factory_plugin::invocation inv, session ctx,
+auto make_to_kafka(operator_factory_invocation inv, session ctx,
                    const record& defaults) -> failure_or<operator_ptr> {
   auto args = to_kafka_args{};
   TRY(resolve_entities(args.message, ctx));

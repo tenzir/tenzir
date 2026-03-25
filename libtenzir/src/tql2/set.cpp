@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -130,8 +130,7 @@ auto assign(const ast::meta& left, const series& right,
     static_assert(basic_type<ty>);
     TENZIR_ASSERT(array.length() > 0);
     auto get_value = [&](int64_t i) {
-      return array.IsValid(i) ? std::optional{value_at(ty{}, array, i)}
-                              : std::nullopt;
+      return view_at<ty>(array, i);
     };
     auto result = std::vector<table_slice>{};
     auto begin = int64_t{0};

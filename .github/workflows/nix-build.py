@@ -35,8 +35,15 @@ import sys
 import tarfile
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 
 from pathlib import Path
+
+
+# Homebrew's `uninstall pkgutil:` matches the component package receipt ids from
+# PackageInfo and Distribution. CPack's product identifier is separate, so we
+# normalize the pkgutil-facing identifier after expanding the signed archive.
+TENZIR_MACOS_PKGUTIL_IDENTIFIER = "com.tenzir.tenzir.runtime"
 
 
 def notice(msg: str) -> None:
@@ -70,6 +77,86 @@ def parse_team_identifier(signing_identity: str) -> str | None:
     """Extract the Apple team identifier from a signing identity string."""
     match = re.search(r"\(([A-Z0-9]{10})\)\s*$", signing_identity)
     return match.group(1) if match else None
+
+
+def set_pkg_identifier(package_info_path: Path, identifier: str) -> None:
+    """Rewrite the PackageInfo identifier so pkgutil uninstall is stable."""
+    tree = ET.parse(package_info_path)
+    root = tree.getroot()
+    root.set("identifier", identifier)
+    tree.write(package_info_path, encoding="utf-8", xml_declaration=True)
+
+
+def get_pkg_identifier(package_info_path: Path) -> str | None:
+    """Read the PackageInfo identifier from a component package."""
+    tree = ET.parse(package_info_path)
+    return tree.getroot().get("identifier")
+
+
+def verify_pkg_identifier(package_info_path: Path, expected_identifier: str) -> None:
+    """Ensure the PackageInfo identifier matches the expected pkgutil id."""
+    actual_identifier = get_pkg_identifier(package_info_path)
+    if actual_identifier != expected_identifier:
+        raise RuntimeError(
+            "package identifier mismatch for "
+            f"{package_info_path}; expected {expected_identifier}, got {actual_identifier}"
+        )
+
+
+def set_distribution_pkg_identifier(distribution_path: Path, identifier: str) -> None:
+    """Rewrite only pkg-ref identifiers in the Distribution manifest.
+
+    Choice ids and their references must remain unchanged, otherwise the
+    installer's choice graph becomes inconsistent.
+    """
+    tree = ET.parse(distribution_path)
+    root = tree.getroot()
+    for elem in root.iter():
+        if elem.tag == "pkg-ref" and elem.get("id"):
+            elem.set("id", identifier)
+    tree.write(distribution_path, encoding="utf-8", xml_declaration=True)
+
+
+def verify_distribution_pkg_identifier(
+    distribution_path: Path,
+    expected_identifier: str,
+) -> None:
+    """Ensure all pkg-ref identifiers in Distribution match the expected id."""
+    tree = ET.parse(distribution_path)
+    root = tree.getroot()
+    ids = {
+        elem.get("id")
+        for elem in root.iter()
+        if elem.tag == "pkg-ref" and elem.get("id")
+    }
+    if ids != {expected_identifier}:
+        raise RuntimeError(
+            "distribution identifier mismatch for "
+            f"{distribution_path}; expected only {expected_identifier}, got {sorted(ids)}"
+        )
+
+
+def verify_signed_pkg_identifier(pkg_path: Path, expected_identifier: str) -> None:
+    """Expand a signed package and ensure its pkg identifiers are stable."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        expanded_dir = Path(tmp_dir) / "expanded"
+        result = subprocess.run(
+            ["pkgutil", "--expand", str(pkg_path), str(expanded_dir)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"pkgutil --expand failed for {pkg_path}: {result.stderr}")
+        package_infos = sorted(expanded_dir.glob("*.pkg/PackageInfo"))
+        if len(package_infos) != 1:
+            raise RuntimeError(
+                f"expected exactly one PackageInfo in {pkg_path}, found {len(package_infos)}"
+            )
+        verify_pkg_identifier(package_infos[0], expected_identifier)
+        distribution_path = expanded_dir / "Distribution"
+        if not distribution_path.exists():
+            raise RuntimeError(f"expected Distribution in {pkg_path}")
+        verify_distribution_pkg_identifier(distribution_path, expected_identifier)
 
 
 def find_macho_binaries(directory: Path) -> list[Path]:
@@ -714,10 +801,41 @@ def cmd_sign(args: argparse.Namespace) -> int:
 
                 component_dir = component_dirs[0]
                 payload_path = component_dir / "Payload"
+                package_info_path = component_dir / "PackageInfo"
+                distribution_path = pkg_extract_dir / "Distribution"
 
                 if not payload_path.exists():
                     error(f"Payload not found at {payload_path}")
                     return 1
+                if not package_info_path.exists():
+                    error(f"PackageInfo not found at {package_info_path}")
+                    return 1
+                if not distribution_path.exists():
+                    error(f"Distribution not found at {distribution_path}")
+                    return 1
+
+                try:
+                    set_pkg_identifier(
+                        package_info_path, TENZIR_MACOS_PKGUTIL_IDENTIFIER
+                    )
+                    # Only pkg-ref ids should be normalized here. Distribution
+                    # also contains choice ids that are referenced separately.
+                    set_distribution_pkg_identifier(
+                        distribution_path, TENZIR_MACOS_PKGUTIL_IDENTIFIER
+                    )
+                    verify_pkg_identifier(
+                        package_info_path, TENZIR_MACOS_PKGUTIL_IDENTIFIER
+                    )
+                    verify_distribution_pkg_identifier(
+                        distribution_path, TENZIR_MACOS_PKGUTIL_IDENTIFIER
+                    )
+                except RuntimeError as exc:
+                    error(str(exc))
+                    return 1
+                notice(
+                    "Set macOS installer identifiers to "
+                    f"{TENZIR_MACOS_PKGUTIL_IDENTIFIER}"
+                )
 
                 # Extract Payload (gzipped cpio archive)
                 payload_extract_dir = tmp_path / "payload_extracted"
@@ -835,10 +953,24 @@ def cmd_sign(args: argparse.Namespace) -> int:
                     if result.returncode != 0:
                         error(f".pkg signature verification failed: {result.stderr}")
                         return 1
+                    try:
+                        verify_signed_pkg_identifier(
+                            signed_pkg, TENZIR_MACOS_PKGUTIL_IDENTIFIER
+                        )
+                    except RuntimeError as exc:
+                        error(str(exc))
+                        return 1
                     notice(f"Created and signed .pkg: {signed_pkg}")
                 else:
                     # No installer identity, just copy the unsigned pkg
                     shutil.copy2(unsigned_pkg, signed_pkg)
+                    try:
+                        verify_signed_pkg_identifier(
+                            signed_pkg, TENZIR_MACOS_PKGUTIL_IDENTIFIER
+                        )
+                    except RuntimeError as exc:
+                        error(str(exc))
+                        return 1
                     warning("No installer identity provided, .pkg is unsigned")
                     notice(f"Created .pkg (unsigned): {signed_pkg}")
 
@@ -980,6 +1112,12 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_print_pkgutil_identifier(_: argparse.Namespace) -> int:
+    """Print the macOS pkgutil identifier for workflow consumers."""
+    print(TENZIR_MACOS_PKGUTIL_IDENTIFIER)
+    return 0
+
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -1117,6 +1255,13 @@ def main() -> int:
         help="Build images in release mode",
     )
     push_parser.set_defaults(func=cmd_push)
+
+    # --- print-pkgutil-identifier subcommand ---
+    print_pkgutil_identifier_parser = subparsers.add_parser(
+        "print-pkgutil-identifier",
+        help="Print the macOS pkgutil identifier",
+    )
+    print_pkgutil_identifier_parser.set_defaults(func=cmd_print_pkgutil_identifier)
 
     args = parser.parse_args()
     return args.func(args)

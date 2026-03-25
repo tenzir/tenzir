@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -33,10 +33,10 @@ TEST("list") {
 TEST("maps") {
   map ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
-  auto i = ports.find("ssh");
+  auto i = ports.find(data{"ssh"});
   REQUIRE(i != ports.end());
   CHECK(i->second == 22u);
-  i = ports.find("imaps");
+  i = ports.find(data{"imaps"});
   REQUIRE(i != ports.end());
   CHECK(i->second == 993u);
   CHECK(ports.emplace("telnet", 23u).second);
@@ -224,33 +224,33 @@ TEST("parseable") {
   auto l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == true);
+  CHECK(d == data{true});
   MESSAGE("numbers");
   str = "+1001"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK_EQUAL(f, l);
-  CHECK_EQUAL(d, int64_t{1001});
+  CHECK_EQUAL(d, data{int64_t{1001}});
   str = "1001"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == 1001u);
+  CHECK(d == data{uint64_t{1001}});
   str = "10.01"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == 10.01);
+  CHECK(d == data{10.01});
   MESSAGE("string");
   str = R"("bar")";
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == "bar");
+  CHECK(d == data{std::string{"bar"}});
   MESSAGE("pattern");
   str = "/foo/"s;
   f = str.begin();
@@ -264,7 +264,7 @@ TEST("parseable") {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == *to<ip>("10.0.0.1"));
+  CHECK(d == data{*to<ip>("10.0.0.1")});
   MESSAGE("list");
   str = "[42,4.2,null]"s;
   f = str.begin();

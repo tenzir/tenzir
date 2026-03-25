@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -15,6 +15,8 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/plugin/parser.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/split_at_regex.hpp>
 #include <tenzir/split_at_string.hpp>
@@ -390,7 +392,7 @@ public:
         buffer_.clear();
         co_await read_input_queue_->enqueue(std::move(batch));
       }
-      co_await read_input_queue_->enqueue(std::nullopt);
+      co_await read_input_queue_->enqueue(None{});
       co_return FinalizeBehavior::continue_;
     }
     // Non-parallel: emit any remaining buffered data as the final line.
@@ -580,7 +582,7 @@ private:
         auto next = co_await read_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
-          co_await read_input_queue_->enqueue(std::nullopt);
+          co_await read_input_queue_->enqueue(None{});
           break;
         }
         auto const* begin = reinterpret_cast<char const*>((*next)->data());
@@ -623,7 +625,7 @@ private:
     read_output_queue_->enqueue(table_slice{});
   }
 
-  using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+  using ReadInputQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
   /// The output queue is unbounded to avoid a theoretical deadlock where the
   /// main thread wants to push to a full input queue while all workers want to
   /// push to a full output queue.
@@ -651,7 +653,7 @@ public:
     return "read_lines";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     argument_parser2::operator_(name())
@@ -778,7 +780,7 @@ public:
       if (finished_workers_ >= args_.jobs) {
         co_return FinalizeBehavior::done;
       }
-      co_await write_input_queue_->enqueue(std::nullopt);
+      co_await write_input_queue_->enqueue(None{});
       co_return FinalizeBehavior::continue_;
     }
     co_return FinalizeBehavior::done;
@@ -807,7 +809,7 @@ private:
         co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await write_input_queue_->dequeue();
         if (not next) {
-          co_await write_input_queue_->enqueue(std::nullopt);
+          co_await write_input_queue_->enqueue(None{});
           break;
         }
         write_output_queue_->enqueue(print_slice(*next));
@@ -817,7 +819,7 @@ private:
     write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
+  using WriteInputQueue = folly::coro::BoundedQueue<Option<table_slice>>;
   using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
   WriteLinesArgs args_;
@@ -831,7 +833,7 @@ class write_lines final
   : public virtual operator_plugin2<writer_adapter<lines_printer>>,
     public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
     return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
@@ -858,7 +860,7 @@ public:
     return "read_delimited_regex";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
@@ -917,7 +919,7 @@ public:
     return "read_delimited";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
@@ -967,7 +969,7 @@ public:
     return "read_all";
   }
 
-  auto make(invocation inv, session ctx) const
+  auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto binary_flag = std::optional<located<bool>>{};
     TRY(argument_parser2::operator_(name())

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -16,6 +16,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/drain_bytes.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/compute/cast.h>

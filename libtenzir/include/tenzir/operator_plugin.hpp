@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -19,6 +19,7 @@
 
 #include <mutex>
 #include <span>
+#include <string_view>
 
 namespace tenzir {
 
@@ -63,14 +64,21 @@ struct Positional {
 };
 
 struct Named {
-  Named(std::string name, std::string type, AnySetter setter, bool required)
-    : name{std::move(name)},
+  Named(std::vector<std::string> names, std::string type, AnySetter setter,
+        bool required)
+    : names{std::move(names)},
       type{std::move(type)},
       setter{std::move(setter)},
       required{required} {
+    TENZIR_ASSERT(not this->names.empty());
   }
 
-  std::string name;
+  Named(std::string name, std::string type, AnySetter setter, bool required)
+    : Named(std::vector{std::move(name)}, std::move(type), std::move(setter),
+            required) {
+  }
+
+  std::vector<std::string> names;
   std::string type;
   AnySetter setter;
   bool required = false;
@@ -706,14 +714,33 @@ public:
   auto
   named(std::string name, T Args::* ptr, std::string type = type_default<T>)
     -> Argument<Args, T> {
+    return named(std::vector{std::move(name)}, ptr, std::move(type));
+  }
+
+  /// Adds a required named argument with multiple aliases.
+  template <ArgType T>
+  auto named(std::vector<std::string> names, T Args::* ptr,
+             std::string type = type_default<T>) -> Argument<Args, T> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
-      std::move(name),
+      std::move(names),
       std::move(type),
       make_setter(ptr),
       true,
     });
     return Argument<Args, T>{ArgumentType::named, index};
+  }
+
+  template <ArgType T, class Name>
+    requires std::constructible_from<std::string_view, Name>
+  auto named(std::initializer_list<Name> names, T Args::* ptr,
+             std::string type = type_default<T>) -> Argument<Args, T> {
+    auto names_vec = std::vector<std::string>{};
+    names_vec.reserve(names.size());
+    for (auto name : names) {
+      names_vec.emplace_back(name);
+    }
+    return named(names_vec, ptr, std::move(type));
   }
 
   /// Adds an optional named argument.

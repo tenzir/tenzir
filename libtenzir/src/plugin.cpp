@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -61,6 +61,23 @@
 #endif
 
 namespace tenzir {
+
+// -- operator_parser_plugin ---------------------------------------------------
+
+auto operator_parser_plugin::make_operator(std::string_view pipeline) const
+  -> std::pair<std::string_view, caf::expected<operator_ptr>> {
+  return {pipeline,
+          caf::make_error(ec::unspecified, "this operator does not support "
+                                           "the legacy parsing API")};
+}
+
+auto operator_parser_plugin::parse_operator(parser_interface& p) const
+  -> operator_ptr {
+  // TODO: Remove this default implementation and adjust `parser.cpp`
+  // accordingly when all operators are converted.
+  (void)p;
+  return nullptr;
+}
 
 // -- plugin singleton ---------------------------------------------------------
 
@@ -497,12 +514,14 @@ auto saver_parser_plugin::supported_uri_schemes() const
 // -- store plugin -------------------------------------------------------------
 
 auto store_plugin::make_store_builder(filesystem_actor fs,
-                                      const tenzir::uuid& id) const
+                                      const tenzir::uuid& id,
+                                      std::string origin) const
   -> caf::expected<store_actor_plugin::builder_and_header> {
   auto store = make_active_store();
   if (not store) {
     return store.error();
   }
+  (*store)->set_origin(std::move(origin));
   auto db_dir = std::filesystem::path{
     caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
                 defaults::state_directory.data())};
@@ -623,7 +642,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
 auto plugin_ptr::make_dynamic(const char* filename) noexcept
   -> caf::expected<plugin_ptr> {
   TENZIR_DISABLE_LEAK_SANITIZER();
-  auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY | RTLD_NODELETE);
   TENZIR_ENABLE_LEAK_SANITIZER();
   if (not library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,

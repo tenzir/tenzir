@@ -1,12 +1,13 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/series_builder_view3.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -32,7 +33,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list = ast::expression{};
     auto element = ast::expression{};
@@ -68,7 +69,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list = ast::expression{};
     auto element = ast::expression{};
@@ -104,7 +105,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list1 = ast::expression{};
     auto list2 = ast::expression{};
@@ -143,7 +144,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list_expr = ast::expression{};
     auto element_expr = ast::expression{};
@@ -240,7 +241,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list_expr = ast::expression{};
     auto element_expr = ast::expression{};
@@ -306,7 +307,7 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
+  auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto args = arguments{};
     TRY(argument_parser2::function("zip")
@@ -346,7 +347,7 @@ public:
             {"right", right_null ? type{} : right_list->type.value_type()},
           }}}};
           const auto make_nulls =
-            [](int64_t count) -> generator<std::optional<view<tenzir::list>>> {
+            [](int64_t count) -> generator<std::optional<view3<tenzir::list>>> {
             for (auto i = int64_t{0}; i < count; ++i) {
               co_yield {};
             }
@@ -372,10 +373,10 @@ public:
             for (auto i = size_t{0}; i < max_length; ++i) {
               auto record_builder = list_builder.record();
               if (left_value and i < left_value->size()) {
-                record_builder.field("left").data((*left_value)->at(i));
+                record_builder.field("left").data(left_value->at(i));
               }
               if (right_value and i < right_value->size()) {
-                record_builder.field("right").data((*right_value)->at(i));
+                record_builder.field("right").data(right_value->at(i));
               }
             }
           }
