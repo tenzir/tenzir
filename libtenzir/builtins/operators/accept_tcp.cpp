@@ -432,13 +432,10 @@ private:
             OpenPipeline<chunk_ptr> pipeline, Arc<MessageQueue> message_queue,
             MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = Option<std::string>{};
-    auto cancellation_token
-      = co_await folly::coro::co_current_cancellation_token;
     while (true) {
       try {
-        auto read_result = co_await folly::coro::co_withCancellation(
-          cancellation_token, read_tcp_chunk(*connection, buffer_size,
-                                             std::chrono::milliseconds{0}));
+        auto read_result = co_await read_tcp_chunk(
+          *connection, buffer_size, std::chrono::milliseconds{0});
         if (not read_result) {
           break;
         }
