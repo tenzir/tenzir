@@ -1,0 +1,2 @@
+error: child process exited with exit-code 2
+ = note: child process execution failed

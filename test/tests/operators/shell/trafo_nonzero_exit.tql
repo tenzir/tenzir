@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {x: 1}, {x: 2}
+write_lines
+shell "cat >/dev/null; exit 7"
+read_lines

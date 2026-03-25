@@ -1,0 +1,5 @@
+from {x: 1}
+where false
+write_lines
+shell "wc -c"
+read_lines

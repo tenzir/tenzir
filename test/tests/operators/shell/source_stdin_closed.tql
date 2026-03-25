@@ -1,0 +1,2 @@
+shell "cat >/dev/null; printf done\\n"
+read_lines

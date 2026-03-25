@@ -1,0 +1,7 @@
+from_file env("TENZIR_INPUTS") + "/python/large_batch.stdin" {
+  read_json
+}
+write_ndjson
+shell "cat"
+read_json
+summarize rows=count(), total=sum(value), min=min(value), max=max(value)
