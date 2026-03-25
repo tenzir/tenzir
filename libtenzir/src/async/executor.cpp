@@ -760,7 +760,9 @@ private:
     }
     // TODO: What to do about diagnostics here?
     auto output = pipe.infer_type(input, dh_);
-    // TODO: What if this fails?
+    // The caller is responsible for passing a well-typed pipeline that
+    // type-checks against `input`. Filter operators are type-preserving, so
+    // this must succeed if the caller upholds that contract.
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
