@@ -9,7 +9,9 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace tenzir {
