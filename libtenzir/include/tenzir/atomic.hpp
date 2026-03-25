@@ -12,6 +12,10 @@
 namespace tenzir {
 
 /// A `std::atomic<T>` that is movable and copyable (with relaxed order).
+///
+/// Memory ordering is always required explicitly — there are no defaults.
+/// This forces call sites to make a conscious ordering choice and makes
+/// atomic operations visible and auditable in code review.
 template <class T>
 class Atomic {
 public:
@@ -36,7 +40,9 @@ public:
   }
 
   auto operator=(const Atomic& other) noexcept -> Atomic& {
-    store(other.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    if (this != &other) {
+      store(other.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
     return *this;
   }
 
@@ -51,18 +57,15 @@ public:
     return data_.is_lock_free();
   }
 
-  void store(T desired, std::memory_order order
-                        = std::memory_order_seq_cst) noexcept {
+  void store(T desired, std::memory_order order) noexcept {
     data_.store(desired, order);
   }
 
-  auto load(std::memory_order order = std::memory_order_seq_cst) const noexcept
-    -> T {
+  auto load(std::memory_order order) const noexcept -> T {
     return data_.load(order);
   }
 
-  auto exchange(T desired, std::memory_order order
-                           = std::memory_order_seq_cst) noexcept -> T {
+  auto exchange(T desired, std::memory_order order) noexcept -> T {
     return data_.exchange(desired, order);
   }
 
@@ -71,26 +74,13 @@ public:
     return data_.compare_exchange_weak(expected, desired, success, failure);
   }
 
-  auto compare_exchange_weak(T& expected, T desired,
-                             std::memory_order order
-                             = std::memory_order_seq_cst) noexcept -> bool {
-    return data_.compare_exchange_weak(expected, desired, order);
-  }
-
-  auto
-  compare_exchange_strong(T& expected, T desired, std::memory_order success,
-                          std::memory_order failure) noexcept -> bool {
+  auto compare_exchange_strong(T& expected, T desired,
+                               std::memory_order success,
+                               std::memory_order failure) noexcept -> bool {
     return data_.compare_exchange_strong(expected, desired, success, failure);
   }
 
-  auto compare_exchange_strong(T& expected, T desired,
-                               std::memory_order order
-                               = std::memory_order_seq_cst) noexcept -> bool {
-    return data_.compare_exchange_strong(expected, desired, order);
-  }
-
-  void wait(T old, std::memory_order order
-                   = std::memory_order_seq_cst) const noexcept {
+  void wait(T old, std::memory_order order) const noexcept {
     data_.wait(old, order);
   }
 
@@ -106,8 +96,7 @@ public:
     requires requires(std::atomic<T>& a, Arg arg, std::memory_order o) {
       a.fetch_add(arg, o);
     }
-  auto fetch_add(Arg arg, std::memory_order order
-                          = std::memory_order_seq_cst) noexcept {
+  auto fetch_add(Arg arg, std::memory_order order) noexcept {
     return data_.fetch_add(arg, order);
   }
 
@@ -115,8 +104,7 @@ public:
     requires requires(std::atomic<T>& a, Arg arg, std::memory_order o) {
       a.fetch_sub(arg, o);
     }
-  auto fetch_sub(Arg arg, std::memory_order order
-                          = std::memory_order_seq_cst) noexcept {
+  auto fetch_sub(Arg arg, std::memory_order order) noexcept {
     return data_.fetch_sub(arg, order);
   }
 
@@ -124,8 +112,7 @@ public:
     requires requires(std::atomic<T>& a, Arg arg, std::memory_order o) {
       a.fetch_and(arg, o);
     }
-  auto fetch_and(Arg arg, std::memory_order order
-                          = std::memory_order_seq_cst) noexcept {
+  auto fetch_and(Arg arg, std::memory_order order) noexcept {
     return data_.fetch_and(arg, order);
   }
 
@@ -133,8 +120,7 @@ public:
     requires requires(std::atomic<T>& a, Arg arg, std::memory_order o) {
       a.fetch_or(arg, o);
     }
-  auto fetch_or(Arg arg, std::memory_order order
-                         = std::memory_order_seq_cst) noexcept {
+  auto fetch_or(Arg arg, std::memory_order order) noexcept {
     return data_.fetch_or(arg, order);
   }
 
@@ -142,8 +128,7 @@ public:
     requires requires(std::atomic<T>& a, Arg arg, std::memory_order o) {
       a.fetch_xor(arg, o);
     }
-  auto fetch_xor(Arg arg, std::memory_order order
-                          = std::memory_order_seq_cst) noexcept {
+  auto fetch_xor(Arg arg, std::memory_order order) noexcept {
     return data_.fetch_xor(arg, order);
   }
 

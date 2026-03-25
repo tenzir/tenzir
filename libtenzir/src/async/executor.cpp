@@ -53,7 +53,7 @@ struct SenderReceiverShared {
   Atomic<size_t> senders{0};
 
   bool is_closed() const {
-    return senders.load() == 0;
+    return senders.load(std::memory_order_acquire) == 0;
   }
 };
 
@@ -65,12 +65,12 @@ class Sender {
 public:
   explicit Sender(Arc<SenderReceiverShared<T>> shared)
     : shared_{std::move(shared)} {
-    shared_->senders += 1;
+    shared_->senders.fetch_add(1, std::memory_order_relaxed);
   }
 
   ~Sender() {
     if (shared_.not_moved_from()) {
-      auto previous = shared_->senders.fetch_sub(1);
+      auto previous = shared_->senders.fetch_sub(1, std::memory_order_release);
       TENZIR_ASSERT(previous > 0);
       if (previous == 1) {
         // FIXME: If this happens while the channel is full, then we can't push
