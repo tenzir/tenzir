@@ -74,9 +74,9 @@ public:
     return data_.compare_exchange_weak(expected, desired, success, failure);
   }
 
-  auto compare_exchange_strong(T& expected, T desired,
-                               std::memory_order success,
-                               std::memory_order failure) noexcept -> bool {
+  auto
+  compare_exchange_strong(T& expected, T desired, std::memory_order success,
+                          std::memory_order failure) noexcept -> bool {
     return data_.compare_exchange_strong(expected, desired, success, failure);
   }
 
