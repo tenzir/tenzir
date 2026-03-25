@@ -62,9 +62,9 @@ def _normalize_traceback_filename(filename: str) -> tuple[str, bool]:
 
 
 def print_stable_exception(
-    exc_type: type[BaseException] | None,
-    exc: BaseException | None,
-    tb: TracebackType | None,
+    exc_type: Optional[type[BaseException]],
+    exc: Optional[BaseException],
+    tb: Optional[TracebackType],
     file,
 ) -> None:
     if exc_type is None or exc is None:

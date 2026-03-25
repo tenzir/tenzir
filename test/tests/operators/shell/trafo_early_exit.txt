@@ -1,0 +1,5 @@
+{
+  line: "done",
+}
+error: child process exited with exit-code 7
+ = note: child process execution failed

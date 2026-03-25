@@ -623,10 +623,10 @@ public:
     try {
       co_await (*stdin_pipe).write(std::move(input));
     } catch (std::exception const& ex) {
-      lifecycle_ = Lifecycle::done;
-      diagnostic::error("{}", ex.what())
-        .note("failed to write to child process")
-        .emit(ctx.dh());
+      lifecycle_ = Lifecycle::draining;
+      if (not write_error_) {
+        write_error_ = ex.what();
+      }
     }
   }
 
@@ -714,8 +714,19 @@ private:
     }
     lifecycle_ = Lifecycle::done;
     if (exit_error_) {
-      diagnostic::error("{}", *exit_error_)
-        .note("child process execution failed")
+      if (write_error_) {
+        diagnostic::error("{}", *exit_error_)
+          .note("child process execution failed")
+          .note("failed to write to child process: {}", *write_error_)
+          .emit(dh);
+      } else {
+        diagnostic::error("{}", *exit_error_)
+          .note("child process execution failed")
+          .emit(dh);
+      }
+    } else if (write_error_) {
+      diagnostic::error("{}", *write_error_)
+        .note("failed to write to child process")
         .emit(dh);
     }
   }
@@ -728,6 +739,7 @@ private:
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   std::optional<std::string> exit_error_ = std::nullopt;
+  std::optional<std::string> write_error_ = std::nullopt;
 };
 
 class plugin final : public virtual operator_plugin2<shell_operator>,
