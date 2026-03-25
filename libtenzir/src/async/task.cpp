@@ -40,7 +40,7 @@ auto wait_forever() -> Task<void> {
                                               }};
   co_await baton;
   if (token.isCancellationRequested()) {
-    co_yield folly::coro::co_cancelled;
+    co_yield folly::coro::co_stopped_may_throw;
   }
 }
 
