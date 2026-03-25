@@ -228,6 +228,11 @@ protected:
           .primary(args_.url)
           .note("{}", e.what())
           .emit(dh);
+      } catch (Azure::Core::Http::TransportException const& e) {
+        diagnostic::warning("failed to delete `{}`", path)
+          .primary(args_.url)
+          .note("{}", e.what())
+          .emit(dh);
       }
     });
   }
