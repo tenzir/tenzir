@@ -75,4 +75,29 @@ TEST("output pipe read_some appends to iobuf queue") {
   }());
 }
 
+TEST("subprocess spawns cat with pipe wrappers") {
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto spec = SubprocessSpec{};
+    spec.argv = {"cat"};
+    spec.stdin_mode = PipeMode::pipe;
+    spec.stdout_mode = PipeMode::pipe;
+    spec.use_path = true;
+    spec.kill_child_on_destruction = true;
+    auto subprocess = co_await Subprocess::spawn(std::move(spec));
+    auto stdin_pipe = subprocess.stdin_pipe();
+    auto stdout_pipe = subprocess.stdout_pipe();
+    check(stdin_pipe.is_some());
+    check(stdout_pipe.is_some());
+    co_await (*stdin_pipe).write(chunk::copy("hello", 5));
+    co_await (*stdin_pipe).close();
+    auto chunk = co_await (*stdout_pipe).read_chunk();
+    check(chunk.is_some());
+    check_eq(to_string(*chunk), "hello");
+    auto none = co_await (*stdout_pipe).read_chunk();
+    check(none.is_none());
+    auto return_code = co_await subprocess.wait();
+    check(return_code.succeeded());
+  }());
+}
+
 } // namespace tenzir

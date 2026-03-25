@@ -13,15 +13,39 @@
 #include "tenzir/option.hpp"
 
 #include <folly/File.h>
+#include <folly/Subprocess.h>
 
+#include <chrono>
 #include <cstddef>
 #include <span>
+#include <string>
+#include <vector>
 
 namespace folly {
 class IOBufQueue;
 } // namespace folly
 
 namespace tenzir {
+
+enum class PipeMode {
+  inherit,
+  pipe,
+  dev_null,
+};
+
+struct SubprocessSpec {
+  std::vector<std::string> argv;
+  Option<std::vector<std::string>> env = None{};
+  Option<std::string> cwd = None{};
+  PipeMode stdin_mode = PipeMode::inherit;
+  PipeMode stdout_mode = PipeMode::inherit;
+  PipeMode stderr_mode = PipeMode::inherit;
+  std::vector<int> pipe_input_fds;
+  std::vector<int> pipe_output_fds;
+  bool use_path = false;
+  bool process_group_leader = false;
+  bool kill_child_on_destruction = true;
+};
 
 class WritePipe {
 public:
@@ -38,6 +62,7 @@ public:
 
   auto is_closed() const noexcept -> bool;
   auto child_fd() const noexcept -> int;
+  auto native_fd() const noexcept -> int;
 
 private:
   folly::File pipe_;
@@ -54,20 +79,66 @@ public:
   auto operator=(ReadPipe const&) -> ReadPipe& = delete;
   ~ReadPipe();
 
-  auto read_chunk(size_t max_bytes = 64 * 1024) -> Task<Option<chunk_ptr>>;
+  auto read_chunk(size_t max_bytes = 64z * 1024) -> Task<Option<chunk_ptr>>;
   auto read_some(folly::IOBufQueue& out, size_t min_read = 1,
-                 size_t new_alloc = 64 * 1024) -> Task<size_t>;
+                 size_t new_alloc = 64z * 1024) -> Task<size_t>;
   auto close() -> Task<void>;
 
   auto is_closed() const noexcept -> bool;
   auto is_eof() const noexcept -> bool;
   auto child_fd() const noexcept -> int;
+  auto native_fd() const noexcept -> int;
 
 private:
   folly::File pipe_;
   int child_fd_ = -1;
   bool eof_ = false;
   bool closed_ = false;
+};
+
+class Subprocess {
+public:
+  Subprocess(Subprocess&&) noexcept = default;
+  auto operator=(Subprocess&&) noexcept -> Subprocess& = default;
+  Subprocess(Subprocess const&) = delete;
+  auto operator=(Subprocess const&) -> Subprocess& = delete;
+  ~Subprocess();
+
+  static auto spawn(SubprocessSpec spec) -> Task<Subprocess>;
+
+  auto stdin_pipe() -> Option<WritePipe&>;
+  auto stdout_pipe() -> Option<ReadPipe&>;
+  auto stderr_pipe() -> Option<ReadPipe&>;
+  auto input_pipe(int child_fd) -> Option<WritePipe&>;
+  auto output_pipe(int child_fd) -> Option<ReadPipe&>;
+
+  auto wait() -> Task<folly::ProcessReturnCode>;
+  auto wait_timeout(std::chrono::milliseconds timeout)
+    -> Task<folly::ProcessReturnCode>;
+  auto terminate_or_kill(std::chrono::milliseconds timeout)
+    -> Task<folly::ProcessReturnCode>;
+  auto terminate_or_kill_process_group(std::chrono::milliseconds timeout)
+    -> Task<folly::ProcessReturnCode>;
+  auto send_signal(int signal) -> Task<void>;
+  auto send_signal_to_process_group(int signal) -> Task<void>;
+
+  auto pid() const noexcept -> pid_t;
+  auto return_code() const noexcept -> folly::ProcessReturnCode;
+
+private:
+  explicit Subprocess(folly::Subprocess subprocess,
+                      Option<WritePipe> stdin_pipe,
+                      Option<ReadPipe> stdout_pipe,
+                      Option<ReadPipe> stderr_pipe,
+                      std::vector<WritePipe> input_pipes,
+                      std::vector<ReadPipe> output_pipes);
+
+  folly::Subprocess subprocess_;
+  Option<WritePipe> stdin_pipe_ = None{};
+  Option<ReadPipe> stdout_pipe_ = None{};
+  Option<ReadPipe> stderr_pipe_ = None{};
+  std::vector<WritePipe> input_pipes_;
+  std::vector<ReadPipe> output_pipes_;
 };
 
 } // namespace tenzir
