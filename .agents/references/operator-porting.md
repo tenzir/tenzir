@@ -8,15 +8,15 @@ executor). It is based on migrations of many operators including `timeshift`,
 
 Reference files (pick the one closest to your operator):
 
-| File | Pattern |
-|------|---------|
-| `libtenzir/builtins/operators/timeshift.cpp` | Simple streaming transformation |
-| `libtenzir/builtins/operators/enumerate.cpp` | Streaming with snapshotted mutable state |
-| `libtenzir/builtins/operators/batch.cpp` | Buffering with timeout-driven flush |
-| `libtenzir/builtins/operators/buffer.cpp` | Producer-consumer queue with mutex/notify |
-| `libtenzir/builtins/operators/sockets.cpp` | One-shot source |
-| `libtenzir/builtins/operators/every_cron.cpp` | Recurring sub-pipeline spawning |
-| `libtenzir/builtins/formats/xsv.cpp` | Format parser/printer (`chunk_ptr`) |
+| File                                          | Pattern                                   |
+|-----------------------------------------------|-------------------------------------------|
+| `libtenzir/builtins/operators/timeshift.cpp`  | Simple streaming transformation           |
+| `libtenzir/builtins/operators/enumerate.cpp`  | Streaming with snapshotted mutable state  |
+| `libtenzir/builtins/operators/batch.cpp`      | Buffering with timeout-driven flush       |
+| `libtenzir/builtins/operators/buffer.cpp`     | Producer-consumer queue with mutex/notify |
+| `libtenzir/builtins/operators/sockets.cpp`    | One-shot source                           |
+| `libtenzir/builtins/operators/every_cron.cpp` | Recurring sub-pipeline spawning           |
+| `libtenzir/builtins/formats/xsv.cpp`          | Format parser/printer (`chunk_ptr`)       |
 
 See also: `executor.md` for the full API reference.
 
@@ -69,9 +69,6 @@ struct MyArgs {
 
 - `located<T>` — use when you need `.source` to point errors at the right token.
 - `std::optional<located<T>>` — maps to an optional named argument in `Describer`.
-- When `Args` contains types that require CAF serialization (`ast::expression`,
-  `ast::field_path`), add `friend auto inspect(auto& f, Args& x)` so the old
-  executor path can still serialize it.
 
 ---
 
@@ -88,11 +85,11 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override; // concurrent driver
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override;                                  // handles await_task result
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override;                                  // flush before checkpoint
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override;                      // end-of-stream
   auto state() -> OperatorState override;                    // early termination signal
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override;                                  // flush before checkpoint
   auto snapshot(Serde& serde) -> void override;              // checkpoint state
 
 private:
@@ -154,59 +151,33 @@ values before arithmetic:
 if (timeout_ != duration::max() and now - entry.start_time > timeout_) { … }
 ```
 
-### Producer-consumer queue
-
-When `process()` (writer) and `await_task()` (reader) run concurrently, use
-`Mutex<State>` + `Notify` for coordination. `await_task()` returns `Option<T>`
-with `None{}` as the done sentinel. `finalize()` marks the queue closed,
-signals the reader, and returns `FinalizeBehavior::continue_` to keep draining.
-`state()` returns `done` after `process_task()` observes the sentinel.
-
 ### Sources
 
 Sources use `await_task()` to produce data and `process_task()` to push it.
 `state()` returns `done` when the source is exhausted. For a one-shot source
 (fetches data once and stops), see `sockets.cpp`.
 
-### Sub-pipeline operators
+### Format operators (chunk_ptr -> table_slice)
 
-Use `ctx.spawn_sub(key, pipeline, tag_v<Input>)`. The executor calls
-`finish_sub()` when a sub-pipeline completes. In `start()`, check for an
-existing active sub before spawning to avoid double-spawning on snapshot restore.
-After each spawn the active sub key is the one just below the next-to-assign key,
-so always use `ctx.get_sub(next_ - 1)` to access it (guard against underflow
-when `next_ == 0`).
-
-### Format operators (chunk_ptr ↔ table_slice)
-
-Parsers: `Operator<chunk_ptr, table_slice>`. Use `start()` to initialize parser
-state, `process()` to parse chunks, and `finalize()` to flush the last partial
-record.
+`read_xxx` operators typically implement `Operator<chunk_ptr, table_slice>`.
+They use `start()` to initialize a parser state, `process()` to parse chunks,
+and `finalize()` to flush the last partial record.
 
 ---
 
 ## Step 5 — Member types
 
-### Non-movable types (`Mutex<T>`, `Notify`)
-
-Heap-allocate with `Box<T>{std::in_place, …}` and mark `mutable` (required
-because `await_task` is `const`):
-
-```cpp
-mutable Box<Mutex<State>> state_{std::in_place, State{}};
-mutable Box<Notify> data_available_{std::in_place};
-```
-
 ### Vocabulary preferences
 
-| Prefer | Instead of |
-|--------|-----------|
-| `Option<T>` | `std::optional<T>` for operator-internal members |
-| `Box<T>` | `std::unique_ptr<T>` |
-| `enum class Lifecycle { running, draining, done }` | multiple `bool` flags for complex shutdown |
+| Prefer                                             | Instead of                                       |
+|----------------------------------------------------|--------------------------------------------------|
+| `Option<T>`                                        | `std::optional<T>` for operator-internal members |
+| `Box<T>`                                           | `std::unique_ptr<T>`                             |
+| `enum class Lifecycle { running, draining, done }` | multiple `bool` flags for complex shutdown       |
+| `Atomic<T>`                                        | `std::atomic<T>`                                 |
+| `Ref<T>`                                           | `std::reference_wrapper<T>`                      |
+| `Mutex<T>`                                         | `std::mutex` + separate data                     |
 
-`std::optional` is still required on `Args` struct members wired into
-`Describer`.
 
 ### Lifecycle modeling for complex shutdown
 
@@ -254,33 +225,14 @@ uses `steady_clock::time_point` for timing and incorrect offsets after restart
 are acceptable, leave `snapshot()` empty and document why. Likewise, if
 `prepare_snapshot()` flushes all buffered data first, `snapshot()` is a no-op.
 
----
-
-## Step 7 — prepare_snapshot()
-
-Drain buffered output before the checkpoint. **Never hold a mutex while
-`co_await`-ing `push()`** — that deadlocks because `push()` can block on
-downstream backpressure. Take the item under the lock, release it, then push:
-
-```cpp
-auto prepare_snapshot(Push<T>& push, OpCtx& ctx) -> Task<void> override {
-  TENZIR_UNUSED(ctx);
-  while (true) {
-    auto item = Option<T>{None{}};
-    {
-      auto guard = co_await state_->lock();
-      if (guard->queue.empty()) { co_return; }
-      item = std::move(guard->queue.front());
-      guard->queue.pop();
-    }                               // lock released before push
-    co_await push(std::move(*item));
-  }
-}
-```
+**Buffered data should be flushed in prepare_snapshot.** If the operator contains
+dynamically large amount of data (i.e. a buffer for incoming data), it should
+not be serialized in `snapshot()`. Instead, there is `prepare_snapshot()` for
+emitting this data before yielding and allowing `snapshot()` to run.
 
 ---
 
-## Step 8 — Plugin registration
+## Step 7 — Plugin registration
 
 ### Adding to an existing plugin
 
@@ -307,7 +259,14 @@ public:
 };
 ```
 
-### New file (no existing old path)
+### New file
+
+If the old implementation is already a huge file or highly complex,
+it is preferred to create a new file for the new operator.
+When doing so, a new Plugin class will have to be defined.
+It's name should not clash with the name of the old impl. This can
+be avoided by adding or removing `tql2.` prefix. It does not matter
+which form is used by the new impl.
 
 ```cpp
 class plugin final : public virtual OperatorPlugin {
@@ -352,8 +311,9 @@ Use `Describer<MyArgs>{}` (no Impl template args) when providing a full spawner.
 ### Validating a sub-pipeline's output type
 
 Check that the output is both present **and** of the right type. An absent
-output (`std::nullopt`) means the sub-pipeline is a sink and is incompatible
-with an operator that produces events:
+output (`std::nullopt`) means the sub-pipeline is not known yet (which is
+something that should probably be eventually removed).
+If the sub-pipeline is a sink the inferred type is `tag_v<void>`.
 
 ```cpp
 TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
@@ -368,20 +328,17 @@ if (not output or *output != tag_v<table_slice>) {
 
 ## Common pitfalls
 
-### Extract shared logic into free functions
+### Don't extract shared logic
 
-When old and new implementations share logic, extract it into a free function
-that both classes call. Do not duplicate.
+Given that the old implementation will eventually be removed, don't try to
+extract shared logic from the old implementation. If old implementation uses
+existing helpers, they can be reused if they don't require major modifications.
 
 ### Unused boolean flags
 
 Flags declared but never read hide stale state. Either use every flag in the
 relevant condition or delete it. This is especially common after refactoring
 shutdown logic.
-
-### Don't hold the mutex while `co_await`-ing `push()`
-
-This deadlocks. Always release the lock before awaiting push (see Step 7).
 
 ### Don't share argument parsing between old and new paths
 
@@ -409,8 +366,6 @@ if (timeout_ != duration::max() and now - start > timeout_) { … }
 ## Checklist
 
 - [ ] `Args` struct defined; `located<T>` where source location needed for errors
-- [ ] `Args` uses `std::optional` (not `Option`) for optional named args in `Describer`
-- [ ] `Args` has `friend auto inspect(...)` if it contains CAF-serializable complex types
 - [ ] Operator derives from `Operator<Input, Output>`
 - [ ] `process()` does not guard on `rows() == 0`
 - [ ] `await_task()` / `process_task()` added only when independent output is needed
@@ -418,8 +373,6 @@ if (timeout_ != duration::max() and now - start > timeout_) { … }
 - [ ] `snapshot()` serializes all state-machine flags (not just counters)
 - [ ] `snapshot()` documents why `steady_clock` values are excluded (if applicable)
 - [ ] `state()` returns `done` for early-terminating operators
-- [ ] Non-movable members wrapped in `Box<T>{std::in_place,…}` and marked `mutable`
-- [ ] `Option<T>` used for internal optional members; `std::optional` only for Args
 - [ ] `Box<T>` used instead of `std::unique_ptr<T>`
 - [ ] Duration overflow guarded when a `duration::max()` sentinel is possible
 - [ ] Complex shutdown uses `enum class Lifecycle`; `stop()`/`finalize()` share a teardown helper
