@@ -41,7 +41,7 @@ public:
       // We reset the scope _after_ joining it.
       scope_ = nullptr;
     }};
-    co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
+    auto body = [&](AsyncScope& scope) -> Task<U> {
       scope_ = &scope;
       auto cancel_guard = detail::scope_guard{[&] noexcept {
         // We assume that the consumer is not interested anymore. Otherwise,
@@ -49,7 +49,23 @@ public:
         scope.cancel();
       }};
       co_return co_await std::move(task);
-    });
+    };
+    if constexpr (std::is_void_v<U>) {
+      co_await async_scope(std::move(body));
+    } else {
+      auto result = co_await async_scope(std::move(body));
+      // Drain unconsumed completions so a subsequent activate() starts clean.
+      while (running_ > 0) {
+        co_await queue_.dequeue();
+        running_ -= 1;
+      }
+      co_return std::move(result);
+    }
+    // Drain unconsumed completions so a subsequent activate() starts clean.
+    while (running_ > 0) {
+      co_await queue_.dequeue();
+      running_ -= 1;
+    }
   }
 
   /// Like `activate(Task<U>)`, but takes a function returning an awaitable.
