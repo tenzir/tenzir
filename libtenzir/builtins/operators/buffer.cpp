@@ -209,17 +209,8 @@ public:
     co_return;
   }
 
-  /// Accepts upstream data into the buffer.
-  ///
-  /// For the block policy, when the buffer overflows, the oldest buffered
-  /// items are pushed directly downstream via `push`. This avoids the
-  /// deadlock that would occur if we blocked on internal state waiting for
-  /// `process_task()` to drain — `process_task()` is sequential with
-  /// `process()` and can never run while we're suspended.
-  ///
-  /// Blocking on `push()` (downstream backpressure) is safe: it doesn't
-  /// depend on any operator-internal progress.
   auto process(T input, Push<T>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(push);
     if (size(input) == 0) {
       co_return;
     }
@@ -250,73 +241,94 @@ public:
           .emit(ctx.dh());
       }
     } else {
-      // Block policy: add everything to the buffer, then push the oldest
-      // items directly downstream until the buffer is back at capacity.
-      {
-        auto guard = co_await state_->lock();
-        guard->queue.push(std::move(input));
-        guard->size += size(input);
-      }
-      // Drain overflow without holding the lock — push may suspend.
-      while (true) {
-        auto guard = co_await state_->lock();
-        if (guard->size <= args_.capacity.inner) {
-          break;
+      // block policy: enqueue what fits, wait for space when full
+      while (size(input) > 0) {
+        {
+          auto guard = co_await state_->lock();
+          const auto free = args_.capacity.inner - guard->size;
+          if (free > 0) {
+            auto [lhs, rhs] = split(input, free);
+            guard->size += size(lhs);
+            guard->queue.push(std::move(lhs));
+            input = std::move(rhs);
+            guard.unlock();
+            data_available_->notify_one();
+          }
         }
-        auto item = std::move(guard->queue.front());
-        guard->queue.pop();
-        guard->size -= size(item);
-        guard.unlock();
-        co_await push(std::move(item));
+        if (size(input) > 0) {
+          co_await space_available_->wait();
+        }
       }
-      // Non-overflowing data is drained from process_task instead,
-      // so it does not block process function.
-      data_available_->notify_one();
     }
     co_return;
   }
 
-  /// Wakes when data is available in the buffer for active draining.
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    co_await data_available_->wait();
-    co_return {};
+    while (true) {
+      {
+        auto guard = co_await state_->lock();
+        if (not guard->queue.empty()) {
+          auto item = std::move(guard->queue.front());
+          guard->queue.pop();
+          guard->size -= size(item);
+          guard.unlock();
+          space_available_->notify_one();
+          co_return Option{std::move(item)};
+        }
+        if (guard->closed) {
+          co_return Option<T>{None{}};
+        }
+      }
+      co_await data_available_->wait();
+    }
   }
 
-  /// Actively drains one batch from the buffer per invocation.
-  ///
-  /// This ensures buffered data flows downstream even when no new input
-  /// arrives, rather than sitting in the buffer until the next overflow.
-  /// Draining one batch at a time keeps the buffer populated so that it
-  /// can absorb upstream bursts between process_task calls.
   auto process_task(Any result, Push<T>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(result, ctx);
-    auto guard = co_await state_->lock();
-    if (guard->queue.empty()) {
+    TENZIR_UNUSED(ctx);
+    auto* opt = result.try_as<Option<T>>();
+    if (not opt) {
       co_return;
     }
-    auto item = std::move(guard->queue.front());
-    guard->queue.pop();
-    guard->size -= size(item);
-    const auto has_more = not guard->queue.empty();
-    guard.unlock();
-    co_await push(std::move(item));
-    if (has_more) {
-      data_available_->notify_one();
+    if (not *opt) {
+      done_ = true;
+      co_return;
     }
+    co_await push(std::move(**opt));
   }
 
   auto prepare_snapshot(Push<T>& push, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_return co_await flush(push);
+
+    while (true) {
+      Option<T> item;
+      {
+        auto guard = co_await state_->lock();
+        if (guard->queue.empty()) {
+          co_return;
+        }
+        item = std::move(guard->queue.front());
+        guard->queue.pop();
+        guard->size -= size(*item);
+      }
+      space_available_->notify_one();
+      co_await push(std::move(*item));
+    }
   }
 
-  /// Drains remaining buffer contents downstream and signals completion.
   auto finalize(Push<T>& push, OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    co_await flush(push);
-    co_return FinalizeBehavior::done;
+    TENZIR_UNUSED(push, ctx);
+    {
+      auto guard = co_await state_->lock();
+      guard->closed = true;
+    }
+    data_available_->notify_one();
+    co_return FinalizeBehavior::continue_;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -326,23 +338,10 @@ public:
   }
 
 private:
-  auto flush(Push<T>& push) -> Task<void> {
-    while (true) {
-      auto guard = co_await state_->lock();
-      if (guard->queue.empty()) {
-        co_return;
-      }
-      auto item = std::move(guard->queue.front());
-      guard->queue.pop();
-      guard->size -= size(item);
-      guard.unlock();
-      co_await push(std::move(item));
-    }
-  }
-
   struct InternalState {
     std::queue<T> queue = {};
     uint64_t size = 0;
+    bool closed = false;
   };
 
   BufferArgs args_;
@@ -350,6 +349,8 @@ private:
 
   mutable Box<Mutex<InternalState>> state_{std::in_place, InternalState{}};
   mutable Box<Notify> data_available_{std::in_place};
+  mutable Box<Notify> space_available_{std::in_place};
+  bool done_ = false;
 };
 
 class write_buffer_operator final
