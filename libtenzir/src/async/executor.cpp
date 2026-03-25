@@ -1374,6 +1374,12 @@ private:
     }
     LOGV("running done in {}", op_name());
     if (phase_ == Phase::stopping_forced) {
+      // Cancel operator-scoped tasks immediately so that background IO
+      // coroutines stop producing work before the subpipelines drain.
+      // check_done() will also cancel, but only once subpipelines_.empty(),
+      // which may be too late to prevent further output.
+      TENZIR_ASSERT(operator_scope_);
+      operator_scope_->cancel();
       for (auto& [_, sub] : subpipelines_) {
         sub.push = None{};
         if (sub.from_control_sender) {
