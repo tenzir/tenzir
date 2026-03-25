@@ -50,7 +50,7 @@ struct SenderReceiverShared {
   /// channel is closed because the last sender got destroyed.
   folly::coro::BoundedQueue<Option<T>> data;
   /// Number of remaining senders. Channel is closed when this drops to 0.
-  std::atomic<size_t> senders;
+  Atomic<size_t> senders{0};
 
   bool is_closed() const {
     return senders.load() == 0;
@@ -74,7 +74,8 @@ public:
       TENZIR_ASSERT(previous > 0);
       if (previous == 1) {
         // FIXME: If this happens while the channel is full, then we can't push
-        // anything and need a different way to signal it.
+        // anything and need a different way to signal it. We temporarily accept
+        // this, but this should be cleaned up rather sooner than later.
         auto success = shared_->data.try_enqueue(None{});
         if (not success) {
           TENZIR_TODO();
@@ -1080,15 +1081,6 @@ private:
   }
 
   auto run() -> Task<void> {
-    // co_await folly::coro::co_scope_exit(
-    //   [](Runner* self) -> Task<void> {
-    //     LOGW("shutting down operator {} with {} pending",
-    //                 typeid(*self->op_).name(), self->queue_.pending());
-    //     // TODO: Can we always do this here?
-    //     co_await self->queue_.cancel_and_join();
-    //     LOGW("shutdown done for {}", typeid(*self->op_).name());
-    //   },
-    //   this);
     auto& cancellation_token
       = co_await folly::coro::co_current_cancellation_token;
     try {
@@ -1205,54 +1197,14 @@ private:
             co_await begin_checkpoint(checkpoint);
           });
       });
-    // FIXME: Don't pull here if we are processing a checkpoint!
+    // We always pull from upstream, even if the operator is done, since we want
+    // to continue receiving checkpoints and our shutdown logic depends on it.
     driver_.add(pull_upstream());
   }
 
-  /// Checkpoint the operator and all of its subpipelines.
-  ///
-  /// This works as follows:
-  /// - First, checkpoint the state of the operator itself.
-  /// - If there are no subpipelines: We are done, send checkpoint downstream.
-  /// - Otherwise, forward the checkpoint to all subpipelines.
-  /// - Remember which ones exist for the commit notification later.
-  /// X Block output (perhaps with buffer) of the inner operator.
-  /// X Also block output subpipelines created after this point.
-  /// - Start asynchronous subpipeline checkpointing and return.
-  ///
-  /// Asynchronous subpipeline checkpointing works as follows:
-  /// X Wait for all subpipelines that got the checkpoint to return it to us.
-  /// X Once a subpipeline returns its checkpoint, its output is also blocked.
-  /// X When we got all checkpoints, we forward it to our actual downstream.
-  /// X Then, unblock our output and blocked subpipelines (which means all).
-  /// X The checkpoint is now complete.
-  ///
-  /// When blocking the output of a subpipeline, should we call `process_sub`?
-  /// If it does not mutate the operator state, then there is no problem. If it
-  /// does, but does, then we have to be careful: If we then process something
-  /// from another subpipeline that is not yet blocked (i.e. checkpoint is
-  /// pending), and propagate information from that with that event, then we
-  /// have information from after the checkpoint in something that comes before
-  /// the checkpoint. This must not happen. On the other hand, the same can
-  /// happen for mutations that go through `process`. So we should not call
-  /// `process_sub` for blocked subpipelines.
-  ///
-  /// Could we build a loop? Let's say `while foo < 42 { … }`. We would then
-  /// have to forward the checkpoint, but also record incoming data from the
-  /// back-edge before the checkpoint comes back. This needs to be part of the
-  /// snapshot, but we already forwarded the checkpoint, so we need to inform
-  /// the system that it must wait for the checkpoint of the back-edge. This
-  /// then covers then in-flight data at the point in time when the original
-  /// snapshot was created.
-  ///
-  /// Can we apply this to `process_sub`? We perform the snapshot, but then
-  /// record all incoming data as it comes out of the subpipelines... Hmm...
-  /// No, that doesn't sound great.
-  ///
-  /// When we get a commit notification, we forward it only to those
-  /// subpipelines that already existed when we started the checkpoint. In the
-  /// meantime, we must take care to not destroy those subpipelines.
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
+    // TODO: This is not fully implement yet. The approach is documented in the
+    // docs of the class, but this implementation is not yet complete.
     LOGI("got checkpoint {} in {}", checkpoint.id, op_name());
     co_await to_control_.send(ToControl::checkpoint_begin);
     co_await call_prepare_snapshot();
@@ -1280,7 +1232,6 @@ private:
       co_await sub.send(checkpoint);
       sub.wants_commit = true;
     }
-    // TODO: Continue here?
     TENZIR_TODO();
   }
 
@@ -1351,10 +1302,17 @@ private:
             sub.closed_data = true;
             break;
           case ToControl::ready_for_shutdown:
-            // Safe to drop: OpenPipeline may only be used inside main-loop
-            // operator functions (not await_task / process_sub), so no handle
-            // outlives this event.
-            // TODO: Can we really immediately shut it down? Checkpoints?
+            // We immediately shut down the subpipeline once the request
+            // arrives. The subpipeline will not be part of future checkpoints.
+            // There is a small delay that needs to be accounted for by the
+            // checkpointing logic until the shutdown fully propagates and we
+            // remove the subpipeline from our bookkeeping. Note that both
+            // handles are only safe to drop here because `OpenPipeline` may
+            // only be used inside the main-loop functions, which this drop is
+            // also part of. Thus, there is no concurrent use.
+            // TODO: Once we implement the rest of the checkpointing logic, we
+            // probably need to defer the closing of these channels until the
+            // post-commit occurs, as the pipeline needs to be kept alive then.
             sub.push = None{};
             sub.from_control_sender = None{};
             break;
