@@ -1,0 +1,3 @@
+from {x: 1}
+head 0
+python "self.y = self.x + 1"

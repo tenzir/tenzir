@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}, {x: 2}
+python "if self.x == 2: raise RuntimeError('boom on second row')"
