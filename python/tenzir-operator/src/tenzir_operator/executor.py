@@ -69,9 +69,28 @@ def print_stable_exception(
 ) -> None:
     if exc_type is None or exc is None:
         return
-    if tb is not None:
+    tb_exception = traceback.TracebackException(
+        exc_type,
+        exc,
+        tb,
+        capture_locals=False,
+    )
+
+    def _print(tb_exc: traceback.TracebackException) -> None:
+        if tb_exc.__cause__ is not None:
+            _print(tb_exc.__cause__)
+            print(
+                "\nThe above exception was the direct cause of the following exception:\n",
+                file=file,
+            )
+        elif tb_exc.__context__ is not None and not tb_exc.__suppress_context__:
+            _print(tb_exc.__context__)
+            print(
+                "\nDuring handling of the above exception, another exception occurred:\n",
+                file=file,
+            )
         print("Traceback (most recent call last):", file=file)
-        for frame in traceback.extract_tb(tb):
+        for frame in tb_exc.stack:
             filename, is_executor_frame = _normalize_traceback_filename(frame.filename)
             if is_executor_frame:
                 print(f'  File "{filename}", in {frame.name}', file=file)
@@ -82,8 +101,10 @@ def print_stable_exception(
                 )
             if frame.line:
                 print(f"    {frame.line}", file=file)
-    for line in traceback.format_exception_only(exc_type, exc):
-        print(line, end="", file=file)
+        for line in tb_exc.format_exception_only():
+            print(line, end="", file=file)
+
+    _print(tb_exception)
 
 
 T = TypeVar("T")

@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {x: "payload"}
+repeat 10000
+write_lines
+shell "exec 0<&-; sleep 30"
+read_lines

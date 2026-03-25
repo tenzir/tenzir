@@ -6,7 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/subprocess.hpp>
 #include <tenzir/chunk.hpp>
@@ -18,6 +20,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
@@ -60,9 +63,9 @@ namespace bp = boost::process;
 #endif
 
 #include <mutex>
-#include <optional>
 #include <queue>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <unistd.h>
 
@@ -398,19 +401,24 @@ struct TaskFailed {
   std::string note;
 };
 
+struct WriteFailure {
+  std::string message;
+  Option<std::error_code> code = None{};
+};
+
 using Message = variant<OutputChunk, OutputClosed, ProcessExited, TaskFailed>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 constexpr auto message_queue_capacity = uint32_t{16};
 
 auto resolve_command(ShellArgs const& args, OpCtx& ctx)
-  -> Task<std::optional<std::string>> {
+  -> Task<Option<std::string>> {
   auto command = std::string{};
   auto requests = std::vector<secret_request>{
     make_secret_request("command", args.command, command, ctx.dh())};
   auto result = co_await ctx.resolve_secrets(std::move(requests));
   if (not result) {
-    co_return std::nullopt;
+    co_return None{};
   }
   co_return command;
 }
@@ -434,11 +442,11 @@ auto spawn_shell_subprocess(std::string command, bool pipe_stdin)
   co_return co_await Subprocess::spawn(std::move(spec));
 }
 
-auto read_stdout(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
+auto read_stdout(Arc<MessageQueue> queue, Subprocess& subprocess)
   -> Task<void> {
   auto pipe = subprocess.stdout_pipe();
   TENZIR_ASSERT(pipe.is_some());
-  auto failure = std::optional<TaskFailed>{};
+  auto failure = Option<TaskFailed>{};
   try {
     while (true) {
       auto chunk = co_await (*pipe).read_chunk(block_size);
@@ -454,14 +462,14 @@ auto read_stdout(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
       .note = "failed to read from child process",
     };
   }
-  if (failure) {
+  if (failure.is_some()) {
     co_await queue->enqueue(std::move(*failure));
   }
 }
 
-auto wait_for_exit(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
+auto wait_for_exit(Arc<MessageQueue> queue, Subprocess& subprocess)
   -> Task<void> {
-  auto failure = std::optional<TaskFailed>{};
+  auto failure = Option<TaskFailed>{};
   try {
     auto return_code = co_await subprocess.wait();
     co_await queue->enqueue(ProcessExited{return_code});
@@ -471,21 +479,29 @@ auto wait_for_exit(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
       .note = "failed to wait for child process",
     };
   }
-  if (failure) {
+  if (failure.is_some()) {
     co_await queue->enqueue(std::move(*failure));
   }
 }
 
 auto process_exit_error(const folly::ProcessReturnCode& return_code)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (return_code.exited()) {
     auto exit_code = return_code.exitStatus();
     if (exit_code == 0) {
-      return std::nullopt;
+      return None{};
     }
     return fmt::format("child process exited with exit-code {}", exit_code);
   }
   return fmt::format("child process {}", return_code.str());
+}
+
+auto format_write_failure(std::system_error const& ex) -> WriteFailure {
+  return WriteFailure{
+    .message = fmt::format("{} ({}: {})", ex.what(), ex.code().value(),
+                           ex.code().message()),
+    .code = ex.code(),
+  };
 }
 
 class ShellSource final : public Operator<void, chunk_ptr> {
@@ -576,12 +592,12 @@ private:
 
   ShellArgs args_;
   Lifecycle lifecycle_ = Lifecycle::starting;
-  std::optional<Subprocess> subprocess_ = std::nullopt;
-  std::shared_ptr<MessageQueue> message_queue_
-    = std::make_shared<MessageQueue>(message_queue_capacity);
+  Option<Subprocess> subprocess_ = None{};
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
-  std::optional<std::string> exit_error_ = std::nullopt;
+  Option<std::string> exit_error_ = None{};
 };
 
 class ShellTransform final : public Operator<chunk_ptr, chunk_ptr> {
@@ -598,7 +614,6 @@ public:
     try {
       subprocess_ = co_await spawn_shell_subprocess(std::move(*command), true);
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
-      ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
       lifecycle_ = Lifecycle::running;
     } catch (std::exception const& ex) {
       diagnostic::error("{}", ex.what())
@@ -622,10 +637,18 @@ public:
     TENZIR_ASSERT(stdin_pipe.is_some());
     try {
       co_await (*stdin_pipe).write(std::move(input));
+    } catch (std::system_error const& ex) {
+      lifecycle_ = Lifecycle::draining;
+      if (write_failure_.is_none()) {
+        write_failure_ = format_write_failure(ex);
+      }
     } catch (std::exception const& ex) {
       lifecycle_ = Lifecycle::draining;
-      if (not write_error_) {
-        write_error_ = ex.what();
+      if (write_failure_.is_none()) {
+        write_failure_ = WriteFailure{
+          .message = ex.what(),
+          .code = None{},
+        };
       }
     }
   }
@@ -690,6 +713,26 @@ public:
           co_return FinalizeBehavior::done;
         }
       }
+      start_wait_for_exit(ctx);
+    } else if (write_failure_.is_some() and not child_exited_) {
+      if (not termination_attempted_) {
+        termination_attempted_ = true;
+        co_return FinalizeBehavior::continue_;
+      }
+      TENZIR_ASSERT(subprocess_);
+      try {
+        auto return_code
+          = co_await subprocess_->terminate_or_kill(std::chrono::seconds{1});
+        child_exited_ = true;
+        exit_error_ = process_exit_error(return_code);
+        co_await finish_if_ready(ctx.dh());
+      } catch (std::exception const& ex) {
+        lifecycle_ = Lifecycle::done;
+        diagnostic::error("{}", ex.what())
+          .note("failed to terminate child process after stdin write failure")
+          .emit(ctx.dh());
+        co_return FinalizeBehavior::done;
+      }
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
@@ -708,24 +751,38 @@ private:
     done,
   };
 
+  auto start_wait_for_exit(OpCtx& ctx) -> void {
+    TENZIR_ASSERT(subprocess_);
+    if (exit_wait_started_) {
+      return;
+    }
+    exit_wait_started_ = true;
+    ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
+  }
+
   auto finish_if_ready(diagnostic_handler& dh) -> Task<void> {
     if (not stdout_closed_ or not child_exited_) {
       co_return;
     }
     lifecycle_ = Lifecycle::done;
+    auto write_failure = write_failure_;
+    if (write_failure.is_some() and write_failure->code.is_some()
+        and *write_failure->code == std::errc::broken_pipe and exit_error_) {
+      write_failure = None{};
+    }
     if (exit_error_) {
-      if (write_error_) {
+      if (write_failure.is_some()) {
         diagnostic::error("{}", *exit_error_)
           .note("child process execution failed")
-          .note("failed to write to child process: {}", *write_error_)
+          .note("failed to write to child process: {}", write_failure->message)
           .emit(dh);
       } else {
         diagnostic::error("{}", *exit_error_)
           .note("child process execution failed")
           .emit(dh);
       }
-    } else if (write_error_) {
-      diagnostic::error("{}", *write_error_)
+    } else if (write_failure.is_some()) {
+      diagnostic::error("{}", write_failure->message)
         .note("failed to write to child process")
         .emit(dh);
     }
@@ -733,13 +790,15 @@ private:
 
   ShellArgs args_;
   Lifecycle lifecycle_ = Lifecycle::starting;
-  std::optional<Subprocess> subprocess_ = std::nullopt;
-  std::shared_ptr<MessageQueue> message_queue_
-    = std::make_shared<MessageQueue>(message_queue_capacity);
+  Option<Subprocess> subprocess_ = None{};
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
-  std::optional<std::string> exit_error_ = std::nullopt;
-  std::optional<std::string> write_error_ = std::nullopt;
+  bool exit_wait_started_ = false;
+  bool termination_attempted_ = false;
+  Option<std::string> exit_error_ = None{};
+  Option<WriteFailure> write_failure_ = None{};
 };
 
 class plugin final : public virtual operator_plugin2<shell_operator>,
