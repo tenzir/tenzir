@@ -1315,7 +1315,8 @@ private:
     // see both channels drained and erase the entry, leaving the second with a
     // dangling key.
     auto finish_if_closed = [&] -> Task<void> {
-      if (not (sub.from_sub_done and sub.to_control_done)) {
+      auto closed = sub.from_sub_done and sub.to_control_done;
+      if (not closed) {
         co_return;
       }
       subpipelines_.erase(it);
