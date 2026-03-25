@@ -7,21 +7,26 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/as_bytes.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/async/subprocess.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/preserved_fds.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
+#include <folly/coro/BoundedQueue.h>
 
 #if __has_include(<boost/process/v1/child.hpp>)
 
@@ -55,8 +60,11 @@ namespace bp = boost::process;
 #endif
 
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <string_view>
 #include <thread>
+#include <unistd.h>
 
 namespace tenzir::plugins::shell {
 namespace {
@@ -371,7 +379,347 @@ private:
   located<secret> command_;
 };
 
-class plugin final : public virtual operator_plugin2<shell_operator> {
+struct ShellArgs {
+  located<secret> command = located{secret{}, location::unknown};
+};
+
+struct OutputChunk {
+  chunk_ptr chunk;
+};
+
+struct OutputClosed {};
+
+struct ProcessExited {
+  folly::ProcessReturnCode return_code;
+};
+
+struct TaskFailed {
+  std::string error;
+  std::string note;
+};
+
+using Message = variant<OutputChunk, OutputClosed, ProcessExited, TaskFailed>;
+using MessageQueue = folly::coro::BoundedQueue<Message>;
+
+constexpr auto message_queue_capacity = uint32_t{16};
+
+auto resolve_command(ShellArgs const& args, OpCtx& ctx)
+  -> Task<std::optional<std::string>> {
+  auto command = std::string{};
+  auto requests = std::vector<secret_request>{
+    make_secret_request("command", args.command, command, ctx.dh())};
+  auto result = co_await ctx.resolve_secrets(std::move(requests));
+  if (not result) {
+    co_return std::nullopt;
+  }
+  co_return command;
+}
+
+auto spawn_shell_subprocess(std::string command, bool pipe_stdin)
+  -> Task<Subprocess> {
+  auto stdin_mode = pipe_stdin ? PipeMode::pipe : PipeMode::dev_null;
+  auto spec = SubprocessSpec{
+    .argv = {"/bin/sh", "-c", std::move(command)},
+    .env = None{},
+    .cwd = None{},
+    .stdin_mode = stdin_mode,
+    .stdout_mode = PipeMode::pipe,
+    .stderr_mode = PipeMode::inherit,
+    .pipe_input_fds = {},
+    .pipe_output_fds = {},
+    .use_path = false,
+    .process_group_leader = false,
+    .kill_child_on_destruction = true,
+  };
+  co_return co_await Subprocess::spawn(std::move(spec));
+}
+
+auto read_stdout(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
+  -> Task<void> {
+  auto pipe = subprocess.stdout_pipe();
+  TENZIR_ASSERT(pipe.is_some());
+  auto failure = std::optional<TaskFailed>{};
+  try {
+    while (true) {
+      auto chunk = co_await (*pipe).read_chunk(block_size);
+      if (chunk.is_none()) {
+        break;
+      }
+      co_await queue->enqueue(OutputChunk{std::move(*chunk)});
+    }
+    co_await queue->enqueue(OutputClosed{});
+  } catch (std::exception const& ex) {
+    failure = TaskFailed{
+      .error = ex.what(),
+      .note = "failed to read from child process",
+    };
+  }
+  if (failure) {
+    co_await queue->enqueue(std::move(*failure));
+  }
+}
+
+auto wait_for_exit(std::shared_ptr<MessageQueue> queue, Subprocess& subprocess)
+  -> Task<void> {
+  auto failure = std::optional<TaskFailed>{};
+  try {
+    auto return_code = co_await subprocess.wait();
+    co_await queue->enqueue(ProcessExited{return_code});
+  } catch (std::exception const& ex) {
+    failure = TaskFailed{
+      .error = ex.what(),
+      .note = "failed to wait for child process",
+    };
+  }
+  if (failure) {
+    co_await queue->enqueue(std::move(*failure));
+  }
+}
+
+class ShellSource final : public Operator<void, chunk_ptr> {
+public:
+  explicit ShellSource(ShellArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto command = co_await resolve_command(args_, ctx);
+    if (not command) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    try {
+      subprocess_ = co_await spawn_shell_subprocess(std::move(*command), false);
+      ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
+      ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
+      lifecycle_ = Lifecycle::running;
+    } catch (std::exception const& ex) {
+      diagnostic::error("{}", ex.what())
+        .note("failed to spawn child process")
+        .emit(ctx.dh());
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    auto* message = result.try_as<Message>();
+    TENZIR_ASSERT(message);
+    co_await co_match(
+      std::move(*message),
+      [&](OutputChunk output) -> Task<void> {
+        co_await push(std::move(output.chunk));
+      },
+      [&](OutputClosed) -> Task<void> {
+        stdout_closed_ = true;
+        co_await finish_if_ready(ctx.dh());
+      },
+      [&](ProcessExited exited) -> Task<void> {
+        child_exited_ = true;
+        exit_code_ = exited.return_code.exitStatus();
+        co_await finish_if_ready(ctx.dh());
+      },
+      [&](TaskFailed failure) -> Task<void> {
+        lifecycle_ = Lifecycle::done;
+        diagnostic::error("{}", failure.error)
+          .note("{}", failure.note)
+          .emit(ctx.dh());
+        co_return;
+      });
+  }
+
+  auto state() -> OperatorState override {
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
+  }
+
+private:
+  enum class Lifecycle {
+    starting,
+    running,
+    done,
+  };
+
+  auto finish_if_ready(diagnostic_handler& dh) -> Task<void> {
+    if (not stdout_closed_ or not child_exited_) {
+      co_return;
+    }
+    lifecycle_ = Lifecycle::done;
+    if (exit_code_ != 0) {
+      diagnostic::error("child process exited with exit-code {}", exit_code_)
+        .note("child process execution failed")
+        .emit(dh);
+    }
+  }
+
+  ShellArgs args_;
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  std::optional<Subprocess> subprocess_ = std::nullopt;
+  std::shared_ptr<MessageQueue> message_queue_
+    = std::make_shared<MessageQueue>(message_queue_capacity);
+  bool stdout_closed_ = false;
+  bool child_exited_ = false;
+  int exit_code_ = 0;
+};
+
+class ShellTransform final : public Operator<chunk_ptr, chunk_ptr> {
+public:
+  explicit ShellTransform(ShellArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto command = co_await resolve_command(args_, ctx);
+    if (not command) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    try {
+      subprocess_ = co_await spawn_shell_subprocess(std::move(*command), true);
+      ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
+      ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
+      lifecycle_ = Lifecycle::running;
+    } catch (std::exception const& ex) {
+      diagnostic::error("{}", ex.what())
+        .note("failed to spawn child process")
+        .emit(ctx.dh());
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  auto process(chunk_ptr input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    if (lifecycle_ != Lifecycle::running) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    TENZIR_ASSERT(subprocess_);
+    auto stdin_pipe = subprocess_->stdin_pipe();
+    TENZIR_ASSERT(stdin_pipe.is_some());
+    try {
+      co_await (*stdin_pipe).write(std::move(input));
+    } catch (std::exception const& ex) {
+      lifecycle_ = Lifecycle::done;
+      diagnostic::error("{}", ex.what())
+        .note("failed to write to child process")
+        .emit(ctx.dh());
+    }
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    auto* message = result.try_as<Message>();
+    TENZIR_ASSERT(message);
+    co_await co_match(
+      std::move(*message),
+      [&](OutputChunk output) -> Task<void> {
+        co_await push(std::move(output.chunk));
+      },
+      [&](OutputClosed) -> Task<void> {
+        stdout_closed_ = true;
+        co_await finish_if_ready(ctx.dh());
+      },
+      [&](ProcessExited exited) -> Task<void> {
+        child_exited_ = true;
+        exit_code_ = exited.return_code.exitStatus();
+        co_await finish_if_ready(ctx.dh());
+      },
+      [&](TaskFailed failure) -> Task<void> {
+        lifecycle_ = Lifecycle::done;
+        diagnostic::error("{}", failure.error)
+          .note("{}", failure.note)
+          .emit(ctx.dh());
+        co_return;
+      });
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining;
+      TENZIR_ASSERT(subprocess_);
+      auto stdin_pipe = subprocess_->stdin_pipe();
+      TENZIR_ASSERT(stdin_pipe.is_some());
+      if (not(*stdin_pipe).is_closed()) {
+        try {
+          co_await (*stdin_pipe).close();
+        } catch (std::exception const& ex) {
+          lifecycle_ = Lifecycle::done;
+          diagnostic::error("{}", ex.what())
+            .note("failed to close child process stdin")
+            .emit(ctx.dh());
+          co_return FinalizeBehavior::done;
+        }
+      }
+    }
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
+  }
+
+  auto state() -> OperatorState override {
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
+  }
+
+private:
+  enum class Lifecycle {
+    starting,
+    running,
+    draining,
+    done,
+  };
+
+  auto finish_if_ready(diagnostic_handler& dh) -> Task<void> {
+    if (not stdout_closed_ or not child_exited_) {
+      co_return;
+    }
+    lifecycle_ = Lifecycle::done;
+    if (exit_code_ != 0) {
+      diagnostic::error("child process exited with exit-code {}", exit_code_)
+        .note("child process execution failed")
+        .emit(dh);
+    }
+  }
+
+  ShellArgs args_;
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  std::optional<Subprocess> subprocess_ = std::nullopt;
+  std::shared_ptr<MessageQueue> message_queue_
+    = std::make_shared<MessageQueue>(message_queue_capacity);
+  bool stdout_closed_ = false;
+  bool child_exited_ = false;
+  int exit_code_ = 0;
+};
+
+class plugin final : public virtual operator_plugin2<shell_operator>,
+                     public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "shell";
@@ -388,6 +736,29 @@ public:
       = argument_parser2::operator_("shell").positional("cmd", command);
     TRY(parser.parse(inv, ctx));
     return std::make_unique<shell_operator>(std::move(command));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ShellArgs>{};
+    d.positional("cmd", &ShellArgs::command);
+    d.spawner([]<class Input>(DescribeCtx&)
+                -> failure_or<Option<SpawnWith<ShellArgs, Input>>> {
+      if constexpr (std::same_as<Input, void>) {
+        return SpawnWith<ShellArgs, void>{
+          [](ShellArgs args) -> Box<Operator<void, chunk_ptr>> {
+            return Box<Operator<void, chunk_ptr>>{ShellSource{std::move(args)}};
+          }};
+      } else if constexpr (std::same_as<Input, chunk_ptr>) {
+        return SpawnWith<ShellArgs, chunk_ptr>{
+          [](ShellArgs args) -> Box<Operator<chunk_ptr, chunk_ptr>> {
+            return Box<Operator<chunk_ptr, chunk_ptr>>{
+              ShellTransform{std::move(args)}};
+          }};
+      } else {
+        return None{};
+      }
+    });
+    return d.without_optimize();
   }
 };
 
