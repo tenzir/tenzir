@@ -1391,6 +1391,9 @@ private:
     // Then finalize the operator, which can still produce output.
     auto b = co_await call_finalize();
     if (b == FinalizeBehavior::continue_) {
+      // The operator is still draining and will transition to `done` via
+      // further `await_task()` calls. Re-arm so those calls keep flowing.
+      add_await_task();
       co_return;
     }
     // Tell all subpipelines to shut down. Note that the previous step could
