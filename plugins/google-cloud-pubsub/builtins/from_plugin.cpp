@@ -8,8 +8,11 @@
 
 #include "tenzir/multi_series_builder.hpp"
 
+#include <tenzir/async.hpp>
+#include <tenzir/async/notify.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -17,6 +20,12 @@
 
 #include <google/cloud/pubsub/subscriber.h>
 #include <google/cloud/pubsub/subscription_admin_client.h>
+
+#include <atomic>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "uri_transform.hpp"
 
@@ -193,10 +202,263 @@ private:
   from_args args_;
 };
 
+// Holds state shared between the operator and the GCP subscriber callback.
+// Uses a mutex because GCP only limits the number of callbacks *scheduled*,
+// not the number actually executing at a time, even with
+// MaxConcurrencyOption(1).
+// See
+// https://cloud.google.com/cpp/docs/reference/pubsub/latest/structgoogle_1_1cloud_1_1pubsub_1_1MaxConcurrencyOption
+struct MessageData {
+  std::string data;
+  std::string message_id;
+  time publish_time;
+  std::unordered_map<std::string, std::string> attributes;
+};
+
+struct PendingMessage {
+  MessageData data;
+  pubsub::AckHandler handler;
+};
+
+struct SharedState {
+  std::mutex mutex;
+  std::vector<PendingMessage> pending;
+  Notify notify;
+  std::atomic<bool> session_done{false};
+  std::string session_error;
+};
+
+// RAII wrapper that cancels the GCP subscriber session on destruction and
+// blocks until all background threads stop accessing shared state. This
+// ensures no callbacks run after the operator is destroyed.
+struct SessionHandle {
+  google::cloud::future<google::cloud::Status> fut;
+
+  SessionHandle() = default;
+  explicit SessionHandle(google::cloud::future<google::cloud::Status> f)
+    : fut{std::move(f)} {
+  }
+  SessionHandle(const SessionHandle&) = delete;
+  auto operator=(const SessionHandle&) -> SessionHandle& = delete;
+  SessionHandle(SessionHandle&&) = default;
+  auto operator=(SessionHandle&&) -> SessionHandle& = default;
+
+  ~SessionHandle() noexcept {
+    if (not fut.valid()) {
+      return;
+    }
+    if (not fut.is_ready()) {
+      fut.cancel();
+    }
+    // Blocking wait: ensures no GCP background threads access shared state.
+    fut.get();
+  }
+};
+
+class FromGoogleCloudPubsub final : public Operator<void, table_slice> {
+public:
+  explicit FromGoogleCloudPubsub(from_args args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto subscription = pubsub::Subscription(args_.project_id.inner,
+                                             args_.subscription_id.inner);
+    // Detect whether the subscription has message ordering enabled.
+    auto ordering_enabled = [&]() -> bool {
+      auto admin_client = pubsub::SubscriptionAdminClient(
+        pubsub::MakeSubscriptionAdminConnection());
+      auto sub_info = admin_client.GetSubscription(subscription);
+      if (not sub_info.ok()) {
+        return false;
+      }
+      return sub_info->enable_message_ordering();
+    }();
+    ordering_enabled_ = ordering_enabled;
+
+    // TODO: Expose the max ack deadline extension as an operator option. The
+    // GCP client library automatically extends ack deadlines while the handler
+    // is alive; the default max extension is 10 minutes, which should cover
+    // typical checkpoint intervals.
+    auto connection = pubsub::MakeSubscriberConnection(
+      std::move(subscription),
+      google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1));
+    auto subscriber = pubsub::Subscriber(std::move(connection));
+
+    auto shared = shared_;
+    auto has_metadata = args_.metadata_field.has_value();
+    // Subscribe and attach a .then() callback to detect session end. The
+    // callback runs on a GCP background thread when the session terminates
+    // (e.g., due to an error), setting session_done and notifying the operator.
+    auto session_fut = subscriber.Subscribe(
+      [shared, has_metadata](pubsub::Message const& m, pubsub::AckHandler h) {
+        {
+          auto guard = std::scoped_lock{shared->mutex};
+          auto msg = MessageData{
+            .data = std::string{m.data()},
+            .message_id = m.message_id(),
+            .publish_time = time{m.publish_time()},
+          };
+          if (has_metadata) {
+            for (const auto& [key, value] : m.attributes()) {
+              msg.attributes.emplace(key, value);
+            }
+          }
+          shared->pending.push_back(
+            PendingMessage{std::move(msg), std::move(h)});
+        }
+        shared->notify.notify_one();
+      });
+    session_.emplace(SessionHandle{
+      std::move(session_fut)
+        .then([shared](google::cloud::future<google::cloud::Status> f) {
+          auto status = f.get();
+          if (not status.ok()
+              and status.code() != google::cloud::StatusCode::kCancelled) {
+            auto guard = std::scoped_lock{shared->mutex};
+            shared->session_error = status.message();
+          }
+          shared->session_done.store(true, std::memory_order_release);
+          shared->notify.notify_one();
+          return status;
+        })});
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (done_) {
+      co_await wait_forever();
+    }
+    // If the session has already ended (set by the .then() callback), skip wait.
+    if (shared_->session_done.load(std::memory_order_acquire)) {
+      co_return {};
+    }
+    co_await shared_->notify.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push,
+                    OpCtx& ctx) -> Task<void> override {
+    // Drain all pending messages under the lock, then process outside.
+    auto pending = std::vector<PendingMessage>{};
+    {
+      auto guard = std::scoped_lock{shared_->mutex};
+      pending = std::exchange(shared_->pending, {});
+    }
+
+    // Deduplicate redelivered messages that were already processed in this
+    // checkpoint interval but not yet committed.
+    auto messages = std::vector<MessageData>{};
+    for (auto& pm : pending) {
+      if (seen_message_ids_.contains(pm.data.message_id)) {
+        // Already processed; ack the redelivered copy immediately.
+        std::move(pm.handler).ack();
+        continue;
+      }
+      seen_message_ids_.insert(pm.data.message_id);
+      uncommitted_acks_.push_back({pm.data.message_id, std::move(pm.handler)});
+      messages.push_back(std::move(pm.data));
+    }
+
+    if (not messages.empty()) {
+      auto msb = multi_series_builder{
+        {.settings={
+           .ordered = ordering_enabled_,
+           .raw = true,
+         }},
+        ctx.dh(),
+      };
+      for (const auto& msg : messages) {
+        auto event = msb.record();
+        event.field("message").data(msg.data);
+        if (args_.metadata_field) {
+          auto meta = event.field(*args_.metadata_field).record();
+          meta.field("message_id").data(msg.message_id);
+          meta.field("publish_time").data(msg.publish_time);
+          auto attrs = meta.field("attributes").record();
+          for (const auto& [key, value] : msg.attributes) {
+            attrs.field(key).data(value);
+          }
+        }
+      }
+      for (auto&& slice : msb.finalize_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
+    }
+
+    // Check whether the session ended (set by the .then() callback).
+    if (shared_->session_done.load(std::memory_order_acquire)) {
+      auto error = std::string{};
+      {
+        auto guard = std::scoped_lock{shared_->mutex};
+        error = std::exchange(shared_->session_error, {});
+      }
+      if (not error.empty()) {
+        diagnostic::error("google-cloud-subscriber: {}", error)
+          .primary(args_.operator_location)
+          .emit(ctx);
+      }
+      done_ = true;
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // Move current uncommitted acks into a staging set that post_commit() will
+    // process. If snapshot() is called multiple times before post_commit()
+    // (e.g., due to a failed commit followed by a retry), we must not
+    // re-append — the previous snapshot already moved them.
+    // TODO: Verify what guarantees the checkpoint framework provides regarding
+    // the frequency and ordering of snapshot()/post_commit() calls. In
+    // particular, can snapshot() be called multiple times without an
+    // intervening post_commit(), and does seen_message_ids_ need an upper
+    // bound to prevent unbounded growth under slow checkpoint intervals?
+    if (not uncommitted_acks_.empty()) {
+      committed_acks_.insert(committed_acks_.end(),
+                             std::make_move_iterator(uncommitted_acks_.begin()),
+                             std::make_move_iterator(uncommitted_acks_.end()));
+      uncommitted_acks_.clear();
+    }
+    serde("seen_message_ids", seen_message_ids_);
+    serde("done", done_);
+  }
+
+  auto post_commit(OpCtx&) -> Task<void> override {
+    // Only ACK handlers that were captured at snapshot time.
+    for (auto& ack : committed_acks_) {
+      seen_message_ids_.erase(ack.message_id);
+      std::move(ack.handler).ack();
+    }
+    committed_acks_.clear();
+    co_return;
+  }
+
+private:
+  from_args args_;
+  bool ordering_enabled_ = false;
+  bool done_ = false;
+  Option<SessionHandle> session_;
+  std::shared_ptr<SharedState> shared_ = std::make_shared<SharedState>();
+  // Checkpointing: handlers are ack'd only after a successful checkpoint
+  // commit, providing at-least-once delivery semantics. Double-buffered so
+  // that messages arriving between snapshot() and post_commit() are not
+  // prematurely ack'd.
+  struct PendingAck {
+    std::string message_id;
+    pubsub::AckHandler handler;
+  };
+  std::vector<PendingAck> uncommitted_acks_;
+  std::vector<PendingAck> committed_acks_;
+  std::unordered_set<std::string> seen_message_ids_;
+};
+
 } // namespace
 
 class from_plugin final
-  : public operator_plugin2<from_google_cloud_pubsub_operator> {
+  : public virtual operator_plugin2<from_google_cloud_pubsub_operator>,
+    public virtual OperatorPlugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -207,6 +469,15 @@ public:
     TRY(args.validate(ctx));
     args.operator_location = inv.self.get_location();
     return std::make_unique<from_google_cloud_pubsub_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<from_args, FromGoogleCloudPubsub>{};
+    d.operator_location(&from_args::operator_location);
+    d.named("project_id", &from_args::project_id);
+    d.named("subscription_id", &from_args::subscription_id);
+    d.named("metadata_field", &from_args::metadata_field);
+    return d.without_optimize();
   }
 
   // auto load_properties() const -> load_properties_t override {

@@ -6,21 +6,23 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/weak_run_delayed.hpp"
-
+#include <tenzir/async.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
-#include <tenzir/tql2/resolve.hpp>
 #include <tenzir/variant.hpp>
 
 #include <google/cloud/future.h>
+#include <google/cloud/internal/future_coroutines.h>
 #include <google/cloud/pubsub/publisher.h>
 
 #include <chrono>
+#include <deque>
 #include <string_view>
 #include <vector>
 
@@ -183,10 +185,100 @@ private:
   to_args args_;
 };
 
+struct FlushingPublisher {
+  pubsub::Publisher inner;
+  ~FlushingPublisher() noexcept {
+    inner.Flush();
+  }
+};
+
+class ToGoogleCloudPubsub final : public Operator<table_slice, void> {
+public:
+  explicit ToGoogleCloudPubsub(to_args args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
+    publisher_.emplace(FlushingPublisher{
+      pubsub::Publisher{pubsub::MakePublisherConnection(std::move(topic))}});
+    co_return;
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (input.rows() == 0 or not publisher_) {
+      co_return;
+    }
+    auto pub = publisher_->inner;
+    auto* dh = &ctx.dh();
+    for (const auto& messages : eval(args_.message, input, *dh)) {
+      co_await co_match(
+        *messages.array,
+        [&](const arrow::StringArray& array) -> Task<void> {
+          for (auto i = int64_t{}; i < array.length(); ++i) {
+            if (array.IsNull(i)) {
+              diagnostic::warning("expected `string`, got `null`")
+                .primary(args_.message)
+                .emit(*dh);
+              continue;
+            }
+            auto str = std::string{array.GetView(i)};
+            inflight_.push_back(ctx.spawn_task(
+              [pub, str = std::move(str), dh]() mutable -> Task<void> {
+                auto future = pub.Publish(
+                  pubsub::MessageBuilder{}.SetData(std::move(str)).Build());
+                auto result = co_await std::move(future);
+                if (not result) {
+                  diagnostic::error("failed to publish: {}",
+                                    result.status().message())
+                    .emit(*dh);
+                }
+              }));
+            if (inflight_.size() >= max_inflight_publishes) {
+              auto handle = std::move(inflight_.front());
+              inflight_.pop_front();
+              co_await handle.join();
+            }
+          }
+          co_return;
+        },
+        [&](const auto&) -> Task<void> {
+          diagnostic::warning("expected `string`, got `{}`",
+                              messages.type.kind())
+            .primary(args_.message)
+            .note("event is skipped")
+            .emit(*dh);
+          co_return;
+        });
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    if (publisher_) {
+      publisher_->inner.Flush();
+    }
+    while (not inflight_.empty()) {
+      auto handle = std::move(inflight_.front());
+      inflight_.pop_front();
+      co_await handle.join();
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  static constexpr auto max_inflight_publishes = size_t{100};
+
+  to_args args_;
+  Option<FlushingPublisher> publisher_;
+  std::deque<AsyncHandle<void>> inflight_;
+};
+
 } // namespace
 
 class to_plugin final
-  : public operator_plugin2<to_google_cloud_pubsub_operator> {
+  : public virtual operator_plugin2<to_google_cloud_pubsub_operator>,
+    public virtual OperatorPlugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -198,6 +290,15 @@ public:
           .parse(inv, ctx));
     args.op = inv.self.get_location();
     return std::make_unique<to_google_cloud_pubsub_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<to_args, ToGoogleCloudPubsub>{};
+    d.operator_location(&to_args::op);
+    d.named("project_id", &to_args::project_id);
+    d.named("topic_id", &to_args::topic_id);
+    d.named("message", &to_args::message, "string");
+    return d.without_optimize();
   }
 };
 
