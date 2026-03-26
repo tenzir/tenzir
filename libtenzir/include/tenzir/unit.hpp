@@ -35,7 +35,7 @@ auto unit_to_void(T&& value) -> UnitToVoid<T> {
   }
 }
 
-/// Forwards a value, converting `void` to `Unit`.
+/// Forwards a function's return value, converting `void` to `Unit`.
 ///
 /// This takes a function to invoke as there are no `void` parameters.
 template <class F>

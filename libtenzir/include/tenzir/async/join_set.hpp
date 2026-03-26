@@ -50,22 +50,13 @@ public:
       }};
       co_return co_await std::move(task);
     };
-    if constexpr (std::is_void_v<U>) {
-      co_await async_scope(std::move(body));
-    } else {
-      auto result = co_await async_scope(std::move(body));
-      // Drain unconsumed completions so a subsequent activate() starts clean.
-      while (running_ > 0) {
-        co_await queue_.dequeue();
-        running_ -= 1;
-      }
-      co_return std::move(result);
-    }
+    auto result = co_await void_to_unit(async_scope(std::move(body)));
     // Drain unconsumed completions so a subsequent activate() starts clean.
     while (running_ > 0) {
       co_await queue_.dequeue();
       running_ -= 1;
     }
+    co_return unit_to_void(std::move(result));
   }
 
   /// Like `activate(Task<U>)`, but takes a function returning an awaitable.
