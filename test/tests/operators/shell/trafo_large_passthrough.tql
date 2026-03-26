@@ -1,6 +1,7 @@
-from_file env("TENZIR_INPUTS") + "/python/large_batch.stdin" {
-  read_json
-}
+from {value: 0}
+repeat 10000
+enumerate value
+value = value + 1
 write_ndjson
 shell "cat"
 read_json

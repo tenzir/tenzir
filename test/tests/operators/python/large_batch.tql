@@ -1,5 +1,6 @@
-from_file env("TENZIR_INPUTS") + "/python/large_batch.stdin" {
-  read_json
-}
+from {value: 0}
+repeat 10000
+enumerate value
+value = value + 1
 python "self.twice = self.value * 2"
 summarize rows=count(), total=sum(twice), min=min(twice), max=max(twice)
