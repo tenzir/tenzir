@@ -923,10 +923,7 @@ public:
     if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
-    if (input.rows() == 0) {
-      co_return;
-    }
-    auto failure = std::optional<std::string>{};
+    auto failure = Option<std::string>{};
     try {
       if (not co_await ensure_child_running()) {
         co_await emit_subprocess_failure(ctx.dh(),
@@ -961,7 +958,7 @@ public:
     } catch (const std::exception& ex) {
       failure = ex.what();
     }
-    if (failure) {
+    if (failure.is_some()) {
       co_await emit_subprocess_failure(ctx.dh(), *failure);
     }
   }
@@ -1009,15 +1006,25 @@ public:
                                          : OperatorState::unspecified;
   }
 
+  auto snapshot(Serde& serde) -> void override {
+    TENZIR_UNUSED(serde);
+    // This operator owns a live subprocess session whose transport state is
+    // inherently local to the current process and machine.
+    //
+    // FIXME: To support snapshot/restore, extend the protocol between the host
+    // operator and the Python subprocess so the child can export and import
+    // logical execution state into a fresh subprocess after restart.
+  }
+
 private:
-  auto resolve_code(OpCtx& ctx) -> Task<std::optional<std::string>> {
+  auto resolve_code(OpCtx& ctx) -> Task<Option<std::string>> {
     if (args_.file) {
       auto code_chunk = chunk::make_empty();
       if (auto err = read(args_.file->inner, code_chunk); err.valid()) {
         diagnostic::error(err)
           .note("failed to read code from file")
           .emit(ctx.dh());
-        co_return std::nullopt;
+        co_return None{};
       }
       co_return detail::strip_leading_indentation(std::string{
         reinterpret_cast<const char*>(code_chunk->data()), code_chunk->size()});
@@ -1027,7 +1034,7 @@ private:
       make_secret_request("code", args_.code, code, ctx.dh())};
     auto result = co_await ctx.resolve_secrets(std::move(requests));
     if (not result) {
-      co_return std::nullopt;
+      co_return None{};
     }
     co_return detail::strip_leading_indentation(std::move(code));
   }
@@ -1092,23 +1099,23 @@ private:
   }
 
   auto read_output_batch(ReadPipe& pipe)
-    -> Task<std::optional<std::shared_ptr<arrow::RecordBatch>>> {
+    -> Task<Option<std::shared_ptr<arrow::RecordBatch>>> {
     auto fd = pipe.native_fd();
     auto batch = co_await spawn_blocking(
-      [fd]() -> std::optional<std::shared_ptr<arrow::RecordBatch>> {
+      [fd]() -> Option<std::shared_ptr<arrow::RecordBatch>> {
         auto file = arrow_fd_wrapper{fd};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(
           &file, arrow_ipc_read_options());
         if (not reader.ok()) {
-          return std::nullopt;
+          return None{};
         }
         auto result_batch = (*reader)->ReadNext();
         if (not result_batch.ok() or not result_batch->batch) {
-          return std::nullopt;
+          return None{};
         }
         auto closing = (*reader)->ReadNext();
         if (not closing.ok()) {
-          return std::nullopt;
+          return None{};
         }
         static_cast<void>((*reader)->Close());
         return result_batch->batch;
@@ -1164,14 +1171,14 @@ private:
                     ec);
       }
     }
-    venv_.reset();
+    venv_ = None{};
   }
 
   Lifecycle lifecycle_ = Lifecycle::starting;
   config config_;
   PythonArgs args_;
-  std::optional<Subprocess> subprocess_;
-  std::optional<std::filesystem::path> venv_;
+  Option<Subprocess> subprocess_ = None{};
+  Option<std::filesystem::path> venv_ = None{};
 };
 
 class plugin final : public virtual operator_plugin2<python_operator>,

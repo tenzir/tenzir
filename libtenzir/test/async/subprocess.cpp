@@ -100,4 +100,21 @@ TEST("subprocess spawns cat with pipe wrappers") {
   }());
 }
 
+TEST("subprocess terminate_or_kill stops a running child") {
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto spec = SubprocessSpec{};
+    spec.argv = {"sleep", "30"};
+    spec.use_path = true;
+    spec.kill_child_on_destruction = true;
+    auto subprocess = co_await Subprocess::spawn(std::move(spec));
+    auto poll = co_await subprocess.wait_timeout(std::chrono::milliseconds{0});
+    check(poll.running());
+    auto return_code
+      = co_await subprocess.terminate_or_kill(std::chrono::milliseconds{100});
+    check(not return_code.running());
+    check(return_code.killed());
+    check_eq(return_code.killSignal(), SIGTERM);
+  }());
+}
+
 } // namespace tenzir
