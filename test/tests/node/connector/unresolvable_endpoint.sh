@@ -3,7 +3,9 @@
 # Regression test: tenzir must not segfault when the configured
 # endpoint hostname cannot be resolved.
 exit_code=0
-tenzir --bare-mode --endpoint=this-host-does-not-exist.invalid:1234 'from {}' 2>/dev/null || exit_code=$?
+$TENZIR_BINARY --bare-mode --endpoint=this-host-does-not-exist.invalid:1234 \
+  --tenzir.connection-timeout=5s --tenzir.connection-retry-delay=0ms \
+  'from {}' 2>/dev/null || exit_code=$?
 # A segfault yields exit code 139 (128 + SIGSEGV). Any non-signal error
 # means the crash is fixed.
 if [ "$exit_code" -ge 128 ]; then
