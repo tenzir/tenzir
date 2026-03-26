@@ -1,0 +1,6 @@
+error: `list_separator` and `null_value` conflict
+ --> tests/operators/xsv/error_tsv_list_separator_conflicts_with_default_null_value.tql:6:27
+  |
+6 |   read_tsv list_separator="-"
+  |                           ^^^ 
+  = note: `-` is a substring of `-`

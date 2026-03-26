@@ -9,19 +9,19 @@
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
-#include "tenzir/concept/parseable/string/quoted_string.hpp"
-#include "tenzir/concept/parseable/tenzir/data.hpp"
-#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/async.hpp"
+#include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/parser_interface.hpp"
-#include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
-#include "tenzir/tql/basic.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/plugin_api.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
 
@@ -31,7 +31,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <iterator>
 #include <string_view>
 
 namespace tenzir::plugins::xsv {
@@ -415,6 +414,134 @@ protected:
   mode mode_ = mode::all_required;
 };
 
+// ── Args structs for the new executor ──────────────────────────────────────
+
+struct WriteXsvArgs {
+  located<std::string> field_separator;
+  located<std::string> list_separator;
+  located<std::string> null_value;
+  bool no_header = false;
+};
+
+struct ReadXsvArgs {
+  // Core separators — required for read_xsv, pre-filled for csv/tsv/ssv.
+  located<std::string> field_separator;
+  located<std::string> list_separator;
+  located<std::string> null_value;
+  // Optional parsing knobs.
+  located<std::string> quotes = {"\"'", location::unknown};
+  bool auto_expand = false;
+  bool allow_comments = false;
+  std::optional<ast::expression> header;
+  // multi_series_builder policy (from docs).
+  std::optional<located<std::string>> schema;
+  std::optional<located<std::string>> selector;
+  // multi_series_builder settings (from docs).
+  bool schema_only = false;
+  bool raw = false;
+  std::optional<located<std::string>> unflatten_separator;
+  bool merge = true;
+  std::optional<duration> batch_timeout;
+  std::optional<uint64_t> batch_size;
+  // Internal: used in diagnostic messages; set at Describer construction time.
+  std::string name = "xsv";
+};
+
+// Handles for args that the validate() callback needs to inspect.
+struct ReadXsvCommonHandles {
+  Argument<ReadXsvArgs, located<std::string>> quotes;
+  Argument<ReadXsvArgs, ast::expression> header;
+  Argument<ReadXsvArgs, located<std::string>> schema;
+  Argument<ReadXsvArgs, located<std::string>> selector;
+  Argument<ReadXsvArgs, bool> schema_only;
+  Argument<ReadXsvArgs, located<std::string>> unflatten_separator;
+};
+
+/// Adds all common read_xsv optional args to the Describer (everything
+/// except field/list/null separators, which callers add themselves).
+/// Returns handles for the args needed by the validate() callback.
+template <class... Impls>
+auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
+  -> ReadXsvCommonHandles {
+  auto quotes_arg = d.named_optional("quotes", &ReadXsvArgs::quotes);
+  d.named("auto_expand", &ReadXsvArgs::auto_expand);
+  d.named("comments", &ReadXsvArgs::allow_comments);
+  auto header_arg
+    = d.named("header", &ReadXsvArgs::header, "list<string>|string");
+  auto schema_arg = d.named("schema", &ReadXsvArgs::schema);
+  auto selector_arg = d.named("selector", &ReadXsvArgs::selector);
+  auto so_arg = d.named("schema_only", &ReadXsvArgs::schema_only);
+  d.named("raw", &ReadXsvArgs::raw);
+  auto unflatten_arg
+    = d.named("unflatten_separator", &ReadXsvArgs::unflatten_separator);
+  d.named("merge", &ReadXsvArgs::merge);
+  d.named("_batch_timeout", &ReadXsvArgs::batch_timeout);
+  d.named("_batch_size", &ReadXsvArgs::batch_size);
+  return {quotes_arg,   header_arg, schema_arg,
+          selector_arg, so_arg,     unflatten_arg};
+}
+
+auto validate_quote_conflicts(
+  DescribeCtx& ctx, const located<std::string>& quotes,
+  const located<std::string>& field_separator,
+  const std::optional<located<std::string>>& list_separator,
+  const std::optional<located<std::string>>& null_value) -> void {
+  for (const char q : quotes.inner) {
+    if (field_separator.inner.find(q) != std::string::npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`field_separator=\"{}\"`",
+                        q, field_separator.inner)
+        .primary(quotes.source)
+        .primary(field_separator.source)
+        .emit(ctx);
+    }
+    if (list_separator and list_separator->inner.find(q) != std::string::npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`list_separator=\"{}\"`",
+                        q, list_separator->inner)
+        .primary(quotes.source)
+        .primary(list_separator->source)
+        .emit(ctx);
+    }
+    if (null_value and null_value->inner.find(q) != std::string::npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`null_value=\"{}\"`",
+                        q, null_value->inner)
+        .primary(quotes.source)
+        .primary(null_value->source)
+        .emit(ctx);
+    }
+  }
+}
+
+auto validate_multi_series_builder_args(DescribeCtx& ctx,
+                                        const ReadXsvCommonHandles& common)
+  -> void {
+  if (auto sc = ctx.get(common.schema)) {
+    if (sc->inner.empty()) {
+      diagnostic::error("`schema` must not be empty")
+        .primary(sc->source)
+        .emit(ctx);
+    } else if (ctx.get(common.selector).has_value()) {
+      diagnostic::error("`schema` and `selector` are mutually exclusive")
+        .primary(sc->source)
+        .emit(ctx);
+    }
+  }
+  if (auto so = ctx.get(common.schema_only);
+      so.has_value() and *so and not ctx.get(common.schema).has_value()
+      and not ctx.get(common.selector).has_value()) {
+    diagnostic::error("`schema_only` requires `schema` or `selector`").emit(ctx);
+  }
+  if (auto u = ctx.get(common.unflatten_separator);
+      u.has_value() and u->inner.empty()) {
+    diagnostic::error("`unflatten_separator` must not be empty")
+      .primary(u->source)
+      .emit(ctx);
+  }
+}
+
+// WriteXsv and ReadXsv are defined after xsv_printer_impl and parse_line.
 struct xsv_printer_impl {
   xsv_printer_impl(std::string_view sep, std::string_view list_sep,
                    std::string_view null)
@@ -726,6 +853,308 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
 }
 } // namespace
 
+// ── WriteXsv ────────────────────────────────────────────────────────────────
+
+class WriteXsv final : public Operator<table_slice, chunk_ptr> {
+public:
+  explicit WriteXsv(WriteXsvArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    if (input.rows() == 0) {
+      co_return;
+    }
+    if (not args_.no_header) {
+      if (not schema_) {
+        schema_ = input.schema();
+      } else if (*schema_ != input.schema()) {
+        diagnostic::error(
+          "multiple schemas are not supported when header is enabled")
+          .note("got schema `{}` after schema `{}`", input.schema(), *schema_)
+          .emit(ctx);
+        failed_ = true;
+        co_return;
+      }
+    }
+    auto metadata = chunk_metadata{.content_type = content_type()};
+    auto printer = xsv_printer_impl{
+      args_.field_separator.inner,
+      args_.list_separator.inner,
+      args_.null_value.inner,
+    };
+    auto buffer = std::vector<char>{};
+    auto out_iter = std::back_inserter(buffer);
+    auto resolved_slice = flatten(resolve_enumerations(input)).slice;
+    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+    for (const auto& row : values3(*array)) {
+      TENZIR_ASSERT(row);
+      if (first_ and not args_.no_header) {
+        printer.print_header(out_iter, *row);
+        first_ = false;
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
+      const auto ok = printer.print_values(out_iter, *row);
+      TENZIR_ASSERT(ok);
+      out_iter = fmt::format_to(out_iter, "\n");
+    }
+    co_await push(chunk::make(std::move(buffer), std::move(metadata)));
+  }
+
+private:
+  auto content_type() const -> std::string {
+    if (args_.field_separator.inner == ",") {
+      return "text/csv";
+    }
+    if (args_.field_separator.inner == "\t") {
+      return "text/tab-separated-values";
+    }
+    return "text/plain";
+  }
+
+  WriteXsvArgs args_;
+  bool first_ = true;
+  bool failed_ = false;
+  Option<type> schema_;
+};
+
+// ── ReadXsv ─────────────────────────────────────────────────────────────────
+
+class ReadXsv final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadXsv(ReadXsvArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    quoting_ = detail::quoting_escaping_policy{
+      .quotes = args_.quotes.inner,
+      .backslashes_escape = true,
+      .doubled_quotes_escape = true,
+    };
+    // ── Build multi_series_builder options from args_ ─────────────────────────
+    auto msb_opts = multi_series_builder::options{};
+    msb_opts.settings.default_schema_name
+      = fmt::format("tenzir.{}", args_.name);
+    msb_opts.settings.schema_only = args_.schema_only;
+    msb_opts.settings.merge = args_.merge;
+    msb_opts.settings.raw = args_.raw;
+    if (args_.unflatten_separator) {
+      msb_opts.settings.unnest_separator = args_.unflatten_separator->inner;
+    }
+    if (args_.batch_timeout) {
+      msb_opts.settings.timeout = *args_.batch_timeout;
+    }
+    if (args_.batch_size) {
+      msb_opts.settings.desired_batch_size = *args_.batch_size;
+    }
+    if (args_.schema and args_.selector) {
+      diagnostic::error("`schema` and `selector` are mutually exclusive")
+        .emit(ctx.dh());
+      co_return;
+    }
+    if (args_.schema) {
+      auto schema = modules::get_schema(args_.schema->inner);
+      if (not schema) {
+        if (args_.schema_only) {
+          diagnostic::error("schema `{}` does not exist, but `schema_only` "
+                            "was specified",
+                            args_.schema->inner)
+            .primary(args_.schema->source)
+            .emit(ctx.dh());
+          co_return;
+        }
+        diagnostic::warning("schema `{}` does not exist", args_.schema->inner)
+          .primary(args_.schema->source)
+          .hint("if you know the input's shape, define the schema")
+          .emit(ctx.dh());
+      }
+      msb_opts.policy
+        = multi_series_builder::policy_schema{args_.schema->inner};
+    } else if (args_.selector) {
+      auto parsed = parse_selector_value(args_.selector->inner);
+      if (not parsed) {
+        diagnostic::error("invalid selector `{}`", args_.selector->inner)
+          .primary(args_.selector->source)
+          .emit(ctx.dh());
+        co_return;
+      }
+      msb_opts.policy = std::move(*parsed);
+    }
+    // ── Build xsv_parser_options from args_ ───────────────────────────────────
+    opts_ = xsv_parser_options{
+      .name = args_.name,
+      .field_separator = args_.field_separator.inner,
+      .list_separator = args_.list_separator.inner,
+      .null_value = args_.null_value.inner,
+      .quotes = args_.quotes.inner,
+      .auto_expand = args_.auto_expand,
+      .allow_comments = args_.allow_comments,
+      .header = {},
+      .builder_options = std::move(msb_opts),
+    };
+    // ── Eagerly evaluate the header expression if provided ───────────────────
+    if (args_.header) {
+      auto result = const_eval(*args_.header, ctx.dh());
+      if (not result) {
+        co_return;
+      }
+      auto header_data = std::move(*result);
+      auto maybe_header = match(
+        header_data,
+        [&](const std::string& s) -> failure_or<std::vector<std::string>> {
+          return parse_header(s, args_.header->get_location(), opts_, quoting_,
+                              ctx.dh());
+        },
+        [&](list& l) -> failure_or<std::vector<std::string>> {
+          if (l.empty() and not args_.auto_expand) {
+            diagnostic::error("`header` list is empty")
+              .primary(*args_.header)
+              .emit(ctx.dh());
+            return failure::promise();
+          }
+          auto fields = std::vector<std::string>{};
+          fields.reserve(l.size());
+          for (auto& v : l) {
+            if (auto* s = try_as<std::string>(v)) {
+              fields.push_back(std::move(*s));
+            } else {
+              const auto t = type::infer(v);
+              diagnostic::error("expected `list<string>`, got `{}` in `header` "
+                                "list",
+                                t ? t->kind() : type_kind{})
+                .primary(*args_.header)
+                .emit(ctx.dh());
+              return failure::promise();
+            }
+          }
+          warn_on_duplicate_fields(fields, args_.header->get_location(),
+                                   ctx.dh());
+          return fields;
+        },
+        [&](const auto&) -> failure_or<std::vector<std::string>> {
+          const auto t = type::infer(header_data);
+          diagnostic::error("`header` must be a `string` or `list<string>`")
+            .primary(*args_.header, "got `{}`", t ? t->kind() : type_kind{})
+            .emit(ctx.dh());
+          return failure::promise();
+        });
+      if (not maybe_header) {
+        co_return;
+      }
+      header_ = std::move(*maybe_header);
+      original_field_count_ = header_->size();
+      opts_.header = *header_;
+    }
+    // ── Build diagnostic handler and MSB ─────────────────────────────────────
+    dh_ = std::make_unique<transforming_diagnostic_handler>(
+      ctx.dh(), [this](diagnostic d) {
+        d.message = fmt::format("{} parser: {}", opts_.name, d.message);
+        d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                        fmt::format("line {}", line_counter_));
+        return d;
+      });
+    msb_ = multi_series_builder(opts_.builder_options, *dh_);
+    co_return;
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not msb_) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      for (auto& slice : msb_->yield_ready_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
+      co_return;
+    }
+    auto& dh = *dh_;
+    const auto* begin = reinterpret_cast<const char*>(input->data());
+    const auto* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (const auto* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current}, dh);
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_, dh);
+        buffer_.clear();
+      }
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+      for (auto& slice : msb_->yield_ready_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
+    }
+    buffer_.append(begin, end);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (not msb_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (not buffer_.empty()) {
+      process_line(buffer_, *dh_);
+      buffer_.clear();
+    }
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
+    ++line_counter_;
+    if (line.empty()) {
+      return;
+    }
+    if (opts_.allow_comments and line.front() == '#') {
+      return;
+    }
+    if (not header_) {
+      auto parsed = parse_header(line, location::unknown, opts_, quoting_, dh);
+      if (not parsed) {
+        return;
+      }
+      header_ = std::move(*parsed);
+      original_field_count_ = header_->size();
+      opts_.header = *header_;
+      return;
+    }
+    auto r = msb_->record();
+    parse_line(line, *header_, *original_field_count_, r, opts_, line_counter_,
+               quoting_, dh);
+  }
+
+  ReadXsvArgs args_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  Option<std::vector<std::string>> header_;
+  Option<size_t> original_field_count_;
+  size_t line_counter_ = 0;
+  xsv_parser_options opts_;
+  detail::quoting_escaping_policy quoting_;
+  std::unique_ptr<transforming_diagnostic_handler> dh_;
+  Option<multi_series_builder> msb_;
+};
+
 class xsv_parser final : public plugin_parser {
 public:
   xsv_parser() = default;
@@ -919,11 +1348,13 @@ using csv_plugin = configured_xsv_plugin<"csv", ",", ";", "">;
 using tsv_plugin = configured_xsv_plugin<"tsv", "\t", ",", "-">;
 using ssv_plugin = configured_xsv_plugin<"ssv", " ", ",", "-">;
 
-class read_xsv : public operator_plugin2<parser_adapter<xsv_parser>> {
+class read_xsv : public operator_plugin2<parser_adapter<xsv_parser>>,
+                 public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_xsv";
   }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
@@ -936,13 +1367,39 @@ public:
     return std::make_unique<parser_adapter<xsv_parser>>(
       xsv_parser{std::move(opts)});
   }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadXsvArgs, ReadXsv>{};
+    auto field_sep = d.named("field_separator", &ReadXsvArgs::field_separator);
+    auto list_sep = d.named("list_separator", &ReadXsvArgs::list_separator);
+    auto null_val = d.named("null_value", &ReadXsvArgs::null_value);
+    auto common = add_read_xsv_args(d);
+    d.validate(
+      [field_sep, list_sep, null_val, common](DescribeCtx& ctx) -> Empty {
+        TRY(auto fs, ctx.get(field_sep));
+        TRY(auto ls, ctx.get(list_sep));
+        TRY(auto nv, ctx.get(null_val));
+        auto& dh = ctx;
+        (void)check_non_empty("field_separator", fs, dh);
+        (void)check_no_substrings(dh, {{"field_separator", fs},
+                                       {"list_separator", ls},
+                                       {"null_value", nv}});
+        auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
+        validate_quote_conflicts(ctx, qs, fs, std::optional{ls},
+                                 std::optional{nv});
+        validate_multi_series_builder_args(ctx, common);
+        return {};
+      });
+    return d.without_optimize();
+  }
 };
 
 template <detail::string_literal Name, detail::string_literal Sep,
           detail::string_literal ListSep, detail::string_literal Null,
           detail::string_literal... mimes>
 class configured_read_xsv_plugin final
-  : public operator_plugin2<parser_adapter<xsv_parser>> {
+  : public operator_plugin2<parser_adapter<xsv_parser>>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
@@ -967,13 +1424,57 @@ public:
       xsv_parser{std::move(opts)});
   }
 
+  auto describe() const -> Description override {
+    // Pre-fill separator defaults; field_separator is fixed and not exposed.
+    auto defaults = ReadXsvArgs{};
+    defaults.field_separator = {std::string{Sep}, location::unknown};
+    defaults.list_separator = {std::string{ListSep}, location::unknown};
+    defaults.null_value = {std::string{Null}, location::unknown};
+    defaults.name = std::string{Name};
+    auto d = Describer<ReadXsvArgs, ReadXsv>{std::move(defaults)};
+    auto list_sep
+      = d.named_optional("list_separator", &ReadXsvArgs::list_separator);
+    auto null_val = d.named_optional("null_value", &ReadXsvArgs::null_value);
+    auto common = add_read_xsv_args(d);
+    d.validate([list_sep, null_val, common,
+                fixed_sep = std::string{Sep}](DescribeCtx& ctx) -> Empty {
+      auto fs_loc = located{fixed_sep, location::unknown};
+      auto ls = ctx.get(list_sep);
+      auto nv = ctx.get(null_val);
+      if (ls) {
+        (void)check_no_substrings(ctx, {{"field_separator", fs_loc},
+                                        {"list_separator", *ls}});
+      }
+      if (nv) {
+        (void)check_no_substrings(ctx, {{"field_separator", fs_loc},
+                                        {"null_value", *nv}});
+      }
+      auto effective_ls
+        = ls.value_or(located{std::string{ListSep}, location::unknown});
+      auto effective_nv
+        = nv.value_or(located{std::string{Null}, location::unknown});
+      (void)check_no_substrings(ctx, {{"list_separator", effective_ls},
+                                      {"null_value", effective_nv}});
+      auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
+      validate_quote_conflicts(ctx, qs, fs_loc, effective_ls, effective_nv);
+      validate_multi_series_builder_args(ctx, common);
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto read_properties() const -> read_properties_t override {
     return {.extensions = {std::string{Name}}, .mime_types = {mimes...}};
   }
 };
 
-class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
+class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>>,
+                  public virtual OperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "write_xsv";
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = xsv_printer_options{};
@@ -984,12 +1485,34 @@ public:
     return std::make_unique<writer_adapter<xsv_printer>>(
       xsv_printer{std::move(args)});
   }
+
+  auto describe() const -> Description override {
+    auto d = Describer<WriteXsvArgs, WriteXsv>{};
+    auto field_sep = d.named("field_separator", &WriteXsvArgs::field_separator);
+    auto list_sep = d.named("list_separator", &WriteXsvArgs::list_separator);
+    auto null_val = d.named("null_value", &WriteXsvArgs::null_value);
+    d.named("no_header", &WriteXsvArgs::no_header);
+    d.validate([field_sep, list_sep, null_val](DescribeCtx& ctx) -> Empty {
+      TRY(auto fs, ctx.get(field_sep));
+      TRY(auto ls, ctx.get(list_sep));
+      TRY(auto nv, ctx.get(null_val));
+      auto& dh = ctx;
+      (void)check_non_empty("field_separator", fs, dh);
+      (void)check_non_empty("list_separator", ls, dh);
+      (void)check_no_substrings(dh, {{"field_separator", fs},
+                                     {"list_separator", ls},
+                                     {"null_value", nv}});
+      return {};
+    });
+    return d.without_optimize();
+  }
 };
 
 template <detail::string_literal Name, detail::string_literal Sep,
           detail::string_literal ListSep, detail::string_literal Null>
 class configured_write_xsv_plugin final
-  : public operator_plugin2<writer_adapter<xsv_printer>> {
+  : public operator_plugin2<writer_adapter<xsv_printer>>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("write_{}", Name);
@@ -1008,6 +1531,42 @@ public:
     TRY(opts.validate(ctx));
     return std::make_unique<writer_adapter<xsv_printer>>(
       xsv_printer{std::move(opts)});
+  }
+
+  auto describe() const -> Description override {
+    // Pre-fill separator defaults; field_separator is fixed and not exposed.
+    auto d = Describer<WriteXsvArgs, WriteXsv>{WriteXsvArgs{
+      .field_separator = {std::string{Sep}, location::unknown},
+      .list_separator = {std::string{ListSep}, location::unknown},
+      .null_value = {std::string{Null}, location::unknown},
+    }};
+    auto list_sep
+      = d.named_optional("list_separator", &WriteXsvArgs::list_separator);
+    auto null_val = d.named_optional("null_value", &WriteXsvArgs::null_value);
+    d.named("no_header", &WriteXsvArgs::no_header);
+    d.validate([list_sep, null_val,
+                fixed_sep = std::string{Sep}](DescribeCtx& ctx) -> Empty {
+      auto fs_loc = located{fixed_sep, location::unknown};
+      auto ls = ctx.get(list_sep);
+      auto nv = ctx.get(null_val);
+      if (ls) {
+        (void)check_non_empty("list_separator", *ls, ctx);
+        (void)check_no_substrings(ctx, {{"field_separator", fs_loc},
+                                        {"list_separator", *ls}});
+      }
+      if (nv) {
+        (void)check_no_substrings(ctx, {{"field_separator", fs_loc},
+                                        {"null_value", *nv}});
+      }
+      auto effective_ls
+        = ls.value_or(located{std::string{ListSep}, location::unknown});
+      auto effective_nv
+        = nv.value_or(located{std::string{Null}, location::unknown});
+      (void)check_no_substrings(ctx, {{"list_separator", effective_ls},
+                                      {"null_value", effective_nv}});
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto write_properties() const -> write_properties_t override {
