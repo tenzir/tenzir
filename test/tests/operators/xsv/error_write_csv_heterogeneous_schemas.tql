@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from_stdin { read_ndjson }
+batch 1
+drop_null_fields
+write_csv

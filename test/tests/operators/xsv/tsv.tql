@@ -1,0 +1,4 @@
+from_file f"{env("TENZIR_INPUTS")}/xsv/sample.tsv" {
+    read_tsv
+}
+write_tsv

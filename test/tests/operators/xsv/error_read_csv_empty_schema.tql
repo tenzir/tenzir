@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_file f"{env("TENZIR_INPUTS")}/xsv/sample.csv" {
+  read_csv schema=""
+}

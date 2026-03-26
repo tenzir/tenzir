@@ -1,2 +1,0 @@
-from f"{env("TENZIR_INPUTS")}/xsv/sample.tsv"
-write_tsv
