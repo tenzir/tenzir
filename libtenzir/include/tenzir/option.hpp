@@ -155,9 +155,12 @@ public:
     return *this;
   }
 
+  auto operator=(Option const&) -> Option& = default;
+  auto operator=(Option&&) -> Option& = default;
+
   /// Assigns a value (non-reference `T` only).
   template <class U = T>
-    requires(not std::is_reference_v<T> and std::constructible_from<T, U>)
+    requires(not std::is_reference_v<T> and std::convertible_to<U, T>)
   auto operator=(U&& value) -> Option& {
     storage_.emplace(std::forward<U>(value));
     return *this;
@@ -165,7 +168,7 @@ public:
 
   /// Rebinds to a reference (reference `T` only).
   template <class U = std::remove_reference_t<T>>
-    requires(std::is_reference_v<T> and std::convertible_to<U&, T>)
+    requires(std::is_reference_v<T> and std::convertible_to<U&, T&>)
   auto operator=(U& ref) -> Option& {
     storage_.emplace(ref);
     return *this;
