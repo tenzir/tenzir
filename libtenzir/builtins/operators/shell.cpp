@@ -484,6 +484,28 @@ auto wait_for_exit(Arc<MessageQueue> queue, Subprocess& subprocess)
   }
 }
 
+auto wait_for_exit_after_write_failure(Arc<MessageQueue> queue,
+                                       Subprocess& subprocess) -> Task<void> {
+  auto failure = Option<TaskFailed>{};
+  try {
+    auto return_code
+      = co_await subprocess.wait_timeout(std::chrono::milliseconds{50});
+    if (return_code.running()) {
+      return_code
+        = co_await subprocess.terminate_or_kill(std::chrono::seconds{1});
+    }
+    co_await queue->enqueue(ProcessExited{return_code});
+  } catch (std::exception const& ex) {
+    failure = TaskFailed{
+      .error = ex.what(),
+      .note = "failed to terminate child process after stdin write failure",
+    };
+  }
+  if (failure.is_some()) {
+    co_await queue->enqueue(std::move(*failure));
+  }
+}
+
 auto process_exit_error(const folly::ProcessReturnCode& return_code)
   -> Option<std::string> {
   if (return_code.exited()) {
@@ -715,24 +737,7 @@ public:
       }
       start_wait_for_exit(ctx);
     } else if (write_failure_.is_some() and not child_exited_) {
-      if (not termination_attempted_) {
-        termination_attempted_ = true;
-        co_return FinalizeBehavior::continue_;
-      }
-      TENZIR_ASSERT(subprocess_);
-      try {
-        auto return_code
-          = co_await subprocess_->terminate_or_kill(std::chrono::seconds{1});
-        child_exited_ = true;
-        exit_error_ = process_exit_error(return_code);
-        co_await finish_if_ready(ctx.dh());
-      } catch (std::exception const& ex) {
-        lifecycle_ = Lifecycle::done;
-        diagnostic::error("{}", ex.what())
-          .note("failed to terminate child process after stdin write failure")
-          .emit(ctx.dh());
-        co_return FinalizeBehavior::done;
-      }
+      start_wait_for_exit_after_write_failure(ctx);
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
@@ -753,11 +758,21 @@ private:
 
   auto start_wait_for_exit(OpCtx& ctx) -> void {
     TENZIR_ASSERT(subprocess_);
-    if (exit_wait_started_) {
+    if (exit_task_started_) {
       return;
     }
-    exit_wait_started_ = true;
+    exit_task_started_ = true;
     ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
+  }
+
+  auto start_wait_for_exit_after_write_failure(OpCtx& ctx) -> void {
+    TENZIR_ASSERT(subprocess_);
+    if (exit_task_started_) {
+      return;
+    }
+    exit_task_started_ = true;
+    ctx.spawn_task(
+      wait_for_exit_after_write_failure(message_queue_, *subprocess_));
   }
 
   auto finish_if_ready(diagnostic_handler& dh) -> Task<void> {
@@ -795,8 +810,7 @@ private:
                                            message_queue_capacity};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
-  bool exit_wait_started_ = false;
-  bool termination_attempted_ = false;
+  bool exit_task_started_ = false;
   Option<std::string> exit_error_ = None{};
   Option<WriteFailure> write_failure_ = None{};
 };
