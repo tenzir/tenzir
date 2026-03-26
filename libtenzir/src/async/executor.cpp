@@ -760,11 +760,10 @@ private:
       std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
                   pipe.operators.end());
     }
-    // TODO: What to do about diagnostics here?
     auto output = pipe.infer_type(input, dh_);
     // The caller is responsible for passing a well-typed pipeline that
-    // type-checks against `input`. Filter operators are type-preserving, so
-    // this must succeed if the caller upholds that contract.
+    // type-checks against `input`. And since optimizations are type-preserving,
+    // we know that this cannot fail.
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
