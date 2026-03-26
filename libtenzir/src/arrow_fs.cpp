@@ -135,7 +135,7 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
       }
       processing_[open.slot]->file = open.file.MoveValueUnsafe();
       const auto key = static_cast<int64_t>(open.slot);
-      co_await ctx.spawn_sub(key, base_args_.pipe.inner, tag_v<chunk_ptr>);
+      co_await ctx.spawn_sub<chunk_ptr>(key, base_args_.pipe.inner);
       // Queue the first read.
       auto file = processing_[open.slot]->file;
       auto offset = processing_[open.slot]->offset;
@@ -155,7 +155,7 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
       const auto key = static_cast<int64_t>(read.slot);
       auto sub = ctx.get_sub(key);
       TENZIR_ASSERT(sub);
-      auto& pipe = as<OpenPipeline<chunk_ptr>>(*sub);
+      auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
       if (not read.result.ok()) {
         diagnostic::error("failed to read from `{}`",
                           processing_[read.slot]->path)

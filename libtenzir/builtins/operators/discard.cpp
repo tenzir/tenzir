@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/substitute_ctx.hpp"

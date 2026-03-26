@@ -8,17 +8,18 @@
 
 #include "tenzir/ir.hpp"
 
+#include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
-#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
 
@@ -212,11 +213,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> {
     // Spawn subpipelines if they are not already spawned (due to restore).
-    if (not ctx.get_sub(true).has_value()) {
-      co_await ctx.spawn_sub(true, args_.consequence, tag_v<table_slice>);
+    if (not ctx.get_sub(true).is_some()) {
+      co_await ctx.spawn_sub<table_slice>(true, args_.consequence);
       if (args_.alternative) {
-        co_await ctx.spawn_sub(false, args_.alternative->pipeline,
-                               tag_v<table_slice>);
+        co_await ctx.spawn_sub<table_slice>(false, args_.alternative->pipeline);
       }
     }
   }
@@ -224,14 +224,14 @@ public:
   auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
     -> Task<void> {
     // FIXME: If the inner subpipelines terminate and get erased, this can fail.
-    auto true_sub = check(ctx.get_sub(true));
-    auto consequence = as<OpenPipeline<table_slice>>(std::move(true_sub));
+    auto& true_sub = ctx.get_sub(true).unwrap();
+    auto& consequence = as<SubHandle<table_slice>>(true_sub);
     auto false_sub = ctx.get_sub(false);
     auto alternative
-      = false_sub
-          ? std::optional{as<OpenPipeline<table_slice>>(std::move(*false_sub))}
-          : std::nullopt;
-    TENZIR_ASSERT(alternative.has_value() == args_.alternative.has_value());
+      = false_sub ? Option<SubHandle<table_slice>&>{as<SubHandle<table_slice>>(
+                      *false_sub)}
+                  : None{};
+    TENZIR_ASSERT(alternative.is_some() == args_.alternative.has_value());
     auto true_events = std::vector<table_slice>{};
     auto false_events = std::vector<table_slice>{};
     auto end = int64_t{0};
@@ -705,6 +705,11 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
     result = result.substr(5);
   }
   return result;
+}
+
+ir::pipeline::pipeline(std::vector<let> lets,
+                       std::vector<Box<Operator>> operators)
+  : lets{std::move(lets)}, operators{std::move(operators)} {
 }
 
 } // namespace tenzir

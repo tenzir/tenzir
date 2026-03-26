@@ -59,7 +59,7 @@ public:
       TENZIR_ASSERT(next_ > 0);
       auto sub = ctx.get_sub(next_ - 1);
       if (sub) {
-        auto& pipe = as<OpenPipeline<Input>>(*sub);
+        auto& pipe = as<SubHandle<Input>>(*sub);
         co_await pipe.close();
       }
     }
@@ -90,7 +90,7 @@ protected:
     last_started_ = steady_clock::now();
     sleep_done_ = false;
     sub_finished_ = false;
-    co_await ctx.spawn_sub(next_, args_.pipe.inner, tag_v<Input>);
+    co_await ctx.spawn_sub<Input>(next_, args_.pipe.inner);
     ++next_;
   }
 
@@ -133,7 +133,7 @@ public:
                   input.rows());
       co_return;
     }
-    auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+    auto& pipe = as<SubHandle<table_slice>>(*sub);
     std::ignore = co_await pipe.push(std::move(input));
   }
 };

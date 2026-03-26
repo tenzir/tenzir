@@ -248,7 +248,11 @@ struct SubPipeline {
       from_control_sender{
         Option<Sender<FromControl>>{std::move(from_control_sender)}},
       to_control_receiver{std::move(to_control_receiver)},
-      input{input} {
+      input{input},
+      handle{match(input, [this]<class Input>(tag<Input>) -> AnySubHandle {
+        // TODO: There surely is a better way to model this than passing `this`.
+        return AnySubHandle{std::in_place_type<SubHandle<Input>>, *this};
+      })} {
   }
 
   auto send(Signal signal) -> Task<void> {
@@ -257,15 +261,6 @@ struct SubPipeline {
       *push, [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
         return push(std::move(signal));
       });
-  }
-
-  auto get_handle() -> AnyOpenPipeline {
-    return match(input, [&]<class In>(tag<In>) -> AnyOpenPipeline {
-      if (closed_data or not push) {
-        return OpenPipeline<In>{None{}};
-      }
-      return OpenPipeline<In>{as<Box<Push<OperatorMsg<In>>>>(*push)};
-    });
   }
 
   /// We keep the push handle until we begin its shutdown sequence.
@@ -286,7 +281,42 @@ struct SubPipeline {
   bool from_sub_done = false;
   /// Set when process(SubMessage) observes the to_control channel drain.
   bool to_control_done = false;
+  /// Handle that is given out to the operator implementation.
+  AnySubHandle handle;
 };
+
+template <class Input>
+template <std::same_as<Input> In>
+auto SubHandle<Input>::push(In input) -> Task<Result<void, In>> {
+  if (self_.closed_data) {
+    co_return Err{std::move(input)};
+  }
+  auto& push = as<Box<Push<OperatorMsg<Input>>>>(self_.push.unwrap());
+  co_await push(std::move(input));
+  co_return {};
+}
+
+template <class Input>
+auto SubHandle<Input>::close() -> Task<void>
+  requires(not std::same_as<Input, void>)
+{
+  if (self_.closed_data) {
+    co_return;
+  }
+  auto& push = as<Box<Push<OperatorMsg<Input>>>>(self_.push.unwrap());
+  co_await push(EndOfData{});
+  self_.closed_data = true;
+  co_return;
+}
+
+template class SubHandle<chunk_ptr>;
+template class SubHandle<table_slice>;
+// Explicit instantiation of member template `push` (not covered by template
+// class).
+template auto SubHandle<chunk_ptr>::push(chunk_ptr)
+  -> Task<Result<void, chunk_ptr>>;
+template auto SubHandle<table_slice>::push(table_slice)
+  -> Task<Result<void, table_slice>>;
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
@@ -720,17 +750,17 @@ private:
   }
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline> override {
+    -> Task<AnySubHandle&> override {
     return spawn_sub_impl(std::move(key), std::move(pipe), input, false);
   }
 
   auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline> override {
+    -> Task<AnySubHandle&> override {
     return spawn_sub_impl(std::move(key), std::move(pipe), input, true);
   }
 
   auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
-                      bool fused) -> Task<AnyOpenPipeline> {
+                      bool fused) -> Task<AnySubHandle&> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     if (not fused) {
       // For the parallel operator, which is currently the only user of the
@@ -802,9 +832,8 @@ private:
     // Insert the resulting subpipeline into our internal state before starting
     // its runner so shutdown paths can already observe and drain it.
     auto [it, inserted] = subpipelines_.try_emplace(
-      std::move(key), SubPipeline{std::move(push_sub), std::move(from_sub),
-                                  std::move(from_control_sender),
-                                  std::move(to_control_receiver), input});
+      std::move(key), std::move(push_sub), std::move(from_sub),
+      std::move(from_control_sender), std::move(to_control_receiver), input);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -885,7 +914,7 @@ private:
         // dropping `to_parent` and `to_control_sender`, closing the channels.
       });
     });
-    co_return it->second.get_handle();
+    co_return it->second.handle;
   }
 
   auto add_from_sub_recv(std::unordered_map<data, SubPipeline>::iterator it)
@@ -910,13 +939,13 @@ private:
     });
   }
 
-  auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> override {
+  auto get_sub(SubKeyView key) -> Option<AnySubHandle&> override {
     // TODO: The `materialize` is bad.
     auto it = subpipelines_.find(materialize(key));
     if (it == subpipelines_.end()) {
-      return std::nullopt;
+      return None{};
     }
-    return it->second.get_handle();
+    return it->second.handle;
   }
 
   auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor> override {

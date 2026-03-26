@@ -196,9 +196,8 @@ public:
           close_transport(std::move(transport));
           co_return;
         }
-        auto sub = co_await ctx.spawn_sub(
-          data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
-        pipeline_ = as<OpenPipeline<chunk_ptr>>(sub);
+        co_await ctx.spawn_sub<chunk_ptr>(data{int64_t(conn_id)},
+                                          std::move(pipeline_copy));
         current_conn_id_ = conn_id;
         current_connection_ = Connection{std::move(*transport)};
         auto message_queue = message_queue_;
@@ -208,12 +207,15 @@ public:
                     std::move(bytes_read_counter))));
       },
       [&](Payload payload) -> Task<void> {
-        if (not pipeline_ or not current_conn_id_
-            or payload.conn_id != *current_conn_id_) {
+        if (not current_conn_id_ or payload.conn_id != *current_conn_id_) {
           co_return;
         }
-        auto push_result = co_await pipeline_->push(std::move(payload.chunk));
-        TENZIR_UNUSED(push_result);
+        auto sub_key = data{int64_t(*current_conn_id_)};
+        if (auto sub = ctx.get_sub(make_view(sub_key))) {
+          auto push_result = co_await as<SubHandle<chunk_ptr>>(*sub).push(
+            std::move(payload.chunk));
+          TENZIR_UNUSED(push_result);
+        }
       },
       [&](ConnectionClosed closed) -> Task<void> {
         if (closed.error) {
@@ -228,9 +230,9 @@ public:
         if (current_conn_id_ and *current_conn_id_ == closed.conn_id) {
           current_connection_ = None{};
           current_conn_id_ = None{};
-          if (pipeline_) {
-            co_await pipeline_->close();
-            pipeline_ = None{};
+          auto closed_key = data{int64_t(closed.conn_id)};
+          if (auto sub = ctx.get_sub(make_view(closed_key))) {
+            co_await as<SubHandle<chunk_ptr>>(*sub).close();
           }
         }
       });
@@ -240,7 +242,6 @@ public:
     -> Task<void> override {
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
     if (current_conn_id_ and *current_conn_id_ == conn_id) {
-      pipeline_ = None{};
       if (current_connection_) {
         auto connection = std::move(*current_connection_);
         current_connection_ = None{};
@@ -303,7 +304,6 @@ private:
   folly::EventBase* evb_ = nullptr;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
-  Option<OpenPipeline<chunk_ptr>> pipeline_;
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
   uint64_t next_conn_id_{0};

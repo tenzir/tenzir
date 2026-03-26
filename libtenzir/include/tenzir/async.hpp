@@ -48,6 +48,7 @@
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/result.hpp"
@@ -74,15 +75,22 @@ using SubKeyView = data_view;
 template <class T>
 struct OperatorMsg;
 
+// Forward declaration of the actual implementation in the executor.
+struct SubPipeline;
+
 /// A handle to a subpipeline. May only be used within the main functions of the
 /// operator that do not run concurrently (so not `await_task` or `process_sub`).
 template <class Input>
-class OpenPipeline {
+class SubHandle {
 public:
-  OpenPipeline() noexcept = default;
+  // The handle should not be stored or passed around.
+  SubHandle(SubHandle&&) = delete;
+  auto operator=(SubHandle&&) -> SubHandle& = delete;
+  SubHandle(SubHandle const&) = delete;
+  auto operator=(SubHandle const&) -> SubHandle& = delete;
+  ~SubHandle() = default;
 
-  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) noexcept
-    : push_{push} {
+  explicit SubHandle(SubPipeline& self) noexcept : self_{self} {
   }
 
   template <std::same_as<Input> In>
@@ -92,12 +100,11 @@ public:
     requires(not std::same_as<Input, void>);
 
 private:
-  /// When this is `None`, then the pipeline is closed.
-  Option<Push<OperatorMsg<Input>>&> push_;
+  SubPipeline& self_;
 };
 
-using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
-                                OpenPipeline<table_slice>>;
+using AnySubHandle
+  = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>>;
 
 class OpCtx {
 public:
@@ -125,13 +132,28 @@ public:
   ///
   /// When the pipeline completes, `finish_sub` is called.
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline>
+    -> Task<AnySubHandle&>
     = 0;
+
+  template <class Input>
+  auto spawn_sub(SubKey key, ir::pipeline pipe) -> Task<SubHandle<Input>&> {
+    co_return as<SubHandle<Input>>(
+      co_await spawn_sub(std::move(key), std::move(pipe), tag_v<Input>));
+  }
+
   virtual auto
   spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline>
+    -> Task<AnySubHandle&>
     = 0;
-  virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
+
+  template <class Input>
+  auto spawn_sub_fused(SubKey key, ir::pipeline pipe)
+    -> Task<SubHandle<Input>&> {
+    co_return as<SubHandle<Input>>(
+      co_await spawn_sub_fused(std::move(key), std::move(pipe), tag_v<Input>));
+  }
+
+  virtual auto get_sub(SubKeyView key) -> Option<AnySubHandle&> = 0;
   /// Returns a profiling-wrapped IO executor for this operator.
   virtual auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor>
     = 0;

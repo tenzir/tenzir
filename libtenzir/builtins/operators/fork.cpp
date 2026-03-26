@@ -291,7 +291,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (not started_) {
-      co_await ctx.spawn_sub(int64_t{0}, args_.pipe.inner, tag_v<table_slice>);
+      co_await ctx.spawn_sub<table_slice>(int64_t{0}, args_.pipe.inner);
       started_ = true;
     }
   }
@@ -299,7 +299,7 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (auto sub = ctx.get_sub(int64_t{0})) {
-      auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+      auto& pipe = as<SubHandle<table_slice>>(*sub);
       std::ignore = co_await pipe.push(input);
     }
     co_await push(std::move(input));

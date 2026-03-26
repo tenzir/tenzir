@@ -44,11 +44,11 @@ public:
       if (not copy.substitute(sub_ctx, true)) {
         co_return;
       }
-      sub = co_await ctx.spawn_sub(std::move(key_data), std::move(copy),
-                                   tag_v<table_slice>);
+      co_await ctx.spawn_sub<table_slice>(key_data, std::move(copy));
+      sub = ctx.get_sub(make_view(key_data));
     }
     TENZIR_ASSERT(sub);
-    auto& cast = as<OpenPipeline<table_slice>>(*sub);
+    auto& cast = as<SubHandle<table_slice>>(*sub);
     auto result = co_await cast.push(std::move(input));
     auto closed = result.is_err();
     if (closed) {

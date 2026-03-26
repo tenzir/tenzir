@@ -99,7 +99,7 @@ public:
       done_ = true;
       co_return;
     }
-    co_await ctx.spawn_sub(caf::none, std::move(pipe), tag_v<chunk_ptr>);
+    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipe));
     ctx.spawn_task(folly::coro::co_withExecutor(
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
   }
@@ -131,12 +131,12 @@ public:
         done_ = true;
         co_return;
       }
-      auto pipeline = as<OpenPipeline<chunk_ptr>>(*sub);
+      auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
       co_await pipeline.close();
       stdin_closed_ = true;
       co_return;
     }
-    auto pipeline = as<OpenPipeline<chunk_ptr>>(*sub);
+    auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
     auto push_result = co_await pipeline.push(std::move(chunk));
     if (push_result.is_err()) {
       done_ = true;
