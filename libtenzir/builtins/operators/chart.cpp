@@ -78,15 +78,15 @@ template <chart_type Ty>
 struct ChartArgs {
   ast::field_path x;
   ast::expression y;
-  std::optional<ast::expression> group;
-  std::optional<located<data>> x_min;
-  std::optional<located<data>> x_max;
-  std::optional<located<data>> y_min;
-  std::optional<located<data>> y_max;
-  std::optional<located<duration>> res;
-  std::optional<located<data>> fill;
-  std::optional<location> x_log;
-  std::optional<location> y_log;
+  Option<ast::expression> group;
+  Option<located<data>> x_min;
+  Option<located<data>> x_max;
+  Option<located<data>> y_min;
+  Option<located<data>> y_max;
+  Option<located<duration>> res;
+  Option<located<data>> fill;
+  Option<location> x_log;
+  Option<location> y_log;
   located<uint64_t> limit{
     Ty == chart_type::bar or Ty == chart_type::pie ? 100u : 100'000u,
     location::unknown,
@@ -132,7 +132,7 @@ auto make_bucket(plugins_map const& plugins, session ctx) -> Bucket {
 
 template <chart_type Ty>
 auto handle_y(call_map& y_out, location& y_loc_out,
-              std::optional<located<duration>> const& res, ast::expression& y,
+              Option<located<duration>> const& res, ast::expression& y,
               session ctx) -> failure_or<void> {
   auto const entity = make_once_entity();
   y_loc_out = y.get_location();
@@ -383,7 +383,7 @@ private:
         if (gs.array->IsNull(idx)) {
           if (args_.group) {
             diagnostic::warning("got group name `null`")
-              .primary(args_.group.value())
+              .primary(*args_.group)
               .note("using `\"null\"` instead")
               .emit(dh);
             return std::string{"null"};
@@ -548,7 +548,7 @@ private:
       return series::null(string_type{}, detail::narrow<int64_t>(slice.rows()));
     }
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
-    auto gss = eval(args_.group.value(), slice, dh);
+    auto gss = eval(*args_.group, slice, dh);
     for (auto&& gs : gss) {
       if (gs.type.kind().template is<null_type>()) {
         check(b->AppendNulls(gs.length()));
@@ -565,7 +565,7 @@ private:
                 .template is_any<int64_type, uint64_type, double_type,
                                  enumeration_type>()) {
         diagnostic::warning("cannot group type `{}`", gs.type.kind())
-          .primary(args_.group.value())
+          .primary(*args_.group)
           .emit(dh);
         check(b->AppendNulls(gs.length()));
         continue;

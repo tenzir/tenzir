@@ -12,6 +12,7 @@
 #include "tenzir/try.hpp"
 #include "tenzir/variant_traits.hpp"
 
+#include <caf/inspector_access.hpp>
 #include <fmt/format.h>
 
 #include <compare>
@@ -103,6 +104,8 @@ class Option {
   using Value = std::remove_reference_t<T>;
 
 public:
+  using value_type = std::remove_reference_t<T>;
+
   // -- Construction -----------------------------------------------------------
 
   /// Constructs an empty option.
@@ -152,6 +155,22 @@ public:
     return *this;
   }
 
+  /// Assigns a value (non-reference `T` only).
+  template <class U = T>
+    requires(not std::is_reference_v<T> and std::constructible_from<T, U>)
+  auto operator=(U&& value) -> Option& {
+    storage_.emplace(std::forward<U>(value));
+    return *this;
+  }
+
+  /// Rebinds to a reference (reference `T` only).
+  template <class U = std::remove_reference_t<T>>
+    requires(std::is_reference_v<T> and std::convertible_to<U&, T>)
+  auto operator=(U& ref) -> Option& {
+    storage_.emplace(ref);
+    return *this;
+  }
+
   // -- Observers --------------------------------------------------------------
 
   /// Returns whether the option contains a value.
@@ -167,6 +186,11 @@ public:
   /// Returns whether the option is empty.
   auto is_none() const noexcept -> bool {
     return not is_some();
+  }
+
+  /// Resets to empty.
+  auto reset() noexcept(noexcept(storage_.reset())) -> void {
+    storage_.reset();
   }
 
   /// Constructs/rebinds the contained value in-place.
@@ -479,6 +503,28 @@ struct tenzir::tryable<tenzir::Option<T>> {
     -> tenzir::None {
     return tenzir::None{};
   }
+};
+
+// -- CAF inspection -----------------------------------------------------------
+
+template <class T>
+  requires(not std::is_reference_v<T>)
+struct caf::optional_inspector_traits<tenzir::Option<T>>
+  : caf::optional_inspector_traits_base {
+  using container_type = tenzir::Option<T>;
+  using value_type = T;
+
+  template <class... Ts>
+  static void emplace(container_type& container, Ts&&... xs) {
+    container.emplace(std::forward<Ts>(xs)...);
+  }
+};
+
+template <class T>
+  requires(not std::is_reference_v<T>)
+struct caf::inspector_access<tenzir::Option<T>>
+  : caf::optional_inspector_access<tenzir::Option<T>> {
+  // nop
 };
 
 // -- fmt::formatter -----------------------------------------------------------

@@ -15,6 +15,7 @@
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/let_id.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <mutex>
@@ -201,18 +202,24 @@ private:
 template <class Args, class T>
 auto make_setter(T Args::* ptr) -> auto {
   using Value = decltype(std::invoke([] {
-    if constexpr (detail::is_specialization_of<std::optional, T>::value) {
+    if constexpr (detail::is_specialization_of<std::optional, T>::value
+                  or detail::is_specialization_of<Option, T>::value) {
       return tag_v<typename T::value_type>;
     } else {
       return tag_v<T>;
     }
   }))::type;
-  if constexpr (std::same_as<T, std::optional<location>>) {
+  if constexpr (std::same_as<T, std::optional<location>>
+                or std::same_as<T, Option<location>>) {
     return Setter<located<bool>>{[ptr](Any& args, located<bool> value) {
       if (value.inner) {
         (&args.as<Args>())->*ptr = value.source;
       } else {
-        (&args.as<Args>())->*ptr = std::nullopt;
+        if constexpr (std::same_as<T, std::optional<location>>) {
+          (&args.as<Args>())->*ptr = std::nullopt;
+        } else {
+          (&args.as<Args>())->*ptr = None{};
+        }
       }
     }};
   } else if constexpr (std::same_as<T, bool>) {
@@ -585,6 +592,24 @@ public:
   }
 
   template <ArgType T>
+  auto positional(std::string name, Option<T> Args::* ptr,
+                  std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+    });
+    return Argument<Args, T>{ArgumentType::positional, index};
+  }
+
+  template <ArgType T>
   auto optional_positional(std::string name, T Args::* ptr,
                            std::string type = type_default<T>)
     -> Argument<Args, T> {
@@ -625,6 +650,17 @@ public:
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
+  auto pipeline(Option<located<ir::pipeline>> Args::* ptr)
+    -> Argument<Args, located<ir::pipeline>> {
+    TENZIR_ASSERT(not desc_.pipeline);
+    desc_.pipeline = Pipeline{
+      make_setter(ptr),
+      {},
+      false,
+    };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
+  }
+
   /// Pipeline with let bindings that are injected into the subpipeline.
   /// Usage: `d.pipeline(&Args::pipe, {{"var_name", &Args::var_let_id}, ...})`
   auto pipeline(
@@ -649,6 +685,26 @@ public:
 
   auto pipeline(
     std::optional<located<ir::pipeline>> Args::* ptr,
+    std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
+    -> Argument<Args, located<ir::pipeline>> {
+    TENZIR_ASSERT(not desc_.pipeline);
+    auto let_bindings = std::vector<LetBinding>{};
+    for (const auto& [name, member_ptr] : bindings) {
+      let_bindings.push_back(
+        {std::string{name}, [member_ptr](Any& args, let_id id) {
+           (&args.as<Args>())->*member_ptr = id;
+         }});
+    }
+    desc_.pipeline = Pipeline{
+      make_setter(ptr),
+      std::move(let_bindings),
+      false,
+    };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
+  }
+
+  auto pipeline(
+    Option<located<ir::pipeline>> Args::* ptr,
     std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
@@ -757,6 +813,20 @@ public:
     return Argument<Args, T>{ArgumentType::named, index};
   }
 
+  /// Adds an optional named argument.
+  template <ArgType T>
+  auto named(std::string name, Option<T> Args::* ptr,
+             std::string type = type_default<T>) -> Argument<Args, T> {
+    auto index = desc_.named.size();
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      false,
+    });
+    return Argument<Args, T>{ArgumentType::named, index};
+  }
+
   /// Adds an optional named argument with a default value.
   template <ArgType T>
   auto named_optional(std::string name, T Args::* ptr,
@@ -786,6 +856,19 @@ public:
 
   /// Adds an optional location flag.
   auto named(std::string name, std::optional<location> Args::* ptr,
+             std::string type = "") -> Argument<Args, bool> {
+    auto index = desc_.named.size();
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      false,
+    });
+    return Argument<Args, bool>{ArgumentType::named, index};
+  }
+
+  /// Adds an optional location flag.
+  auto named(std::string name, Option<location> Args::* ptr,
              std::string type = "") -> Argument<Args, bool> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{

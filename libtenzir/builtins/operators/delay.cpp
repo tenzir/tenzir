@@ -229,7 +229,7 @@ private:
 struct DelayArgs {
   ast::expression expr;
   double speed = 1.0;
-  std::optional<time> start;
+  Option<time> start;
 };
 
 class Delay final : public Operator<table_slice, table_slice> {
@@ -306,7 +306,7 @@ public:
 private:
   ast::expression expr_;
   double speed_;
-  std::optional<time> start_;
+  Option<time> start_;
   std::optional<std::chrono::steady_clock::time_point> start_time_;
 };
 
