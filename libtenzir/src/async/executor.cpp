@@ -932,7 +932,11 @@ private:
     return operator_scope_->spawn(std::move(task));
   }
 
-  auto add_await_task() -> void {
+  auto ensure_await_task() -> void {
+    if (await_task_pending_) {
+      return;
+    }
+    await_task_pending_ = true;
     TENZIR_ASSERT(operator_scope_);
     driver_.add([this] -> Task<Option<ExplicitAny>> {
       TENZIR_ASSERT(operator_scope_);
@@ -1100,7 +1104,7 @@ private:
         }
       }
       co_await base_op().start(*this);
-      add_await_task();
+      ensure_await_task();
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
       co_await main_loop();
@@ -1145,6 +1149,7 @@ private:
 
   auto process(Option<ExplicitAny> message) -> Task<void> {
     // The task provided by the inner implementation completed.
+    await_task_pending_ = false;
     LOGV("got future result in {}", op_name());
     if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
       co_return;
@@ -1154,9 +1159,15 @@ private:
     TENZIR_ASSERT(message);
     co_await call_process_task(std::move(message->value));
     if (base_op().state() == OperatorState::done) {
+      // This is here because we need to check for completion when
+      // `FinalizeBehavior::continue_` was returned. This is not really clean
+      // and should be revisited eventually.
       co_await handle_done(false);
     } else {
-      add_await_task();
+      // This only happens if we are not in the done state, because whether or
+      // not another `await_task` should be scheduled depends on what
+      // `finalize()` returns, which is not ideal.
+      ensure_await_task();
     }
     LOGV("handled future result in {}", op_name());
   }
@@ -1272,7 +1283,6 @@ private:
       if (phase_ != Phase::stopping_forced) {
         co_await call_finish_sub(make_view(message.key));
       }
-      // TODO: Can we do without the permissions?
       co_await check_done();
     };
     co_await co_match(
@@ -1323,18 +1333,13 @@ private:
   }
 
   auto handle_done(bool force) -> Task<void> {
-    if (force) {
-      if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
-        co_return;
-      }
-      phase_ = Phase::stopping_forced;
-    } else if (phase_ == Phase::running) {
-      phase_ = Phase::stopping_gracefully;
-    } else if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
+    if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
       co_return;
     }
     LOGV("running done in {}", op_name());
-    if (phase_ == Phase::stopping_forced) {
+    auto first_time = phase_ == Phase::running;
+    phase_ = force ? Phase::stopping_forced : Phase::stopping_gracefully;
+    if (force) {
       // Cancel operator-scoped tasks immediately so that background IO
       // coroutines stop producing work before the subpipelines drain.
       // check_done() will also cancel, but only once subpipelines_.empty(),
@@ -1351,27 +1356,27 @@ private:
       co_await check_done();
       co_return;
     }
-    // Notify control only if we are stopping before normal end-of-stream.
-    if (not input_is_void_ and not got_end_of_data_) {
-      co_await to_control_.send(ToControl::no_more_input);
+    if (first_time) {
+      // Notify control only if we are stopping before normal end-of-stream.
+      if (not input_is_void_ and not got_end_of_data_) {
+        co_await to_control_.send(ToControl::no_more_input);
+      }
     }
     // Then finalize the operator, which can still produce output.
     auto b = co_await call_finalize();
     if (b == FinalizeBehavior::continue_) {
-      // The operator is still draining and will transition to `done` via
+      // The operator is still draining and will transition to `stopped` via
       // further `await_task()` calls. Re-arm so those calls keep flowing.
-      add_await_task();
+      ensure_await_task();
       co_return;
     }
     // Tell all subpipelines to shut down. Note that the previous step could
     // have still pushed data into them. The main loop continues running to
-    // drain remaining subpipeline output and collect SubPipelineFinished
-    // messages. `try_finish_done()` completes the shutdown once all are gone.
-    // If we already got a shutdown request, the Shutdown handler already
-    // closed the subpipeline push handles, so skip sending EndOfData.
+    // drain remaining subpipeline output. `check_done()` completes the shutdown
+    // once all are gone.
     for (auto& [key, sub] : subpipelines_) {
       // It might be that push is closed if the pipeline is already shutting down.
-      if (sub.push and not sub.input.is<void>()) {
+      if (sub.push and not sub.closed_data and not sub.input.is<void>()) {
         sub.closed_data = true;
         co_await co_match(*sub.push,
                           [&]<class In>(Box<Push<OperatorMsg<In>>>& push) {
@@ -1383,20 +1388,27 @@ private:
   }
 
   auto check_done() -> Task<void> {
-    if (phase_ == Phase::stopped) {
+    if (phase_ == Phase::running or phase_ == Phase::stopped) {
       co_return;
     }
-    if (phase_ != Phase::running and subpipelines_.empty()) {
-      TENZIR_ASSERT(operator_scope_);
-      operator_scope_->cancel();
-      if (phase_ == Phase::stopping_gracefully and not output_is_void_) {
-        LOGW("sending end of data from {}", id_);
-        co_await push_signal(EndOfData{});
-      }
-      phase_ = Phase::stopped;
-      LOGW("sending ready to shutdown from {}", id_);
-      co_await to_control_.send(ToControl::ready_for_shutdown);
+    if (not subpipelines_.empty()) {
+      // We need to wait for all subpipelines to finish.
+      co_return;
     }
+    // If we reach this point, then we are about to fully shut down. The only
+    // remaining tasks in the operator scope are from `await_task()` and
+    // `ctx.spawn_task(…)`. If the operator still needs to keep them running, it
+    // should not have requested the execution to continue. So we assume we can
+    // just cancel them.
+    TENZIR_ASSERT(operator_scope_);
+    operator_scope_->cancel();
+    if (phase_ == Phase::stopping_gracefully and not output_is_void_) {
+      LOGW("sending end of data from {}", id_);
+      co_await push_signal(EndOfData{});
+    }
+    LOGW("sending ready to shutdown from {}", id_);
+    co_await to_control_.send(ToControl::ready_for_shutdown);
+    phase_ = Phase::stopped;
   }
 
   AnyOperator op_;
@@ -1440,11 +1452,14 @@ private:
   SelectSet<Event> driver_;
   /// Whether we want to exclusively listen for messages from subpipelines.
   bool active_checkpoint_{false};
-
-  bool got_end_of_data_ = false;
-  Phase phase_ = Phase::running;
+  /// True if there is an `await_task()` not yet processed by the mainloop.
+  bool await_task_pending_{false};
+  /// Whether `EndOfData` was already received from upstream.
+  bool got_end_of_data_{false};
+  /// Tracks the shutdown sequencing of the operator.
+  Phase phase_{Phase::running};
   // TODO: Expose this as an atomic for metrics?
-  size_t ticks_ = 0;
+  size_t ticks_{0};
 };
 
 namespace {
