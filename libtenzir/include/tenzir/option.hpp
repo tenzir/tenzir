@@ -147,6 +147,10 @@ public:
     : storage_{std::move(opt)} {
   }
 
+  Option(Option const&) = default;
+  Option(Option&&) noexcept(std::is_nothrow_move_constructible_v<Storage>)
+    = default;
+
   // -- Assignment -------------------------------------------------------------
 
   /// Resets to empty.

@@ -25,8 +25,8 @@ namespace {
 constexpr auto fairness_factor = 2.0;
 
 struct ParallelArgs {
-  std::optional<located<uint64_t>> jobs;
-  std::optional<ast::expression> route_by;
+  Option<located<uint64_t>> jobs;
+  Option<ast::expression> route_by;
   bool fuse = true;
   located<ir::pipeline> pipe;
 };
@@ -225,7 +225,7 @@ private:
   }
 
   uint64_t jobs_;
-  std::optional<ast::expression> route_by_;
+  Option<ast::expression> route_by_;
   bool fuse_;
   ir::pipeline pipe_;
   std::vector<uint64_t> rows_assigned_;

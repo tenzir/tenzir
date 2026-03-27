@@ -96,7 +96,7 @@ private:
 struct AssertThroughptArgs final {
   located<uint64_t> min_events;
   duration within;
-  std::optional<uint64_t> retries;
+  Option<uint64_t> retries;
 };
 
 class AssertThroughput final : public Operator<table_slice, table_slice> {

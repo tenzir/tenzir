@@ -24,7 +24,8 @@ struct FromFileArgs : ArrowFsArgs {};
 class FromFileOperator final : public ArrowFsOperator {
 public:
   explicit FromFileOperator(FromFileArgs args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+    : ArrowFsOperator{static_cast<ArrowFsArgs&&>(args)},
+      args_{std::move(args)} {
   }
 
 protected:

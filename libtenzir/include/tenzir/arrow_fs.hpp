@@ -36,10 +36,10 @@ namespace tenzir {
 /// Common arguments for Arrow filesystem-based operators.
 struct ArrowFsArgs {
   located<secret> url;
-  std::optional<location> watch;
-  std::optional<location> remove;
-  std::optional<ast::lambda_expr> rename;
-  std::optional<duration> max_age;
+  Option<location> watch;
+  Option<location> remove;
+  Option<ast::lambda_expr> rename;
+  Option<duration> max_age;
   located<ir::pipeline> pipe;
 
   /// Registers the common ArrowFsArgs fields on a Describer.
@@ -240,7 +240,7 @@ using SeenFileSet = std::unordered_set<SeenFile, SeenFileHasher>;
 ///   - File cleanup (remove/rename after processing)
 class ArrowFsOperator : public Operator<void, table_slice> {
 public:
-  explicit ArrowFsOperator(ArrowFsArgs args) : base_args_{std::move(args)} {
+  explicit ArrowFsOperator(ArrowFsArgs&& args) : base_args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> final;

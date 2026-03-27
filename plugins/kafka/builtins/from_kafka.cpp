@@ -171,17 +171,17 @@ struct FromKafkaArgs {
   /// Kafka topic to consume.
   std::string topic;
   /// Maximum number of messages to emit before stopping.
-  std::optional<located<uint64_t>> count;
+  Option<located<uint64_t>> count;
   /// Stop after all assigned partitions reach EOF.
-  std::optional<location> exit;
+  Option<location> exit;
   /// Starting position to use for partition assignment.
-  std::optional<located<data>> offset;
+  Option<located<data>> offset;
   /// Target number of messages per source batch.
   uint64_t batch_size = 10_k;
   /// Region used for MSK IAM token generation.
-  std::optional<located<std::string>> aws_region;
+  Option<located<std::string>> aws_region;
   /// IAM authentication settings for OAUTHBEARER.
-  std::optional<located<record>> aws_iam;
+  Option<located<record>> aws_iam;
   /// Raw librdkafka overrides applied to the consumer config.
   located<record> options;
   /// Controls output ordering guarantees.
@@ -431,8 +431,14 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::external_);
     initialize_perf_tracking();
+    auto aws_iam = args_.aws_iam
+                     ? std::optional<located<record>>{*args_.aws_iam}
+                     : std::nullopt;
+    auto aws_region = args_.aws_region
+                        ? std::optional<located<std::string>>{*args_.aws_region}
+                        : std::nullopt;
     auto auth = co_await resolve_aws_iam_auth(
-      args_.aws_iam, args_.aws_region, ctx,
+      std::move(aws_iam), std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_ = true;

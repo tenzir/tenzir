@@ -60,7 +60,7 @@ constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
 
 struct ToTcpArgs {
   located<std::string> endpoint;
-  std::optional<located<data>> tls;
+  Option<located<data>> tls;
   located<ir::pipeline> printer;
 };
 

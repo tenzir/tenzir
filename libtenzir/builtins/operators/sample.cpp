@@ -44,11 +44,11 @@ struct operator_args {
 };
 
 struct SampleArgs {
-  std::optional<std::string> mode_str;
+  Option<std::string> mode_str;
   duration period = default_period;
-  std::optional<uint64_t> min_events;
-  std::optional<uint64_t> max_rate;
-  std::optional<uint64_t> max_samples;
+  Option<uint64_t> min_events;
+  Option<uint64_t> max_rate;
+  Option<uint64_t> max_samples;
 };
 
 class Sample final : public Operator<table_slice, table_slice> {
@@ -65,13 +65,13 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto min_events = args_.min_events.value_or(default_min_events);
+    const auto min_events = args_.min_events.unwrap_or(default_min_events);
     if (auto now = std::chrono::steady_clock::now();
         now - last_ > args_.period) {
       if (count_ > 1 && count_ > min_events) {
         const auto rate
           = detail::narrow_cast<uint64_t>(std::ceil(compute_rate()));
-        stride_ = std::max(args_.max_rate.value_or(rate), rate);
+        stride_ = std::max(args_.max_rate.unwrap_or(rate), rate);
       } else {
         stride_ = 1;
       }

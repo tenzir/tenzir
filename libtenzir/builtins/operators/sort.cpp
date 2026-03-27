@@ -628,7 +628,7 @@ private:
 // -- New executor-based TQL2 implementation -----------------------------------
 
 struct SortArgs {
-  std::optional<ast::expression> expr;
+  Option<ast::expression> expr;
 };
 
 class Sort final : public Operator<table_slice, table_slice> {

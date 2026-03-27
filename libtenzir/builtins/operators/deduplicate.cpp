@@ -57,11 +57,11 @@ auto make_keys_expression(std::vector<ast::expression> exprs)
 struct configuration {
   ast::expression keys;
   located<int64_t> limit;
-  std::optional<located<int64_t>> distance;
-  std::optional<located<duration>> create_timeout;
-  std::optional<located<duration>> write_timeout;
-  std::optional<located<duration>> read_timeout;
-  std::optional<ast::field_path> count_field;
+  Option<located<int64_t>> distance;
+  Option<located<duration>> create_timeout;
+  Option<located<duration>> write_timeout;
+  Option<located<duration>> read_timeout;
+  Option<ast::field_path> count_field;
 
   friend auto inspect(auto& f, configuration& x) -> bool {
     return f.object(x).fields(f.field("keys", x.keys),
@@ -74,12 +74,12 @@ struct configuration {
   }
 
   static auto
-  make(std::vector<ast::expression> keys, std::optional<located<int64_t>> limit,
-       std::optional<located<int64_t>> distance,
-       std::optional<located<duration>> create_timeout,
-       std::optional<located<duration>> write_timeout,
-       std::optional<located<duration>> read_timeout,
-       std::optional<ast::field_path> count_field, diagnostic_handler& dh)
+  make(std::vector<ast::expression> keys, Option<located<int64_t>> limit,
+       Option<located<int64_t>> distance,
+       Option<located<duration>> create_timeout,
+       Option<located<duration>> write_timeout,
+       Option<located<duration>> read_timeout,
+       Option<ast::field_path> count_field, diagnostic_handler& dh)
     -> failure_or<configuration>;
 
   static auto parse(operator_factory_invocation inv, session ctx)
@@ -90,12 +90,12 @@ struct configuration {
 
 struct DeduplicateArgs {
   std::vector<ast::expression> keys;
-  std::optional<located<int64_t>> limit;
-  std::optional<located<int64_t>> distance;
-  std::optional<located<duration>> create_timeout;
-  std::optional<located<duration>> write_timeout;
-  std::optional<located<duration>> read_timeout;
-  std::optional<ast::field_path> count_field;
+  Option<located<int64_t>> limit;
+  Option<located<int64_t>> distance;
+  Option<located<duration>> create_timeout;
+  Option<located<duration>> write_timeout;
+  Option<located<duration>> read_timeout;
+  Option<ast::field_path> count_field;
 
   friend auto inspect(auto& f, DeduplicateArgs& x) -> bool {
     return f.object(x).fields(f.field("keys", x.keys),
@@ -170,12 +170,12 @@ using dedup_map
   = tsl::robin_map<data, State, std::hash<data_view>, std::equal_to<data_view>>;
 
 auto configuration::make(std::vector<ast::expression> keys,
-                         std::optional<located<int64_t>> limit,
-                         std::optional<located<int64_t>> distance,
-                         std::optional<located<duration>> create_timeout,
-                         std::optional<located<duration>> write_timeout,
-                         std::optional<located<duration>> read_timeout,
-                         std::optional<ast::field_path> count_field,
+                         Option<located<int64_t>> limit,
+                         Option<located<int64_t>> distance,
+                         Option<located<duration>> create_timeout,
+                         Option<located<duration>> write_timeout,
+                         Option<located<duration>> read_timeout,
+                         Option<ast::field_path> count_field,
                          diagnostic_handler& dh) -> failure_or<configuration> {
   auto seen_general_expression = false;
   auto normalized_keys = std::vector<ast::expression>{};
@@ -219,7 +219,7 @@ auto configuration::make(std::vector<ast::expression> keys,
   cfg.keys = normalized_keys.empty()
                ? ast::expression{ast::this_{location::unknown}}
                : make_keys_expression(std::move(normalized_keys));
-  cfg.limit = limit.value_or(located{1, location::unknown});
+  cfg.limit = limit.unwrap_or(located{1, location::unknown});
   cfg.distance = distance;
   cfg.create_timeout = create_timeout;
   cfg.write_timeout = write_timeout;
@@ -333,10 +333,10 @@ auto configuration::parse(operator_factory_invocation inv, session ctx)
     seen_general_expression = true;
     expressions.push_back(std::move(arg));
   }
-  auto limit = std::optional<located<int64_t>>{};
+  auto limit = Option<located<int64_t>>{};
   auto cfg = DeduplicateArgs{};
   auto parser = argument_parser2::operator_("deduplicate");
-  [[maybe_unused]] auto unused_key = std::optional<ast::expression>{};
+  [[maybe_unused]] auto unused_key = Option<ast::expression>{};
   parser.positional("key", unused_key, "any");
   parser.named("distance", cfg.distance);
   parser.named("limit", limit);
@@ -443,7 +443,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   auto filtered = filter(slice, *mask);
   if (cfg.count_field and filtered.rows() > 0) {
     auto count_series = series{int64_type{}, finish(*count_builder)};
-    return assign(cfg.count_field.value(), count_series, filtered, dh,
+    return assign(*cfg.count_field, count_series, filtered, dh,
                   assign_position::back);
   }
   return filtered;

@@ -1698,17 +1698,17 @@ private:
 
 /// Arguments for the from_mysql operator.
 struct FromMySQLArgs {
-  std::optional<located<std::string>> table;
-  std::optional<located<std::string>> host;
-  std::optional<located<int64_t>> port;
-  std::optional<located<std::string>> user;
-  std::optional<located<std::string>> password;
-  std::optional<located<std::string>> database;
-  std::optional<located<std::string>> sql;
-  std::optional<located<std::string>> show;
-  std::optional<located<bool>> live;
-  std::optional<located<std::string>> tracking_column;
-  std::optional<located<data>> tls;
+  Option<located<std::string>> table;
+  Option<located<std::string>> host;
+  Option<located<int64_t>> port;
+  Option<located<std::string>> user;
+  Option<located<std::string>> password;
+  Option<located<std::string>> database;
+  Option<located<std::string>> sql;
+  Option<located<std::string>> show;
+  Option<located<bool>> live;
+  Option<located<std::string>> tracking_column;
+  Option<located<data>> tls;
 };
 
 class FromMySQL final : public Operator<void, table_slice> {

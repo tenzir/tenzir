@@ -141,13 +141,14 @@ private:
 };
 
 struct FromAbsArgs : ArrowFsArgs {
-  std::optional<std::string> account_key;
+  Option<std::string> account_key;
 };
 
 class FromAbsOperator final : public ArrowFsOperator {
 public:
   explicit FromAbsOperator(FromAbsArgs args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+    : ArrowFsOperator{std::move(static_cast<ArrowFsArgs&>(args))},
+      args_{std::move(args)} {
   }
 
 protected:

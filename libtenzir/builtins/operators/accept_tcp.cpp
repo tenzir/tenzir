@@ -64,8 +64,8 @@ constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 
 struct AcceptTcpArgs {
   located<std::string> endpoint;
-  std::optional<located<data>> tls;
-  std::optional<located<uint64_t>> max_connections;
+  Option<located<data>> tls;
+  Option<located<uint64_t>> max_connections;
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
