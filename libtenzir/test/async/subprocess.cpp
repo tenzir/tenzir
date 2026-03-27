@@ -66,7 +66,21 @@ TEST("output pipe read_some appends to iobuf queue") {
     co_await input.close();
     auto bytes_read = co_await output.read_some(queue, 1, 8);
     check_eq(bytes_read, 5u);
-    auto data = queue.move()->coalesce();
+    MESSAGE("read_some: bytes_read={} empty={} chainLength={}", bytes_read,
+            queue.empty(), queue.chainLength());
+    auto* front = queue.front();
+    MESSAGE("read_some: front={} front_length={}",
+            fmt::ptr(static_cast<void const*>(front)),
+            front ? front->length() : 0);
+    auto moved = queue.move();
+    MESSAGE("read_some: moved={} moved_length={} moved_chain_length={}",
+            fmt::ptr(static_cast<void const*>(moved.get())),
+            moved ? moved->length() : 0,
+            moved ? moved->computeChainDataLength() : 0);
+    auto data = moved ? moved->coalesce() : folly::ByteRange{};
+    MESSAGE("read_some: coalesced_size={} coalesced='{}'", data.size(),
+            std::string{reinterpret_cast<char const*>(data.data()),
+                        data.size()});
     auto str = std::string{
       reinterpret_cast<char const*>(data.data()),
       data.size(),
