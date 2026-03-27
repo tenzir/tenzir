@@ -340,15 +340,17 @@ private:
 
 // New executor implementation
 struct SliceArgs {
-  std::optional<int64_t> begin;
-  std::optional<int64_t> end;
-  std::optional<int64_t> stride;
+  Option<int64_t> begin;
+  Option<int64_t> end;
+  Option<int64_t> stride;
 };
 
 class Slice final : public Operator<table_slice, table_slice> {
 public:
   explicit Slice(SliceArgs args)
-    : begin_{args.begin}, end_{args.end}, stride_{args.stride} {
+    : begin_{std::move(args.begin)},
+      end_{std::move(args.end)},
+      stride_{std::move(args.stride)} {
     // Buffering is required when any index is negative or stride is negative
     needs_buffering_ = (stride_ && *stride_ < 0) || (begin_ && *begin_ < 0)
                        || (end_ && *end_ < 0);
@@ -376,8 +378,8 @@ public:
       co_return FinalizeBehavior::done;
     }
     // Resolve negative indices using total row count (offset_)
-    auto begin = begin_.value_or(0);
-    auto end = end_.value_or(offset_);
+    auto begin = begin_.unwrap_or(0);
+    auto end = end_.unwrap_or(offset_);
     if (begin < 0) {
       begin = offset_ + begin;
     }
@@ -391,7 +393,7 @@ public:
       co_return FinalizeBehavior::done;
     }
     // Apply slice to buffer
-    auto stride = stride_.value_or(1);
+    auto stride = stride_.unwrap_or(1);
     if (stride > 0) {
       co_await finalize_positive_stride(push, begin, end, stride);
     } else {
@@ -420,9 +422,9 @@ private:
     if (rows == 0) {
       return {};
     }
-    auto begin = begin_.value_or(0);
-    auto end = end_.value_or(std::numeric_limits<int64_t>::max());
-    auto stride = stride_.value_or(1);
+    auto begin = begin_.unwrap_or(0);
+    auto end = end_.unwrap_or(std::numeric_limits<int64_t>::max());
+    auto stride = stride_.unwrap_or(1);
     // Compute clamped range for this slice
     const auto clamped_begin = std::clamp(begin - offset_, int64_t{0}, rows);
     const auto clamped_end = std::clamp(end - offset_, int64_t{0}, rows);
@@ -543,9 +545,9 @@ private:
   }
 
   // Immutable (from args)
-  std::optional<int64_t> begin_;
-  std::optional<int64_t> end_;
-  std::optional<int64_t> stride_;
+  Option<int64_t> begin_;
+  Option<int64_t> end_;
+  Option<int64_t> stride_;
   bool needs_buffering_ = false;
 
   // Mutable state (for snapshot)

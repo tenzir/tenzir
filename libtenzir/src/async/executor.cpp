@@ -904,96 +904,103 @@ private:
   }
 
   auto call_process_task(Any result) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
-          co_await op->process_task(std::move(result), *this);
+          co_await op->process_task(std::move(result), ctx_ref);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->process_task(std::move(result), wrapper, *this);
+          co_await op->process_task(std::move(result), wrapper, ctx_ref);
         }
       });
   }
 
   auto call_finalize() -> Task<FinalizeBehavior> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_return co_await co_match(
       op_,
       [&]<class In, class Out>(
         Box<Operator<In, Out>>& op) -> Task<FinalizeBehavior> {
         if constexpr (std::same_as<Out, void>) {
-          co_return co_await op->finalize(*this);
+          co_return co_await op->finalize(ctx_ref);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_return co_await op->finalize(wrapper, *this);
+          co_return co_await op->finalize(wrapper, ctx_ref);
         }
       });
   }
 
   auto call_prepare_snapshot() -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
-          co_await op->prepare_snapshot(*this);
+          co_await op->prepare_snapshot(ctx_ref);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->prepare_snapshot(wrapper, *this);
+          co_await op->prepare_snapshot(wrapper, ctx_ref);
         }
       });
   }
 
   auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
-          co_await op->process_sub(key, std::move(slice), *this);
+          co_await op->process_sub(key, std::move(slice), ctx_ref);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->process_sub(key, std::move(slice), wrapper, *this);
+          co_await op->process_sub(key, std::move(slice), wrapper, ctx_ref);
         }
       });
   }
 
   auto call_process_sub(SubKeyView key, chunk_ptr chunk) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
-          co_await op->process_sub(key, std::move(chunk), *this);
+          co_await op->process_sub(key, std::move(chunk), ctx_ref);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->process_sub(key, std::move(chunk), wrapper, *this);
+          co_await op->process_sub(key, std::move(chunk), wrapper, ctx_ref);
         }
       });
   }
 
   auto call_finish_sub(SubKeyView key) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
-          co_await op->finish_sub(key, *this);
+          co_await op->finish_sub(key, ctx_ref);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->finish_sub(key, wrapper, *this);
+          co_await op->finish_sub(key, wrapper, ctx_ref);
         }
       });
   }
 
   template <class DataInput>
   auto call_process(DataInput input) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
         if constexpr (std::same_as<In, DataInput>) {
           if constexpr (std::same_as<Out, void>) {
-            co_await op->process(input, *this);
+            co_await op->process(input, ctx_ref);
           } else {
             auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
             auto wrapper = OpPushWrapper{push};
-            co_await op->process(input, wrapper, *this);
+            co_await op->process(input, wrapper, ctx_ref);
           }
         } else {
           TENZIR_UNREACHABLE();
@@ -1494,7 +1501,8 @@ private:
             while (not stop) {
               auto to_control = co_await to_control_receiver.recv();
               stop = to_control.is_none();
-              co_yield {index, to_control};
+              co_yield std::pair<size_t, Option<ToControl>>{
+                index, std::move(to_control)};
             }
           });
         LOGI("done with operator");
@@ -1517,14 +1525,14 @@ private:
       // TODO: Cancellation?
       TENZIR_ASSERT(next, "unexpected end of queue");
       co_await co_match(
-        *next,
+        std::move(*next),
         [&](Option<FromControl> from_control) -> Task<void> {
           if (not from_control) {
             // Our controller should not die without cancelling us.
             TENZIR_UNREACHABLE();
           }
           co_await co_match(
-            *from_control,
+            std::move(*from_control),
             [&](PostCommit) -> Task<void> {
               for (auto& ctrl : operator_ctrl_) {
                 co_await ctrl.send(PostCommit{});
@@ -1551,7 +1559,7 @@ private:
           -> Task<void> {
           auto [index, kind] = std::move(next);
           co_await co_match(
-            kind,
+            std::move(kind),
             [&](Terminated) -> Task<void> {
               // TODO: What if we didn't send shutdown signal?
               TENZIR_ASSERT(runners_left > 0);

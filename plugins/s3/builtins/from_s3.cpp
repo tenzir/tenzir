@@ -239,7 +239,7 @@ private:
 
 struct FromS3Args : ArrowFsArgs {
   bool anonymous = false;
-  std::optional<located<record>> aws_iam;
+  Option<located<record>> aws_iam;
 };
 
 class FromS3Operator final : public ArrowFsOperator {
@@ -258,7 +258,10 @@ protected:
     if (result.is_error()) {
       co_return failure::promise();
     }
-    resolved_ = co_await resolve_aws_iam_auth(args_.aws_iam, std::nullopt, ctx);
+    auto aws_iam = args_.aws_iam
+                     ? std::optional<located<record>>{*args_.aws_iam}
+                     : std::nullopt;
+    resolved_ = co_await resolve_aws_iam_auth(aws_iam, std::nullopt, ctx);
     if (not resolved_) {
       co_return failure::promise();
     }

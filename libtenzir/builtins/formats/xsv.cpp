@@ -432,17 +432,17 @@ struct ReadXsvArgs {
   located<std::string> quotes = {"\"'", location::unknown};
   bool auto_expand = false;
   bool allow_comments = false;
-  std::optional<ast::expression> header;
+  Option<ast::expression> header;
   // multi_series_builder policy (from docs).
-  std::optional<located<std::string>> schema;
-  std::optional<located<std::string>> selector;
+  Option<located<std::string>> schema;
+  Option<located<std::string>> selector;
   // multi_series_builder settings (from docs).
   bool schema_only = false;
   bool raw = false;
-  std::optional<located<std::string>> unflatten_separator;
+  Option<located<std::string>> unflatten_separator;
   bool merge = true;
-  std::optional<duration> batch_timeout;
-  std::optional<uint64_t> batch_size;
+  Option<duration> batch_timeout;
+  Option<uint64_t> batch_size;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
 };

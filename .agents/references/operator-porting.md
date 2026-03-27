@@ -61,14 +61,14 @@ Collect all operator parameters into a plain struct.
 
 ```cpp
 struct MyArgs {
-  located<uint64_t> capacity = {};           // located<T> when .source needed in errors
-  std::optional<located<std::string>> policy; // optional named arg for Describer
-  double speed = 1.0;                        // bare T when location not needed
+  located<uint64_t> capacity = {};     // located<T> when .source needed in errors
+  Option<located<std::string>> policy; // optional named arg for Describer
+  double speed = 1.0;                  // bare T when location not needed
 };
 ```
 
 - `located<T>` — use when you need `.source` to point errors at the right token.
-- `std::optional<located<T>>` — maps to an optional named argument in `Describer`.
+- `Option<located<T>>` — maps to an optional named argument in `Describer`.
 
 ---
 

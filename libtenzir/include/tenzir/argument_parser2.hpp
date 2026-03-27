@@ -11,6 +11,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
@@ -87,6 +88,11 @@ public:
   auto positional(std::string name, std::optional<T>& x,
                   std::string type = maybe_default<T>) -> argument_parser2&;
 
+  /// Adds an optional positional argument.
+  template <argument_parser_type T>
+  auto positional(std::string name, Option<T>& x,
+                  std::string type = maybe_default<T>) -> argument_parser2&;
+
   auto positional(std::string name, located<pipeline>& x, std::string type = "")
     -> argument_parser2&;
   auto positional(std::string name, std::optional<located<pipeline>>& x,
@@ -104,6 +110,13 @@ public:
   template <argument_parser_type T>
   auto named(std::string name, std::optional<T>& x,
              std::string type = maybe_default<T>) -> argument_parser2&;
+
+  /// Adds an optional named argument. Use this if "Not Given" is a case you
+  /// need to handle.
+  template <argument_parser_type T>
+  auto
+  named(std::string name, Option<T>& x, std::string type = maybe_default<T>)
+    -> argument_parser2&;
 
   auto named(std::string name, located<pipeline>& x, std::string type = "")
     -> argument_parser2&;
@@ -123,6 +136,10 @@ public:
   /// Adds an optional named argument.
   auto named(std::string name, std::optional<location>& x,
              std::string type = "") -> argument_parser2&;
+
+  /// Adds an optional named argument.
+  auto named(std::string name, Option<location>& x, std::string type = "")
+    -> argument_parser2&;
 
   /// Adds an optional named argument.
   auto named(std::string name, bool& x, std::string type = "")

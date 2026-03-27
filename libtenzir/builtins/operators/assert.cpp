@@ -22,7 +22,7 @@ namespace {
 
 struct AssertArgs {
   ast::expression invariant;
-  std::optional<ast::expression> message;
+  Option<ast::expression> message;
 
   friend auto inspect(auto& f, AssertArgs& x) -> bool {
     return f.object(x).fields(f.field("invariant", x.invariant),

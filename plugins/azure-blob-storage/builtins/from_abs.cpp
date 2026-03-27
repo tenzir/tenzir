@@ -141,7 +141,7 @@ private:
 };
 
 struct FromAbsArgs : ArrowFsArgs {
-  std::optional<std::string> account_key;
+  Option<std::string> account_key;
 };
 
 class FromAbsOperator final : public ArrowFsOperator {

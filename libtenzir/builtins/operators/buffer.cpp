@@ -172,7 +172,7 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
 
 struct BufferArgs {
   located<uint64_t> capacity;
-  std::optional<located<std::string>> policy_str;
+  Option<located<std::string>> policy_str;
 };
 
 template <class T>

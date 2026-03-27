@@ -145,11 +145,11 @@ auto default_message_expression() -> ast::expression {
 struct ToKafkaArgs {
   std::string topic;
   ast::expression message = default_message_expression();
-  std::optional<located<std::string>> key;
-  std::optional<located<time>> timestamp;
+  Option<located<std::string>> key;
+  Option<located<time>> timestamp;
   located<record> options;
-  std::optional<located<std::string>> aws_region;
-  std::optional<located<record>> aws_iam;
+  Option<located<std::string>> aws_region;
+  Option<located<record>> aws_iam;
   uint64_t jobs = 1;
 };
 
@@ -355,8 +355,14 @@ public:
         "to_kafka",
       },
       MetricsDirection::write, MetricsVisibility::external_);
+    auto aws_iam = args_.aws_iam
+                     ? std::optional<located<record>>{*args_.aws_iam}
+                     : std::nullopt;
+    auto aws_region = args_.aws_region
+                        ? std::optional<located<std::string>>{*args_.aws_region}
+                        : std::nullopt;
     auto auth = co_await resolve_aws_iam_auth(
-      args_.aws_iam, args_.aws_region, ctx,
+      std::move(aws_iam), std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_.store(true);
