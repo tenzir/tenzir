@@ -10,6 +10,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 
 #include <arrow/util/utf8.h>
@@ -22,7 +23,7 @@ namespace {
 
 struct ReadDelimitedArgs {
   located<data> separator;
-  std::optional<bool> binary;
+  Option<bool> binary;
   bool include_separator = false;
 };
 
@@ -41,7 +42,7 @@ public:
         TENZIR_UNREACHABLE();
       });
     // Auto-resolve binary mode: true for blob separators, false for string.
-    binary_ = args_.binary.value_or(is<blob>(args_.separator.inner));
+    binary_ = args_.binary.unwrap_or(is<blob>(args_.separator.inner));
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -84,6 +85,11 @@ public:
       co_await push(builder_.finish_assert_one_slice("tenzir.data"));
     }
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    co_await push(builder_.finish_assert_one_slice("tenzir.data"));
   }
 
   auto snapshot(Serde& serde) -> void override {

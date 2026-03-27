@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/try.hpp>
@@ -20,7 +21,7 @@ struct SplitArgs {
 
 class SplitBytes final : public Operator<chunk_ptr, chunk_ptr> {
 public:
-  explicit SplitBytes(SplitArgs args) : args_{std::move(args)} {
+  explicit SplitBytes(SplitArgs args) : args_{args} {
   }
 
   auto process(chunk_ptr input, Push<chunk_ptr>& push, OpCtx& ctx)
