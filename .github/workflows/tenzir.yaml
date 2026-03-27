@@ -904,6 +904,8 @@ jobs:
     needs:
       - configure
       - docker-tenzir
+      - docker-tenzir-amd64
+      - docker-tenzir-arm64
       - policy-enforcement
       - python
       - python-package
