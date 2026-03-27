@@ -1,5 +1,0 @@
-from {
-  line: "alpha;;;beta;;;gamma;;;delta"
-}
-write_lines
-read_delimited ";;;"

@@ -2,4 +2,5 @@ from {
   line: "foo\x00\x01bar\x00\x01baz"
 }
 write_lines
+split_bytes 2
 read_delimited b"\x00\x01"

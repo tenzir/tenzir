@@ -1,5 +1,0 @@
-from {
-  line: "a|b|c|d"
-}
-write_lines
-read_delimited "|"
