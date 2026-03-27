@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/plugin/register.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/try.hpp>
 
 namespace tenzir::plugins::split_bytes {
