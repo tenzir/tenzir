@@ -134,8 +134,7 @@ struct FromGcsArgs : ArrowFsArgs {
 class FromGcsOperator final : public ArrowFsOperator {
 public:
   explicit FromGcsOperator(FromGcsArgs args)
-    : ArrowFsOperator{std::move(static_cast<ArrowFsArgs&>(args))},
-      args_{std::move(args)} {
+    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
   }
 
 protected:

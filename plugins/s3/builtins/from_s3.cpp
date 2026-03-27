@@ -245,8 +245,7 @@ struct FromS3Args : ArrowFsArgs {
 class FromS3Operator final : public ArrowFsOperator {
 public:
   explicit FromS3Operator(FromS3Args args)
-    : ArrowFsOperator{std::move(static_cast<ArrowFsArgs&>(args))},
-      args_{std::move(args)} {
+    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
   }
 
 protected:

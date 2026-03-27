@@ -147,8 +147,7 @@ struct FromAbsArgs : ArrowFsArgs {
 class FromAbsOperator final : public ArrowFsOperator {
 public:
   explicit FromAbsOperator(FromAbsArgs args)
-    : ArrowFsOperator{std::move(static_cast<ArrowFsArgs&>(args))},
-      args_{std::move(args)} {
+    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
   }
 
 protected:
