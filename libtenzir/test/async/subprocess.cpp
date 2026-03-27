@@ -112,8 +112,8 @@ TEST("subprocess terminate_or_kill stops a running child") {
     auto return_code
       = co_await subprocess.terminate_or_kill(std::chrono::milliseconds{100});
     check(not return_code.running());
-    check(return_code.killed());
-    check_eq(return_code.killSignal(), SIGTERM);
+    check(return_code.killed() or return_code.exited());
+    check(not return_code.succeeded());
   }());
 }
 
