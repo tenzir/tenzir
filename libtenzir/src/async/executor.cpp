@@ -936,17 +936,19 @@ private:
       return;
     }
     await_task_pending_ = true;
+    // `await_task()` belongs to the inner operator lifecycle and must stop with
+    // it, even if the outer driver keeps running to finish framing work. We
+    // spawn it into `operator_scope_` immediately (while it is guaranteed
+    // non-null) rather than inside the driver lambda, because the operator
+    // scope is set to null before the driver finishes.
     TENZIR_ASSERT(operator_scope_);
-    driver_.add([this] -> Task<Option<ExplicitAny>> {
-      TENZIR_ASSERT(operator_scope_);
-      // `await_task()` belongs to the inner operator lifecycle and must stop
-      // with it, even if the outer driver keeps running to finish framing work.
-      co_return co_await operator_scope_
-        ->spawn([this] -> Task<ExplicitAny> {
-          co_return ExplicitAny{co_await base_op().await_task(*this)};
-        })
-        .try_join();
+    auto handle = operator_scope_->spawn([this] -> Task<ExplicitAny> {
+      co_return ExplicitAny{co_await base_op().await_task(*this)};
     });
+    driver_.add(
+      [handle = std::move(handle)] mutable -> Task<Option<ExplicitAny>> {
+        co_return co_await handle.try_join();
+      });
   }
 
   /// Access the OperatorBase interface.
