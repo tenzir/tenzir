@@ -122,10 +122,11 @@ struct EvalUnOp<ast::unary_op::neg, duration_type> {
 
 } // namespace
 
-auto evaluator::eval(const ast::unary_expr& x) -> multi_series {
+auto evaluator::eval(ast::unary_expr const& x, ActiveRows active)
+  -> multi_series {
   auto eval_op = [&]<ast::unary_op Op>() -> multi_series {
     TENZIR_ASSERT(x.op.inner == Op);
-    return map_series(eval(x.expr), [&](series v) {
+    return map_series(eval(x.expr, active), [&](series v) {
       return match(v.type, [&]<concrete_type T>(const T&) -> series {
         if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
           auto& a = as<type_to_arrow_array_t<T>>(*v.array);
@@ -165,7 +166,7 @@ auto evaluator::eval(const ast::unary_expr& x) -> multi_series {
           .hint("move only works on fields within assignments")
           .emit(ctx_);
       }
-      return eval(x.expr);
+      return eval(x.expr, active);
     }
   }
   TENZIR_UNREACHABLE();

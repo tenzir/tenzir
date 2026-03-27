@@ -60,7 +60,7 @@ public:
     auto null_dh = null_diagnostic_handler{};
     auto null_sp = session_provider::make(null_dh);
     const auto non_const_eval = [&](const ast::expression& expr) {
-      auto value = evaluator{nullptr, null_sp.as_session()}.eval(expr);
+      auto value = evaluator{nullptr, null_sp.as_session()}.eval(expr, {});
       TENZIR_ASSERT(value.length() == 1);
       TENZIR_ASSERT(value.parts().size() == 1);
       return value.part(0);
@@ -117,7 +117,7 @@ public:
     -> Task<void> override {
     TENZIR_ASSERT(next_ < events_.size());
     auto sp = session_provider::make(ctx);
-    auto value = evaluator{nullptr, sp.as_session()}.eval(events_[next_]);
+    auto value = evaluator{nullptr, sp.as_session()}.eval(events_[next_], {});
     TENZIR_ASSERT(value.length() == 1);
     TENZIR_ASSERT(value.parts().size() == 1);
     auto part = std::move(value.part(0));

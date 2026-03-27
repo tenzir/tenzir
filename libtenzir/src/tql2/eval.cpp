@@ -128,7 +128,7 @@ auto eval(const ast::expression& expr, const table_slice& input,
   return trace_panic(expr, [&] -> multi_series {
     // TODO: Do not create a new session here.
     auto sp = session_provider::make(dh);
-    auto result = evaluator{&input, sp.as_session()}.eval(expr);
+    auto result = evaluator{&input, sp.as_session()}.eval(expr, {});
     TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(input.rows()));
     return result;
   });
@@ -160,7 +160,7 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
     // TODO: Do not create a new session here.
     try {
       auto sp = session_provider::make(dh);
-      auto result = evaluator{nullptr, sp.as_session()}.eval(expr);
+      auto result = evaluator{nullptr, sp.as_session()}.eval(expr, {});
       TENZIR_ASSERT(result.length() == 1);
       TENZIR_ASSERT(result.parts().size() == 1);
       auto& part = result.part(0);

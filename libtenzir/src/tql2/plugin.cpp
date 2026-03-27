@@ -28,9 +28,9 @@ auto function_use::evaluator::get_input() const -> std::optional<table_slice> {
   return *input;
 }
 
-auto function_use::evaluator::operator()(const ast::expression& expr) const
+auto function_use::evaluator::operator()(ast::expression const& expr) const
   -> multi_series {
-  return static_cast<tenzir::evaluator*>(self_)->eval(expr);
+  return static_cast<tenzir::evaluator*>(self_)->eval(expr, {});
 }
 
 auto function_use::evaluator::operator()(

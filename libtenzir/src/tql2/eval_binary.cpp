@@ -8,6 +8,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/active_rows.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
@@ -46,6 +47,18 @@ auto disable_short_circuiting() -> bool {
            and lower != "off";
   }();
   return result;
+}
+
+auto compose_active_rows(ActiveRows outer, arrow::BooleanArray const& inner,
+                         bool skip_value)
+  -> std::shared_ptr<arrow::BooleanArray> {
+  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(builder.Reserve(inner.length()));
+  auto nested = ActiveRows{inner, skip_value};
+  for (auto row = int64_t{0}; row < inner.length(); ++row) {
+    check(builder.Append(outer.is_active(row) and nested.is_active(row)));
+  }
+  return finish(builder);
 }
 
 [[maybe_unused]] constexpr auto is_arithmetic(ast::binary_op op) -> bool {
@@ -412,8 +425,9 @@ struct EvalBinOp;
 template <ast::binary_op Op, basic_type L, basic_type R>
   requires caf::detail::is_complete<BinOpKernel<Op, L, R>>
 struct EvalBinOp<Op, L, R> {
-  static auto eval(const type_to_arrow_array_t<L>& l,
-                   const type_to_arrow_array_t<R>& r, auto&& warn)
+  static auto
+  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
+       auto&& warn, ActiveRows active, int64_t offset)
     -> std::shared_ptr<arrow::Array> {
     using kernel = BinOpKernel<Op, L, R>;
     using result = kernel::result;
@@ -422,6 +436,10 @@ struct EvalBinOp<Op, L, R> {
     auto warnings
       = detail::stack_vector<const char*, 2 * sizeof(const char*)>{};
     for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (not active.is_active(offset + i)) {
+        check(b->AppendNull());
+        continue;
+      }
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
       if (ln && rn) {
@@ -466,11 +484,12 @@ struct EvalBinOp<Op, L, R> {
 template <>
 struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
-                   auto&&) -> std::shared_ptr<arrow::StringArray> {
+                   auto&&, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::StringArray> {
     auto b = arrow::StringBuilder{};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (l.IsNull(i) || r.IsNull(i)) {
+      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
         b.UnsafeAppendNull();
         continue;
       }
@@ -486,11 +505,12 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
 template <>
 struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+                   auto&&, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (l.IsNull(i) || r.IsNull(i)) {
+      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
         b.UnsafeAppendNull();
         continue;
       }
@@ -504,13 +524,13 @@ struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
 
 template <>
 struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
-  static auto
-  eval(const ip_type::array_type& l, const subnet_type::array_type& r, auto&&)
-    -> std::shared_ptr<arrow::BooleanArray> {
+  static auto eval(const ip_type::array_type& l,
+                   const subnet_type::array_type& r, auto&&, ActiveRows active,
+                   int64_t offset) -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (l.IsNull(i) || r.IsNull(i)) {
+      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
         check(b.AppendNull());
         continue;
       }
@@ -526,12 +546,12 @@ struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
 template <>
 struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
   static auto eval(const subnet_type::array_type& l,
-                   const subnet_type::array_type& r, auto&&)
-    -> std::shared_ptr<arrow::BooleanArray> {
+                   const subnet_type::array_type& r, auto&&, ActiveRows active,
+                   int64_t offset) -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (l.IsNull(i) || r.IsNull(i)) {
+      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
         check(b.AppendNull());
         continue;
       }
@@ -548,11 +568,16 @@ template <ast::binary_op Op, concrete_type L>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, L, null_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+                   auto&&, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::BooleanArray> {
     TENZIR_UNUSED(r);
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (not active.is_active(offset + i)) {
+        check(b.AppendNull());
+        continue;
+      }
       check(b.Append(l.IsNull(i) != invert));
     }
     return finish(b);
@@ -564,8 +589,9 @@ template <ast::binary_op Op, concrete_type R>
            && not std::same_as<R, null_type>)
 struct EvalBinOp<Op, null_type, R> {
   static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
-                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
-    return EvalBinOp<Op, R, null_type>::eval(r, l, warn);
+                   auto&& warn, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::BooleanArray> {
+    return EvalBinOp<Op, R, null_type>::eval(r, l, warn, active, offset);
   }
 };
 
@@ -573,12 +599,17 @@ template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, ip_type, ip_type> {
   static auto eval(const ip_type::array_type& l, const ip_type::array_type& r,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+                   auto&&, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (not active.is_active(offset + i)) {
+        b.UnsafeAppendNull();
+        continue;
+      }
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
       auto equal = bool{};
@@ -599,12 +630,17 @@ template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+                   auto&&, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (not active.is_active(offset + i)) {
+        b.UnsafeAppendNull();
+        continue;
+      }
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
       auto equal = bool{};
@@ -624,7 +660,8 @@ struct EvalBinOp<Op, string_type, string_type> {
 template <basic_type L>
 struct EvalBinOp<ast::binary_op::in, L, list_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
-                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+                   auto&& warn, ActiveRows active, int64_t offset)
+    -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     const auto lty = type::from_arrow(*l.type());
@@ -644,6 +681,10 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
           auto* values = dynamic_cast<const RA*>(r.values().get());
           TENZIR_ASSERT(values);
           for (auto i = int64_t{}; i < l.length(); ++i) {
+            if (not active.is_active(offset + i)) {
+              b.UnsafeAppendNull();
+              continue;
+            }
             if (r.IsNull(i)) {
               b.UnsafeAppendNull();
               continue;
@@ -692,14 +733,16 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
 };
 
 template <ast::binary_op Op, concrete_type L, concrete_type R>
-auto eval_op_typed(evaluator& self, const ast::binary_expr& x,
-                   const basic_series<L>& left, const basic_series<R>& right)
-  -> series {
+auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
+                   basic_series<L> const& left, basic_series<R> const& right,
+                   ActiveRows active, int64_t offset) -> series {
   if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
     auto oa = EvalBinOp<Op, L, R>::eval(
-      *left.array, *right.array, [&](const char* w) {
+      *left.array, *right.array,
+      [&](const char* w) {
         diagnostic::warning("{}", w).primary(x).emit(self.ctx());
-      });
+      },
+      active, offset);
     auto ot = type::from_arrow(*oa->type());
     return series{std::move(ot), std::move(oa)};
   } else {
@@ -733,12 +776,12 @@ auto eval_op_typed(evaluator& self, const ast::binary_expr& x,
   X(secret_type)
 
 template <ast::binary_op Op, concrete_type L>
-auto dispatch_eval_rhs(evaluator& self, const ast::binary_expr& x,
-                       const basic_series<L>& left, const series& right)
-  -> series {
+auto dispatch_eval_rhs(evaluator& self, ast::binary_expr const& x,
+                       basic_series<L> const& left, series const& right,
+                       ActiveRows active, int64_t offset) -> series {
 #define TENZIR_TQL2_DISPATCH_RHS(Type)                                         \
   if (auto typed = right.as<Type>()) {                                         \
-    return eval_op_typed<Op>(self, x, left, *typed);                           \
+    return eval_op_typed<Op>(self, x, left, *typed, active, offset);           \
   }
   TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_RHS);
 #undef TENZIR_TQL2_DISPATCH_RHS
@@ -746,11 +789,12 @@ auto dispatch_eval_rhs(evaluator& self, const ast::binary_expr& x,
 }
 
 template <ast::binary_op Op>
-auto dispatch_eval_binary(evaluator& self, const ast::binary_expr& x,
-                          const series& left, const series& right) -> series {
+auto dispatch_eval_binary(evaluator& self, ast::binary_expr const& x,
+                          series const& left, series const& right,
+                          ActiveRows active, int64_t offset) -> series {
 #define TENZIR_TQL2_DISPATCH_LHS(Type)                                         \
   if (auto typed = left.as<Type>()) {                                          \
-    return dispatch_eval_rhs<Op>(self, x, *typed, right);                      \
+    return dispatch_eval_rhs<Op>(self, x, *typed, right, active, offset);      \
   }
   TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_LHS);
 #undef TENZIR_TQL2_DISPATCH_LHS
@@ -760,24 +804,33 @@ auto dispatch_eval_binary(evaluator& self, const ast::binary_expr& x,
 #undef TENZIR_TQL2_DISPATCH_CONCRETE_TYPES
 
 template <ast::binary_op Op>
-auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
+auto eval_op(evaluator& self, ast::binary_expr const& x, ActiveRows active)
+  -> multi_series {
   TENZIR_ASSERT_EQ(x.op.inner, Op);
-  auto left = self.eval(x.left);
-  auto right = self.eval(x.right);
+  auto left = self.eval(x.left, active);
+  auto right = self.eval(x.right, active);
   TENZIR_ASSERT_EQ(left.length(), right.length());
-  return map_series(std::move(left), std::move(right),
-                    [&](series left, series right) {
-                      return dispatch_eval_binary<Op>(self, x, left, right);
-                    });
+  // Track the global offset for each aligned part so EvalBinOp can map local
+  // indices to the correct positions in the active bitmap.
+  auto offset = int64_t{0};
+  return map_series(
+    std::move(left), std::move(right), [&](series left, series right) {
+      auto part_len = left.length();
+      auto result
+        = dispatch_eval_binary<Op>(self, x, left, right, active, offset);
+      offset += part_len;
+      return result;
+    });
 }
 
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::and_ or Op == ast::binary_op::or_)
-auto eval_and_or_eager(evaluator& self, const ast::binary_expr& x) -> series {
+auto eval_and_or_eager(evaluator& self, ast::binary_expr const& x,
+                       ActiveRows active) -> series {
   auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
   check(builder.Reserve(self.length()));
-  for (auto [left, right] :
-       split_multi_series(self.eval(x.left), self.eval(x.right))) {
+  for (auto [left, right] : split_multi_series(self.eval(x.left, active),
+                                               self.eval(x.right, active))) {
     const auto length = left.length();
     TENZIR_ASSERT_EQ(length, right.length());
     const auto typed_left = left.as<bool_type>();
@@ -862,141 +915,118 @@ auto eval_and_or_eager(evaluator& self, const ast::binary_expr& x) -> series {
 }
 
 template <ast::binary_op Op>
-auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
+auto eval_and_or(evaluator& self, ast::binary_expr const& x, ActiveRows active)
+  -> series {
   if (disable_short_circuiting()) {
-    return eval_and_or_eager<Op>(self, x);
+    return eval_and_or_eager<Op>(self, x, active);
   }
-  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-  check(builder.Reserve(self.length()));
-  auto left_offset = int64_t{0};
-  for (const auto& left : self.eval(x.left)) {
-    const auto length = left.length();
-    const auto left_begin = left_offset;
-    const auto left_end = left_begin + length;
-    left_offset += length;
-    const auto typed_left = left.as<bool_type>();
+  // Evaluate the left side and materialize it into a flat BooleanArray.
+  // Non-bool left parts are treated as null.
+  auto left_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(left_builder.Reserve(self.length()));
+  auto warned_left_mismatch = false;
+  for (auto& left : self.eval(x.left, active)) {
+    auto typed_left = left.as<bool_type>();
     if (not typed_left) {
-      if (not is<null_type>(left.type)) {
+      if (not is<null_type>(left.type) and not warned_left_mismatch) {
+        warned_left_mismatch = true;
         diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
           .primary(x.left)
           .hint("the result of this expression is `null`")
           .emit(self.ctx());
       }
+      check(left_builder.AppendNulls(left.length()));
+      continue;
     }
-    const auto short_circuit_eval_right = [&]<bool Value>() {
-      for (const auto& right : self.slice(left_begin, left_end).eval(x.right)) {
-        if (const auto typed_right = right.as<bool_type>()) {
-          for (const auto& value : *typed_right->array) {
-            if (value and *value == Value) {
-              check(builder.Append(Value));
-              continue;
-            }
-            check(builder.AppendNull());
-          }
-          continue;
-        }
-        if (not is<null_type>(right.type)) {
-          diagnostic::warning("expected `bool`, but got `{}`",
-                              right.type.kind())
-            .primary(x.right)
-            .hint("the result of this expression is `null`")
-            .emit(self.ctx());
-        }
-        check(builder.AppendNulls(right.length()));
-      }
-    };
-    if constexpr (Op == ast::binary_op::and_) {
-      if (not typed_left) {
-        short_circuit_eval_right.template operator()<false>();
-        TENZIR_ASSERT_EQ(builder.length(), left_offset);
-        continue;
-      }
-      if (typed_left->array->false_count() == length) {
-        check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
-        TENZIR_ASSERT_EQ(builder.length(), left_offset);
-        continue;
-      }
-    } else if constexpr (Op == ast::binary_op::or_) {
-      if (not typed_left) {
-        short_circuit_eval_right.template operator()<true>();
-        TENZIR_ASSERT_EQ(builder.length(), left_offset);
-        continue;
-      }
-      if (typed_left->array->true_count() == length) {
-        check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
-        TENZIR_ASSERT_EQ(builder.length(), left_offset);
-        continue;
-      }
-    } else {
-      static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
-    }
-    TENZIR_ASSERT(typed_left);
-    const auto get_left = [&](int64_t i) -> bool {
-      return typed_left->array->IsValid(i) and typed_left->array->GetView(i);
-    };
-    const auto eval_right = [&](int64_t start, int64_t end) -> void {
-      TENZIR_ASSERT_LT(start, end);
-      for (const auto& right :
-           self.slice(left_begin + start, left_begin + end).eval(x.right)) {
-        if (is<bool_type>(right.type)) {
-          check(
-            builder.AppendArraySlice(*right.array->data(), 0, right.length()));
-          continue;
-        }
-        if (not is<null_type>(right.type)) {
-          diagnostic::warning("expected `bool`, but got `{}`",
-                              right.type.kind())
-            .primary(x.right)
-            .hint("the result of this expression is `null`")
-            .emit(self.ctx());
-        }
-        check(builder.AppendNulls(right.length()));
-      }
-    };
-    auto range_offset = int64_t{0};
-    auto range_current = get_left(0);
-    const auto append_until = [&](int64_t end) {
-      TENZIR_ASSERT_GT(end, range_offset);
-      TENZIR_ASSERT_LT(range_offset, length);
-      if constexpr (Op == ast::binary_op::and_ or Op == ast::binary_op::or_) {
-        if (range_current == (Op == ast::binary_op::and_)) {
-          eval_right(range_offset, end);
+    check(left_builder.AppendArraySlice(*typed_left->array->data(), 0,
+                                        left.length()));
+  }
+  auto left_flat = finish(left_builder);
+  TENZIR_ASSERT_EQ(left_flat->length(), self.length());
+  // Evaluate the right side, skipping rows where the left is already
+  // deterministic:
+  //   and: skip rows where left is definitely false  (skip_value = false)
+  //   or:  skip rows where left is definitely true   (skip_value = true)
+  // Null entries in left_flat are always active because the result may still
+  // depend on the right operand (e.g. null and false == false).
+  auto skip_val = (Op == ast::binary_op::or_);
+  auto right_active = compose_active_rows(active, *left_flat, skip_val);
+  auto right_ms = self.eval(x.right, ActiveRows{*right_active, false});
+  // Combine left_flat and right_ms using three-valued logic.
+  auto result_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(result_builder.Reserve(self.length()));
+  auto right_offset = int64_t{0};
+  for (auto& right : right_ms) {
+    auto length = right.length();
+    auto right_begin = right_offset;
+    right_offset += length;
+    auto* right_array = try_as<arrow::BooleanArray>(right.array.get());
+    auto warned_right_mismatch = false;
+    auto append_from_right = [&](int64_t local_i) {
+      if (right_array) {
+        if (right_array->IsValid(local_i)) {
+          check(result_builder.Append(right_array->GetView(local_i)));
         } else {
-          check(builder.AppendArraySlice(*left.array->data(), range_offset,
-                                         end - range_offset));
+          check(result_builder.AppendNull());
+        }
+        return;
+      }
+      if (not warned_right_mismatch and not is<null_type>(right.type)) {
+        warned_right_mismatch = true;
+        diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+          .primary(x.right)
+          .hint("the result of this expression is `null`")
+          .emit(self.ctx());
+      }
+      check(result_builder.AppendNull());
+    };
+    for (auto local_i = int64_t{0}; local_i < length; ++local_i) {
+      auto global_i = right_begin + local_i;
+      auto left_valid = left_flat->IsValid(global_i);
+      auto left_true = left_valid and left_flat->GetView(global_i);
+      if constexpr (Op == ast::binary_op::and_) {
+        if (left_true) {
+          append_from_right(local_i);
+        } else if (left_valid) {
+          // left is false: result is false, right was not evaluated
+          check(result_builder.Append(false));
+        } else {
+          // left is null: right was evaluated but result is null
+          check(result_builder.AppendNull());
         }
       } else {
-        static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
+        static_assert(Op == ast::binary_op::or_);
+        if (left_true) {
+          // left is true: result is true, right was not evaluated
+          check(result_builder.Append(true));
+        } else {
+          append_from_right(local_i);
+        }
       }
-      TENZIR_ASSERT_EQ(builder.length(), left_begin + end);
-    };
-    for (auto i = int64_t{1}; i < length; ++i) {
-      if (range_current == get_left(i)) {
-        continue;
-      }
-      append_until(i);
-      range_offset = i;
-      range_current = not range_current;
     }
-    append_until(length);
-    TENZIR_ASSERT_EQ(builder.length(), left_offset);
   }
-  auto result = finish(builder);
+  auto result = finish(result_builder);
   TENZIR_ASSERT_EQ(result->length(), self.length());
-  return series{
-    bool_type{},
-    std::move(result),
-  };
+  return series{bool_type{}, std::move(result)};
 }
 
-auto eval_if(evaluator& self, const ast::binary_expr& x,
-             const ast::expression& fallback
-             = ast::constant{caf::none, location::unknown}) -> multi_series {
+auto eval_if(evaluator& self, ast::binary_expr const& x,
+             ast::expression const& fallback, ActiveRows active)
+  -> multi_series;
+
+auto eval_if(evaluator& self, ast::binary_expr const& x, ActiveRows active = {})
+  -> multi_series {
+  return eval_if(self, x, ast::constant{caf::none, location::unknown}, active);
+}
+
+auto eval_if(evaluator& self, ast::binary_expr const& x,
+             ast::expression const& fallback, ActiveRows active)
+  -> multi_series {
   if (disable_short_circuiting()) {
     auto inputs = std::array<multi_series, 3>{
-      self.eval(x.right),
-      self.eval(x.left),
-      self.eval(fallback),
+      self.eval(x.right, active),
+      self.eval(x.left, active),
+      self.eval(fallback, active),
     };
     // TODO: There is an optimization possibility here where the `predicate` is
     // iterated independently of the `map_series` call, removing splits based on
@@ -1080,72 +1110,93 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
       return result;
     });
   }
-  auto right_offset = int64_t{0};
-  return map_series(
-    self.eval(x.right), [&](const series& right) -> multi_series {
-      const auto length = right.length();
-      const auto right_begin = right_offset;
-      const auto right_end = right_begin + length;
-      right_offset += length;
-      const auto typed_right = right.as<bool_type>();
-      if (not typed_right) {
-        diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+  // Non-eager: materialize condition into a no-null BooleanArray (null → false),
+  // evaluate branches with ActiveRows to skip irrelevant rows, then combine.
+  auto cond_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(cond_builder.Reserve(self.length()));
+  auto warned_cond_type = false;
+  auto warned_cond_null = false;
+  for (auto& cond_part : self.eval(x.right, active)) {
+    auto typed = cond_part.as<bool_type>();
+    if (not typed) {
+      if (not is<null_type>(cond_part.type) and not warned_cond_type) {
+        warned_cond_type = true;
+        diagnostic::warning("expected `bool`, but got `{}`",
+                            cond_part.type.kind())
           .primary(x.right)
           .hint("this will be treated as `false`")
           .emit(self.ctx());
-        return self.slice(right_begin, right_end).eval(fallback);
       }
-      if (typed_right->array->true_count() == length) {
-        return self.slice(right_begin, right_end).eval(x.left);
+      for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
+        cond_builder.UnsafeAppend(false);
       }
-      if (typed_right->array->null_count() > 0) {
-        diagnostic::warning("expected `bool`, but got `null`")
-          .primary(x.right)
-          .hint("use `else` to provide a fallback value")
-          .emit(self.ctx());
+      continue;
+    }
+    if (typed->array->null_count() > 0 and not warned_cond_null) {
+      warned_cond_null = true;
+      diagnostic::warning("expected `bool`, but got `null`")
+        .primary(x.right)
+        .hint("use `else` to provide a fallback value")
+        .emit(self.ctx());
+    }
+    for (auto i = int64_t{0}; i < typed->array->length(); ++i) {
+      cond_builder.UnsafeAppend(typed->array->IsValid(i)
+                                and typed->array->GetView(i));
+    }
+  }
+  auto cond_flat = finish(cond_builder);
+  TENZIR_ASSERT_EQ(cond_flat->length(), self.length());
+  // Then-branch: active where cond is true (skip_value=false → skip false rows).
+  // Else-branch: active where cond is false (skip_value=true → skip true rows).
+  auto then_active = compose_active_rows(active, *cond_flat, false);
+  auto else_active = compose_active_rows(active, *cond_flat, true);
+  auto then_ms = self.eval(x.left, ActiveRows{*then_active, false});
+  auto else_ms = self.eval(fallback, ActiveRows{*else_active, false});
+  // Combine: pick then where cond is true, else where cond is false.
+  auto result = multi_series{};
+  auto offset = int64_t{0};
+  for (auto [then_part, else_part] : split_multi_series(then_ms, else_ms)) {
+    auto length = then_part.length();
+    auto begin = offset;
+    offset += length;
+    auto get_cond = [&](int64_t i) -> bool {
+      return cond_flat->GetView(begin + i);
+    };
+    auto range_start = int64_t{0};
+    auto range_val = get_cond(0);
+    auto append_range = [&](int64_t end) {
+      result.append(
+        (range_val ? then_part : else_part).slice(range_start, end));
+    };
+    for (auto i = int64_t{1}; i < length; ++i) {
+      if (get_cond(i) == range_val) {
+        continue;
       }
-      if (typed_right->array->true_count() == 0) {
-        return self.slice(right_begin, right_end).eval(fallback);
-      }
-      const auto get_right = [&](int64_t i) -> bool {
-        return typed_right->array->IsValid(i)
-               and typed_right->array->GetView(i);
-      };
-      auto result = multi_series{};
-      auto range_offset = int64_t{0};
-      auto range_current = get_right(0);
-      const auto append_until = [&](int64_t end) {
-        result.append(self.slice(right_begin + range_offset, right_begin + end)
-                        .eval(range_current ? x.left : fallback));
-      };
-      for (auto i = int64_t{1}; i < length; ++i) {
-        if (range_current == get_right(i)) {
-          continue;
-        }
-        append_until(i);
-        range_offset = i;
-        range_current = not range_current;
-      }
-      append_until(length);
-      TENZIR_ASSERT_EQ(result.length(), length);
-      return result;
-    });
+      append_range(i);
+      range_start = i;
+      range_val = not range_val;
+    }
+    append_range(length);
+  }
+  TENZIR_ASSERT_EQ(result.length(), self.length());
+  return result;
 }
 
-auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
+auto eval_else(evaluator& self, ast::binary_expr const& x, ActiveRows active)
+  -> multi_series {
   // Short-circuit the evaluation of `x if y else z`, avoiding the
   // construction of null series. This is also important for correctness, as
   // `null if true else 42` should return `null`, but without this would return
   // `42`.
-  if (const auto* binop = try_as<ast::binary_expr>(x.left)) {
+  if (auto const* binop = try_as<ast::binary_expr>(x.left)) {
     if (binop->op.inner == ast::binary_op::if_) {
-      return eval_if(self, *binop, x.right);
+      return eval_if(self, *binop, x.right, active);
     }
   }
   if (disable_short_circuiting()) {
     auto inputs = std::array<multi_series, 2>{
-      self.eval(x.left),
-      self.eval(x.right),
+      self.eval(x.left, active),
+      self.eval(x.right, active),
     };
     return map_series(inputs, [&](std::span<series> parts) -> multi_series {
       TENZIR_ASSERT_EQ(parts.size(), 2u);
@@ -1182,53 +1233,66 @@ auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
       return result;
     });
   }
-  auto left_offset = int64_t{0};
-  return map_series(self.eval(x.left), [&](series left) -> multi_series {
-    const auto length = left.length();
-    const auto left_begin = left_offset;
-    const auto left_end = left_begin + length;
-    left_offset += length;
-    if (left.array->null_count() == 0) {
-      return left;
+  // Non-eager: evaluate left, build a null mask, then evaluate right only for
+  // rows where left is null, and combine.
+  auto left_ms = self.eval(x.left, active);
+  // Build a BooleanArray: true where left[i] is null.
+  auto null_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(null_builder.Reserve(self.length()));
+  for (auto& left_part : left_ms) {
+    for (auto i = int64_t{0}; i < left_part.length(); ++i) {
+      null_builder.UnsafeAppend(left_part.array->IsNull(i));
     }
-    if (left.array->null_count() == length) {
-      return self.slice(left_begin, left_end).eval(x.right);
+  }
+  auto left_is_null = finish(null_builder);
+  TENZIR_ASSERT_EQ(left_is_null->length(), self.length());
+  // Evaluate right only where left is null:
+  //   left_is_null[i]=false (non-null left) → skip, skip_value=false.
+  auto right_active = compose_active_rows(active, *left_is_null, false);
+  auto right_ms = self.eval(x.right, ActiveRows{*right_active, false});
+  // Combine: pick left where non-null, else pick right.
+  auto result = multi_series{};
+  for (auto [left_part, right_part] : split_multi_series(left_ms, right_ms)) {
+    auto length = left_part.length();
+    if (left_part.array->null_count() == 0) {
+      result.append(left_part);
+      continue;
     }
-    const auto get_left_valid = [&](int64_t i) -> bool {
-      return left.array->IsValid(i);
-    };
-    auto result = multi_series{};
-    auto range_offset = int64_t{0};
-    auto range_current = get_left_valid(0);
-    const auto append_until = [&](int64_t end) {
-      if (not range_current) {
-        result.append(
-          self.slice(left_begin + range_offset, left_begin + end).eval(x.right));
-        return;
+    if (left_part.array->null_count() == length) {
+      result.append(right_part);
+      continue;
+    }
+    auto range_start = int64_t{0};
+    auto range_valid = left_part.array->IsValid(0);
+    auto append_range = [&](int64_t end) {
+      if (range_valid) {
+        result.append(left_part.slice(range_start, end));
+      } else {
+        result.append(right_part.slice(range_start, end));
       }
-      result.append(left.slice(range_offset, end));
     };
     for (auto i = int64_t{1}; i < length; ++i) {
-      if (range_current == get_left_valid(i)) {
+      if (left_part.array->IsValid(i) == range_valid) {
         continue;
       }
-      append_until(i);
-      range_offset = i;
-      range_current = not range_current;
+      append_range(i);
+      range_start = i;
+      range_valid = not range_valid;
     }
-    append_until(length);
-    TENZIR_ASSERT_EQ(result.length(), length);
-    return result;
-  });
+    append_range(length);
+  }
+  TENZIR_ASSERT_EQ(result.length(), self.length());
+  return result;
 }
 
 } // namespace
 
-auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
+auto evaluator::eval(ast::binary_expr const& x, ActiveRows active)
+  -> multi_series {
   switch (x.op.inner) {
 #define X(op)                                                                  \
   case ast::binary_op::op:                                                     \
-    return eval_op<ast::binary_op::op>(*this, x)
+    return eval_op<ast::binary_op::op>(*this, x, active)
     X(add);
     X(sub);
     X(mul);
@@ -1244,13 +1308,13 @@ auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
       // These four have special handling as they short-circuit the evaluation
       // of either side of the expression.
     case ast::binary_op::and_:
-      return eval_and_or<ast::binary_op::and_>(*this, x);
+      return eval_and_or<ast::binary_op::and_>(*this, x, active);
     case ast::binary_op::or_:
-      return eval_and_or<ast::binary_op::or_>(*this, x);
+      return eval_and_or<ast::binary_op::or_>(*this, x, active);
     case ast::binary_op::if_:
-      return eval_if(*this, x);
+      return eval_if(*this, x, active);
     case ast::binary_op::else_:
-      return eval_else(*this, x);
+      return eval_else(*this, x, active);
   }
   TENZIR_UNREACHABLE();
 }

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/active_rows.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/series.hpp"
@@ -46,37 +47,38 @@ public:
     return result;
   }
 
-  auto eval(const ast::expression& x) -> multi_series;
+  auto eval(ast::expression const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::constant& x) -> multi_series;
+  auto eval(ast::constant const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::record& x) -> multi_series;
+  auto eval(ast::record const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::list& x) -> multi_series;
+  auto eval(ast::list const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::this_& x) -> multi_series;
+  auto eval(ast::this_ const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::root_field& x) -> multi_series;
+  auto eval(ast::root_field const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::function_call& x) -> multi_series;
+  auto eval(ast::function_call const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::unary_expr& x) -> multi_series;
+  auto eval(ast::unary_expr const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::binary_expr& x) -> multi_series;
+  auto eval(ast::binary_expr const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::field_access& x) -> multi_series;
+  auto eval(ast::field_access const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::assignment& x) -> multi_series;
+  auto eval(ast::assignment const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::meta& x) -> multi_series;
+  auto eval(ast::meta const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::index_expr& x) -> multi_series;
+  auto eval(ast::index_expr const& x, ActiveRows active) -> multi_series;
 
-  auto eval(const ast::format_expr& x) -> multi_series;
+  auto eval(ast::format_expr const& x, ActiveRows active) -> multi_series;
 
   template <class T>
     requires(detail::tl_contains<ast::expression_kinds, T>::value)
-  auto eval(const T& x) -> multi_series {
+  auto eval(T const& x, ActiveRows active) -> multi_series {
+    TENZIR_UNUSED(active);
     return not_implemented(x);
   }
 
