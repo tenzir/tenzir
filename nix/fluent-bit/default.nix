@@ -84,52 +84,50 @@ stdenv.mkDerivation (finalAttrs: {
     pkg-config
   ];
 
-  buildInputs =
-    [
-      c-ares
-      # Needed by rdkafka.
-      curl
-      libbacktrace
-      libyaml
-      luajit
-      nghttp2.dev
-      openssl
-      rdkafka
-      # Needed by rdkafka.
-      zlib
-      # Needed by rdkafka.
-      zstd
-    ]
-    ++ lib.optionals stdenv.hostPlatform.isLinux [
-      musl-fts
-    ]
-    ++ lib.optionals (stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isStatic) [
-      # libbpf doesn't build for Darwin yet.
-      libbpf
-      systemd
-    ];
+  buildInputs = [
+    c-ares
+    # Needed by rdkafka.
+    curl
+    libbacktrace
+    libyaml
+    luajit
+    nghttp2.dev
+    openssl
+    rdkafka
+    # Needed by rdkafka.
+    zlib
+    # Needed by rdkafka.
+    zstd
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
+    musl-fts
+  ]
+  ++ lib.optionals (stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isStatic) [
+    # libbpf doesn't build for Darwin yet.
+    libbpf
+    systemd
+  ];
 
   env = lib.optionalAttrs stdenv.hostPlatform.isDarwin {
     NIX_LDFLAGS = "-lzstd";
   };
 
-  cmakeFlags =
-    [
-      "-DFLB_RELEASE=ON"
-      "-DFLB_DEBUG=OFF"
-      "-DFLB_PREFER_SYSTEM_LIBS=Yes"
-      "-DFLB_CORO_STACK_SIZE=24576"
-    ]
-    ++ lib.optionals stdenv.cc.isClang [
-      # FLB_SECURITY causes bad linker options for Clang to be set.
-      "-DFLB_SECURITY=Off"
-    ]
-    ++ lib.optionals stdenv.hostPlatform.isStatic [
-      "-DFLB_BINARY=OFF"
-      "-DFLB_SHARED_LIB=OFF"
-      "-DFLB_LUAJIT=OFF"
-      "-DFLB_OUT_PGSQL=OFF"
-    ];
+  cmakeFlags = [
+    "-DFLB_RELEASE=ON"
+    "-DFLB_DEBUG=OFF"
+    "-DFLB_PREFER_SYSTEM_LIBS=Yes"
+    "-DFLB_CORO_STACK_SIZE=24576"
+  ]
+  ++ lib.optionals stdenv.cc.isClang [
+    # FLB_SECURITY causes bad linker options for Clang to be set.
+    "-DFLB_SECURITY=Off"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isStatic [
+    "-DFLB_BINARY=OFF"
+    "-DFLB_SHARED_LIB=OFF"
+    "-DFLB_LUAJIT=OFF"
+    "-DFLB_OUT_PGSQL=OFF"
+  ];
 
   outputs = [
     "out"

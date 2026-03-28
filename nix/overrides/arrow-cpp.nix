@@ -34,18 +34,23 @@ arrow-cpp.overrideAttrs (orig: {
     orig.buildInputs
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       sqlite
-    ] ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic ) [
+    ]
+    ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) [
       iconv
     ];
 
   # We replace the proConfigure phase of the upstream package with one that supports zoneinfo
   # lookups in arrow's default paths again, because we don't want to ship zoneinfo with the
   # packages built from the static binary.
-  preConfigure = if stdenv.hostPlatform.isStatic then ''
-    patchShebangs build-support/
-    substituteInPlace "src/arrow/vendored/datetime/tz.cpp" \
-      --replace-fail "NIX_STORE_ZONEINFO" "${tzdata}/share/zoneinfo"
-  '' else orig.preConfigure;
+  preConfigure =
+    if stdenv.hostPlatform.isStatic then
+      ''
+        patchShebangs build-support/
+        substituteInPlace "src/arrow/vendored/datetime/tz.cpp" \
+          --replace-fail "NIX_STORE_ZONEINFO" "${tzdata}/share/zoneinfo"
+      ''
+    else
+      orig.preConfigure;
 
   cmakeFlags =
     orig.cmakeFlags
@@ -62,10 +67,13 @@ arrow-cpp.overrideAttrs (orig: {
 
   doCheck = false;
 
-  env =
-    ((orig.env or { })
+  env = (
+    (orig.env or { })
     // {
-      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+      NIX_LDFLAGS = lib.optionalString (
+        stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
+      ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
       GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
-    });
+    }
+  );
 })

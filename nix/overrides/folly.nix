@@ -26,7 +26,7 @@ folly.overrideAttrs (orig: {
   patches = (
     (builtins.filter (
       x:
-      # relaced below
+      # replaced below
       ((builtins.match ".*-memset-memcpy-aarch64\.patch" "${x}") == null)
       # no longer applicable
       && ((builtins.match ".*-folly-fix-glog-0\.7\.patch$" "${x}") == null)

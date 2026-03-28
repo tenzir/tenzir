@@ -45,22 +45,21 @@ buildGoModule (
     #  "-shared"
     #];
 
-    ldflags =
-      [
-        "-s"
-        "-w"
-      ]
-      ++ (
-        if stdenv.hostPlatform.isStatic then
-          [
-            "-buildmode=c-archive"
-            "-extar=${stdenv.cc.targetPrefix}ar"
-          ]
-        else
-          [
-            "-buildmode=c-shared"
-          ]
-      );
+    ldflags = [
+      "-s"
+      "-w"
+    ]
+    ++ (
+      if stdenv.hostPlatform.isStatic then
+        [
+          "-buildmode=c-archive"
+          "-extar=${stdenv.cc.targetPrefix}ar"
+        ]
+      else
+        [
+          "-buildmode=c-shared"
+        ]
+    );
     #++ [ "-buildmode=c-archive" ];
 
     doCheck = false;

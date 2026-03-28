@@ -70,11 +70,10 @@ in
         "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
         "-DCMAKE_LINKER_TYPE=LLD"
       ];
-    hardeningDisable =
-      [
-        "fortify"
-        "pic"
-      ];
+    hardeningDisable = [
+      "fortify"
+      "pic"
+    ];
     dontStrip = true;
     doCheck = false;
   }

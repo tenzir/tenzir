@@ -84,29 +84,28 @@ let
       version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
 
       extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
-      bundledPlugins =
-        [
-          "plugins/amqp"
-          "plugins/azure-blob-storage"
-          "plugins/clickhouse"
-          "plugins/fluent-bit"
-          "plugins/from_velociraptor"
-          "plugins/gcs"
-          "plugins/google-cloud-pubsub"
-          "plugins/kafka"
-          "plugins/nic"
-          "plugins/parquet"
-          "plugins/s3"
-          "plugins/sigma"
-          "plugins/sqs"
-          "plugins/web"
-          "plugins/zmq"
-        ]
-        # Temporarily disable yara on the static mac build because of issues
-        # building protobufc.
-        ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
-          "plugins/yara"
-        ];
+      bundledPlugins = [
+        "plugins/amqp"
+        "plugins/azure-blob-storage"
+        "plugins/clickhouse"
+        "plugins/fluent-bit"
+        "plugins/from_velociraptor"
+        "plugins/gcs"
+        "plugins/google-cloud-pubsub"
+        "plugins/kafka"
+        "plugins/nic"
+        "plugins/parquet"
+        "plugins/s3"
+        "plugins/sigma"
+        "plugins/sqs"
+        "plugins/web"
+        "plugins/zmq"
+      ]
+      # Temporarily disable yara on the static mac build because of issues
+      # building protobufc.
+      ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
+        "plugins/yara"
+      ];
       py3 =
         let
           p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
@@ -167,7 +166,8 @@ let
               ;
             paths = [
               self
-            ] ++ builtins.sort (lhs: rhs: lhs.name < rhs.name) (builtins.concatLists thisLayer.plugins);
+            ]
+            ++ builtins.sort (lhs: rhs: lhs.name < rhs.name) (builtins.concatLists thisLayer.plugins);
             nativeBuildInputs = [ makeBinaryWrapper ];
             postBuild = ''
               rm $out/bin/tenzir
@@ -213,88 +213,85 @@ let
 
           outputs = [ "out" ] ++ (if isStatic then [ "package" ] else [ "dev" ]);
 
-          nativeBuildInputs =
-            [
-              cmake
-              ninja
-              protobuf
-              grpc
-              makeBinaryWrapper
-              uv
-            ]
-            ++ lib.optionals stdenv.isLinux [
-              dpkg
-              rpm
-            ];
+          nativeBuildInputs = [
+            cmake
+            ninja
+            protobuf
+            grpc
+            makeBinaryWrapper
+            uv
+          ]
+          ++ lib.optionals stdenv.isLinux [
+            dpkg
+            rpm
+          ];
           propagatedNativeBuildInputs = [ pkg-config ];
-          buildInputs =
-            [
-              aws-sdk-cpp-tenzir
-              azure-sdk-for-cpp.storage-blobs
-              libbacktrace
-              clickhouse-cpp
-              fast-float
-              fluent-bit
-              libpcap
-              libunwind
-              rabbitmq-c
-              rdkafka
-              cyrus_sasl
-              cppzmq
-              restinio
-              (restinio.override {
-                with_boost_asio = true;
-              })
-              llhttp
-              c-ares
-              expat
-            ]
-            ++ lib.optionals stdenv.isLinux [
-              pfs
-            ]
-            ++ lib.optionals (stdenv.cc.isClang && isStatic) [
-              empty-libgcc_eh
-            ]
-            ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
-              yara
-              jansson
-            ];
-          propagatedBuildInputs =
-            [
-              arrow-cpp
-              boost
-              caf
-              curl
-              flatbuffers
-              folly
-              proxygen
-              double-conversion
-              libevent
-              snappy
-              google-cloud-cpp-tenzir
-              nlohmann_json
-              crc32c
-              grpc
-              libmaxminddb
-              jemalloc-tenzir
-              mimalloc-tenzir
-              protobuf
-              re2
-              reproc
-              robin-map
-              simdjson
-              spdlog
-              c-ares
-              expat
-              yaml-cpp
-              xxHash
-            ]
-            ++ lib.optionals stdenv.isLinux [
-              liburing
-            ]
-            ++ lib.optionals (!isStatic) [
-              arrow-adbc-cpp
-            ];
+          buildInputs = [
+            aws-sdk-cpp-tenzir
+            azure-sdk-for-cpp.storage-blobs
+            libbacktrace
+            clickhouse-cpp
+            fast-float
+            fluent-bit
+            libpcap
+            libunwind
+            rabbitmq-c
+            rdkafka
+            cyrus_sasl
+            cppzmq
+            restinio
+            (restinio.override {
+              with_boost_asio = true;
+            })
+            llhttp
+            c-ares
+            expat
+          ]
+          ++ lib.optionals stdenv.isLinux [
+            pfs
+          ]
+          ++ lib.optionals (stdenv.cc.isClang && isStatic) [
+            empty-libgcc_eh
+          ]
+          ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
+            yara
+            jansson
+          ];
+          propagatedBuildInputs = [
+            arrow-cpp
+            boost
+            caf
+            curl
+            flatbuffers
+            folly
+            proxygen
+            double-conversion
+            libevent
+            snappy
+            google-cloud-cpp-tenzir
+            nlohmann_json
+            crc32c
+            grpc
+            libmaxminddb
+            jemalloc-tenzir
+            mimalloc-tenzir
+            protobuf
+            re2
+            reproc
+            robin-map
+            simdjson
+            spdlog
+            c-ares
+            expat
+            yaml-cpp
+            xxHash
+          ]
+          ++ lib.optionals stdenv.isLinux [
+            liburing
+          ]
+          ++ lib.optionals (!isStatic) [
+            arrow-adbc-cpp
+          ];
 
           env = {
             POETRY_VIRTUALENVS_IN_PROJECT = 1;
@@ -302,79 +299,80 @@ let
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
-            UV_PYTHON="${lib.getBin py3.python}/bin/python3";
-            NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv";
+            UV_PYTHON = "${lib.getBin py3.python}/bin/python3";
+            NIX_LDFLAGS = lib.optionalString (
+              stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
+            ) "-L${lib.getDev iconv}/lib -liconv";
           };
-          cmakeFlags =
-            [
-              "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
-              "-DCAF_ROOT_DIR=${caf}"
-              "-DTENZIR_ALLOCATOR=jemalloc"
-              "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
-              "-DTENZIR_ENABLE_MANPAGES=OFF"
-              "-DTENZIR_ENABLE_BUNDLED_DEPENDENCIES=OFF"
-              "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
-              "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
-              "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
-              "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
-              # Disabled for now, takes long to compile and integration tests give
-              # reasonable coverage.
-              "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
-              "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
-            ]
-            ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [
-              "-DTENZIR_INSTALL_ARCHIVEDIR=${placeholder "dev"}/lib"
-              "-DTENZIR_INSTALL_CMAKEDIR=${placeholder "dev"}/lib/cmake"
-            ]
-            ++ lib.optionals isStatic [
-              # Hint paths for FindEXPAT module (CMake uses MODULE mode)
-              "-DEXPAT_LIBRARY=${expat}/lib/libexpat.a"
-              "-DEXPAT_INCLUDE_DIR=${lib.getDev expat}/include"
-              "-UCMAKE_INSTALL_BINDIR"
-              "-UCMAKE_INSTALL_SBINDIR"
-              "-UCMAKE_INSTALL_INCLUDEDIR"
-              "-UCMAKE_INSTALL_OLDINCLUDEDIR"
-              "-UCMAKE_INSTALL_MANDIR"
-              "-UCMAKE_INSTALL_INFODIR"
-              "-UCMAKE_INSTALL_DOCDIR"
-              "-UCMAKE_INSTALL_LIBDIR"
-              "-UCMAKE_INSTALL_LIBEXECDIR"
-              "-UCMAKE_INSTALL_LOCALEDIR"
-              "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
-              "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-              "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
-              "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
-              "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
-              "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
-            ]
-            ++ lib.optionals (isStatic && stdenv.hostPlatform.isDarwin) [
-              "-DTENZIR_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt"
-            ]
-            ++ lib.optionals stdenv.cc.isClang [
-              "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
-              "-DCMAKE_CXX_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
-              "-DCMAKE_C_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
-              "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
-            ]
-            ++ lib.optionals stdenv.hostPlatform.isx86_64 [
-              "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
-              "-DTENZIR_ENABLE_SSSE3_INSTRUCTIONS=ON"
-              "-DTENZIR_ENABLE_SSE4_1_INSTRUCTIONS=ON"
-              "-DTENZIR_ENABLE_SSE4_1_INSTRUCTIONS=ON"
-              # AVX and up is disabled for compatibility.
-              "-DTENZIR_ENABLE_AVX_INSTRUCTIONS=OFF"
-              "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
-            ]
-            ++ lib.optionals stdenv.hostPlatform.isDarwin [
-              # Want's to install into the users home, but that would be the
-              # builder in the Nix context, and that doesn't make sense.
-              "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
-            ]
-            ++ extraCmakeFlags;
+          cmakeFlags = [
+            "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
+            "-DCAF_ROOT_DIR=${caf}"
+            "-DTENZIR_ALLOCATOR=jemalloc"
+            "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
+            "-DTENZIR_ENABLE_MANPAGES=OFF"
+            "-DTENZIR_ENABLE_BUNDLED_DEPENDENCIES=OFF"
+            "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
+            "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
+            "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
+            "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
+            # Disabled for now, takes long to compile and integration tests give
+            # reasonable coverage.
+            "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
+            "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
+          ]
+          ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [
+            "-DTENZIR_INSTALL_ARCHIVEDIR=${placeholder "dev"}/lib"
+            "-DTENZIR_INSTALL_CMAKEDIR=${placeholder "dev"}/lib/cmake"
+          ]
+          ++ lib.optionals isStatic [
+            # Hint paths for FindEXPAT module (CMake uses MODULE mode)
+            "-DEXPAT_LIBRARY=${expat}/lib/libexpat.a"
+            "-DEXPAT_INCLUDE_DIR=${lib.getDev expat}/include"
+            "-UCMAKE_INSTALL_BINDIR"
+            "-UCMAKE_INSTALL_SBINDIR"
+            "-UCMAKE_INSTALL_INCLUDEDIR"
+            "-UCMAKE_INSTALL_OLDINCLUDEDIR"
+            "-UCMAKE_INSTALL_MANDIR"
+            "-UCMAKE_INSTALL_INFODIR"
+            "-UCMAKE_INSTALL_DOCDIR"
+            "-UCMAKE_INSTALL_LIBDIR"
+            "-UCMAKE_INSTALL_LIBEXECDIR"
+            "-UCMAKE_INSTALL_LOCALEDIR"
+            "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
+            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+            "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
+            "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
+            "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
+            "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
+          ]
+          ++ lib.optionals (isStatic && stdenv.hostPlatform.isDarwin) [
+            "-DTENZIR_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt"
+          ]
+          ++ lib.optionals stdenv.cc.isClang [
+            "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
+            "-DCMAKE_CXX_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
+            "-DCMAKE_C_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
+            "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
+          ]
+          ++ lib.optionals stdenv.hostPlatform.isx86_64 [
+            "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSSE3_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSE4_1_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSE4_1_INSTRUCTIONS=ON"
+            # AVX and up is disabled for compatibility.
+            "-DTENZIR_ENABLE_AVX_INSTRUCTIONS=OFF"
+            "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
+          ]
+          ++ lib.optionals stdenv.hostPlatform.isDarwin [
+            # Want's to install into the users home, but that would be the
+            # builder in the Nix context, and that doesn't make sense.
+            "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
+          ]
+          ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure =
-            (if isReleaseBuild then
+          preConfigure = (
+            if isReleaseBuild then
               ''
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
               ''
@@ -382,13 +380,13 @@ let
               ''
                 version_build_metadata=$(basename $out | cut -d'-' -f 1)
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              '');
+              ''
+          );
 
-          hardeningDisable =
-            lib.optionals isStatic [
-              "fortify"
-              "pic"
-            ];
+          hardeningDisable = lib.optionals isStatic [
+            "fortify"
+            "pic"
+          ];
 
           preBuild =
             let
@@ -478,21 +476,20 @@ let
         // lib.optionalAttrs isStatic {
           __noChroot = stdenv.hostPlatform.isDarwin;
 
-          buildPhase =
-            ''
-              runHook preBuild
-            ''
-            # Append /usr/bin to PATH so CPack can find `pkgbuild`.
-            + lib.optionalString stdenv.hostPlatform.isDarwin ''
-              PATH=$PATH:/usr/bin
-            ''
-            + ''
+          buildPhase = ''
+            runHook preBuild
+          ''
+          # Append /usr/bin to PATH so CPack can find `pkgbuild`.
+          + lib.optionalString stdenv.hostPlatform.isDarwin ''
+            PATH=$PATH:/usr/bin
+          ''
+          + ''
 
-              cmake --build . --target package --parallel $NIX_BUILD_CORES
-              rm -rf package/_CPack_Packages
+            cmake --build . --target package --parallel $NIX_BUILD_CORES
+            rm -rf package/_CPack_Packages
 
-              runHook postBuild
-            '';
+            runHook postBuild
+          '';
           installPhase = ''
             runHook preInstall
 

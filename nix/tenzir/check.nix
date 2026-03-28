@@ -53,7 +53,9 @@ stdenvNoCC.mkDerivation {
       reqs=(--no-deps ${tenzirPythonPkgs.tenzir-wheels}/*.whl)
       export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="''${reqs[*]}"
       ${template "."}
-      ${lib.concatMapStrings template (builtins.map (x: x.src or x) (builtins.concatLists unchecked.plugins))}
+      ${lib.concatMapStrings template (
+        builtins.map (x: x.src or x) (builtins.concatLists unchecked.plugins)
+      )}
     '';
 
   # We just symlink all outputs of the unchecked derivation.

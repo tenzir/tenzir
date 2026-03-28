@@ -65,7 +65,8 @@ let
     { copyToRoot = cacert; }
     { deps = extraTools; }
     { deps = [ pkg ]; }
-  ] ++ builtins.map (pluginLayer: { deps = pluginLayer; }) plugins;
+  ]
+  ++ builtins.map (pluginLayer: { deps = pluginLayer; }) plugins;
 
   layers = foldImageLayers layerDefs;
 

@@ -14,48 +14,48 @@ pkgs.mkShell (
       package.tenzir-de
       package.tenzir-de.unchecked
     ];
-    nativeBuildInputs =
-      [
-        pkgs.ccache
-        pkgs.clang-tools
-        pkgs.cmake-format
-        pkgs.nixfmt
-        pkgs.speeve
-        pkgs.libsodium
-        pkgs.markdownlint-cli
-        pkgs.poetry
-        pkgs.python3Packages.spdx-tools
-        pkgs.ruff
-        pkgs.shfmt
-        pkgs.uv
-        (pkgs.python3.withPackages (
-          ps: with ps; [
-            aiohttp
-            boto3
-            boto3-stubs
-            dynaconf
-            numpy
-            pandas
-            pip
-            pyarrow
-            python-box
-          ]
-        ))
-        pkgs.clangbuildanalyzer
-      ]
-      ++ package.tenzir-integration-test-deps
-      ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
-        # Make clang available as alternative compiler when it isn't the default.
-        pkgs.clang
-        pkgs.llvmPackages.bintools
-      ]
-      ++ lib.optionals pkgs.stdenv.isLinux [
-        # Temporarily only on Linux.
-        pkgs.pandoc
-        pkgs.gdb
-      ] ++ lib.optionals (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") [
-        pkgs.mold
-      ];
+    nativeBuildInputs = [
+      pkgs.ccache
+      pkgs.clang-tools
+      pkgs.cmake-format
+      pkgs.nixfmt
+      pkgs.speeve
+      pkgs.libsodium
+      pkgs.markdownlint-cli
+      pkgs.poetry
+      pkgs.python3Packages.spdx-tools
+      pkgs.ruff
+      pkgs.shfmt
+      pkgs.uv
+      (pkgs.python3.withPackages (
+        ps: with ps; [
+          aiohttp
+          boto3
+          boto3-stubs
+          dynaconf
+          numpy
+          pandas
+          pip
+          pyarrow
+          python-box
+        ]
+      ))
+      pkgs.clangbuildanalyzer
+    ]
+    ++ package.tenzir-integration-test-deps
+    ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
+      # Make clang available as alternative compiler when it isn't the default.
+      pkgs.clang
+      pkgs.llvmPackages.bintools
+    ]
+    ++ lib.optionals pkgs.stdenv.isLinux [
+      # Temporarily only on Linux.
+      pkgs.pandoc
+      pkgs.gdb
+    ]
+    ++ lib.optionals (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") [
+      pkgs.mold
+    ];
     # To build libcaf_openssl with bundled CAF.
     buildInputs = [
       pkgs.openssl
@@ -69,7 +69,8 @@ pkgs.mkShell (
       # uv is provided in the nativeBuildInputs above.
       export TENZIR_ENABLE_BUNDLED_UV=OFF
       export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$PWD/python"
-    '' + lib.optionalString (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") ''
+    ''
+    + lib.optionalString (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") ''
       export LDFLAGS="-fuse-ld=mold"
     '';
   }

@@ -20,11 +20,13 @@ let
 
 in
 {
-  curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
-    # Brings in a conflicting libiconv via libunistring.
-    idnSupport = false;
-    pslSupport = false;
-  });
+  curl = prevPkgs.curl.override (
+    lib.optionalAttrs (isDarwin && isStatic) {
+      # Brings in a conflicting libiconv via libunistring.
+      idnSupport = false;
+      pslSupport = false;
+    }
+  );
 
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };

@@ -28,11 +28,12 @@ buildPythonPackage rec {
     sha256 = "sha256-ije6OxbfZMsds4PqrZxzOuziGEE74PrV14X3qQdhIQY=";
   };
 
-  propagatedBuildInputs =
-    [ setuptools ]
-    ++ lib.optional iniSupport configobj
-    ++ lib.optional redisSupport redis
-    ++ lib.optional vaultSupport hvac;
+  propagatedBuildInputs = [
+    setuptools
+  ]
+  ++ lib.optional iniSupport configobj
+  ++ lib.optional redisSupport redis
+  ++ lib.optional vaultSupport hvac;
 
   nativeCheckInputs = [
     pytestCheckHook
