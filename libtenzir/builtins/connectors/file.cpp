@@ -7,8 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
-#include "tenzir/compile_ctx.hpp"
-#include "tenzir/substitute_ctx.hpp"
+#include "tenzir/async/blocking_executor.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -24,8 +23,8 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/fwd.hpp>
-#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -36,7 +35,6 @@
 #include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
-#include <iostream>
 #include <memory>
 #include <string_view>
 #include <unistd.h>
@@ -703,44 +701,48 @@ public:
   }
 };
 
-class SaveStdout final : public Operator<chunk_ptr, void> {
-public:
-  auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override {
-    std::cout << std::string_view{reinterpret_cast<char const*>(input->data()),
-                                  input->size()};
-    co_return;
-  }
+struct SaveStdoutArgs {
+  location self;
 };
 
-class SaveStdoutIr final : public ir::Operator {
+class SaveStdout final : public Operator<chunk_ptr, void> {
 public:
-  auto name() const -> std::string override {
-    return "SaveStdoutIr";
+  explicit SaveStdout(SaveStdoutArgs args) : args_{std::move(args)} {
   }
 
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    return {};
+  auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override {
+    TENZIR_ASSERT(input);
+    auto err = co_await spawn_blocking([input = std::move(input)] {
+      auto written = std::fwrite(input->data(), 1, input->size(), stdout);
+      return written != input->size() ? errno : 0;
+    });
+    if (err != 0) {
+      diagnostic::error("failed to write to stdout: {}",
+                        detail::describe_errno(err))
+        .primary(args_.self)
+        .emit(ctx);
+    }
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<chunk_ptr>());
-    return SaveStdout{};
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    auto err = co_await spawn_blocking([] {
+      return std::fflush(stdout) != 0 ? errno : 0;
+    });
+    if (err != 0) {
+      diagnostic::warning("failed to flush stdout: {}",
+                          detail::describe_errno(err))
+        .primary(args_.self)
+        .emit(ctx);
+    }
+    co_return FinalizeBehavior::done;
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    // TODO
-    return tag_v<void>;
-  }
-
-  friend auto inspect(auto& f, SaveStdoutIr& x) -> bool {
-    return f.object(x).fields();
-  }
+private:
+  SaveStdoutArgs args_;
 };
 
 class save_stdout_plugin final : public operator_plugin2<save_file_operator>,
-                                 public operator_compiler_plugin {
+                                 public OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "save_stdout";
@@ -754,11 +756,10 @@ public:
     return std::make_unique<save_file_operator>(std::move(args));
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
-    // FIXME
-    TENZIR_UNUSED(inv, ctx);
-    return SaveStdoutIr{};
+  auto describe() const -> Description override {
+    auto d = Describer<SaveStdoutArgs, SaveStdout>{};
+    d.operator_location(&SaveStdoutArgs::self);
+    return d.without_optimize();
   }
 };
 
@@ -820,6 +821,3 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::load_stdin_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::save_stdout_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdin_::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdout_::plugin)
-TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::ir::Operator,
-                            tenzir::plugins::file::SaveStdoutIr>);
