@@ -30,7 +30,7 @@ namespace tenzir {
 
 namespace {
 
-auto make_active_mask(ActiveRows active, int64_t length)
+auto make_active_mask(ActiveRows const& active, int64_t length)
   -> std::shared_ptr<arrow::BooleanArray> {
   auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
   check(builder.Reserve(length));
@@ -40,7 +40,7 @@ auto make_active_mask(ActiveRows active, int64_t length)
   return finish(builder);
 }
 
-auto scatter_active_rows(multi_series compressed, ActiveRows active,
+auto scatter_active_rows(multi_series compressed, ActiveRows const& active,
                          int64_t length) -> multi_series {
   auto result = multi_series{};
   auto current_type = std::optional<type>{};
@@ -137,7 +137,8 @@ auto suggest_field_name(std::string_view requested_field,
   return best_field;
 }
 
-auto evaluator::eval(ast::record const& x, ActiveRows active) -> multi_series {
+auto evaluator::eval(ast::record const& x, ActiveRows const& active)
+  -> multi_series {
   auto arrays = std::vector<multi_series>{};
   for (const auto& item : x.items) {
     arrays.push_back(eval(item.match(
@@ -201,7 +202,8 @@ auto evaluator::eval(ast::record const& x, ActiveRows active) -> multi_series {
   });
 }
 
-auto evaluator::eval(ast::list const& x, ActiveRows active) -> multi_series {
+auto evaluator::eval(ast::list const& x, ActiveRows const& active)
+  -> multi_series {
   if (x.items.empty()) {
     auto b = series_builder{};
     for (auto i = int64_t{0}; i < length_; ++i) {
@@ -296,9 +298,16 @@ auto evaluator::eval(ast::list const& x, ActiveRows active) -> multi_series {
   });
 }
 
-auto evaluator::eval(ast::field_access const& x, ActiveRows active)
+auto evaluator::eval(ast::field_access const& x, ActiveRows const& active)
   -> multi_series {
+  auto offset = int64_t{0};
   return map_series(eval(x.left, active), [&](series l) -> series {
+    auto active_slice = active.slice(offset, l.length());
+    offset += l.length();
+    auto active_constant = active_slice.as_constant();
+    if (active_constant == false) {
+      return series::null(null_type{}, l.length());
+    }
     if (auto null = l.as<null_type>()) {
       if (not x.suppress_warnings()) {
         diagnostic::warning("tried to access field of `null`")
@@ -322,11 +331,22 @@ auto evaluator::eval(ast::field_access const& x, ActiveRows active)
     if (auto idx = rec_ty->resolve_field(x.name.name)) {
       const auto has_null = s.null_count() != 0;
       if (has_null and not x.suppress_warnings()) {
-        diagnostic::warning("tried to access field of `null`")
-          .primary(x.name)
-          .note("field name is `{}`", x.name.name)
-          .hint("append `?` to suppress this warning")
-          .emit(ctx_);
+        auto warn = active_constant == true;
+        if (not warn) {
+          for (auto row = int64_t{0}; row < l.length(); ++row) {
+            if (active_slice.is_active(row) and s.IsNull(row)) {
+              warn = true;
+              break;
+            }
+          }
+        }
+        if (warn) {
+          diagnostic::warning("tried to access field of `null`")
+            .primary(x.name)
+            .note("field name is `{}`", x.name.name)
+            .hint("append `?` to suppress this warning")
+            .emit(ctx_);
+        }
         return series{
           rec_ty->field(*idx).type,
           check(s.GetFlattenedField(detail::narrow<int>(*idx),
@@ -355,7 +375,7 @@ auto evaluator::eval(ast::field_access const& x, ActiveRows active)
   });
 }
 
-auto evaluator::eval(ast::function_call const& x, ActiveRows active)
+auto evaluator::eval(ast::function_call const& x, ActiveRows const& active)
   -> multi_series {
   // TODO: We parse the function call every time we get a new batch here. We
   // could store the result in the AST if that becomes a problem, but that is
@@ -364,29 +384,14 @@ auto evaluator::eval(ast::function_call const& x, ActiveRows active)
   if (not func) {
     return series::null(null_type{}, length_);
   }
-  if (not active.array()) {
+  auto active_constant = active.as_constant();
+  if (active_constant == true) {
     return (*func)->run(function_use::evaluator{this}, ctx_);
   }
-  auto* input = get_input();
-  TENZIR_ASSERT_EQ(active.array()->length(), length_);
-  auto saw_active = false;
-  auto saw_inactive = false;
-  for (auto row = int64_t{0}; row < length_; ++row) {
-    if (active.is_active(row)) {
-      saw_active = true;
-    } else {
-      saw_inactive = true;
-    }
-    if (saw_active and saw_inactive) {
-      break;
-    }
-  }
-  if (not saw_inactive) {
-    return (*func)->run(function_use::evaluator{this}, ctx_);
-  }
-  if (not saw_active) {
+  if (active_constant == false) {
     return series::null(null_type{}, length_);
   }
+  auto* input = get_input();
   if (not input) {
     return series::null(null_type{}, length_);
   }
@@ -399,13 +404,14 @@ auto evaluator::eval(ast::function_call const& x, ActiveRows active)
   return scatter_active_rows(std::move(result), active, length_);
 }
 
-auto evaluator::eval(ast::this_ const& x, ActiveRows active) -> multi_series {
+auto evaluator::eval(ast::this_ const& x, ActiveRows const& active)
+  -> multi_series {
   TENZIR_UNUSED(active);
   const auto& input = input_or_throw(x);
   return series{input.schema(), check(to_record_batch(input)->ToStructArray())};
 }
 
-auto evaluator::eval(ast::root_field const& x, ActiveRows active)
+auto evaluator::eval(ast::root_field const& x, ActiveRows const& active)
   -> multi_series {
   TENZIR_UNUSED(active);
   const auto& input = input_or_throw(x);
@@ -430,7 +436,7 @@ auto evaluator::eval(ast::root_field const& x, ActiveRows active)
   return null();
 }
 
-auto evaluator::eval(ast::index_expr const& x, ActiveRows active)
+auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
   -> multi_series {
   // We map `foo["bar"]` onto the implementation of `foo.bar`, as that has a
   // faster implementation that is optimized for the accessed field name being a
@@ -687,7 +693,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows active)
     });
 }
 
-auto evaluator::eval(ast::meta const& x, ActiveRows active) -> multi_series {
+auto evaluator::eval(ast::meta const& x, ActiveRows const& active)
+  -> multi_series {
   TENZIR_UNUSED(active);
   const auto& input = input_or_throw(x);
   switch (x.kind) {
@@ -706,7 +713,7 @@ auto evaluator::eval(ast::meta const& x, ActiveRows active) -> multi_series {
   TENZIR_UNREACHABLE();
 }
 
-auto evaluator::eval(ast::assignment const& x, ActiveRows active)
+auto evaluator::eval(ast::assignment const& x, ActiveRows const& active)
   -> multi_series {
   TENZIR_UNUSED(active);
   // TODO: What shall happen if we hit this in const eval mode?
@@ -714,13 +721,13 @@ auto evaluator::eval(ast::assignment const& x, ActiveRows active)
   return null();
 }
 
-auto evaluator::eval(ast::constant const& x, ActiveRows active)
+auto evaluator::eval(ast::constant const& x, ActiveRows const& active)
   -> multi_series {
   TENZIR_UNUSED(active);
   return to_series(x.as_data());
 }
 
-auto evaluator::eval(ast::format_expr const& x, ActiveRows active)
+auto evaluator::eval(ast::format_expr const& x, ActiveRows const& active)
   -> multi_series {
   auto cols = std::vector<variant<std::string, multi_series>>{};
   cols.reserve(x.segments.size());
@@ -843,7 +850,7 @@ auto evaluator::eval(const ast::lambda_expr& x,
   return tenzir::eval(x, input, ctx_);
 }
 
-auto evaluator::eval(ast::expression const& x, ActiveRows active)
+auto evaluator::eval(ast::expression const& x, ActiveRows const& active)
   -> multi_series {
   return trace_panic(x, [&] {
     auto result = x.match([&](auto& y) {

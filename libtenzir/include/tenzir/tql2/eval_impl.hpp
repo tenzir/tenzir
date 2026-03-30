@@ -47,37 +47,46 @@ public:
     return result;
   }
 
-  auto eval(ast::expression const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::expression const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::constant const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::constant const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::record const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::record const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::list const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::list const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::this_ const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::this_ const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::root_field const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::root_field const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::function_call const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::function_call const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::unary_expr const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::unary_expr const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::binary_expr const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::binary_expr const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::field_access const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::field_access const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::assignment const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::assignment const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::meta const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::meta const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::index_expr const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::index_expr const& x, ActiveRows const& active)
+    -> multi_series;
 
-  auto eval(ast::format_expr const& x, ActiveRows active) -> multi_series;
+  auto eval(ast::format_expr const& x, ActiveRows const& active)
+    -> multi_series;
 
   template <class T>
     requires(detail::tl_contains<ast::expression_kinds, T>::value)
-  auto eval(T const& x, ActiveRows active) -> multi_series {
+  auto eval(T const& x, ActiveRows const& active) -> multi_series {
     TENZIR_UNUSED(active);
     return not_implemented(x);
   }

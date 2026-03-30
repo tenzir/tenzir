@@ -22,22 +22,25 @@ struct EvalUnOp;
 
 template <ast::unary_op Op>
 struct EvalUnOp<Op, null_type> {
-  static auto eval(const arrow::NullArray& x, auto warn)
+  static auto eval(arrow::NullArray const& x, auto warn,
+                   ActiveRows const& active)
     -> std::shared_ptr<arrow::NullArray> {
     TENZIR_UNUSED(warn);
+    TENZIR_UNUSED(active);
     return std::make_shared<arrow::NullArray>(x.data());
   }
 };
 
 template <>
 struct EvalUnOp<ast::unary_op::not_, bool_type> {
-  static auto eval(const arrow::BooleanArray& x, auto warn)
+  static auto eval(arrow::BooleanArray const& x, auto warn,
+                   ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
-    // TODO: Make sure this works or use simpler version.
     TENZIR_UNUSED(warn);
+    TENZIR_UNUSED(active);
     const auto& input = x.values();
     auto output = check(arrow::AllocateBuffer(input->size()));
-    const auto* input_ptr = input->data();
+    auto* input_ptr = input->data();
     auto* output_ptr = output->mutable_data();
     auto length = detail::narrow<size_t>(input->size());
     for (auto i = size_t{0}; i < length; ++i) {
@@ -54,13 +57,14 @@ template <numeric_type T>
 struct EvalUnOp<ast::unary_op::neg, T> {
   using U = std::conditional_t<std::same_as<T, uint64_type>, int64_type, T>;
 
-  static auto eval(const type_to_arrow_array_t<T>& x, auto warn)
+  static auto eval(type_to_arrow_array_t<T> const& x, auto warn,
+                   ActiveRows const& active)
     -> std::shared_ptr<type_to_arrow_array_t<U>> {
     auto b = type_to_arrow_builder_t<U>{tenzir::arrow_memory_pool()};
     check(b.Reserve(x.length()));
     auto overflow = false;
     for (auto i = int64_t{0}; i < x.length(); ++i) {
-      if (x.IsNull(i)) {
+      if (not active.is_active(i) or x.IsNull(i)) {
         check(b.AppendNull());
         continue;
       }
@@ -94,13 +98,14 @@ struct EvalUnOp<ast::unary_op::neg, T> {
 
 template <>
 struct EvalUnOp<ast::unary_op::neg, duration_type> {
-  static auto eval(const arrow::DurationArray& x, auto warn)
+  static auto eval(arrow::DurationArray const& x, auto warn,
+                   ActiveRows const& active)
     -> std::shared_ptr<arrow::DurationArray> {
     auto b = duration_type::make_arrow_builder(arrow_memory_pool());
     check(b->Reserve(x.length()));
     auto overflow = false;
     for (auto i = int64_t{0}; i < x.length(); ++i) {
-      if (x.IsNull(i)) {
+      if (not active.is_active(i) or x.IsNull(i)) {
         check(b->AppendNull());
         continue;
       }
@@ -122,17 +127,23 @@ struct EvalUnOp<ast::unary_op::neg, duration_type> {
 
 } // namespace
 
-auto evaluator::eval(ast::unary_expr const& x, ActiveRows active)
+auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
   -> multi_series {
   auto eval_op = [&]<ast::unary_op Op>() -> multi_series {
     TENZIR_ASSERT(x.op.inner == Op);
+    auto offset = int64_t{0};
     return map_series(eval(x.expr, active), [&](series v) {
+      auto active_slice = active.slice(offset, v.length());
+      offset += v.length();
       return match(v.type, [&]<concrete_type T>(const T&) -> series {
         if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
           auto& a = as<type_to_arrow_array_t<T>>(*v.array);
-          auto oa = EvalUnOp<Op, T>::eval(a, [&](std::string_view msg) {
-            diagnostic::warning("{}", msg).primary(x).emit(ctx_);
-          });
+          auto oa = EvalUnOp<Op, T>::eval(
+            a,
+            [&](std::string_view msg) {
+              diagnostic::warning("{}", msg).primary(x).emit(ctx_);
+            },
+            active_slice);
           auto ot = type::from_arrow(*oa->type());
           return series{std::move(ot), std::move(oa)};
         } else {

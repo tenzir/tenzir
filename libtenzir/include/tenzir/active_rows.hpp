@@ -8,9 +8,15 @@
 
 #pragma once
 
+#include "tenzir/arrow_memory_pool.hpp"
+#include "tenzir/arrow_utils.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
+
 #include <arrow/array/array_primitive.h>
 
 #include <cstdint>
+#include <memory>
 
 namespace tenzir {
 
@@ -34,8 +40,9 @@ public:
 
   /// Rows where `array[i]` is valid and equals `skip_value` are inactive.
   /// Null rows are always active.
-  explicit ActiveRows(arrow::BooleanArray const& array, bool skip_value)
-    : array_{&array}, skip_value_{skip_value} {
+  explicit ActiveRows(std::shared_ptr<arrow::BooleanArray> array,
+                      bool skip_value)
+    : array_{std::move(array)}, skip_value_{skip_value} {
   }
 
   auto is_active(int64_t i) const -> bool {
@@ -48,12 +55,41 @@ public:
     return array_->GetView(i) != skip_value_;
   }
 
-  auto array() const -> arrow::BooleanArray const* {
-    return array_;
+  auto slice(int64_t begin, int64_t length) const -> ActiveRows {
+    TENZIR_ASSERT_GEQ(begin, 0);
+    TENZIR_ASSERT_GEQ(length, 0);
+    if (not array_) {
+      return *this;
+    }
+    TENZIR_ASSERT_LEQ(begin + length, array_->length());
+    return ActiveRows{
+      std::static_pointer_cast<arrow::BooleanArray>(
+        array_->Slice(begin, length)),
+      skip_value_,
+    };
+  }
+
+  auto as_constant() const -> Option<bool> {
+    if (not array_) {
+      return true;
+    }
+    auto saw_active = false;
+    auto saw_inactive = false;
+    for (auto row = int64_t{0}; row < array_->length(); ++row) {
+      if (is_active(row)) {
+        saw_active = true;
+      } else {
+        saw_inactive = true;
+      }
+      if (saw_active and saw_inactive) {
+        return None{};
+      }
+    }
+    return saw_active;
   }
 
 private:
-  arrow::BooleanArray const* array_ = nullptr;
+  std::shared_ptr<arrow::BooleanArray> array_;
   bool skip_value_ = false;
 };
 
