@@ -1,0 +1,17 @@
+from {
+  facility: 20,
+  severity: 5,
+  timestamp: 2023-01-01T00:00:00Z,
+  hostname: "host",
+  app_name: "app",
+  process_id: "123",
+  message_id: "ID47",
+  structured_data: {
+    exampleSDID: {
+      eventSource: r#"App]"\\lication"#,
+      eventID: 1011,
+    },
+  },
+  message: "Hello",
+}
+write_syslog

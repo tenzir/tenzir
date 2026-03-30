@@ -1,0 +1,9 @@
+from {
+  x: r#"<165>1 2023-06-01T12:00:00Z host app 1 - - Octet message"#,
+}
+// Build an octet-framed stream: "{len} {message}\n" where len includes the
+// trailing newline that write_lines appends.
+select l = x.length_chars() + 1, line = x
+write_lines
+split_bytes 1
+read_syslog octet_counting=true

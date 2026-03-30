@@ -14,7 +14,7 @@
       eventID: 1011,
     },
   },
-  message: "BOM'su root' failed for lonvick on /dev/pts/8\n",
+  message: "BOM'su root' failed for lonvick on /dev/pts/8\nnewline\n",
 }
 {
   facility: 4,
@@ -26,7 +26,7 @@
   process_id: null,
   message_id: "ID47",
   structured_data: {},
-  message: "BOM'su root' failed for lonvick on /dev/pts/8\n",
+  message: "BOM'su root' failed for lonvick on /dev/pts/8\nnewline\n",
 }
 {
   facility: 20,
@@ -98,7 +98,7 @@
   process_id: null,
   message_id: null,
   structured_data: {},
-  message: "  [origin software=\"rsyslogd\" swVersion=\"8.32.0\" x-pid=\"20134\" x-info=\"http://www.rsyslog.com\"] start\n",
+  message: "  [origin software=\"rsyslogd\" swVersion=\"8.32.0\" x-pid=\"20134\" x-info=\"http://www.rsyslog.com\"] start\nnewline\n",
 }
 {
   facility: 10,
@@ -110,7 +110,7 @@
   process_id: null,
   message_id: null,
   structured_data: {},
-  message: " Unregistered Authentication Agent for unix-process:20115:498098 (system bus name :1.4543, object path /org/freedesktop/PolicyKit1/AuthenticationAgent, locale en_US.UTF-8) (disconnected from bus)\n",
+  message: " Unregistered Authentication Agent for unix-process:20115:498098 (system bus name :1.4543, object path /org/freedesktop/PolicyKit1/AuthenticationAgent, locale en_US.UTF-8) (disconnected from bus)\nnewline\n",
 }
 {
   facility: 4,
@@ -122,7 +122,7 @@
   process_id: null,
   message_id: null,
   structured_data: {},
-  message: " uid 1000 obtained auth for org.freedesktop.packagekit.package-remove\n",
+  message: " uid 1000 obtained auth for org.freedesktop.packagekit.package-remove\nnewline\n",
 }
 {
   facility: 3,
@@ -134,7 +134,7 @@
   process_id: "1370",
   message_id: null,
   structured_data: {},
-  message: " PARENT process running...\n",
+  message: " PARENT process running...\nnewline\n",
 }
 {
   facility: 1,
@@ -146,7 +146,7 @@
   process_id: "2156",
   message_id: null,
   structured_data: {},
-  message: " no mapping for commit\n",
+  message: " no mapping for commit\nnewline\n",
 }
 {
   facility: 3,
@@ -158,7 +158,7 @@
   process_id: "1370",
   message_id: null,
   structured_data: {},
-  message: " Parent finished...\n",
+  message: " Parent finished...\nnewline\n",
 }
 {
   facility: 3,
@@ -170,5 +170,5 @@
   process_id: null,
   message_id: null,
   structured_data: {},
-  message: " in /59_ceedcdaa for remove-packages package aisleriot;1:3.22.5-1;amd64;installed:ubuntu-bionic-main was removing for uid 1000\n",
+  message: " in /59_ceedcdaa for remove-packages package aisleriot;1:3.22.5-1;amd64;installed:ubuntu-bionic-main was removing for uid 1000\nnewline\n",
 }
