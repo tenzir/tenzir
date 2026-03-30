@@ -1,0 +1,13 @@
+---
+fixtures:
+  - http_request:
+      path: /ingest
+      body: '{"value":11}'
+timeout: 60
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT"), metadata_field=meta {
+  read_json
+}
+| select value, meta.method, meta.path
+| head 1

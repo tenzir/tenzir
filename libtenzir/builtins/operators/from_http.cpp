@@ -15,6 +15,7 @@
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -30,7 +31,6 @@
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/variant.hpp>
 
-#include <arrow/util/compression.h>
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 #include <folly/ScopeGuard.h>
@@ -716,43 +716,6 @@ auto find_content_encoding(
   return None{};
 }
 
-// Decompresses one chunk of data using an already-initialised streaming
-// decompressor. Grows the output buffer as needed. Returns None and emits a
-// warning on failure.
-auto decompress_chunk(arrow::util::Decompressor& decompressor,
-                      std::span<std::byte const> input, diagnostic_handler& dh)
-  -> Option<blob> {
-  auto out = blob{};
-  out.resize(std::max<size_t>(input.size_bytes() * 2, 64));
-  auto written = size_t{};
-  auto read = size_t{};
-  while (read < input.size_bytes()) {
-    auto result = decompressor.Decompress(
-      detail::narrow<int64_t>(input.size_bytes() - read),
-      reinterpret_cast<uint8_t const*>(input.data() + read),
-      detail::narrow<int64_t>(out.size() - written),
-      reinterpret_cast<uint8_t*>(out.data() + written));
-    if (not result.ok()) {
-      diagnostic::warning("failed to decompress: {}",
-                          result.status().ToString())
-        .note("emitting compressed body")
-        .emit(dh);
-      return None{};
-    }
-    written += result->bytes_written;
-    read += result->bytes_read;
-    if (result->need_more_output) {
-      if (out.size() < out.max_size() / 2) {
-        out.resize(out.size() * 2);
-      } else {
-        out.resize(out.max_size());
-      }
-    }
-  }
-  out.resize(written);
-  return out;
-}
-
 // Static fetch task that runs on the Proxygen EventBase thread. All
 // results are communicated through the message queue; no operator members
 // are touched from this task.
@@ -929,24 +892,10 @@ public:
           .error_body = {},
         };
         if (content_encoding) {
-          auto compression_type = arrow::util::Codec::GetCompressionType(
-            std::string{*content_encoding});
-          if (not compression_type.ok()) {
-            diagnostic::warning("invalid compression type: {}",
-                                *content_encoding)
-              .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
-              .note("skipping decompression")
-              .emit(ctx);
-            response_->content_encoding = None{};
+          if (auto dec = http::make_decompressor(*content_encoding, ctx)) {
+            response_->decompressor = std::move(*dec);
           } else {
-            auto codec = arrow::util::Codec::Create(
-              compression_type.ValueUnsafe(),
-              arrow::util::kUseDefaultCompressionLevel);
-            TENZIR_ASSERT(codec.ok());
-            if (codec.ValueUnsafe()) {
-              response_->decompressor
-                = check(codec.ValueUnsafe()->MakeDecompressor());
-            }
+            response_->content_encoding = None{};
           }
         }
         if (response_->is_success()) {
@@ -976,8 +925,8 @@ public:
         auto const* p = reinterpret_cast<std::byte const*>(body.data->data());
         auto payload = blob{p, p + body.data->size()};
         if (response_->decompressor) {
-          auto decompressed
-            = decompress_chunk(*response_->decompressor, payload, ctx.dh());
+          auto decompressed = http::decompress_chunk(*response_->decompressor,
+                                                     payload, ctx.dh());
           if (not decompressed) {
             co_return;
           }

@@ -12,6 +12,7 @@ from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
 from . import s3  # noqa: F401
 from . import platform_ws  # noqa: F401
+from . import http_request  # noqa: F401
 from . import http_paginate  # noqa: F401
 from . import http_server  # noqa: F401
 from . import tcp  # noqa: F401
@@ -21,6 +22,7 @@ __all__ = [
     "clickhouse",
     "gcs",
     "google_secops",
+    "http_request",
     "http_paginate",
     "http_server",
     "kafka",

@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include <tenzir/blob.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/option.hpp>
+
+#include <arrow/util/compression.h>
 #include <caf/error.hpp>
 
 #include <cstdint>
@@ -80,5 +85,19 @@ struct request_item {
 /// Applies a list of request items to a given HTTP request.
 /// We mimic HTTPie's behavior in processing request items.
 auto apply(std::vector<request_item> items, request& req) -> caf::error;
+
+/// Creates a streaming decompressor for the given Content-Encoding value.
+/// Emits a warning and returns None for unknown or unsupported encodings.
+auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
+  -> Option<std::shared_ptr<arrow::util::Decompressor>>;
+
+/// Decompresses one chunk using a persistent streaming decompressor.
+/// Handles concatenated compressed streams via IsFinished/Reset.
+/// Returns None and emits a warning on failure, or when the decompressed
+/// output would exceed max_output_size bytes.
+auto decompress_chunk(arrow::util::Decompressor& decompressor,
+                      std::span<std::byte const> input, diagnostic_handler& dh,
+                      size_t max_output_size
+                      = std::numeric_limits<size_t>::max()) -> Option<blob>;
 
 } // namespace tenzir::http

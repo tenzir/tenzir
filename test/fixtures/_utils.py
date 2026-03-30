@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import shutil
 import socket
 import subprocess
@@ -28,6 +29,7 @@ def find_container_runtime() -> str | None:
 def generate_self_signed_cert(
     temp_dir: Path,
     common_name: str = _COMMON_NAME,
+    san_entries: list[str] = ["DNS:localhost"],
 ) -> tuple[Path, Path, Path, Path]:
     """Generate a self-signed certificate for testing.
 
@@ -52,6 +54,8 @@ def generate_self_signed_cert(
         "-nodes",
         "-subj",
         f"/CN={common_name}",
+        "-addext",
+        f"subjectAltName={','.join(san_entries)}",
     ]
     subprocess.run(
         cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL

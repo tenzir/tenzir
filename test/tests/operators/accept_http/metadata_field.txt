@@ -1,0 +1,7 @@
+{
+  value: 11,
+  meta: {
+    method: "post",
+    path: "/ingest",
+  },
+}

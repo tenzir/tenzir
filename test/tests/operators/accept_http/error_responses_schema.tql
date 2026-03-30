@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+accept_http "127.0.0.1:8080", responses={"/ingest": {code: "201", content_type: "text/plain", body: "created"}} {
+  read_json
+}

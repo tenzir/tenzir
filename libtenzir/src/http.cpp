@@ -9,10 +9,12 @@
 #include "tenzir/http.hpp"
 
 #include "tenzir/curl.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <string_view>
 
 namespace tenzir::http {
@@ -21,11 +23,14 @@ namespace {} // namespace
 
 auto message::header(const std::string& name) -> struct header* {
   auto pred = [&](auto& x) -> bool {
-    if (x.name.size() != name.size())
+    if (x.name.size() != name.size()) {
       return false;
-    for (auto i = 0u; i < name.size(); ++i)
-      if (::toupper(x.name[i]) != ::toupper(name[i]))
+    }
+    for (auto i = 0u; i < name.size(); ++i) {
+      if (::toupper(x.name[i]) != ::toupper(name[i])) {
         return false;
+      }
+    }
     return true;
   };
   auto i = std::find_if(headers.begin(), headers.end(), pred);
@@ -49,26 +54,33 @@ auto request_item::parse(std::string_view str) -> std::optional<request_item> {
     return true;
   };
   auto xs = detail::split_escaped(str, ":=@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_data_json, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, ":=", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = data_json, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, ":", "\\", 1);
-  if (xs.size() == 2 and is_valid_header_name(xs[0]))
+  if (xs.size() == 2 and is_valid_header_name(xs[0])) {
     return request_item{.type = header, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "==", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = url_param, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "=@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_data, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_form, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "=", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = data, .key = xs[0], .value = xs[1]};
+  }
   return {};
 }
 
@@ -81,17 +93,20 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
         break;
       }
       case request_item::data: {
-        if (req.method.empty())
+        if (req.method.empty()) {
           req.method = "POST";
+        }
         body.emplace(std::move(item.key), std::move(item.value));
         break;
       }
       case request_item::data_json: {
-        if (req.method.empty())
+        if (req.method.empty()) {
           req.method = "POST";
+        }
         auto data = from_json(item.value);
-        if (not data)
+        if (not data) {
           return data.error();
+        }
         body.emplace(std::move(item.key), std::move(*data));
         break;
       }
@@ -139,8 +154,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     } else if (content_type.starts_with("application/json")) {
       if (not body.empty()) {
         req.body = json_encode(body);
-        if (accept)
+        if (accept) {
           accept->insert(accept->begin(), "application/json");
+        }
         TENZIR_DEBUG("JSON-encoded request body: {}", req.body);
       }
     } else {
@@ -153,8 +169,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     // Without a Content-Type, we assume JSON.
     req.body = json_encode(body);
     req.headers.emplace_back("Content-Type", "application/json");
-    if (accept)
+    if (accept) {
       accept->insert(accept->begin(), "application/json");
+    }
   }
   // Add an Accept header unless we have one already.
   if (accept) {
@@ -162,6 +179,98 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     req.headers.emplace_back("Accept", std::move(value));
   }
   return {};
+}
+
+auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
+  -> Option<std::shared_ptr<arrow::util::Decompressor>> {
+  if (encoding.empty()) {
+    return None{};
+  }
+  auto compression_type
+    = arrow::util::Codec::GetCompressionType(std::string{encoding});
+  if (not compression_type.ok()) {
+    diagnostic::warning("invalid Content-Encoding: `{}`", encoding)
+      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
+      .note("skipping decompression")
+      .emit(dh);
+    return None{};
+  }
+  auto codec = arrow::util::Codec::Create(
+    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
+  if (not codec.ok() or not codec.ValueUnsafe()) {
+    diagnostic::warning("failed to create codec for Content-Encoding: `{}`",
+                        encoding)
+      .note("skipping decompression")
+      .emit(dh);
+    return None{};
+  }
+  auto dec = codec.ValueUnsafe()->MakeDecompressor();
+  if (not dec.ok()) {
+    diagnostic::warning("failed to create decompressor for Content-Encoding: "
+                        "`{}`",
+                        encoding)
+      .note("skipping decompression")
+      .emit(dh);
+    return None{};
+  }
+  return std::move(dec.ValueUnsafe());
+}
+
+auto decompress_chunk(arrow::util::Decompressor& decompressor,
+                      std::span<std::byte const> input, diagnostic_handler& dh,
+                      size_t max_output_size) -> Option<blob> {
+  if (max_output_size == 0) {
+    diagnostic::warning("decompressed output exceeds limit").emit(dh);
+    return None{};
+  }
+  auto out = blob{};
+  auto initial_size
+    = std::min(max_output_size, std::max<size_t>(input.size_bytes() * 2, 64));
+  out.resize(initial_size);
+  auto written = size_t{};
+  auto read = size_t{};
+  while (read < input.size_bytes()) {
+    auto result = decompressor.Decompress(
+      detail::narrow<int64_t>(input.size_bytes() - read),
+      reinterpret_cast<uint8_t const*>(input.data() + read),
+      detail::narrow<int64_t>(out.size() - written),
+      reinterpret_cast<uint8_t*>(out.data() + written));
+    if (not result.ok()) {
+      diagnostic::warning("failed to decompress: {}",
+                          result.status().ToString())
+        .note("emitting compressed body")
+        .emit(dh);
+      return None{};
+    }
+    auto const bytes_written = detail::narrow<size_t>(result->bytes_written);
+    if (bytes_written > max_output_size - written) [[unlikely]] {
+      diagnostic::warning("decompressed output exceeds limit").emit(dh);
+      return None{};
+    }
+    written += bytes_written;
+    read += detail::narrow<size_t>(result->bytes_read);
+    if (result->need_more_output) {
+      if (out.size() >= max_output_size) [[unlikely]] {
+        diagnostic::warning("decompressed output exceeds limit").emit(dh);
+        return None{};
+      }
+      auto next_size = std::min(out.size() * 2, max_output_size);
+      out.resize(next_size);
+    }
+    // Reset gracefully when a compressed stream ends to handle concatenated
+    // compressed streams (e.g. multiple gzip members in one body).
+    if (decompressor.IsFinished()) {
+      if (auto reset = decompressor.Reset(); not reset.ok()) {
+        diagnostic::warning("failed to reset decompressor: {}",
+                            reset.ToString())
+          .note("emitting compressed body")
+          .emit(dh);
+        return None{};
+      }
+    }
+  }
+  out.resize(written);
+  return out;
 }
 
 } // namespace tenzir::http

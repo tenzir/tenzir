@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+accept_http "http://127.0.0.1:8080", tls=true {
+  read_json
+}

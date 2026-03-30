@@ -1,0 +1,6 @@
+error: `https://` endpoint requires `tls=true`
+ --> tests/operators/accept_http/endpoint_ipv6.tql:5:13
+  |
+5 | accept_http "https://[::1]:8080" {
+  |             ^^^^^^^^^^^^^^^^^^^^ 
+  |
