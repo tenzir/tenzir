@@ -730,51 +730,23 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
   }
 }
 
-#define TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(X)                                 \
-  X(null_type)                                                                 \
-  X(bool_type)                                                                 \
-  X(int64_type)                                                                \
-  X(uint64_type)                                                               \
-  X(double_type)                                                               \
-  X(duration_type)                                                             \
-  X(time_type)                                                                 \
-  X(string_type)                                                               \
-  X(ip_type)                                                                   \
-  X(subnet_type)                                                               \
-  X(enumeration_type)                                                          \
-  X(list_type)                                                                 \
-  X(map_type)                                                                  \
-  X(record_type)                                                               \
-  X(blob_type)                                                                 \
-  X(secret_type)
-
 template <ast::binary_op Op, concrete_type L>
 auto dispatch_eval_rhs(evaluator& self, ast::binary_expr const& x,
                        basic_series<L> const& left, series const& right,
                        ActiveRows const& active) -> series {
-#define TENZIR_TQL2_DISPATCH_RHS(Type)                                         \
-  if (auto typed = right.as<Type>()) {                                         \
-    return eval_op_typed<Op>(self, x, left, *typed, active);                   \
-  }
-  TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_RHS);
-#undef TENZIR_TQL2_DISPATCH_RHS
-  TENZIR_UNREACHABLE();
+  return match(right, [&](auto const& typed) {
+    return eval_op_typed<Op>(self, x, left, typed, active);
+  });
 }
 
 template <ast::binary_op Op>
 auto dispatch_eval_binary(evaluator& self, ast::binary_expr const& x,
                           series const& left, series const& right,
                           ActiveRows const& active) -> series {
-#define TENZIR_TQL2_DISPATCH_LHS(Type)                                         \
-  if (auto typed = left.as<Type>()) {                                          \
-    return dispatch_eval_rhs<Op>(self, x, *typed, right, active);              \
-  }
-  TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_LHS);
-#undef TENZIR_TQL2_DISPATCH_LHS
-  TENZIR_UNREACHABLE();
+  return match(left, [&](auto const& typed_left) {
+    return dispatch_eval_rhs<Op>(self, x, typed_left, right, active);
+  });
 }
-
-#undef TENZIR_TQL2_DISPATCH_CONCRETE_TYPES
 
 template <ast::binary_op Op>
 auto eval_op(evaluator& self, ast::binary_expr const& x,
