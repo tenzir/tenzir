@@ -398,7 +398,7 @@ template <ast::binary_op Op, basic_type L, basic_type R>
 struct EvalBinOp<Op, L, R> {
   static auto
   eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
-       auto&& warn, ActiveRows const& active, int64_t offset)
+       auto&& warn, ActiveRows const& active)
     -> std::shared_ptr<arrow::Array> {
     using kernel = BinOpKernel<Op, L, R>;
     using result = kernel::result;
@@ -407,7 +407,7 @@ struct EvalBinOp<Op, L, R> {
     auto warnings
       = detail::stack_vector<const char*, 2 * sizeof(const char*)>{};
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i)) {
+      if (not active.is_active(i)) {
         check(b->AppendNull());
         continue;
       }
@@ -455,12 +455,12 @@ struct EvalBinOp<Op, L, R> {
 template <>
 struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
-                   auto&&, ActiveRows const& active, int64_t offset)
+                   auto&&, ActiveRows const& active)
     -> std::shared_ptr<arrow::StringArray> {
     auto b = arrow::StringBuilder{};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
+      if (not active.is_active(i) or l.IsNull(i) or r.IsNull(i)) {
         b.UnsafeAppendNull();
         continue;
       }
@@ -476,12 +476,12 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
 template <>
 struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
-                   auto&&, ActiveRows const& active, int64_t offset)
+                   auto&&, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
+      if (not active.is_active(i) or l.IsNull(i) or r.IsNull(i)) {
         b.UnsafeAppendNull();
         continue;
       }
@@ -497,12 +497,12 @@ template <>
 struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
   static auto
   eval(const ip_type::array_type& l, const subnet_type::array_type& r, auto&&,
-       ActiveRows const& active, int64_t offset)
+       ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
+      if (not active.is_active(i) or l.IsNull(i) or r.IsNull(i)) {
         check(b.AppendNull());
         continue;
       }
@@ -519,12 +519,12 @@ template <>
 struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
   static auto
   eval(const subnet_type::array_type& l, const subnet_type::array_type& r,
-       auto&&, ActiveRows const& active, int64_t offset)
+       auto&&, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i) or l.IsNull(i) or r.IsNull(i)) {
+      if (not active.is_active(i) or l.IsNull(i) or r.IsNull(i)) {
         check(b.AppendNull());
         continue;
       }
@@ -541,13 +541,13 @@ template <ast::binary_op Op, concrete_type L>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, L, null_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r,
-                   auto&&, ActiveRows const& active, int64_t offset)
+                   auto&&, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     TENZIR_UNUSED(r);
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i)) {
+      if (not active.is_active(i)) {
         check(b.AppendNull());
         continue;
       }
@@ -562,9 +562,9 @@ template <ast::binary_op Op, concrete_type R>
            && not std::same_as<R, null_type>)
 struct EvalBinOp<Op, null_type, R> {
   static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
-                   auto&& warn, ActiveRows const& active, int64_t offset)
+                   auto&& warn, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
-    return EvalBinOp<Op, R, null_type>::eval(r, l, warn, active, offset);
+    return EvalBinOp<Op, R, null_type>::eval(r, l, warn, active);
   }
 };
 
@@ -572,14 +572,14 @@ template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, ip_type, ip_type> {
   static auto eval(const ip_type::array_type& l, const ip_type::array_type& r,
-                   auto&&, ActiveRows const& active, int64_t offset)
+                   auto&&, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i)) {
+      if (not active.is_active(i)) {
         b.UnsafeAppendNull();
         continue;
       }
@@ -603,14 +603,14 @@ template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
-                   auto&&, ActiveRows const& active, int64_t offset)
+                   auto&&, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (not active.is_active(offset + i)) {
+      if (not active.is_active(i)) {
         b.UnsafeAppendNull();
         continue;
       }
@@ -633,7 +633,7 @@ struct EvalBinOp<Op, string_type, string_type> {
 template <basic_type L>
 struct EvalBinOp<ast::binary_op::in, L, list_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
-                   auto&& warn, ActiveRows const& active, int64_t offset)
+                   auto&& warn, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
@@ -654,7 +654,7 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
           auto* values = dynamic_cast<const RA*>(r.values().get());
           TENZIR_ASSERT(values);
           for (auto i = int64_t{}; i < l.length(); ++i) {
-            if (not active.is_active(offset + i)) {
+            if (not active.is_active(i)) {
               b.UnsafeAppendNull();
               continue;
             }
@@ -708,14 +708,14 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
 template <ast::binary_op Op, concrete_type L, concrete_type R>
 auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
                    basic_series<L> const& left, basic_series<R> const& right,
-                   ActiveRows const& active, int64_t offset) -> series {
+                   ActiveRows const& active) -> series {
   if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
     auto oa = EvalBinOp<Op, L, R>::eval(
       *left.array, *right.array,
       [&](const char* w) {
         diagnostic::warning("{}", w).primary(x).emit(self.ctx());
       },
-      active, offset);
+      active);
     auto ot = type::from_arrow(*oa->type());
     return series{std::move(ot), std::move(oa)};
   } else {
@@ -751,10 +751,10 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
 template <ast::binary_op Op, concrete_type L>
 auto dispatch_eval_rhs(evaluator& self, ast::binary_expr const& x,
                        basic_series<L> const& left, series const& right,
-                       ActiveRows const& active, int64_t offset) -> series {
+                       ActiveRows const& active) -> series {
 #define TENZIR_TQL2_DISPATCH_RHS(Type)                                         \
   if (auto typed = right.as<Type>()) {                                         \
-    return eval_op_typed<Op>(self, x, left, *typed, active, offset);           \
+    return eval_op_typed<Op>(self, x, left, *typed, active);                   \
   }
   TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_RHS);
 #undef TENZIR_TQL2_DISPATCH_RHS
@@ -764,10 +764,10 @@ auto dispatch_eval_rhs(evaluator& self, ast::binary_expr const& x,
 template <ast::binary_op Op>
 auto dispatch_eval_binary(evaluator& self, ast::binary_expr const& x,
                           series const& left, series const& right,
-                          ActiveRows const& active, int64_t offset) -> series {
+                          ActiveRows const& active) -> series {
 #define TENZIR_TQL2_DISPATCH_LHS(Type)                                         \
   if (auto typed = left.as<Type>()) {                                          \
-    return dispatch_eval_rhs<Op>(self, x, *typed, right, active, offset);      \
+    return dispatch_eval_rhs<Op>(self, x, *typed, right, active);              \
   }
   TENZIR_TQL2_DISPATCH_CONCRETE_TYPES(TENZIR_TQL2_DISPATCH_LHS);
 #undef TENZIR_TQL2_DISPATCH_LHS
@@ -783,16 +783,13 @@ auto eval_op(evaluator& self, ast::binary_expr const& x,
   auto left = self.eval(x.left, active);
   auto right = self.eval(x.right, active);
   TENZIR_ASSERT_EQ(left.length(), right.length());
-  // Track the global offset for each aligned part so EvalBinOp can map local
-  // indices to the correct positions in the active bitmap.
   auto offset = int64_t{0};
   return map_series(
     std::move(left), std::move(right), [&](series left, series right) {
       auto part_len = left.length();
-      auto result
-        = dispatch_eval_binary<Op>(self, x, left, right, active, offset);
+      auto active_slice = active.slice(offset, part_len);
       offset += part_len;
-      return result;
+      return dispatch_eval_binary<Op>(self, x, left, right, active_slice);
     });
 }
 
