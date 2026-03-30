@@ -16,6 +16,10 @@ from common import TARGET_METADATA_ARTIFACTS, gh_api, gh_json
 HEX_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 
 
+class ArtifactUnavailableError(RuntimeError):
+    """Raised when a workflow run cannot provide the requested artifact."""
+
+
 def infer_event_for_ref(ref: str) -> str | None:
     if ref == "main":
         return "push"
@@ -103,6 +107,11 @@ def wait_for_artifact(
             raise RuntimeError(
                 f"Tenzir workflow run {run_id} completed with conclusion {conclusion}: {run.get('url')}",
             )
+        if status == "completed":
+            raise ArtifactUnavailableError(
+                f"Tenzir workflow run {run_id} completed successfully without artifact "
+                f"{artifact_name}: {run.get('url')}",
+            )
         if time.monotonic() >= deadline:
             raise TimeoutError(f"timed out waiting for artifact {artifact_name} from run {run_id}")
         time.sleep(interval_seconds)
@@ -142,21 +151,33 @@ def fetch_target_metadata(
     timeout_seconds: int,
     interval_seconds: int,
     event: str | None = None,
+    allow_missing_artifact: bool = False,
 ) -> dict[str, object]:
     artifact_name = TARGET_METADATA_ARTIFACTS[target]
     resolved_sha = resolve_commit_sha(repo, ref)
     run = find_run(repo, ref, event=event)
     run_id = int(run["databaseId"])
-    _artifact = wait_for_artifact(
-        repo,
-        run_id,
-        artifact_name=artifact_name,
-        timeout_seconds=timeout_seconds,
-        interval_seconds=interval_seconds,
-    )
+    try:
+        _artifact = wait_for_artifact(
+            repo,
+            run_id,
+            artifact_name=artifact_name,
+            timeout_seconds=timeout_seconds,
+            interval_seconds=interval_seconds,
+        )
+    except ArtifactUnavailableError as exc:
+        if not allow_missing_artifact:
+            raise
+        return {
+            "available": False,
+            "reason": str(exc),
+            "resolved_sha": resolved_sha,
+            "run_id": run_id,
+        }
     metadata_path = download_artifact(repo, run_id, artifact_name, output_dir)
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     return {
+        "available": True,
         "run_id": run_id,
         "resolved_sha": resolved_sha,
         "metadata_path": str(metadata_path.resolve()),
@@ -180,6 +201,11 @@ def main() -> int:
     fetch.add_argument("--output-dir", required=True, type=Path, help="Where to download metadata")
     fetch.add_argument("--timeout-seconds", type=int, default=3600, help="Artifact wait timeout")
     fetch.add_argument("--interval-seconds", type=int, default=15, help="Artifact poll interval")
+    fetch.add_argument(
+        "--allow-missing-artifact",
+        action="store_true",
+        help="Return an unavailable result instead of failing when the run completes without the metadata artifact",
+    )
 
     args = parser.parse_args()
     if args.command == "fetch-target-metadata":
@@ -191,6 +217,7 @@ def main() -> int:
             timeout_seconds=args.timeout_seconds,
             interval_seconds=args.interval_seconds,
             event=args.event,
+            allow_missing_artifact=args.allow_missing_artifact,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0

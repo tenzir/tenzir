@@ -139,6 +139,8 @@ jobs:
             ]
             if event is not None:
               command.extend(["--event", event])
+            if event == "release":
+              command.append("--allow-missing-artifact")
             result = subprocess.run(
               command,
               check=True,
@@ -195,11 +197,14 @@ jobs:
 
             if stable_tag:
               release = fetch(stable_tag, target, run_temp / f"stable-{target}", event="release")
-              release_path = materialize(Path(release["metadata_path"]), target, f"latest stable {target}", int(release["run_id"]))
-              release_payload = json.loads(release_path.read_text(encoding="utf-8"))
-              release_payload["storage_prefix"] = storage_prefix("tag", stable_tag, target)
-              release_path.write_text(json.dumps(release_payload, indent=2), encoding="utf-8")
-              build_specs.append(str(release_path))
+              if release.get("available", True):
+                release_path = materialize(Path(release["metadata_path"]), target, f"latest stable {target}", int(release["run_id"]))
+                release_payload = json.loads(release_path.read_text(encoding="utf-8"))
+                release_payload["storage_prefix"] = storage_prefix("tag", stable_tag, target)
+                release_path.write_text(json.dumps(release_payload, indent=2), encoding="utf-8")
+                build_specs.append(str(release_path))
+              else:
+                print(f"Skipping latest stable baseline for {target}: {release['reason']}")
 
           for selector in request["refs"]:
             target = selector["target"]
