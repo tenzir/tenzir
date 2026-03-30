@@ -9,7 +9,6 @@
 #include "tenzir/tql2/eval_impl.hpp"
 
 #include "tenzir/active_rows.hpp"
-
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
@@ -401,8 +400,7 @@ auto evaluator::eval(ast::function_call const& x, ActiveRows const& active)
   auto filtered = filter(*input, *mask);
   auto sub_evaluator = evaluator{&filtered, ctx_};
   auto result = (*func)->run(function_use::evaluator{&sub_evaluator}, ctx_);
-  TENZIR_ASSERT_EQ(result.length(),
-                   detail::narrow<int64_t>(filtered.rows()));
+  TENZIR_ASSERT_EQ(result.length(), detail::narrow<int64_t>(filtered.rows()));
   return scatter_active_rows(std::move(result), active, length_);
 }
 
@@ -445,13 +443,14 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
   // constant.
   if (auto const* constant = try_as<ast::constant>(x.index)) {
     if (auto const* string = try_as<std::string>(constant->value)) {
-      return eval(ast::field_access{
-                    x.expr,
-                    location::unknown,
-                    x.has_question_mark,
-                    ast::identifier{*string, constant->source},
-                  },
-                  active);
+      return eval(
+        ast::field_access{
+          x.expr,
+          location::unknown,
+          x.has_question_mark,
+          ast::identifier{*string, constant->source},
+        },
+        active);
     }
   }
   return map_series(

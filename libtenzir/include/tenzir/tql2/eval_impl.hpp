@@ -47,8 +47,7 @@ public:
     return result;
   }
 
-  auto eval(ast::expression const& x, ActiveRows const& active)
-    -> multi_series;
+  auto eval(ast::expression const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::constant const& x, ActiveRows const& active) -> multi_series;
 
@@ -58,14 +57,12 @@ public:
 
   auto eval(ast::this_ const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::root_field const& x, ActiveRows const& active)
-    -> multi_series;
+  auto eval(ast::root_field const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::function_call const& x, ActiveRows const& active)
     -> multi_series;
 
-  auto eval(ast::unary_expr const& x, ActiveRows const& active)
-    -> multi_series;
+  auto eval(ast::unary_expr const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::binary_expr const& x, ActiveRows const& active)
     -> multi_series;
@@ -73,13 +70,11 @@ public:
   auto eval(ast::field_access const& x, ActiveRows const& active)
     -> multi_series;
 
-  auto eval(ast::assignment const& x, ActiveRows const& active)
-    -> multi_series;
+  auto eval(ast::assignment const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::meta const& x, ActiveRows const& active) -> multi_series;
 
-  auto eval(ast::index_expr const& x, ActiveRows const& active)
-    -> multi_series;
+  auto eval(ast::index_expr const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::format_expr const& x, ActiveRows const& active)
     -> multi_series;

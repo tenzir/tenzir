@@ -22,8 +22,8 @@ struct EvalUnOp;
 
 template <ast::unary_op Op>
 struct EvalUnOp<Op, null_type> {
-  static auto eval(arrow::NullArray const& x, auto warn,
-                   ActiveRows const& active)
+  static auto
+  eval(arrow::NullArray const& x, auto warn, ActiveRows const& active)
     -> std::shared_ptr<arrow::NullArray> {
     TENZIR_UNUSED(warn);
     TENZIR_UNUSED(active);
@@ -33,8 +33,8 @@ struct EvalUnOp<Op, null_type> {
 
 template <>
 struct EvalUnOp<ast::unary_op::not_, bool_type> {
-  static auto eval(arrow::BooleanArray const& x, auto warn,
-                   ActiveRows const& active)
+  static auto
+  eval(arrow::BooleanArray const& x, auto warn, ActiveRows const& active)
     -> std::shared_ptr<arrow::BooleanArray> {
     TENZIR_UNUSED(warn);
     TENZIR_UNUSED(active);
@@ -57,8 +57,8 @@ template <numeric_type T>
 struct EvalUnOp<ast::unary_op::neg, T> {
   using U = std::conditional_t<std::same_as<T, uint64_type>, int64_type, T>;
 
-  static auto eval(type_to_arrow_array_t<T> const& x, auto warn,
-                   ActiveRows const& active)
+  static auto
+  eval(type_to_arrow_array_t<T> const& x, auto warn, ActiveRows const& active)
     -> std::shared_ptr<type_to_arrow_array_t<U>> {
     auto b = type_to_arrow_builder_t<U>{tenzir::arrow_memory_pool()};
     check(b.Reserve(x.length()));
@@ -98,8 +98,8 @@ struct EvalUnOp<ast::unary_op::neg, T> {
 
 template <>
 struct EvalUnOp<ast::unary_op::neg, duration_type> {
-  static auto eval(arrow::DurationArray const& x, auto warn,
-                   ActiveRows const& active)
+  static auto
+  eval(arrow::DurationArray const& x, auto warn, ActiveRows const& active)
     -> std::shared_ptr<arrow::DurationArray> {
     auto b = duration_type::make_arrow_builder(arrow_memory_pool());
     check(b->Reserve(x.length()));
