@@ -946,12 +946,24 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
     auto typed = cond_part.as<bool_type>();
     if (not typed) {
       if (not is<null_type>(cond_part.type) and not warned_cond_type) {
-        warned_cond_type = true;
-        diagnostic::warning("expected `bool`, but got `{}`",
-                            cond_part.type.kind())
-          .primary(x.right)
-          .hint("this will be treated as `false`")
-          .emit(self.ctx());
+        auto active_slice = active.slice(cond_offset, cond_part.length());
+        auto warn = active_slice.as_constant() == true;
+        if (not warn) {
+          for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
+            if (active_slice.is_active(i)) {
+              warn = true;
+              break;
+            }
+          }
+        }
+        if (warn) {
+          warned_cond_type = true;
+          diagnostic::warning("expected `bool`, but got `{}`",
+                              cond_part.type.kind())
+            .primary(x.right)
+            .hint("this will be treated as `false`")
+            .emit(self.ctx());
+        }
       }
       for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
         cond_builder.UnsafeAppend(false);
@@ -1019,6 +1031,9 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
     auto get_cond = [&](int64_t i) -> bool {
       return cond_flat->GetView(begin + i);
     };
+    if (length == 0) {
+      continue;
+    }
     auto range_start = int64_t{0};
     auto range_val = get_cond(0);
     auto append_range = [&](int64_t end) {
