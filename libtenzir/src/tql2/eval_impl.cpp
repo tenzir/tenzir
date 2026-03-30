@@ -379,7 +379,9 @@ auto evaluator::eval(ast::function_call const& x, ActiveRows const& active)
   -> multi_series {
   // TODO: We parse the function call every time we get a new batch here. We
   // could store the result in the AST if that becomes a problem, but that is
-  // also not an optimal solution.
+  // also not an optimal solution. Note that we call `make_function`
+  // unconditionally to validate arguments even in dead branches; only `run` is
+  // skipped for inactive rows.
   auto func = ctx_.reg().get(x).make_function(function_invocation{x}, ctx_);
   if (not func) {
     return series::null(null_type{}, length_);
