@@ -30,6 +30,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
+#include <tenzir/try.hpp>
 #include <tenzir/variant.hpp>
 
 #include <boost/url/parse.hpp>
@@ -50,6 +51,7 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <chrono>
+#include <iterator>
 #include <limits>
 #include <span>
 #include <string>
@@ -210,66 +212,30 @@ auto make_paginated_request_config(
   };
 }
 
-auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void {
-  if (not url.starts_with("http://") and not url.starts_with("https://")) {
-    url.insert(0, tls_enabled ? "https://" : "http://");
-  }
-}
-
-auto tls_enabled_from_args(FromHttpArgs const& args) -> bool {
-  if (not args.tls) {
-    return true;
-  }
-  // Mirror tls_options semantics for explicit `tls=...` arguments:
-  // - `tls=true` enables TLS
-  // - record values (e.g. `{skip_peer_verification: true}`) implicitly enable
-  //   TLS
-  // Keep the default false for absent `tls` args when normalizing schemeless
-  // URLs.
-  auto tls_opts
-    = tls_options{*args.tls, {.tls_default = true, .is_server = false}};
-  return tls_opts.get_tls(nullptr).inner;
-}
-
 auto resolve_http_secrets(
   OpCtx& ctx, FromHttpArgs const& args, std::string& resolved_url,
   std::vector<std::pair<std::string, std::string>>& resolved_headers)
-  -> Task<bool> {
+  -> Task<failure_or<void>> {
   resolved_url.clear();
-  resolved_headers.clear();
   auto requests = std::vector<secret_request>{};
   requests.emplace_back(
     make_secret_request("url", args.url, resolved_url, ctx.dh()));
-  if (args.headers) {
-    if (auto const* rec = try_as<record>(args.headers->inner)) {
-      for (auto const& [name, value] : *rec) {
-        match(
-          value,
-          [&](std::string const& literal) {
-            resolved_headers.emplace_back(name, literal);
-          },
-          [&](secret const& sec) {
-            auto& out
-              = resolved_headers.emplace_back(name, std::string{}).second;
-            requests.emplace_back(make_secret_request(
-              name, sec, args.headers->source, out, ctx.dh()));
-          },
-          [](auto const&) {
-            TENZIR_UNREACHABLE();
-          });
-      }
-    }
-  }
+  auto header_requests = http::make_header_secret_requests(
+    args.headers, resolved_headers, ctx.dh());
+  requests.insert(requests.end(),
+                  std::make_move_iterator(header_requests.begin()),
+                  std::make_move_iterator(header_requests.end()));
   if (auto result = co_await ctx.resolve_secrets(std::move(requests));
       result.is_error()) {
-    co_return false;
+    co_return failure::promise();
   }
   if (resolved_url.empty()) {
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
-    co_return false;
+    co_return failure::promise();
   }
-  add_default_url_scheme(resolved_url, tls_enabled_from_args(args));
-  co_return true;
+  CO_TRY(
+    http::normalize_url_and_tls(args.tls, resolved_url, args.url.source, ctx));
+  co_return {};
 }
 
 using pagination_spec = located<variant<ast::lambda_expr, std::string>>;
@@ -867,8 +833,9 @@ public:
     paginate_ = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
-    if (not co_await resolve_http_secrets(ctx, args_, resolved_url,
-                                          resolved_headers_)) {
+    auto sec_res = co_await resolve_http_secrets(ctx, args_, resolved_url,
+                                                 resolved_headers_);
+    if (sec_res.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }

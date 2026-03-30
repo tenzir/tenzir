@@ -8,10 +8,12 @@
 
 #pragma once
 
-#include <tenzir/async/result.hpp>
-#include <tenzir/blob.hpp>
-#include <tenzir/diagnostics.hpp>
-#include <tenzir/option.hpp>
+#include "tenzir/async/result.hpp"
+#include "tenzir/blob.hpp"
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
+#include "tenzir/secret_resolution.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/error.hpp>
@@ -20,9 +22,26 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace tenzir::http {
+
+auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void;
+
+auto is_tls_enabled(Option<located<data>> const& tls,
+                    tls_options::options options,
+                    std::string_view url_when_missing) -> bool;
+
+auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
+                           location url_loc, diagnostic_handler& dh,
+                           tls_options::options options = {.is_server = false})
+  -> failure_or<bool>;
+
+auto make_header_secret_requests(
+  Option<located<data>> const& headers,
+  std::vector<std::pair<std::string, std::string>>& resolved_headers,
+  diagnostic_handler& dh) -> std::vector<secret_request>;
 
 struct header {
   std::string name;
