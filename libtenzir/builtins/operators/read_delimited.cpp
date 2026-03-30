@@ -66,10 +66,7 @@ public:
       consumed = pos + separator_.size();
     }
     buffer_ = buffer_.substr(consumed);
-    if (builder_.length()
-        >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.data"));
-    }
+    co_await flush(push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -81,15 +78,8 @@ public:
     }
     buffer_.clear();
     // push
-    if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.data"));
-    }
+    co_await flush(push);
     co_return FinalizeBehavior::done;
-  }
-
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    co_await push(builder_.finish_assert_one_slice("tenzir.data"));
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -97,6 +87,12 @@ public:
   }
 
 private:
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.data"));
+    }
+  }
+
   auto emit(std::string_view segment, OpCtx& ctx) -> void {
     if (binary_) {
       builder_.record().field("data", as_bytes(segment));
