@@ -15,7 +15,6 @@
 
 #include <arrow/util/utf8.h>
 
-#include <cstddef>
 #include <string_view>
 
 namespace tenzir::plugins::read_delimited {
