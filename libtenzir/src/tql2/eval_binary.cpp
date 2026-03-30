@@ -945,7 +945,7 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
   for (auto& cond_part : self.eval(x.right, active)) {
     auto typed = cond_part.as<bool_type>();
     if (not typed) {
-      if (not is<null_type>(cond_part.type) and not warned_cond_type) {
+      if (not warned_cond_type) {
         auto active_slice = active.slice(cond_offset, cond_part.length());
         auto warn = active_slice.as_constant() == true;
         if (not warn) {
