@@ -111,8 +111,11 @@ public:
   auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(next_ < events_.size());
-    auto part = std::move(const_eval_series(events_[next_], ctx)).unwrap();
-    auto cast = part.as<record_type>();
+    auto result = const_eval_series(events_[next_], ctx);
+    if (not result) {
+      co_await assert_cancelled();
+    }
+    auto cast = std::move(result).unwrap().as<record_type>();
     TENZIR_ASSERT(cast);
     auto schema = tenzir::type{"tenzir.from", cast->type};
     auto slice = table_slice{arrow::RecordBatch::Make(schema.to_arrow_schema(),

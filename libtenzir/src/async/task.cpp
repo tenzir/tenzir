@@ -44,4 +44,11 @@ auto wait_forever() -> Task<void> {
   }
 }
 
+auto assert_cancelled() -> Task<void> {
+  auto& token = co_await folly::coro::co_current_cancellation_token;
+  TENZIR_ASSERT(token.isCancellationRequested());
+  co_yield folly::coro::co_stopped_may_throw;
+  TENZIR_UNREACHABLE();
+}
+
 } // namespace tenzir

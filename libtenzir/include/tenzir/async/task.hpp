@@ -27,4 +27,7 @@ auto sleep_for(std::chrono::steady_clock::duration d) -> Task<void>;
 /// it is already in the past).
 auto sleep_until(std::chrono::steady_clock::time_point t) -> Task<void>;
 
+/// Asserts that the current task is cancelled and propagates that cancellation.
+auto assert_cancelled() -> Task<void>;
+
 } // namespace tenzir
