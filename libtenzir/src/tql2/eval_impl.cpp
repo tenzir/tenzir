@@ -453,9 +453,12 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         active);
     }
   }
+  auto offset = int64_t{0};
   return map_series(
     eval(x.expr, active), eval(x.index, active),
     [&](series value, const series& index) -> multi_series {
+      auto active_slice = active.slice(offset, value.length());
+      offset += value.length();
       const auto add_suppress_hint = [&](auto diag) {
         // The `get` function internally creates an `ast::index_expr` and
         // evaluates it. We change the warning when it is used.
@@ -466,7 +469,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
       };
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {
-        if (not x.has_question_mark) {
+        if (not x.has_question_mark
+            and active_slice.as_constant() != false) {
           diagnostic::warning("tried to access field of `null`")
             .primary(x.expr, "is null")
             .compose(add_suppress_hint)
@@ -475,7 +479,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         return std::move(*null);
       }
       if (auto null = index.as<null_type>()) {
-        if (not x.has_question_mark) {
+        if (not x.has_question_mark
+            and active_slice.as_constant() != false) {
           diagnostic::warning("cannot use `null` as index")
             .primary(x.index, "is null")
             .compose(add_suppress_hint)
@@ -486,10 +491,12 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
       if (auto str = index.as<string_type>()) {
         auto* ty = try_as<record_type>(value.type);
         if (not ty) {
-          diagnostic::warning("cannot access field of non-record type")
-            .primary(x.index)
-            .secondary(x.expr, "has type `{}`", value.type.kind())
-            .emit(ctx_);
+          if (active_slice.as_constant() != false) {
+            diagnostic::warning("cannot access field of non-record type")
+              .primary(x.index)
+              .secondary(x.expr, "has type `{}`", value.type.kind())
+              .emit(ctx_);
+          }
           return series::null(null_type{}, value.length());
         }
         auto& s = as<arrow::StructArray>(*value.array);
@@ -508,11 +515,15 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         for (auto i = int64_t{}; i < s.length(); ++i) {
           if (s.IsNull(i)) {
             b.null();
-            warn_null_record = true;
+            if (active_slice.is_active(i)) {
+              warn_null_record = true;
+            }
             continue;
           }
           if (str->array->IsNull(i)) {
-            warn_null_index = true;
+            if (active_slice.is_active(i)) {
+              warn_null_index = true;
+            }
             b.null();
             continue;
           }
@@ -529,8 +540,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
             auto v = view_at(*field.array, i);
             b.data(v);
           } else {
-            if (std::ranges::find(not_found, name) == not_found.end()) {
-              if (not x.has_question_mark) {
+            if (active_slice.is_active(i) and not x.has_question_mark) {
+              if (std::ranges::find(not_found, name) == not_found.end()) {
                 diagnostic::warning("record does not have field `{}`", name)
                   .primary(x.index, "does not exist")
                   .compose([&](auto&& d) {
@@ -541,8 +552,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
                   })
                   .hint("use `[…]?` to suppress this warning")
                   .emit(ctx_);
+                not_found.emplace_back(name);
               }
-              not_found.emplace_back(name);
             }
             b.null();
           }
@@ -578,7 +589,12 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
               return;
             }
             if (*last_field < 0 or *last_field >= record->array->num_fields()) {
-              warn_index_out_of_bounds = true;
+              for (auto r = begin; r < end; ++r) {
+                if (active_slice.is_active(r)) {
+                  warn_index_out_of_bounds = true;
+                  break;
+                }
+              }
               result.append(series::null(null_type{}, end - begin));
               return;
             }
@@ -594,7 +610,9 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
               if (not last_field) {
                 continue;
               }
-              warn_null_index = true;
+              if (active_slice.is_active(i)) {
+                warn_null_index = true;
+              }
               add(group_offset, i);
               last_field.reset();
               group_offset = i;
@@ -625,7 +643,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         }
         auto list = value.as<list_type>();
         if (not list) {
-          if (not is<null_type>(value.type) or not x.has_question_mark) {
+          if ((not is<null_type>(value.type) or not x.has_question_mark)
+              and active_slice.as_constant() != false) {
             diagnostic::warning("expected `record` or `list`")
               .primary(x.expr, "has type `{}`", value.type.kind())
               .compose(add_suppress_hint)
@@ -642,12 +661,16 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         auto number_null = false;
         for (auto i = int64_t{0}; i < list->length(); ++i) {
           if (not list->array->IsValid(i)) {
-            list_null = true;
+            if (active_slice.is_active(i)) {
+              list_null = true;
+            }
             check(b->AppendNull());
             continue;
           }
           if (not number->array->IsValid(i)) {
-            number_null = true;
+            if (active_slice.is_active(i)) {
+              number_null = true;
+            }
             check(b->AppendNull());
             continue;
           }
@@ -657,12 +680,14 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
             target = length + target;
           }
           if (target < 0 || target >= length) {
-            out_of_bounds = true;
+            if (active_slice.is_active(i)) {
+              out_of_bounds = true;
+            }
             check(b->AppendNull());
             continue;
           }
-          auto offset = list->array->value_offset(i);
-          auto value_index = offset + target;
+          auto list_offset = list->array->value_offset(i);
+          auto value_index = list_offset + target;
           check(
             append_array_slice(*b, value_type, *list_values, value_index, 1));
         }
