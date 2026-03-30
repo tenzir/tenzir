@@ -23,7 +23,7 @@ from update_pr_comment import (
 def test_parse_command_uses_defaults_and_target_specific_refs() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         bench_root = Path(tmpdir) / "bench"
-        benchmark_dir = bench_root / "from_kafka_route53"
+        benchmark_dir = bench_root / "benchmarks" / "from_kafka_route53"
         benchmark_dir.mkdir(parents=True)
         (benchmark_dir / "bench.yaml").write_text("name: example\n", encoding="utf-8")
         (bench_root / "defaults.txt").write_text("from_kafka_*\n", encoding="utf-8")

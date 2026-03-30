@@ -13,11 +13,12 @@ from common import bench_root
 
 
 def available_benchmarks(root: Path) -> list[str]:
-    if not root.exists():
+    benchmarks_root = root / "benchmarks"
+    if not benchmarks_root.exists():
         return []
     return sorted(
         directory.name
-        for directory in root.iterdir()
+        for directory in benchmarks_root.iterdir()
         if directory.is_dir() and (directory / "bench.yaml").exists()
     )
 

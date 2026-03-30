@@ -7,10 +7,11 @@ bench:
     - --neo
 ---
 from_kafka f"{env("BENCHMARK_KAFKA_TOPIC")}",
-  count=2586,
+  count=258600,
   offset="beginning",
   options={
     "bootstrap.servers": f"{env("BENCHMARK_KAFKA_BOOTSTRAP_SERVERS")}",
     "group.id": f"{env("BENCHMARK_KAFKA_GROUP_ID")}",
   },
   _json=true
+discard

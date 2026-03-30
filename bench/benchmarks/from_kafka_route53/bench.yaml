@@ -6,15 +6,15 @@ tags:
 input:
   path: cloudwatch/route53.ndjson
   source: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
-  events: 2586
+  events: 258600
   measure: true
 env:
   TENZIR_CONSOLE_FORMAT: none
 fixtures:
   - kafka:
-      compose_file: ../compose.yaml
       topic: from-kafka-route53-bench
+      repetitions: 100
 runtime:
   warmup_runs: 1
   measurement_runs: 3
-  timeout_seconds: 300
+  timeout_seconds: 1800

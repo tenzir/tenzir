@@ -5,9 +5,9 @@ services:
       - redpanda
       - start
       - --overprovisioned
-      - --smp=1
-      - --memory=1G
-      - --reserve-memory=0M
+      - --smp=4
+      - --memory=4G
+      - --reserve-memory=512M
       - --check=false
       - --node-id=0
       - --kafka-addr=0.0.0.0:9092
