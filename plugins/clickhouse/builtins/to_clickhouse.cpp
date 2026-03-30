@@ -210,7 +210,7 @@ public:
       make_secret_request("password", args_.password, client_args.password, dh),
     });
     if (not ok) {
-      state_->done.store(true);
+      state_->done.store(true, std::memory_order_release);
       co_return;
     }
     state_->worker_handles.reserve(args_.jobs);
@@ -225,7 +225,7 @@ public:
         diagnostic::error("ClickHouse error: {}", e.what())
           .primary(args_.operator_location)
           .emit(dh);
-        state_->done.store(true);
+        state_->done.store(true, std::memory_order_release);
         co_return;
       }
       TENZIR_ASSERT(client);
@@ -238,7 +238,7 @@ public:
       std::ignore = ctx.spawn_task(ping_loop(state_.get(), std::move(client)));
     }
     if (state_->worker_handles.empty()) {
-      state_->done.store(true);
+      state_->done.store(true, std::memory_order_release);
       co_return;
     }
   }
@@ -267,7 +267,7 @@ public:
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(state_);
-    state_->done.store(true);
+    state_->done.store(true, std::memory_order_release);
     // Enqueue shutdown signals
     for (auto& _ : state_->worker_handles) {
       co_await state_->input_queue.enqueue(None{});
@@ -284,8 +284,9 @@ public:
 
   auto state() -> OperatorState override {
     TENZIR_ASSERT(state_);
-    return state_->done.load() ? OperatorState::done
-                               : OperatorState::unspecified;
+    return state_->done.load(std::memory_order_acquire)
+             ? OperatorState::done
+             : OperatorState::unspecified;
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -327,7 +328,7 @@ private:
         diagnostic::error("unexpected exception").emit(client->dh());
       }
       if (not success) {
-        shared_state->done.store(true);
+        shared_state->done.store(true, std::memory_order_release);
         continue;
       }
       // Remove the slice from the persisted state.

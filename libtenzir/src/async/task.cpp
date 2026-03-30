@@ -34,13 +34,13 @@ auto wait_forever() -> Task<void> {
   // We want to stop this when cancellation occurs, but `Baton` is not
   // cancelable by default.
   auto baton = folly::coro::Baton{};
-  auto token = co_await folly::coro::co_current_cancellation_token;
+  auto& token = co_await folly::coro::co_current_cancellation_token;
   auto callback = folly::CancellationCallback{token, [&]() noexcept {
                                                 baton.post();
                                               }};
   co_await baton;
   if (token.isCancellationRequested()) {
-    co_yield folly::coro::co_cancelled;
+    co_yield folly::coro::co_stopped_may_throw;
   }
 }
 

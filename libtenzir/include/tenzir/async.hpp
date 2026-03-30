@@ -74,25 +74,26 @@ using SubKeyView = data_view;
 template <class T>
 struct OperatorMsg;
 
+/// A handle to a subpipeline. May only be used within the main functions of the
+/// operator that do not run concurrently (so not `await_task` or `process_sub`).
 template <class Input>
 class OpenPipeline {
 public:
   OpenPipeline() noexcept = default;
 
-  explicit OpenPipeline(Option<Box<Push<OperatorMsg<Input>>>>& push) noexcept
-    : push_{&push} {
-  }
-
-  explicit OpenPipeline(None) noexcept {
+  explicit OpenPipeline(Option<Push<OperatorMsg<Input>>&> push) noexcept
+    : push_{push} {
   }
 
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>>;
+
   auto close() -> Task<void>
     requires(not std::same_as<Input, void>);
 
 private:
-  Option<Box<Push<OperatorMsg<Input>>>>* push_ = nullptr;
+  /// When this is `None`, then the pipeline is closed.
+  Option<Push<OperatorMsg<Input>>&> push_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
@@ -116,6 +117,13 @@ public:
   virtual auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>>
     = 0;
+
+  /// Spawn a subpipeline with the given key and input type.
+  ///
+  /// The returned handle allows you to push data in. Data flowing out of the
+  /// subpipeline is routed through the `process_sub` function of the operator.
+  ///
+  /// When the pipeline completes, `finish_sub` is called.
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline>
     = 0;
@@ -363,7 +371,7 @@ public:
     return OperatorState::unspecified;
   }
 
-  /// Called to signal that a source should stop producing data.
+  /// Called to signal that a source should gracefully shut down.
   virtual auto stop(OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(ctx);
     co_return;

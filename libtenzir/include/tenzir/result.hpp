@@ -58,12 +58,34 @@ public:
     return is<Err<Error>>(value_);
   }
 
+  auto is_ok() const -> bool {
+    return not is_err();
+  }
+
+  template <class F>
+  auto map_err(F&& f) && -> Result<Value, std::invoke_result_t<F, Error>> {
+    if (is_ok()) [[likely]] {
+      return std::move(*this).unwrap_unchecked();
+    } else {
+      return Err{std::invoke(std::forward<F>(f),
+                             std::move(*this).unwrap_err_unchecked())};
+    }
+  }
+
   auto unwrap() & -> ValueRef {
     return as<VoidToUnit<Value>>(value_);
   }
 
   auto unwrap() && -> Value {
     return unit_to_void(as<VoidToUnit<Value>>(std::move(value_)));
+  }
+
+  auto unwrap_unchecked() && -> Value {
+    return unit_to_void(std::move(*try_as<VoidToUnit<Value>>(value_)));
+  }
+
+  auto unwrap_err_unchecked() && -> Error {
+    return unit_to_void(std::move(*try_as<Err<Error>>(value_)).unwrap());
   }
 
   auto unwrap_err() && -> Error {

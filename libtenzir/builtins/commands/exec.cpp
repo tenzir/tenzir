@@ -191,7 +191,8 @@ public:
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
          auto success = exec_command(inv, sys);
-         return caf::make_message(success ? ec::no_error : ec::silent);
+         return caf::make_message(success ? caf::error{}
+                                          : caf::make_error(ec::silent));
        }},
     };
     return {std::move(exec), std::move(factory)};

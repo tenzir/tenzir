@@ -365,7 +365,7 @@ public:
       std::move(aws_iam), std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
-      done_.store(true);
+      done_.store(true, std::memory_order_release);
       co_return;
     }
     auth_ = *auth;
@@ -375,7 +375,7 @@ public:
     if (not cfg) {
       diagnostic::error("failed to create kafka configuration: {}", cfg.error())
         .emit(ctx);
-      done_.store(true);
+      done_.store(true, std::memory_order_release);
       co_return;
     }
     auto user_options = args_.options;
@@ -385,7 +385,7 @@ public:
     if (auto ok = co_await ctx.resolve_secrets(
           configure_producer_or_request_secrets(*cfg, user_options, ctx.dh()));
         not ok) {
-      done_.store(true);
+      done_.store(true, std::memory_order_release);
       co_return;
     }
     if (args_.jobs <= 1) {
@@ -397,7 +397,7 @@ public:
       if (raw_producer == nullptr) {
         diagnostic::error("failed to create kafka producer: {}", error)
           .emit(ctx);
-        done_.store(true);
+        done_.store(true, std::memory_order_release);
         co_return;
       }
       producer_.emplace(args_.topic, args_.message, auth_, std::move(*cfg),
@@ -419,7 +419,7 @@ public:
       if (raw_producer == nullptr) {
         diagnostic::error("failed to create kafka producer: {}", error)
           .emit(ctx);
-        done_.store(true);
+        done_.store(true, std::memory_order_release);
         co_return;
       }
       worker_handles_.push_back(ctx.spawn_task(worker_loop(AsyncKafkaProducer{
@@ -431,7 +431,7 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_.load() or input.rows() == 0) {
+    if (done_.load(std::memory_order_acquire) or input.rows() == 0) {
       co_return;
     }
     if (producer_) {
@@ -439,7 +439,7 @@ public:
       if (not co_await producer_->process(input,
                                           args_.key ? args_.key->inner : "",
                                           compute_timestamp_ms(), ctx)) {
-        done_.store(true);
+        done_.store(true, std::memory_order_release);
       }
       co_return;
     }
@@ -458,7 +458,7 @@ public:
     }
     // Signal workers to stop, then enqueue one empty slice per worker to
     // unblock any that are waiting on dequeue, then join all of them.
-    done_.store(true);
+    done_.store(true, std::memory_order_release);
     TENZIR_ASSERT(input_queue_);
     for (auto i = size_t{0}; i < worker_handles_.size(); ++i) {
       co_await input_queue_->enqueue(table_slice{});
@@ -473,7 +473,8 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_.load() ? OperatorState::done : OperatorState::unspecified;
+    return done_.load(std::memory_order_acquire) ? OperatorState::done
+                                                 : OperatorState::unspecified;
   }
 
 private:
@@ -495,7 +496,7 @@ private:
         break;
       }
       if (not co_await producer.process(next, key, timestamp_ms, *ctx_)) {
-        done_.store(true);
+        done_.store(true, std::memory_order_release);
         break;
       }
     }

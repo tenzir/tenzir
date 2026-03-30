@@ -94,7 +94,7 @@ References: `accept_tcp.cpp`, `serve_tcp.cpp`.
 
 ### Semaphores for capacity limits
 
-Use `folly::fibers::Semaphore` for resource permits. Do not use atomics or
+Use `tenzir::Semaphore` for resource permits. Do not use atomics or
 ad-hoc counters for permit accounting. Keep using message queues for state
 coordination.
 
@@ -104,12 +104,12 @@ ownership is handed back to the operator via a message, release it from the
 matching operator lifecycle path.
 
 ```cpp
-Box<folly::fibers::Semaphore> permits_{std::in_place, limit};
+auto permits_ = Semaphore{limit};
 
-co_await permits_->co_wait();
-auto release = detail::scope_guard{[this]() noexcept { permits_->signal(); }};
+auto guard = co_await permits_.acquire();
 co_await start_work();
-release.disable();
+// Prefer RAII to drop the guard, or alternatively:
+guard.release();
 ```
 
 ### Cancellation
