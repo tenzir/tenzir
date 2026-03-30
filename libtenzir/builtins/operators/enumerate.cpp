@@ -36,7 +36,7 @@ auto default_output_field() -> ast::field_path {
 
 struct EnumerateArgs {
   ast::field_path out = default_output_field();
-  std::optional<ast::expression> group;
+  Option<ast::expression> group;
 
   friend auto inspect(auto& f, EnumerateArgs& x) -> bool {
     return f.object(x).fields(f.field("out", x.out), f.field("group", x.group));

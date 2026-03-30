@@ -52,8 +52,8 @@ constexpr auto message_queue_capacity = uint32_t{512};
 
 struct ServeTcpArgs {
   located<std::string> endpoint;
-  std::optional<located<data>> tls;
-  std::optional<located<uint64_t>> max_connections;
+  Option<located<data>> tls;
+  Option<located<uint64_t>> max_connections;
   located<ir::pipeline> printer;
 };
 

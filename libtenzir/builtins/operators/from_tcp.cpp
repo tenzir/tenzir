@@ -70,7 +70,7 @@ constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
 
 struct FromTcpArgs {
   located<std::string> endpoint;
-  std::optional<located<data>> tls;
+  Option<located<data>> tls;
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };

@@ -144,14 +144,14 @@ private:
 
 struct ToClickhouseArgs {
   located<secret> host = {secret::make_literal("localhost"), location::unknown};
-  std::optional<located<uint64_t>> port = std::nullopt;
+  Option<located<uint64_t>> port = None{};
   located<secret> user = {secret::make_literal("default"), location::unknown};
   located<secret> password = {secret::make_literal(""), location::unknown};
   ast::expression table = {};
   located<std::string> mode = {
     std::string{to_string(clickhouse::mode::create_append)}, location::unknown};
-  std::optional<ast::field_path> primary = std::nullopt;
-  std::optional<located<data>> tls;
+  Option<ast::field_path> primary = None{};
+  Option<located<data>> tls;
   location operator_location;
   uint64_t jobs = 1;
 };

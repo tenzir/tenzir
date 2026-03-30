@@ -104,7 +104,7 @@ private:
 struct TimeshiftArgs {
   ast::field_path selector;
   double speed = 1.0;
-  std::optional<time> start;
+  Option<time> start;
 };
 
 class Timeshift final : public Operator<table_slice, table_slice> {
@@ -165,8 +165,8 @@ public:
 private:
   ast::field_path selector_;
   double speed_;
-  std::optional<time> start_;
-  std::optional<time> first_time_;
+  Option<time> start_;
+  Option<time> first_time_;
 };
 
 struct plugin2 : operator_plugin2<timeshift_operator2>, virtual OperatorPlugin {

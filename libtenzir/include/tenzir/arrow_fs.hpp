@@ -36,10 +36,10 @@ namespace tenzir {
 /// Common arguments for Arrow filesystem-based operators.
 struct ArrowFsArgs {
   located<secret> url;
-  std::optional<location> watch;
-  std::optional<location> remove;
-  std::optional<ast::lambda_expr> rename;
-  std::optional<duration> max_age;
+  Option<location> watch;
+  Option<location> remove;
+  Option<ast::lambda_expr> rename;
+  Option<duration> max_age;
   located<ir::pipeline> pipe;
 
   /// Registers the common ArrowFsArgs fields on a Describer.

@@ -66,7 +66,7 @@ public:
   /// existing `validate(diagnostic_handler&)` logic.
   template <class Args, class... Impls>
   auto add_to_describer(Describer<Args, Impls...>& d,
-                        std::optional<located<data>> Args::* tls_member)
+                        Option<located<data>> Args::* tls_member)
     -> _::operator_plugin::Validator {
     auto tls_arg = d.named("tls", tls_member, "record");
     auto opts
