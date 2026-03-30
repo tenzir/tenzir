@@ -1,0 +1,168 @@
+---
+bench:
+  id: legacy
+  description: Read Route53 resolver logs from a file, map them to OCSF DNS Activity, and discard the result.
+  min_version: "5.23.0"
+---
+from_file env("BENCHMARK_INPUT_PATH") {
+  read_ndjson
+}
+
+let $rcode_id = {
+  NOERROR: 0,
+  FORMERR: 1,
+  SERVFAIL: 2,
+  NXDOMAIN: 3,
+  NOTIMP: 4,
+  REFUSED: 5,
+  YXDOMAIN: 6,
+  YXRRSET: 7,
+  NXRRSET: 8,
+  NOTAUTH: 9,
+  NOTZONE: 10,
+  DSOTYPENI: 11,
+  BADSIG_VERS: 16,
+  BADKEY: 17,
+  BADTIME: 18,
+  BADMODE: 19,
+  BADNAME: 20,
+  BADALG: 21,
+  BADTRUNC: 22,
+  BADCOOKIE: 23,
+}
+
+let $proto_nums = {
+  UDP: 17,
+  TCP: 6,
+}
+
+let $firewall_actions = {
+  BLOCK: {
+    action_id: 2,
+    action: "Denied",
+    disposition_id: 2,
+    disposition: "Blocked",
+  },
+  ALLOW: {
+    action_id: 1,
+    action: "Allowed",
+    disposition_id: 1,
+    disposition: "Allowed",
+  },
+  ALERT: {
+    action_id: 1,
+    action: "Allowed",
+    disposition_id: 19,
+    disposition: "Alert",
+    is_alert: true,
+  },
+}
+
+this = {aws: this}
+
+ocsf.category_uid = 4
+ocsf.class_uid = 4003
+ocsf.severity_id = 1
+ocsf.severity = "Informational"
+ocsf.activity_id = 6
+ocsf.type_uid = ocsf.class_uid * 100 + ocsf.activity_id
+
+ocsf.cloud = {
+  account: {
+    uid: move aws.account_id?,
+  },
+  region: move aws.region?,
+  provider: "AWS",
+}
+
+ocsf.metadata = {
+  product: {
+    name: "Amazon Route 53",
+    vendor_name: "AWS",
+    version: aws.version?.string(),
+    feature: {
+      name: "Resolver Query Logs",
+    },
+  },
+  version: "1.7.0",
+  profiles: ["cloud"],
+}
+drop aws.version?
+
+ocsf.time = move aws.query_timestamp?
+ocsf.query_time = ocsf.time
+
+ocsf.query = {
+  hostname: move aws.query_name?,
+  type: move aws.query_type?,
+  class: move aws.query_class?,
+}
+
+if aws.has("answers") and aws.answers.length() > 0 {
+  ocsf.answers = (move aws.answers).map(a => {
+    rdata: a.Rdata,
+    type: a.Type,
+    class: a.Class,
+  })
+  ocsf.response_time = ocsf.time
+} else {
+  drop aws.answers?
+}
+
+if aws.has("rcode") {
+  ocsf.rcode_id = $rcode_id[aws.rcode] else 99
+  ocsf.status_id = 1 if ocsf.rcode_id == 0 else 2
+  ocsf.status = "Success" if ocsf.rcode_id == 0 else "Failure"
+  drop aws.rcode
+} else {
+  ocsf.status_id = 0
+  ocsf.status = "Unknown"
+}
+
+if aws.has("srcaddr") {
+  ocsf.src_endpoint.ip = ip(move aws.srcaddr)
+  ocsf.connection_info.protocol_ver_id = 6 if ocsf.src_endpoint.ip.is_v6() else 4
+}
+if aws.has("srcport") {
+  ocsf.src_endpoint.port = int(move aws.srcport)
+}
+if aws.has("vpc_id") {
+  ocsf.src_endpoint.vpc_uid = move aws.vpc_id
+}
+if aws.srcids?.instance? != null {
+  ocsf.src_endpoint.instance_uid = move aws.srcids.instance
+}
+if aws.srcids?.resolver_endpoint? != null {
+  ocsf.dst_endpoint.uid = move aws.srcids.resolver_endpoint
+}
+if aws.srcids?.resolver_network_interface? != null {
+  ocsf.dst_endpoint.interface_uid = move aws.srcids.resolver_network_interface
+}
+drop aws.srcids?
+
+if aws.has("transport") {
+  ocsf.connection_info.protocol_name = aws.transport.to_lower()
+  ocsf.connection_info.protocol_num = $proto_nums[aws.transport] else -1
+  drop aws.transport
+}
+
+if aws.has("firewall_rule_action") {
+  ocsf.metadata.profiles = ["cloud", "security_control"]
+  ocsf.action_id = $firewall_actions[aws.firewall_rule_action].action_id
+  ocsf.action = $firewall_actions[aws.firewall_rule_action].action
+  ocsf.disposition_id = $firewall_actions[aws.firewall_rule_action].disposition_id
+  ocsf.disposition = $firewall_actions[aws.firewall_rule_action].disposition
+  if $firewall_actions[aws.firewall_rule_action].is_alert? != null {
+    ocsf.is_alert = $firewall_actions[aws.firewall_rule_action].is_alert
+  }
+  drop aws.firewall_rule_action
+  ocsf.firewall_rule = {
+    uid: move aws.firewall_rule_group_id?,
+    match_details: move aws.firewall_domain_list_id?,
+  }
+}
+
+this = {...ocsf, unmapped: aws}
+@name = "ocsf.dns_activity"
+ocsf::derive
+discard
