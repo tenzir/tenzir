@@ -23,7 +23,6 @@
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
-#include <tenzir/tql2/eval_impl.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/resolve.hpp>
@@ -58,12 +57,8 @@ public:
     // as part of the `from` operator. This avoids `from {x: 3 * null}` emitting
     // the same warning twice.
     auto null_dh = null_diagnostic_handler{};
-    auto null_sp = session_provider::make(null_dh);
     const auto non_const_eval = [&](const ast::expression& expr) {
-      auto value = evaluator{nullptr, null_sp.as_session()}.eval(expr, {});
-      TENZIR_ASSERT(value.length() == 1);
-      TENZIR_ASSERT(value.parts().size() == 1);
-      return value.part(0);
+      return std::move(const_eval_series(expr, null_dh)).unwrap();
     };
     for (const auto& expr : events_) {
       auto slice = non_const_eval(expr);
@@ -116,11 +111,7 @@ public:
   auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(next_ < events_.size());
-    auto sp = session_provider::make(ctx);
-    auto value = evaluator{nullptr, sp.as_session()}.eval(events_[next_], {});
-    TENZIR_ASSERT(value.length() == 1);
-    TENZIR_ASSERT(value.parts().size() == 1);
-    auto part = std::move(value.part(0));
+    auto part = std::move(const_eval_series(events_[next_], ctx)).unwrap();
     auto cast = part.as<record_type>();
     TENZIR_ASSERT(cast);
     auto schema = tenzir::type{"tenzir.from", cast->type};

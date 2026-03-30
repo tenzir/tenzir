@@ -154,21 +154,26 @@ auto eval(const ast::constant& expr, const table_slice& input,
   });
 }
 
-auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
-  -> failure_or<data> {
-  return trace_panic(expr, [&] -> failure_or<data> {
+auto const_eval_series(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<series> {
+  return trace_panic(expr, [&] -> failure_or<series> {
     // TODO: Do not create a new session here.
     try {
       auto sp = session_provider::make(dh);
       auto result = evaluator{nullptr, sp.as_session()}.eval(expr, {});
       TENZIR_ASSERT(result.length() == 1);
       TENZIR_ASSERT(result.parts().size() == 1);
-      auto& part = result.part(0);
-      return materialize(view_at(*part.array, 0));
+      return std::move(result.part(0));
     } catch (failure fail) {
       return fail;
     }
   });
+}
+
+auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<data> {
+  TRY(auto part, const_eval_series(expr, dh));
+  return materialize(view_at(*part.array, 0));
 }
 
 auto try_const_eval(const ast::expression& expr, session ctx)
