@@ -1208,6 +1208,31 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<std::vector<table_slice>>();
       auto result = std::make_shared<std::vector<table_slice>>();
       auto pending = std::make_shared<size_t>(0);
+      auto first_hard_error = std::make_shared<caf::error>();
+      auto finish = [result, pending, rp, first_hard_error]() mutable {
+        if (*pending != 0) {
+          return;
+        }
+        if (first_hard_error->valid() and result->empty()) {
+          rp.deliver(*first_hard_error);
+          return;
+        }
+        rp.deliver(std::move(*result));
+      };
+      auto handle_partition_error
+        = [self, pending, result, first_hard_error, finish](caf::error err,
+                                                            auto actor) mutable {
+            if (err == caf::sec::request_receiver_down
+                or err == caf::exit_reason::remote_link_unreachable) {
+              TENZIR_DEBUG("{} ignores unavailable partition {} while "
+                           "collecting recent events: {}",
+                           *self, actor, err);
+            } else if (not first_hard_error->valid()) {
+              *first_hard_error = std::move(err);
+            }
+            *pending -= 1;
+            finish();
+          };
       // Collect from active partitions.
       for (const auto& [schema, info] : self->state().active_partitions) {
         if (schema.attribute("internal").has_value() != internal) {
@@ -1217,20 +1242,17 @@ index(index_actor::stateful_pointer<index_state> self,
         self->mail(atom::get_v)
           .request(info.actor, caf::infinite)
           .then(
-            [result, pending, rp](std::vector<table_slice>& slices) mutable {
+            [result, pending,
+             finish](std::vector<table_slice>& slices) mutable {
               result->insert(result->end(),
                              std::make_move_iterator(slices.begin()),
                              std::make_move_iterator(slices.end()));
               *pending -= 1;
-              if (*pending == 0) {
-                rp.deliver(std::move(*result));
-              }
+              finish();
             },
-            [rp, pending](const caf::error& err) mutable {
-              *pending -= 1;
-              if (*pending == 0) {
-                rp.deliver(err);
-              }
+            [handle_partition_error, actor = info.actor](
+              const caf::error& err) mutable {
+              handle_partition_error(err, actor);
             });
       }
       // Collect from unpersisted partitions (being written to disk).
@@ -1243,26 +1265,20 @@ index(index_actor::stateful_pointer<index_state> self,
         self->mail(atom::get_v)
           .request(actor, caf::infinite)
           .then(
-            [result, pending, rp](std::vector<table_slice>& slices) mutable {
+            [result, pending,
+             finish](std::vector<table_slice>& slices) mutable {
               result->insert(result->end(),
                              std::make_move_iterator(slices.begin()),
                              std::make_move_iterator(slices.end()));
               *pending -= 1;
-              if (*pending == 0) {
-                rp.deliver(std::move(*result));
-              }
+              finish();
             },
-            [rp, pending](const caf::error& err) mutable {
-              *pending -= 1;
-              if (*pending == 0) {
-                rp.deliver(err);
-              }
+            [handle_partition_error, actor](const caf::error& err) mutable {
+              handle_partition_error(err, actor);
             });
       }
       // If no partitions, return immediately
-      if (*pending == 0) {
-        rp.deliver(std::move(*result));
-      }
+      finish();
       return rp;
     },
     [self](atom::evaluate,
