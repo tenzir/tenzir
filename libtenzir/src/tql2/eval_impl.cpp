@@ -469,8 +469,7 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
       };
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {
-        if (not x.has_question_mark
-            and active_slice.as_constant() != false) {
+        if (not x.has_question_mark and active_slice.as_constant() != false) {
           diagnostic::warning("tried to access field of `null`")
             .primary(x.expr, "is null")
             .compose(add_suppress_hint)
@@ -479,8 +478,7 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         return std::move(*null);
       }
       if (auto null = index.as<null_type>()) {
-        if (not x.has_question_mark
-            and active_slice.as_constant() != false) {
+        if (not x.has_question_mark and active_slice.as_constant() != false) {
           diagnostic::warning("cannot use `null` as index")
             .primary(x.index, "is null")
             .compose(add_suppress_hint)

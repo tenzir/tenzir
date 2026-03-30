@@ -54,8 +54,9 @@ public:
   /// to avoid evaluating expressions in dead branches.
   auto eval_narrowed(ast::expression const& x, ActiveRows const& active)
     -> multi_series {
-    if (active.as_constant() == false)
+    if (active.as_constant() == false) {
       return series::null(null_type{}, length_);
+    }
     return eval(x, active);
   }
 

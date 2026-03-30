@@ -32,7 +32,6 @@ namespace tenzir {
 
 namespace {
 
-
 [[maybe_unused]] constexpr auto is_arithmetic(ast::binary_op op) -> bool {
   using enum ast::binary_op;
   switch (op) {
