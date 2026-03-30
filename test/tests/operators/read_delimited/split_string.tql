@@ -1,0 +1,6 @@
+from {
+  line: "foo||bar||baz"
+}
+write_lines
+split_bytes 2
+read_delimited "||"
