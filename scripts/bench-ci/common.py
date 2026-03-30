@@ -1,0 +1,70 @@
+"""Shared helpers for benchmark CI scripts."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+from typing import Any
+
+COMMENT_MARKER = "<!-- tenzir-bench-comment -->"
+
+TARGET_METADATA_ARTIFACTS = {
+    "docker": "benchmark-target-docker-amd64",
+    "static": "benchmark-target-static-x86_64-linux",
+}
+
+TARGET_PACKAGE_ARTIFACTS = {
+    "static": "tenzir-static-x86_64-linux",
+}
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def bench_root() -> Path:
+    return repo_root() / "bench"
+
+
+def gh_json(args: list[str]) -> Any:
+    result = subprocess.run(
+        ["gh", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
+def gh_api(
+    endpoint: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+) -> Any:
+    cmd = ["gh", "api", endpoint, "--method", method]
+    input_data = None
+    if payload is not None:
+        cmd.extend(["--input", "-"])
+        input_data = json.dumps(payload)
+    result = subprocess.run(
+        cmd,
+        check=True,
+        capture_output=True,
+        text=True,
+        input=input_data,
+    )
+    if not result.stdout.strip():
+        return {}
+    return json.loads(result.stdout)
+
+
+def dump_json(payload: Any, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
