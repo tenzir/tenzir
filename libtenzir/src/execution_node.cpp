@@ -1111,16 +1111,17 @@ struct exec_node_state {
                        op->name(), err);
           TENZIR_ASSERT(issue_demand_inflight);
           issue_demand_inflight = false;
-          if (err.valid() and err != caf::sec::request_receiver_down
-              and err != caf::exit_reason::remote_link_unreachable) {
+          if (err == caf::sec::request_receiver_down
+              or err == caf::exit_reason::remote_link_unreachable) {
+            previous = nullptr;
+            schedule_run(false);
+            return;
+          }
+          if (err.valid()) {
             diagnostic::error(err)
               .note("{} {} failed to pull from previous execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());
-          } else {
-            // TODO: We seem to assume that this error is recoverable, but I'm
-            // not sure whether that makes sense here.
-            schedule_run(true);
           }
         });
   }

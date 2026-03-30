@@ -851,7 +851,7 @@ void index_state::decommission_active_partition(
               }
               unpersisted.erase(id);
               persisted_partitions.emplace(id);
-              self->send_exit(actor, caf::exit_reason::normal);
+              retire_partition(id, actor, caf::exit_reason::normal);
               if (completion) {
                 completion(caf::none);
               }
@@ -863,7 +863,7 @@ void index_state::decommission_active_partition(
                            "queries: {}",
                            *self, schema, id, err);
               unpersisted.erase(id);
-              self->send_exit(actor, err);
+              retire_partition(id, actor, err);
               if (completion) {
                 completion(err);
               }
@@ -875,7 +875,7 @@ void index_state::decommission_active_partition(
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
         unpersisted.erase(id);
-        self->send_exit(actor, err);
+        retire_partition(id, actor, err);
         if (completion) {
           completion(err);
         }
@@ -915,6 +915,38 @@ auto index_state::flush() -> caf::typed_response_promise<void> {
                                   });
   }
   return rp;
+}
+
+void index_state::pin_recent_partition(const uuid& id) {
+  ++recent_partition_pins[id];
+}
+
+void index_state::unpin_recent_partition(const uuid& id) {
+  const auto it = recent_partition_pins.find(id);
+  TENZIR_ASSERT(it != recent_partition_pins.end());
+  TENZIR_ASSERT(it->second > 0);
+  --it->second;
+  if (it->second != 0) {
+    return;
+  }
+  recent_partition_pins.erase(it);
+  if (auto retired = retired_partitions.find(id);
+      retired != retired_partitions.end()) {
+    self->send_exit(retired->second.actor, retired->second.reason);
+    retired_partitions.erase(retired);
+  }
+}
+
+void index_state::retire_partition(const uuid& id, active_partition_actor actor,
+                                   caf::error reason) {
+  if (recent_partition_pins.contains(id)) {
+    auto [_, inserted] = retired_partitions.emplace(
+      id,
+      RetiredPartition{.actor = std::move(actor), .reason = std::move(reason)});
+    TENZIR_ASSERT(inserted);
+    return;
+  }
+  self->send_exit(actor, reason);
 }
 
 void index_state::add_partition_creation_listener(
@@ -1081,8 +1113,16 @@ std::size_t index_state::memusage() const {
   for (const auto& [type, partition_info] : active_partitions) {
     usage += as_bytes(type).size() + sizeof(partition_info);
   }
+  for (const auto& [id, partition] : unpersisted) {
+    usage += sizeof(id) + as_bytes(partition.first).size()
+             + sizeof(partition.second);
+  }
   usage += persisted_partitions.size()
            * sizeof(decltype(persisted_partitions)::value_type);
+  usage += recent_partition_pins.size()
+           * sizeof(decltype(recent_partition_pins)::value_type);
+  usage += retired_partitions.size()
+           * sizeof(decltype(retired_partitions)::value_type);
   usage += pending_queries.memusage();
   for (const auto& [addr, uuids] : monitored_queries) {
     usage += sizeof(addr) + calculate_usage(uuids);
@@ -1208,37 +1248,35 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<std::vector<table_slice>>();
       auto result = std::make_shared<std::vector<table_slice>>();
       auto pending = std::make_shared<size_t>(0);
-      auto first_hard_error = std::make_shared<caf::error>();
-      auto finish = [result, pending, rp, first_hard_error]() mutable {
+      auto first_error = std::make_shared<caf::error>();
+      auto pinned_partitions = std::make_shared<std::vector<uuid>>();
+      auto finish = [result, pending, rp, first_error, pinned_partitions,
+                     &state = self->state()]() mutable {
         if (*pending != 0) {
           return;
         }
-        if (first_hard_error->valid() and result->empty()) {
-          rp.deliver(*first_hard_error);
+        for (const auto& id : *pinned_partitions) {
+          state.unpin_recent_partition(id);
+        }
+        pinned_partitions->clear();
+        if (first_error->valid()) {
+          rp.deliver(*first_error);
           return;
         }
         rp.deliver(std::move(*result));
       };
-      auto handle_partition_error
-        = [self, pending, result, first_hard_error, finish](caf::error err,
-                                                            auto actor) mutable {
-            if (err == caf::sec::request_receiver_down
-                or err == caf::exit_reason::remote_link_unreachable) {
-              TENZIR_DEBUG("{} ignores unavailable partition {} while "
-                           "collecting recent events: {}",
-                           *self, actor, err);
-            } else if (not first_hard_error->valid()) {
-              *first_hard_error = std::move(err);
-            }
-            *pending -= 1;
-            finish();
+      auto track_partition
+        = [pending, pinned_partitions, &state = self->state()](const uuid& id) {
+            state.pin_recent_partition(id);
+            pinned_partitions->push_back(id);
+            *pending += 1;
           };
       // Collect from active partitions.
       for (const auto& [schema, info] : self->state().active_partitions) {
         if (schema.attribute("internal").has_value() != internal) {
           continue;
         }
-        *pending += 1;
+        track_partition(info.id);
         self->mail(atom::get_v)
           .request(info.actor, caf::infinite)
           .then(
@@ -1250,9 +1288,12 @@ index(index_actor::stateful_pointer<index_state> self,
               *pending -= 1;
               finish();
             },
-            [handle_partition_error, actor = info.actor](
-              const caf::error& err) mutable {
-              handle_partition_error(err, actor);
+            [pending, first_error, finish](const caf::error& err) mutable {
+              if (not first_error->valid()) {
+                *first_error = err;
+              }
+              *pending -= 1;
+              finish();
             });
       }
       // Collect from unpersisted partitions (being written to disk).
@@ -1261,7 +1302,7 @@ index(index_actor::stateful_pointer<index_state> self,
         if (type.attribute("internal").has_value() != internal) {
           continue;
         }
-        *pending += 1;
+        track_partition(uuid);
         self->mail(atom::get_v)
           .request(actor, caf::infinite)
           .then(
@@ -1273,8 +1314,12 @@ index(index_actor::stateful_pointer<index_state> self,
               *pending -= 1;
               finish();
             },
-            [handle_partition_error, actor](const caf::error& err) mutable {
-              handle_partition_error(err, actor);
+            [pending, first_error, finish](const caf::error& err) mutable {
+              if (not first_error->valid()) {
+                *first_error = err;
+              }
+              *pending -= 1;
+              finish();
             });
       }
       // If no partitions, return immediately

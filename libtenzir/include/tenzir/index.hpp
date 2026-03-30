@@ -201,6 +201,13 @@ struct index_state {
 
   auto flush() -> caf::typed_response_promise<void>;
 
+  void pin_recent_partition(const uuid& id);
+
+  void unpin_recent_partition(const uuid& id);
+
+  void retire_partition(const uuid& id, active_partition_actor actor,
+                        caf::error reason);
+
   /// Adds a new partition creation listener.
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);
@@ -231,6 +238,15 @@ struct index_state {
   // unpin them after they're safely on disk.
   std::unordered_map<uuid, std::pair<type, active_partition_actor>> unpersisted
     = {};
+
+  struct RetiredPartition {
+    active_partition_actor actor = {};
+    caf::error reason = caf::none;
+  };
+
+  std::unordered_map<uuid, size_t> recent_partition_pins = {};
+
+  std::unordered_map<uuid, RetiredPartition> retired_partitions = {};
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
