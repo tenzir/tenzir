@@ -46,9 +46,10 @@ public:
       auto guard = detail::scope_guard{[&] noexcept {
         scope_ = nullptr;
       }};
+      auto cancel_guard = detail::scope_guard{[&] noexcept {
+        scope.cancel();
+      }};
       co_return co_await std::move(task);
-      // TODO: What about the queue at this point?
-      // TODO: Should we cancel the outstanding tasks here?
     });
   }
 
@@ -170,10 +171,10 @@ public:
         panic("got empty exception object in queue scope");
       }
       if constexpr (std::same_as<T, void>) {
-        std::move(*result).unwrap();
+        std::move(*result).value();
         co_return Unit{};
       } else {
-        co_return std::move(*result).unwrap();
+        co_return std::move(*result).value();
       }
     }
     co_return None{};

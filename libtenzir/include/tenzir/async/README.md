@@ -60,3 +60,8 @@ example, a channel between a set of tasks should make the readers aware if all
 writers have been dropped, and the writers aware if all readers have been
 dropped. This is important to ensure that partial termination does not lead to
 buffers filling up, or even deadlocks in the case of bounded channels.
+
+## Notes
+
+- Don't use `folly::makePromise()`, as `co_await` does not cancel.
+- Instead, wrap with `folly::coro::toTaskInterruptOnCancel(...)`

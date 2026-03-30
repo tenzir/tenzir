@@ -8,8 +8,11 @@
 
 #pragma once
 
-#include <folly/OperationCancelled.h>
-#include <folly/Try.h>
+#include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
+
+#include <tenzir/async/task.hpp>
+#include <tenzir/type_traits.hpp>
 
 namespace tenzir {
 
@@ -57,7 +60,7 @@ public:
   }
 
   template <class Self>
-  auto unwrap(this Self&& self) -> decltype(auto) {
+  auto value(this Self&& self) -> decltype(auto) {
     return std::forward<Self>(self).value_.value();
   }
 
@@ -90,5 +93,54 @@ private:
   // Based on `Try` because `result` is not default-constructible.
   folly::Try<T> value_;
 };
+
+/// Wraps an awaitable to catch exceptions and cancellations.
+///
+/// Always prefer this over `folly::coro::co_awaitTry`. Unlike `coro::Try<T>`,
+/// we separate cancellation from exceptions. See https://wg21.link/p1677 for
+/// why this is a good idea.
+///
+/// Only use this if you want to special-case both cancellation and exceptions.
+/// If you don't care about both, use `async_try` or `catch_cancellation` instead.
+template <class SemiAwaitable>
+auto async_result(SemiAwaitable&& awaitable)
+  -> Task<AsyncResult<folly::coro::semi_await_result_t<SemiAwaitable>>> {
+  // Note: This could be optimized to avoid the additional coroutine frame.
+  co_return AsyncResult{
+    co_await folly::coro::co_awaitTry(std::forward<SemiAwaitable>(awaitable))};
+}
+
+/// Wraps an awaitable to catch exceptions while propagating cancellation.
+template <class SemiAwaitable>
+auto async_try(SemiAwaitable&& awaitable)
+  -> Task<Result<folly::coro::semi_await_result_t<SemiAwaitable>,
+                 folly::exception_wrapper>> {
+  // Note: This could be optimized to avoid the additional coroutine frame.
+  auto result = co_await async_result(std::forward<SemiAwaitable>(awaitable));
+  if (result.is_exception()) {
+    co_return Err{std::move(result).exception()};
+  }
+  // This call will propagate cancellation.
+  if constexpr (std::is_void_v<folly::coro::semi_await_result_t<SemiAwaitable>>) {
+    std::move(result).value();
+    co_return {};
+  } else {
+    co_return std::move(result).value();
+  }
+}
+
+/// Wraps an awaitable to catch cancellation while propagating exceptions.
+template <class SemiAwaitable>
+auto catch_cancellation(SemiAwaitable&& awaitable)
+  -> Task<Option<VoidToUnit<folly::coro::semi_await_result_t<SemiAwaitable>>>> {
+  // Note: This could be optimized to avoid the additional coroutine frame.
+  auto result = co_await async_result(std::forward<SemiAwaitable>(awaitable));
+  if (result.is_cancelled()) {
+    co_return None{};
+  }
+  co_return void_to_unit([&] {
+    return std::move(result).value();
+  });
+}
 
 } // namespace tenzir

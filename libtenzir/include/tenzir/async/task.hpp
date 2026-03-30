@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/unit.hpp"
+
 #include <folly/coro/Task.h>
 
 #include <chrono>
@@ -29,5 +31,19 @@ auto sleep_until(std::chrono::steady_clock::time_point t) -> Task<void>;
 
 /// Asserts that the current task is cancelled and propagates that cancellation.
 auto assert_cancelled() -> Task<void>;
+
+/// Forwards a task's return value, converting `void` to `Unit`.
+///
+/// This takes a task to invoke as there are no `void` parameters.
+template <class Awaitable>
+auto void_to_unit(Awaitable&& awaitable)
+  -> Task<VoidToUnit<folly::coro::semi_await_result_t<Awaitable>>> {
+  if constexpr (std::is_void_v<folly::coro::semi_await_result_t<Awaitable>>) {
+    co_await std::forward<Awaitable>(awaitable);
+    co_return Unit{};
+  } else {
+    co_return co_await std::forward<Awaitable>(awaitable);
+  }
+}
 
 } // namespace tenzir

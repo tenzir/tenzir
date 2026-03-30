@@ -1,0 +1,7 @@
+// Make sure that we exit `every` and its subpipelines.
+every 1s {
+  from {}
+  repeat
+}
+repeat
+head 1

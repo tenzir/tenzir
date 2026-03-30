@@ -14,21 +14,21 @@ namespace tenzir {
 template <class Input>
 template <std::same_as<Input> In>
 auto OpenPipeline<Input>::push(In input) -> Task<Result<void, In>> {
-  if (push_ and *push_) {
-    if constexpr (std::same_as<Input, table_slice>) {
-      LOGW("pushing {} rows to subpipeline", input.rows());
-    } else {
-      LOGW("pushing {} bytes to subpipeline", input ? input->size() : 0);
-    }
-    co_await (**push_)(std::move(input));
-  } else {
+  if (not push_) {
     if constexpr (std::same_as<Input, table_slice>) {
       LOGW("discarding {} rows due to closed subpipeline", input.rows());
     } else {
       LOGW("discarding {} bytes due to closed subpipeline",
            input ? input->size() : 0);
     }
+    co_return Err{std::move(input)};
   }
+  if constexpr (std::same_as<Input, table_slice>) {
+    LOGW("pushing {} rows to subpipeline", input.rows());
+  } else {
+    LOGW("pushing {} bytes to subpipeline", input ? input->size() : 0);
+  }
+  co_await (*push_)(std::move(input));
   co_return {};
 }
 
@@ -36,12 +36,14 @@ template <class Input>
 auto OpenPipeline<Input>::close() -> Task<void>
   requires(not std::same_as<Input, void>)
 {
-  if (push_ and *push_) {
-    LOGW("pushing end-of-data to subpipeline");
-    co_await (**push_)(EndOfData{});
-  } else {
+  if (not push_) {
     LOGW("discarding end-of-data due to closed subpipeline");
+    co_return;
   }
+  LOGW("pushing end-of-data to subpipeline");
+  co_await (*push_)(EndOfData{});
+  // TODO: Do we need to propagate this information directly to the owner?
+  push_ = None{};
 }
 
 template class OpenPipeline<void>;
