@@ -16,6 +16,7 @@
 #include <arrow/util/utf8.h>
 
 #include <cstddef>
+#include <string_view>
 
 namespace tenzir::plugins::read_delimited {
 
@@ -47,25 +48,22 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
+    if (input->size() == 0) {
       co_return;
     }
     buffer_.append(reinterpret_cast<const char*>(input->data()), input->size());
-    auto consumed = size_t{0};
+    auto remaining = std::string_view{buffer_};
     while (true) {
-      const auto pos = buffer_.find(separator_, consumed);
+      const auto pos = remaining.find(separator_);
       if (pos == std::string::npos) {
         break;
       }
-      const auto seg
-        = args_.include_separator
-            ? std::string_view{buffer_.data() + consumed,
-                               pos + separator_.size() - consumed}
-            : std::string_view{buffer_.data() + consumed, pos - consumed};
+      const auto end = args_.include_separator ? pos + separator_.size() : pos;
+      const auto seg = remaining.substr(0, end);
       emit(seg, ctx);
-      consumed = pos + separator_.size();
+      remaining = remaining.substr(pos + separator_.size());
     }
-    buffer_ = buffer_.substr(consumed);
+    buffer_ = buffer_.substr(buffer_.size() - remaining.size());
     co_await flush(push);
   }
 
