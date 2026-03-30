@@ -1,0 +1,20 @@
+name: from_kafka_route53
+description: Read the CloudWatch Route53 dataset from Kafka and discard the parsed events.
+tags:
+  benchmark: kafka
+  dataset: route53
+input:
+  path: cloudwatch/route53.ndjson
+  source: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
+  events: 2586
+  measure: true
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - kafka:
+      compose_file: ../compose.yaml
+      topic: from-kafka-route53-bench
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 300

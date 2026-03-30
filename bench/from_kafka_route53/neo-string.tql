@@ -1,0 +1,16 @@
+---
+bench:
+  id: neo-string
+  description: Consume the Route53 sample payload from Kafka and discard parsed messages.
+  min_version: "5.23.0"
+  tenzir_args:
+    - --neo
+---
+from_kafka f"{env("BENCHMARK_KAFKA_TOPIC")}",
+  count=2586,
+  offset="beginning",
+  options={
+    "bootstrap.servers": f"{env("BENCHMARK_KAFKA_BOOTSTRAP_SERVERS")}",
+    "group.id": f"{env("BENCHMARK_KAFKA_GROUP_ID")}",
+  }
+this = move message.parse_json()
