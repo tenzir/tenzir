@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {
+  line: "foo"
+}
+write_lines
+read_delimited_regex "[invalid"

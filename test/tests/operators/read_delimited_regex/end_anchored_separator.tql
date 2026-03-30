@@ -1,0 +1,9 @@
+// Regression test: an end-anchored regex (e.g. \z) produces a zero-width
+// match whose .second == buffer_.cend() inside finalize().  Previously the
+// in-loop `begin = current + 1` after that match advanced past cend(), which
+// is undefined behaviour and aborts in checked-iterator / debug builds.
+from {
+  line: "alpha"
+}
+write_lines
+read_delimited_regex r"\z"
