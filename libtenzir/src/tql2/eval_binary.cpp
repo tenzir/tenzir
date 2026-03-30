@@ -850,7 +850,7 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
       and (left_flat->IsNull(i) or left_flat->GetView(i) != skip_val));
   }
   auto right_active = ActiveRows{finish(right_active_builder), false};
-  auto right_ms = self.eval(x.right, right_active);
+  auto right_ms = self.eval_narrowed(x.right, right_active);
   // Combine left_flat and right_ms using three-valued logic.
   auto result_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
   check(result_builder.Reserve(self.length()));
@@ -1019,8 +1019,8 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
     then_active = ActiveRows{finish(then_builder), false};
     else_active = ActiveRows{finish(else_builder), false};
   }
-  auto then_ms = self.eval(x.left, then_active);
-  auto else_ms = self.eval(fallback, else_active);
+  auto then_ms = self.eval_narrowed(x.left, then_active);
+  auto else_ms = self.eval_narrowed(fallback, else_active);
   // Combine: pick then where cond is true, else where cond is false.
   auto result = multi_series{};
   auto offset = int64_t{0};
@@ -1082,7 +1082,7 @@ auto eval_else(evaluator& self, ast::binary_expr const& x,
   }
   auto right_active = ActiveRows{finish(right_active_builder), false};
   // Evaluate right only where left is null on rows that are still active.
-  auto right_ms = self.eval(x.right, right_active);
+  auto right_ms = self.eval_narrowed(x.right, right_active);
   // Combine: pick left where non-null, else pick right.
   auto result = multi_series{};
   for (auto [left_part, right_part] : split_multi_series(left_ms, right_ms)) {

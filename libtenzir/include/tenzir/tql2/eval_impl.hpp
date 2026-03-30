@@ -49,6 +49,16 @@ public:
 
   auto eval(ast::expression const& x, ActiveRows const& active) -> multi_series;
 
+  /// Like `eval`, but skips evaluation and returns all-null if `active` has no
+  /// active rows. Use this when `active` was narrowed down from a parent set,
+  /// to avoid evaluating expressions in dead branches.
+  auto eval_narrowed(ast::expression const& x, ActiveRows const& active)
+    -> multi_series {
+    if (active.as_constant() == false)
+      return series::null(null_type{}, length_);
+    return eval(x, active);
+  }
+
   auto eval(ast::constant const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::record const& x, ActiveRows const& active) -> multi_series;
