@@ -771,17 +771,16 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
   // Evaluate the left side and materialize it into a flat BooleanArray.
   // Non-bool left parts are treated as null.
   auto left_ms = self.eval(x.left, active);
-  auto left_flat = std::shared_ptr<arrow::BooleanArray>{};
-  if (left_ms.parts().size() == 1) {
-    auto& left = left_ms.parts().front();
-    if (auto typed_left = left.as<bool_type>();
-        typed_left and left.length() == self.length()) {
-      left_flat = typed_left->array;
+  auto left_flat = std::invoke([&] -> std::shared_ptr<arrow::BooleanArray> {
+    if (left_ms.parts().size() == 1) {
+      auto& left = left_ms.parts().front();
+      if (auto typed_left = left.as<bool_type>();
+          typed_left and left.length() == self.length()) {
+        return typed_left->array;
+      }
     }
-  }
-  if (not left_flat) {
-    auto left_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-    check(left_builder.Reserve(self.length()));
+    auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+    check(builder.Reserve(self.length()));
     auto warned_left_mismatch = false;
     for (auto& left : left_ms) {
       auto typed_left = left.as<bool_type>();
@@ -793,14 +792,14 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
             .hint("the result of this expression is `null`")
             .emit(self.ctx());
         }
-        check(left_builder.AppendNulls(left.length()));
+        check(builder.AppendNulls(left.length()));
         continue;
       }
-      check(left_builder.AppendArraySlice(*typed_left->array->data(), 0,
-                                          left.length()));
+      check(builder.AppendArraySlice(*typed_left->array->data(), 0,
+                                     left.length()));
     }
-    left_flat = finish(left_builder);
-  }
+    return finish(builder);
+  });
   TENZIR_ASSERT_EQ(left_flat->length(), self.length());
   // Evaluate the right side, skipping rows where the left is already
   // deterministic:
@@ -809,15 +808,22 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
   // Null entries in left_flat are always active because the result may still
   // depend on the right operand (e.g. null and false == false).
   auto skip_val = (Op == ast::binary_op::or_);
-  auto right_active_builder
-    = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-  check(right_active_builder.Reserve(self.length()));
-  for (auto i = int64_t{0}; i < self.length(); ++i) {
-    right_active_builder.UnsafeAppend(
-      active.is_active(i)
-      and (left_flat->IsNull(i) or left_flat->GetView(i) != skip_val));
-  }
-  auto right_active = ActiveRows{finish(right_active_builder), false};
+  // When all rows are active, left_flat already encodes exactly which rows
+  // need right-side evaluation, so reuse it directly. Otherwise intersect
+  // with the parent active mask.
+  auto right_active = [&] -> ActiveRows {
+    if (active.as_constant() == true) {
+      return ActiveRows{left_flat, skip_val};
+    }
+    auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+    check(builder.Reserve(self.length()));
+    for (auto i = int64_t{0}; i < self.length(); ++i) {
+      builder.UnsafeAppend(
+        active.is_active(i)
+        and (left_flat->IsNull(i) or left_flat->GetView(i) != skip_val));
+    }
+    return ActiveRows{finish(builder), false};
+  }();
   auto right_ms = self.eval_narrowed(x.right, right_active);
   // Combine left_flat and right_ms using three-valued logic.
   auto result_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
@@ -903,90 +909,80 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
 auto eval_if(evaluator& self, ast::binary_expr const& x,
              ast::expression const& fallback, ActiveRows const& active)
   -> multi_series {
-  // Materialize condition into a no-null BooleanArray (null → false),
-  // evaluate branches with ActiveRows to skip irrelevant rows, then combine.
-  auto cond_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-  check(cond_builder.Reserve(self.length()));
-  auto warned_cond_type = false;
-  auto warned_cond_null = false;
-  auto cond_offset = int64_t{0};
-  for (auto& cond_part : self.eval(x.right, active)) {
-    auto typed = cond_part.as<bool_type>();
-    if (not typed) {
-      if (not warned_cond_type) {
-        auto active_slice = active.slice(cond_offset, cond_part.length());
-        auto warn = active_slice.as_constant() == true;
-        if (not warn) {
-          for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
-            if (active_slice.is_active(i)) {
-              warn = true;
-              break;
-            }
+  // Build cond_active[i] = active.is_active(i) AND cond_null_to_false[i].
+  // Fast path: reuse the array directly when the condition is already a single
+  // no-null bool series and all rows are active (no allocation needed).
+  // The then-branch derives from cond_active directly via skip_value_.
+  // The else-branch shares it in the fast path; otherwise a separate mask is
+  // built because cond_active[i]=false covers both "inactive" and
+  // "active AND cond=false" rows.
+  auto cond_ms = self.eval(x.right, active);
+  auto cond_active = std::invoke([&]() -> std::shared_ptr<arrow::BooleanArray> {
+    if (active.as_constant() == true and cond_ms.parts().size() == 1) {
+      auto& part = cond_ms.parts().front();
+      if (auto typed = part.as<bool_type>();
+          typed and part.length() == self.length()
+          and typed->array->null_count() == 0) {
+        return typed->array;
+      }
+    }
+    auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+    check(builder.Reserve(self.length()));
+    auto warned_cond_type = false;
+    auto warned_cond_null = false;
+    auto cond_offset = int64_t{0};
+    for (auto& cond_part : cond_ms) {
+      auto typed = cond_part.as<bool_type>();
+      if (not typed) {
+        for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
+          if (not warned_cond_type and active.is_active(cond_offset + i)) {
+            warned_cond_type = true;
+            diagnostic::warning("expected `bool`, but got `{}`",
+                                cond_part.type.kind())
+              .primary(x.right)
+              .hint("this will be treated as `false`")
+              .emit(self.ctx());
           }
+          builder.UnsafeAppend(false);
         }
-        if (warn) {
-          warned_cond_type = true;
-          diagnostic::warning("expected `bool`, but got `{}`",
-                              cond_part.type.kind())
+        cond_offset += cond_part.length();
+        continue;
+      }
+      for (auto i = int64_t{0}; i < typed->array->length(); ++i) {
+        auto active_row = active.is_active(cond_offset + i);
+        auto is_null = typed->array->IsNull(i);
+        if (not warned_cond_null and active_row and is_null) {
+          warned_cond_null = true;
+          diagnostic::warning("expected `bool`, but got `null`")
             .primary(x.right)
-            .hint("this will be treated as `false`")
+            .hint("use `else` to provide a fallback value")
             .emit(self.ctx());
         }
-      }
-      for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
-        cond_builder.UnsafeAppend(false);
+        builder.UnsafeAppend(active_row and not is_null
+                             and typed->array->GetView(i));
       }
       cond_offset += cond_part.length();
-      continue;
     }
-    if (typed->array->null_count() > 0 and not warned_cond_null) {
-      auto active_slice = active.slice(cond_offset, cond_part.length());
-      auto warn = active_slice.as_constant() == true;
-      if (not warn) {
-        for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
-          if (active_slice.is_active(i) and typed->array->IsNull(i)) {
-            warn = true;
-            break;
-          }
-        }
-      }
-      if (warn) {
-        warned_cond_null = true;
-        diagnostic::warning("expected `bool`, but got `null`")
-          .primary(x.right)
-          .hint("use `else` to provide a fallback value")
-          .emit(self.ctx());
-      }
+    return finish(builder);
+  });
+  TENZIR_ASSERT_EQ(cond_active->length(), self.length());
+  auto then_active = ActiveRows{cond_active, false};
+  auto else_active = std::invoke([&] {
+    if (active.as_constant() == true) {
+      // No inactive rows: cond_active equals plain cond, so skip_value_=true
+      // correctly marks the then-rows inactive in the else branch.
+      return ActiveRows{cond_active, true};
     }
-    for (auto i = int64_t{0}; i < typed->array->length(); ++i) {
-      cond_builder.UnsafeAppend(typed->array->IsValid(i)
-                                and typed->array->GetView(i));
-    }
-    cond_offset += cond_part.length();
-  }
-  auto cond_flat = finish(cond_builder);
-  TENZIR_ASSERT_EQ(cond_flat->length(), self.length());
-  // Then-branch: active where cond is true (skip_value=false → skip false rows).
-  // Else-branch: active where cond is false (skip_value=true → skip true rows).
-  auto then_active = ActiveRows{};
-  auto else_active = ActiveRows{};
-  if (active.as_constant() == true) {
-    then_active = ActiveRows{cond_flat, false};
-    else_active = ActiveRows{cond_flat, true};
-  } else {
-    auto then_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-    auto else_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-    check(then_builder.Reserve(self.length()));
-    check(else_builder.Reserve(self.length()));
+    // In the slow path cond_active[i]=false covers both inactive rows and
+    // active-but-cond-false rows, so we cannot reuse it for else_active.
+    // Build a separate mask: active[i] AND NOT cond_active[i].
+    auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+    check(builder.Reserve(self.length()));
     for (auto i = int64_t{0}; i < self.length(); ++i) {
-      auto cond = cond_flat->GetView(i);
-      auto active_row = active.is_active(i);
-      then_builder.UnsafeAppend(active_row and cond);
-      else_builder.UnsafeAppend(active_row and not cond);
+      builder.UnsafeAppend(active.is_active(i) and not cond_active->GetView(i));
     }
-    then_active = ActiveRows{finish(then_builder), false};
-    else_active = ActiveRows{finish(else_builder), false};
-  }
+    return ActiveRows{finish(builder), false};
+  });
   auto then_ms = self.eval_narrowed(x.left, then_active);
   auto else_ms = self.eval_narrowed(fallback, else_active);
   // Combine: pick then where cond is true, else where cond is false.
@@ -997,7 +993,7 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
     auto begin = offset;
     offset += length;
     auto get_cond = [&](int64_t i) -> bool {
-      return cond_flat->GetView(begin + i);
+      return cond_active->GetView(begin + i);
     };
     if (length == 0) {
       continue;
