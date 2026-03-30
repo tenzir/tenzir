@@ -211,6 +211,9 @@ jobs:
             ref = selector["ref"]
             event = infer_event(ref)
             extra = fetch(ref, target, run_temp / f"extra-{target}-{ref}", event=event)
+            if not extra.get("available", True):
+              print(f"Skipping {target}@{ref}: {extra['reason']}")
+              continue
             extra_path = materialize(Path(extra["metadata_path"]), target, f"{target}@{ref}", int(extra["run_id"]))
             extra_payload = json.loads(extra_path.read_text(encoding="utf-8"))
             if ref == "main":

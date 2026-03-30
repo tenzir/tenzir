@@ -238,7 +238,9 @@ def _publish_dataset(
                 handle.seek(0)
                 shutil.copyfileobj(handle, process.stdin)
         process.stdin.close()
-        stdout, stderr = process.communicate()
+        stdout = b""
+        stderr = process.stderr.read() if process.stderr is not None else b""
+        process.wait()
     except Exception:
         process.kill()
         process.wait()
