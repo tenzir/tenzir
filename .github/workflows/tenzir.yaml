@@ -374,8 +374,9 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
+            '."build-version" = $build_version | ."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
+            --arg build_version "${{ steps.configure.outputs.build-version }}" \
             --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
             --arg source "${source_tag}" \
             --args -- "${tags[@]}")"

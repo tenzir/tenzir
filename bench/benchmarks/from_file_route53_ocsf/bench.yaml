@@ -10,7 +10,7 @@ tags:
 input:
   path: cloudwatch/route53.ndjson
   source: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
-  events: 258600
+  events: 25860
   measure: true
 env:
   TENZIR_CONSOLE_FORMAT: none

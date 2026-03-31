@@ -175,7 +175,7 @@ jobs:
             "target": "docker",
             "arch": "amd64",
             "sha": "${{ github.sha }}",
-            "version": "${{ fromJSON(inputs.config).source-tag }}",
+            "version": "${{ fromJSON(inputs.config).build-version }}",
             "image": "${{ steps.build-images.outputs.benchmark-image }}"
           }
           EOF
