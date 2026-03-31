@@ -178,11 +178,12 @@ def load_contexts(
     *,
     benchmarks: Sequence[str] | None = None,
 ) -> list:
-    definition_paths = [bench_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
+    benchmarks_root = bench_root / "benchmarks"
+    definition_paths = [benchmarks_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
     definitions = load_definitions_from_paths(
         definition_paths,
         version_supplier=lambda: executor.build_info().version,
-        root=bench_root.parent,
+        root=bench_root,
     )
     contexts = []
     for definition in definitions:
@@ -229,11 +230,12 @@ def expected_report_identities(
     benchmarks: Sequence[str] | None = None,
 ) -> set[tuple[str, str]]:
     if build.version is not None:
-        definition_paths = [bench_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
+        benchmarks_root = bench_root / "benchmarks"
+        definition_paths = [benchmarks_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
         definitions = load_definitions_from_paths(
             definition_paths,
             version_supplier=lambda: build.version,
-            root=bench_root.parent,
+            root=bench_root,
         )
         contexts = []
         for definition in definitions:

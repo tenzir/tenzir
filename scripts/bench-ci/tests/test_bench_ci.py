@@ -22,6 +22,7 @@ from find_build_run import infer_event_for_ref
 import find_build_run as find_build_run_module
 from parse_command import parse_command
 from resolve_baselines import choose_latest_stable_release
+import run_benchmarks as run_benchmarks_module
 from run_benchmarks import (
     download_reference_reports,
     filter_missing_reports,
@@ -31,6 +32,7 @@ from run_benchmarks import (
 from tenzir_bench.reports import Report
 from update_pr_comment import (
     COMMENT_MARKER,
+    current_authenticated_login,
     select_existing_comment,
     wrap_comment_body,
 )
@@ -72,12 +74,33 @@ def test_update_pr_comment_helpers_use_sticky_marker() -> None:
 
     existing = select_existing_comment(
         [
-            {"id": 1, "body": "hello"},
-            {"id": 2, "body": body},
+            {"id": 1, "body": "hello", "user": {"login": "github-actions[bot]"}},
+            {"id": 2, "body": body, "user": {"login": "github-actions[bot]"}},
         ],
+        author_login="github-actions[bot]",
     )
 
-    assert existing == {"id": 2, "body": body}
+    assert existing == {"id": 2, "body": body, "user": {"login": "github-actions[bot]"}}
+
+
+def test_select_existing_comment_ignores_foreign_authors() -> None:
+    body = wrap_comment_body("bench results")
+
+    existing = select_existing_comment(
+        [
+            {"id": 1, "body": body, "user": {"login": "alice"}},
+            {"id": 2, "body": body, "user": {"login": "github-actions[bot]"}},
+        ],
+        author_login="github-actions[bot]",
+    )
+
+    assert existing == {"id": 2, "body": body, "user": {"login": "github-actions[bot]"}}
+
+
+def test_current_authenticated_login_reads_login_from_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(update_pr_comment_module, "gh_api", lambda endpoint, **_kwargs: {"login": "github-actions[bot]"})
+
+    assert current_authenticated_login() == "github-actions[bot]"
 
 
 def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,10 +114,12 @@ def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPa
         paginate: bool = False,
     ) -> object:
         calls.append((endpoint, method, payload, paginate))
+        if endpoint == "user":
+            return {"login": "github-actions[bot]"}
         if method == "GET":
             return [
-                {"id": 1, "body": "unrelated"},
-                {"id": 2, "body": wrap_comment_body("existing benchmark results")},
+                {"id": 1, "body": "unrelated", "user": {"login": "github-actions[bot]"}},
+                {"id": 2, "body": wrap_comment_body("existing benchmark results"), "user": {"login": "github-actions[bot]"}},
             ]
         return {}
 
@@ -103,14 +128,64 @@ def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPa
     update_pr_comment_module.update_pr_comment("tenzir/tenzir", 5960, "new benchmark results")
 
     assert calls[0] == (
+        "user",
+        "GET",
+        None,
+        False,
+    )
+    assert calls[1] == (
         "repos/tenzir/tenzir/issues/5960/comments?per_page=100",
         "GET",
         None,
         True,
     )
-    assert calls[1][0] == "repos/tenzir/tenzir/issues/comments/2"
-    assert calls[1][1] == "PATCH"
-    assert calls[1][3] is False
+    assert calls[2][0] == "repos/tenzir/tenzir/issues/comments/2"
+    assert calls[2][1] == "PATCH"
+    assert calls[2][3] is False
+
+
+def test_load_contexts_resolves_selected_benchmarks_from_subdirectory(tmp_path: Path) -> None:
+    bench_root = tmp_path / "bench"
+    benchmark_dir = bench_root / "benchmarks" / "from_kafka_route53"
+    benchmark_dir.mkdir(parents=True)
+    (benchmark_dir / "bench.yaml").write_text(
+        """
+input:
+  path: route53.ndjson
+output:
+  format: null
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (benchmark_dir / "neo.tql").write_text(
+        """
+---
+bench:
+  id: neo
+---
+from file
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    contexts = run_benchmarks_module.load_contexts(
+        executor=type(
+            "Executor",
+            (),
+            {
+                "build_info": lambda self: type("BuildInfo", (), {"version": "v1.2.3"})(),
+                "create_context": lambda self, definition: type("Context", (), {"definition": definition})(),
+            },
+        )(),
+        bench_root=bench_root,
+        benchmarks=["from_kafka_route53"],
+    )
+
+    assert len(contexts) == 1
+    assert contexts[0].definition.benchmark_id == "from_kafka_route53"
+    assert contexts[0].definition.implementation_id == "neo"
 
 
 def test_gh_api_slurps_paginated_json(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -13,23 +13,40 @@ def wrap_comment_body(body: str) -> str:
     return f"{COMMENT_MARKER}\n{rendered}\n"
 
 
-def select_existing_comment(comments: list[dict[str, object]]) -> dict[str, object] | None:
+def current_authenticated_login() -> str:
+    payload = gh_api("user")
+    if not isinstance(payload, dict):
+        raise RuntimeError("unexpected authenticated user response")
+    login = payload.get("login")
+    if not isinstance(login, str) or not login:
+        raise RuntimeError("authenticated user response is missing a login")
+    return login
+
+
+def select_existing_comment(
+    comments: list[dict[str, object]],
+    *,
+    author_login: str,
+) -> dict[str, object] | None:
     for comment in comments:
         body = comment.get("body")
-        if isinstance(body, str) and COMMENT_MARKER in body:
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, dict) else None
+        if isinstance(body, str) and COMMENT_MARKER in body and login == author_login:
             return comment
     return None
 
 
 def update_pr_comment(repo: str, pr_number: int, body: str) -> None:
     wrapped = wrap_comment_body(body)
+    author_login = current_authenticated_login()
     comments = gh_api(
         f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
         paginate=True,
     )
     if not isinstance(comments, list):
         raise RuntimeError("unexpected pull request comments response")
-    existing = select_existing_comment(comments)
+    existing = select_existing_comment(comments, author_login=author_login)
     if existing is None:
         gh_api(
             f"repos/{repo}/issues/{pr_number}/comments",
