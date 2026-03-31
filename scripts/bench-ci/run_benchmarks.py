@@ -147,11 +147,20 @@ def run_local_build(
     return select_fastest(load_reports(output_dir))
 
 
+def report_identity(report: Report) -> tuple[str, str]:
+    if not report.benchmark_id:
+        raise RuntimeError(f"{report.path}: missing benchmark_id in benchmark report")
+    if not report.implementation_id:
+        raise RuntimeError(
+            f"{report.path}: missing implementation_id in benchmark report",
+        )
+    return report.benchmark_id, report.implementation_id
+
+
 def normalize_reports(reports: dict[str, Report]) -> dict[tuple[str, str], Report]:
     normalized: dict[tuple[str, str], Report] = {}
     for report in reports.values():
-        implementation_id = report.implementation_id or report.pipeline
-        normalized[(report.benchmark_id, implementation_id)] = report
+        normalized[report_identity(report)] = report
     return normalized
 
 
@@ -188,10 +197,14 @@ def download_reference_reports(
             body = s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
             payload = json.loads(body)
             pipeline = payload["pipeline"]
-            benchmark_id = str(payload.get("benchmark_id") or pipeline)
+            benchmark_id = payload.get("benchmark_id")
+            if not isinstance(benchmark_id, str) or not benchmark_id:
+                raise RuntimeError(f"s3://{bucket}/{key}: missing benchmark_id")
             if selected and benchmark_id not in selected:
                 continue
             implementation_id = payload.get("implementation_id")
+            if not isinstance(implementation_id, str) or not implementation_id:
+                raise RuntimeError(f"s3://{bucket}/{key}: missing implementation_id")
             report = Report(
                 path=Path(f"s3://{bucket}/{key}"),
                 pipeline=pipeline,
@@ -202,7 +215,7 @@ def download_reference_reports(
                 build_version=payload.get("build", {}).get("version"),
                 artifact_id=None,
             )
-            reports[pipeline] = report
+            reports[f"{benchmark_id}/{implementation_id}"] = report
     return reports
 
 

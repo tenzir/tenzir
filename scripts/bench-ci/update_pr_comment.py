@@ -23,7 +23,10 @@ def select_existing_comment(comments: list[dict[str, object]]) -> dict[str, obje
 
 def update_pr_comment(repo: str, pr_number: int, body: str) -> None:
     wrapped = wrap_comment_body(body)
-    comments = gh_api(f"repos/{repo}/issues/{pr_number}/comments?per_page=100")
+    comments = gh_api(
+        f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
+        paginate=True,
+    )
     if not isinstance(comments, list):
         raise RuntimeError("unexpected pull request comments response")
     existing = select_existing_comment(comments)

@@ -42,8 +42,11 @@ def gh_api(
     *,
     method: str = "GET",
     payload: dict[str, Any] | None = None,
+    paginate: bool = False,
 ) -> Any:
     cmd = ["gh", "api", endpoint, "--method", method]
+    if paginate:
+        cmd.append("--paginate")
     input_data = None
     if payload is not None:
         cmd.extend(["--input", "-"])
@@ -67,4 +70,3 @@ def dump_json(payload: Any, path: Path) -> None:
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
-
