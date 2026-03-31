@@ -85,11 +85,15 @@ def infer_build_spec(target: str, *, scratch_dir: Path) -> BuildSpec:
         return BuildSpec(label=target, target="docker", kind="docker", image=target)
     resolved = path.resolve()
     if resolved.is_file() and resolved.name == "tenzir":
-        return BuildSpec(label=resolved.name, target="static", kind="static", path=str(resolved))
+        return BuildSpec(
+            label=resolved.name, target="static", kind="static", path=str(resolved)
+        )
     if resolved.is_dir():
         binary = next(iter(sorted(resolved.rglob("bin/tenzir"))), None)
         if binary is not None:
-            return BuildSpec(label=resolved.name, target="static", kind="static", path=str(binary))
+            return BuildSpec(
+                label=resolved.name, target="static", kind="static", path=str(binary)
+            )
         tarballs = sorted(resolved.rglob("*.tar.gz"))
         if tarballs:
             extracted_dir = scratch_dir / "static-extracted"
@@ -98,8 +102,12 @@ def infer_build_spec(target: str, *, scratch_dir: Path) -> BuildSpec:
                 archive.extractall(extracted_dir)
             binary = next(iter(sorted(extracted_dir.rglob("bin/tenzir"))), None)
             if binary is None:
-                raise RuntimeError(f"{resolved}: failed to locate bin/tenzir after extracting {tarballs[0]}")
-            return BuildSpec(label=resolved.name, target="static", kind="static", path=str(binary))
+                raise RuntimeError(
+                    f"{resolved}: failed to locate bin/tenzir after extracting {tarballs[0]}"
+                )
+            return BuildSpec(
+                label=resolved.name, target="static", kind="static", path=str(binary)
+            )
     if resolved.is_file() and resolved.suffixes[-2:] == [".tar", ".gz"]:
         extracted_dir = scratch_dir / "static-extracted"
         extracted_dir.mkdir(parents=True, exist_ok=True)
@@ -107,8 +115,12 @@ def infer_build_spec(target: str, *, scratch_dir: Path) -> BuildSpec:
             archive.extractall(extracted_dir)
         binary = next(iter(sorted(extracted_dir.rglob("bin/tenzir"))), None)
         if binary is None:
-            raise RuntimeError(f"{resolved}: failed to locate bin/tenzir after extracting archive")
-        return BuildSpec(label=resolved.stem, target="static", kind="static", path=str(binary))
+            raise RuntimeError(
+                f"{resolved}: failed to locate bin/tenzir after extracting archive"
+            )
+        return BuildSpec(
+            label=resolved.stem, target="static", kind="static", path=str(binary)
+        )
     raise RuntimeError(
         f"failed to infer benchmark target kind from {target}; expected a docker image ref, "
         "a tenzir binary, or a static build artifact directory/archive",
@@ -134,7 +146,12 @@ def _materialize_static_artifact(paths: BenchPaths, build: BuildSpec) -> Path:
         )
     repo = os.getenv("GITHUB_REPOSITORY", "tenzir/tenzir")
     safe_label = re.sub(r"[^A-Za-z0-9._-]", "-", build.label)
-    artifact_root = paths.results_state_dir / "benchmark-ci" / "_artifacts" / f"{safe_label}-{build.run_id}"
+    artifact_root = (
+        paths.results_state_dir
+        / "benchmark-ci"
+        / "_artifacts"
+        / f"{safe_label}-{build.run_id}"
+    )
     binary = next(iter(sorted(artifact_root.rglob("bin/tenzir"))), None)
     if binary is not None:
         return binary
@@ -160,7 +177,9 @@ def _materialize_static_artifact(paths: BenchPaths, build: BuildSpec) -> Path:
         )
     tarballs = sorted(download_dir.rglob("*.tar.gz"))
     if not tarballs:
-        raise RuntimeError(f"{build.label}: no tarball found in downloaded artifact {build.artifact_name}")
+        raise RuntimeError(
+            f"{build.label}: no tarball found in downloaded artifact {build.artifact_name}"
+        )
     extracted_dir = artifact_root / "extract"
     if not extracted_dir.exists():
         extracted_dir.mkdir(parents=True, exist_ok=True)
@@ -168,7 +187,9 @@ def _materialize_static_artifact(paths: BenchPaths, build: BuildSpec) -> Path:
             archive.extractall(extracted_dir)
     binary = next(iter(sorted(extracted_dir.rglob("bin/tenzir"))), None)
     if binary is None:
-        raise RuntimeError(f"{build.label}: failed to locate bin/tenzir after extracting {tarballs[0]}")
+        raise RuntimeError(
+            f"{build.label}: failed to locate bin/tenzir after extracting {tarballs[0]}"
+        )
     return binary
 
 
@@ -179,7 +200,11 @@ def load_contexts(
     benchmarks: Sequence[str] | None = None,
 ) -> list:
     benchmarks_root = bench_root / "benchmarks"
-    definition_paths = [benchmarks_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
+    definition_paths = (
+        [benchmarks_root / benchmark for benchmark in benchmarks]
+        if benchmarks
+        else [bench_root]
+    )
     definitions = load_definitions_from_paths(
         definition_paths,
         version_supplier=lambda: executor.build_info().version,
@@ -231,7 +256,11 @@ def expected_report_identities(
 ) -> set[tuple[str, str]]:
     if build.version is not None:
         benchmarks_root = bench_root / "benchmarks"
-        definition_paths = [benchmarks_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
+        definition_paths = (
+            [benchmarks_root / benchmark for benchmark in benchmarks]
+            if benchmarks
+            else [bench_root]
+        )
         definitions = load_definitions_from_paths(
             definition_paths,
             version_supplier=lambda: build.version,
@@ -242,7 +271,9 @@ def expected_report_identities(
             contexts.append(type("DefinitionContext", (), {"definition": definition})())
     else:
         binary = resolve_build_entry(paths, build)
-        executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
+        executor = BenchmarkExecutor(
+            paths, binary, RunnerRegistry(), target=build.target
+        )
         contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
     identities: set[tuple[str, str]] = set()
     for context in contexts:
@@ -250,7 +281,9 @@ def expected_report_identities(
         benchmark_id = definition.benchmark_id
         implementation_id = definition.implementation_id
         if not benchmark_id:
-            raise RuntimeError(f"{definition.path}: missing benchmark_id in benchmark definition")
+            raise RuntimeError(
+                f"{definition.path}: missing benchmark_id in benchmark definition"
+            )
         if not implementation_id:
             raise RuntimeError(
                 f"{definition.path}: missing implementation_id in benchmark definition",
@@ -274,7 +307,9 @@ def publish_reports(reports: dict[str, Report], *, destination: str) -> None:
         if not report.target:
             raise RuntimeError(f"{report.path}: missing target in benchmark report")
         if not report.hardware_key:
-            raise RuntimeError(f"{report.path}: missing hardware.key in benchmark report")
+            raise RuntimeError(
+                f"{report.path}: missing hardware.key in benchmark report"
+            )
         key = str(
             Path(prefix)
             / report.hardware_key
@@ -322,7 +357,11 @@ def download_reference_reports(
             if not isinstance(target, str) or not target:
                 raise RuntimeError(f"s3://{bucket}/{key}: missing target")
             report_hardware = payload.get("hardware", {})
-            report_hardware_key = report_hardware.get("key") if isinstance(report_hardware, dict) else None
+            report_hardware_key = (
+                report_hardware.get("key")
+                if isinstance(report_hardware, dict)
+                else None
+            )
             if not isinstance(report_hardware_key, str) or not report_hardware_key:
                 raise RuntimeError(f"s3://{bucket}/{key}: missing hardware.key")
             if report_hardware_key != hardware_key:
@@ -365,7 +404,10 @@ def cmd_reference(args: argparse.Namespace) -> int:
     if args.build:
         build = load_build_spec(Path(args.build))
     else:
-        build = infer_build_spec(args.target, scratch_dir=paths.results_state_dir / "benchmark-ci" / "_resolved-target")
+        build = infer_build_spec(
+            args.target,
+            scratch_dir=paths.results_state_dir / "benchmark-ci" / "_resolved-target",
+        )
     reports = run_local_build(
         build,
         bench_root=bench_root,
@@ -432,24 +474,45 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     reference = subparsers.add_parser("reference")
-    reference.add_argument("--bench-root", default="bench", help="Benchmark root directory")
+    reference.add_argument(
+        "--bench-root", default="bench", help="Benchmark root directory"
+    )
     reference_inputs = reference.add_mutually_exclusive_group(required=True)
-    reference_inputs.add_argument("--build", help="Path to the resolved build spec JSON")
-    reference_inputs.add_argument("--target", help="Docker image ref, static artifact directory/archive, or tenzir binary")
-    reference.add_argument("--benchmark", action="append", help="Benchmark id to run. Repeat to select multiple.")
-    reference.add_argument("--destination", help="S3 destination for normalized reference reports")
+    reference_inputs.add_argument(
+        "--build", help="Path to the resolved build spec JSON"
+    )
+    reference_inputs.add_argument(
+        "--target",
+        help="Docker image ref, static artifact directory/archive, or tenzir binary",
+    )
+    reference.add_argument(
+        "--benchmark",
+        action="append",
+        help="Benchmark id to run. Repeat to select multiple.",
+    )
+    reference.add_argument(
+        "--destination", help="S3 destination for normalized reference reports"
+    )
     reference.set_defaults(func=cmd_reference)
 
     compare = subparsers.add_parser("compare")
-    compare.add_argument("--bench-root", default="bench", help="Benchmark root directory")
+    compare.add_argument(
+        "--bench-root", default="bench", help="Benchmark root directory"
+    )
     compare.add_argument(
         "--build",
         action="append",
         required=True,
         help="Path to a build spec JSON. Repeat in display order.",
     )
-    compare.add_argument("--benchmark", action="append", help="Benchmark id to run. Repeat to select multiple.")
-    compare.add_argument("--markdown-output", help="Write grouped markdown to this file")
+    compare.add_argument(
+        "--benchmark",
+        action="append",
+        help="Benchmark id to run. Repeat to select multiple.",
+    )
+    compare.add_argument(
+        "--markdown-output", help="Write grouped markdown to this file"
+    )
     compare.set_defaults(func=cmd_compare)
 
     args = parser.parse_args()

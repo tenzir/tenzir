@@ -71,8 +71,12 @@ def update_pr_comment(repo: str, pr_number: int, body: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default="tenzir/tenzir", help="GitHub repository")
-    parser.add_argument("--pr-number", type=int, required=True, help="Pull request number")
-    parser.add_argument("--body-file", required=True, help="Path to the rendered markdown body")
+    parser.add_argument(
+        "--pr-number", type=int, required=True, help="Pull request number"
+    )
+    parser.add_argument(
+        "--body-file", required=True, help="Path to the rendered markdown body"
+    )
     args = parser.parse_args()
     with open(args.body_file, encoding="utf-8") as handle:
         body = handle.read()
