@@ -1352,12 +1352,13 @@ private:
             // There is a small delay that needs to be accounted for by the
             // checkpointing logic until the shutdown fully propagates and we
             // remove the subpipeline from our bookkeeping. Note that both
-            // handles are only safe to drop here because `OpenPipeline` may
+            // handles are only safe to drop here because `SubHandle` may
             // only be used inside the main-loop functions, which this drop is
             // also part of. Thus, there is no concurrent use.
             // TODO: Once we implement the rest of the checkpointing logic, we
             // probably need to defer the closing of these channels until the
             // post-commit occurs, as the pipeline needs to be kept alive then.
+            sub.closed_data = true;
             sub.push = None{};
             sub.from_control_sender = None{};
             break;
@@ -1384,6 +1385,7 @@ private:
       TENZIR_ASSERT(operator_scope_);
       operator_scope_->cancel();
       for (auto& [_, sub] : subpipelines_) {
+        sub.closed_data = true;
         sub.push = None{};
         if (sub.from_control_sender) {
           co_await sub.from_control_sender->send(HardStop{});
