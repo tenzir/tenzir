@@ -100,9 +100,7 @@ public:
       finish();
       co_return;
     }
-    auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline),
-                                      tag_v<table_slice>);
-    TENZIR_UNUSED(sub);
+    co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
     co_return;
   }
 
@@ -115,7 +113,7 @@ public:
       finish();
       co_return;
     }
-    auto pipeline = as<OpenPipeline<table_slice>>(*sub);
+    auto& pipeline = as<SubHandle<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
       finish();
@@ -158,7 +156,7 @@ public:
     if (lifecycle_ == Lifecycle::running) {
       lifecycle_ = Lifecycle::draining;
       if (auto sub = ctx.get_sub(make_view(sub_key_))) {
-        auto pipeline = as<OpenPipeline<table_slice>>(*sub);
+        auto& pipeline = as<SubHandle<table_slice>>(*sub);
         co_await pipeline.close();
         co_return FinalizeBehavior::continue_;
       }

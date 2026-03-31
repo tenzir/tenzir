@@ -10,6 +10,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -20,7 +21,6 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/expression.hpp>
-#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/null_bitmap.hpp>

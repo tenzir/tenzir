@@ -79,6 +79,11 @@ public:
     Box<folly::coro::Transport> transport;
   };
 
+  struct Payload {
+    uint64_t conn_id;
+    chunk_ptr chunk;
+  };
+
   struct ConnectionClosed {
     uint64_t conn_id;
     Option<std::string> error;
@@ -86,7 +91,8 @@ public:
 
   struct AcceptLoopFinished {};
 
-  using Message = variant<Accepted, ConnectionClosed, AcceptLoopFinished>;
+  using Message
+    = variant<Accepted, Payload, ConnectionClosed, AcceptLoopFinished>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit AcceptTcpListener(AcceptTcpArgs args)
@@ -190,9 +196,8 @@ public:
           co_return;
         }
         auto key = sub_key_for(conn_id);
-        auto sub = co_await ctx.spawn_sub(
-          std::move(key), std::move(pipeline_copy), tag_v<chunk_ptr>);
-        auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
+        co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
+                                          std::move(pipeline_copy));
         auto connection = Connection{std::move(*transport)};
         auto [_, inserted]
           = connections_.emplace(conn_id, std::move(connection));
@@ -200,8 +205,23 @@ public:
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
-          read_loop(conn_id, connections_.at(conn_id), std::move(open_pipeline),
-                    std::move(message_queue), std::move(bytes_read))));
+          read_loop(conn_id, connections_.at(conn_id), std::move(message_queue),
+                    std::move(bytes_read))));
+      },
+      [&](Payload payload) -> Task<void> {
+        auto key = sub_key_for(payload.conn_id);
+        if (auto sub = ctx.get_sub(make_view(key))) {
+          auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
+          auto push_result = co_await pipe.push(std::move(payload.chunk));
+          if (push_result.is_err()) {
+            // Subpipeline closed — shut down the TCP connection so read_loop
+            // gets an error and sends ConnectionClosed.
+            if (auto it = connections_.find(payload.conn_id);
+                it != connections_.end()) {
+              close_transport(it->second);
+            }
+          }
+        }
       },
       [&](ConnectionClosed closed) -> Task<void> {
         if (closed.error) {
@@ -347,7 +367,7 @@ private:
   static auto close_subpipeline(uint64_t conn_id, OpCtx& ctx) -> Task<void> {
     auto key = sub_key_for(conn_id);
     if (auto sub = ctx.get_sub(make_view(key))) {
-      auto pipeline = as<OpenPipeline<chunk_ptr>>(*sub);
+      auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
       co_await pipeline.close();
     }
     co_return;
@@ -427,10 +447,9 @@ private:
     }
   }
 
-  static auto
-  read_loop(uint64_t conn_id, Connection connection,
-            OpenPipeline<chunk_ptr> pipeline, Arc<MessageQueue> message_queue,
-            MetricsCounter bytes_counter) -> Task<void> {
+  static auto read_loop(uint64_t conn_id, Connection connection,
+                        Arc<MessageQueue> message_queue,
+                        MetricsCounter bytes_counter) -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
       try {
@@ -440,8 +459,8 @@ private:
           break;
         }
         bytes_counter.add((*read_result)->size());
-        auto push_result = co_await pipeline.push(std::move(*read_result));
-        TENZIR_UNUSED(push_result);
+        co_await message_queue->enqueue(
+          Payload{conn_id, std::move(*read_result)});
       } catch (folly::AsyncSocketException const& e) {
         read_error = e.what();
         break;

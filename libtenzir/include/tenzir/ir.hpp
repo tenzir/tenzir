@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "tenzir/async.hpp"
-#include "tenzir/box.hpp"
+#include "tenzir/async/fwd.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -118,9 +117,7 @@ struct pipeline {
 
   pipeline() = default;
 
-  pipeline(std::vector<let> lets, std::vector<Box<Operator>> operators)
-    : lets{std::move(lets)}, operators{std::move(operators)} {
-  }
+  pipeline(std::vector<let> lets, std::vector<Box<Operator>> operators);
 
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;

@@ -89,10 +89,11 @@ public:
   auto is_some() const noexcept -> bool {
     return ptr_ != nullptr;
   }
-  template <class Self>
-  // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
-  auto get(this Self&& self) -> decltype(auto) {
-    return std::forward_like<Self>(*self.ptr_);
+  auto get() -> T& {
+    return *ptr_;
+  }
+  auto get() const -> T const& {
+    return *ptr_;
   }
   auto reset() noexcept -> void {
     ptr_ = nullptr;
@@ -282,20 +283,16 @@ public:
     return std::forward<Self>(self).storage_.get();
   }
 
-  /// Pointer-style access (non-reference `T` only). Panics if empty.
-  auto operator->() -> Value*
-    requires(not std::is_reference_v<T>)
-  {
+  /// Pointer-style access. Panics if empty.
+  auto operator->() -> Value* {
     if (not is_some()) [[unlikely]] {
       panic("called Option::operator-> on a None value");
     }
     return &storage_.get();
   }
 
-  /// Pointer-style access (non-reference `T` only). Panics if empty.
-  auto operator->() const -> Value const*
-    requires(not std::is_reference_v<T>)
-  {
+  /// Pointer-style access. Panics if empty.
+  auto operator->() const -> Value const* {
     if (not is_some()) [[unlikely]] {
       panic("called Option::operator-> on a None value");
     }

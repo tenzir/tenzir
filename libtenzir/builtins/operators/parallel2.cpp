@@ -156,11 +156,10 @@ public:
         co_return;
       }
       if (fuse_) {
-        co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
-                                     tag_v<table_slice>);
+        co_await ctx.spawn_sub_fused<table_slice>(data{int64_t(i)},
+                                                  std::move(copy));
       } else {
-        co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy),
-                               tag_v<table_slice>);
+        co_await ctx.spawn_sub<table_slice>(data{int64_t(i)}, std::move(copy));
       }
     }
   }
@@ -181,7 +180,7 @@ public:
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto sub = ctx.get_sub(int64_t(i));
       if (sub) {
-        auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+        auto& pipe = as<SubHandle<table_slice>>(*sub);
         co_await pipe.close();
       }
     }
@@ -204,7 +203,7 @@ private:
       auto slice = subslice(input, begin, end);
       auto sub = ctx.get_sub(int64_t(bucket));
       TENZIR_ASSERT(sub);
-      auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+      auto& pipe = as<SubHandle<table_slice>>(*sub);
       std::ignore = co_await pipe.push(std::move(slice));
       begin = end;
     }
@@ -219,7 +218,7 @@ private:
       offset += count;
       auto sub = ctx.get_sub(int64_t(worker));
       TENZIR_ASSERT(sub);
-      auto& pipe = as<OpenPipeline<table_slice>>(*sub);
+      auto& pipe = as<SubHandle<table_slice>>(*sub);
       std::ignore = co_await pipe.push(std::move(slice));
     }
   }
@@ -251,10 +250,9 @@ public:
         co_return;
       }
       if (fuse_) {
-        co_await ctx.spawn_sub_fused(data{int64_t(i)}, std::move(copy),
-                                     tag_v<void>);
+        co_await ctx.spawn_sub_fused<void>(data{int64_t(i)}, std::move(copy));
       } else {
-        co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy), tag_v<void>);
+        co_await ctx.spawn_sub<void>(data{int64_t(i)}, std::move(copy));
       }
     }
   }
