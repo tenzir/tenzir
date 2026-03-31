@@ -8,23 +8,29 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/series.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
+#include <arrow/compute/api_vector.h>
+#include <arrow/datum.h>
+
+#include <algorithm>
+#include <span>
+#include <unordered_map>
+
 namespace tenzir::plugins::drop_null_fields {
 
 namespace {
 
-/// Represents which fields are null in a row
-using null_pattern = std::vector<bool>;
+using null_pattern = std::vector<uint64_t>;
 
 /// Resolves field paths to offsets
 auto resolve_field_paths(const std::vector<ast::field_path>& fields,
@@ -43,24 +49,50 @@ auto resolve_field_paths(const std::vector<ast::field_path>& fields,
   return result;
 }
 
-/// Computes the null pattern for a specific row in a table slice
-auto compute_null_pattern(const table_slice& slice, size_t row_index,
-                          const std::vector<offset>& field_offsets)
-  -> null_pattern {
-  auto pattern = null_pattern{};
-  pattern.reserve(field_offsets.size());
-  for (const auto& field_offset : field_offsets) {
+struct null_accessor {
+  std::shared_ptr<arrow::Array> array;
+  bool exists = false;
+};
+
+struct null_pattern_hash {
+  auto operator()(null_pattern const& pattern) const noexcept -> size_t {
+    auto seed = size_t{0};
+    for (auto word : pattern) {
+      seed ^= std::hash<uint64_t>{}(word) + 0x9e3779b9 + (seed << 6)
+              + (seed >> 2);
+    }
+    return seed;
+  }
+};
+
+auto build_null_accessors(const table_slice& slice,
+                          std::span<const offset> field_offsets)
+  -> std::vector<null_accessor> {
+  auto result = std::vector<null_accessor>{};
+  result.reserve(field_offsets.size());
+  for (auto const& field_offset : field_offsets) {
     if (field_offset.empty()) {
-      // Field doesn't exist, treat as not null
-      pattern.push_back(false);
+      result.push_back({});
       continue;
     }
-    // Navigate to the field using series constructor
-    auto ser = series{slice, field_offset};
-    // Check if this specific row is null
-    pattern.push_back(ser.array->IsNull(row_index));
+    result.push_back({
+      .array = field_offset.get(slice).second,
+      .exists = true,
+    });
   }
-  return pattern;
+  return result;
+}
+
+auto compute_null_pattern(std::span<const null_accessor> accessors, size_t row,
+                          null_pattern& pattern) -> void {
+  std::ranges::fill(pattern, uint64_t{0});
+  for (auto i = 0uz; i < accessors.size(); ++i) {
+    auto const& accessor = accessors[i];
+    if (not accessor.exists or not accessor.array->IsNull(row)) {
+      continue;
+    }
+    pattern[i / 64] |= uint64_t{1} << (i % 64);
+  }
 }
 
 /// Finds all fields in the schema (for when no specific fields are given)
@@ -137,13 +169,28 @@ auto fields_to_check(const table_slice& slice,
 auto fields_to_drop_for_pattern(const null_pattern& pattern,
                                 const std::vector<ast::field_path>& fields)
   -> std::vector<ast::field_path> {
-  TENZIR_ASSERT(pattern.size() == fields.size());
   auto result = std::vector<ast::field_path>{};
   for (auto i = 0uz; i < fields.size(); ++i) {
-    if (pattern[i]) {
+    auto const word = pattern[i / 64];
+    auto const bit = uint64_t{1} << (i % 64);
+    if (word & bit) {
       result.push_back(fields[i]);
     }
   }
+  return result;
+}
+
+auto take_rows(const table_slice& slice, std::span<const int64_t> rows)
+  -> table_slice {
+  auto builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
+  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
+  for (auto row : rows) {
+    builder.UnsafeAppend(row);
+  }
+  auto batch = check(arrow::compute::Take(to_record_batch(slice), finish(builder)))
+                 .record_batch();
+  auto result = table_slice{std::move(batch), slice.schema()};
+  result.import_time(slice.import_time());
   return result;
 }
 
@@ -158,29 +205,25 @@ auto drop_null_fields_impl(table_slice slice,
     return {std::move(slice)};
   }
   auto field_offsets = resolve_field_paths(fields, slice.schema());
+  auto accessors = build_null_accessors(slice, field_offsets);
+  auto words_per_pattern = (fields.size() + 63) / 64;
+  auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
+  auto buckets
+    = std::unordered_map<null_pattern, std::vector<int64_t>, null_pattern_hash>{};
+  buckets.reserve(slice.rows());
+  for (auto row = 0uz; row < slice.rows(); ++row) {
+    compute_null_pattern(accessors, row, current_pattern);
+    buckets[current_pattern].push_back(detail::narrow<int64_t>(row));
+  }
   auto result = std::vector<table_slice>{};
-  auto current_start = 0uz;
-  auto current_pattern = compute_null_pattern(slice, 0, field_offsets);
-  for (auto row = 1uz; row < slice.rows(); ++row) {
-    auto pattern = compute_null_pattern(slice, row, field_offsets);
-    if (pattern == current_pattern) {
-      continue;
-    }
-    auto fields_to_drop = fields_to_drop_for_pattern(current_pattern, fields);
-    auto group_slice = subslice(slice, current_start, row);
+  result.reserve(buckets.size());
+  for (auto& [pattern, rows] : buckets) {
+    auto group_slice = take_rows(slice, rows);
+    auto fields_to_drop = fields_to_drop_for_pattern(pattern, fields);
     if (fields_to_drop.empty()) {
       result.push_back(std::move(group_slice));
-    } else {
-      result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+      continue;
     }
-    current_start = row;
-    current_pattern = std::move(pattern);
-  }
-  auto fields_to_drop = fields_to_drop_for_pattern(current_pattern, fields);
-  auto group_slice = subslice(slice, current_start, slice.rows());
-  if (fields_to_drop.empty()) {
-    result.push_back(std::move(group_slice));
-  } else {
     result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
   }
   return result;
