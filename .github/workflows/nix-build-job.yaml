@@ -14,6 +14,9 @@ on:
       attribute:
         type: string
         required: true
+      build-version:
+        type: string
+        required: true
       run-tests:
         type: boolean
         required: false
@@ -211,6 +214,27 @@ jobs:
         with:
           name: ${{ inputs.attribute }}-${{ inputs.arch }}-${{ inputs.os }}
           path: ${{ steps.build.outputs.package-dir }}/
+          if-no-files-found: error
+      - name: Write benchmark target metadata
+        if: runner.os == 'Linux' && inputs.attribute == 'tenzir-static' && inputs.arch == 'x86_64' && inputs.os == 'linux'
+        run: |
+          mkdir -p "$RUNNER_TEMP/benchmark-target"
+          cat > "$RUNNER_TEMP/benchmark-target/benchmark-target-static-x86_64-linux.json" <<EOF
+          {
+            "kind": "static",
+            "target": "static",
+            "arch": "x86_64",
+            "sha": "${{ github.sha }}",
+            "version": "${{ inputs.build-version }}",
+            "artifact_name": "${{ inputs.attribute }}-${{ inputs.arch }}-${{ inputs.os }}"
+          }
+          EOF
+      - name: Upload benchmark target metadata
+        if: runner.os == 'Linux' && inputs.attribute == 'tenzir-static' && inputs.arch == 'x86_64' && inputs.os == 'linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: benchmark-target-static-x86_64-linux
+          path: ${{ runner.temp }}/benchmark-target/benchmark-target-static-x86_64-linux.json
           if-no-files-found: error
       - name: Upload Signed Tarball to GitHub Actions
         if: runner.os == 'macOS'

@@ -15,6 +15,9 @@ on:
       images:
         description: Built image references for this architecture
         value: ${{ jobs.build.outputs.images }}
+      benchmark-image:
+        description: Benchmark image reference for this architecture
+        value: ${{ jobs.build.outputs.benchmark-image }}
 
 permissions:
   actions: write
@@ -28,6 +31,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     outputs:
       images: ${{ steps.build-images.outputs.images }}
+      benchmark-image: ${{ steps.build-images.outputs.benchmark-image }}
     steps:
       - name: Prevent pushing protected editions to public repos
         run: |
@@ -130,6 +134,7 @@ jobs:
           CACHE_PATH=/home/runner/work/cache
           mkdir -p $CACHE_PATH
           images_file="$(mktemp)"
+          benchmark_image_file="$(mktemp)"
           trap 'rm -f "$images_file"' EXIT
           cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
           source_tag='${{ fromJSON(inputs.config).source-tag }}'
@@ -147,5 +152,37 @@ jobs:
             image="${registry}/tenzir/${name}:${source_tag}-${{ inputs.arch }}"
             buildah push img "${image}"
             echo "${image}" >> "$images_file"
+            if [[ "${name}" == "tenzir" && "${registry}" == "ghcr.io" && "${{ inputs.arch }}" == "amd64" ]]; then
+              benchmark_image="${image}"
+              if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+                benchmark_image="${registry}/tenzir/${name}:${{ github.sha }}-${{ inputs.arch }}"
+                buildah push img "${benchmark_image}"
+              fi
+              echo "${benchmark_image}" > "$benchmark_image_file"
+            fi
           done
           echo "images=$(paste -sd' ' "$images_file")" >> "$GITHUB_OUTPUT"
+          if [[ -s "$benchmark_image_file" ]]; then
+            echo "benchmark-image=$(cat "$benchmark_image_file")" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Write benchmark target metadata
+        if: inputs.arch == 'amd64'
+        run: |
+          mkdir -p "$RUNNER_TEMP/benchmark-target"
+          cat > "$RUNNER_TEMP/benchmark-target/benchmark-target-docker-amd64.json" <<EOF
+          {
+            "kind": "docker",
+            "target": "docker",
+            "arch": "amd64",
+            "sha": "${{ github.sha }}",
+            "version": "${{ fromJSON(inputs.config).build-version }}",
+            "image": "${{ steps.build-images.outputs.benchmark-image }}"
+          }
+          EOF
+      - name: Upload benchmark target metadata
+        if: inputs.arch == 'amd64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: benchmark-target-docker-amd64
+          path: ${{ runner.temp }}/benchmark-target/benchmark-target-docker-amd64.json
+          if-no-files-found: error

@@ -1,0 +1,74 @@
+---
+name: Benchmark
+description: Run Tenzir benchmarks for a docker image or static build artifact.
+
+inputs:
+  target:
+    description: >-
+      Docker image ref, static build artifact directory/archive, or
+      tenzir binary path.
+    required: true
+  publish-results:
+    description: >-
+      Publish benchmark results to the configured S3 bucket.
+    required: false
+    default: "false"
+  destination-prefix:
+    description: Destination key prefix relative to the benchmark S3 prefix.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Configure benchmark runtime directories
+      shell: bash
+      run: |
+        echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache" >> "$GITHUB_ENV"
+        echo "XDG_STATE_HOME=$RUNNER_TEMP/xdg-state" >> "$GITHUB_ENV"
+        echo "TENZIR_BENCH_RUNNER_CLASS=${TENZIR_BENCH_RUNNER_CLASS:-${RUNNER_OS}-${RUNNER_ARCH}}" >> "$GITHUB_ENV"
+    - name: Set up Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      with:
+        python-version: "3.12"
+    - name: Checkout tenzir-bench
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      with:
+        repository: tenzir/bench
+        path: .tools/tenzir-bench
+    - name: Install benchmark runner
+      shell: bash
+      run: |
+        python3 -m pip install ./.tools/tenzir-bench
+    - name: Configure AWS credentials
+      if: inputs.publish-results == 'true' && env.BENCHMARK_AWS_ROLE_ARN != ''
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
+      with:
+        aws-region: eu-west-1
+        role-to-assume: ${{ env.BENCHMARK_AWS_ROLE_ARN }}
+    - name: Validate benchmark storage configuration
+      if: inputs.publish-results == 'true'
+      shell: bash
+      run: |
+        if [[ -z "$BENCHMARK_S3_BUCKET" ]]; then
+          echo "::error::BENCHMARK_S3_BUCKET must be configured for benchmark publishing"
+          exit 1
+        fi
+        if [[ -z "${{ inputs.destination-prefix }}" ]]; then
+          echo "::error::destination-prefix must be set when publish-results=true"
+          exit 1
+        fi
+    - name: Run benchmarks
+      shell: bash
+      run: |
+        destination_args=()
+        if [[ "${{ inputs.publish-results }}" == "true" ]]; then
+          destination="s3://${BENCHMARK_S3_BUCKET}/"
+          destination+="${BENCHMARK_S3_PREFIX:+$BENCHMARK_S3_PREFIX/}"
+          destination+="${{ inputs.destination-prefix }}"
+          destination_args+=(--destination "$destination")
+        fi
+        python3 scripts/bench-ci/run_benchmarks.py reference \
+          --bench-root bench \
+          --target "${{ inputs.target }}" \
+          "${destination_args[@]}"
