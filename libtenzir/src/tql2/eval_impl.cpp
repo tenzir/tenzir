@@ -538,7 +538,7 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
             auto v = view_at(*field.array, i);
             b.data(v);
           } else {
-            if (active_slice.is_active(i) and not x.has_question_mark) {
+            if (not x.has_question_mark and active_slice.is_active(i)) {
               if (std::ranges::find(not_found, name) == not_found.end()) {
                 diagnostic::warning("record does not have field `{}`", name)
                   .primary(x.index, "does not exist")
@@ -587,10 +587,12 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
               return;
             }
             if (*last_field < 0 or *last_field >= record->array->num_fields()) {
-              for (auto r = begin; r < end; ++r) {
-                if (active_slice.is_active(r)) {
-                  warn_index_out_of_bounds = true;
-                  break;
+              if (not warn_index_out_of_bounds) {
+                for (auto r = begin; r < end; ++r) {
+                  if (active_slice.is_active(r)) {
+                    warn_index_out_of_bounds = true;
+                    break;
+                  }
                 }
               }
               result.append(series::null(null_type{}, end - begin));

@@ -26,33 +26,50 @@ namespace tenzir {
 /// and their output values are unspecified. This enables short-circuit
 /// evaluation of `and`, `or`, and `if/else` without physical slicing.
 ///
-/// When `array_` is null, all rows are active (common case). Otherwise,
-/// a row `i` is inactive if and only if the array has a valid (non-null)
-/// value equal to `skip_value_`. Null entries in the array are always active.
+/// When `array_` is null, `inactive_` is the constant answer: false means all
+/// rows are active, true means all rows are inactive. When `array_` is
+/// non-null, the array is guaranteed to be mixed (not all-active or
+/// all-inactive); a row `i` is inactive iff the array has a valid (non-null)
+/// value equal to `inactive_`. Null entries in the array are always active.
 ///
-/// For `and`: `ActiveRows{left, false}` — skip rows where left is false.
-/// For `or`:  `ActiveRows{left, true}`  — skip rows where left is true.
-/// For `if`:  then-branch uses `skip_value_=false`, else uses `skip_value_=true`.
+/// For `and`: `ActiveRows{left, false}` — inactive where left is false.
+/// For `or`:  `ActiveRows{left, true}`  — inactive where left is true.
+/// For `if`:  then-branch uses `inactive_=false`, else uses `inactive_=true`.
 class ActiveRows {
 public:
   /// All rows active.
   ActiveRows() = default;
 
-  /// Rows where `array[i]` is valid and equals `skip_value` are inactive.
-  /// Null rows are always active.
-  explicit ActiveRows(std::shared_ptr<arrow::BooleanArray> array,
-                      bool skip_value)
-    : array_{std::move(array)}, skip_value_{skip_value} {
+  /// Construct from a boolean array. Normalizes: if the array turns out to be
+  /// constant (all-active or all-inactive), stores null + inactive_ instead of
+  /// keeping the array, so that as_constant() is always O(1).
+  explicit ActiveRows(std::shared_ptr<arrow::BooleanArray> array, bool inactive)
+    : inactive_{inactive} {
+    auto saw_active = false;
+    auto saw_inactive = false;
+    for (auto i = int64_t{0}; i < array->length(); ++i) {
+      if (array->IsNull(i) or array->GetView(i) != inactive) {
+        saw_active = true;
+      } else {
+        saw_inactive = true;
+      }
+      if (saw_active and saw_inactive) {
+        array_ = std::move(array);
+        return;
+      }
+    }
+    // Constant: keep array_ null, normalize inactive_ to match.
+    inactive_ = not saw_active;
   }
 
   auto is_active(int64_t i) const -> bool {
     if (not array_) {
-      return true;
+      return not inactive_;
     }
     if (array_->IsNull(i)) {
       return true;
     }
-    return array_->GetView(i) != skip_value_;
+    return array_->GetView(i) != inactive_;
   }
 
   auto slice(int64_t begin, int64_t length) const -> ActiveRows {
@@ -65,32 +82,22 @@ public:
     return ActiveRows{
       std::static_pointer_cast<arrow::BooleanArray>(
         array_->Slice(begin, length)),
-      skip_value_,
+      inactive_,
     };
   }
 
   auto as_constant() const -> Option<bool> {
     if (not array_) {
-      return true;
+      // We consider all entries to be `true`. So if `inactive_` is false, then
+      // all are active – hence we return `not inactive_`.
+      return not inactive_;
     }
-    auto saw_active = false;
-    auto saw_inactive = false;
-    for (auto row = int64_t{0}; row < array_->length(); ++row) {
-      if (is_active(row)) {
-        saw_active = true;
-      } else {
-        saw_inactive = true;
-      }
-      if (saw_active and saw_inactive) {
-        return None{};
-      }
-    }
-    return saw_active;
+    return None{};
   }
 
 private:
   std::shared_ptr<arrow::BooleanArray> array_;
-  bool skip_value_ = false;
+  bool inactive_ = false;
 };
 
 } // namespace tenzir

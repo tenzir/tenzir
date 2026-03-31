@@ -719,13 +719,15 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
     auto ot = type::from_arrow(*oa->type());
     return series{std::move(ot), std::move(oa)};
   } else {
-    diagnostic::warning("binary operator `{}` not implemented for `{}` and "
-                        "`{}`",
-                        x.op.inner, to_string(type_kind::of<L>),
-                        to_string(type_kind::of<R>))
-      .primary(x)
-      .hint("the result of this expression is `null`")
-      .emit(self.ctx());
+    if (active.as_constant() != false) {
+      diagnostic::warning("binary operator `{}` not implemented for `{}` and "
+                          "`{}`",
+                          x.op.inner, to_string(type_kind::of<L>),
+                          to_string(type_kind::of<R>))
+        .primary(x)
+        .hint("the result of this expression is `null`")
+        .emit(self.ctx());
+    }
     return series::null(null_type{}, left.length());
   }
 }
@@ -803,24 +805,24 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
   TENZIR_ASSERT_EQ(left_flat->length(), self.length());
   // Evaluate the right side, skipping rows where the left is already
   // deterministic:
-  //   and: skip rows where left is definitely false  (skip_value = false)
-  //   or:  skip rows where left is definitely true   (skip_value = true)
+  //   and: inactive where left is definitely false  (inactive = false)
+  //   or:  inactive where left is definitely true   (inactive = true)
   // Null entries in left_flat are always active because the result may still
   // depend on the right operand (e.g. null and false == false).
-  auto skip_val = (Op == ast::binary_op::or_);
+  auto inactive = (Op == ast::binary_op::or_);
   // When all rows are active, left_flat already encodes exactly which rows
   // need right-side evaluation, so reuse it directly. Otherwise intersect
   // with the parent active mask.
   auto right_active = [&] -> ActiveRows {
     if (active.as_constant() == true) {
-      return ActiveRows{left_flat, skip_val};
+      return ActiveRows{left_flat, inactive};
     }
     auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(builder.Reserve(self.length()));
     for (auto i = int64_t{0}; i < self.length(); ++i) {
       builder.UnsafeAppend(
         active.is_active(i)
-        and (left_flat->IsNull(i) or left_flat->GetView(i) != skip_val));
+        and (left_flat->IsNull(i) or left_flat->GetView(i) != inactive));
     }
     return ActiveRows{finish(builder), false};
   }();
@@ -912,7 +914,7 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
   // Build cond_active[i] = active.is_active(i) AND cond_null_to_false[i].
   // Fast path: reuse the array directly when the condition is already a single
   // no-null bool series and all rows are active (no allocation needed).
-  // The then-branch derives from cond_active directly via skip_value_.
+  // The then-branch derives from cond_active directly via inactive_.
   // The else-branch shares it in the fast path; otherwise a separate mask is
   // built because cond_active[i]=false covers both "inactive" and
   // "active AND cond=false" rows.
@@ -969,7 +971,7 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
   auto then_active = ActiveRows{cond_active, false};
   auto else_active = std::invoke([&] {
     if (active.as_constant() == true) {
-      // No inactive rows: cond_active equals plain cond, so skip_value_=true
+      // No inactive rows: cond_active equals plain cond, so inactive_=true
       // correctly marks the then-rows inactive in the else branch.
       return ActiveRows{cond_active, true};
     }
