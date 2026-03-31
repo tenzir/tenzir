@@ -390,6 +390,82 @@ jobs:
       tags: "${{ join(fromJSON(needs.configure.outputs.docker-config).tags, ' ') }}"
     secrets: inherit
 
+  benchmark-reference-docker:
+    name: Benchmark reference (docker)
+    needs:
+      - configure
+      - docker-tenzir-amd64
+    if: |
+      needs.configure.outputs.run-docker-tenzir == 'true' &&
+      (
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'release' && !contains(github.event.release.tag_name, '-rc'))
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Configure benchmark runtime directories
+        run: |
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/xdg-state" >> "$GITHUB_ENV"
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Checkout tenzir-bench
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          repository: tenzir/bench
+          path: .tools/tenzir-bench
+      - name: Install benchmark runner
+        run: |
+          python3 -m pip install ./.tools/tenzir-bench
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download benchmark target metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-target-docker-amd64
+          path: ${{ runner.temp }}/benchmark-target
+      - name: Materialize docker benchmark target
+        run: |
+          cp "$RUNNER_TEMP/benchmark-target/benchmark-target-docker-amd64.json" \
+            "$RUNNER_TEMP/resolved-target.json"
+      - name: Configure AWS credentials
+        if: vars.BENCHMARK_AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: eu-west-1
+          role-to-assume: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
+      - name: Validate benchmark storage configuration
+        env:
+          BENCHMARK_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
+        run: |
+          if [[ -z "$BENCHMARK_BUCKET" ]]; then
+            echo "::error::BENCHMARK_S3_BUCKET must be configured for benchmark publishing"
+            exit 1
+          fi
+      - name: Run and publish benchmark references
+        env:
+          BENCHMARK_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
+          BENCHMARK_PREFIX: ${{ vars.BENCHMARK_S3_PREFIX }}
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            ref_prefix="refs/tags/${{ github.event.release.tag_name }}/docker"
+          else
+            ref_prefix="refs/main/${{ github.sha }}/docker"
+          fi
+          destination="s3://${BENCHMARK_BUCKET}/${BENCHMARK_PREFIX:+$BENCHMARK_PREFIX/}${ref_prefix}"
+          python3 scripts/bench-ci/run_benchmarks.py reference \
+            --bench-root bench \
+            --build "$RUNNER_TEMP/resolved-target.json" \
+            --destination "$destination"
+
   sync-openapi-to-docs:
     name: Sync OpenAPI to Docs
     needs: [docker-tenzir, configure]
@@ -485,6 +561,98 @@ jobs:
       source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
       arch-suffixes: "aarch64 x86_64"
     secrets: inherit
+
+  benchmark-reference-static:
+    name: Benchmark reference (static)
+    needs:
+      - configure
+      - tenzir-static-x86_64-linux
+    if: |
+      needs.configure.outputs.run-tenzir-nix == 'true' &&
+      (
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'release' && !contains(github.event.release.tag_name, '-rc'))
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Configure benchmark runtime directories
+        run: |
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/xdg-state" >> "$GITHUB_ENV"
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Checkout tenzir-bench
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          repository: tenzir/bench
+          path: .tools/tenzir-bench
+      - name: Install benchmark runner
+        run: |
+          python3 -m pip install ./.tools/tenzir-bench
+      - name: Download benchmark target metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-target-static-x86_64-linux
+          path: ${{ runner.temp }}/benchmark-target
+      - name: Download static benchmark artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tenzir-static-x86_64-linux
+          path: ${{ runner.temp }}/static-artifact
+      - name: Materialize static benchmark target
+        env:
+          TARGET_METADATA_PATH: ${{ runner.temp }}/benchmark-target/benchmark-target-static-x86_64-linux.json
+          RESOLVED_TARGET_PATH: ${{ runner.temp }}/resolved-target.json
+        run: |
+          tarball="$(find "$RUNNER_TEMP/static-artifact" -type f -name '*.tar.gz' | head -n1)"
+          mkdir -p "$RUNNER_TEMP/static-extracted"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/static-extracted"
+          binary="$(find "$RUNNER_TEMP/static-extracted" -type f -path '*/bin/tenzir' | head -n1)"
+          TARGET_BINARY="$binary" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = json.loads(Path(os.environ["TARGET_METADATA_PATH"]).read_text(encoding="utf-8"))
+          metadata["path"] = os.environ["TARGET_BINARY"]
+          Path(os.environ["RESOLVED_TARGET_PATH"]).write_text(
+              json.dumps(metadata, indent=2),
+              encoding="utf-8",
+          )
+          PY
+      - name: Configure AWS credentials
+        if: vars.BENCHMARK_AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: eu-west-1
+          role-to-assume: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
+      - name: Validate benchmark storage configuration
+        env:
+          BENCHMARK_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
+        run: |
+          if [[ -z "$BENCHMARK_BUCKET" ]]; then
+            echo "::error::BENCHMARK_S3_BUCKET must be configured for benchmark publishing"
+            exit 1
+          fi
+      - name: Run and publish benchmark references
+        env:
+          BENCHMARK_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
+          BENCHMARK_PREFIX: ${{ vars.BENCHMARK_S3_PREFIX }}
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            ref_prefix="refs/tags/${{ github.event.release.tag_name }}/static"
+          else
+            ref_prefix="refs/main/${{ github.sha }}/static"
+          fi
+          destination="s3://${BENCHMARK_BUCKET}/${BENCHMARK_PREFIX:+$BENCHMARK_PREFIX/}${ref_prefix}"
+          python3 scripts/bench-ci/run_benchmarks.py reference \
+            --bench-root bench \
+            --build "$RUNNER_TEMP/resolved-target.json" \
+            --destination "$destination"
 
   tenzir:
     needs:
