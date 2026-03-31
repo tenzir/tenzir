@@ -1,0 +1,2 @@
+export
+where foo.nope == "c" or bar.nope == "c"
