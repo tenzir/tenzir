@@ -19,6 +19,7 @@ if TENZIR_BENCH_SRC.exists() and str(TENZIR_BENCH_SRC) not in sys.path:
 import update_pr_comment as update_pr_comment_module
 import common as common_module
 from find_build_run import infer_event_for_ref
+import find_build_run as find_build_run_module
 from parse_command import parse_command
 from resolve_baselines import choose_latest_stable_release
 from run_benchmarks import (
@@ -135,6 +136,21 @@ def test_infer_event_for_ref_prefers_main_and_release_tags() -> None:
     assert infer_event_for_ref("main") == "push"
     assert infer_event_for_ref("v5.30.0") == "release"
     assert infer_event_for_ref("4e5a6b7") is None
+
+
+def test_list_artifacts_paginates_across_multiple_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        find_build_run_module,
+        "gh_api",
+        lambda endpoint, paginate=False: [
+            {"artifacts": [{"name": "artifact-a"}]},
+            {"artifacts": [{"name": "artifact-b"}]},
+        ],
+    )
+
+    artifacts = find_build_run_module.list_artifacts("tenzir/tenzir", 123)
+
+    assert [artifact["name"] for artifact in artifacts] == ["artifact-a", "artifact-b"]
 
 
 def test_normalize_reports_uses_benchmark_and_implementation_ids() -> None:

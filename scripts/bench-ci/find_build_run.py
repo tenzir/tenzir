@@ -69,10 +69,19 @@ def find_run(repo: str, ref: str, *, event: str | None = None) -> dict[str, Any]
 
 
 def list_artifacts(repo: str, run_id: int) -> list[dict[str, Any]]:
-    payload = gh_api(f"repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100")
-    artifacts = payload.get("artifacts")
-    if not isinstance(artifacts, list):
-        raise RuntimeError("unexpected artifact response")
+    payload = gh_api(
+        f"repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100",
+        paginate=True,
+    )
+    pages = payload if isinstance(payload, list) else [payload]
+    artifacts: list[dict[str, Any]] = []
+    for page in pages:
+        if not isinstance(page, dict):
+            raise RuntimeError("unexpected artifact response")
+        page_artifacts = page.get("artifacts")
+        if not isinstance(page_artifacts, list):
+            raise RuntimeError("unexpected artifact response")
+        artifacts.extend(page_artifacts)
     return artifacts
 
 
