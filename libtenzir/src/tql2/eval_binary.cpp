@@ -784,10 +784,12 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
     auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(builder.Reserve(self.length()));
     auto warned_left_mismatch = false;
+    auto offset = int64_t{0};
     for (auto& left : left_ms) {
       auto typed_left = left.as<bool_type>();
       if (not typed_left) {
-        if (not is<null_type>(left.type) and not warned_left_mismatch) {
+        if (not is<null_type>(left.type) and not warned_left_mismatch
+            and active.slice(offset, left.length()).as_constant() != false) {
           warned_left_mismatch = true;
           diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
             .primary(x.left)
@@ -795,10 +797,12 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
             .emit(self.ctx());
         }
         check(builder.AppendNulls(left.length()));
+        offset += left.length();
         continue;
       }
       check(builder.AppendArraySlice(*typed_left->array->data(), 0,
                                      left.length()));
+      offset += left.length();
     }
     return finish(builder);
   });
@@ -846,7 +850,8 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
         }
         return;
       }
-      if (not warned_right_mismatch and not is<null_type>(right.type)) {
+      if (not warned_right_mismatch and not is<null_type>(right.type)
+          and right_active.slice(right_begin, length).as_constant() != false) {
         warned_right_mismatch = true;
         diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
           .primary(x.right)
