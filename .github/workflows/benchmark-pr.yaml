@@ -11,7 +11,7 @@ permissions:
   id-token: write
   issues: write
   packages: read
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   benchmark:
