@@ -38,7 +38,7 @@ jobs:
               ;;
           esac
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
       - name: Checkout tenzir-bench
@@ -65,14 +65,14 @@ jobs:
         run: |
           python3 scripts/bench-ci/resolve_baselines.py --repo "${{ github.repository }}" > "$RUNNER_TEMP/baselines.json"
       - name: Authenticate to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Configure AWS credentials
         if: vars.BENCHMARK_AWS_ROLE_ARN != ''
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
         with:
           aws-region: eu-west-1
           role-to-assume: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
