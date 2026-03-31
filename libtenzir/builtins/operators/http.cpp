@@ -66,6 +66,34 @@ namespace http = caf::net::http;
 namespace ssl = caf::net::ssl;
 using namespace std::literals;
 
+/// Ensures the Host header includes the port from the URI when present and
+/// wraps IPv6 addresses in brackets per RFC 3986 / RFC 9110.
+/// CAF's HTTP client omits the port from the Host header, which breaks
+/// servers that validate the Host header (e.g., pre-signed URL signatures).
+auto ensure_host_header(std::unordered_map<std::string, std::string>& headers,
+                        const caf::uri& uri) -> void {
+  // Skip if the user already provided a Host header.
+  for (const auto& [k, v] : headers) {
+    if (detail::ascii_icase_equal(k, "Host")) {
+      return;
+    }
+  }
+  auto host = std::string{};
+  auto* addr = std::get_if<caf::ip_address>(&uri.authority().host);
+  if (addr && ! addr->embeds_v4()) {
+    host += '[';
+    host += to_string(*addr);
+    host += ']';
+  } else {
+    host = uri.authority().host_str();
+  }
+  if (uri.authority().port != 0) {
+    host += ':';
+    host += std::to_string(uri.authority().port);
+  }
+  headers.emplace("Host", std::move(host));
+}
+
 template <typename T>
 constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
   return x.transform([](auto&& x) {
@@ -1633,6 +1661,7 @@ public:
           TENZIR_UNREACHABLE();
         });
     }
+    ensure_host_header(headers, *uri);
     http::with(ctrl.self().system())
       .context(args_.make_ssl_context(*uri, ctrl))
       .connect(*uri)
@@ -1675,6 +1704,7 @@ public:
           args_.paginate_delay->inner,
           [&, preq = std::move(paginate_queue[i])] mutable {
             auto& [uri, hdrs] = preq;
+            ensure_host_header(hdrs, uri);
             http::with(ctrl.self().system())
               .context(args_.make_ssl_context(uri, ctrl))
               .connect(uri)
@@ -2288,6 +2318,7 @@ public:
         if (not has_accept_header) {
           headers.emplace("Accept", "application/json, */*;q=0.5");
         }
+        ensure_host_header(headers, *caf_uri);
         http::with(ctrl.self().system())
           .context(args_.make_ssl_context(*caf_uri, ctrl))
           .connect(*caf_uri)
@@ -2338,6 +2369,7 @@ public:
             args_.paginate_delay.inner,
             [&, preq = std::move(pagination_queue[i])] mutable {
               auto& [uri, hdrs] = preq;
+              ensure_host_header(hdrs, uri);
               http::with(ctrl.self().system())
                 .context(args_.make_ssl_context(uri, ctrl))
                 .connect(uri)
