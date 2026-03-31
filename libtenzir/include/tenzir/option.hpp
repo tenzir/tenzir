@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/panic.hpp"
+#include "tenzir/result.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/variant_traits.hpp"
 
@@ -362,6 +363,16 @@ public:
       return std::forward<Self>(self).storage_.get();
     }
     return Value{};
+  }
+
+  /// Converts `Option<T>` to `Result<T, E>`, mapping `None` to `err`.
+  template <class Self, class E>
+  auto ok_or(this Self&& self, E&& err)
+    -> Result<Value, std::remove_cvref_t<E>> {
+    if (self.is_some()) {
+      return std::forward<Self>(self).storage_.get();
+    }
+    return Err{std::forward<E>(err)};
   }
 
   // -- Transformations --------------------------------------------------------

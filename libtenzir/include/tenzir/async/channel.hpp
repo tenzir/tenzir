@@ -13,13 +13,12 @@
 #include "tenzir/async/task.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
 
-#include <cstddef>
-#include <cstdint>
 #include <folly/concurrency/UnboundedQueue.h>
+
+#include <cstddef>
 #include <utility>
 
 namespace tenzir {
@@ -29,61 +28,50 @@ enum class TryRecvError {
   closed,
 };
 
-/// Data shared between senders and receivers.
+namespace detail {
+
 template <class T>
-struct SenderReceiverShared {
-  explicit SenderReceiverShared(size_t capacity)
-    : slots{capacity},
-      items{0} {
+struct Channel {
+  explicit Channel(size_t capacity) : capacity{capacity}, ready{0} {
   }
 
-  /// The actual concurrent queue storage.
+  /// The thread-safe queue backing our channel.
   folly::UMPMCQueue<T, false> data;
-  /// Number of remaining queue slots.
-  Semaphore slots;
-  /// Number of items ready to receive, plus a sticky wakeup after close.
-  Semaphore items;
+  /// Number of remaining send permits.
+  Semaphore capacity;
+  /// Number of ready-to-dequeue items, plus a sticky wakeup permit after close.
+  Semaphore ready;
   /// Whether the channel is closed because the last sender got destroyed.
   Atomic<bool> closed{false};
-  /// Number of receivers that are about to block on `items`.
-  Atomic<size_t> waiting_receivers{0};
 
   auto is_closed() const -> bool {
     return closed.load(std::memory_order_acquire);
   }
-
-  auto close() -> void {
-    auto was_closed = closed.exchange(true, std::memory_order_acq_rel);
-    if (was_closed) {
-      return;
-    }
-    auto waiters = waiting_receivers.load(std::memory_order_acquire);
-    for (auto i = size_t{0}; i < waiters; ++i) {
-      items.add_permit();
-    }
-    // Keep one permit available so subsequent `recv()` calls return
-    // immediately after the channel drained.
-    items.add_permit();
-  }
 };
 
 template <class T>
-struct SenderShared {
-  explicit SenderShared(Arc<SenderReceiverShared<T>> channel)
-    : channel{std::move(channel)} {
+struct SenderCore {
+  explicit SenderCore(Arc<Channel<T>> channel) : channel{std::move(channel)} {
   }
 
-  ~SenderShared() {
-    channel->close();
+  ~SenderCore() {
+    auto was_closed = channel->closed.exchange(true, std::memory_order_release);
+    TENZIR_ASSERT(not was_closed);
+    // Receivers that observe closure without dequeuing an item return this
+    // permit to wake the next blocked receiver and leave one sticky wakeup for
+    // future `recv()` calls.
+    channel->ready.add_permit();
   }
 
-  SenderShared(SenderShared const&) = delete;
-  auto operator=(SenderShared const&) -> SenderShared& = delete;
-  SenderShared(SenderShared&&) = delete;
-  auto operator=(SenderShared&&) -> SenderShared& = delete;
+  SenderCore(SenderCore const&) = delete;
+  auto operator=(SenderCore const&) -> SenderCore& = delete;
+  SenderCore(SenderCore&&) = delete;
+  auto operator=(SenderCore&&) -> SenderCore& = delete;
 
-  Arc<SenderReceiverShared<T>> channel;
+  Arc<Channel<T>> channel;
 };
+
+} // namespace detail
 
 /// Handle to the sending end of a channel.
 ///
@@ -91,43 +79,31 @@ struct SenderShared {
 template <class T>
 class Sender {
 public:
-  explicit Sender(Arc<SenderShared<T>> shared) : shared_{std::move(shared)} {
+  explicit Sender(Arc<detail::SenderCore<T>> core) : core_{std::move(core)} {
   }
-
-  Sender(Sender const&) = default;
-  auto operator=(Sender const&) -> Sender& = default;
-  Sender(Sender&&) noexcept = default;
-  auto operator=(Sender&&) noexcept -> Sender& = default;
-  ~Sender() = default;
 
   /// Sends a value to the channel, waiting for capacity.
   auto send(T x) -> Task<void> {
-    auto& channel = shared_->channel;
-    auto guard = co_await channel->slots.acquire();
-    channel->data.enqueue(std::move(x));
-    guard.forget();
-    channel->items.add_permit();
+    co_await core_->channel->capacity.consume();
+    do_send(std::move(x));
   }
 
   /// Sends a value if the channel is not full.
   auto try_send(T x) -> Result<void, T> {
-    auto& channel = shared_->channel;
-    auto guard = channel->slots.try_acquire();
-    if (not guard) {
+    if (not core_->channel->capacity.try_consume()) {
       return Err{std::move(x)};
     }
-    channel->data.enqueue(std::move(x));
-    guard->forget();
-    channel->items.add_permit();
+    do_send(std::move(x));
     return {};
   }
 
-  auto clone() const -> Sender {
-    return Sender{*this};
+private:
+  auto do_send(T x) -> void {
+    core_->channel->data.enqueue(std::move(x));
+    core_->channel->ready.add_permit();
   }
 
-private:
-  Arc<SenderShared<T>> shared_;
+  Arc<detail::SenderCore<T>> core_;
 };
 
 /// Handle to the receiving end of a channel.
@@ -139,92 +115,44 @@ private:
 template <class T>
 class Receiver {
 public:
-  explicit Receiver(Arc<SenderReceiverShared<T>> shared)
+  explicit Receiver(Arc<detail::Channel<T>> shared)
     : shared_{std::move(shared)} {
   }
 
   /// Returns `None` if channel is closed.
   auto recv() -> Task<Option<T>> {
-    while (true) {
-      if (auto item_guard = shared_->items.try_acquire()) {
-        T value;
-        if (shared_->data.try_dequeue(value)) {
-          item_guard->forget();
-          shared_->slots.add_permit();
-          co_return value;
-        }
-        TENZIR_ASSERT(shared_->is_closed());
-        // Preserve the sticky close wakeup for future receives.
-        co_return None{};
-      }
-      if (shared_->is_closed()) {
-        co_return None{};
-      }
-      shared_->waiting_receivers.fetch_add(1, std::memory_order_acq_rel);
-      auto waiting_guard = detail::scope_guard{[&] noexcept {
-        auto previous
-          = shared_->waiting_receivers.fetch_sub(1, std::memory_order_acq_rel);
-        TENZIR_ASSERT(previous > 0);
-      }};
-      if (auto item_guard = shared_->items.try_acquire()) {
-        T value;
-        if (shared_->data.try_dequeue(value)) {
-          item_guard->forget();
-          shared_->slots.add_permit();
-          co_return value;
-        }
-        TENZIR_ASSERT(shared_->is_closed());
-        co_return None{};
-      }
-      if (shared_->is_closed()) {
-        co_return None{};
-      }
-      auto item_guard = co_await shared_->items.acquire();
-      T value;
-      if (shared_->data.try_dequeue(value)) {
-        item_guard.forget();
-        shared_->slots.add_permit();
-        co_return value;
-      }
-      TENZIR_ASSERT(shared_->is_closed());
-      co_return None{};
-    }
+    co_return do_recv(co_await shared_->ready.acquire());
   }
 
   /// Returns immediately, indicating whether the channel is empty or closed.
   auto try_recv() -> Task<Result<T, TryRecvError>> {
-    auto item_guard = shared_->items.try_acquire();
-    if (not item_guard) {
-      if (shared_->is_closed()) {
-        co_return TryRecvError::closed;
-      }
-      co_return TryRecvError::empty;
+    auto permit = shared_->ready.try_acquire();
+    if (not permit) {
+      co_return Err{shared_->is_closed() ? TryRecvError::closed
+                                         : TryRecvError::empty};
     }
-    T value;
-    if (shared_->data.try_dequeue(value)) {
-      item_guard->forget();
-      shared_->slots.add_permit();
-      co_return std::move(value);
-    }
-    TENZIR_ASSERT(shared_->is_closed());
-    co_return TryRecvError::closed;
+    co_return do_recv(std::move(*permit)).ok_or(TryRecvError::closed);
   }
 
 private:
-  Arc<SenderReceiverShared<T>> shared_;
-};
+  auto do_recv(SemaphorePermit permit) -> Option<T> {
+    if (auto value = shared_->data.try_dequeue()) {
+      permit.forget();
+      shared_->capacity.add_permit();
+      return std::move(*value);
+    }
+    TENZIR_ASSERT(shared_->is_closed());
+    return None{};
+  }
 
-template <class T>
-struct SenderReceiver {
-  Sender<T> sender;
-  Receiver<T> receiver;
+  Arc<detail::Channel<T>> shared_;
 };
 
 /// Returns a bounded channel with the given capacity.
 template <class T>
-auto channel(size_t capacity) -> SenderReceiver<T> {
-  auto shared = Arc<SenderReceiverShared<T>>{capacity};
-  auto sender_shared = Arc<SenderShared<T>>{std::in_place, shared};
+auto channel(size_t capacity) -> std::tuple<Sender<T>, Receiver<T>> {
+  auto shared = Arc<detail::Channel<T>>{capacity};
+  auto sender_shared = Arc<detail::SenderCore<T>>{std::in_place, shared};
   return {
     Sender<T>{std::move(sender_shared)},
     Receiver<T>{std::move(shared)},
