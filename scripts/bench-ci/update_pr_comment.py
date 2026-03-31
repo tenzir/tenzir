@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from common import COMMENT_MARKER, gh_api
 
@@ -14,6 +15,9 @@ def wrap_comment_body(body: str) -> str:
 
 
 def current_authenticated_login() -> str:
+    configured = os.environ.get("BENCHMARK_COMMENT_AUTHOR_LOGIN", "").strip()
+    if configured:
+        return configured
     payload = gh_api("user")
     if not isinstance(payload, dict):
         raise RuntimeError("unexpected authenticated user response")

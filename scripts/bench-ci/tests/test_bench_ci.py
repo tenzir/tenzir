@@ -103,6 +103,17 @@ def test_current_authenticated_login_reads_login_from_api(monkeypatch: pytest.Mo
     assert current_authenticated_login() == "github-actions[bot]"
 
 
+def test_current_authenticated_login_prefers_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BENCHMARK_COMMENT_AUTHOR_LOGIN", "github-actions[bot]")
+    monkeypatch.setattr(
+        update_pr_comment_module,
+        "gh_api",
+        lambda endpoint, **_kwargs: pytest.fail("gh_api should not be called when author login is configured"),
+    )
+
+    assert current_authenticated_login() == "github-actions[bot]"
+
+
 def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, str, object | None, bool]] = []
 

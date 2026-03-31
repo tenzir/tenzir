@@ -372,6 +372,7 @@ jobs:
           MANIFEST_FILE: ${{ runner.temp }}/compare-manifest.json
       - name: Update pull request comment
         env:
+          BENCHMARK_COMMENT_AUTHOR_LOGIN: github-actions[bot]
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 scripts/bench-ci/update_pr_comment.py \
