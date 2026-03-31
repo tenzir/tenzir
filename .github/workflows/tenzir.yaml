@@ -714,7 +714,7 @@ jobs:
           publish-results: true
           destination-prefix: >-
             ${{ github.ref_type == 'tag'
-                && format('tags/{0}/docker', github.ref_name)
+                && format('refs/tags/{0}/docker', github.ref_name)
                 || format('refs/main/{0}/docker', github.sha) }}
 
   sync-openapi-to-docs:
@@ -841,7 +841,7 @@ jobs:
           publish-results: true
           destination-prefix: >-
             ${{ github.ref_type == 'tag'
-                && format('tags/{0}/static', github.ref_name)
+                && format('refs/tags/{0}/static', github.ref_name)
                 || format('refs/main/{0}/static', github.sha) }}
 
   tenzir:
