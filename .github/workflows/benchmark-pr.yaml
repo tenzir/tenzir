@@ -222,7 +222,28 @@ jobs:
 
             main_sha = baselines["main_sha"]
             stable_tag = baselines["latest_stable_tag"]
-            main = fetch(main_sha, target, run_temp / f"main-{target}", event="push")
+            main_result = subprocess.run(
+              [
+                "python3",
+                "scripts/bench-ci/find_build_run.py",
+                "fetch-latest-target-metadata",
+                "--repo",
+                repo,
+                "--branch",
+                "main",
+                "--event",
+                "push",
+                "--target",
+                target,
+                "--output-dir",
+                str(run_temp / f"main-{target}"),
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+            )
+            main = json.loads(main_result.stdout)
+            main_sha = str(main["resolved_sha"])
             main_path = prepare_storage_backed(
               Path(main["metadata_path"]),
               target,

@@ -68,6 +68,47 @@ def find_run(repo: str, ref: str, *, event: str | None = None) -> dict[str, Any]
     return run
 
 
+def find_latest_run_with_artifact(
+    repo: str,
+    *,
+    branch: str,
+    event: str,
+    artifact_name: str,
+    limit: int = 50,
+) -> dict[str, Any]:
+    runs = gh_json(
+        [
+            "run",
+            "list",
+            "--repo",
+            repo,
+            "--workflow",
+            "tenzir.yaml",
+            "--branch",
+            branch,
+            "--event",
+            event,
+            "--json",
+            "databaseId,status,conclusion,headSha,url,displayTitle,event",
+            "--limit",
+            str(limit),
+        ],
+    )
+    if not isinstance(runs, list) or not runs:
+        raise RuntimeError(f"no Tenzir workflow runs found for branch {branch} ({event})")
+    for run in runs:
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            continue
+        run_id = int(run["databaseId"])
+        artifacts = list_artifacts(repo, run_id)
+        for artifact in artifacts:
+            if artifact.get("name") == artifact_name and not artifact.get("expired", False):
+                return run
+    raise RuntimeError(
+        f"no successful Tenzir workflow run on {branch} ({event}) produced artifact {artifact_name}",
+    )
+
+
 def list_artifacts(repo: str, run_id: int) -> list[dict[str, Any]]:
     payload = gh_api(
         f"repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100",
@@ -194,6 +235,36 @@ def fetch_target_metadata(
     }
 
 
+def fetch_latest_target_metadata(
+    repo: str,
+    branch: str,
+    target: str,
+    *,
+    output_dir: Path,
+    event: str,
+) -> dict[str, object]:
+    artifact_name = TARGET_METADATA_ARTIFACTS[target]
+    run = find_latest_run_with_artifact(
+        repo,
+        branch=branch,
+        event=event,
+        artifact_name=artifact_name,
+    )
+    run_id = int(run["databaseId"])
+    metadata_path = download_artifact(repo, run_id, artifact_name, output_dir)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    resolved_sha = run.get("headSha")
+    if not isinstance(resolved_sha, str):
+        raise RuntimeError(f"workflow run {run_id} is missing headSha")
+    return {
+        "available": True,
+        "run_id": run_id,
+        "resolved_sha": resolved_sha,
+        "metadata_path": str(metadata_path.resolve()),
+        "metadata": metadata,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -216,6 +287,18 @@ def main() -> int:
         help="Return an unavailable result instead of failing when the run completes without the metadata artifact",
     )
 
+    fetch_latest = subparsers.add_parser("fetch-latest-target-metadata")
+    fetch_latest.add_argument("--repo", default="tenzir/tenzir", help="GitHub repository")
+    fetch_latest.add_argument("--branch", required=True, help="Branch to scan for recent workflow runs")
+    fetch_latest.add_argument(
+        "--event",
+        required=True,
+        choices=["push", "workflow_dispatch", "merge_group", "pull_request", "release"],
+        help="GitHub event for the matching Tenzir workflow runs",
+    )
+    fetch_latest.add_argument("--target", required=True, choices=sorted(TARGET_METADATA_ARTIFACTS))
+    fetch_latest.add_argument("--output-dir", required=True, type=Path, help="Where to download metadata")
+
     args = parser.parse_args()
     if args.command == "fetch-target-metadata":
         result = fetch_target_metadata(
@@ -227,6 +310,16 @@ def main() -> int:
             interval_seconds=args.interval_seconds,
             event=args.event,
             allow_missing_artifact=args.allow_missing_artifact,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "fetch-latest-target-metadata":
+        result = fetch_latest_target_metadata(
+            args.repo,
+            args.branch,
+            args.target,
+            output_dir=args.output_dir,
+            event=args.event,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0

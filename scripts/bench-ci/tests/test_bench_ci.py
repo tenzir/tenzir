@@ -153,6 +153,33 @@ def test_list_artifacts_paginates_across_multiple_pages(monkeypatch: pytest.Monk
     assert [artifact["name"] for artifact in artifacts] == ["artifact-a", "artifact-b"]
 
 
+def test_find_latest_run_with_artifact_uses_recent_successful_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_gh_json(args: list[str]) -> object:
+        assert "--branch" in args
+        return [
+            {"databaseId": 11, "status": "completed", "conclusion": "success", "headSha": "missing"},
+            {"databaseId": 12, "status": "completed", "conclusion": "success", "headSha": "wanted"},
+        ]
+
+    def fake_list_artifacts(repo: str, run_id: int) -> list[dict[str, object]]:
+        if run_id == 11:
+            return [{"name": "other-artifact", "expired": False}]
+        return [{"name": "benchmark-target-docker-amd64", "expired": False}]
+
+    monkeypatch.setattr(find_build_run_module, "gh_json", fake_gh_json)
+    monkeypatch.setattr(find_build_run_module, "list_artifacts", fake_list_artifacts)
+
+    run = find_build_run_module.find_latest_run_with_artifact(
+        "tenzir/tenzir",
+        branch="main",
+        event="push",
+        artifact_name="benchmark-target-docker-amd64",
+    )
+
+    assert run["databaseId"] == 12
+    assert run["headSha"] == "wanted"
+
+
 def test_normalize_reports_uses_benchmark_and_implementation_ids() -> None:
     report = Report(
         path=Path("/tmp/report.json"),
