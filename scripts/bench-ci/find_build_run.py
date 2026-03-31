@@ -71,7 +71,9 @@ def find_run(repo: str, ref: str, *, event: str | None = None) -> dict[str, Any]
     if expected_event is not None:
         filtered = [run for run in filtered if run.get("event") == expected_event]
     if not filtered:
-        raise RuntimeError(f"no Tenzir workflow run found for {ref} ({sha}) with event {expected_event or 'any'}")
+        raise RuntimeError(
+            f"no Tenzir workflow run found for {ref} ({sha}) with event {expected_event or 'any'}"
+        )
     run = filtered[0]
     return run
 
@@ -103,14 +105,18 @@ def find_latest_run_with_artifact(
         ],
     )
     if not isinstance(runs, list) or not runs:
-        raise RuntimeError(f"no Tenzir workflow runs found for branch {branch} ({event})")
+        raise RuntimeError(
+            f"no Tenzir workflow runs found for branch {branch} ({event})"
+        )
     for run in runs:
         if run.get("status") != "completed" or run.get("conclusion") != "success":
             continue
         run_id = int(run["databaseId"])
         artifacts = list_artifacts(repo, run_id)
         for artifact in artifacts:
-            if artifact.get("name") == artifact_name and not artifact.get("expired", False):
+            if artifact.get("name") == artifact_name and not artifact.get(
+                "expired", False
+            ):
                 return run
     raise RuntimeError(
         f"no successful Tenzir workflow run on {branch} ({event}) produced artifact {artifact_name}",
@@ -146,7 +152,9 @@ def wait_for_artifact(
     while True:
         artifacts = list_artifacts(repo, run_id)
         for artifact in artifacts:
-            if artifact.get("name") == artifact_name and not artifact.get("expired", False):
+            if artifact.get("name") == artifact_name and not artifact.get(
+                "expired", False
+            ):
                 return artifact
         run = gh_json(
             [
@@ -171,11 +179,15 @@ def wait_for_artifact(
                 f"{artifact_name}: {run.get('url')}",
             )
         if time.monotonic() >= deadline:
-            raise TimeoutError(f"timed out waiting for artifact {artifact_name} from run {run_id}")
+            raise TimeoutError(
+                f"timed out waiting for artifact {artifact_name} from run {run_id}"
+            )
         time.sleep(interval_seconds)
 
 
-def download_artifact(repo: str, run_id: int, artifact_name: str, output_dir: Path) -> Path:
+def download_artifact(
+    repo: str, run_id: int, artifact_name: str, output_dir: Path
+) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -196,7 +208,9 @@ def download_artifact(repo: str, run_id: int, artifact_name: str, output_dir: Pa
     )
     candidates = sorted(output_dir.rglob("*.json"))
     if len(candidates) != 1:
-        raise RuntimeError(f"expected exactly one metadata json in {output_dir}, found {len(candidates)}")
+        raise RuntimeError(
+            f"expected exactly one metadata json in {output_dir}, found {len(candidates)}"
+        )
     return candidates[0]
 
 
@@ -279,16 +293,30 @@ def main() -> int:
 
     fetch = subparsers.add_parser("fetch-target-metadata")
     fetch.add_argument("--repo", default="tenzir/tenzir", help="GitHub repository")
-    fetch.add_argument("--ref", "--sha", dest="ref", required=True, help="Git ref or commit SHA to locate")
+    fetch.add_argument(
+        "--ref",
+        "--sha",
+        dest="ref",
+        required=True,
+        help="Git ref or commit SHA to locate",
+    )
     fetch.add_argument(
         "--event",
         choices=["pull_request", "push", "release", "workflow_dispatch", "merge_group"],
         help="Preferred GitHub event for the matching Tenzir workflow run",
     )
-    fetch.add_argument("--target", required=True, choices=sorted(TARGET_METADATA_ARTIFACTS))
-    fetch.add_argument("--output-dir", required=True, type=Path, help="Where to download metadata")
-    fetch.add_argument("--timeout-seconds", type=int, default=3600, help="Artifact wait timeout")
-    fetch.add_argument("--interval-seconds", type=int, default=15, help="Artifact poll interval")
+    fetch.add_argument(
+        "--target", required=True, choices=sorted(TARGET_METADATA_ARTIFACTS)
+    )
+    fetch.add_argument(
+        "--output-dir", required=True, type=Path, help="Where to download metadata"
+    )
+    fetch.add_argument(
+        "--timeout-seconds", type=int, default=3600, help="Artifact wait timeout"
+    )
+    fetch.add_argument(
+        "--interval-seconds", type=int, default=15, help="Artifact poll interval"
+    )
     fetch.add_argument(
         "--allow-missing-artifact",
         action="store_true",
@@ -296,16 +324,24 @@ def main() -> int:
     )
 
     fetch_latest = subparsers.add_parser("fetch-latest-target-metadata")
-    fetch_latest.add_argument("--repo", default="tenzir/tenzir", help="GitHub repository")
-    fetch_latest.add_argument("--branch", required=True, help="Branch to scan for recent workflow runs")
+    fetch_latest.add_argument(
+        "--repo", default="tenzir/tenzir", help="GitHub repository"
+    )
+    fetch_latest.add_argument(
+        "--branch", required=True, help="Branch to scan for recent workflow runs"
+    )
     fetch_latest.add_argument(
         "--event",
         required=True,
         choices=["push", "workflow_dispatch", "merge_group", "pull_request", "release"],
         help="GitHub event for the matching Tenzir workflow runs",
     )
-    fetch_latest.add_argument("--target", required=True, choices=sorted(TARGET_METADATA_ARTIFACTS))
-    fetch_latest.add_argument("--output-dir", required=True, type=Path, help="Where to download metadata")
+    fetch_latest.add_argument(
+        "--target", required=True, choices=sorted(TARGET_METADATA_ARTIFACTS)
+    )
+    fetch_latest.add_argument(
+        "--output-dir", required=True, type=Path, help="Where to download metadata"
+    )
 
     args = parser.parse_args()
     if args.command == "fetch-target-metadata":

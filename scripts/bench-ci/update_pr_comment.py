@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from common import COMMENT_MARKER, gh_api
 
@@ -14,6 +15,9 @@ def wrap_comment_body(body: str) -> str:
 
 
 def current_authenticated_login() -> str:
+    configured = os.environ.get("BENCHMARK_COMMENT_AUTHOR_LOGIN", "").strip()
+    if configured:
+        return configured
     payload = gh_api("user")
     if not isinstance(payload, dict):
         raise RuntimeError("unexpected authenticated user response")
@@ -67,8 +71,12 @@ def update_pr_comment(repo: str, pr_number: int, body: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default="tenzir/tenzir", help="GitHub repository")
-    parser.add_argument("--pr-number", type=int, required=True, help="Pull request number")
-    parser.add_argument("--body-file", required=True, help="Path to the rendered markdown body")
+    parser.add_argument(
+        "--pr-number", type=int, required=True, help="Pull request number"
+    )
+    parser.add_argument(
+        "--body-file", required=True, help="Path to the rendered markdown body"
+    )
     args = parser.parse_args()
     with open(args.body_file, encoding="utf-8") as handle:
         body = handle.read()

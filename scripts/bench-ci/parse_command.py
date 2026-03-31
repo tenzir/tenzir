@@ -68,7 +68,11 @@ def parse_command(comment_body: str, *, root: Path | None = None) -> dict[str, o
 
 
 def resolve_benchmarks(value: str | None, *, root: Path) -> list[str]:
-    patterns = [item.strip() for item in (value.split(",") if value else load_defaults(root)) if item.strip()]
+    patterns = [
+        item.strip()
+        for item in (value.split(",") if value else load_defaults(root))
+        if item.strip()
+    ]
     available = available_benchmarks(root)
     selected: list[str] = []
     seen: set[str] = set()
@@ -84,8 +88,14 @@ def resolve_benchmarks(value: str | None, *, root: Path) -> list[str]:
     return selected
 
 
-def resolve_targets(value: str | None, *, refs: list[dict[str, str]] | None = None) -> list[str]:
-    targets = [item.strip() for item in value.split(",") if item.strip()] if value is not None else ["docker"]
+def resolve_targets(
+    value: str | None, *, refs: list[dict[str, str]] | None = None
+) -> list[str]:
+    targets = (
+        [item.strip() for item in value.split(",") if item.strip()]
+        if value is not None
+        else ["docker"]
+    )
     for selector in refs or []:
         target = selector["target"]
         if target not in targets:

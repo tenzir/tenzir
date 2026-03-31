@@ -21,6 +21,7 @@ import common as common_module
 from find_build_run import infer_event_for_ref
 import find_build_run as find_build_run_module
 from parse_command import parse_command
+import resolve_compare_manifest as resolve_compare_manifest_module
 from resolve_baselines import choose_latest_stable_release
 import run_benchmarks as run_benchmarks_module
 from run_benchmarks import (
@@ -36,6 +37,7 @@ from update_pr_comment import (
     select_existing_comment,
     wrap_comment_body,
 )
+from resolve_compare_manifest import resolve_compare_manifest, storage_prefix
 
 
 def test_parse_command_uses_defaults_and_target_specific_refs() -> None:
@@ -97,13 +99,45 @@ def test_select_existing_comment_ignores_foreign_authors() -> None:
     assert existing == {"id": 2, "body": body, "user": {"login": "github-actions[bot]"}}
 
 
-def test_current_authenticated_login_reads_login_from_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(update_pr_comment_module, "gh_api", lambda endpoint, **_kwargs: {"login": "github-actions[bot]"})
+def test_current_authenticated_login_reads_login_from_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        update_pr_comment_module,
+        "gh_api",
+        lambda endpoint, **_kwargs: {"login": "github-actions[bot]"},
+    )
 
     assert current_authenticated_login() == "github-actions[bot]"
 
 
-def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_current_authenticated_login_prefers_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BENCHMARK_COMMENT_AUTHOR_LOGIN", "github-actions[bot]")
+    monkeypatch.setattr(
+        update_pr_comment_module,
+        "gh_api",
+        lambda endpoint, **_kwargs: pytest.fail(
+            "gh_api should not be called when author login is configured"
+        ),
+    )
+
+    assert current_authenticated_login() == "github-actions[bot]"
+
+
+def test_storage_prefix_uses_semantic_ref_layout() -> None:
+    assert storage_prefix("tenzir-bench-data", "runs", "main", "abc123", "docker") == (
+        "s3://tenzir-bench-data/runs/refs/main/abc123/docker"
+    )
+    assert storage_prefix("tenzir-bench-data", "", "tag", "v5.30.0", "static") == (
+        "s3://tenzir-bench-data/refs/tags/v5.30.0/static"
+    )
+
+
+def test_update_pr_comment_paginates_before_posting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[tuple[str, str, object | None, bool]] = []
 
     def fake_gh_api(
@@ -118,14 +152,24 @@ def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPa
             return {"login": "github-actions[bot]"}
         if method == "GET":
             return [
-                {"id": 1, "body": "unrelated", "user": {"login": "github-actions[bot]"}},
-                {"id": 2, "body": wrap_comment_body("existing benchmark results"), "user": {"login": "github-actions[bot]"}},
+                {
+                    "id": 1,
+                    "body": "unrelated",
+                    "user": {"login": "github-actions[bot]"},
+                },
+                {
+                    "id": 2,
+                    "body": wrap_comment_body("existing benchmark results"),
+                    "user": {"login": "github-actions[bot]"},
+                },
             ]
         return {}
 
     monkeypatch.setattr(update_pr_comment_module, "gh_api", fake_gh_api)
 
-    update_pr_comment_module.update_pr_comment("tenzir/tenzir", 5960, "new benchmark results")
+    update_pr_comment_module.update_pr_comment(
+        "tenzir/tenzir", 5960, "new benchmark results"
+    )
 
     assert calls[0] == (
         "user",
@@ -144,7 +188,140 @@ def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPa
     assert calls[2][3] is False
 
 
-def test_load_contexts_resolves_selected_benchmarks_from_subdirectory(tmp_path: Path) -> None:
+def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def write_metadata(name: str, *, target: str) -> Path:
+        metadata = tmp_path / f"{name}.json"
+        metadata.write_text(
+            json.dumps(
+                {
+                    "target": target,
+                    "kind": target,
+                    "image": f"ghcr.io/tenzir/{name}:latest"
+                    if target == "docker"
+                    else None,
+                    "version": "5.30.0",
+                },
+            ),
+            encoding="utf-8",
+        )
+        return metadata
+
+    def fake_fetch_target_metadata(
+        repo: str,
+        ref: str,
+        target: str,
+        *,
+        output_dir: Path,
+        timeout_seconds: int,
+        interval_seconds: int,
+        event: str | None = None,
+        allow_missing_artifact: bool = False,
+    ) -> dict[str, object]:
+        if ref == "v5.29.0":
+            raise RuntimeError("missing release run")
+        return {
+            "available": True,
+            "metadata_path": str(write_metadata(f"{target}-{ref}", target=target)),
+            "run_id": 11,
+            "resolved_sha": "deadbeef",
+        }
+
+    def fake_fetch_latest_target_metadata(
+        repo: str,
+        branch: str,
+        target: str,
+        *,
+        output_dir: Path,
+        event: str,
+    ) -> dict[str, object]:
+        return {
+            "available": True,
+            "metadata_path": str(write_metadata(f"{target}-main", target=target)),
+            "run_id": 12,
+            "resolved_sha": "mainsha",
+        }
+
+    def fake_materialize_build(
+        metadata_path: Path,
+        target: str,
+        label: str,
+        *,
+        run_id: int,
+        repo: str,
+        run_temp: Path,
+    ) -> Path:
+        resolved = run_temp / f"{label.replace(' ', '-')}.json"
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        payload["label"] = label
+        payload["path"] = f"/tmp/{label.replace(' ', '-')}/bin/tenzir"
+        resolved.write_text(json.dumps(payload), encoding="utf-8")
+        return resolved
+
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "fetch_target_metadata",
+        fake_fetch_target_metadata,
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "fetch_latest_target_metadata",
+        fake_fetch_latest_target_metadata,
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module, "materialize_build", fake_materialize_build
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "infer_event_for_ref",
+        lambda repo, ref: "release" if ref.startswith("v") else None,
+    )
+
+    manifest = resolve_compare_manifest(
+        repo="tenzir/tenzir",
+        request={
+            "benchmarks": ["from_kafka_route53"],
+            "targets": ["docker"],
+            "refs": [
+                {"target": "docker", "ref": "v5.29.0"},
+                {"target": "docker", "ref": "feature-x"},
+            ],
+        },
+        baselines={"latest_stable_tag": "v5.30.0"},
+        head_sha="cafebabe",
+        run_temp=tmp_path,
+        bucket="tenzir-bench-data",
+        prefix="runs",
+    )
+
+    assert manifest["benchmarks"] == ["from_kafka_route53"]
+    assert len(manifest["builds"]) == 4
+    build_payloads = [
+        json.loads(Path(path).read_text(encoding="utf-8"))
+        for path in manifest["builds"]
+    ]
+    labels = [payload["label"] for payload in build_payloads]
+    assert labels == [
+        "candidate docker",
+        "main docker",
+        "latest stable docker",
+        "docker@feature-x",
+    ]
+    assert (
+        build_payloads[1]["storage_prefix"]
+        == "s3://tenzir-bench-data/runs/refs/main/mainsha/docker"
+    )
+    assert (
+        build_payloads[2]["storage_prefix"]
+        == "s3://tenzir-bench-data/runs/refs/tags/v5.30.0/docker"
+    )
+
+
+def test_load_contexts_resolves_selected_benchmarks_from_subdirectory(
+    tmp_path: Path,
+) -> None:
     bench_root = tmp_path / "bench"
     benchmark_dir = bench_root / "benchmarks" / "from_kafka_route53"
     benchmark_dir.mkdir(parents=True)
@@ -175,8 +352,12 @@ from file
             "Executor",
             (),
             {
-                "build_info": lambda self: type("BuildInfo", (), {"version": "v1.2.3"})(),
-                "create_context": lambda self, definition: type("Context", (), {"definition": definition})(),
+                "build_info": lambda self: type(
+                    "BuildInfo", (), {"version": "v1.2.3"}
+                )(),
+                "create_context": lambda self, definition: type(
+                    "Context", (), {"definition": definition}
+                )(),
             },
         )(),
         bench_root=bench_root,
@@ -200,14 +381,18 @@ def test_gh_api_slurps_paginated_json(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(common_module.subprocess, "run", fake_run)
 
-    payload = common_module.gh_api("repos/tenzir/tenzir/issues/5960/comments?per_page=100", paginate=True)
+    payload = common_module.gh_api(
+        "repos/tenzir/tenzir/issues/5960/comments?per_page=100", paginate=True
+    )
 
     assert payload == [{"id": 1}, {"id": 2}]
     assert "--paginate" in calls[0]
     assert "--slurp" in calls[0]
 
 
-def test_infer_event_for_ref_prefers_main_and_release_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_infer_event_for_ref_prefers_main_and_release_tags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         find_build_run_module,
         "ref_is_tag",
@@ -220,7 +405,9 @@ def test_infer_event_for_ref_prefers_main_and_release_tags(monkeypatch: pytest.M
     assert infer_event_for_ref("tenzir/tenzir", "4e5a6b7") is None
 
 
-def test_list_artifacts_paginates_across_multiple_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_list_artifacts_paginates_across_multiple_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         find_build_run_module,
         "gh_api",
@@ -235,12 +422,24 @@ def test_list_artifacts_paginates_across_multiple_pages(monkeypatch: pytest.Monk
     assert [artifact["name"] for artifact in artifacts] == ["artifact-a", "artifact-b"]
 
 
-def test_find_latest_run_with_artifact_uses_recent_successful_run(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_find_latest_run_with_artifact_uses_recent_successful_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_gh_json(args: list[str]) -> object:
         assert "--branch" in args
         return [
-            {"databaseId": 11, "status": "completed", "conclusion": "success", "headSha": "missing"},
-            {"databaseId": 12, "status": "completed", "conclusion": "success", "headSha": "wanted"},
+            {
+                "databaseId": 11,
+                "status": "completed",
+                "conclusion": "success",
+                "headSha": "missing",
+            },
+            {
+                "databaseId": 12,
+                "status": "completed",
+                "conclusion": "success",
+                "headSha": "wanted",
+            },
         ]
 
     def fake_list_artifacts(repo: str, run_id: int) -> list[dict[str, object]]:
@@ -326,7 +525,9 @@ def test_filter_missing_reports_uses_expected_identities() -> None:
     assert missing == {("from_file_route53_ocsf", "legacy")}
 
 
-def test_publish_reports_uses_hardware_key_in_s3_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_publish_reports_uses_hardware_key_in_s3_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     uploaded: list[tuple[str, str, str]] = []
 
     class FakeS3:
@@ -354,7 +555,9 @@ def test_publish_reports_uses_hardware_key_in_s3_path(monkeypatch: pytest.Monkey
         build_version="v1.0.0",
         artifact_id=None,
     )
-    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
+    monkeypatch.setattr(
+        run_benchmarks_module.boto3, "client", lambda _service: FakeS3()
+    )
 
     publish_reports(
         {"from_file_route53_ocsf/neo": report},
@@ -370,7 +573,9 @@ def test_publish_reports_uses_hardware_key_in_s3_path(monkeypatch: pytest.Monkey
     ]
 
 
-def test_download_reference_reports_filters_by_hardware_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_download_reference_reports_filters_by_hardware_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     payload = {
         "pipeline": "from_file_route53_ocsf/neo",
         "benchmark_id": "from_file_route53_ocsf",
@@ -397,8 +602,12 @@ def test_download_reference_reports_filters_by_hardware_key(monkeypatch: pytest.
             return [
                 {
                     "Contents": [
-                        {"Key": f"{Prefix}/ubuntu-latest_x86_64_unknown_4c/from_file_route53_ocsf/neo/report.json"},
-                        {"Key": f"{Prefix}/ubicloud-standard-4-arm_aarch64_unknown_4c/from_file_route53_ocsf/neo/report.json"},
+                        {
+                            "Key": f"{Prefix}/ubuntu-latest_x86_64_unknown_4c/from_file_route53_ocsf/neo/report.json"
+                        },
+                        {
+                            "Key": f"{Prefix}/ubicloud-standard-4-arm_aarch64_unknown_4c/from_file_route53_ocsf/neo/report.json"
+                        },
                     ],
                 },
             ]
@@ -416,7 +625,9 @@ def test_download_reference_reports_filters_by_hardware_key(monkeypatch: pytest.
 
     import run_benchmarks as run_benchmarks_module
 
-    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
+    monkeypatch.setattr(
+        run_benchmarks_module.boto3, "client", lambda _service: FakeS3()
+    )
 
     reports = download_reference_reports(
         destination="s3://tenzir-bench-data/runs/refs/main/abc123/static",
