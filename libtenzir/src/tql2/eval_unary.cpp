@@ -147,10 +147,12 @@ auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
           auto ot = type::from_arrow(*oa->type());
           return series{std::move(ot), std::move(oa)};
         } else {
-          diagnostic::warning("unary operator `{}` not implemented for `{}`",
-                              x.op.inner, v.type.kind())
-            .primary(x)
-            .emit(ctx_);
+          if (active_slice.as_constant() != false) {
+            diagnostic::warning("unary operator `{}` not implemented for `{}`",
+                                x.op.inner, v.type.kind())
+              .primary(x)
+              .emit(ctx_);
+          }
           return series::null(null_type{}, v.length());
         }
       });

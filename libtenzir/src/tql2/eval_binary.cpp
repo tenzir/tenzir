@@ -398,8 +398,7 @@ template <ast::binary_op Op, basic_type L, basic_type R>
 struct EvalBinOp<Op, L, R> {
   static auto
   eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
-       auto&& warn, ActiveRows const& active)
-    -> std::shared_ptr<arrow::Array> {
+       auto&& warn, ActiveRows const& active) -> std::shared_ptr<arrow::Array> {
     using kernel = BinOpKernel<Op, L, R>;
     using result = kernel::result;
     using result_type = data_to_type_t<result>;
@@ -497,8 +496,7 @@ template <>
 struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
   static auto
   eval(const ip_type::array_type& l, const subnet_type::array_type& r, auto&&,
-       ActiveRows const& active)
-    -> std::shared_ptr<arrow::BooleanArray> {
+       ActiveRows const& active) -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
@@ -800,8 +798,8 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
         offset += left.length();
         continue;
       }
-      check(builder.AppendArraySlice(*typed_left->array->data(), 0,
-                                     left.length()));
+      check(
+        builder.AppendArraySlice(*typed_left->array->data(), 0, left.length()));
       offset += left.length();
     }
     return finish(builder);
