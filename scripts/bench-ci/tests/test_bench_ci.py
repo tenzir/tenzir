@@ -17,6 +17,7 @@ if TENZIR_BENCH_SRC.exists() and str(TENZIR_BENCH_SRC) not in sys.path:
     sys.path.insert(0, str(TENZIR_BENCH_SRC))
 
 import update_pr_comment as update_pr_comment_module
+import common as common_module
 from find_build_run import infer_event_for_ref
 from parse_command import parse_command
 from resolve_baselines import choose_latest_stable_release
@@ -109,6 +110,25 @@ def test_update_pr_comment_paginates_before_posting(monkeypatch: pytest.MonkeyPa
     assert calls[1][0] == "repos/tenzir/tenzir/issues/comments/2"
     assert calls[1][1] == "PATCH"
     assert calls[1][3] is False
+
+
+def test_gh_api_slurps_paginated_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    class Completed:
+        stdout = '[[{"id":1}],[{"id":2}]]'
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Completed:
+        calls.append(cmd)
+        return Completed()
+
+    monkeypatch.setattr(common_module.subprocess, "run", fake_run)
+
+    payload = common_module.gh_api("repos/tenzir/tenzir/issues/5960/comments?per_page=100", paginate=True)
+
+    assert payload == [{"id": 1}, {"id": 2}]
+    assert "--paginate" in calls[0]
+    assert "--slurp" in calls[0]
 
 
 def test_infer_event_for_ref_prefers_main_and_release_tags() -> None:

@@ -202,6 +202,16 @@ jobs:
             resolved.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             return resolved
 
+          def prepare_storage_backed(metadata_path: Path, target: str, label: str, run_id: int, storage: str) -> Path:
+            payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+            payload["label"] = label
+            payload["run_id"] = run_id
+            payload["storage_prefix"] = storage
+            safe_label = label.replace(" ", "-").replace("/", "-")
+            resolved = run_temp / f"{safe_label}.json"
+            resolved.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            return resolved
+
           for target in request["targets"]:
             target_dir = run_temp / f"candidate-{target}"
             candidate = fetch(head_sha, target, target_dir, event="pull_request")
@@ -211,19 +221,25 @@ jobs:
             main_sha = baselines["main_sha"]
             stable_tag = baselines["latest_stable_tag"]
             main = fetch(main_sha, target, run_temp / f"main-{target}", event="push")
-            main_path = materialize(Path(main["metadata_path"]), target, f"main {target}", int(main["run_id"]))
-            main_payload = json.loads(main_path.read_text(encoding="utf-8"))
-            main_payload["storage_prefix"] = storage_prefix("main", main_sha, target)
-            main_path.write_text(json.dumps(main_payload, indent=2), encoding="utf-8")
+            main_path = prepare_storage_backed(
+              Path(main["metadata_path"]),
+              target,
+              f"main {target}",
+              int(main["run_id"]),
+              storage_prefix("main", main_sha, target),
+            )
             build_specs.append(str(main_path))
 
             if stable_tag:
               release = fetch(stable_tag, target, run_temp / f"stable-{target}", event="release")
               if release.get("available", True):
-                release_path = materialize(Path(release["metadata_path"]), target, f"latest stable {target}", int(release["run_id"]))
-                release_payload = json.loads(release_path.read_text(encoding="utf-8"))
-                release_payload["storage_prefix"] = storage_prefix("tag", stable_tag, target)
-                release_path.write_text(json.dumps(release_payload, indent=2), encoding="utf-8")
+                release_path = prepare_storage_backed(
+                  Path(release["metadata_path"]),
+                  target,
+                  f"latest stable {target}",
+                  int(release["run_id"]),
+                  storage_prefix("tag", stable_tag, target),
+                )
                 build_specs.append(str(release_path))
               else:
                 print(f"Skipping latest stable baseline for {target}: {release['reason']}")
@@ -236,13 +252,24 @@ jobs:
             if not extra.get("available", True):
               print(f"Skipping {target}@{ref}: {extra['reason']}")
               continue
-            extra_path = materialize(Path(extra["metadata_path"]), target, f"{target}@{ref}", int(extra["run_id"]))
-            extra_payload = json.loads(extra_path.read_text(encoding="utf-8"))
             if ref == "main":
-              extra_payload["storage_prefix"] = storage_prefix("main", str(extra["resolved_sha"]), target)
+              extra_path = prepare_storage_backed(
+                Path(extra["metadata_path"]),
+                target,
+                f"{target}@{ref}",
+                int(extra["run_id"]),
+                storage_prefix("main", str(extra["resolved_sha"]), target),
+              )
             elif event == "release":
-              extra_payload["storage_prefix"] = storage_prefix("tag", ref, target)
-            extra_path.write_text(json.dumps(extra_payload, indent=2), encoding="utf-8")
+              extra_path = prepare_storage_backed(
+                Path(extra["metadata_path"]),
+                target,
+                f"{target}@{ref}",
+                int(extra["run_id"]),
+                storage_prefix("tag", ref, target),
+              )
+            else:
+              extra_path = materialize(Path(extra["metadata_path"]), target, f"{target}@{ref}", int(extra["run_id"]))
             build_specs.append(str(extra_path))
 
           Path(os.environ["MANIFEST_FILE"]).write_text(

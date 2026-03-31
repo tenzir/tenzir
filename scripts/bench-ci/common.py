@@ -46,7 +46,7 @@ def gh_api(
 ) -> Any:
     cmd = ["gh", "api", endpoint, "--method", method]
     if paginate:
-        cmd.append("--paginate")
+        cmd.extend(["--paginate", "--slurp"])
     input_data = None
     if payload is not None:
         cmd.extend(["--input", "-"])
@@ -60,7 +60,15 @@ def gh_api(
     )
     if not result.stdout.strip():
         return {}
-    return json.loads(result.stdout)
+    payload = json.loads(result.stdout)
+    if not paginate or not isinstance(payload, list):
+        return payload
+    if all(isinstance(page, list) for page in payload):
+        flattened: list[Any] = []
+        for page in payload:
+            flattened.extend(page)
+        return flattened
+    return payload
 
 
 def dump_json(payload: Any, path: Path) -> None:

@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+import subprocess
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +34,9 @@ class BuildSpec:
     path: str | None = None
     image: str | None = None
     storage_prefix: str | None = None
+    version: str | None = None
+    run_id: int | None = None
+    artifact_name: str | None = None
 
 
 def load_build_spec(path: Path) -> BuildSpec:
@@ -45,12 +51,21 @@ def load_build_spec(path: Path) -> BuildSpec:
     entry_path = payload.get("path")
     image = payload.get("image")
     storage_prefix = payload.get("storage_prefix")
+    version = payload.get("version")
+    run_id = payload.get("run_id")
+    artifact_name = payload.get("artifact_name")
     if entry_path is not None and not isinstance(entry_path, str):
         raise RuntimeError(f"{path}: path must be a string")
     if image is not None and not isinstance(image, str):
         raise RuntimeError(f"{path}: image must be a string")
     if storage_prefix is not None and not isinstance(storage_prefix, str):
         raise RuntimeError(f"{path}: storage_prefix must be a string")
+    if version is not None and not isinstance(version, str):
+        raise RuntimeError(f"{path}: version must be a string")
+    if run_id is not None and not isinstance(run_id, int):
+        raise RuntimeError(f"{path}: run_id must be an integer")
+    if artifact_name is not None and not isinstance(artifact_name, str):
+        raise RuntimeError(f"{path}: artifact_name must be a string")
     return BuildSpec(
         label=label,
         target=target,
@@ -58,6 +73,9 @@ def load_build_spec(path: Path) -> BuildSpec:
         path=entry_path,
         image=image,
         storage_prefix=storage_prefix,
+        version=version,
+        run_id=run_id,
+        artifact_name=artifact_name,
     )
 
 
@@ -103,10 +121,55 @@ def resolve_build_entry(paths: BenchPaths, build: BuildSpec) -> Path:
             raise RuntimeError(f"{build.label}: docker build is missing an image ref")
         return _resolve_entry(paths, f"docker://{build.image}")
     if build.kind == "static":
-        if not build.path:
-            raise RuntimeError(f"{build.label}: static build is missing a binary path")
-        return _resolve_entry(paths, build.path)
+        if build.path:
+            return _resolve_entry(paths, build.path)
+        return _resolve_entry(paths, str(_materialize_static_artifact(paths, build)))
     raise RuntimeError(f"{build.label}: unsupported build kind {build.kind}")
+
+
+def _materialize_static_artifact(paths: BenchPaths, build: BuildSpec) -> Path:
+    if build.run_id is None or not build.artifact_name:
+        raise RuntimeError(
+            f"{build.label}: static build is missing both a binary path and artifact download metadata",
+        )
+    repo = os.getenv("GITHUB_REPOSITORY", "tenzir/tenzir")
+    safe_label = re.sub(r"[^A-Za-z0-9._-]", "-", build.label)
+    artifact_root = paths.results_state_dir / "benchmark-ci" / "_artifacts" / f"{safe_label}-{build.run_id}"
+    binary = next(iter(sorted(artifact_root.rglob("bin/tenzir"))), None)
+    if binary is not None:
+        return binary
+    download_dir = artifact_root / "download"
+    if not download_dir.exists():
+        download_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                "gh",
+                "run",
+                "download",
+                str(build.run_id),
+                "--repo",
+                repo,
+                "--name",
+                build.artifact_name,
+                "--dir",
+                str(download_dir),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    tarballs = sorted(download_dir.rglob("*.tar.gz"))
+    if not tarballs:
+        raise RuntimeError(f"{build.label}: no tarball found in downloaded artifact {build.artifact_name}")
+    extracted_dir = artifact_root / "extract"
+    if not extracted_dir.exists():
+        extracted_dir.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(tarballs[0], "r:gz") as archive:
+            archive.extractall(extracted_dir)
+    binary = next(iter(sorted(extracted_dir.rglob("bin/tenzir"))), None)
+    if binary is None:
+        raise RuntimeError(f"{build.label}: failed to locate bin/tenzir after extracting {tarballs[0]}")
+    return binary
 
 
 def load_contexts(
@@ -165,9 +228,20 @@ def expected_report_identities(
     paths: BenchPaths,
     benchmarks: Sequence[str] | None = None,
 ) -> set[tuple[str, str]]:
-    binary = resolve_build_entry(paths, build)
-    executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
-    contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
+    if build.version is not None:
+        definition_paths = [bench_root / benchmark for benchmark in benchmarks] if benchmarks else [bench_root]
+        definitions = load_definitions_from_paths(
+            definition_paths,
+            version_supplier=lambda: build.version,
+            root=bench_root.parent,
+        )
+        contexts = []
+        for definition in definitions:
+            contexts.append(type("DefinitionContext", (), {"definition": definition})())
+    else:
+        binary = resolve_build_entry(paths, build)
+        executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
+        contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
     identities: set[tuple[str, str]] = set()
     for context in contexts:
         definition = context.definition
