@@ -778,6 +778,7 @@ jobs:
       os: linux
       arch: aarch64
       attribute: tenzir-static
+      build-version: ${{ needs.configure.outputs.build-version }}
     secrets: inherit
 
   tenzir-static-x86_64-linux:
@@ -790,6 +791,7 @@ jobs:
       os: linux
       arch: x86_64
       attribute: tenzir-static
+      build-version: ${{ needs.configure.outputs.build-version }}
     secrets: inherit
 
   tenzir-static-arm64-darwin:
@@ -802,6 +804,7 @@ jobs:
       os: darwin
       arch: arm64
       attribute: tenzir-static
+      build-version: ${{ needs.configure.outputs.build-version }}
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 

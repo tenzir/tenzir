@@ -335,6 +335,7 @@ jobs:
             "${args[@]}" \
             --markdown-output "$RUNNER_TEMP/benchmark-comment.md"
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MANIFEST_FILE: ${{ runner.temp }}/compare-manifest.json
       - name: Update pull request comment
         env:
