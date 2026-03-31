@@ -287,7 +287,7 @@ def main() -> int:
     )
     fetch.add_argument("--target", required=True, choices=sorted(TARGET_METADATA_ARTIFACTS))
     fetch.add_argument("--output-dir", required=True, type=Path, help="Where to download metadata")
-    fetch.add_argument("--timeout-seconds", type=int, default=3600, help="Artifact wait timeout")
+    fetch.add_argument("--timeout-seconds", type=int, default=10800, help="Artifact wait timeout")
     fetch.add_argument("--interval-seconds", type=int, default=15, help="Artifact poll interval")
     fetch.add_argument(
         "--allow-missing-artifact",

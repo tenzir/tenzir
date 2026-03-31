@@ -40,6 +40,15 @@ jobs:
               exit 1
               ;;
           esac
+      - name: React to benchmark request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -f content='+1' > /dev/null
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
