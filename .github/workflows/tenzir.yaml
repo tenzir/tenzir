@@ -356,7 +356,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             source_tag="${{ steps.configure.outputs.head-ref-slug }}"
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
-          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+          elif [[ "$GITHUB_EVENT_NAME" == "push" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             source_tag="${{ github.sha }}"
             if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
               tags=('main' "${{ github.sha }}")
