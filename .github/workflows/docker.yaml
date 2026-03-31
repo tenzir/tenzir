@@ -15,6 +15,9 @@ on:
       images:
         description: Built image references for this architecture
         value: ${{ jobs.build.outputs.images }}
+      benchmark-image:
+        description: Benchmark image reference for this architecture
+        value: ${{ jobs.build.outputs.benchmark-image }}
 
 permissions:
   actions: write
@@ -28,6 +31,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     outputs:
       images: ${{ steps.build-images.outputs.images }}
+      benchmark-image: ${{ steps.build-images.outputs.benchmark-image }}
     steps:
       - name: Prevent pushing protected editions to public repos
         run: |

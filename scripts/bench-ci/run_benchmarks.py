@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Sequence
@@ -56,6 +57,42 @@ def load_build_spec(path: Path) -> BuildSpec:
         path=entry_path,
         image=image,
         storage_prefix=storage_prefix,
+    )
+
+
+def infer_build_spec(target: str, *, scratch_dir: Path) -> BuildSpec:
+    path = Path(target).expanduser()
+    if not path.exists():
+        return BuildSpec(label=target, target="docker", kind="docker", image=target)
+    resolved = path.resolve()
+    if resolved.is_file() and resolved.name == "tenzir":
+        return BuildSpec(label=resolved.name, target="static", kind="static", path=str(resolved))
+    if resolved.is_dir():
+        binary = next(iter(sorted(resolved.rglob("bin/tenzir"))), None)
+        if binary is not None:
+            return BuildSpec(label=resolved.name, target="static", kind="static", path=str(binary))
+        tarballs = sorted(resolved.rglob("*.tar.gz"))
+        if tarballs:
+            extracted_dir = scratch_dir / "static-extracted"
+            extracted_dir.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(tarballs[0], "r:gz") as archive:
+                archive.extractall(extracted_dir)
+            binary = next(iter(sorted(extracted_dir.rglob("bin/tenzir"))), None)
+            if binary is None:
+                raise RuntimeError(f"{resolved}: failed to locate bin/tenzir after extracting {tarballs[0]}")
+            return BuildSpec(label=resolved.name, target="static", kind="static", path=str(binary))
+    if resolved.is_file() and resolved.suffixes[-2:] == [".tar", ".gz"]:
+        extracted_dir = scratch_dir / "static-extracted"
+        extracted_dir.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(resolved, "r:gz") as archive:
+            archive.extractall(extracted_dir)
+        binary = next(iter(sorted(extracted_dir.rglob("bin/tenzir"))), None)
+        if binary is None:
+            raise RuntimeError(f"{resolved}: failed to locate bin/tenzir after extracting archive")
+        return BuildSpec(label=resolved.stem, target="static", kind="static", path=str(binary))
+    raise RuntimeError(
+        f"failed to infer benchmark target kind from {target}; expected a docker image ref, "
+        "a tenzir binary, or a static build artifact directory/archive",
     )
 
 
@@ -189,7 +226,10 @@ def render_markdown_for_builds(builds: list[tuple[str, dict[str, Report]]]) -> s
 def cmd_reference(args: argparse.Namespace) -> int:
     paths = BenchPaths.create()
     bench_root = Path(args.bench_root).resolve()
-    build = load_build_spec(Path(args.build))
+    if args.build:
+        build = load_build_spec(Path(args.build))
+    else:
+        build = infer_build_spec(args.target, scratch_dir=paths.results_state_dir / "benchmark-ci" / "_resolved-target")
     reports = run_local_build(
         build,
         bench_root=bench_root,
@@ -248,7 +288,9 @@ def main() -> int:
 
     reference = subparsers.add_parser("reference")
     reference.add_argument("--bench-root", default="bench", help="Benchmark root directory")
-    reference.add_argument("--build", required=True, help="Path to the resolved build spec JSON")
+    reference_inputs = reference.add_mutually_exclusive_group(required=True)
+    reference_inputs.add_argument("--build", help="Path to the resolved build spec JSON")
+    reference_inputs.add_argument("--target", help="Docker image ref, static artifact directory/archive, or tenzir binary")
     reference.add_argument("--benchmark", action="append", help="Benchmark id to run. Repeat to select multiple.")
     reference.add_argument("--destination", help="S3 destination for normalized reference reports")
     reference.set_defaults(func=cmd_reference)
