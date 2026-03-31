@@ -20,12 +20,14 @@ jobs:
       startsWith(github.event.comment.body, '/bench')
     runs-on: ubuntu-latest
     env:
-      XDG_CACHE_HOME: ${{ runner.temp }}/xdg-cache
-      XDG_STATE_HOME: ${{ runner.temp }}/xdg-state
       TENZIR_BENCH_RUNNER_CLASS: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Configure benchmark runtime directories
+        run: |
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/xdg-state" >> "$GITHUB_ENV"
       - name: Verify commenter permission
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
