@@ -26,6 +26,7 @@ runs:
       run: |
         echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache" >> "$GITHUB_ENV"
         echo "XDG_STATE_HOME=$RUNNER_TEMP/xdg-state" >> "$GITHUB_ENV"
+        echo "TENZIR_BENCH_RUNNER_CLASS=${TENZIR_BENCH_RUNNER_CLASS:-${RUNNER_OS}-${RUNNER_ARCH}}" >> "$GITHUB_ENV"
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
       with:

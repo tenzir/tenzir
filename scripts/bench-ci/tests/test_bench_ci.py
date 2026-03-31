@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+import json
 
 import pytest
 
@@ -19,7 +20,12 @@ import update_pr_comment as update_pr_comment_module
 from find_build_run import infer_event_for_ref
 from parse_command import parse_command
 from resolve_baselines import choose_latest_stable_release
-from run_benchmarks import filter_missing_reports, normalize_reports
+from run_benchmarks import (
+    download_reference_reports,
+    filter_missing_reports,
+    normalize_reports,
+    publish_reports,
+)
 from tenzir_bench.reports import Report
 from update_pr_comment import (
     COMMENT_MARKER,
@@ -117,6 +123,8 @@ def test_normalize_reports_uses_benchmark_and_implementation_ids() -> None:
         pipeline="from /tmp/input | write_json",
         benchmark_id="from_file_route53_ocsf",
         implementation_id="neo",
+        target="static",
+        hardware_key="ubuntu-latest_x86_64_unknown_4c",
         wall_clock=1.0,
         rss_kb=1024,
         build_version="v1.0.0",
@@ -134,6 +142,8 @@ def test_normalize_reports_rejects_missing_implementation_id() -> None:
         pipeline="pipeline-hash",
         benchmark_id="from_file_route53_ocsf",
         implementation_id=None,
+        target="static",
+        hardware_key="ubuntu-latest_x86_64_unknown_4c",
         wall_clock=1.0,
         rss_kb=1024,
         build_version="v1.0.0",
@@ -151,6 +161,8 @@ def test_filter_missing_reports_uses_expected_identities() -> None:
             pipeline="pipeline-hash",
             benchmark_id="from_file_route53_ocsf",
             implementation_id="neo",
+            target="static",
+            hardware_key="ubuntu-latest_x86_64_unknown_4c",
             wall_clock=1.0,
             rss_kb=1024,
             build_version="v1.0.0",
@@ -167,3 +179,103 @@ def test_filter_missing_reports_uses_expected_identities() -> None:
     )
 
     assert missing == {("from_file_route53_ocsf", "legacy")}
+
+
+def test_publish_reports_uses_hardware_key_in_s3_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    uploaded: list[tuple[str, str, str]] = []
+
+    class FakeS3:
+        def head_object(self, *, Bucket: str, Key: str) -> object:
+            error = ClientError({"Error": {"Code": "404"}}, "HeadObject")
+            raise error
+
+        def upload_file(self, filename: str, bucket: str, key: str) -> None:
+            uploaded.append((filename, bucket, key))
+
+    import run_benchmarks as run_benchmarks_module
+    from botocore.exceptions import ClientError
+
+    report_path = tmp_path / "report.json"
+    report_path.write_text("{}", encoding="utf-8")
+    report = Report(
+        path=report_path,
+        pipeline="pipeline-hash",
+        benchmark_id="from_file_route53_ocsf",
+        implementation_id="neo",
+        target="static",
+        hardware_key="ubuntu-latest_x86_64_unknown_4c",
+        wall_clock=1.0,
+        rss_kb=1024,
+        build_version="v1.0.0",
+        artifact_id=None,
+    )
+    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
+
+    publish_reports(
+        {"from_file_route53_ocsf/neo": report},
+        destination="s3://tenzir-bench-data/runs/refs/main/abc123/static",
+    )
+
+    assert uploaded == [
+        (
+            str(report_path),
+            "tenzir-bench-data",
+            "runs/refs/main/abc123/static/ubuntu-latest_x86_64_unknown_4c/from_file_route53_ocsf/neo/report.json",
+        ),
+    ]
+
+
+def test_download_reference_reports_filters_by_hardware_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "pipeline": "from_file_route53_ocsf/neo",
+        "benchmark_id": "from_file_route53_ocsf",
+        "implementation_id": "neo",
+        "target": "static",
+        "hardware": {"key": "ubuntu-latest_x86_64_unknown_4c"},
+        "build": {"version": "v1.0.0"},
+        "runtime": {"wall_clock": 1.0, "max_resident_set_kb": 1024},
+    }
+    other_payload = {
+        **payload,
+        "hardware": {"key": "ubicloud-standard-4-arm_aarch64_unknown_4c"},
+    }
+
+    class FakeBody:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+        def read(self) -> bytes:
+            return self.text.encode("utf-8")
+
+    class FakePaginator:
+        def paginate(self, *, Bucket: str, Prefix: str) -> list[dict[str, object]]:
+            return [
+                {
+                    "Contents": [
+                        {"Key": f"{Prefix}/ubuntu-latest_x86_64_unknown_4c/from_file_route53_ocsf/neo/report.json"},
+                        {"Key": f"{Prefix}/ubicloud-standard-4-arm_aarch64_unknown_4c/from_file_route53_ocsf/neo/report.json"},
+                    ],
+                },
+            ]
+
+    class FakeS3:
+        def get_paginator(self, _name: str) -> FakePaginator:
+            return FakePaginator()
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            if "ubuntu-latest" in Key:
+                body = json.dumps(payload)
+            else:
+                body = json.dumps(other_payload)
+            return {"Body": FakeBody(body)}
+
+    import run_benchmarks as run_benchmarks_module
+
+    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
+
+    reports = download_reference_reports(
+        destination="s3://tenzir-bench-data/runs/refs/main/abc123/static",
+        hardware_key="ubuntu-latest_x86_64_unknown_4c",
+    )
+
+    assert set(reports) == {"from_file_route53_ocsf/neo"}

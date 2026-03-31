@@ -14,6 +14,7 @@ import boto3
 from botocore.exceptions import ClientError
 from tenzir_bench.compare import _resolve_entry
 from tenzir_bench.executor import BenchmarkExecutor
+from tenzir_bench.hardware import current_hardware_key
 from tenzir_bench.paths import BenchPaths
 from tenzir_bench.pr_comment import render_grouped_markdown
 from tenzir_bench.publisher import _parse_destination
@@ -137,7 +138,7 @@ def run_local_build(
     force: bool = True,
 ) -> dict[str, Report]:
     binary = resolve_build_entry(paths, build)
-    executor = BenchmarkExecutor(paths, binary, RunnerRegistry())
+    executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
     contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
     if not contexts:
         return {}
@@ -165,7 +166,7 @@ def expected_report_identities(
     benchmarks: Sequence[str] | None = None,
 ) -> set[tuple[str, str]]:
     binary = resolve_build_entry(paths, build)
-    executor = BenchmarkExecutor(paths, binary, RunnerRegistry())
+    executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
     contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
     identities: set[tuple[str, str]] = set()
     for context in contexts:
@@ -194,7 +195,17 @@ def publish_reports(reports: dict[str, Report], *, destination: str) -> None:
     s3 = boto3.client("s3")
     normalized = normalize_reports(reports)
     for (benchmark_id, implementation_id), report in normalized.items():
-        key = str(Path(prefix) / benchmark_id / implementation_id / "report.json")
+        if not report.target:
+            raise RuntimeError(f"{report.path}: missing target in benchmark report")
+        if not report.hardware_key:
+            raise RuntimeError(f"{report.path}: missing hardware.key in benchmark report")
+        key = str(
+            Path(prefix)
+            / report.hardware_key
+            / benchmark_id
+            / implementation_id
+            / "report.json",
+        )
         try:
             s3.head_object(Bucket=bucket, Key=key)
             continue
@@ -208,6 +219,7 @@ def download_reference_reports(
     *,
     destination: str,
     benchmarks: Sequence[str] | None = None,
+    hardware_key: str,
 ) -> dict[str, Report]:
     bucket, prefix = _parse_destination(destination, default_bucket="")
     s3 = boto3.client("s3")
@@ -230,11 +242,22 @@ def download_reference_reports(
             implementation_id = payload.get("implementation_id")
             if not isinstance(implementation_id, str) or not implementation_id:
                 raise RuntimeError(f"s3://{bucket}/{key}: missing implementation_id")
+            target = payload.get("target")
+            if not isinstance(target, str) or not target:
+                raise RuntimeError(f"s3://{bucket}/{key}: missing target")
+            report_hardware = payload.get("hardware", {})
+            report_hardware_key = report_hardware.get("key") if isinstance(report_hardware, dict) else None
+            if not isinstance(report_hardware_key, str) or not report_hardware_key:
+                raise RuntimeError(f"s3://{bucket}/{key}: missing hardware.key")
+            if report_hardware_key != hardware_key:
+                continue
             report = Report(
                 path=Path(f"s3://{bucket}/{key}"),
                 pipeline=pipeline,
                 benchmark_id=benchmark_id,
                 implementation_id=implementation_id,
+                target=target,
+                hardware_key=report_hardware_key,
                 wall_clock=float(payload["runtime"]["wall_clock"]),
                 rss_kb=int(payload["runtime"]["max_resident_set_kb"]),
                 build_version=payload.get("build", {}).get("version"),
@@ -281,6 +304,7 @@ def cmd_reference(args: argparse.Namespace) -> int:
 def cmd_compare(args: argparse.Namespace) -> int:
     paths = BenchPaths.create()
     bench_root = Path(args.bench_root).resolve()
+    hardware_key = current_hardware_key()
     build_reports: list[tuple[str, dict[str, Report]]] = []
     for build_path in args.build:
         build = load_build_spec(Path(build_path))
@@ -289,6 +313,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
             reports = download_reference_reports(
                 destination=build.storage_prefix,
                 benchmarks=args.benchmark,
+                hardware_key=hardware_key,
             )
             expected = expected_report_identities(
                 build,
@@ -307,6 +332,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
                 reports = download_reference_reports(
                     destination=build.storage_prefix,
                     benchmarks=args.benchmark,
+                    hardware_key=hardware_key,
                 )
         else:
             reports = run_local_build(

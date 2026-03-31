@@ -406,6 +406,7 @@ jobs:
       BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
       BENCHMARK_S3_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
       BENCHMARK_S3_PREFIX: ${{ vars.BENCHMARK_S3_PREFIX }}
+      TENZIR_BENCH_RUNNER_CLASS: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -537,6 +538,7 @@ jobs:
       BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
       BENCHMARK_S3_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
       BENCHMARK_S3_PREFIX: ${{ vars.BENCHMARK_S3_PREFIX }}
+      TENZIR_BENCH_RUNNER_CLASS: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
