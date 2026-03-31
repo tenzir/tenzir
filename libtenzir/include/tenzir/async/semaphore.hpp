@@ -10,6 +10,7 @@
 
 #include "tenzir/async/task.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
 
 #include <folly/fibers/Semaphore.h>
 
@@ -50,8 +51,16 @@ public:
     impl_.signal();
   }
 
+  /// Tries to consume a permit without blocking.
+  auto try_consume() -> bool {
+    return impl_.try_wait();
+  }
+
   /// Acquires a permit and returns a guard that releases it.
   auto acquire() -> Task<SemaphoreGuard>;
+
+  /// Tries to acquire a permit and returns a guard that releases it.
+  auto try_acquire() -> Option<SemaphoreGuard>;
 
   /// Consumes a permit without returning a guard that restores it.
   auto consume() -> Task<void> {
@@ -109,6 +118,13 @@ private:
 inline auto Semaphore::acquire() -> Task<SemaphoreGuard> {
   co_await consume();
   co_return SemaphoreGuard{*this};
+}
+
+inline auto Semaphore::try_acquire() -> Option<SemaphoreGuard> {
+  if (not try_consume()) {
+    return None{};
+  }
+  return SemaphoreGuard{*this};
 }
 
 } // namespace tenzir

@@ -8,13 +8,11 @@
 
 #include "tenzir/async/executor.hpp"
 
-#include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/join_set.hpp"
 #include "tenzir/async/log.hpp"
 #include "tenzir/async/mail.hpp"
 #include "tenzir/async/select_set.hpp"
-#include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
@@ -34,150 +32,6 @@ namespace tenzir {
 
 // Forward declaration to avoid including registry.hpp.
 auto global_registry() -> std::shared_ptr<const registry>;
-
-enum class TryRecvError {
-  empty,
-  closed,
-};
-
-/// Data shared between senders and receivers.
-template <class T>
-struct SenderReceiverShared {
-  explicit SenderReceiverShared(size_t capacity)
-    : data{detail::narrow<uint32_t>(capacity)} {
-  }
-
-  /// The actual data, where `None` is used to signal to receivers that the
-  /// channel is closed because the last sender got destroyed.
-  folly::coro::BoundedQueue<Option<T>> data;
-  /// Number of remaining senders. Channel is closed when this drops to 0.
-  Atomic<size_t> senders{0};
-
-  bool is_closed() const {
-    return senders.load(std::memory_order_acquire) == 0;
-  }
-};
-
-/// Handle to the sending end of a channel.
-///
-/// Dropping the last sender closes the channel.
-template <class T>
-class Sender {
-public:
-  explicit Sender(Arc<SenderReceiverShared<T>> shared)
-    : shared_{std::move(shared)} {
-    shared_->senders.fetch_add(1, std::memory_order_relaxed);
-  }
-
-  ~Sender() {
-    if (shared_.not_moved_from()) {
-      auto previous = shared_->senders.fetch_sub(1, std::memory_order_release);
-      TENZIR_ASSERT(previous > 0);
-      if (previous == 1) {
-        // FIXME: If this happens while the channel is full, then we can't push
-        // anything and need a different way to signal it. We temporarily accept
-        // this, but this should be cleaned up rather sooner than later.
-        auto success = shared_->data.try_enqueue(None{});
-        if (not success) {
-          TENZIR_TODO();
-        }
-      }
-    }
-  }
-
-  // TODO: Make this copyable.
-  Sender(const Sender&) = delete;
-  Sender& operator=(const Sender&) = delete;
-  Sender(Sender&&) = default;
-  Sender& operator=(Sender&&) = default;
-
-  /// Sends a value to the channel, waiting for capacity.
-  auto send(T x) -> Task<void> {
-    co_await shared_->data.enqueue(std::move(x));
-  }
-
-  /// Sends a value if the channel is not full.
-  auto try_send(T x) -> Result<void, T> {
-    auto success = shared_->data.try_enqueue(std::move(x));
-    if (not success) {
-      // Unlike our own function, `try_enqueue` does not actually move the value
-      // out if it fails to enqueue, so we can just "move it again" here.
-      return Err{std::move(x)};
-    }
-    return {};
-  }
-
-private:
-  Arc<SenderReceiverShared<T>> shared_;
-};
-
-/// Handle to the receiving end of a channel.
-///
-/// Unlike in Rust, dropping the receiver does not close the channel. The sender
-/// might thus eventually block. The outer system needs to be designed such that
-/// a dropped receiver eventually leads to cancellation of the sender. This is
-/// not an oversight, but a conscious choice.
-template <class T>
-class Receiver {
-public:
-  explicit Receiver(Arc<SenderReceiverShared<T>> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  /// Returns `None` if channel is closed.
-  auto recv() -> Task<Option<T>> {
-    auto result = co_await shared_->data.dequeue();
-    if (not result) {
-      TENZIR_ASSERT(shared_->is_closed());
-      // Channel is closed and we just popped an element. There must be space.
-      auto success = shared_->data.try_enqueue(None{});
-      TENZIR_ASSERT(success);
-      drained_ = true;
-      co_return None{};
-    }
-    co_return std::move(*result);
-  }
-
-  /// Returns immediately, indicating whether the channel is empty or closed.
-  auto try_recv() -> Task<Result<T, TryRecvError>> {
-    auto result = shared_->data.try_dequeue();
-    if (not result) {
-      // The queue is emtpy, but maybe a different receiver took the marker that
-      // the channel is closed. We thus have to check for this.
-      if (shared_->is_closed()) {
-        return TryRecvError::closed;
-      }
-      return TryRecvError::empty;
-    }
-    if (not *result) {
-      TENZIR_ASSERT(shared_->is_closed());
-      // Make sure we put back the marker.
-      auto success = shared_->data.try_enqueue(None{});
-      // The queue is empty now, so this must succeed.
-      TENZIR_ASSERT(success);
-      drained_ = true;
-      return TryRecvError::closed;
-    }
-    return std::move(**result);
-  }
-
-private:
-  Arc<SenderReceiverShared<T>> shared_;
-  bool drained_ = false;
-};
-
-template <class T>
-struct SenderReceiver {
-  Sender<T> sender;
-  Receiver<T> receiver;
-};
-
-/// Returns a bounded channel with the given capacity.
-template <class T>
-auto channel(size_t capacity) -> SenderReceiver<T> {
-  auto shared = Arc<SenderReceiverShared<T>>{capacity};
-  return {Sender<T>{shared}, Receiver<T>{shared}};
-}
 
 /// Transforms a `Push<OperatorMsg<T>>` into a `Push<T>`.
 template <class T>
