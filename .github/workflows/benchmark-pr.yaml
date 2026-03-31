@@ -53,9 +53,11 @@ jobs:
         run: |
           python3 -m pip install ./.tools/tenzir-bench
       - name: Parse benchmark command
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           python3 scripts/bench-ci/parse_command.py \
-            --comment-body "${{ github.event.comment.body }}" > "$RUNNER_TEMP/request.json"
+            --comment-body "$COMMENT_BODY" > "$RUNNER_TEMP/request.json"
       - name: Resolve pull request metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
