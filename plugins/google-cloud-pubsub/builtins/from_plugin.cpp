@@ -24,7 +24,6 @@
 #include <atomic>
 #include <mutex>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "uri_transform.hpp"
@@ -40,7 +39,7 @@ struct from_args {
   located<std::string> subscription_id;
   located<duration> yield_timeout
     = located{defaults::import::batch_timeout, location::unknown};
-  std::optional<ast::field_path> metadata_field;
+  Option<ast::field_path> metadata_field;
   bool ordered = true;
   location operator_location;
 
@@ -52,11 +51,10 @@ struct from_args {
   }
 
   auto validate(diagnostic_handler& dh) -> failure_or<void> {
-    if (yield_timeout.inner <= duration::zero()) {
-      diagnostic::error("_yield_timeout must be larger than zero")
+    if (yield_timeout.source != location::unknown) {
+      diagnostic::warning("`_yield_timeout` is deprecated and has no effect")
         .primary(yield_timeout.source)
         .emit(dh);
-      return failure::promise();
     }
     return {};
   }
@@ -215,14 +213,18 @@ struct MessageData {
   std::unordered_map<std::string, std::string> attributes;
 };
 
-struct PendingMessage {
-  MessageData data;
-  pubsub::AckHandler handler;
-};
+// TODO: We acknowledge messages immediately upon receipt rather than deferring
+// acks until after a checkpoint commit. This means we provide at-most-once
+// delivery semantics instead of at-least-once. The proper approach would be to
+// hold AckHandlers and only ack after a successful checkpoint commit (with
+// deduplication via seen_message_ids to handle redeliveries). However, until we
+// have guarantees on checkpoint frequency, deferring acks would lead to
+// unbounded memory growth from accumulating AckHandlers and message IDs between
+// checkpoints.
 
 struct SharedState {
   std::mutex mutex;
-  std::vector<PendingMessage> pending;
+  std::vector<MessageData> pending;
   Notify notify;
   std::atomic<bool> session_done{false};
   std::string session_error;
@@ -260,7 +262,7 @@ public:
   explicit FromGoogleCloudPubsub(from_args args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto start(OpCtx& /*ctx*/) -> Task<void> override {
     auto subscription = pubsub::Subscription(args_.project_id.inner,
                                              args_.subscription_id.inner);
     // Detect whether the subscription has message ordering enabled.
@@ -275,17 +277,13 @@ public:
     }();
     ordering_enabled_ = ordering_enabled;
 
-    // TODO: Expose the max ack deadline extension as an operator option. The
-    // GCP client library automatically extends ack deadlines while the handler
-    // is alive; the default max extension is 10 minutes, which should cover
-    // typical checkpoint intervals.
     auto connection = pubsub::MakeSubscriberConnection(
       std::move(subscription),
       google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1));
     auto subscriber = pubsub::Subscriber(std::move(connection));
 
     auto shared = shared_;
-    auto has_metadata = args_.metadata_field.has_value();
+    auto has_metadata = args_.metadata_field.is_some();
     // Subscribe and attach a .then() callback to detect session end. The
     // callback runs on a GCP background thread when the session terminates
     // (e.g., due to an error), setting session_done and notifying the operator.
@@ -297,15 +295,16 @@ public:
             .data = std::string{m.data()},
             .message_id = m.message_id(),
             .publish_time = time{m.publish_time()},
+            .attributes = {},
           };
           if (has_metadata) {
             for (const auto& [key, value] : m.attributes()) {
               msg.attributes.emplace(key, value);
             }
           }
-          shared->pending.push_back(
-            PendingMessage{std::move(msg), std::move(h)});
+          shared->pending.push_back(std::move(msg));
         }
+        std::move(h).ack();
         shared->notify.notify_one();
       });
     session_.emplace(SessionHandle{
@@ -339,24 +338,10 @@ public:
   auto process_task(Any, Push<table_slice>& push,
                     OpCtx& ctx) -> Task<void> override {
     // Drain all pending messages under the lock, then process outside.
-    auto pending = std::vector<PendingMessage>{};
+    auto messages = std::vector<MessageData>{};
     {
       auto guard = std::scoped_lock{shared_->mutex};
-      pending = std::exchange(shared_->pending, {});
-    }
-
-    // Deduplicate redelivered messages that were already processed in this
-    // checkpoint interval but not yet committed.
-    auto messages = std::vector<MessageData>{};
-    for (auto& pm : pending) {
-      if (seen_message_ids_.contains(pm.data.message_id)) {
-        // Already processed; ack the redelivered copy immediately.
-        std::move(pm.handler).ack();
-        continue;
-      }
-      seen_message_ids_.insert(pm.data.message_id);
-      uncommitted_acks_.push_back({pm.data.message_id, std::move(pm.handler)});
-      messages.push_back(std::move(pm.data));
+      messages = std::exchange(shared_->pending, {});
     }
 
     if (not messages.empty()) {
@@ -405,53 +390,12 @@ public:
     return done_ ? OperatorState::done : OperatorState::unspecified;
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    // Move current uncommitted acks into a staging set that post_commit() will
-    // process. If snapshot() is called multiple times before post_commit()
-    // (e.g., due to a failed commit followed by a retry), we must not
-    // re-append — the previous snapshot already moved them.
-    // TODO: Verify what guarantees the checkpoint framework provides regarding
-    // the frequency and ordering of snapshot()/post_commit() calls. In
-    // particular, can snapshot() be called multiple times without an
-    // intervening post_commit(), and does seen_message_ids_ need an upper
-    // bound to prevent unbounded growth under slow checkpoint intervals?
-    if (not uncommitted_acks_.empty()) {
-      committed_acks_.insert(committed_acks_.end(),
-                             std::make_move_iterator(uncommitted_acks_.begin()),
-                             std::make_move_iterator(uncommitted_acks_.end()));
-      uncommitted_acks_.clear();
-    }
-    serde("seen_message_ids", seen_message_ids_);
-    serde("done", done_);
-  }
-
-  auto post_commit(OpCtx&) -> Task<void> override {
-    // Only ACK handlers that were captured at snapshot time.
-    for (auto& ack : committed_acks_) {
-      seen_message_ids_.erase(ack.message_id);
-      std::move(ack.handler).ack();
-    }
-    committed_acks_.clear();
-    co_return;
-  }
-
 private:
   from_args args_;
   bool ordering_enabled_ = false;
   bool done_ = false;
   Option<SessionHandle> session_;
   std::shared_ptr<SharedState> shared_ = std::make_shared<SharedState>();
-  // Checkpointing: handlers are ack'd only after a successful checkpoint
-  // commit, providing at-least-once delivery semantics. Double-buffered so
-  // that messages arriving between snapshot() and post_commit() are not
-  // prematurely ack'd.
-  struct PendingAck {
-    std::string message_id;
-    pubsub::AckHandler handler;
-  };
-  std::vector<PendingAck> uncommitted_acks_;
-  std::vector<PendingAck> committed_acks_;
-  std::unordered_set<std::string> seen_message_ids_;
 };
 
 } // namespace
@@ -477,6 +421,7 @@ public:
     d.named("project_id", &from_args::project_id);
     d.named("subscription_id", &from_args::subscription_id);
     d.named("metadata_field", &from_args::metadata_field);
+    d.named("_yield_timeout", &from_args::yield_timeout);
     return d.without_optimize();
   }
 
