@@ -12,6 +12,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -35,6 +36,8 @@
 namespace tenzir::plugins::lines {
 
 namespace {
+
+using std::chrono::steady_clock;
 
 struct parser_args {
   parser_args() = default;
@@ -340,7 +343,13 @@ public:
     if (args_.jobs > 0) {
       co_return co_await read_output_queue_->dequeue();
     }
-    co_return co_await Operator<chunk_ptr, table_slice>::await_task(dh);
+    TENZIR_UNUSED(dh);
+    if (flush_at_) {
+      co_await sleep_until(*flush_at_);
+    } else {
+      co_await sleep_for(defaults::import::batch_timeout);
+    }
+    co_return PeriodicTick{};
   }
 
   auto state() -> OperatorState override {
@@ -354,6 +363,13 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    if (args_.jobs == 0) {
+      TENZIR_ASSERT(result.try_as<PeriodicTick>());
+      if (flush_at_ and steady_clock::now() >= *flush_at_) {
+        co_await flush_non_parallel(push);
+      }
+      co_return;
+    }
     auto slice = std::move(result).as<table_slice>();
     if (slice.rows() == 0) {
       ++finished_workers_;
@@ -371,9 +387,13 @@ public:
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input), ctx);
-      // Flush if we've accumulated enough data.
-      if (builder_.length() > 0) {
-        co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+      // Only flush immediately when the batch is full; small batches at the
+      // end of a chunk are held until the periodic tick or finalize().
+      if (static_cast<uint64_t>(builder_.length())
+          >= defaults::import::table_slice_size) {
+        co_await flush_non_parallel(push);
+      } else {
+        flush_at_ = Option{steady_clock::now() + defaults::import::batch_timeout};
       }
     }
   }
@@ -400,10 +420,16 @@ public:
       emit_line(buffer_, ctx);
       buffer_.clear();
     }
-    if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
-    }
+    co_await flush_non_parallel(push);
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (args_.jobs == 0) {
+      co_await flush_non_parallel(push);
+    }
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -412,6 +438,13 @@ public:
   }
 
 private:
+  auto flush_non_parallel(Push<table_slice>& push) -> Task<void> {
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+    }
+    flush_at_ = None{};
+  }
+
   auto emit_line(std::string_view line, OpCtx& ctx) -> void {
     if (line.empty() and args_.skip_empty) {
       return;
@@ -631,6 +664,8 @@ private:
   /// push to a full output queue.
   using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
 
+  struct PeriodicTick {};
+
   ReadLinesArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
@@ -638,6 +673,7 @@ private:
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
   series_builder builder_;
+  Option<steady_clock::time_point> flush_at_ = None{};
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;

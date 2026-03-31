@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -19,6 +20,8 @@
 namespace tenzir::plugins::read_delimited_regex {
 
 namespace {
+
+using std::chrono::steady_clock;
 
 struct ReadDelimitedRegexArgs {
   located<data> separator;
@@ -47,6 +50,25 @@ public:
                          boost::regex_constants::optimize};
   }
 
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (flush_at_) {
+      co_await sleep_until(*flush_at_);
+    } else {
+      co_await sleep_for(defaults::import::batch_timeout);
+    }
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    TENZIR_UNUSED(ctx);
+    if (flush_at_ and steady_clock::now() >= *flush_at_) {
+      co_await flush(push);
+    }
+  }
+
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (not input or input->size() == 0) {
@@ -54,7 +76,14 @@ public:
     }
     buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
     match_and_consume(/*has_finished=*/false, ctx);
-    co_await flush(push);
+    // Only flush immediately when the batch is full; small batches at the end
+    // of a chunk are held until the periodic tick or finalize().
+    if (static_cast<uint64_t>(builder_.length())
+        >= defaults::import::table_slice_size) {
+      co_await flush(push);
+    } else {
+      flush_at_ = Option{steady_clock::now() + defaults::import::batch_timeout};
+    }
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -62,6 +91,12 @@ public:
     match_and_consume(/*has_finished=*/true, ctx);
     co_await flush(push);
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -127,7 +162,10 @@ private:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.data"));
     }
+    flush_at_ = None{};
   }
+
+  struct PeriodicTick {};
 
   ReadDelimitedRegexArgs args_;
   boost::regex expr_;
@@ -138,6 +176,7 @@ private:
   // we don't match at this position again.
   bool last_match_zero_ = false;
   series_builder builder_;
+  Option<steady_clock::time_point> flush_at_ = None{};
 };
 
 class plugin final : public virtual OperatorPlugin {

@@ -10,6 +10,8 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/task.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
@@ -946,6 +948,7 @@ public:
     }
     if (args_.batch_timeout) {
       msb_opts.settings.timeout = *args_.batch_timeout;
+      next_tick_ = msb_opts.settings.timeout;
     }
     if (args_.batch_size) {
       msb_opts.settings.desired_batch_size = *args_.batch_size;
@@ -1060,15 +1063,26 @@ public:
     co_return;
   }
 
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await sleep_for(next_tick_);
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    if (not msb_) {
+      co_return;
+    }
+    co_await flush(push);
+  }
+
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (not msb_) {
       co_return;
     }
     if (not input or input->size() == 0) {
-      for (auto& slice : msb_->yield_ready_as_table_slice()) {
-        co_await push(std::move(slice));
-      }
       co_return;
     }
     auto& dh = *dh_;
@@ -1097,9 +1111,7 @@ public:
         }
       }
       begin = current + 1;
-      for (auto& slice : msb_->yield_ready_as_table_slice()) {
-        co_await push(std::move(slice));
-      }
+      co_await flush(push);
     }
     buffer_.append(begin, end);
   }
@@ -1119,7 +1131,22 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    if (msb_) {
+      co_await flush(push);
+    }
+  }
+
 private:
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    auto ready = msb_->yield_ready_as_table_slice();
+    next_tick_ = ready.wait_for;
+    for (auto& slice : ready) {
+      co_await push(std::move(slice));
+    }
+  }
+
   auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
     ++line_counter_;
     if (line.empty()) {
@@ -1143,6 +1170,8 @@ private:
                quoting_, dh);
   }
 
+  struct PeriodicTick {};
+
   ReadXsvArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
@@ -1153,6 +1182,8 @@ private:
   detail::quoting_escaping_policy quoting_;
   std::unique_ptr<transforming_diagnostic_handler> dh_;
   Option<multi_series_builder> msb_;
+  std::chrono::steady_clock::duration next_tick_
+    = defaults::import::batch_timeout;
 };
 
 class xsv_parser final : public plugin_parser {

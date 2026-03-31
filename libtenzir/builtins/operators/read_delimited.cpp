@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -20,6 +21,8 @@
 namespace tenzir::plugins::read_delimited {
 
 namespace {
+
+using std::chrono::steady_clock;
 
 struct ReadDelimitedArgs {
   located<data> separator;
@@ -45,6 +48,22 @@ public:
     binary_ = args_.binary.unwrap_or(is<blob>(args_.separator.inner));
   }
 
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (flush_at_) {
+      co_await sleep_until(*flush_at_);
+    } else {
+      co_await sleep_for(defaults::import::batch_timeout);
+    }
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    if (flush_at_ && steady_clock::now() >= *flush_at_) {
+      co_await flush(push);
+    }
+  }
+
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (input->size() == 0) {
@@ -63,7 +82,12 @@ public:
       remaining = remaining.substr(pos + separator_.size());
     }
     buffer_ = buffer_.substr(buffer_.size() - remaining.size());
-    co_await flush(push);
+    if (static_cast<uint64_t>(builder_.length())
+        >= defaults::import::table_slice_size) {
+      co_await flush(push);
+    } else {
+      flush_at_ = Option{steady_clock::now() + defaults::import::batch_timeout};
+    }
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -74,9 +98,13 @@ public:
       emit(buffer_, ctx);
     }
     buffer_.clear();
-    // push
     co_await flush(push);
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    co_await flush(push);
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -88,6 +116,7 @@ private:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.data"));
     }
+    flush_at_ = None{};
   }
 
   auto emit(std::string_view segment, OpCtx& ctx) -> void {
@@ -109,6 +138,7 @@ private:
   bool binary_ = false;
   std::string buffer_;
   series_builder builder_;
+  Option<steady_clock::time_point> flush_at_ = None{};
 };
 
 class plugin final : public virtual OperatorPlugin {

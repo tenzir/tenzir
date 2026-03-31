@@ -7,12 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/chunk.hpp"
-#include "tenzir/compile_ctx.hpp"
 #include "tenzir/json_parser.hpp"
-#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -50,7 +49,7 @@
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/GlobalExecutor.h>
 
-#include <atomic>
+#include <chrono>
 #include <deque>
 #include <simdjson.h>
 #include <string_view>
@@ -1163,17 +1162,14 @@ public:
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await sleep_for(next_tick_);
     co_return PeriodicTick{};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
-    TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
     auto ready = parser_->builder.yield_ready_as_table_slice();
     TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
@@ -1215,7 +1211,7 @@ private:
   struct PeriodicTick {};
 
   ReadJsonArgs args_;
-  duration next_tick_;
+  std::chrono::steady_clock::duration next_tick_;
   std::unique_ptr<default_parser> parser_;
 };
 
@@ -1566,7 +1562,7 @@ private:
   using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
 
   ReadJsonArgs args_;
-  duration next_tick_;
+  std::chrono::steady_clock::duration next_tick_;
   bool draining_ = false;
   size_t finished_workers_ = 0;
   // Non-parallel mode state:
