@@ -19,7 +19,7 @@ import update_pr_comment as update_pr_comment_module
 from find_build_run import infer_event_for_ref
 from parse_command import parse_command
 from resolve_baselines import choose_latest_stable_release
-from run_benchmarks import normalize_reports
+from run_benchmarks import filter_missing_reports, normalize_reports
 from tenzir_bench.reports import Report
 from update_pr_comment import (
     COMMENT_MARKER,
@@ -142,3 +142,28 @@ def test_normalize_reports_rejects_missing_implementation_id() -> None:
 
     with pytest.raises(RuntimeError, match="missing implementation_id"):
         normalize_reports({"pipeline-hash": report})
+
+
+def test_filter_missing_reports_uses_expected_identities() -> None:
+    remote = {
+        "from_file_route53_ocsf/neo": Report(
+            path=Path("/tmp/report.json"),
+            pipeline="pipeline-hash",
+            benchmark_id="from_file_route53_ocsf",
+            implementation_id="neo",
+            wall_clock=1.0,
+            rss_kb=1024,
+            build_version="v1.0.0",
+            artifact_id=None,
+        ),
+    }
+
+    missing = filter_missing_reports(
+        expected={
+            ("from_file_route53_ocsf", "neo"),
+            ("from_file_route53_ocsf", "legacy"),
+        },
+        remote_reports=remote,
+    )
+
+    assert missing == {("from_file_route53_ocsf", "legacy")}

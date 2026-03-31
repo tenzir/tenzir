@@ -157,6 +157,31 @@ def report_identity(report: Report) -> tuple[str, str]:
     return report.benchmark_id, report.implementation_id
 
 
+def expected_report_identities(
+    build: BuildSpec,
+    *,
+    bench_root: Path,
+    paths: BenchPaths,
+    benchmarks: Sequence[str] | None = None,
+) -> set[tuple[str, str]]:
+    binary = resolve_build_entry(paths, build)
+    executor = BenchmarkExecutor(paths, binary, RunnerRegistry())
+    contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
+    identities: set[tuple[str, str]] = set()
+    for context in contexts:
+        definition = context.definition
+        benchmark_id = definition.benchmark_id
+        implementation_id = definition.implementation_id
+        if not benchmark_id:
+            raise RuntimeError(f"{definition.path}: missing benchmark_id in benchmark definition")
+        if not implementation_id:
+            raise RuntimeError(
+                f"{definition.path}: missing implementation_id in benchmark definition",
+            )
+        identities.add((benchmark_id, implementation_id))
+    return identities
+
+
 def normalize_reports(reports: dict[str, Report]) -> dict[tuple[str, str], Report]:
     normalized: dict[tuple[str, str], Report] = {}
     for report in reports.values():
@@ -220,15 +245,14 @@ def download_reference_reports(
 
 
 def filter_missing_reports(
-    local_reports: dict[str, Report],
+    expected: set[tuple[str, str]],
     remote_reports: dict[str, Report],
-) -> list[str]:
-    required = normalize_reports(local_reports)
+) -> set[tuple[str, str]]:
     available = normalize_reports(remote_reports)
-    missing: list[str] = []
-    for key, report in required.items():
+    missing: set[tuple[str, str]] = set()
+    for key in expected:
         if key not in available:
-            missing.append(report.pipeline)
+            missing.add(key)
     return missing
 
 
@@ -266,13 +290,19 @@ def cmd_compare(args: argparse.Namespace) -> int:
                 destination=build.storage_prefix,
                 benchmarks=args.benchmark,
             )
-            probe_reports = run_local_build(
+            expected = expected_report_identities(
                 build,
                 bench_root=bench_root,
                 paths=paths,
                 benchmarks=args.benchmark,
             )
-            if filter_missing_reports(local_reports=probe_reports, remote_reports=reports):
+            if filter_missing_reports(expected=expected, remote_reports=reports):
+                probe_reports = run_local_build(
+                    build,
+                    bench_root=bench_root,
+                    paths=paths,
+                    benchmarks=args.benchmark,
+                )
                 publish_reports(probe_reports, destination=build.storage_prefix)
                 reports = download_reference_reports(
                     destination=build.storage_prefix,

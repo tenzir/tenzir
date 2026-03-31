@@ -53,12 +53,33 @@ jobs:
         run: |
           python3 scripts/bench-ci/parse_command.py \
             --comment-body "${{ github.event.comment.body }}" > "$RUNNER_TEMP/request.json"
-      - name: Resolve pull request head SHA
+      - name: Resolve pull request metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr view "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --json headRefOid \
-            --jq .headRefOid > "$RUNNER_TEMP/pr-head-sha"
+          gh pr view "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --json headRefOid,isCrossRepository > "$RUNNER_TEMP/pr-metadata.json"
+      - name: Reject fork pull requests
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = json.loads(Path(os.environ["PR_METADATA_FILE"]).read_text(encoding="utf-8"))
+          if metadata.get("isCrossRepository"):
+              raise SystemExit(
+                  "::error::/bench does not execute candidate artifacts from fork pull requests",
+              )
+          Path(os.environ["HEAD_SHA_FILE"]).write_text(
+              str(metadata["headRefOid"]),
+              encoding="utf-8",
+          )
+          PY
+        env:
+          PR_METADATA_FILE: ${{ runner.temp }}/pr-metadata.json
+          HEAD_SHA_FILE: ${{ runner.temp }}/pr-head-sha
       - name: Resolve default baselines
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
