@@ -1,6 +1,71 @@
 name: Tenzir
 on:
   workflow_dispatch:
+    inputs:
+      policy-enforcement:
+        description: Run the `policy-enforcement` job.
+        type: boolean
+        default: false
+      docker-tenzir-amd64:
+        description: Run the `docker-tenzir-amd64` job.
+        type: boolean
+        default: false
+      docker-tenzir-arm64:
+        description: Run the `docker-tenzir-arm64` job.
+        type: boolean
+        default: false
+      docker-tenzir:
+        description: Run the `docker-tenzir` manifest job.
+        type: boolean
+        default: false
+      benchmark-reference-docker:
+        description: Run the `benchmark-reference-docker` job.
+        type: boolean
+        default: false
+      sync-openapi-to-docs:
+        description: Run the `sync-openapi-to-docs` job.
+        type: boolean
+        default: false
+      regression-tests:
+        description: Run the `regression-tests` job.
+        type: boolean
+        default: false
+      tenzir-static-aarch64-linux:
+        description: Run the `tenzir-static-aarch64-linux` job.
+        type: boolean
+        default: false
+      tenzir-static-x86_64-linux:
+        description: Run the `tenzir-static-x86_64-linux` job.
+        type: boolean
+        default: false
+      tenzir-static-arm64-darwin:
+        description: Run the `tenzir-static-arm64-darwin` job.
+        type: boolean
+        default: false
+      docker-slim:
+        description: Run the `docker-slim` job.
+        type: boolean
+        default: false
+      benchmark-reference-static:
+        description: Run the `benchmark-reference-static` job.
+        type: boolean
+        default: false
+      tenzir:
+        description: Run the `tenzir` job.
+        type: boolean
+        default: false
+      python:
+        description: Run the `python` job.
+        type: boolean
+        default: false
+      python-package:
+        description: Run the `python-package` job.
+        type: boolean
+        default: false
+      update-homebrew-tap:
+        description: Run the `update-homebrew-tap` job.
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -68,6 +133,18 @@ jobs:
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
+      run-policy-enforcement: ${{ steps.select-jobs.outputs.run-policy-enforcement }}
+      run-docker-tenzir-amd64: ${{ steps.select-jobs.outputs.run-docker-tenzir-amd64 }}
+      run-docker-tenzir-arm64: ${{ steps.select-jobs.outputs.run-docker-tenzir-arm64 }}
+      run-docker-tenzir-manifest: ${{ steps.select-jobs.outputs.run-docker-tenzir }}
+      run-benchmark-reference-docker: ${{ steps.select-jobs.outputs.run-benchmark-reference-docker }}
+      run-sync-openapi-to-docs: ${{ steps.select-jobs.outputs.run-sync-openapi-to-docs }}
+      run-tenzir-static-aarch64-linux: ${{ steps.select-jobs.outputs.run-tenzir-static-aarch64-linux }}
+      run-tenzir-static-x86_64-linux: ${{ steps.select-jobs.outputs.run-tenzir-static-x86_64-linux }}
+      run-tenzir-static-arm64-darwin: ${{ steps.select-jobs.outputs.run-tenzir-static-arm64-darwin }}
+      run-docker-slim: ${{ steps.select-jobs.outputs.run-docker-slim }}
+      run-benchmark-reference-static: ${{ steps.select-jobs.outputs.run-benchmark-reference-static }}
+      run-update-homebrew-tap: ${{ steps.select-jobs.outputs.run-update-homebrew-tap }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -92,6 +169,8 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
       - name: Configure
         id: configure
+        env:
+          WORKFLOW_DISPATCH_INPUTS: ${{ toJSON(inputs) }}
         run: |
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
@@ -195,8 +274,43 @@ jobs:
           fi
           # Run only what is requested for a workflow dispatch.
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "::notice Enabling workflow dispatch jobs (macOS nix package)"
-            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
+            echo "::notice Enabling workflow dispatch job groups"
+            input_enabled() {
+              local name="$1"
+              jq -e --arg name "$name" '.[$name] == true or .[$name] == "true"' \
+                <<< "$WORKFLOW_DISPATCH_INPUTS" >/dev/null
+            }
+            if input_enabled docker-tenzir-amd64 ||
+               input_enabled docker-tenzir-arm64 ||
+               input_enabled docker-tenzir ||
+               input_enabled benchmark-reference-docker ||
+               input_enabled sync-openapi-to-docs ||
+               input_enabled regression-tests ||
+               input_enabled python; then
+              echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT
+            fi
+            if input_enabled tenzir-static-aarch64-linux ||
+               input_enabled tenzir-static-x86_64-linux ||
+               input_enabled tenzir-static-arm64-darwin ||
+               input_enabled docker-slim ||
+               input_enabled benchmark-reference-static ||
+               input_enabled python ||
+               input_enabled python-package ||
+               input_enabled update-homebrew-tap; then
+              echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
+            fi
+            if input_enabled regression-tests; then
+              echo "run-regression-tests=true" >> $GITHUB_OUTPUT
+            fi
+            if input_enabled tenzir; then
+              echo "run-tenzir=true" >> $GITHUB_OUTPUT
+            fi
+            if input_enabled python; then
+              echo "run-python=true" >> $GITHUB_OUTPUT
+            fi
+            if input_enabled python-package; then
+              echo "run-python-package=true" >> $GITHUB_OUTPUT
+            fi
             exit 0
           fi
           # From here on we should be in a pull request.
@@ -282,12 +396,194 @@ jobs:
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
+      - name: Select Jobs
+        id: select-jobs
+        env:
+          WORKFLOW_DISPATCH_INPUTS: ${{ toJSON(inputs) }}
+          RUN_DOCKER_TENZIR: ${{ steps.configure.outputs.run-docker-tenzir }}
+          RUN_REGRESSION_TESTS: ${{ steps.configure.outputs.run-regression-tests }}
+          RUN_TENZIR_NIX: ${{ steps.configure.outputs.run-tenzir-nix }}
+          RUN_TENZIR: ${{ steps.configure.outputs.run-tenzir }}
+          RUN_PYTHON: ${{ steps.configure.outputs.run-python }}
+          RUN_PYTHON_PACKAGE: ${{ steps.configure.outputs.run-python-package }}
+        run: |
+          set_output() {
+            echo "$1=$2" >> "$GITHUB_OUTPUT"
+          }
+
+          input_enabled() {
+            local name="$1"
+            jq -e --arg name "$name" '.[$name] == true or .[$name] == "true"' \
+              <<< "$WORKFLOW_DISPATCH_INPUTS" >/dev/null
+          }
+
+          enable_job() {
+            local job="$1"
+            case "$job" in
+              policy-enforcement)
+                set_output run-policy-enforcement true
+                ;;
+              docker-tenzir-amd64)
+                set_output run-docker-tenzir-amd64 true
+                ;;
+              docker-tenzir-arm64)
+                set_output run-docker-tenzir-arm64 true
+                ;;
+              docker-tenzir)
+                enable_job docker-tenzir-amd64
+                enable_job docker-tenzir-arm64
+                set_output run-docker-tenzir true
+                ;;
+              benchmark-reference-docker)
+                enable_job docker-tenzir-amd64
+                set_output run-benchmark-reference-docker true
+                ;;
+              sync-openapi-to-docs)
+                enable_job docker-tenzir
+                set_output run-sync-openapi-to-docs true
+                ;;
+              regression-tests)
+                enable_job docker-tenzir
+                set_output run-regression-tests true
+                ;;
+              tenzir-static-aarch64-linux)
+                set_output run-tenzir-static-aarch64-linux true
+                ;;
+              tenzir-static-x86_64-linux)
+                set_output run-tenzir-static-x86_64-linux true
+                ;;
+              tenzir-static-arm64-darwin)
+                set_output run-tenzir-static-arm64-darwin true
+                ;;
+              docker-slim)
+                enable_job tenzir-static-aarch64-linux
+                enable_job tenzir-static-x86_64-linux
+                set_output run-docker-slim true
+                ;;
+              benchmark-reference-static)
+                enable_job tenzir-static-x86_64-linux
+                set_output run-benchmark-reference-static true
+                ;;
+              tenzir)
+                set_output run-tenzir true
+                ;;
+              python)
+                enable_job docker-tenzir
+                enable_job tenzir-static-x86_64-linux
+                set_output run-python true
+                ;;
+              python-package)
+                enable_job tenzir-static-arm64-darwin
+                enable_job tenzir-static-aarch64-linux
+                enable_job tenzir-static-x86_64-linux
+                set_output run-python-package true
+                ;;
+              update-homebrew-tap)
+                enable_job tenzir-static-arm64-darwin
+                set_output run-update-homebrew-tap true
+                ;;
+              *)
+                echo "::error::Unknown workflow dispatch job selection: $job"
+                exit 1
+                ;;
+            esac
+          }
+
+          for key in \
+            run-policy-enforcement \
+            run-docker-tenzir-amd64 \
+            run-docker-tenzir-arm64 \
+            run-docker-tenzir \
+            run-benchmark-reference-docker \
+            run-sync-openapi-to-docs \
+            run-regression-tests \
+            run-tenzir-static-aarch64-linux \
+            run-tenzir-static-x86_64-linux \
+            run-tenzir-static-arm64-darwin \
+            run-docker-slim \
+            run-benchmark-reference-static \
+            run-tenzir \
+            run-python \
+            run-python-package \
+            run-update-homebrew-tap; do
+            set_output "$key" false
+          done
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            for job in \
+              policy-enforcement \
+              docker-tenzir-amd64 \
+              docker-tenzir-arm64 \
+              docker-tenzir \
+              benchmark-reference-docker \
+              sync-openapi-to-docs \
+              regression-tests \
+              tenzir-static-aarch64-linux \
+              tenzir-static-x86_64-linux \
+              tenzir-static-arm64-darwin \
+              docker-slim \
+              benchmark-reference-static \
+              tenzir \
+              python \
+              python-package \
+              update-homebrew-tap; do
+              if input_enabled "$job"; then
+                enable_job "$job"
+              fi
+            done
+            exit 0
+          fi
+
+          set_output run-policy-enforcement true
+
+          if [[ "$RUN_DOCKER_TENZIR" == "true" ]]; then
+            set_output run-docker-tenzir-amd64 true
+            set_output run-docker-tenzir-arm64 true
+            set_output run-docker-tenzir true
+          fi
+          if [[ "$RUN_DOCKER_TENZIR" == "true" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            set_output run-sync-openapi-to-docs true
+          fi
+          if [[ "$RUN_REGRESSION_TESTS" == "true" ]]; then
+            set_output run-regression-tests true
+          fi
+
+          if [[ "$RUN_TENZIR_NIX" == "true" ]]; then
+            set_output run-tenzir-static-aarch64-linux true
+            set_output run-tenzir-static-x86_64-linux true
+            set_output run-tenzir-static-arm64-darwin true
+            set_output run-docker-slim true
+          fi
+
+          if [[ "$RUN_DOCKER_TENZIR" == "true" ]]; then
+            if [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_EVENT_NAME" == "release" && "$GITHUB_REF_NAME" != *-rc* ]]; then
+              set_output run-benchmark-reference-docker true
+            fi
+          fi
+          if [[ "$RUN_TENZIR_NIX" == "true" ]]; then
+            if [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_EVENT_NAME" == "release" && "$GITHUB_REF_NAME" != *-rc* ]]; then
+              set_output run-benchmark-reference-static true
+            fi
+          fi
+
+          if [[ "$RUN_TENZIR" == "true" ]]; then
+            set_output run-tenzir true
+          fi
+          if [[ "$RUN_PYTHON" == "true" ]]; then
+            set_output run-python true
+          fi
+          if [[ "$RUN_PYTHON_PACKAGE" == "true" ]]; then
+            set_output run-python-package true
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            set_output run-update-homebrew-tap true
+          fi
 
   policy-enforcement:
     name: Policy Enforcement
     needs:
       - configure
-    if: github.event_name != 'workflow_dispatch'
+    if: needs.configure.outputs.run-policy-enforcement == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -356,7 +652,7 @@ jobs:
     name: Docker
     needs:
       - configure
-    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    if: needs.configure.outputs.run-docker-tenzir-amd64 == 'true'
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
@@ -368,7 +664,7 @@ jobs:
     name: Docker
     needs:
       - configure
-    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    if: needs.configure.outputs.run-docker-tenzir-arm64 == 'true'
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
@@ -382,7 +678,7 @@ jobs:
       - configure
       - docker-tenzir-amd64
       - docker-tenzir-arm64
-    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    if: needs.configure.outputs.run-docker-tenzir-manifest == 'true'
     uses: ./.github/workflows/push-manifest.yaml
     with:
       source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
@@ -395,13 +691,7 @@ jobs:
     needs:
       - configure
       - docker-tenzir-amd64
-    if: |
-      needs.configure.outputs.run-docker-tenzir == 'true' &&
-      (
-        github.ref == 'refs/heads/main' ||
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'release' && !contains(github.event.release.tag_name, '-rc'))
-      )
+    if: needs.configure.outputs.run-benchmark-reference-docker == 'true'
     runs-on: ubuntu-latest
     env:
       BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
@@ -430,7 +720,7 @@ jobs:
   sync-openapi-to-docs:
     name: Sync OpenAPI to Docs
     needs: [docker-tenzir, configure]
-    if: github.ref == 'refs/heads/main' && needs.configure.outputs.run-docker-tenzir == 'true'
+    if: needs.configure.outputs.run-sync-openapi-to-docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Generate app token
@@ -480,7 +770,7 @@ jobs:
   tenzir-static-aarch64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true' && github.event_name != 'workflow_dispatch'
+    if: needs.configure.outputs.run-tenzir-static-aarch64-linux == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubicloud-standard-4-arm
@@ -492,7 +782,7 @@ jobs:
   tenzir-static-x86_64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true' && github.event_name != 'workflow_dispatch'
+    if: needs.configure.outputs.run-tenzir-static-x86_64-linux == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubuntu-latest
@@ -504,7 +794,7 @@ jobs:
   tenzir-static-arm64-darwin:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true'
+    if: needs.configure.outputs.run-tenzir-static-arm64-darwin == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: macos-15
@@ -517,6 +807,7 @@ jobs:
   docker-slim:
     name: Push tenzir-slim docker manifest
     needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
+    if: needs.configure.outputs.run-docker-slim == 'true'
     uses: ./.github/workflows/push-manifest.yaml
     with:
       source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
@@ -528,13 +819,7 @@ jobs:
     needs:
       - configure
       - tenzir-static-x86_64-linux
-    if: |
-      needs.configure.outputs.run-tenzir-nix == 'true' &&
-      (
-        github.ref == 'refs/heads/main' ||
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'release' && !contains(github.event.release.tag_name, '-rc'))
-      )
+    if: needs.configure.outputs.run-benchmark-reference-static == 'true'
     runs-on: ubuntu-latest
     env:
       BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
@@ -903,7 +1188,7 @@ jobs:
     needs:
       - configure
       - tenzir-static-arm64-darwin
-    if: github.event_name == 'release'
+    if: needs.configure.outputs.run-update-homebrew-tap == 'true'
     name: Update Homebrew Tap
     runs-on: ubuntu-latest
     steps:
@@ -922,7 +1207,7 @@ jobs:
           repositories: homebrew-tenzir
       - name: Prepare tap update
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || needs.configure.outputs.release-version }}
         run: |
           pkg_path="$(ls "${{ runner.temp }}/signed-pkg/"*.pkg)"
           sha256="$(shasum -a 256 "$pkg_path" | awk '{print $1}')"
@@ -961,7 +1246,7 @@ jobs:
 
       - name: Commit tap update
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || needs.configure.outputs.release-version }}
           TAP_DIR: ${{ env.HOMEBREW_TAP_DIR }}
         run: |
           if git -C "$TAP_DIR" diff --quiet -- Casks/tenzir.rb; then
