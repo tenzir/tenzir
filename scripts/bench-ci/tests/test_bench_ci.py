@@ -207,10 +207,17 @@ def test_gh_api_slurps_paginated_json(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "--slurp" in calls[0]
 
 
-def test_infer_event_for_ref_prefers_main_and_release_tags() -> None:
-    assert infer_event_for_ref("main") == "push"
-    assert infer_event_for_ref("v5.30.0") == "release"
-    assert infer_event_for_ref("4e5a6b7") is None
+def test_infer_event_for_ref_prefers_main_and_release_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        find_build_run_module,
+        "ref_is_tag",
+        lambda repo, ref: ref == "v5.30.0",
+    )
+
+    assert infer_event_for_ref("tenzir/tenzir", "main") == "push"
+    assert infer_event_for_ref("tenzir/tenzir", "v5.30.0") == "release"
+    assert infer_event_for_ref("tenzir/tenzir", "v5.30") is None
+    assert infer_event_for_ref("tenzir/tenzir", "4e5a6b7") is None
 
 
 def test_list_artifacts_paginates_across_multiple_pages(monkeypatch: pytest.MonkeyPatch) -> None:

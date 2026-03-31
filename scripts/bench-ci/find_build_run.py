@@ -20,10 +20,18 @@ class ArtifactUnavailableError(RuntimeError):
     """Raised when a workflow run cannot provide the requested artifact."""
 
 
-def infer_event_for_ref(ref: str) -> str | None:
+def ref_is_tag(repo: str, ref: str) -> bool:
+    try:
+        gh_api(f"repos/{repo}/git/ref/tags/{ref}")
+    except subprocess.CalledProcessError:
+        return False
+    return True
+
+
+def infer_event_for_ref(repo: str, ref: str) -> str | None:
     if ref == "main":
         return "push"
-    if ref.startswith("v"):
+    if ref.startswith("v") and ref_is_tag(repo, ref):
         return "release"
     if HEX_SHA_RE.fullmatch(ref):
         return None
@@ -40,7 +48,7 @@ def resolve_commit_sha(repo: str, ref: str) -> str:
 
 def find_run(repo: str, ref: str, *, event: str | None = None) -> dict[str, Any]:
     sha = resolve_commit_sha(repo, ref)
-    expected_event = event or infer_event_for_ref(ref)
+    expected_event = event or infer_event_for_ref(repo, ref)
     runs = gh_json(
         [
             "run",

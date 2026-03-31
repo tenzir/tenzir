@@ -807,7 +807,7 @@ jobs:
 
   docker-slim:
     name: Push tenzir-slim docker manifest
-    needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
+    needs: [configure, tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
     if: needs.configure.outputs.run-docker-slim == 'true'
     uses: ./.github/workflows/push-manifest.yaml
     with:
