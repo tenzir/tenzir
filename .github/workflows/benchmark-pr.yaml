@@ -144,10 +144,24 @@ jobs:
             if ref == "main":
               return "push"
             if ref.startswith("v"):
-              return "release"
+              result = subprocess.run(
+                ["gh", "api", f"repos/{repo}/git/ref/tags/{ref}"],
+                check=False,
+                capture_output=True,
+                text=True,
+              )
+              if result.returncode == 0:
+                return "release"
             return None
 
-          def fetch(ref: str, target: str, destination: Path, *, event: str | None = None) -> dict:
+          def fetch(
+            ref: str,
+            target: str,
+            destination: Path,
+            *,
+            event: str | None = None,
+            allow_missing: bool = False,
+          ) -> dict:
             command = [
               "python3",
               "scripts/bench-ci/find_build_run.py",
@@ -167,10 +181,15 @@ jobs:
               command.append("--allow-missing-artifact")
             result = subprocess.run(
               command,
-              check=True,
+              check=False,
               capture_output=True,
               text=True,
             )
+            if result.returncode != 0:
+              if allow_missing:
+                detail = (result.stderr or result.stdout or "").strip() or "lookup failed"
+                return {"available": False, "reason": detail}
+              result.check_returncode()
             return json.loads(result.stdout)
 
           def materialize(metadata_path: Path, target: str, label: str, run_id: int) -> Path:
@@ -254,7 +273,13 @@ jobs:
             build_specs.append(str(main_path))
 
             if stable_tag:
-              release = fetch(stable_tag, target, run_temp / f"stable-{target}", event="release")
+              release = fetch(
+                stable_tag,
+                target,
+                run_temp / f"stable-{target}",
+                event="release",
+                allow_missing=True,
+              )
               if release.get("available", True):
                 release_path = prepare_storage_backed(
                   Path(release["metadata_path"]),
@@ -271,7 +296,13 @@ jobs:
             target = selector["target"]
             ref = selector["ref"]
             event = infer_event(ref)
-            extra = fetch(ref, target, run_temp / f"extra-{target}-{ref}", event=event)
+            extra = fetch(
+              ref,
+              target,
+              run_temp / f"extra-{target}-{ref}",
+              event=event,
+              allow_missing=event == "release",
+            )
             if not extra.get("available", True):
               print(f"Skipping {target}@{ref}: {extra['reason']}")
               continue
