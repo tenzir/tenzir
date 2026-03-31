@@ -1,0 +1,9 @@
+// Same regression as end_anchored_separator.tql but with byte-by-byte chunking
+// to verify the chunk-boundary path: \z is blocked by the boundary guard in
+// every process() call and only fires in finalize(), where the UB used to occur.
+from {
+  line: "alpha"
+}
+write_lines
+split_bytes 1
+read_delimited_regex r"\z"

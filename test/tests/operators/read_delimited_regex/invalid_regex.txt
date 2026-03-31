@@ -1,0 +1,6 @@
+error: invalid regex: Unmatched [ or [^ in character class declaration.  The error occurred while parsing the regular expression: '[invalid>>>HERE>>>'.
+ --> tests/operators/read_delimited_regex/invalid_regex.tql:9:22
+  |
+9 | read_delimited_regex "[invalid"
+  |                      ^^^^^^^^^^ 
+  |

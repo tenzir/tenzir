@@ -1,0 +1,6 @@
+from {
+  line: "<a><b><c>"
+}
+write_lines
+split_bytes 1
+read_delimited_regex "(?=<)"
