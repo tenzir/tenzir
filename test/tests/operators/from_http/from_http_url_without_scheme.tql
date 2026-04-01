@@ -1,7 +1,10 @@
 ---
-fixtures: [http_server]
+fixtures:
+  - http_server:
+      tls: true
 ---
 
-from_http env("HTTP_FIXTURE_METHOD_URL_NO_SCHEME") {
+from_http env("HTTP_FIXTURE_METHOD_URL_NO_SCHEME"),
+          tls={cacert: env("HTTP_FIXTURE_TLS_CAFILE")} {
   read_json
 }

@@ -647,14 +647,13 @@ auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh)
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
-  if (args.tls) {
-    auto tls_opts = tls_options{*args.tls, {.is_server = false}};
-    auto result = tls_opts.make_folly_ssl_context(dh);
-    if (result.is_success()) {
-      config.tls_context = std::move(*result);
-    } else {
-      return None{};
-    }
+  tls_options::options opts = {.is_server = false};
+  auto tls_opts = args.tls ? tls_options{*args.tls, opts} : tls_options{opts};
+  auto result = tls_opts.make_folly_ssl_context(dh);
+  if (result.is_success()) {
+    config.tls_context = std::move(*result);
+  } else {
+    return None{};
   }
   return Option<FetchConfig>{std::move(config)};
 }
@@ -669,7 +668,8 @@ struct ResponseState {
   uint16_t status;
   std::vector<std::pair<std::string, std::string>> headers;
   Option<std::string> content_encoding;
-  blob body;
+  std::shared_ptr<arrow::util::Decompressor> decompressor;
+  blob error_body;
 
   auto is_success() const -> bool {
     return status < 400;
@@ -716,33 +716,20 @@ auto find_content_encoding(
   return None{};
 }
 
-auto try_decompress_body(std::string_view encoding,
-                         std::span<std::byte const> body,
-                         diagnostic_handler& dh) -> Option<blob> {
-  auto compression_type
-    = arrow::util::Codec::GetCompressionType(std::string{encoding});
-  if (not compression_type.ok()) {
-    diagnostic::warning("invalid compression type: {}", encoding)
-      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
-      .note("skipping decompression")
-      .emit(dh);
-    return None{};
-  }
+// Decompresses one chunk of data using an already-initialised streaming
+// decompressor. Grows the output buffer as needed. Returns None and emits a
+// warning on failure.
+auto decompress_chunk(arrow::util::Decompressor& decompressor,
+                      std::span<std::byte const> input, diagnostic_handler& dh)
+  -> Option<blob> {
   auto out = blob{};
-  out.resize(std::max<size_t>(body.size_bytes() * 2, 64));
-  auto codec = arrow::util::Codec::Create(
-    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
-  TENZIR_ASSERT(codec.ok());
-  if (not codec.ValueUnsafe()) {
-    return None{};
-  }
-  auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
+  out.resize(std::max<size_t>(input.size_bytes() * 2, 64));
   auto written = size_t{};
   auto read = size_t{};
-  while (read != body.size_bytes()) {
-    auto result = decompressor->Decompress(
-      detail::narrow<int64_t>(body.size_bytes() - read),
-      reinterpret_cast<uint8_t const*>(body.data() + read),
+  while (read < input.size_bytes()) {
+    auto result = decompressor.Decompress(
+      detail::narrow<int64_t>(input.size_bytes() - read),
+      reinterpret_cast<uint8_t const*>(input.data() + read),
       detail::narrow<int64_t>(out.size() - written),
       reinterpret_cast<uint8_t*>(out.data() + written));
     if (not result.ok()) {
@@ -759,16 +746,6 @@ auto try_decompress_body(std::string_view encoding,
         out.resize(out.size() * 2);
       } else {
         out.resize(out.max_size());
-      }
-    }
-    if (decompressor->IsFinished()) {
-      auto reset = decompressor->Reset();
-      if (not reset.ok()) {
-        diagnostic::warning("failed to reset decompressor: {}",
-                            reset.ToString())
-          .note("emitting compressed body")
-          .emit(dh);
-        return None{};
       }
     }
   }
@@ -947,9 +924,31 @@ public:
         response_ = ResponseState{
           .status = hdr.status,
           .headers = std::move(headers),
-          .content_encoding = std::move(content_encoding),
-          .body = {},
+          .content_encoding = content_encoding,
+          .decompressor = nullptr,
+          .error_body = {},
         };
+        if (content_encoding) {
+          auto compression_type = arrow::util::Codec::GetCompressionType(
+            std::string{*content_encoding});
+          if (not compression_type.ok()) {
+            diagnostic::warning("invalid compression type: {}",
+                                *content_encoding)
+              .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
+              .note("skipping decompression")
+              .emit(ctx);
+            response_->content_encoding = None{};
+          } else {
+            auto codec = arrow::util::Codec::Create(
+              compression_type.ValueUnsafe(),
+              arrow::util::kUseDefaultCompressionLevel);
+            TENZIR_ASSERT(codec.ok());
+            if (codec.ValueUnsafe()) {
+              response_->decompressor
+                = check(codec.ValueUnsafe()->MakeDecompressor());
+            }
+          }
+        }
         if (response_->is_success()) {
           if (is_link_pagination(paginate_)) {
             TENZIR_ASSERT(paginate_);
@@ -974,21 +973,32 @@ public:
         if (not response_body_needed()) {
           co_return;
         }
-        auto const* payload_data
-          = reinterpret_cast<std::byte const*>(body.data->data());
-        if (response_->content_encoding or not response_->is_success()) {
-          // store for processing in FetchDone
-          response_->body.insert(response_->body.end(), payload_data,
-                                 payload_data + body.data->size());
-        } else {
-          // push to sub-pipeline
+        auto const* p = reinterpret_cast<std::byte const*>(body.data->data());
+        auto payload = blob{p, p + body.data->size()};
+        if (response_->decompressor) {
+          auto decompressed
+            = decompress_chunk(*response_->decompressor, payload, ctx.dh());
+          if (not decompressed) {
+            co_return;
+          }
+          payload = std::move(*decompressed);
+        }
+        if (payload.empty()) {
+          co_return;
+        }
+        if (response_->is_success()) {
+          // push to parser
           if (auto sub = ctx.get_sub(pagination_.page_count)) {
             auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
-            auto push_result = co_await pipeline.push(std::move(body.data));
+            auto push_result = co_await pipeline.push(chunk::copy(
+              reinterpret_cast<char const*>(payload.data()), payload.size()));
             TENZIR_UNUSED(push_result);
           }
+        } else {
+          // append to error body
+          response_->error_body.insert(response_->error_body.end(),
+                                       payload.begin(), payload.end());
         }
-
         co_return;
       },
       // --- FetchError ---
@@ -1004,33 +1014,8 @@ public:
       },
       // --- FetchDone ---
       [&](FetchDone) -> Task<void> {
-        if (response_) {
-          if (response_->content_encoding) {
-            // decompress
-            if (auto decompressed = try_decompress_body(
-                  *response_->content_encoding,
-                  std::span<std::byte const>{response_->body.data(),
-                                             response_->body.size()},
-                  ctx.dh())) {
-              response_->body = std::move(*decompressed);
-            }
-            // push body into subpipeline
-            if (response_->is_success() and not response_->body.empty()) {
-              if (auto sub = ctx.get_sub(pagination_.page_count)) {
-                auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
-                auto body_chunk = chunk::copy(
-                  reinterpret_cast<char const*>(response_->body.data()),
-                  response_->body.size());
-                auto push_result
-                  = co_await pipeline.push(std::move(body_chunk));
-                TENZIR_UNUSED(push_result);
-              }
-              response_->body.clear();
-            }
-          }
-          if (not response_->is_success() and args_.error_field) {
-            co_await push_error_field(push, ctx);
-          }
+        if (response_ and not response_->is_success() and args_.error_field) {
+          co_await push_error_field(push, ctx);
         }
         // close sub-pipeline (next pagination request is started from finish_sub)
         if (auto sub = ctx.get_sub(pagination_.page_count)) {
@@ -1116,7 +1101,7 @@ private:
     auto record_sb = series_builder{};
     std::ignore = record_sb.record();
     auto error_sb = series_builder{};
-    error_sb.data(std::move(response_->body));
+    error_sb.data(std::move(response_->error_body));
     auto slice = assign(*args_.error_field, error_sb.finish_assert_one_array(),
                         record_sb.finish_assert_one_slice(), ctx.dh());
     if (args_.metadata_field) {

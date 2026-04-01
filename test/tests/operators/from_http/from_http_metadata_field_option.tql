@@ -5,7 +5,8 @@ timeout: 60
 
 from_http env("HTTP_FIXTURE_METHOD_URL"),
           method="put",
-          metadata_field=meta {
+          metadata_field=meta,
+          tls=false {
   read_json
 }
 meta.headers.Server = replace_regex(

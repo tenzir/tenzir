@@ -3,4 +3,4 @@ fixtures: [http_server]
 timeout: 60
 ---
 
-from_http env("HTTP_FIXTURE_STATUS_404_URL"), error_field=error { read_json }
+from_http env("HTTP_FIXTURE_STATUS_404_URL"), error_field=error, tls=false { read_json }

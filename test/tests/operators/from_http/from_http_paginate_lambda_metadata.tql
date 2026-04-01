@@ -4,7 +4,8 @@ fixtures: [http_paginate]
 
 from_http env("HTTP_FIXTURE_META_LAMBDA_URL"),
           metadata_field=meta,
-          paginate=(x => x.meta.headers["X-Next-Page"]?) {
+          paginate=(x => x.meta.headers["X-Next-Page"]?),
+          tls=false {
   read_json
 }
 drop meta
