@@ -1,0 +1,6 @@
+---
+fixtures: [http_paginate]
+error: true
+---
+
+from_http env("HTTP_FIXTURE_LAMBDA_URL"), paginate=((left, right) => left) { read_json }

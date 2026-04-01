@@ -1,0 +1,5 @@
+---
+fixtures: [http_paginate]
+---
+
+from_http env("HTTP_FIXTURE_LAMBDA_URL"), paginate=(x => x.next), tls=false { read_json }

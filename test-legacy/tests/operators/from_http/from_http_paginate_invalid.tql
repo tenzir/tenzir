@@ -1,5 +1,0 @@
----
-error: true
----
-
-from_http "https://example.org/data.json", paginate="invalid"

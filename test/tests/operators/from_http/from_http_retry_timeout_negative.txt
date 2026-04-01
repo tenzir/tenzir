@@ -1,0 +1,6 @@
+error: `timeout` must be a non-negative duration
+ --> tests/operators/from_http/from_http_retry_timeout_negative.tql:5:41
+  |
+5 | from_http "http://example.com", timeout=-1s { read_json }
+  |                                         ^^^ 
+  |

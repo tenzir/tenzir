@@ -24,11 +24,7 @@
 
 namespace tenzir {
 
-namespace {
-
-/// Scans well-known system paths for CA certificate bundles and configures
-/// proxygen's default CA paths accordingly.
-auto discover_and_set_ca_paths() -> void {
+auto ensure_http_default_ca_paths() -> void {
   static std::once_flag flag;
   std::call_once(flag, [] {
     auto ca_paths = std::vector<std::string>{};
@@ -41,12 +37,15 @@ auto discover_and_set_ca_paths() -> void {
         ca_paths.emplace_back(path);
       }
     }
-    if (ca_paths.empty()) {
-      TENZIR_WARN("no CA certificate bundle found at well-known paths");
+    // If none is found, maybe we should warn here,
+    // but only if node config tls and operator args were not set.
+    if (not ca_paths.empty()) {
+      proxygen::coro::HTTPClient::setDefaultCAPaths(std::move(ca_paths));
     }
-    proxygen::coro::HTTPClient::setDefaultCAPaths(std::move(ca_paths));
   });
 }
+
+namespace {
 
 auto to_http_response(proxygen::coro::HTTPClient::Response& resp)
   -> HttpResponse {
@@ -133,7 +132,7 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                   ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
   if (config.tls) {
-    discover_and_set_ca_paths();
+    ensure_http_default_ca_paths();
   }
   auto conn_params
     = proxygen::coro::HTTPClient::getConnParams(secure, impl_->url.getHost());
@@ -188,7 +187,6 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
                std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
-  discover_and_set_ca_paths();
   co_return co_await co_withExecutor(
     evb,
     [](folly::EventBase* evb, std::string url, std::string body,
@@ -199,6 +197,9 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
         auto parsed = proxygen::URL{url};
         if (not parsed.isValid() or not parsed.hasHost()) {
           throw std::runtime_error(fmt::format("invalid url: {}", url));
+        }
+        if (parsed.isSecure()) {
+          ensure_http_default_ca_paths();
         }
         auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
           evb, parsed.getHost(), parsed.getPort(), parsed.isSecure(), false,

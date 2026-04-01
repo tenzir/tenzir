@@ -1,0 +1,8 @@
+---
+fixtures: [http_server]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_HEADER_URL"), headers={"X-Test": "alpha"}, tls=false {
+  read_json
+}
