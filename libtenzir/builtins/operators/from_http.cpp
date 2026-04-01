@@ -12,6 +12,7 @@
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/http_pool.hpp>
@@ -76,6 +77,7 @@ struct FromHttpArgs {
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
+  Option<located<std::string>> encode;
   Option<located<std::string>> mode;
   located<ir::pipeline> parser;
 };
@@ -151,7 +153,7 @@ auto make_request_config(
   // Serialise the optional body. Records become JSON; blobs and strings are
   // sent verbatim.
   auto body = std::vector<std::byte>{};
-  auto body_is_record = false;
+  Option<std::string> content_type;
   if (args.body) {
     match(
       args.body->inner,
@@ -163,21 +165,27 @@ auto make_request_config(
         body.insert(body.end(), b.begin(), b.end());
       },
       [&](record const& r) {
-        auto buf = std::string{};
-        auto p = json_printer{{}};
-        auto it = std::back_inserter(buf);
-        p.print(it, r);
-        auto const* p2 = reinterpret_cast<std::byte const*>(buf.data());
-        body.insert(body.end(), p2, p2 + buf.size());
-        body_is_record = true;
+        if (args.encode and args.encode->inner == "form") {
+          auto buf = curl::escape(flatten(r));
+          auto const* p = reinterpret_cast<std::byte const*>(buf.data());
+          body.insert(body.end(), p, p + buf.size());
+          content_type = "application/x-www-form-urlencoded";
+        } else {
+          auto buf = std::string{};
+          auto p = json_printer{{}};
+          auto it = std::back_inserter(buf);
+          p.print(it, r);
+          auto const* p2 = reinterpret_cast<std::byte const*>(buf.data());
+          body.insert(body.end(), p2, p2 + buf.size());
+          content_type = "application/json";
+        }
       },
       [](auto const&) {
         // Other data types are rejected at describe() time.
       });
   }
-  // Optionally inject Content-Type for record bodies.
-  if (body_is_record and not has_header(headers, "content-type")) {
-    headers.emplace_back("Content-Type", "application/json");
+  if (content_type and not has_header(headers, "content-type")) {
+    headers.emplace_back("Content-Type", content_type.unwrap());
   }
   if (not has_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
@@ -1160,6 +1168,7 @@ public:
     auto max_retry_count_arg
       = d.named("max_retry_count", &FromHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
+    auto encode_arg = d.named("encode", &FromHttpArgs::encode);
     auto mode_arg = d.named("mode", &FromHttpArgs::mode);
     auto parser_arg = d.pipeline(&FromHttpArgs::parser);
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -1171,6 +1180,19 @@ public:
           .hint("use `accept_http` to listen for incoming HTTP requests")
           .primary(mode->source)
           .emit(ctx);
+      }
+      // Validate encode: requires a body and must be "json" or "form".
+      if (auto encode = ctx.get(encode_arg)) {
+        if (not ctx.get(body_arg)) {
+          diagnostic::error("`encode` requires a `body`")
+            .primary(encode->source)
+            .emit(ctx);
+        } else if (encode->inner != "json" and encode->inner != "form") {
+          diagnostic::error("unsupported encoding: `{}`", encode->inner)
+            .hint(R"(`encode` must be `"json"` or `"form"`)")
+            .primary(encode->source)
+            .emit(ctx);
+        }
       }
       // Validate body type when explicitly provided.
       if (auto body = ctx.get(body_arg)) {

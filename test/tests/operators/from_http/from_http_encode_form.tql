@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        header_name: Content-Type
+        header_value: application/x-www-form-urlencoded
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_BODY_URL"),
+          method="post",
+          body={a: "hello", b: "world"},
+          encode="form" {
+  read_json
+}
