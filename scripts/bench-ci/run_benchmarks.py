@@ -16,9 +16,11 @@ from pathlib import Path
 from tenzir_bench.compare import (
     CompareBuild,
     _resolve_entry,
+    expected_report_identities,
     prepare_compare_reports_for_build,
 )
 from tenzir_bench.executor import BenchmarkExecutor
+from tenzir_bench.hardware import current_hardware_key
 from tenzir_bench.paths import BenchPaths
 from tenzir_bench.pr_comment import BuildDisplay, render_grouped_markdown
 from tenzir_bench.publisher import Publisher
@@ -397,40 +399,36 @@ def cmd_compare(args: argparse.Namespace) -> int:
     compare_root.mkdir(parents=True, exist_ok=True)
     for build_path in args.build:
         build = load_build_spec(Path(build_path))
-        compare_build = _to_compare_build(paths, build, materialize_static=False)
-        try:
-            reports = prepare_compare_reports_for_build(
-                paths,
-                compare_build,
-                benchmark_dirs,
-                compare_root=compare_root,
-                registry=RunnerRegistry(),
-                validate=False,
-                dry_run=False,
-                verbose=False,
+        if (
+            build.kind == "static"
+            and build.storage_prefix is not None
+            and build.path is None
+            and build.run_id is not None
+            and build.artifact_name is not None
+        ):
+            preflight_build = _to_compare_build(paths, build, materialize_static=False)
+            expected = expected_report_identities(paths, preflight_build, benchmark_dirs)
+            remote_reports = download_reference_reports(
+                destination=build.storage_prefix,
+                benchmarks=args.benchmark,
+                hardware_key=current_hardware_key(),
             )
-        except RuntimeError as exc:
-            requires_static_backfill = (
-                build.kind == "static"
-                and build.storage_prefix is not None
-                and build.path is None
-                and build.run_id is not None
-                and build.artifact_name is not None
-                and "no local build path is available to backfill" in str(exc)
-            )
-            if not requires_static_backfill:
-                raise
-            compare_build = _to_compare_build(paths, build, materialize_static=True)
-            reports = prepare_compare_reports_for_build(
-                paths,
-                compare_build,
-                benchmark_dirs,
-                compare_root=compare_root,
-                registry=RunnerRegistry(),
-                validate=False,
-                dry_run=False,
-                verbose=False,
-            )
+            if filter_missing_reports(expected=expected, remote_reports=remote_reports):
+                compare_build = _to_compare_build(paths, build, materialize_static=True)
+            else:
+                compare_build = preflight_build
+        else:
+            compare_build = _to_compare_build(paths, build, materialize_static=False)
+        reports = prepare_compare_reports_for_build(
+            paths,
+            compare_build,
+            benchmark_dirs,
+            compare_root=compare_root,
+            registry=RunnerRegistry(),
+            validate=False,
+            dry_run=False,
+            verbose=False,
+        )
         build_reports.append((build, reports))
 
     markdown = render_markdown_for_builds(build_reports)

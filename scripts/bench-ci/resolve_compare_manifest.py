@@ -11,6 +11,7 @@ from typing import Any
 
 from common import TARGET_PACKAGE_ARTIFACTS, dump_json, gh_api, load_json
 from find_build_run import (
+    fetch_latest_target_metadata,
     fetch_target_metadata,
     infer_event_for_ref,
 )
@@ -189,16 +190,30 @@ def resolve_compare_manifest(
             target,
             destination=run_temp / f"merge-base-main-{target}",
             event="push",
+            allow_missing=True,
         )
+        main_ref = merge_base
+        if not main.get("available", True):
+            print(
+                f"Falling back to latest main baseline for {target}: {main['reason']}"
+            )
+            main = fetch_latest_target_metadata(
+                repo,
+                "main",
+                target,
+                output_dir=run_temp / f"main-{target}",
+                event="push",
+            )
+            main_ref = str(main["resolved_sha"])
         main_path = prepare_storage_backed_build(
             Path(main["metadata_path"]),
             f"main {target}",
             run_id=int(main["run_id"]),
-            storage=storage_prefix(bucket, prefix, "main", merge_base, target),
+            storage=storage_prefix(bucket, prefix, "main", main_ref, target),
             run_temp=run_temp,
             role="main",
             target=target,
-            ref=merge_base,
+            ref=main_ref,
             implicit=True,
         )
         build_specs.append(str(main_path))

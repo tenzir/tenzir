@@ -347,6 +347,101 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     assert build_payloads[3]["request_index"] == 1
 
 
+def test_resolve_compare_manifest_falls_back_when_merge_base_metadata_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def write_metadata(name: str, *, target: str) -> Path:
+        metadata = tmp_path / f"{name}.json"
+        metadata.write_text(
+            json.dumps(
+                {
+                    "target": target,
+                    "kind": target,
+                    "image": f"ghcr.io/tenzir/{name}:latest"
+                    if target == "docker"
+                    else None,
+                    "version": "5.30.0",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return metadata
+
+    def fake_fetch_target_metadata(
+        repo: str,
+        ref: str,
+        target: str,
+        *,
+        output_dir: Path,
+        timeout_seconds: int,
+        interval_seconds: int,
+        event: str | None = None,
+        allow_missing_artifact: bool = False,
+    ) -> dict[str, object]:
+        if ref == "mergebase123":
+            if allow_missing_artifact:
+                return {
+                    "available": False,
+                    "reason": "missing merge-base artifact",
+                    "resolved_sha": ref,
+                    "run_id": 99,
+                }
+            raise RuntimeError("missing merge-base artifact")
+        return {
+            "available": True,
+            "metadata_path": str(write_metadata(f"{target}-{ref}", target=target)),
+            "run_id": 11,
+            "resolved_sha": "deadbeef",
+        }
+
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "fetch_target_metadata",
+        fake_fetch_target_metadata,
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "fetch_latest_target_metadata",
+        lambda repo, branch, target, *, output_dir, event: {
+            "available": True,
+            "metadata_path": str(write_metadata(f"{target}-main", target=target)),
+            "run_id": 12,
+            "resolved_sha": "fallbackmainsha",
+        },
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "materialize_build",
+        lambda metadata_path, target, label, *, run_id, repo, run_temp: metadata_path,
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "merge_base_sha",
+        lambda repo, base, head: "mergebase123",
+    )
+
+    manifest = resolve_compare_manifest(
+        repo="tenzir/tenzir",
+        request={"benchmarks": ["from_kafka_route53"], "targets": ["docker"], "refs": []},
+        baselines={"latest_stable_tag": None},
+        head_sha="cafebabe",
+        run_temp=tmp_path,
+        bucket="tenzir-bench-data",
+        prefix="runs",
+    )
+
+    build_payloads = [
+        json.loads(Path(path).read_text(encoding="utf-8"))
+        for path in manifest["builds"]
+    ]
+    assert build_payloads[1]["ref"] == "fallbackmainsha"
+    assert (
+        build_payloads[1]["storage_prefix"]
+        == "s3://tenzir-bench-data/runs/refs/main/fallbackmainsha/docker"
+    )
+
+
 def test_load_contexts_resolves_selected_benchmarks_from_subdirectory(
     tmp_path: Path,
 ) -> None:
@@ -652,3 +747,79 @@ def test_download_reference_reports_filters_by_hardware_key(
     )
 
     assert set(reports) == {"from_file_route53_ocsf/neo"}
+
+
+def test_cmd_compare_materializes_static_only_when_reference_backfill_is_needed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bench_root = tmp_path / "bench"
+    (bench_root / "benchmarks").mkdir(parents=True)
+    build_path = tmp_path / "build.json"
+    build_path.write_text(
+        json.dumps(
+            {
+                "label": "main static",
+                "target": "static",
+                "kind": "static",
+                "storage_prefix": "s3://tenzir-bench-data/runs/refs/main/abc123/static",
+                "version": "5.30.0",
+                "run_id": 11,
+                "artifact_name": "tenzir-static-x86_64-linux",
+                "role": "main",
+                "ref": "abc123",
+                "implicit": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = Report(
+        path=tmp_path / "report.json",
+        pipeline="pipeline",
+        benchmark_id="from_file_route53_ocsf",
+        implementation_id="neo",
+        target="static",
+        hardware_key="ubuntu-latest_x86_64_unknown_4c",
+        wall_clock=1.0,
+        rss_kb=1024,
+        build_version="5.30.0",
+        artifact_id=None,
+    )
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "expected_report_identities",
+        lambda paths, build, benchmark_dirs: {("from_file_route53_ocsf", "neo")},
+    )
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "download_reference_reports",
+        lambda **kwargs: {"from_file_route53_ocsf/neo": report},
+    )
+    materialize_calls: list[bool] = []
+
+    def fake_to_compare_build(paths: object, build: object, *, materialize_static: bool) -> object:
+        materialize_calls.append(materialize_static)
+        return type("Build", (), {"label": "main static"})()
+
+    monkeypatch.setattr(run_benchmarks_module, "_to_compare_build", fake_to_compare_build)
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "prepare_compare_reports_for_build",
+        lambda *args, **kwargs: {"pipeline": report},
+    )
+    monkeypatch.setattr(run_benchmarks_module, "render_markdown_for_builds", lambda builds: "")
+    monkeypatch.setattr(run_benchmarks_module, "current_hardware_key", lambda: "ubuntu-latest_x86_64_unknown_4c")
+
+    args = type(
+        "Args",
+        (),
+        {
+            "bench_root": str(bench_root),
+            "build": [str(build_path)],
+            "benchmark": None,
+            "markdown_output": str(tmp_path / "comment.md"),
+        },
+    )()
+
+    assert run_benchmarks_module.cmd_compare(args) == 0
+    assert materialize_calls == [False]
