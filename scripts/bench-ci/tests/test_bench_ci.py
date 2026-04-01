@@ -196,7 +196,9 @@ def test_update_pr_comment_paginates_before_posting(
 
     monkeypatch.setattr(update_pr_comment_module, "gh_api", fake_gh_api)
 
-    update_pr_comment_module.update_pr_comment("tenzir/tenzir", 5960, "new benchmark results")
+    update_pr_comment_module.update_pr_comment(
+        "tenzir/tenzir", 5960, "new benchmark results"
+    )
 
     assert calls[0] == (
         "user",
@@ -226,7 +228,9 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
                 {
                     "target": target,
                     "kind": target,
-                    "image": f"ghcr.io/tenzir/{name}:latest" if target == "docker" else None,
+                    "image": f"ghcr.io/tenzir/{name}:latest"
+                    if target == "docker"
+                    else None,
                     "version": "5.30.0",
                 },
             ),
@@ -254,21 +258,6 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
             "resolved_sha": "deadbeef",
         }
 
-    def fake_fetch_latest_target_metadata(
-        repo: str,
-        branch: str,
-        target: str,
-        *,
-        output_dir: Path,
-        event: str,
-    ) -> dict[str, object]:
-        return {
-            "available": True,
-            "metadata_path": str(write_metadata(f"{target}-main", target=target)),
-            "run_id": 12,
-            "resolved_sha": "mainsha",
-        }
-
     def fake_materialize_build(
         metadata_path: Path,
         target: str,
@@ -292,16 +281,18 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     )
     monkeypatch.setattr(
         resolve_compare_manifest_module,
-        "fetch_latest_target_metadata",
-        fake_fetch_latest_target_metadata,
-    )
-    monkeypatch.setattr(
-        resolve_compare_manifest_module, "materialize_build", fake_materialize_build
+        "materialize_build",
+        fake_materialize_build,
     )
     monkeypatch.setattr(
         resolve_compare_manifest_module,
         "infer_event_for_ref",
         lambda repo, ref: "release" if ref.startswith("v") else None,
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "merge_base_sha",
+        lambda repo, base, head: "mergebase123",
     )
 
     manifest = resolve_compare_manifest(
@@ -324,7 +315,8 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     assert manifest["benchmarks"] == ["from_kafka_route53"]
     assert len(manifest["builds"]) == 4
     build_payloads = [
-        json.loads(Path(path).read_text(encoding="utf-8")) for path in manifest["builds"]
+        json.loads(Path(path).read_text(encoding="utf-8"))
+        for path in manifest["builds"]
     ]
     labels = [payload["label"] for payload in build_payloads]
     assert labels == [
@@ -333,14 +325,26 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
         "latest stable docker",
         "docker@feature-x",
     ]
+    assert build_payloads[0]["role"] == "candidate"
+    assert build_payloads[0]["target"] == "docker"
+    assert build_payloads[0]["implicit"] is True
+    assert build_payloads[0]["ref"] == "cafebabe"
+    assert build_payloads[1]["role"] == "main"
+    assert build_payloads[1]["ref"] == "mergebase123"
+    assert build_payloads[1]["implicit"] is True
     assert (
         build_payloads[1]["storage_prefix"]
-        == "s3://tenzir-bench-data/runs/refs/main/mainsha/docker"
+        == "s3://tenzir-bench-data/runs/refs/main/mergebase123/docker"
     )
     assert (
         build_payloads[2]["storage_prefix"]
         == "s3://tenzir-bench-data/runs/refs/tags/v5.30.0/docker"
     )
+    assert build_payloads[2]["role"] == "release"
+    assert build_payloads[2]["implicit"] is True
+    assert build_payloads[3]["role"] == "extra"
+    assert build_payloads[3]["implicit"] is False
+    assert build_payloads[3]["request_index"] == 1
 
 
 def test_load_contexts_resolves_selected_benchmarks_from_subdirectory(
@@ -376,7 +380,9 @@ from file
             "Executor",
             (),
             {
-                "build_info": lambda self: type("BuildInfo", (), {"version": "v1.2.3"})(),
+                "build_info": lambda self: type(
+                    "BuildInfo", (), {"version": "v1.2.3"}
+                )(),
                 "create_context": lambda self, definition: type(
                     "Context", (), {"definition": definition}
                 )(),
@@ -416,7 +422,13 @@ def test_gh_api_surfaces_stderr_on_failure(monkeypatch: pytest.MonkeyPatch) -> N
     def fake_run(*args: object, **kwargs: object) -> object:
         raise subprocess.CalledProcessError(
             1,
-            ["gh", "api", "repos/tenzir/tenzir/issues/5940/comments", "--method", "POST"],
+            [
+                "gh",
+                "api",
+                "repos/tenzir/tenzir/issues/5940/comments",
+                "--method",
+                "POST",
+            ],
             stderr="gh: Validation Failed (HTTP 422)",
         )
 
@@ -568,18 +580,9 @@ def test_filter_missing_reports_uses_expected_identities() -> None:
 def test_publish_reports_uses_hardware_key_in_s3_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    uploaded: list[tuple[str, str, str]] = []
-
-    class FakeS3:
-        def head_object(self, *, Bucket: str, Key: str) -> object:
-            error = ClientError({"Error": {"Code": "404"}}, "HeadObject")
-            raise error
-
-        def upload_file(self, filename: str, bucket: str, key: str) -> None:
-            uploaded.append((filename, bucket, key))
-
     import run_benchmarks as run_benchmarks_module
-    from botocore.exceptions import ClientError
+
+    captured: list[tuple[dict[str, Report], str]] = []
 
     report_path = tmp_path / "report.json"
     report_path.write_text("{}", encoding="utf-8")
@@ -595,18 +598,24 @@ def test_publish_reports_uses_hardware_key_in_s3_path(
         build_version="v1.0.0",
         artifact_id=None,
     )
-    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
+
+    class FakePublisher:
+        def publish_reports(
+            self, reports: dict[str, Report], destination: str, *, force: bool = False
+        ) -> None:
+            captured.append((reports, destination))
+
+    monkeypatch.setattr(run_benchmarks_module, "Publisher", lambda: FakePublisher())
 
     publish_reports(
         {"from_file_route53_ocsf/neo": report},
         destination="s3://tenzir-bench-data/runs/refs/main/abc123/static",
     )
 
-    assert uploaded == [
+    assert captured == [
         (
-            str(report_path),
-            "tenzir-bench-data",
-            "runs/refs/main/abc123/static/ubuntu-latest_x86_64_unknown_4c/from_file_route53_ocsf/neo/report.json",
+            {"from_file_route53_ocsf/neo": report},
+            "s3://tenzir-bench-data/runs/refs/main/abc123/static",
         ),
     ]
 
@@ -614,56 +623,28 @@ def test_publish_reports_uses_hardware_key_in_s3_path(
 def test_download_reference_reports_filters_by_hardware_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    payload = {
-        "pipeline": "from_file_route53_ocsf/neo",
-        "benchmark_id": "from_file_route53_ocsf",
-        "implementation_id": "neo",
-        "target": "static",
-        "hardware": {"key": "ubuntu-latest_x86_64_unknown_4c"},
-        "build": {"version": "v1.0.0"},
-        "runtime": {"wall_clock": 1.0, "max_resident_set_kb": 1024},
-    }
-    other_payload = {
-        **payload,
-        "hardware": {"key": "ubicloud-standard-4-arm_aarch64_unknown_4c"},
-    }
-
-    class FakeBody:
-        def __init__(self, text: str) -> None:
-            self.text = text
-
-        def read(self) -> bytes:
-            return self.text.encode("utf-8")
-
-    class FakePaginator:
-        def paginate(self, *, Bucket: str, Prefix: str) -> list[dict[str, object]]:
-            return [
-                {
-                    "Contents": [
-                        {
-                            "Key": f"{Prefix}/ubuntu-latest_x86_64_unknown_4c/from_file_route53_ocsf/neo/report.json"
-                        },
-                        {
-                            "Key": f"{Prefix}/ubicloud-standard-4-arm_aarch64_unknown_4c/from_file_route53_ocsf/neo/report.json"
-                        },
-                    ],
-                },
-            ]
-
-    class FakeS3:
-        def get_paginator(self, _name: str) -> FakePaginator:
-            return FakePaginator()
-
-        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
-            if "ubuntu-latest" in Key:
-                body = json.dumps(payload)
-            else:
-                body = json.dumps(other_payload)
-            return {"Body": FakeBody(body)}
-
     import run_benchmarks as run_benchmarks_module
 
-    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
+    report = Report(
+        path=Path("/tmp/report.json"),
+        pipeline="from_file_route53_ocsf/neo",
+        benchmark_id="from_file_route53_ocsf",
+        implementation_id="neo",
+        target="static",
+        hardware_key="ubuntu-latest_x86_64_unknown_4c",
+        wall_clock=1.0,
+        rss_kb=1024,
+        build_version="v1.0.0",
+        artifact_id=None,
+    )
+
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "load_reference_reports",
+        lambda destination, **kwargs: {
+            ("from_file_route53_ocsf", "neo"): report,
+        },
+    )
 
     reports = download_reference_reports(
         destination="s3://tenzir-bench-data/runs/refs/main/abc123/static",
