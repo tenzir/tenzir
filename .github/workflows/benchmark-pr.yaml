@@ -17,7 +17,10 @@ jobs:
   benchmark:
     if: |
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/bench')
+      (
+        contains(github.event.comment.body, '@tenzir-bot bench') ||
+        contains(github.event.comment.body, '@tenzir-bot benchmark')
+      )
     runs-on: ubuntu-latest
     env:
       TENZIR_BENCH_RUNNER_CLASS: ubuntu-latest
@@ -40,9 +43,19 @@ jobs:
               exit 1
               ;;
           esac
-      - name: React to benchmark request
+      - name: Parse benchmark command
+        id: parse
+        continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          python3 scripts/bench-ci/parse_command.py \
+            --comment-body "$COMMENT_BODY" > "$RUNNER_TEMP/request.json" \
+            2> "$RUNNER_TEMP/parse-error.txt"
+      - name: React to accepted benchmark request
+        if: steps.parse.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
         run: |
           if ! gh api \
             repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
@@ -52,6 +65,24 @@ jobs:
           then
             echo "::warning::Failed to add +1 reaction to the benchmark request comment"
           fi
+      - name: React to invalid benchmark request
+        if: steps.parse.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+        run: |
+          if ! gh api \
+            repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -f content='-1' > /dev/null
+          then
+            echo "::warning::Failed to add -1 reaction to the invalid benchmark request comment"
+          fi
+      - name: Reject invalid benchmark request
+        if: steps.parse.outcome == 'failure'
+        run: |
+          cat "$RUNNER_TEMP/parse-error.txt" >&2
+          exit 1
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
@@ -64,12 +95,6 @@ jobs:
       - name: Install benchmark runner
         run: |
           python3 -m pip install ./.tools/tenzir-bench
-      - name: Parse benchmark command
-        env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
-        run: |
-          python3 scripts/bench-ci/parse_command.py \
-            --comment-body "$COMMENT_BODY" > "$RUNNER_TEMP/request.json"
       - name: Resolve pull request metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -167,8 +192,8 @@ jobs:
           MANIFEST_FILE: ${{ runner.temp }}/compare-manifest.json
       - name: Update pull request comment
         env:
-          BENCHMARK_COMMENT_AUTHOR_LOGIN: github-actions[bot]
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BENCHMARK_COMMENT_AUTHOR_LOGIN: tenzir-bot
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
         run: |
           python3 scripts/bench-ci/update_pr_comment.py \
             --repo "${{ github.repository }}" \
