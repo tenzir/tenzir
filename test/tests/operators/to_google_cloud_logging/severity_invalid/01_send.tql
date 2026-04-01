@@ -1,0 +1,12 @@
+// Send 1000 events with an invalid severity string. The operator should
+// emit a warning but NOT skip the event (severity defaults to DEFAULT).
+from {msg: "test event", sev: "bogus"},
+     {msg: "another", sev: "totally_invalid"}
+repeat 500
+enumerate id
+to_google_cloud_logging log_id="sev-invalid-log",
+                        project="test-project",
+                        payload=f"invalid-sev-{id}",
+                        severity=sev,
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

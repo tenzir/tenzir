@@ -1,0 +1,6 @@
+error: at most one of `project`, `organization`, `billing_account`, and `folder` can be set
+ --> tests/operators/to_google_cloud_logging/multiple_parents.tql:6:48
+  |
+6 | to_google_cloud_logging log_id="test", project="p", organization="o"
+  |                                                ^^^ 
+  |

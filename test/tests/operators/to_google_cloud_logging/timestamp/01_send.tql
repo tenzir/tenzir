@@ -1,0 +1,11 @@
+// Send ~2000 events with explicit timestamps across different schemas.
+from {message: "event A", ts: 2025-01-15T10:30:00},
+     {code: 200, ts: 2025-06-20T14:00:00}
+repeat 1000
+enumerate id
+to_google_cloud_logging log_id="ts-log",
+                        project="test-project",
+                        payload=f"ts-event-{id}",
+                        timestamp=ts,
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

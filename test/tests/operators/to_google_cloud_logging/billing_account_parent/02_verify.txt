@@ -1,0 +1,4 @@
+{
+  log_name: "billingAccounts/ABC-123-DEF/logs/billing-log",
+  total_entries: 1000,
+}

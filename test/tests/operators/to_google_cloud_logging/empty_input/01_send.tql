@@ -1,0 +1,7 @@
+// Send an empty pipeline — no events should reach the mock server.
+from {}
+where false
+to_google_cloud_logging log_id="empty-log",
+                        project="test-project",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

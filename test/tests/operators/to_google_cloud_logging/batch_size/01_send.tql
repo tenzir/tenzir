@@ -1,0 +1,15 @@
+// Send 10000 events with max_batch_size=100 to stress-test batching and
+// parallel slot management. Expect ~100 WriteLogEntries requests.
+from {type: "access", status: 200, method: "GET"},
+     {type: "error", code: "E_TIMEOUT", retries: 3},
+     {type: "metric", name: "rps", value: 1500.0},
+     {type: "audit", user: "bob", action: "delete"},
+     {type: "trace", span_id: "abc123", duration_ms: 45}
+repeat 2000
+enumerate id
+to_google_cloud_logging log_id="batch-log",
+                        project="test-project",
+                        payload=f"batch-event-{id}",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        max_batch_size=100,
+                        batch_timeout=1s

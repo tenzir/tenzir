@@ -1,0 +1,6 @@
+suite: to_google_cloud_logging
+requires:
+  operators:
+    - to_google_cloud_logging
+skip:
+  on: capability-unavailable

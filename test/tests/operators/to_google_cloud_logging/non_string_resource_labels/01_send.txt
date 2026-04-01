@@ -1,0 +1,7 @@
+warning: labels must be record of `{string: string}`
+  --> tests/operators/to_google_cloud_logging/non_string_resource_labels/01_send.tql:10:41
+   |
+10 |                         resource_labels={zone: "us-east1-b", count: 42},
+   |                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+   |
+   = note: skipping label `count`

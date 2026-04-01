@@ -1,0 +1,14 @@
+// Send ~5000 diverse events without explicit payload — the operator
+// serializes the entire record as a protobuf Struct (json_payload).
+from {name: "alice", score: 95.5, active: true},
+     {host: "10.0.0.1", port: 8080, protocol: "tcp"},
+     {metric: "latency_ms", value: 42, tags: ["web", "prod"]},
+     {event: "deploy", version: "v1.2.3", rollback: false},
+     {sensor_id: 7, reading: 23.1, unit: "celsius"}
+repeat 1000
+enumerate id
+name = f"user-{id}" if name != null else null
+to_google_cloud_logging log_id="json-log",
+                        project="test-project",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

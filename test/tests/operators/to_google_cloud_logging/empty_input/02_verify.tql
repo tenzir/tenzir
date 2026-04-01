@@ -1,0 +1,3 @@
+// Capture file should be empty (no WriteLogEntries requests).
+from_file env("GCL_CAPTURE_FILE") { read_json }
+summarize count=count(this)

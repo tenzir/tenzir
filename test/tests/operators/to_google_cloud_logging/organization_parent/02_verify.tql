@@ -1,0 +1,5 @@
+// Verify log_name starts with organizations/123456789/logs/.
+from_file env("GCL_CAPTURE_FILE") { read_json }
+entries = entries.length()
+summarize log_name=log_name,
+          total_entries=sum(entries)

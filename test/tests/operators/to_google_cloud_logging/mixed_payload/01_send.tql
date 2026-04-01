@@ -1,0 +1,11 @@
+// Send 2000 events: half with valid text payload, half with null payload.
+// Only the valid-payload events should be sent.
+from {message: "valid log line", extra: "data"},
+     {no_message: true, value: 42}
+repeat 1000
+enumerate id
+to_google_cloud_logging log_id="mixed-log",
+                        project="test-project",
+                        payload=message?,
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s
