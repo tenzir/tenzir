@@ -50,7 +50,35 @@ def test_parse_command_uses_defaults_and_target_specific_refs() -> None:
         (bench_root / "defaults.txt").write_text("from_kafka_*\n", encoding="utf-8")
 
         parsed = parse_command(
-            "/bench refs=docker@main,static@abc1234",
+            "@tenzir-bot bench refs=docker@main,static@abc1234",
+            root=bench_root,
+        )
+
+    assert parsed["benchmarks"] == ["from_kafka_route53"]
+    assert parsed["targets"] == ["docker", "static"]
+    assert parsed["refs"] == [
+        {"target": "docker", "ref": "main"},
+        {"target": "static", "ref": "abc1234"},
+    ]
+
+
+def test_parse_command_accepts_multiline_arguments() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bench_root = Path(tmpdir) / "bench"
+        benchmark_dir = bench_root / "benchmarks" / "from_kafka_route53"
+        benchmark_dir.mkdir(parents=True)
+        (benchmark_dir / "bench.yaml").write_text("name: example\n", encoding="utf-8")
+        (bench_root / "defaults.txt").write_text("from_kafka_*\n", encoding="utf-8")
+
+        parsed = parse_command(
+            "\n".join(
+                [
+                    "Looks good.",
+                    "@tenzir-bot benchmark benchmarks=from_kafka_route53",
+                    "targets=docker,static",
+                    "refs=docker@main,static@abc1234",
+                ]
+            ),
             root=bench_root,
         )
 

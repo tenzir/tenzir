@@ -590,12 +590,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+      - name: Detect contrib/tenzir-plugins changes
+        id: changes
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        with:
+          filters: |
+            plugins:
+              - 'contrib/tenzir-plugins'
       - name: Configure ssh-agent
+        if: |
+          (
+            github.event_name != 'pull_request' &&
+            github.event_name != 'merge_group'
+          ) ||
+          steps.changes.outputs.plugins == 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Require contrib/tenzir-plugins to be downstream of current `main`
+        if: |
+          (
+            github.event_name != 'pull_request' &&
+            github.event_name != 'merge_group'
+          ) ||
+          steps.changes.outputs.plugins == 'true'
         run: |
           git submodule update --init contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin main
@@ -609,35 +629,17 @@ jobs:
             $(git -C contrib/tenzir-plugins rev-parse origin/main)
       - name: Generate a token
         id: generate_token
+        if: github.event_name == 'pull_request' && steps.changes.outputs.plugins == 'true'
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
           private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
       - name: Require an open non-draft PR for a submodule bump
+        if: github.event_name == 'pull_request' && steps.changes.outputs.plugins == 'true'
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          # Skip check for automated submodule bumps
-          commit_author=$(git log -1 --format='%an')
-          commit_subject=$(git log -1 --format='%s')
-          if [[ "$commit_author" == "tenzir-bot" && "$commit_subject" == "Bump submodule from"* ]]; then
-            echo "Skipping policy check for automated bump"
-            exit 0
-          fi
-
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" && "$GITHUB_EVENT_NAME" != "merge_group" ]]; then
-            echo "Skipping submodule bump PR check for event $GITHUB_EVENT_NAME"
-            exit 0
-          fi
-
-          git fetch --no-recurse-submodules origin main
-          merge_base=$(git merge-base origin/main HEAD)
-          if git diff --quiet "$merge_base" HEAD -- contrib/tenzir-plugins; then
-            echo "Skipping policy check because contrib/tenzir-plugins was not changed"
-            exit 0
-          fi
-
           # Read the gitlink recorded in the superproject instead of relying on
           # the submodule being initialized as a nested Git checkout.
           plugins_sha=$(git rev-parse HEAD:contrib/tenzir-plugins)

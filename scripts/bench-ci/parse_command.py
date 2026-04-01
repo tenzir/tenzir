@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Parse `/bench` pull request comments into machine-readable JSON."""
+"""Parse `@tenzir-bot bench` pull request comments into machine-readable JSON."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 from fnmatch import fnmatch
 from pathlib import Path
 
 from common import bench_root
+
+COMMAND_RE = re.compile(r"^@tenzir-bot\s+(bench|benchmark)(?:\s+(.*))?$")
 
 
 def available_benchmarks(root: Path) -> list[str]:
@@ -37,11 +40,31 @@ def load_defaults(root: Path) -> list[str]:
 
 
 def parse_command(comment_body: str, *, root: Path | None = None) -> dict[str, object]:
-    body = comment_body.strip()
-    if not body.startswith("/bench"):
-        raise ValueError("comment does not start with /bench")
+    lines = comment_body.splitlines()
+    command_index: int | None = None
+    command_tail = ""
+    for index, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = COMMAND_RE.fullmatch(line)
+        if match is None:
+            continue
+        command_index = index
+        command_tail = (match.group(2) or "").strip()
+        break
+    if command_index is None:
+        raise ValueError(
+            "comment must contain a line starting with '@tenzir-bot bench' or '@tenzir-bot benchmark'",
+        )
     root = (root or bench_root()).resolve()
-    tail = body[len("/bench") :].strip()
+    tail_lines = [command_tail] if command_tail else []
+    for raw_line in lines[command_index + 1 :]:
+        line = raw_line.strip()
+        if not line:
+            continue
+        tail_lines.append(line)
+    tail = " ".join(tail_lines).strip()
     args: dict[str, str] = {}
     if tail:
         for token in shlex.split(tail):
@@ -88,9 +111,7 @@ def resolve_benchmarks(value: str | None, *, root: Path) -> list[str]:
     return selected
 
 
-def resolve_targets(
-    value: str | None, *, refs: list[dict[str, str]] | None = None
-) -> list[str]:
+def resolve_targets(value: str | None, *, refs: list[dict[str, str]] | None = None) -> list[str]:
     targets = (
         [item.strip() for item in value.split(",") if item.strip()]
         if value is not None
@@ -142,7 +163,10 @@ def main() -> int:
         help="Path to the benchmark root",
     )
     args = parser.parse_args()
-    payload = parse_command(args.comment_body, root=args.bench_root)
+    try:
+        payload = parse_command(args.comment_body, root=args.bench_root)
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}") from exc
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
