@@ -125,21 +125,24 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 1
-      - uses: actions/setup-python@v5
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: changes
+        with:
+          filters: |
+            ocsf:
+              - 'scripts/ocsf-schemas.py'
+              - 'schema/types/ocsf/**'
+              - 'libtenzir/include/tenzir/ocsf_*.inc'
+      - if: steps.changes.outputs.ocsf == 'true'
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
-      - name: Check
+      - if: steps.changes.outputs.ocsf == 'true'
+        uses: astral-sh/setup-uv@v5
+      - if: steps.changes.outputs.ocsf == 'true'
+        name: Check
         run: |
           set -eo pipefail
-          base=$(git merge-base origin/main HEAD)
-          if ! git diff --submodule=diff --name-only --no-color --diff-filter=ACDMR "$base" -- \
-            scripts/ocsf-schemas.py \
-            schema/types/ocsf \
-            'libtenzir/include/tenzir/ocsf_*.inc' | grep -q .; then
-            echo "OCSF generator inputs and outputs unchanged, skipping"
-            exit 0
-          fi
           uv run --script scripts/ocsf-schemas.py
           git add --intent-to-add --all
           git diff --submodule=diff --exit-code || {
