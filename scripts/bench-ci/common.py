@@ -28,12 +28,21 @@ def bench_root() -> Path:
 
 
 def gh_json(args: list[str]) -> Any:
-    result = subprocess.run(
-        ["gh", *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    cmd = ["gh", *args]
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if detail:
+            raise RuntimeError(
+                f"gh {' '.join(cmd)} failed with exit code {exc.returncode}: {detail}"
+            ) from exc
+        raise RuntimeError(f"gh {' '.join(cmd)} failed with exit code {exc.returncode}") from exc
     return json.loads(result.stdout)
 
 
@@ -51,13 +60,23 @@ def gh_api(
     if payload is not None:
         cmd.extend(["--input", "-"])
         input_data = json.dumps(payload)
-    result = subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        input=input_data,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            input=input_data,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if detail:
+            raise RuntimeError(
+                f"gh api {endpoint} ({method}) failed with exit code {exc.returncode}: {detail}"
+            ) from exc
+        raise RuntimeError(
+            f"gh api {endpoint} ({method}) failed with exit code {exc.returncode}"
+        ) from exc
     if not result.stdout.strip():
         return {}
     payload = json.loads(result.stdout)
