@@ -10,7 +10,7 @@
 
   inputs = {
     isReleaseBuild.url = "github:boolean-option/false";
-    nixpkgs.url = "github:tobim/nixpkgs/feb094c7b636764a305a6486998805dcb6db7b79";
+    nixpkgs.url = "github:tobim/nixpkgs/c138dec5080350510dbe6da937ec4a90bb2cda57";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
@@ -153,24 +153,23 @@
         # Legacy aliases for backwards compatibility.
         devShell = import ./shell.nix { inherit pkgs package; };
         formatter = pkgs.nixfmt;
-        hydraJobs =
-          {
-            packages = self.packages.${system};
+        hydraJobs = {
+          packages = self.packages.${system};
+        }
+        // (
+          let
+            tenzir-vm-tests = nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix {
+              # FIXME: the pkgs channel has an issue made the testing creashed
+              makeTest = import (nixpkgs.outPath + "/nixos/tests/make-test-python.nix");
+              inherit self pkgs;
+            };
+          in
+          pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+            inherit (tenzir-vm-tests)
+              tenzir-vm-systemd
+              ;
           }
-          // (
-            let
-              tenzir-vm-tests = nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix {
-                # FIXME: the pkgs channel has an issue made the testing creashed
-                makeTest = import (nixpkgs.outPath + "/nixos/tests/make-test-python.nix");
-                inherit self pkgs;
-              };
-            in
-            pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-              inherit (tenzir-vm-tests)
-                tenzir-vm-systemd
-                ;
-            }
-          );
+        );
       }
     );
 }

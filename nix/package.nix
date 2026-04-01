@@ -14,10 +14,10 @@ rec {
       ])
       (
         lib.fileset.unions [
-        # DNS lookup does not work in the nix sandbox.
-        ../test-legacy/tests/operators/dns_lookup
-        # to_sentinelone_data_lake is not supported in the nix build.
-        ../test-legacy/tests/operators/to_sentinelone_data_lake
+          # DNS lookup does not work in the nix sandbox.
+          ../test-legacy/tests/operators/dns_lookup
+          # to_sentinelone_data_lake is not supported in the nix build.
+          ../test-legacy/tests/operators/to_sentinelone_data_lake
         ]
       );
   tenzir-tree = lib.fileset.unions [
@@ -89,8 +89,9 @@ rec {
     linkPkgs:
     let
       baseStdenv = if forceClang then linkPkgs.clangStdenv else linkPkgs.stdenv;
-      canUseMold = linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
-      linkAdapter  = if canUseMold then linkPkgs.stdenvAdapters.useMoldLinker else lib.trivial.id;
+      # Temporarily disabled until https://nixpk.gs/pr-tracker.html?pr=498046 hits master.
+      canUseMold = false; # linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
+      linkAdapter = if canUseMold then linkPkgs.stdenvAdapters.useMoldLinker else lib.trivial.id;
       tenzirStdenv = linkAdapter baseStdenv;
       tenzir-de = linkPkgs.callPackage ./tenzir {
         inherit

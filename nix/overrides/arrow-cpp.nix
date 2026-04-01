@@ -8,18 +8,7 @@
   sqlite,
   tzdata,
 }:
-let
-  version = "23.0.0";
-in
 arrow-cpp.overrideAttrs (orig: {
-  inherit version;
-
-  src = fetchFromGitHub {
-    owner = "apache";
-    repo = "arrow";
-    rev = "apache-arrow-${version}";
-    hash = "sha256-BluUlbtGJwvlrpN/c/KziOfFh5dvzZyuCy4JZkkFea4=";
-  };
   patches = [
     ./arrow-cpp-nixos-zoneinfo.patch
     ./arrow-cpp-eager-struct-fields.patch
@@ -45,18 +34,23 @@ arrow-cpp.overrideAttrs (orig: {
     orig.buildInputs
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       sqlite
-    ] ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic ) [
+    ]
+    ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) [
       iconv
     ];
 
   # We replace the proConfigure phase of the upstream package with one that supports zoneinfo
   # lookups in arrow's default paths again, because we don't want to ship zoneinfo with the
   # packages built from the static binary.
-  preConfigure = if stdenv.hostPlatform.isStatic then ''
-    patchShebangs build-support/
-    substituteInPlace "src/arrow/vendored/datetime/tz.cpp" \
-      --replace-fail "NIX_STORE_ZONEINFO" "${tzdata}/share/zoneinfo"
-  '' else orig.preConfigure;
+  preConfigure =
+    if stdenv.hostPlatform.isStatic then
+      ''
+        patchShebangs build-support/
+        substituteInPlace "src/arrow/vendored/datetime/tz.cpp" \
+          --replace-fail "NIX_STORE_ZONEINFO" "${tzdata}/share/zoneinfo"
+      ''
+    else
+      orig.preConfigure;
 
   cmakeFlags =
     orig.cmakeFlags
@@ -72,33 +66,14 @@ arrow-cpp.overrideAttrs (orig: {
     ];
 
   doCheck = false;
-  doInstallCheck = false;
 
-  env =
-    ((orig.env or { })
+  env = (
+    (orig.env or { })
     // {
-      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
-    });
-
-  installCheckPhase =
-    let
-      disabledTests = [
-        # flaky
-        "arrow-flight-test"
-        # requires networking
-        "arrow-azurefs-test"
-        "arrow-gcsfs-test"
-        "arrow-flight-integration-test"
-        # File already exists in database: orc_proto.proto
-        "arrow-orc-adapter-test"
-        "parquet-encryption-key-management-test"
-      ];
-    in
-    ''
-      runHook preInstallCheck
-
-      ctest -L unittest --exclude-regex '^(${lib.concatStringsSep "|" disabledTests})$'
-
-      runHook postInstallCheck
-    '';
+      NIX_LDFLAGS = lib.optionalString (
+        stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
+      ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+      GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
+    }
+  );
 })

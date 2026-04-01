@@ -13,15 +13,10 @@ jemalloc.overrideAttrs (orig: {
       "--disable-libdl"
       "--enable-prof"
       "--enable-stats"
-    ] ++ lib.optionals stdenv.hostPlatform.isStatic [
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isStatic [
       "--without-export"
     ];
-
-  env =
-    (orig.env or { })
-    // {
-      EXTRA_CFLAGS = " -fno-omit-frame-pointer";
-    };
 
   doCheck = orig.doCheck && (!stdenv.hostPlatform.isDarwin);
 })

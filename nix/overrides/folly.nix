@@ -3,6 +3,7 @@
   lib,
   stdenv,
   fetchFromGitHub,
+  fetchpatch2,
   glog,
   xz,
 }:
@@ -25,12 +26,20 @@ folly.overrideAttrs (orig: {
   patches = (
     (builtins.filter (
       x:
-      # relaced below
-      ((builtins.match ".*-folly-fix-glog-0\.7\.patch$" "${x}") == null)
+      # replaced below
+      ((builtins.match ".*-memset-memcpy-aarch64\.patch" "${x}") == null)
       # no longer applicable
+      && ((builtins.match ".*-folly-fix-glog-0\.7\.patch$" "${x}") == null)
       && ((builtins.match ".*-char_traits\.patch" "${x}") == null)
       && ((builtins.match ".*-fix-__type_pack_element\.patch" "${x}") == null)
     ) orig.patches)
+    ++ [
+      (fetchpatch2 {
+        name = "folly-fix-aarch64-duplicate-symbol-errors.patch";
+        url = "https://github.com/facebook/folly/commit/f51f51246756aaaa6242cf2c5efc6cd0d5f5ec75.patch";
+        hash = "sha256-+S/q457jGIWYA4bUagw9A9NV9msFGou+AFfNceEgi1I=";
+      })
+    ]
     ++ lib.optional stdenv.hostPlatform.isMusl ./folly-musl-compat.patch
     ++ lib.optional stdenv.hostPlatform.isStatic ./folly-static-compat.patch
   );
