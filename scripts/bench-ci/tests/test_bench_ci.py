@@ -394,7 +394,7 @@ def test_gh_api_surfaces_stderr_on_failure(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(common_module.subprocess, "run", fake_run)
 
-    with pytest.raises(RuntimeError, match="Validation Failed"):
+    with pytest.raises(common_module.GhCommandError, match="Validation Failed"):
         common_module.gh_api(
             "repos/tenzir/tenzir/issues/5940/comments",
             method="POST",

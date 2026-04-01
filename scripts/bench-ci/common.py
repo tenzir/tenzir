@@ -19,6 +19,17 @@ TARGET_PACKAGE_ARTIFACTS = {
 }
 
 
+class GhCommandError(subprocess.CalledProcessError):
+    """CalledProcessError with stderr/stdout folded into the string form."""
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        detail = (self.stderr or self.stdout or "").strip()
+        if not detail:
+            return base
+        return f"{base}: {detail}"
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -37,12 +48,12 @@ def gh_json(args: list[str]) -> Any:
             text=True,
         )
     except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or exc.stdout or "").strip()
-        if detail:
-            raise RuntimeError(
-                f"gh {' '.join(cmd)} failed with exit code {exc.returncode}: {detail}"
-            ) from exc
-        raise RuntimeError(f"gh {' '.join(cmd)} failed with exit code {exc.returncode}") from exc
+        raise GhCommandError(
+            exc.returncode,
+            exc.cmd,
+            output=exc.output,
+            stderr=exc.stderr,
+        ) from exc
     return json.loads(result.stdout)
 
 
@@ -69,13 +80,11 @@ def gh_api(
             input=input_data,
         )
     except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or exc.stdout or "").strip()
-        if detail:
-            raise RuntimeError(
-                f"gh api {endpoint} ({method}) failed with exit code {exc.returncode}: {detail}"
-            ) from exc
-        raise RuntimeError(
-            f"gh api {endpoint} ({method}) failed with exit code {exc.returncode}"
+        raise GhCommandError(
+            exc.returncode,
+            exc.cmd,
+            output=exc.output,
+            stderr=exc.stderr,
         ) from exc
     if not result.stdout.strip():
         return {}
