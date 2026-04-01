@@ -76,6 +76,7 @@ struct FromHttpArgs {
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
+  Option<located<std::string>> mode;
   located<ir::pipeline> parser;
 };
 
@@ -1158,10 +1159,18 @@ public:
     auto max_retry_count_arg
       = d.named("max_retry_count", &FromHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
+    auto mode_arg = d.named("mode", &FromHttpArgs::mode);
     auto parser_arg = d.pipeline(&FromHttpArgs::parser);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Validate TLS options.
       tls_validator(ctx);
+      // `mode` is not supported; direct users to `accept_http`.
+      if (auto mode = ctx.get(mode_arg)) {
+        diagnostic::error("`mode` is not supported by `from_http` anymore")
+          .hint("use `accept_http` to listen for incoming HTTP requests")
+          .primary(mode->source)
+          .emit(ctx);
+      }
       // Validate body type when explicitly provided.
       if (auto body = ctx.get(body_arg)) {
         auto is_valid = match(
