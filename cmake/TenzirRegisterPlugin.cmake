@@ -140,6 +140,13 @@ function (TenzirConfigurePchReuse target)
     add_library(${PCH_DONOR_TARGET} OBJECT
                 "${PCH_BINARY_DIR}/${PCH_DONOR_TARGET}.cpp")
     set_target_properties(${PCH_DONOR_TARGET} PROPERTIES LINKER_LANGUAGE CXX)
+    # Propagate POSITION_INDEPENDENT_CODE from the consumer target so the
+    # PCH is compiled with matching PIE/PIC flags (required by clang 22+).
+    get_target_property(pic ${target} POSITION_INDEPENDENT_CODE)
+    if (pic)
+      set_target_properties(${PCH_DONOR_TARGET}
+                            PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    endif ()
     target_compile_features(${PCH_DONOR_TARGET} PRIVATE cxx_std_23)
     TenzirTargetEnableTooling(${PCH_DONOR_TARGET})
     if (PCH_SOURCE_TARGET)
