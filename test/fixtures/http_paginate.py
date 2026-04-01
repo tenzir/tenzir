@@ -12,6 +12,8 @@ Exports:
   HTTP_FIXTURE_RETRY_FLAKY_URL       — drops first 2 connections, then returns JSON
   HTTP_FIXTURE_LAMBDA_URL            — page chain where body carries `next` URL
   HTTP_FIXTURE_LARGE_ERROR_URL       — HTTP 500 with large streaming response body
+  HTTP_FIXTURE_META_LAMBDA_URL        — next URL carried in X-Next-Page header (tests
+                                        that pagination lambdas can read metadata_field)
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ _RETRY_FLAKY_PAGE = "/paginate/retry/flaky"
 _LAMBDA_PAGE_1 = "/paginate/lambda/1"
 _LAMBDA_PAGE_2 = "/paginate/lambda/2"
 _LARGE_ERROR_PAGE = "/paginate/error/large"
+_META_LAMBDA_PAGE_1 = "/paginate/meta-lambda/1"
+_META_LAMBDA_PAGE_2 = "/paginate/meta-lambda/2"
 # Port 9 is IANA Discard Protocol — always refuses connections on most systems.
 _UNREACHABLE_NEXT = "http://127.0.0.1:9/paginate/unreachable/next"
 
@@ -159,6 +163,20 @@ class _Handler(BaseHTTPRequestHandler):
         if path == _LAMBDA_PAGE_2:
             self._reply(b'{"page":2,"next":null}\n')
             return
+        # Meta-lambda pagination: next URL carried in X-Next-Page response header.
+        # Used to verify that pagination lambdas can read metadata_field fields.
+        if path == _META_LAMBDA_PAGE_1:
+            body = b'{"page":1}\n'
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("X-Next-Page", _META_LAMBDA_PAGE_2)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == _META_LAMBDA_PAGE_2:
+            self._reply(b'{"page":2}\n')
+            return
         # Large error body for queue-draining regression tests.
         if path == _LARGE_ERROR_PAGE:
             chunk = b"x" * 1024
@@ -198,6 +216,7 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_RETRY_FLAKY_URL": f"{base}{_RETRY_FLAKY_PAGE}",
             "HTTP_FIXTURE_LAMBDA_URL": f"{base}{_LAMBDA_PAGE_1}",
             "HTTP_FIXTURE_LARGE_ERROR_URL": f"{base}{_LARGE_ERROR_PAGE}",
+            "HTTP_FIXTURE_META_LAMBDA_URL": f"{base}{_META_LAMBDA_PAGE_1}",
         }
     finally:
         server.shutdown()

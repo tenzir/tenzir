@@ -1036,14 +1036,14 @@ public:
   // Intercept parsed events to attach metadata before pushing downstream.
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
+    if (args_.metadata_field) {
+      slice = attach_metadata(slice, ctx.dh());
+    }
     if (not pagination_.next_url) {
       if (auto next = next_url_from_lambda(paginate_, slice,
                                            pagination_.current_url, ctx.dh())) {
         pagination_.next_url = std::move(*next);
       }
-    }
-    if (args_.metadata_field) {
-      slice = attach_metadata(slice, ctx.dh());
     }
     co_await push(std::move(slice));
   }
