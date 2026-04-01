@@ -37,10 +37,11 @@ auto ensure_http_default_ca_paths() -> void {
         ca_paths.emplace_back(path);
       }
     }
-    if (ca_paths.empty()) {
-      TENZIR_WARN("no CA certificate bundle found at well-known paths");
+    // If none is found, maybe we should warn here,
+    // but only if node config tls and operator args were not set.
+    if (not ca_paths.empty()) {
+      proxygen::coro::HTTPClient::setDefaultCAPaths(std::move(ca_paths));
     }
-    proxygen::coro::HTTPClient::setDefaultCAPaths(std::move(ca_paths));
   });
 }
 

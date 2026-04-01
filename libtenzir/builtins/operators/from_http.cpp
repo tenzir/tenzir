@@ -203,17 +203,15 @@ auto make_paginated_request_config(
   };
 }
 
-auto normalize_http_url(std::string& url, bool tls_enabled) -> void {
+auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void {
   if (not url.starts_with("http://") and not url.starts_with("https://")) {
     url.insert(0, tls_enabled ? "https://" : "http://");
-  } else if (tls_enabled and url.starts_with("http://")) {
-    url.insert(4, "s");
   }
 }
 
 auto tls_enabled_from_args(FromHttpArgs const& args) -> bool {
   if (not args.tls) {
-    return false;
+    return true;
   }
   // Mirror tls_options semantics for explicit `tls=...` arguments:
   // - `tls=true` enables TLS
@@ -222,7 +220,7 @@ auto tls_enabled_from_args(FromHttpArgs const& args) -> bool {
   // Keep the default false for absent `tls` args when normalizing schemeless
   // URLs.
   auto tls_opts
-    = tls_options{*args.tls, {.tls_default = false, .is_server = false}};
+    = tls_options{*args.tls, {.tls_default = true, .is_server = false}};
   return tls_opts.get_tls(nullptr).inner;
 }
 
@@ -263,7 +261,7 @@ auto resolve_http_secrets(
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return false;
   }
-  normalize_http_url(resolved_url, tls_enabled_from_args(args));
+  add_default_url_scheme(resolved_url, tls_enabled_from_args(args));
   co_return true;
 }
 
@@ -617,7 +615,7 @@ struct FetchConfig {
   std::chrono::milliseconds connection_timeout = default_connection_timeout;
   uint32_t max_retry_count = 0;
   std::chrono::milliseconds retry_delay = default_retry_delay;
-  std::shared_ptr<folly::SSLContext> tls_context = {};
+  std::shared_ptr<folly::SSLContext> tls_context;
 };
 
 auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh)
@@ -654,7 +652,7 @@ auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh)
 }
 
 struct PaginationState {
-  int64_t page_count;
+  int64_t page_count = 0;
   std::string current_url;
   Option<std::string> next_url;
 };
@@ -896,27 +894,30 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
+    // prepare pagination
     auto paginate = validate_paginate(args_.paginate, ctx.dh());
     if (not paginate) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     paginate_ = std::move(*paginate);
+    // resolve secrets
     std::string resolved_url;
     if (not co_await resolve_http_secrets(ctx, args_, resolved_url,
                                           resolved_headers_)) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    pagination_.current_url = resolved_url;
+    // prepare fetch config
     auto fetch_config = make_fetch_config(args_, ctx);
     if (not fetch_config) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     fetch_config_ = std::move(*fetch_config);
-    // Ensure system CA paths are registered for default HTTPS connections.
+    // ensure system CA paths are registered
     ensure_http_default_ca_paths();
-    pagination_.current_url = resolved_url;
     co_await spawn_parser(ctx, make_request_config(args_, resolved_headers_));
   }
 
