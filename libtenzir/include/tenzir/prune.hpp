@@ -13,18 +13,10 @@
 
 namespace tenzir {
 
-// Optimizes a given expression specifically for the catalog lookup.
-// Currently this does only a single optimization: It deduplicates string
-// lookups for the type level string synopsis.
-// This is most relevant when looking up using concepts, to rewrite queries like
-//
-//      (suricata.dns.dns.rrname == "u8wm3g4pw100420ydpzc"
-//       || suricata.http.http.hostname == "u8wm3g4pw100420ydpzc")
-//       || (suricata.fileinfo.http.hostname == "u8wm3g4pw100420ydpzc")
-//
-// to
-//
-//     ':string == "u8wm3g4pw100420ydpzc"'
+// Returns an expression for catalog lookup.
+// This is currently a no-op because broadening field predicates for lookup can
+// change which candidate partitions are returned in ways that are expensive to
+// recover from later.
 expression prune(expression e, const detail::heterogeneous_string_hashset& hs);
 
 } // namespace tenzir
