@@ -111,7 +111,9 @@ def resolve_benchmarks(value: str | None, *, root: Path) -> list[str]:
     return selected
 
 
-def resolve_targets(value: str | None, *, refs: list[dict[str, str]] | None = None) -> list[str]:
+def resolve_targets(
+    value: str | None, *, refs: list[dict[str, str]] | None = None
+) -> list[str]:
     targets = (
         [item.strip() for item in value.split(",") if item.strip()]
         if value is not None

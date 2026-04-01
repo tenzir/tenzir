@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from common import TARGET_PACKAGE_ARTIFACTS, dump_json, load_json
+from common import TARGET_PACKAGE_ARTIFACTS, dump_json, gh_api, load_json
 from find_build_run import (
     fetch_latest_target_metadata,
     fetch_target_metadata,
@@ -57,6 +57,17 @@ def fetch_metadata(
 
 def _safe_label(label: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "-", label)
+
+
+def merge_base_sha(repo: str, base: str, head: str) -> str:
+    payload = gh_api(f"repos/{repo}/compare/{base}...{head}")
+    merge_base = payload.get("merge_base_commit")
+    if not isinstance(merge_base, dict):
+        raise RuntimeError(f"failed to resolve merge base for {base}...{head}")
+    sha = merge_base.get("sha")
+    if not isinstance(sha, str) or not sha:
+        raise RuntimeError(f"failed to resolve merge base SHA for {base}...{head}")
+    return sha
 
 
 def materialize_build(
@@ -114,11 +125,22 @@ def prepare_storage_backed_build(
     run_id: int,
     storage: str,
     run_temp: Path,
+    role: str,
+    target: str,
+    ref: str,
+    implicit: bool,
+    request_index: int | None = None,
 ) -> Path:
     payload = load_json(metadata_path)
     payload["label"] = label
     payload["run_id"] = run_id
     payload["storage_prefix"] = storage
+    payload["role"] = role
+    payload["target"] = target
+    payload["ref"] = ref
+    payload["implicit"] = implicit
+    if request_index is not None:
+        payload["request_index"] = request_index
     resolved = run_temp / f"{_safe_label(label)}.json"
     dump_json(payload, resolved)
     return resolved
@@ -136,6 +158,7 @@ def resolve_compare_manifest(
 ) -> dict[str, Any]:
     build_specs: list[str] = []
     stable_tag = baselines.get("latest_stable_tag")
+    merge_base = merge_base_sha(repo, "main", head_sha)
 
     for target in request["targets"]:
         candidate = fetch_metadata(
@@ -153,22 +176,45 @@ def resolve_compare_manifest(
             repo=repo,
             run_temp=run_temp,
         )
+        candidate_payload = load_json(candidate_path)
+        candidate_payload["role"] = "candidate"
+        candidate_payload["target"] = target
+        candidate_payload["ref"] = head_sha
+        candidate_payload["implicit"] = True
+        dump_json(candidate_payload, candidate_path)
         build_specs.append(str(candidate_path))
 
-        main = fetch_latest_target_metadata(
+        main = fetch_metadata(
             repo,
-            "main",
+            merge_base,
             target,
-            output_dir=run_temp / f"main-{target}",
+            destination=run_temp / f"merge-base-main-{target}",
             event="push",
+            allow_missing=True,
         )
-        main_sha = str(main["resolved_sha"])
+        main_ref = merge_base
+        if not main.get("available", True):
+            print(
+                f"Falling back to latest main baseline for {target}: {main['reason']}"
+            )
+            main = fetch_latest_target_metadata(
+                repo,
+                "main",
+                target,
+                output_dir=run_temp / f"main-{target}",
+                event="push",
+            )
+            main_ref = str(main["resolved_sha"])
         main_path = prepare_storage_backed_build(
             Path(main["metadata_path"]),
             f"main {target}",
             run_id=int(main["run_id"]),
-            storage=storage_prefix(bucket, prefix, "main", main_sha, target),
+            storage=storage_prefix(bucket, prefix, "main", main_ref, target),
             run_temp=run_temp,
+            role="main",
+            target=target,
+            ref=main_ref,
+            implicit=True,
         )
         build_specs.append(str(main_path))
 
@@ -188,6 +234,10 @@ def resolve_compare_manifest(
                     run_id=int(release["run_id"]),
                     storage=storage_prefix(bucket, prefix, "tag", stable_tag, target),
                     run_temp=run_temp,
+                    role="release",
+                    target=target,
+                    ref=stable_tag,
+                    implicit=True,
                 )
                 build_specs.append(str(release_path))
             else:
@@ -195,7 +245,7 @@ def resolve_compare_manifest(
                     f"Skipping latest stable baseline for {target}: {release['reason']}"
                 )
 
-    for selector in request["refs"]:
+    for request_index, selector in enumerate(request["refs"]):
         target = selector["target"]
         ref = selector["ref"]
         event = infer_event_for_ref(repo, ref)
@@ -219,6 +269,11 @@ def resolve_compare_manifest(
                     bucket, prefix, "main", str(extra["resolved_sha"]), target
                 ),
                 run_temp=run_temp,
+                role="extra",
+                target=target,
+                ref=ref,
+                implicit=False,
+                request_index=request_index,
             )
         elif event == "release":
             extra_path = prepare_storage_backed_build(
@@ -227,6 +282,11 @@ def resolve_compare_manifest(
                 run_id=int(extra["run_id"]),
                 storage=storage_prefix(bucket, prefix, "tag", ref, target),
                 run_temp=run_temp,
+                role="release",
+                target=target,
+                ref=ref,
+                implicit=False,
+                request_index=request_index,
             )
         else:
             extra_path = materialize_build(
@@ -237,6 +297,13 @@ def resolve_compare_manifest(
                 repo=repo,
                 run_temp=run_temp,
             )
+            extra_payload = load_json(extra_path)
+            extra_payload["role"] = "extra"
+            extra_payload["target"] = target
+            extra_payload["ref"] = ref
+            extra_payload["implicit"] = False
+            extra_payload["request_index"] = request_index
+            dump_json(extra_payload, extra_path)
         build_specs.append(str(extra_path))
 
     return {
