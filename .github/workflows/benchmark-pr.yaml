@@ -18,8 +18,10 @@ jobs:
     if: |
       github.event.issue.pull_request &&
       (
-        contains(github.event.comment.body, '@tenzir-bot bench') ||
-        contains(github.event.comment.body, '@tenzir-bot benchmark')
+        startsWith(github.event.comment.body, '@tenzir-bot bench') ||
+        startsWith(github.event.comment.body, '@tenzir-bot benchmark') ||
+        contains(github.event.comment.body, '\n@tenzir-bot bench') ||
+        contains(github.event.comment.body, '\n@tenzir-bot benchmark')
       )
     runs-on: ubuntu-latest
     env:
