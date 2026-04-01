@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/data.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/variant.hpp"
@@ -17,7 +18,9 @@
 
 #include <arrow/type_fwd.h>
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 
@@ -83,6 +86,8 @@ struct atom_view;
 /// afterwards.
 class series_builder {
 public:
+  using clock = std::chrono::steady_clock;
+  using duration = clock::duration;
   /// Initializes the builder, optionally with a given type (see above).
   series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty);
   series_builder(const tenzir::type* ty = nullptr);
@@ -169,11 +174,20 @@ public:
   /// Returns the number of elements that would be returned by `finish()`.
   auto length() const -> int64_t;
 
+  /// Returns either one ready table slice, or the remaining wait duration.
+  ///
+  /// The method tracks when the current buffered run started and compares that
+  /// against `timeout` on subsequent calls.
+  auto yield_ready(std::string_view name = "",
+                   duration timeout = defaults::import::batch_timeout)
+    -> variant<table_slice, duration>;
+
   /// Removes the element that is currently being built.
   void remove_last();
 
 private:
   std::unique_ptr<detail::series_builder_impl> impl_;
+  std::optional<clock::time_point> oldest_event_ = std::nullopt;
 
   friend class builder_ref;
 };

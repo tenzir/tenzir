@@ -9,7 +9,6 @@
 #include "tenzir/series_builder.hpp"
 
 #include "tenzir/arrow_memory_pool.hpp"
-#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
@@ -1521,6 +1520,31 @@ auto series_builder::type() -> tenzir::type {
 
 auto series_builder::length() const -> int64_t {
   return impl_->total_length();
+}
+
+auto series_builder::yield_ready(std::string_view name, duration timeout)
+  -> variant<table_slice, duration> {
+  auto const now = clock::now();
+  auto const current_length = length();
+  if (current_length == 0) {
+    oldest_event_ = std::nullopt;
+    return timeout;
+  }
+  if (current_length
+      >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
+    oldest_event_ = std::nullopt;
+    return finish_assert_one_slice(name);
+  }
+  if (not oldest_event_) {
+    oldest_event_ = now;
+    return timeout;
+  }
+  auto const waiting = now - *oldest_event_;
+  if (waiting >= timeout) {
+    oldest_event_ = std::nullopt;
+    return finish_assert_one_slice(name);
+  }
+  return timeout - waiting;
 }
 
 void series_builder::remove_last() {

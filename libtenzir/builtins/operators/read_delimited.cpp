@@ -17,12 +17,11 @@
 #include <arrow/util/utf8.h>
 
 #include <string_view>
+#include <variant>
 
 namespace tenzir::plugins::read_delimited {
 
 namespace {
-
-using std::chrono::steady_clock;
 
 struct ReadDelimitedArgs {
   located<data> separator;
@@ -49,19 +48,12 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (flush_at_) {
-      co_await sleep_until(*flush_at_);
-    } else {
-      co_await sleep_for(defaults::import::batch_timeout);
-    }
+    co_await sleep_for(next_tick_);
     co_return {};
   }
 
-  auto process_task(Any, Push<table_slice>& push, OpCtx&)
-    -> Task<void> override {
-    if (flush_at_ && steady_clock::now() >= *flush_at_) {
-      co_await flush(push);
-    }
+  auto process_task(Any, Push<table_slice>& push, OpCtx&) -> Task<void> override {
+    co_await poll_builder(push);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -82,12 +74,7 @@ public:
       remaining = remaining.substr(pos + separator_.size());
     }
     buffer_ = buffer_.substr(buffer_.size() - remaining.size());
-    if (static_cast<uint64_t>(builder_.length())
-        >= defaults::import::table_slice_size) {
-      co_await flush(push);
-    } else {
-      flush_at_ = Option{steady_clock::now() + defaults::import::batch_timeout};
-    }
+    co_await poll_builder(push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -116,7 +103,17 @@ private:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.data"));
     }
-    flush_at_ = None{};
+    next_tick_ = defaults::import::batch_timeout;
+  }
+
+  auto poll_builder(Push<table_slice>& push) -> Task<void> {
+    auto ready = builder_.yield_ready("tenzir.data");
+    if (auto* slice = std::get_if<table_slice>(&ready)) {
+      co_await push(std::move(*slice));
+      next_tick_ = defaults::import::batch_timeout;
+    } else {
+      next_tick_ = std::get<std::chrono::steady_clock::duration>(ready);
+    }
   }
 
   auto emit(std::string_view segment, OpCtx& ctx) -> void {
@@ -138,7 +135,8 @@ private:
   bool binary_ = false;
   std::string buffer_;
   series_builder builder_;
-  Option<steady_clock::time_point> flush_at_ = None{};
+  std::chrono::steady_clock::duration next_tick_
+    = defaults::import::batch_timeout;
 };
 
 class plugin final : public virtual OperatorPlugin {
