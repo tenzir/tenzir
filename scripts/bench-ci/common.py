@@ -19,6 +19,17 @@ TARGET_PACKAGE_ARTIFACTS = {
 }
 
 
+class GhCommandError(subprocess.CalledProcessError):
+    """CalledProcessError with stderr/stdout folded into the string form."""
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        detail = (self.stderr or self.stdout or "").strip()
+        if not detail:
+            return base
+        return f"{base}: {detail}"
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -28,12 +39,21 @@ def bench_root() -> Path:
 
 
 def gh_json(args: list[str]) -> Any:
-    result = subprocess.run(
-        ["gh", *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    cmd = ["gh", *args]
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise GhCommandError(
+            exc.returncode,
+            exc.cmd,
+            output=exc.output,
+            stderr=exc.stderr,
+        ) from exc
     return json.loads(result.stdout)
 
 
@@ -51,13 +71,21 @@ def gh_api(
     if payload is not None:
         cmd.extend(["--input", "-"])
         input_data = json.dumps(payload)
-    result = subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        input=input_data,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            input=input_data,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise GhCommandError(
+            exc.returncode,
+            exc.cmd,
+            output=exc.output,
+            stderr=exc.stderr,
+        ) from exc
     if not result.stdout.strip():
         return {}
     payload = json.loads(result.stdout)

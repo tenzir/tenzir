@@ -6,6 +6,7 @@ import sys
 import tempfile
 from pathlib import Path
 import json
+import subprocess
 
 import pytest
 
@@ -167,9 +168,7 @@ def test_update_pr_comment_paginates_before_posting(
 
     monkeypatch.setattr(update_pr_comment_module, "gh_api", fake_gh_api)
 
-    update_pr_comment_module.update_pr_comment(
-        "tenzir/tenzir", 5960, "new benchmark results"
-    )
+    update_pr_comment_module.update_pr_comment("tenzir/tenzir", 5960, "new benchmark results")
 
     assert calls[0] == (
         "user",
@@ -199,9 +198,7 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
                 {
                     "target": target,
                     "kind": target,
-                    "image": f"ghcr.io/tenzir/{name}:latest"
-                    if target == "docker"
-                    else None,
+                    "image": f"ghcr.io/tenzir/{name}:latest" if target == "docker" else None,
                     "version": "5.30.0",
                 },
             ),
@@ -299,8 +296,7 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     assert manifest["benchmarks"] == ["from_kafka_route53"]
     assert len(manifest["builds"]) == 4
     build_payloads = [
-        json.loads(Path(path).read_text(encoding="utf-8"))
-        for path in manifest["builds"]
+        json.loads(Path(path).read_text(encoding="utf-8")) for path in manifest["builds"]
     ]
     labels = [payload["label"] for payload in build_payloads]
     assert labels == [
@@ -352,9 +348,7 @@ from file
             "Executor",
             (),
             {
-                "build_info": lambda self: type(
-                    "BuildInfo", (), {"version": "v1.2.3"}
-                )(),
+                "build_info": lambda self: type("BuildInfo", (), {"version": "v1.2.3"})(),
                 "create_context": lambda self, definition: type(
                     "Context", (), {"definition": definition}
                 )(),
@@ -388,6 +382,24 @@ def test_gh_api_slurps_paginated_json(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload == [{"id": 1}, {"id": 2}]
     assert "--paginate" in calls[0]
     assert "--slurp" in calls[0]
+
+
+def test_gh_api_surfaces_stderr_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(*args: object, **kwargs: object) -> object:
+        raise subprocess.CalledProcessError(
+            1,
+            ["gh", "api", "repos/tenzir/tenzir/issues/5940/comments", "--method", "POST"],
+            stderr="gh: Validation Failed (HTTP 422)",
+        )
+
+    monkeypatch.setattr(common_module.subprocess, "run", fake_run)
+
+    with pytest.raises(common_module.GhCommandError, match="Validation Failed"):
+        common_module.gh_api(
+            "repos/tenzir/tenzir/issues/5940/comments",
+            method="POST",
+            payload={"body": "hello"},
+        )
 
 
 def test_infer_event_for_ref_prefers_main_and_release_tags(
@@ -555,9 +567,7 @@ def test_publish_reports_uses_hardware_key_in_s3_path(
         build_version="v1.0.0",
         artifact_id=None,
     )
-    monkeypatch.setattr(
-        run_benchmarks_module.boto3, "client", lambda _service: FakeS3()
-    )
+    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
 
     publish_reports(
         {"from_file_route53_ocsf/neo": report},
@@ -625,9 +635,7 @@ def test_download_reference_reports_filters_by_hardware_key(
 
     import run_benchmarks as run_benchmarks_module
 
-    monkeypatch.setattr(
-        run_benchmarks_module.boto3, "client", lambda _service: FakeS3()
-    )
+    monkeypatch.setattr(run_benchmarks_module.boto3, "client", lambda _service: FakeS3())
 
     reports = download_reference_reports(
         destination="s3://tenzir-bench-data/runs/refs/main/abc123/static",
