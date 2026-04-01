@@ -131,43 +131,46 @@ def _start_node(
     log_path.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.setdefault("TENZIR_CONSOLE_FORMAT", "none")
-    process = subprocess.Popen(
-        [
-            str(tenzir_node),
-            "-d",
-            str(state_dir),
-            "--endpoint=127.0.0.1:0",
-            "--print-endpoint",
-            "--max-partition-size",
-            str(max_partition_size),
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-    )
+    with log_path.open("w", encoding="utf-8") as log_handle:
+        process = subprocess.Popen(
+            [
+                str(tenzir_node),
+                "-d",
+                str(state_dir),
+                "--endpoint=127.0.0.1:0",
+                "--print-endpoint",
+                "--max-partition-size",
+                str(max_partition_size),
+            ],
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+        )
     deadline = time.monotonic() + startup_timeout_seconds
-    output: list[str] = []
     endpoint = None
+    offset = 0
     while time.monotonic() < deadline:
-        if process.stdout is None:
+        with log_path.open(encoding="utf-8") as log_handle:
+            log_handle.seek(offset)
+            while True:
+                line = log_handle.readline()
+                if not line:
+                    break
+                offset = log_handle.tell()
+                if _ENDPOINT_RE.match(line.strip()):
+                    endpoint = line.strip()
+                    break
+        if endpoint is not None or process.poll() is not None:
             break
-        line = process.stdout.readline()
-        if not line:
-            if process.poll() is not None:
-                break
-            time.sleep(0.1)
-            continue
-        output.append(line)
-        if _ENDPOINT_RE.match(line.strip()):
-            endpoint = line.strip()
-            break
-    log_path.write_text("".join(output), encoding="utf-8")
+        time.sleep(0.1)
     if endpoint is None:
         process.kill()
         process.wait()
+        detail = log_path.read_text(encoding="utf-8").strip() or "no output"
         raise RuntimeError(
-            "node_catalog_lookup fixture failed to start tenzir-node and emit an endpoint",
+            "node_catalog_lookup fixture failed to start tenzir-node and emit an endpoint: "
+            f"{detail}",
         )
     _LOG.info("Started tenzir-node for catalog lookup benchmark at %s", endpoint)
     return process, endpoint
