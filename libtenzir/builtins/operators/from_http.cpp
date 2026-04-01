@@ -612,21 +612,16 @@ auto next_url_from_link_headers(
 
 // Configuration for a single fetch (and its retries).
 struct FetchConfig {
-  std::chrono::milliseconds request_timeout;
-  std::chrono::milliseconds connection_timeout;
-  uint32_t max_retry_count;
-  std::chrono::milliseconds retry_delay;
-  std::shared_ptr<folly::SSLContext> tls_context;
+  std::chrono::milliseconds request_timeout = default_timeout;
+  std::chrono::milliseconds connection_timeout = default_connection_timeout;
+  uint32_t max_retry_count = 0;
+  std::chrono::milliseconds retry_delay = default_retry_delay;
+  std::shared_ptr<folly::SSLContext> tls_context = {};
 };
 
-auto make_fetch_config(FromHttpArgs const& args) -> Option<FetchConfig> {
-  auto config = FetchConfig{
-    .request_timeout = default_timeout,
-    .connection_timeout = default_connection_timeout,
-    .max_retry_count = 0,
-    .retry_delay = default_retry_delay,
-    .tls_context = {},
-  };
+auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh)
+  -> Option<FetchConfig> {
+  auto config = FetchConfig{};
   if (args.timeout) {
     config.request_timeout
       = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -645,6 +640,15 @@ auto make_fetch_config(FromHttpArgs const& args) -> Option<FetchConfig> {
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
+  if (args.tls) {
+    auto tls_opts = tls_options{*args.tls, {.is_server = false}};
+    auto result = tls_opts.make_folly_ssl_context(dh);
+    if (result.is_success()) {
+      config.tls_context = std::move(*result);
+    } else {
+      return None{};
+    }
+  }
   return Option<FetchConfig>{std::move(config)};
 }
 
@@ -658,10 +662,11 @@ struct ResponseState {
   uint16_t status;
   std::vector<std::pair<std::string, std::string>> headers;
   Option<std::string> content_encoding;
-  bool has_error_status;
-  bool ignore_body;
-  blob encoded_body;
-  blob error_body;
+  blob body;
+
+  auto is_success() const -> bool {
+    return status < 400;
+  }
 };
 
 auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool {
@@ -883,25 +888,8 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
 class FromHttp final : public Operator<void, table_slice> {
 public:
   explicit FromHttp(FromHttpArgs args)
-    : args_{std::move(args)},
-      message_queue_{std::in_place, message_queue_capacity},
-      lifecycle_{Lifecycle::running},
-      evb_{nullptr},
-      fetch_config_{
-        .request_timeout = default_timeout,
-        .connection_timeout = default_connection_timeout,
-        .max_retry_count = 0,
-        .retry_delay = default_retry_delay,
-        .tls_context = {},
-      },
-      paginate_{None{}},
-      pagination_{
-        .page_count = 0,
-        .current_url = {},
-        .next_url = None{},
-      },
-      terminate_on_fetch_done_{false},
-      response_{None{}} {
+    : message_queue_{std::in_place, message_queue_capacity},
+      args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -913,45 +901,22 @@ public:
       co_return;
     }
     paginate_ = std::move(*paginate);
-    if (not co_await resolve_http_secrets(ctx, args_, resolved_url_,
+    std::string resolved_url;
+    if (not co_await resolve_http_secrets(ctx, args_, resolved_url,
                                           resolved_headers_)) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto fetch_config = make_fetch_config(args_);
+    auto fetch_config = make_fetch_config(args_, ctx);
     if (not fetch_config) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     fetch_config_ = std::move(*fetch_config);
-    if (args_.tls) {
-      auto tls_opts = tls_options{*args_.tls, {.is_server = false}};
-      auto result = tls_opts.make_folly_ssl_context(ctx.dh());
-      if (result.is_success()) {
-        fetch_config_.tls_context = std::move(*result);
-      } else {
-        lifecycle_ = Lifecycle::done;
-        co_return;
-      }
-    }
     // Ensure system CA paths are registered for default HTTPS connections.
     ensure_http_default_ca_paths();
-    // Spawn the parser sub-pipeline.
-    auto pipeline = args_.parser.inner;
-    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      lifecycle_ = Lifecycle::done;
-      co_return;
-    }
-    co_await ctx.spawn_sub(data{int64_t{pagination_.page_count}},
-                           std::move(pipeline), tag_v<chunk_ptr>);
-    // Build the initial request source and spawn the fetch task.
-    pagination_.current_url = resolved_url_;
-    terminate_on_fetch_done_ = false;
-    response_ = None{};
-    auto parsed = proxygen::URL{pagination_.current_url};
-    auto request = make_request_config(args_, resolved_headers_);
-    ctx.spawn_task(fetch(evb_, std::move(parsed), std::move(request),
-                         fetch_config_, message_queue_));
+    pagination_.current_url = resolved_url;
+    co_await spawn_parser(ctx, make_request_config(args_, resolved_headers_));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -973,57 +938,47 @@ public:
           .status = hdr.status,
           .headers = std::move(headers),
           .content_encoding = std::move(content_encoding),
-          .has_error_status = false,
-          .ignore_body = false,
-          .encoded_body = {},
-          .error_body = {},
+          .body = {},
         };
-        if (response_->status >= 400) {
+        if (response_->is_success()) {
+          if (is_link_pagination(paginate_)) {
+            TENZIR_ASSERT(paginate_);
+            // Extract the rel=next URL for link pagination.
+            pagination_.next_url
+              = next_url_from_link_headers(response_->headers,
+                                           pagination_.current_url,
+                                           paginate_->source, ctx.dh());
+          }
+        } else {
           if (not args_.error_field) {
             diagnostic::error("received HTTP error status {}",
                               response_->status)
               .primary(args_.url.source)
               .emit(ctx);
-            // Do not terminate immediately; keep draining the queue until
-            // FetchDone so the fetch task cannot block on enqueue.
-            response_->ignore_body = true;
-            terminate_on_fetch_done_ = true;
-          } else {
-            // Body will be buffered and emitted as a blob.
-            response_->has_error_status = true;
           }
-        } else if (is_link_pagination(paginate_)) {
-          TENZIR_ASSERT(paginate_);
-          // Extract the rel=next URL for link pagination.
-          pagination_.next_url
-            = next_url_from_link_headers(response_->headers,
-                                         pagination_.current_url,
-                                         paginate_->source, ctx.dh());
         }
         co_return;
       },
       // --- ResponseBody ---
       [&](ResponseBody body) -> Task<void> {
-        if (response_ and response_->ignore_body) {
+        if (not response_body_needed()) {
           co_return;
         }
         auto const* payload_data
           = reinterpret_cast<std::byte const*>(body.data->data());
-        if (response_ and response_->content_encoding) {
-          response_->encoded_body.insert(response_->encoded_body.end(),
-                                         payload_data,
-                                         payload_data + body.data->size());
-          co_return;
+        if (response_->content_encoding or not response_->is_success()) {
+          // store for processing in FetchDone
+          response_->body.insert(response_->body.end(), payload_data,
+                                 payload_data + body.data->size());
+        } else {
+          // push to sub-pipeline
+          if (auto sub = ctx.get_sub(pagination_.page_count)) {
+            auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
+            auto push_result = co_await pipeline.push(std::move(body.data));
+            TENZIR_UNUSED(push_result);
+          }
         }
-        if (response_ and response_->has_error_status) {
-          response_->error_body.insert(response_->error_body.end(),
-                                       payload_data,
-                                       payload_data + body.data->size());
-        } else if (auto sub = ctx.get_sub(int64_t{pagination_.page_count})) {
-          auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
-          auto push_result = co_await pipeline.push(std::move(body.data));
-          TENZIR_UNUSED(push_result);
-        }
+
         co_return;
       },
       // --- FetchError ---
@@ -1039,60 +994,38 @@ public:
       },
       // --- FetchDone ---
       [&](FetchDone) -> Task<void> {
-        if (response_ and response_->content_encoding) {
-          auto body = blob{response_->encoded_body};
-          if (auto decompressed = try_decompress_body(
-                *response_->content_encoding,
-                std::span<std::byte const>{response_->encoded_body.data(),
-                                           response_->encoded_body.size()},
-                ctx.dh())) {
-            body = std::move(*decompressed);
-          }
-          if (response_->has_error_status) {
-            response_->error_body = std::move(body);
-          } else if (not body.empty()) {
-            if (auto sub = ctx.get_sub(int64_t{pagination_.page_count})) {
-              auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
-              auto body_chunk = chunk::copy(
-                reinterpret_cast<char const*>(body.data()), body.size());
-              auto push_result = co_await pipeline.push(std::move(body_chunk));
-              TENZIR_UNUSED(push_result);
+        if (response_) {
+          if (response_->content_encoding) {
+            // decompress
+            if (auto decompressed = try_decompress_body(
+                  *response_->content_encoding,
+                  std::span<std::byte const>{response_->body.data(),
+                                             response_->body.size()},
+                  ctx.dh())) {
+              response_->body = std::move(*decompressed);
+            }
+            // push body into subpipeline
+            if (response_->is_success() and not response_->body.empty()) {
+              if (auto sub = ctx.get_sub(pagination_.page_count)) {
+                auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
+                auto body_chunk = chunk::copy(
+                  reinterpret_cast<char const*>(response_->body.data()),
+                  response_->body.size());
+                auto push_result
+                  = co_await pipeline.push(std::move(body_chunk));
+                TENZIR_UNUSED(push_result);
+              }
+              response_->body.clear();
             }
           }
-          response_->encoded_body.clear();
-        }
-        if (response_ and response_->has_error_status and args_.error_field) {
-          auto record_sb = series_builder{};
-          std::ignore = record_sb.record();
-          auto error_sb = series_builder{};
-          error_sb.data(blob{response_->error_body});
-          auto slice
-            = assign(*args_.error_field, error_sb.finish_assert_one_array(),
-                     record_sb.finish_assert_one_slice(), ctx.dh());
-          if (args_.metadata_field) {
-            slice = attach_metadata(slice, ctx.dh());
+          if (not response_->is_success() and args_.error_field) {
+            co_await push_error_field(push, ctx);
           }
-          co_await push(std::move(slice));
-          lifecycle_ = Lifecycle::done;
-          co_return;
         }
-        if (terminate_on_fetch_done_) {
-          if (auto sub = ctx.get_sub(int64_t{pagination_.page_count})) {
-            auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
-            co_await pipeline.close();
-          }
-          lifecycle_ = Lifecycle::done;
-          co_return;
-        }
-        // Close parser pipeline. finish_sub() decides whether to paginate or
-        // finish.
-        if (auto sub = ctx.get_sub(int64_t{pagination_.page_count})) {
+        // close sub-pipeline (next pagination request is started from finish_sub)
+        if (auto sub = ctx.get_sub(pagination_.page_count)) {
           auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
           co_await pipeline.close();
-        } else if (pagination_.next_url) {
-          co_await spawn_next_page(ctx);
-        } else {
-          lifecycle_ = Lifecycle::done;
         }
         co_return;
       });
@@ -1115,11 +1048,13 @@ public:
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
     if (pagination_.next_url) {
-      co_await spawn_next_page(ctx);
+      // next page
+      pagination_.current_url = std::move(*pagination_.next_url);
+      pagination_.next_url = None{};
+      pagination_.page_count += 1;
+      co_await spawn_parser(ctx,
+                            make_paginated_request_config(resolved_headers_));
     } else {
       lifecycle_ = Lifecycle::done;
     }
@@ -1152,43 +1087,49 @@ private:
                   dh);
   }
 
-  // Spawns a new parser sub-pipeline and a new fetch task for the next page.
-  auto spawn_next_page(OpCtx& ctx) -> Task<void> {
-    auto url = std::move(*pagination_.next_url);
-    pagination_.next_url = None{};
-    pagination_.current_url = url;
-    // Reset per-page state.
-    terminate_on_fetch_done_ = false;
+  // Spawns the parser sub-pipeline and fetch task for the current page.
+  // Requires pagination_.current_url and pagination_.page_count to be set.
+  auto spawn_parser(OpCtx& ctx, RequestConfig request) -> Task<void> {
     response_ = None{};
     auto pipeline = args_.parser.inner;
     if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    // Each page uses a unique key; the executor does not allow key reuse.
-    auto key = data{int64_t{++pagination_.page_count}};
-    co_await ctx.spawn_sub(std::move(key), std::move(pipeline),
+    co_await ctx.spawn_sub(pagination_.page_count, std::move(pipeline),
                            tag_v<chunk_ptr>);
-    auto parsed = proxygen::URL{url};
-    auto request = make_paginated_request_config(resolved_headers_);
-    ctx.spawn_task(fetch(evb_, std::move(parsed), std::move(request),
-                         fetch_config_, message_queue_));
+    ctx.spawn_task(fetch(evb_, proxygen::URL{pagination_.current_url},
+                         std::move(request), fetch_config_, message_queue_));
   }
 
-  FromHttpArgs args_;
+  auto push_error_field(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
+    auto record_sb = series_builder{};
+    std::ignore = record_sb.record();
+    auto error_sb = series_builder{};
+    error_sb.data(std::move(response_->body));
+    auto slice = assign(*args_.error_field, error_sb.finish_assert_one_array(),
+                        record_sb.finish_assert_one_slice(), ctx.dh());
+    if (args_.metadata_field) {
+      slice = attach_metadata(slice, ctx.dh());
+    }
+    co_await push(std::move(slice));
+  }
+
+  auto response_body_needed() const -> bool {
+    return response_ and (response_->is_success() or args_.error_field);
+  }
+
+  // --- transient ---
   mutable Arc<MessageQueue> message_queue_;
-  Lifecycle lifecycle_;
-  folly::EventBase* evb_;
-  // Runtime fetch settings resolved in start(), reused for all pages.
+  folly::EventBase* evb_{};
+  // --- args ---
+  FromHttpArgs args_;
   FetchConfig fetch_config_;
-  // Resolved URL/headers after secret resolution in start().
-  std::string resolved_url_;
   std::vector<std::pair<std::string, std::string>> resolved_headers_;
-  // Runtime pagination mode and state resolved in start(), reused across pages.
   Option<pagination_spec> paginate_;
+  // --- state ---
+  Lifecycle lifecycle_{};
   PaginationState pagination_;
-  // When set, finish only after FetchDone to ensure queue draining.
-  bool terminate_on_fetch_done_{};
   // State collected per response page; absent before first response header.
   Option<ResponseState> response_;
 };
