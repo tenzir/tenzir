@@ -1,0 +1,11 @@
+---
+bench:
+  id: neo
+  description: Query 100000 one-event partitions via a concept lookup and discard the result.
+  min_version: "5.23.0"
+  tenzir_args:
+    - --neo
+---
+export
+where net.domain == env("BENCHMARK_LOOKUP_VALUE")
+discard
