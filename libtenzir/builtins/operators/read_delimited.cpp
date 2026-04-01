@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async/notify.hpp"
+
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
@@ -17,7 +19,6 @@
 #include <arrow/util/utf8.h>
 
 #include <string_view>
-#include <variant>
 
 namespace tenzir::plugins::read_delimited {
 
@@ -48,11 +49,13 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_await sleep_for(next_tick_);
+    co_await wait_now_.wait();
+    co_await sleep_for(wait_for_);
     co_return {};
   }
 
-  auto process_task(Any, Push<table_slice>& push, OpCtx&) -> Task<void> override {
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
     co_await poll_builder(push);
   }
 
@@ -103,16 +106,16 @@ private:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.data"));
     }
-    next_tick_ = defaults::import::batch_timeout;
   }
 
   auto poll_builder(Push<table_slice>& push) -> Task<void> {
     auto ready = builder_.yield_ready("tenzir.data");
-    if (auto* slice = std::get_if<table_slice>(&ready)) {
-      co_await push(std::move(*slice));
-      next_tick_ = defaults::import::batch_timeout;
-    } else {
-      next_tick_ = std::get<std::chrono::steady_clock::duration>(ready);
+    if (ready.data) {
+      co_await push(std::move(*ready.data));
+    }
+    if (ready.wait_for) {
+      wait_for_ = ready.wait_for.unwrap();
+      wait_now_.notify_one();
     }
   }
 
@@ -135,8 +138,8 @@ private:
   bool binary_ = false;
   std::string buffer_;
   series_builder builder_;
-  std::chrono::steady_clock::duration next_tick_
-    = defaults::import::batch_timeout;
+  mutable Notify wait_now_;
+  duration wait_for_;
 };
 
 class plugin final : public virtual OperatorPlugin {

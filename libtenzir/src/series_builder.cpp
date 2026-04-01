@@ -1523,28 +1523,44 @@ auto series_builder::length() const -> int64_t {
 }
 
 auto series_builder::yield_ready(std::string_view name, duration timeout)
-  -> variant<table_slice, duration> {
+  -> series_builder::YieldReadyResult {
   auto const now = clock::now();
   auto const current_length = length();
   if (current_length == 0) {
     oldest_event_ = std::nullopt;
-    return timeout;
+    return series_builder::YieldReadyResult{
+      .data = None{},
+      .wait_for = None{},
+    };
   }
   if (current_length
       >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
     oldest_event_ = std::nullopt;
-    return finish_assert_one_slice(name);
+    return series_builder::YieldReadyResult{
+      .data = finish_assert_one_slice(name),
+      .wait_for = None{},
+    };
   }
   if (not oldest_event_) {
     oldest_event_ = now;
-    return timeout;
+    return series_builder::YieldReadyResult{
+      .data = None{},
+      .wait_for = timeout,
+    };
+    ;
   }
   auto const waiting = now - *oldest_event_;
   if (waiting >= timeout) {
     oldest_event_ = std::nullopt;
-    return finish_assert_one_slice(name);
+    return series_builder::YieldReadyResult{
+      .data = finish_assert_one_slice(name),
+      .wait_for = None{},
+    };
   }
-  return timeout - waiting;
+  return series_builder::YieldReadyResult{
+    .data = None{},
+    .wait_for = timeout - waiting,
+  };
 }
 
 void series_builder::remove_last() {

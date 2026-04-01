@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/variant.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
 
@@ -22,7 +21,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
-#include <type_traits>
+#include <variant>
 
 namespace tenzir {
 
@@ -174,13 +173,18 @@ public:
   /// Returns the number of elements that would be returned by `finish()`.
   auto length() const -> int64_t;
 
+  struct YieldReadyResult {
+    Option<table_slice> data;
+    Option<duration> wait_for;
+  };
+
   /// Returns either one ready table slice, or the remaining wait duration.
   ///
   /// The method tracks when the current buffered run started and compares that
   /// against `timeout` on subsequent calls.
   auto yield_ready(std::string_view name = "",
                    duration timeout = defaults::import::batch_timeout)
-    -> variant<table_slice, duration>;
+    -> YieldReadyResult;
 
   /// Removes the element that is currently being built.
   void remove_last();
