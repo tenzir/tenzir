@@ -331,6 +331,8 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   // 3. Load all components in order.
   for (const auto* plugin : sequenced_components) {
     auto name = plugin->component_name();
+    TENZIR_WARN("[startup-trace] spawning component '{}' (wants: {})", name,
+                fmt::join(plugin->wanted_components(), ", "));
     auto handle = plugin->make_component(self);
     if (not handle) {
       diagnostic::error("{} failed to create the {} component", *self, name)
@@ -344,6 +346,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
               name)
         .throw_();
     }
+    TENZIR_WARN("[startup-trace] component '{}' spawned and registered", name);
     self->state().ordered_components.push_back(name);
   }
 }
