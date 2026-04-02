@@ -1,0 +1,2 @@
+from {"a.b.c": 42}
+this = unflatten(this)
