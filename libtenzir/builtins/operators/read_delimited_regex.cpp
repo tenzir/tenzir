@@ -159,7 +159,7 @@ private:
   // we don't match at this position again.
   bool last_match_zero_ = false;
   series_builder builder_;
-  mutable Box<WaitChannel> wait_for_{std::in_place};
+  mutable Box<WaitChannel> wait_for_ = new_wait_channel();
 };
 
 class plugin final : public virtual OperatorPlugin {

@@ -658,7 +658,7 @@ private:
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
   series_builder builder_;
-  mutable Box<WaitChannel> wait_for_{std::in_place};
+  mutable Box<WaitChannel> wait_for_ = new_wait_channel();
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
