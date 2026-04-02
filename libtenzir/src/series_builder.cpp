@@ -1488,6 +1488,7 @@ auto series_builder::finish_as_table_slice(std::string_view name)
 #endif
     result.emplace_back(batch, array.type);
   }
+  oldest_event_ = None{};
   return result;
 }
 
@@ -1527,37 +1528,30 @@ auto series_builder::yield_ready(std::string_view name, duration timeout)
   auto const now = clock::now();
   auto const current_length = length();
   if (current_length == 0) {
-    oldest_event_ = std::nullopt;
-    return series_builder::YieldReadyResult{
-      .data = None{},
-      .wait_for = None{},
-    };
+    oldest_event_ = None{};
+    return series_builder::YieldReadyResult{};
   }
   if (current_length
       >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
-    oldest_event_ = std::nullopt;
+    oldest_event_ = None{};
     return series_builder::YieldReadyResult{
       .data = finish_assert_one_slice(name),
-      .wait_for = None{},
     };
   }
   if (not oldest_event_) {
     oldest_event_ = now;
     return series_builder::YieldReadyResult{
-      .data = None{},
       .wait_for = timeout,
     };
   }
   auto const waiting = now - *oldest_event_;
   if (waiting >= timeout) {
-    oldest_event_ = std::nullopt;
+    oldest_event_ = None{};
     return series_builder::YieldReadyResult{
       .data = finish_assert_one_slice(name),
-      .wait_for = None{},
     };
   }
   return series_builder::YieldReadyResult{
-    .data = None{},
     .wait_for = timeout - waiting,
   };
 }

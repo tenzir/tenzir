@@ -174,8 +174,8 @@ public:
   auto length() const -> int64_t;
 
   struct YieldReadyResult {
-    Option<table_slice> data;
-    Option<duration> wait_for;
+    Option<table_slice> data = None{};
+    Option<duration> wait_for = None{};
   };
 
   /// Returns either one ready table slice, or the remaining wait duration.
@@ -191,7 +191,7 @@ public:
 
 private:
   std::unique_ptr<detail::series_builder_impl> impl_;
-  std::optional<clock::time_point> oldest_event_ = std::nullopt;
+  Option<clock::time_point> oldest_event_ = None{};
 
   friend class builder_ref;
 };
