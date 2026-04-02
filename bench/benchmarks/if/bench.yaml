@@ -1,0 +1,17 @@
+---
+name: if
+description: >-
+  jaja
+tags:
+  operators: if
+input:
+  path: cloudwatch/route53.ndjson
+  source: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
+  events: 25860
+  measure: true
+env:
+  TENZIR_CONSOLE_FORMAT: none
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 900

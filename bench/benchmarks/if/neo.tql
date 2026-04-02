@@ -1,0 +1,18 @@
+---
+bench:
+  id: neo
+  description: benchmark if rebatching
+  min_version: "5.28.0"
+  tenzir_args:
+    - --neo
+---
+
+from { key: true },
+     { key: false }
+repeat 100k
+batch
+if key {
+  value = "a"
+} else {
+  value = "b"
+}
