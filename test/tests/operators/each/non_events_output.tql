@@ -1,0 +1,5 @@
+from {x: 1}
+each {
+  from $this
+  write_json
+}

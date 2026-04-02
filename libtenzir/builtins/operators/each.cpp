@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -23,12 +24,13 @@ struct EachArgs {
   uint64_t parallel = 10;
 };
 
-class Each final : public Operator<table_slice, table_slice> {
+template <class Output>
+class Each final : public Operator<table_slice, Output> {
 public:
   explicit Each(EachArgs args) : args_{std::move(args)} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
     TENZIR_ASSERT(todo_.rows() == 0);
@@ -55,7 +57,15 @@ public:
     running_subs_ += 1;
   }
 
-  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+  auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key, ctx);
+    if constexpr (std::same_as<Output, chunk_ptr>) {
+      co_await push(std::move(chunk));
+    }
+  }
+
+  auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(key, push, ctx);
     TENZIR_ASSERT(running_subs_ > 0);
@@ -96,7 +106,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<EachArgs, Each>{};
+    auto d = Describer<EachArgs, Each<table_slice>>{};
     auto parallel = d.named_optional("parallel", &EachArgs::parallel);
     auto pipe = d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -107,15 +117,39 @@ public:
             .emit(ctx);
         }
       }
-      if (auto located_pipe = ctx.get(pipe)) {
-        auto result = located_pipe->inner.infer_type(tag_v<void>, ctx);
+      return {};
+    });
+    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<EachArgs, Input>>> {
+      if constexpr (not std::same_as<Input, table_slice>) {
+        return {};
+      } else {
+        TRY(auto p, ctx.get(pipe));
+        auto null_dh = null_diagnostic_handler{};
+        auto result = p.inner.infer_type(tag_v<void>, null_dh);
         if (not result or not *result) {
           diagnostic::error("pipeline inside `each` must be a source")
-            .primary(located_pipe->source)
+            .primary(p.source)
             .emit(ctx);
+          return failure::promise();
         }
+        if (**result == tag_v<table_slice>) {
+          return std::function<Box<Operator<Input, table_slice>>(EachArgs)>{
+            [](EachArgs args) {
+              return Each<table_slice>{std::move(args)};
+            }};
+        }
+        if (**result == tag_v<chunk_ptr>) {
+          return std::function<Box<Operator<Input, chunk_ptr>>(EachArgs)>{
+            [](EachArgs args) {
+              return Each<chunk_ptr>{std::move(args)};
+            }};
+        }
+        diagnostic::error("pipeline inside `each` must produce events or bytes")
+          .primary(p.source)
+          .emit(ctx);
+        return failure::promise();
       }
-      return {};
     });
     return d.without_optimize();
   }

@@ -1,10 +1,3 @@
-error: operator expects events
- --> tests/operators/each/non_source.tql:6:3
-  |
-6 |   where x == 1
-  |   ^^^^^ 
-  |
-
 error: pipeline inside `each` must be a source
  --> tests/operators/each/non_source.tql:5:6
   |
