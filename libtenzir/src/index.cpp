@@ -949,6 +949,19 @@ void index_state::retire_partition(const uuid& id, active_partition_actor actor,
   self->send_exit(actor, reason);
 }
 
+void index_state::drain_retired_partitions(caf::error reason) {
+  for (auto& [_, partition] : retired_partitions) {
+    auto shutdown_reason = reason.valid() ? reason : partition.reason;
+    if (shutdown_reason.valid()) {
+      self->send_exit(partition.actor, shutdown_reason);
+    } else {
+      self->send_exit(partition.actor, caf::exit_reason::normal);
+    }
+  }
+  retired_partitions.clear();
+  recent_partition_pins.clear();
+}
+
 void index_state::add_partition_creation_listener(
   partition_creation_listener_actor listener) {
   partition_creation_listeners.push_back(listener);
@@ -1945,6 +1958,7 @@ index(index_actor::stateful_pointer<index_state> self,
         rp.deliver(msg.reason);
       }
       auto perform_shutdown = [self](auto reason) {
+        self->state().drain_retired_partitions(reason);
         auto dependents = std::vector<caf::actor>{};
         dependents.reserve(self->state().active_transformers.size());
         for (auto& [act, disp] : self->state().active_transformers) {

@@ -208,6 +208,8 @@ struct index_state {
   void retire_partition(const uuid& id, active_partition_actor actor,
                         caf::error reason);
 
+  void drain_retired_partitions(caf::error reason);
+
   /// Adds a new partition creation listener.
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);
