@@ -98,13 +98,22 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<EachArgs, Each>{};
     auto parallel = d.named_optional("parallel", &EachArgs::parallel);
-    d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
+    auto pipe = d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      TRY(auto parallel_value, ctx.get(parallel));
-      if (parallel_value < 1) {
-        diagnostic::error("`parallel` must be at least 1")
-          .primary(ctx.get_location(parallel).value())
-          .emit(ctx);
+      if (auto parallel_value = ctx.get(parallel)) {
+        if (*parallel_value < 1) {
+          diagnostic::error("`parallel` must be at least 1")
+            .primary(ctx.get_location(parallel).value())
+            .emit(ctx);
+        }
+      }
+      if (auto located_pipe = ctx.get(pipe)) {
+        auto result = located_pipe->inner.infer_type(tag_v<void>, ctx);
+        if (not result or not *result) {
+          diagnostic::error("pipeline inside `each` must be a source")
+            .primary(located_pipe->source)
+            .emit(ctx);
+        }
       }
       return {};
     });
