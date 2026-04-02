@@ -1,0 +1,2 @@
+from {a_b: 1, a_c: 2}
+this = unflatten(this, "_")

@@ -1,0 +1,2 @@
+from {"a.b": 1, a: {b: 2}}
+this = flatten(this)
