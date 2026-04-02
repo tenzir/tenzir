@@ -27,6 +27,7 @@
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -65,7 +66,7 @@ struct ExportArgs {
   /// operators.
   export_special_filter special_filter;
   /// A metric name to use in the `metrics` version
-  std::string metrics_name;
+  Option<std::string> metrics_name;
 };
 
 class Export final : public Operator<void, table_slice> {
@@ -131,10 +132,12 @@ public:
           return std::move(*result);
         }();
         legacy_clauses.emplace_back(predicate{
-          meta_extractor{meta_extractor::schema}, relational_operator::equal,
-          args_.metrics_name.empty()
-            ? data{all_metrics}
-            : data{fmt::format("tenzir.metrics.{}", args_.metrics_name)}});
+          meta_extractor{meta_extractor::schema},
+          relational_operator::equal,
+          args_.metrics_name
+            ? data{fmt::format("tenzir.metrics.{}", *args_.metrics_name)}
+            : data{all_metrics},
+        });
         break;
       }
     }
@@ -517,7 +520,7 @@ public:
       .special_filter = export_special_filter::metrics,
       .metrics_name = {},
     }};
-    auto name = d.optional_positional("name", &ExportArgs::metrics_name);
+    auto name = d.positional("name", &ExportArgs::metrics_name);
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
