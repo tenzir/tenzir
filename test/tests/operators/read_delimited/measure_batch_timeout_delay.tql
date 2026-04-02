@@ -1,0 +1,9 @@
+from {line: "one\ntwo", ts: 1990-01-01T00:00:01.5},
+     {line: "three", ts: 1990-01-01T00:00:02}
+delay ts, start=1990-01-01T00:00:01.5
+drop ts
+write_lines
+split_bytes 1
+read_delimited "\n"
+measure
+drop timestamp, schema_id, schema

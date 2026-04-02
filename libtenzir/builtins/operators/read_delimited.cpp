@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async/notify.hpp"
-
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/series.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -48,17 +47,6 @@ public:
     binary_ = args_.binary.unwrap_or(is<blob>(args_.separator.inner));
   }
 
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_await wait_now_.wait();
-    co_await sleep_for(wait_for_);
-    co_return {};
-  }
-
-  auto process_task(Any, Push<table_slice>& push, OpCtx&)
-    -> Task<void> override {
-    co_await poll_builder(push);
-  }
-
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (input->size() == 0) {
@@ -77,7 +65,18 @@ public:
       remaining = remaining.substr(pos + separator_.size());
     }
     buffer_ = buffer_.substr(buffer_.size() - remaining.size());
-    co_await poll_builder(push);
+    co_await push_or_wait(builder_.yield_ready(TY_NAME), push, *wait_for_);
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    auto duration = co_await wait_for_->dequeue();
+    co_await sleep_for(duration);
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    co_await push_or_wait(builder_.yield_ready(TY_NAME), push, *wait_for_);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -108,17 +107,6 @@ private:
     }
   }
 
-  auto poll_builder(Push<table_slice>& push) -> Task<void> {
-    auto ready = builder_.yield_ready("tenzir.data");
-    if (ready.data) {
-      co_await push(std::move(*ready.data));
-    }
-    if (ready.wait_for) {
-      wait_for_ = ready.wait_for.unwrap();
-      wait_now_.notify_one();
-    }
-  }
-
   auto emit(std::string_view segment, OpCtx& ctx) -> void {
     if (binary_) {
       builder_.record().field("data", as_bytes(segment));
@@ -133,13 +121,14 @@ private:
     }
   }
 
+  constexpr static const auto TY_NAME = "tenzir.data";
+
   ReadDelimitedArgs args_;
   std::string separator_;
   bool binary_ = false;
   std::string buffer_;
   series_builder builder_;
-  mutable Notify wait_now_;
-  duration wait_for_;
+  mutable WaitChannel wait_for_;
 };
 
 class plugin final : public virtual OperatorPlugin {

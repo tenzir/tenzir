@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/defaults.hpp"
-#include "tenzir/diagnostics.hpp"
-#include "tenzir/location.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/series.hpp>
 #include <tenzir/async/task.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/location.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/parser.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -339,17 +339,14 @@ public:
     }
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     if (args_.jobs > 0) {
       co_return co_await read_output_queue_->dequeue();
-    }
-    TENZIR_UNUSED(dh);
-    if (flush_at_) {
-      co_await sleep_until(*flush_at_);
     } else {
-      co_await sleep_for(defaults::import::batch_timeout);
+      auto duration = co_await wait_for_->dequeue();
+      co_await sleep_for(duration);
+      co_return {};
     }
-    co_return PeriodicTick{};
   }
 
   auto state() -> OperatorState override {
@@ -363,19 +360,17 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (args_.jobs == 0) {
-      TENZIR_ASSERT(result.try_as<PeriodicTick>());
-      if (flush_at_ and steady_clock::now() >= *flush_at_) {
-        co_await flush_non_parallel(push);
+    if (args_.jobs > 0) {
+      auto slice = std::move(result).as<table_slice>();
+      if (slice.rows() == 0) {
+        ++finished_workers_;
+        co_return;
       }
+      co_await push(std::move(slice));
+    } else {
+      co_await push_or_wait(builder_.yield_ready(TNAME), push, *wait_for_);
       co_return;
     }
-    auto slice = std::move(result).as<table_slice>();
-    if (slice.rows() == 0) {
-      ++finished_workers_;
-      co_return;
-    }
-    co_await push(std::move(slice));
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -387,14 +382,7 @@ public:
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input), ctx);
-      // Only flush immediately when the batch is full; small batches at the
-      // end of a chunk are held until the periodic tick or finalize().
-      if (static_cast<uint64_t>(builder_.length())
-          >= defaults::import::table_slice_size) {
-        co_await flush_non_parallel(push);
-      } else {
-        flush_at_ = Option{steady_clock::now() + defaults::import::batch_timeout};
-      }
+      co_await push_or_wait(builder_.yield_ready(TNAME), push, *wait_for_);
     }
   }
 
@@ -442,7 +430,6 @@ private:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.line"));
     }
-    flush_at_ = None{};
   }
 
   auto emit_line(std::string_view line, OpCtx& ctx) -> void {
@@ -658,13 +645,13 @@ private:
     read_output_queue_->enqueue(table_slice{});
   }
 
+  constexpr static const auto TNAME = "tenzir.line";
+
   using ReadInputQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
   /// The output queue is unbounded to avoid a theoretical deadlock where the
   /// main thread wants to push to a full input queue while all workers want to
   /// push to a full output queue.
   using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
-
-  struct PeriodicTick {};
 
   ReadLinesArgs args_;
   std::string buffer_;
@@ -673,7 +660,7 @@ private:
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
   series_builder builder_;
-  Option<steady_clock::time_point> flush_at_ = None{};
+  mutable Box<UnboundedQueue<steady_clock::duration>> wait_for_;
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;

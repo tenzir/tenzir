@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/series.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -50,23 +51,15 @@ public:
                          boost::regex_constants::optimize};
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    if (flush_at_) {
-      co_await sleep_until(*flush_at_);
-    } else {
-      co_await sleep_for(defaults::import::batch_timeout);
-    }
-    co_return PeriodicTick{};
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    auto duration = co_await wait_for_->dequeue();
+    co_await sleep_for(duration);
+    co_return {};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    TENZIR_ASSERT(result.try_as<PeriodicTick>());
-    TENZIR_UNUSED(ctx);
-    if (flush_at_ and steady_clock::now() >= *flush_at_) {
-      co_await flush(push);
-    }
+    co_await push_or_wait(builder_.yield_ready(TY_NAME), push, *wait_for_);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -76,14 +69,7 @@ public:
     }
     buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
     match_and_consume(/*has_finished=*/false, ctx);
-    // Only flush immediately when the batch is full; small batches at the end
-    // of a chunk are held until the periodic tick or finalize().
-    if (static_cast<uint64_t>(builder_.length())
-        >= defaults::import::table_slice_size) {
-      co_await flush(push);
-    } else {
-      flush_at_ = Option{steady_clock::now() + defaults::import::batch_timeout};
-    }
+    co_await push_or_wait(builder_.yield_ready(TY_NAME), push, *wait_for_);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -162,10 +148,9 @@ private:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.data"));
     }
-    flush_at_ = None{};
   }
 
-  struct PeriodicTick {};
+  constexpr static const auto TY_NAME = "tenzir.data";
 
   ReadDelimitedRegexArgs args_;
   boost::regex expr_;
@@ -176,7 +161,7 @@ private:
   // we don't match at this position again.
   bool last_match_zero_ = false;
   series_builder builder_;
-  Option<steady_clock::time_point> flush_at_ = None{};
+  mutable WaitChannel wait_for_;
 };
 
 class plugin final : public virtual OperatorPlugin {

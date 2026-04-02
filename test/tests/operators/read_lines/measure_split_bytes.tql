@@ -1,0 +1,8 @@
+from {
+  line: "foo\nbar\nbaz"
+}
+write_lines
+split_bytes 1
+read_lines
+measure
+drop timestamp, schema_id, schema

@@ -1,0 +1,8 @@
+from {
+  line: "foo||bar||baz"
+}
+write_lines
+split_bytes 1
+read_delimited_regex "\\|\\|"
+measure
+drop timestamp, schema_id, schema
