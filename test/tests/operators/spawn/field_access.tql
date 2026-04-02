@@ -1,0 +1,6 @@
+from {x: 10}, {x: 20}
+spawn {
+  from $this
+  this.doubled = x * 2
+}
+sort x

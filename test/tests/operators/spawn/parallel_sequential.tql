@@ -1,0 +1,6 @@
+// parallel=1 forces subpipelines to run one at a time.
+from {x: 1}, {x: 2}, {x: 3}
+spawn parallel=1 {
+  from $this
+}
+sort x

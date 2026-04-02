@@ -1,0 +1,7 @@
+// With parallel=2, only 2 subpipelines run at once. Rows that exceed the
+// limit are queued and spawned as slots free. All events must be processed.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+spawn parallel=2 {
+  from $this
+}
+sort x
