@@ -345,6 +345,9 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
     const auto get_offset
       = [&](const table_slice& slice) -> std::optional<offset> {
       return resolve(args_.field, slice.schema())
