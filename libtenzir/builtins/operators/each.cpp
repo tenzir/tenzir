@@ -141,16 +141,15 @@ public:
     auto parallel = d.named_optional("parallel", &EachArgs::parallel);
     auto pipe = d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto parallel_value = ctx.get(parallel)) {
-        if (*parallel_value < 1) {
-          diagnostic::error("`parallel` must be at least 1")
-            .primary(ctx.get_location(parallel).value())
-            .emit(ctx);
-        }
+      TRY(auto parallel_value, ctx.get(parallel));
+      if (parallel_value < 1) {
+        diagnostic::error("`parallel` must be at least 1")
+          .primary(ctx.get_location(parallel).value())
+          .emit(ctx);
       }
       return {};
     });
-    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
+    d.spawner([=]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<EachArgs, Input>>> {
       if constexpr (not std::same_as<Input, table_slice>) {
         return {};
@@ -165,16 +164,14 @@ public:
           return failure::promise();
         }
         if (**result == tag_v<table_slice>) {
-          return std::function<Box<Operator<Input, table_slice>>(EachArgs)>{
-            [](EachArgs args) {
-              return Each{std::move(args)};
-            }};
+          return [](EachArgs args) {
+            return Each{std::move(args)};
+          };
         }
         if (**result == tag_v<void>) {
-          return std::function<Box<Operator<Input, void>>(EachArgs)>{
-            [](EachArgs args) {
-              return EachSink{std::move(args)};
-            }};
+          return [](EachArgs args) {
+            return EachSink{std::move(args)};
+          };
         }
         diagnostic::error("pipeline inside `each` must not produce bytes")
           .primary(p.source)
