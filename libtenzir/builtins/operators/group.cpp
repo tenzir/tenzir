@@ -6,143 +6,112 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
-#include <tenzir/async/queue_scope.hpp>
-#include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql2/plugin.hpp>
+#include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/view3.hpp>
 
-#include <folly/Expected.h>
+#include <unordered_map>
 
 namespace tenzir::plugins::group {
 
 namespace {
 
-template <class Output>
-class Group final : public Operator<table_slice, Output> {
+struct GroupArgs {
+  ast::expression over;
+  located<ir::pipeline> pipe;
+  let_id let;
+};
+
+class Group final : public Operator<table_slice, table_slice> {
 public:
-  Group(ast::expression over, ir::pipeline pipe, let_id let_id)
-    : over_{std::move(over)}, pipe_{std::move(pipe)}, let_id_{let_id} {
+  explicit Group(GroupArgs args) : args_{std::move(args)} {
   }
 
-  auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    // TODO
-    auto key_value = ast::constant::kind{"hi"};
-    auto key_data = match(key_value, [&](auto& x) {
-      return data{x};
-    });
-    auto sub = ctx.get_sub(make_view(key_data));
-    if (not sub) {
-      auto env = substitute_ctx::env_t{};
-      env[let_id_] = std::move(key_value);
-      auto sub_ctx = substitute_ctx{ctx, &env};
-      auto copy = pipe_;
-      if (not copy.substitute(sub_ctx, true)) {
-        co_return;
+    auto keys = eval(args_.over, input, ctx);
+    auto rows = input.rows();
+    // Build an ordered list of unique group keys and a boolean row-mask per
+    // group. We only materialize each key once on first encounter.
+    auto group_order = std::vector<data>{};
+    auto group_masks
+      = std::unordered_map<data, std::vector<bool>>{};
+    for (auto row = int64_t{0}; row < keys.length(); ++row) {
+      auto key = materialize(keys.view3_at(row));
+      auto [it, inserted]
+        = group_masks.try_emplace(key, std::vector<bool>(rows, false));
+      if (inserted) {
+        group_order.push_back(key);
       }
-      co_await ctx.spawn_sub<table_slice>(key_data, std::move(copy));
-      sub = ctx.get_sub(make_view(key_data));
+      it->second[static_cast<size_t>(row)] = true;
     }
-    TENZIR_ASSERT(sub);
-    auto& cast = as<SubHandle<table_slice>>(*sub);
-    auto result = co_await cast.push(std::move(input));
-    auto closed = result.is_err();
-    if (closed) {
-      // TODO: Ignore?
+    // For each group, extract a sub-slice via Arrow filter and route it.
+    for (auto& key : group_order) {
+      auto& mask = group_masks.at(key);
+      // Build the BooleanArray mask at the Arrow level — no series_builder.
+      auto builder = arrow::BooleanBuilder{arrow_memory_pool()};
+      check(builder.Reserve(static_cast<int64_t>(rows)));
+      for (auto v : mask) {
+        check(builder.Append(v));
+      }
+      auto arr = finish(builder);
+      auto sub_slice = filter(input, *arr);
+      auto sub = ctx.get_sub(make_view(key));
+      if (not sub) {
+        auto key_kind = match(
+          key,
+          [](const pattern&) -> ast::constant::kind {
+            TENZIR_UNREACHABLE();
+          },
+          []<class T>(const T& v) -> ast::constant::kind {
+            return v;
+          });
+        auto env = substitute_ctx::env_t{};
+        env[args_.let] = std::move(key_kind);
+        auto sub_ctx = substitute_ctx{ctx, &env};
+        auto copy = args_.pipe.inner;
+        if (not copy.substitute(sub_ctx, true)) {
+          continue;
+        }
+        sub = co_await ctx.spawn_sub(key, std::move(copy), tag_v<table_slice>);
+      }
+      TENZIR_ASSERT(sub);
+      std::ignore
+        = co_await as<SubHandle<table_slice>>(*sub).push(std::move(sub_slice));
     }
   }
 
   auto snapshot(Serde& serde) -> void override {
     TENZIR_UNUSED(serde);
-    // serde("pipes", pipes_);
   }
 
 private:
-  ast::expression over_;
-  ir::pipeline pipe_;
-  let_id let_id_;
-
-  // tsl::robin_map<data, OpenPipeline> pipes_;
-
-  // TODO: Not serializable, plus where is restore logic?
-  // The operator implementation should be in control when to consume data.
-  // However… We do not to be able to consume checkpoint infos etc! If we don't
-  // consume data, then the checkpoint is delayed. Maybe that is to be expected?
-  // TODO: How do we handle errors in subpipelines?
-  // TODO: Activation of scope?
-  // mutable Box<QueueScope<std::optional<table_slice>>> pipe_output_;
+  GroupArgs args_;
 };
 
-class group_ir final : public ir::Operator {
-public:
-  group_ir() = default;
-
-  group_ir(ast::expression over, ir::pipeline pipe, let_id id)
-    : over_{std::move(over)}, pipe_{std::move(pipe)}, id_{id} {
-  }
-
-  auto name() const -> std::string override {
-    return "group_ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    TRY(over_.substitute(ctx));
-    // This operator instantiates the subpipeline on its own.
-    (void)instantiate;
-    TRY(pipe_.substitute(ctx, false));
-    return {};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    return pipe_.infer_type(input, dh);
-  }
-
-  auto spawn(element_type_tag input) and -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return Group<table_slice>{std::move(over_), std::move(pipe_), id_};
-  }
-
-  friend auto inspect(auto& f, group_ir& x) -> bool {
-    return f.object(x).fields(f.field("over", x.over_),
-                              f.field("pipe", x.pipe_), f.field("id", x.id_));
-  }
-
-private:
-  ast::expression over_;
-  ir::pipeline pipe_;
-  let_id id_;
-};
-
-class group_plugin final : public operator_compiler_plugin {
+class group_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "group";
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::CompileResult> override {
-    TENZIR_ASSERT(inv.args.size() == 2);
-    auto over = std::move(inv.args[0]);
-    TRY(over.bind(ctx));
-    auto scope = ctx.open_scope();
-    auto id = scope.let("group");
-    auto pipe = as<ast::pipeline_expr>(inv.args[1]);
-    TRY(auto pipe_ir, std::move(pipe.inner).compile(ctx));
-    return group_ir{std::move(over), std::move(pipe_ir), id};
+  auto describe() const -> Description override {
+    auto d = Describer<GroupArgs, Group>{};
+    d.positional("over", &GroupArgs::over, "expr");
+    d.pipeline(&GroupArgs::pipe, {{"group", &GroupArgs::let}});
+    return d.without_optimize();
   }
 };
-
-using group_ir_plugin = inspection_plugin<ir::Operator, group_ir>;
 
 } // namespace
 
 } // namespace tenzir::plugins::group
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::group::group_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::group::group_ir_plugin)
