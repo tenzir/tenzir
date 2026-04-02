@@ -187,7 +187,7 @@ public:
     if (count_ == total) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
 private:

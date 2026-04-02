@@ -1258,10 +1258,10 @@ public:
 
   auto state() -> OperatorState override {
     if (! draining_) {
-      return OperatorState::unspecified;
+      return OperatorState::normal;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
-                                           : OperatorState::unspecified;
+                                           : OperatorState::normal;
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
@@ -2001,10 +2001,10 @@ public:
 
   auto state() -> OperatorState override {
     if (! draining_) {
-      return OperatorState::unspecified;
+      return OperatorState::normal;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
-                                           : OperatorState::unspecified;
+                                           : OperatorState::normal;
   }
 
   auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
