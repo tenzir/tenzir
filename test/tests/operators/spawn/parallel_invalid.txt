@@ -1,6 +1,0 @@
-error: `parallel` must be at least 1
- --> tests/operators/spawn/parallel_invalid.tql:5:16
-  |
-5 | spawn parallel=0 {
-  |                ^ 
-  |

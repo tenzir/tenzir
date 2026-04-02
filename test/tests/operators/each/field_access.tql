@@ -1,5 +1,5 @@
 from {x: 10}, {x: 20}
-spawn {
+each {
   from $this
   this.doubled = x * 2
 }

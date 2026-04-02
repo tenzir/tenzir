@@ -13,19 +13,19 @@
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/view3.hpp>
 
-namespace tenzir::plugins::spawn {
+namespace tenzir::plugins::each {
 
 namespace {
 
-struct SpawnArgs {
+struct EachArgs {
   located<ir::pipeline> pipe;
   let_id this_id;
   uint64_t parallel = 10;
 };
 
-class Spawn final : public Operator<table_slice, table_slice> {
+class Each final : public Operator<table_slice, table_slice> {
 public:
-  explicit Spawn(SpawnArgs args) : args_{std::move(args)} {
+  explicit Each(EachArgs args) : args_{std::move(args)} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -80,7 +80,7 @@ public:
   }
 
 private:
-  SpawnArgs args_;
+  EachArgs args_;
   /// Counter to give every subpipeline a unique key.
   uint64_t next_key_ = 0;
   /// Number of currently running subpipelines.
@@ -89,16 +89,16 @@ private:
   table_slice todo_;
 };
 
-class SpawnPlugin final : public virtual OperatorPlugin {
+class EachPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "spawn";
+    return "each";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SpawnArgs, Spawn>{};
-    auto parallel = d.named_optional("parallel", &SpawnArgs::parallel);
-    d.pipeline(&SpawnArgs::pipe, {{"this", &SpawnArgs::this_id}});
+    auto d = Describer<EachArgs, Each>{};
+    auto parallel = d.named_optional("parallel", &EachArgs::parallel);
+    d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto parallel_value, ctx.get(parallel));
       if (parallel_value < 1) {
@@ -114,6 +114,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::spawn
+} // namespace tenzir::plugins::each
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::spawn::SpawnPlugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::each::EachPlugin)

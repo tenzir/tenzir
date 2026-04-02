@@ -2,6 +2,6 @@
 error: true
 ---
 from {x: 1}
-spawn parallel=0 {
+each parallel=0 {
   from $this
 }

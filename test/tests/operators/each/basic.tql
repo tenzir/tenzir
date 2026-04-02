@@ -1,5 +1,5 @@
 from {name: "alice", n: 1}, {name: "bob", n: 2}
-spawn {
+each {
   from $this
 }
 sort name

@@ -1,5 +1,5 @@
 // One input event spawns a subpipeline that produces multiple outputs.
 from {x: 1}
-spawn {
+each {
   from {a: 1}, {a: 2}, {a: 3}
 }
