@@ -1,0 +1,11 @@
+---
+description: "Echo a named argument that is declared as string"
+args:
+  named:
+    - name: value
+      type: string
+      default: "typed default value"
+      description: "Must be a string literal"
+---
+set operator = "typed_named"
+set value = $value

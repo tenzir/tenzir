@@ -1,0 +1,15 @@
+---
+description: "Require a named option without a default"
+args:
+  positional:
+    - name: value
+      type: string
+  named:
+    - name: required_opt
+      type: string
+---
+from {
+  combined: $value + $required_opt
+}
+write_json
+save_stdout

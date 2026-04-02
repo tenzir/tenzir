@@ -1,0 +1,5 @@
+from_stdin {
+  compress_gzip level=9
+  decompress_gzip
+  read_json
+}
