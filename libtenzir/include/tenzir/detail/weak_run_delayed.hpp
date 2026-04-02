@@ -31,8 +31,7 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
   return self->run_delayed_weak(delay, std::forward<Function>(function));
 }
 
-class weak_run_delayed_disposable_impl final : public caf::ref_counted,
-                                               public caf::disposable::impl {
+class weak_run_delayed_disposable_impl final : public caf::disposable::impl {
 public:
   void dispose() override {
     auto l = std::scoped_lock{mut_};
@@ -44,22 +43,12 @@ public:
     return inner_.disposed();
   }
 
-  void ref_disposable() const noexcept override {
-    ref();
+  virtual auto ref() const noexcept -> void override {
+    counter_.ref();
   }
 
-  void deref_disposable() const noexcept override {
-    deref();
-  }
-
-  friend void
-  intrusive_ptr_add_ref(const weak_run_delayed_disposable_impl* p) noexcept {
-    p->ref();
-  }
-
-  friend void
-  intrusive_ptr_release(const weak_run_delayed_disposable_impl* p) noexcept {
-    p->deref();
+  virtual auto deref() const noexcept -> void override {
+    counter_.deref();
   }
 
   // These data members are not private because we need to access them from the
@@ -69,6 +58,8 @@ public:
   mutable std::shared_mutex mut_;
   // The original scheduled action.
   caf::disposable inner_;
+  // The reference counter
+  caf::ref_counted counter_;
 };
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.

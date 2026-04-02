@@ -529,7 +529,7 @@ auto chunk_ptr::proxy::metadata() const noexcept -> const chunk_metadata& {
 }
 
 auto chunk_ptr::proxy::unique() const noexcept -> bool {
-  return ptr_ and ptr_->unique();
+  return ptr_ and ptr_->strong_reference_count() == 1;
 }
 
 } // namespace tenzir
