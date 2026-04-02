@@ -1166,13 +1166,15 @@ private:
       co_await folly::coro::co_safe_point;
       ticks_ += 1;
       LOGI("tick {} in {} ({})", ticks_, id_, op_name());
-      auto state = base_op().state();
-      auto accept_upstream = true;
-      switch (state) {
+      auto accept_upstream = not active_checkpoint_;
+      switch (base_op().state()) {
         case OperatorState::normal:
           break;
         case OperatorState::blocked:
-          accept_upstream = false;
+          if (phase_ == Phase::running
+              or phase_ == Phase::stopping_gracefully) {
+            accept_upstream = false;
+          }
           break;
         case OperatorState::done:
           if (phase_ == Phase::running) {
@@ -1184,7 +1186,7 @@ private:
         return match(
           event,
           [&](Option<AnyOperatorMsg> const&) {
-            return accept_upstream and not active_checkpoint_;
+            return accept_upstream;
           },
           [&](Option<FromControl> const&) {
             return true;
