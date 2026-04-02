@@ -1,3 +1,6 @@
+---
+error: true
+---
 from {x: 1}
 each {
   from $this

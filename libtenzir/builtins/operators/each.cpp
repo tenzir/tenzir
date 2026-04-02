@@ -24,15 +24,11 @@ struct EachArgs {
   uint64_t parallel = 10;
 };
 
-template <class Output>
-class Each final : public Operator<table_slice, Output> {
-public:
-  explicit Each(EachArgs args) : args_{std::move(args)} {
+struct EachImpl {
+  explicit EachImpl(EachArgs args) : args_{std::move(args)} {
   }
 
-  auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(push);
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(todo_.rows() == 0);
     TENZIR_ASSERT(running_subs_ < args_.parallel);
     auto take = args_.parallel - running_subs_;
@@ -57,17 +53,8 @@ public:
     running_subs_ += 1;
   }
 
-  auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
-                   OpCtx& ctx) -> Task<void> override {
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(key, ctx);
-    if constexpr (std::same_as<Output, chunk_ptr>) {
-      co_await push(std::move(chunk));
-    }
-  }
-
-  auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(key, push, ctx);
     TENZIR_ASSERT(running_subs_ > 0);
     running_subs_ -= 1;
     if (todo_.rows() > 0) {
@@ -78,25 +65,69 @@ public:
     }
   }
 
-  auto state() -> OperatorState override {
+  auto state() -> OperatorState {
     return running_subs_ < args_.parallel ? OperatorState::normal
                                           : OperatorState::blocked;
   }
 
-  auto snapshot(Serde& serde) -> void override {
+  auto snapshot(Serde& serde) -> void {
     serde("next_key", next_key_);
     serde("running_subs", running_subs_);
     serde("todo", todo_);
   }
 
-private:
   EachArgs args_;
-  /// Counter to give every subpipeline a unique key.
   uint64_t next_key_ = 0;
-  /// Number of currently running subpipelines.
   size_t running_subs_ = 0;
-  /// Rows that still need to have a subpipeline spawned.
   table_slice todo_;
+};
+
+/// Spawns a source subpipeline per event, forwarding their event output.
+class Each final : public Operator<table_slice, table_slice>, private EachImpl {
+public:
+  using EachImpl::EachImpl;
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return EachImpl::process(std::move(input), ctx);
+  }
+
+  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return EachImpl::finish_sub(key, ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return EachImpl::state();
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    EachImpl::snapshot(serde);
+  }
+};
+
+/// Spawns a source subpipeline per event; subpipelines sink their own output.
+class EachSink final : public Operator<table_slice, void>, private EachImpl {
+public:
+  using EachImpl::EachImpl;
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    return EachImpl::process(std::move(input), ctx);
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    return EachImpl::finish_sub(key, ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return EachImpl::state();
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    EachImpl::snapshot(serde);
+  }
 };
 
 class EachPlugin final : public virtual OperatorPlugin {
@@ -106,7 +137,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<EachArgs, Each<table_slice>>{};
+    auto d = Describer<EachArgs, Each>{};
     auto parallel = d.named_optional("parallel", &EachArgs::parallel);
     auto pipe = d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -136,16 +167,16 @@ public:
         if (**result == tag_v<table_slice>) {
           return std::function<Box<Operator<Input, table_slice>>(EachArgs)>{
             [](EachArgs args) {
-              return Each<table_slice>{std::move(args)};
+              return Each{std::move(args)};
             }};
         }
-        if (**result == tag_v<chunk_ptr>) {
-          return std::function<Box<Operator<Input, chunk_ptr>>(EachArgs)>{
+        if (**result == tag_v<void>) {
+          return std::function<Box<Operator<Input, void>>(EachArgs)>{
             [](EachArgs args) {
-              return Each<chunk_ptr>{std::move(args)};
+              return EachSink{std::move(args)};
             }};
         }
-        diagnostic::error("pipeline inside `each` must produce events or bytes")
+        diagnostic::error("pipeline inside `each` must not produce bytes")
           .primary(p.source)
           .emit(ctx);
         return failure::promise();

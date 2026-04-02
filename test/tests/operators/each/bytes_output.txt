@@ -1,0 +1,6 @@
+error: pipeline inside `each` must not produce bytes
+ --> tests/operators/each/bytes_output.tql:5:6
+  |
+5 | each {
+  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
