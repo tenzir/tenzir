@@ -13,6 +13,7 @@
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -56,8 +57,8 @@ class plugin : public virtual operator_plugin2<Operator> {
     return caf::none;
   }
 
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto make(operator_factory_invocation inv,
+            session ctx) const -> failure_or<operator_ptr> override {
     auto args = Args{};
     args.op = inv.self.get_location();
     auto channel = std::optional<located<uint64_t>>{};
@@ -132,12 +133,48 @@ class plugin : public virtual operator_plugin2<Operator> {
     }
   }
 
-private:
+protected:
   record config_;
 };
 
-using load_plugin = plugin<rabbitmq_loader, loader_args>;
-using save_plugin = plugin<rabbitmq_saver, saver_args>;
+class load_plugin final : public virtual plugin<rabbitmq_loader, loader_args>,
+                          public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<from_amqp_args, FromAmqp>{};
+    d.operator_location(&from_amqp_args::op);
+    d.positional("url", &from_amqp_args::url);
+    d.named("channel", &from_amqp_args::channel);
+    d.named("exchange", &from_amqp_args::exchange);
+    d.named("routing_key", &from_amqp_args::routing_key);
+    d.named("options", &from_amqp_args::options);
+    d.named("queue", &from_amqp_args::queue);
+    d.named("passive", &from_amqp_args::passive);
+    d.named("durable", &from_amqp_args::durable);
+    d.named("exclusive", &from_amqp_args::exclusive);
+    d.named("no_auto_delete", &from_amqp_args::no_auto_delete);
+    d.named("no_local", &from_amqp_args::no_local);
+    d.named("ack", &from_amqp_args::ack);
+    return d.without_optimize();
+  }
+};
+
+class save_plugin final : public virtual plugin<rabbitmq_saver, saver_args>,
+                          public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<to_amqp_args, ToAmqp>{};
+    d.operator_location(&to_amqp_args::op);
+    d.positional("url", &to_amqp_args::url);
+    d.named("channel", &to_amqp_args::channel);
+    d.named("exchange", &to_amqp_args::exchange);
+    d.named("routing_key", &to_amqp_args::routing_key);
+    d.named("options", &to_amqp_args::options);
+    d.named("mandatory", &to_amqp_args::mandatory);
+    d.named("immediate", &to_amqp_args::immediate);
+    return d.without_optimize();
+  }
+};
 
 } // namespace
 

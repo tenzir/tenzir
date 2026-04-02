@@ -8,18 +8,29 @@
 
 #pragma once
 
+#include <tenzir/async.hpp>
+#include <tenzir/async/notify.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
+#include <tenzir/try.hpp>
 
 #include <caf/expected.hpp>
+#include <folly/coro/Sleep.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <string_view>
+#include <thread>
+#include <vector>
 
 #if __has_include(<rabbitmq-c/amqp.h>)
 #  include <rabbitmq-c/amqp.h>
@@ -128,8 +139,8 @@ inline auto to_error(const amqp_rpc_reply_t& reply) -> caf::error {
   return {};
 }
 
-inline auto parse_url(const record& config_, std::string_view str)
-  -> std::optional<record> {
+inline auto parse_url(const record& config_,
+                      std::string_view str) -> std::optional<record> {
   auto info = amqp_connection_info{};
   auto copy = std::string{str};
   if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK) {
@@ -337,7 +348,11 @@ public:
   /// Consumes frames from broker, simply for the side effect of processing
   /// heartbeats implicitly. Required if otherwise no interaction with the
   /// broker would occur.
-  auto handle_heartbeat(operator_control_plane& ctrl) {
+  auto handle_heartbeat(operator_control_plane& ctrl) -> void {
+    handle_heartbeat(ctrl.diagnostics());
+  }
+
+  auto handle_heartbeat(diagnostic_handler& dh) -> void {
     amqp_frame_t frame;
     // We impose no timeout, either there is something to read or not. Never
     // block!
@@ -351,7 +366,7 @@ public:
       if (AMQP_STATUS_TIMEOUT != status and AMQP_STATUS_OK != status) {
         diagnostic::warning("unexpected error while processing heartbeats")
           .note("{}", amqp_error_string2(status))
-          .emit(ctrl.diagnostics());
+          .emit(dh);
         return;
       }
     } while (status == AMQP_STATUS_OK);
@@ -400,8 +415,8 @@ public:
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume(std::optional<std::chrono::microseconds> timeout = {})
-    -> caf::expected<chunk_ptr> {
+  auto consume(std::optional<std::chrono::microseconds> timeout
+               = {}) -> caf::expected<chunk_ptr> {
     TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
@@ -725,8 +740,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -753,8 +768,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> input,
+             operator_control_plane& ctrl) const -> generator<std::monostate> {
     co_yield {};
     auto& dh = ctrl.diagnostics();
     auto config = config_;
@@ -873,8 +888,8 @@ public:
     return true;
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -890,6 +905,394 @@ public:
 private:
   saver_args args_;
   record config_;
+};
+
+// -- New executor types -------------------------------------------------------
+
+/// Args for the new FromAmqp operator.
+struct from_amqp_args {
+  location op;
+  Option<located<secret>> url;
+  Option<located<uint64_t>> channel;
+  Option<located<std::string>> exchange;
+  Option<located<std::string>> routing_key;
+  Option<located<record>> options;
+  Option<located<std::string>> queue;
+  bool passive{false};
+  bool durable{false};
+  bool exclusive{false};
+  bool no_auto_delete{false};
+  bool no_local{false};
+  bool ack{false};
+};
+
+/// Args for the new ToAmqp operator.
+struct to_amqp_args {
+  location op;
+  Option<located<secret>> url;
+  Option<located<uint64_t>> channel;
+  Option<located<std::string>> exchange;
+  Option<located<std::string>> routing_key;
+  Option<located<record>> options;
+  bool mandatory{false};
+  bool immediate{false};
+};
+
+/// Resolve secrets from the args and build an amqp_engine config record.
+/// This is shared between FromAmqp and ToAmqp.
+inline auto
+build_secret_requests(const Option<located<secret>>& url,
+                      const Option<located<record>>& options, record& config,
+                      diagnostic_handler& dh) -> std::vector<secret_request> {
+  auto reqs = std::vector<secret_request>{};
+  if (options) {
+    const auto& loc = options->source;
+    for (const auto& [k, v] : options->inner) {
+      match(
+        v,
+        [&](const concepts::arithmetic auto& x) {
+          set_or_fail(config, k, fmt::to_string(x), loc, dh);
+        },
+        [&](const std::string& x) {
+          set_or_fail(config, k, x, loc, dh);
+        },
+        [&](const secret& x) {
+          reqs.emplace_back(x, loc,
+                            [=, &config,
+                             &dh](resolved_secret_value x) -> failure_or<void> {
+                              TRY(auto str, x.utf8_view(k, loc, dh));
+                              set_or_fail(config, k, std::string{str}, loc, dh);
+                              return {};
+                            });
+        },
+        [](const auto&) {
+          TENZIR_UNREACHABLE();
+        });
+    }
+  }
+  if (url) {
+    auto req = secret_request{
+      *url,
+      [&, loc = url->source](resolved_secret_value val) -> failure_or<void> {
+        TRY(auto str, val.utf8_view("url", loc, dh));
+        if (auto cfg = parse_url(config, str)) {
+          config = std::move(*cfg);
+          return {};
+        }
+        diagnostic::error("failed to parse AMQP URL")
+          .primary(loc)
+          .hint("URL must adhere to the following format")
+          .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
+          .emit(dh);
+        return failure::promise();
+      },
+    };
+    reqs.push_back(std::move(req));
+  }
+  return reqs;
+}
+
+/// Shared state between the background consumer thread and the FromAmqp
+/// operator, following the GCP Pub/Sub SharedState pattern.
+struct consumer_shared_state {
+  static constexpr size_t max_pending = 16;
+
+  std::mutex mutex;
+  std::condition_variable not_full;
+  std::vector<chunk_ptr> pending;
+  Notify notify;
+  std::atomic<bool> done{false};
+  std::string error;
+};
+
+/// RAII wrapper that stops the background consumer thread on destruction.
+struct consumer_thread {
+  std::shared_ptr<consumer_shared_state> shared;
+  std::thread thread;
+
+  consumer_thread() = default;
+
+  consumer_thread(std::shared_ptr<consumer_shared_state> s, std::thread t)
+    : shared{std::move(s)}, thread{std::move(t)} {
+  }
+
+  consumer_thread(const consumer_thread&) = delete;
+  auto operator=(const consumer_thread&) -> consumer_thread& = delete;
+  consumer_thread(consumer_thread&&) = default;
+  auto operator=(consumer_thread&&) -> consumer_thread& = default;
+
+  ~consumer_thread() noexcept {
+    if (not shared) {
+      return;
+    }
+    shared->done.store(true, std::memory_order_release);
+    shared->not_full.notify_one();
+    if (thread.joinable()) {
+      thread.join();
+    }
+  }
+};
+
+class FromAmqp final : public Operator<void, chunk_ptr> {
+public:
+  explicit FromAmqp(from_amqp_args args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto config = record{};
+    auto reqs
+      = build_secret_requests(args_.url, args_.options, config, ctx.dh());
+    if (auto res = co_await ctx.resolve_secrets(std::move(reqs)); not res) {
+      done_ = true;
+      co_return;
+    }
+    auto engine_result = amqp_engine::make(std::move(config));
+    if (not engine_result) {
+      diagnostic::error("failed to construct AMQP engine")
+        .primary(args_.op)
+        .note("{}", engine_result.error())
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    auto engine = std::make_unique<amqp_engine>(std::move(*engine_result));
+    if (auto err = engine->connect(); err.valid()) {
+      diagnostic::error("failed to connect to AMQP server")
+        .primary(args_.op)
+        .note("{}", err)
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    auto channel = args_.channel
+                     ? detail::narrow<uint16_t>(args_.channel->inner)
+                     : default_channel;
+    if (auto err = engine->open(channel); err.valid()) {
+      diagnostic::error("failed to open AMQP channel {}", channel)
+        .primary(args_.op)
+        .note("{}", err)
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    auto routing_key = args_.routing_key
+                         ? std::string_view{args_.routing_key->inner}
+                         : default_routing_key;
+    auto err = engine->start_consumer({
+      .channel = channel,
+      .exchange = args_.exchange ? std::string_view{args_.exchange->inner}
+                                 : default_exchange,
+      .routing_key = routing_key,
+      .queue
+      = args_.queue ? std::string_view{args_.queue->inner} : default_queue,
+      .passive = args_.passive,
+      .durable = args_.durable,
+      .exclusive = args_.exclusive,
+      .auto_delete = not args_.no_auto_delete,
+      .no_local = args_.no_local,
+      .no_ack = not args_.ack,
+    });
+    if (err.valid()) {
+      diagnostic::error("failed to start AMQP consumer")
+        .primary(args_.op)
+        .hint("{}", err)
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    // Launch background thread that runs the blocking consume loop.
+    auto shared = shared_;
+    consumer_ = consumer_thread{
+      shared_,
+      std::thread{[shared, engine = std::move(engine)]() mutable {
+        while (not shared->done.load(std::memory_order_acquire)) {
+          auto message = engine->consume(500ms);
+          if (not message) {
+            {
+              auto guard = std::scoped_lock{shared->mutex};
+              shared->error = fmt::to_string(message.error());
+            }
+            shared->done.store(true, std::memory_order_release);
+            shared->notify.notify_one();
+            return;
+          }
+          if (*message) {
+            {
+              auto guard = std::unique_lock{shared->mutex};
+              shared->not_full.wait(guard, [&] {
+                return shared->pending.size()
+                         < consumer_shared_state::max_pending
+                       or shared->done.load(std::memory_order_relaxed);
+              });
+              if (shared->done.load(std::memory_order_relaxed)) {
+                return;
+              }
+              shared->pending.push_back(std::move(*message));
+            }
+            shared->notify.notify_one();
+          }
+        }
+      }},
+    };
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (done_) {
+      co_await wait_forever();
+    }
+    if (shared_->done.load(std::memory_order_acquire)) {
+      co_return {};
+    }
+    co_await shared_->notify.wait();
+    co_return {};
+  }
+
+  auto
+  process_task(Any, Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
+    auto messages = std::vector<chunk_ptr>{};
+    {
+      auto guard = std::scoped_lock{shared_->mutex};
+      messages = std::exchange(shared_->pending, {});
+    }
+    shared_->not_full.notify_one();
+    for (auto& chunk : messages) {
+      co_await push(std::move(chunk));
+    }
+    if (shared_->done.load(std::memory_order_acquire)) {
+      auto error = std::string{};
+      {
+        auto guard = std::scoped_lock{shared_->mutex};
+        error = std::exchange(shared_->error, {});
+      }
+      if (not error.empty()) {
+        diagnostic::error("failed to consume message")
+          .primary(args_.op)
+          .hint("{}", error)
+          .emit(ctx);
+      }
+      done_ = true;
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  from_amqp_args args_;
+  bool done_ = false;
+  std::shared_ptr<consumer_shared_state> shared_
+    = std::make_shared<consumer_shared_state>();
+  Option<consumer_thread> consumer_;
+};
+
+class ToAmqp final : public Operator<chunk_ptr, void> {
+public:
+  explicit ToAmqp(to_amqp_args args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto config = record{};
+    auto reqs
+      = build_secret_requests(args_.url, args_.options, config, ctx.dh());
+    if (auto res = co_await ctx.resolve_secrets(std::move(reqs)); not res) {
+      co_return;
+    }
+    auto engine_result = amqp_engine::make(config);
+    if (not engine_result) {
+      diagnostic::error("failed to construct AMQP engine")
+        .primary(args_.op)
+        .note("{}", engine_result.error())
+        .emit(ctx);
+      co_return;
+    }
+    engine_.emplace(std::move(*engine_result));
+    if (auto err = engine_->connect(); err.valid()) {
+      diagnostic::error("failed to connect to AMQP server")
+        .primary(args_.op)
+        .note("{}", err)
+        .emit(ctx);
+      engine_.reset();
+      co_return;
+    }
+    auto channel = args_.channel
+                     ? detail::narrow<uint16_t>(args_.channel->inner)
+                     : default_channel;
+    if (auto err = engine_->open(channel); err.valid()) {
+      diagnostic::error("failed to open AMQP channel {}", channel)
+        .primary(args_.op)
+        .note("{}", err)
+        .emit(ctx);
+      engine_.reset();
+      co_return;
+    }
+    exchange_str_
+      = args_.exchange ? args_.exchange->inner : std::string{default_exchange};
+    routing_key_str_ = args_.routing_key ? args_.routing_key->inner
+                                         : std::string{default_routing_key};
+    publish_opts_ = amqp_engine::publish_options{
+      .channel = channel,
+      .exchange = exchange_str_,
+      .routing_key = routing_key_str_,
+      .mandatory = args_.mandatory,
+      .immediate = args_.immediate,
+    };
+    // Compute heartbeat interval from config.
+    auto heartbeat = try_get<uint64_t>(config, "heartbeat");
+    if (heartbeat and *heartbeat and **heartbeat > 0) {
+      auto interval = std::max(uint64_t{1}, **heartbeat / 3);
+      heartbeat_interval_ = std::chrono::seconds{interval};
+    }
+    co_return;
+  }
+
+  auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override {
+    if (not engine_ or not input or input->size() == 0) {
+      co_return;
+    }
+    if (auto err = engine_->publish(input, publish_opts_); err.valid()) {
+      diagnostic::error("failed to publish amqp message")
+        .primary(args_.op)
+        .note("size: {}", input->size())
+        .note("channel: {}", publish_opts_.channel)
+        .note("exchange: {}", publish_opts_.exchange)
+        .note("routing key: {}", publish_opts_.routing_key)
+        .hint("{}", err)
+        .emit(ctx);
+    }
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (heartbeat_interval_ == duration::zero()) {
+      co_await wait_forever();
+    }
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<folly::HighResDuration>(heartbeat_interval_));
+    co_return {};
+  }
+
+  auto process_task(Any, OpCtx& ctx) -> Task<void> override {
+    if (engine_) {
+      engine_->handle_heartbeat(ctx.dh());
+    }
+    co_return;
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    engine_.reset();
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  to_amqp_args args_;
+  Option<amqp_engine> engine_;
+  amqp_engine::publish_options publish_opts_{};
+  std::string exchange_str_;
+  std::string routing_key_str_;
+  duration heartbeat_interval_ = duration::zero();
 };
 
 } // namespace
