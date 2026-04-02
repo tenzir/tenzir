@@ -12,7 +12,6 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/flat_map.hpp"
-#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/request_cache.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -87,9 +86,6 @@ public:
   /// catalog (in bytes).
   auto memusage() const -> size_t;
 
-  /// Update the list of fields that should not be touched by the pruner.
-  void update_unprunable_fields(const partition_synopsis& ps);
-
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
@@ -104,9 +100,6 @@ public:
     synopses_per_type;
 
   std::optional<detail::request_cache> cache;
-
-  /// The set of fields that should not be touched by the pruner.
-  detail::heterogeneous_string_hashset unprunable_fields;
 
   tenzir::taxonomies taxonomies = {};
 };

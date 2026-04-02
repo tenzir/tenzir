@@ -1,0 +1,26 @@
+---
+name: export_catalog_lookup_concept
+description: >-
+  Query a node seeded with 100000 single-event Suricata DNS partitions through
+  a concept-style lookup and discard the results.
+tags:
+  benchmark: node
+  area: catalog
+  lookup: concept
+input:
+  path: suricata-dns.seed.ndjson
+  source: synthetic
+  events: 100000
+  measure: true
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - node_catalog_lookup:
+      events: 100000
+      max_partition_size: 1
+      schema: suricata
+      query_hit_index: 50000
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 1800
