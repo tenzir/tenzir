@@ -205,8 +205,7 @@ struct index_state {
 
   void unpin_recent_partition(const uuid& id);
 
-  void retire_partition(const uuid& id, active_partition_actor actor,
-                        caf::error reason);
+  void retire_partition(const uuid& id, caf::error reason);
 
   void drain_retired_partitions(caf::error reason);
 
@@ -238,17 +237,19 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
-  std::unordered_map<uuid, std::pair<type, active_partition_actor>> unpersisted
-    = {};
-
-  struct RetiredPartition {
+  struct unpersisted_partition_info {
+    type schema = {};
     active_partition_actor actor = {};
-    caf::error reason = caf::none;
+    // The index keeps one reference until the partition is safely retired.
+    // Each in-flight recent snapshot increments the count while it still
+    // needs to query the partition actor.
+    size_t ref_count = 1;
+    bool visible_for_recent = true;
+    bool exit_sent = false;
+    caf::error exit_reason = caf::none;
   };
 
-  std::unordered_map<uuid, size_t> recent_partition_pins = {};
-
-  std::unordered_map<uuid, RetiredPartition> retired_partitions = {};
+  std::unordered_map<uuid, unpersisted_partition_info> unpersisted = {};
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts

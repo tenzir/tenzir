@@ -821,7 +821,14 @@ void index_state::decommission_active_partition(
   const auto type = active_partition->first;
   // Move the active partition to the list of unpersisted partitions.
   TENZIR_ASSERT_EXPENSIVE(not unpersisted.contains(id));
-  unpersisted[id] = {type, actor};
+  unpersisted.emplace(id, unpersisted_partition_info{
+                            .schema = type,
+                            .actor = actor,
+                            .ref_count = 1,
+                            .visible_for_recent = true,
+                            .exit_sent = false,
+                            .exit_reason = caf::none,
+                          });
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
   const auto part_path = partition_path(id);
@@ -849,9 +856,8 @@ void index_state::decommission_active_partition(
                 self->mail(atom::update_v, partition_synopsis_pair{id, ps})
                   .send(listener);
               }
-              unpersisted.erase(id);
               persisted_partitions.emplace(id);
-              retire_partition(id, actor, caf::exit_reason::normal);
+              retire_partition(id, caf::exit_reason::normal);
               if (completion) {
                 completion(caf::none);
               }
@@ -862,8 +868,7 @@ void index_state::decommission_active_partition(
                            "the contained data will not be available for "
                            "queries: {}",
                            *self, schema, id, err);
-              unpersisted.erase(id);
-              retire_partition(id, actor, err);
+              retire_partition(id, err);
               if (completion) {
                 completion(err);
               }
@@ -874,8 +879,7 @@ void index_state::decommission_active_partition(
                      "from "
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
-        unpersisted.erase(id);
-        retire_partition(id, actor, err);
+        retire_partition(id, err);
         if (completion) {
           completion(err);
         }
@@ -918,48 +922,63 @@ auto index_state::flush() -> caf::typed_response_promise<void> {
 }
 
 void index_state::pin_recent_partition(const uuid& id) {
-  ++recent_partition_pins[id];
+  const auto it = unpersisted.find(id);
+  TENZIR_ASSERT(it != unpersisted.end());
+  TENZIR_ASSERT(it->second.visible_for_recent);
+  ++it->second.ref_count;
 }
 
 void index_state::unpin_recent_partition(const uuid& id) {
-  const auto it = recent_partition_pins.find(id);
-  TENZIR_ASSERT(it != recent_partition_pins.end());
-  TENZIR_ASSERT(it->second > 0);
-  --it->second;
-  if (it->second != 0) {
+  const auto it = unpersisted.find(id);
+  TENZIR_ASSERT(it != unpersisted.end());
+  TENZIR_ASSERT(it->second.ref_count > 0);
+  --it->second.ref_count;
+  if (it->second.ref_count != 0) {
     return;
   }
-  recent_partition_pins.erase(it);
-  if (auto retired = retired_partitions.find(id);
-      retired != retired_partitions.end()) {
-    self->send_exit(retired->second.actor, retired->second.reason);
-    retired_partitions.erase(retired);
+  if (not it->second.exit_sent) {
+    if (it->second.exit_reason.valid()) {
+      self->send_exit(it->second.actor, it->second.exit_reason);
+    } else {
+      self->send_exit(it->second.actor, caf::exit_reason::normal);
+    }
   }
+  unpersisted.erase(it);
 }
 
-void index_state::retire_partition(const uuid& id, active_partition_actor actor,
-                                   caf::error reason) {
-  if (recent_partition_pins.contains(id)) {
-    auto [_, inserted] = retired_partitions.emplace(
-      id,
-      RetiredPartition{.actor = std::move(actor), .reason = std::move(reason)});
-    TENZIR_ASSERT(inserted);
+void index_state::retire_partition(const uuid& id, caf::error reason) {
+  const auto it = unpersisted.find(id);
+  TENZIR_ASSERT(it != unpersisted.end());
+  it->second.visible_for_recent = false;
+  it->second.exit_reason = std::move(reason);
+  TENZIR_ASSERT(it->second.ref_count > 0);
+  --it->second.ref_count;
+  if (it->second.ref_count != 0) {
     return;
   }
-  self->send_exit(actor, reason);
+  if (not it->second.exit_sent) {
+    if (it->second.exit_reason.valid()) {
+      self->send_exit(it->second.actor, it->second.exit_reason);
+    } else {
+      self->send_exit(it->second.actor, caf::exit_reason::normal);
+    }
+  }
+  unpersisted.erase(it);
 }
 
 void index_state::drain_retired_partitions(caf::error reason) {
-  for (auto& [_, partition] : retired_partitions) {
-    auto shutdown_reason = reason.valid() ? reason : partition.reason;
+  for (auto& [_, partition] : unpersisted) {
+    partition.visible_for_recent = false;
+    auto shutdown_reason = reason.valid() ? reason : partition.exit_reason;
     if (shutdown_reason.valid()) {
       self->send_exit(partition.actor, shutdown_reason);
+      partition.exit_reason = shutdown_reason;
     } else {
       self->send_exit(partition.actor, caf::exit_reason::normal);
+      partition.exit_reason = caf::exit_reason::normal;
     }
+    partition.exit_sent = true;
   }
-  retired_partitions.clear();
-  recent_partition_pins.clear();
 }
 
 void index_state::add_partition_creation_listener(
@@ -1018,7 +1037,7 @@ auto index_state::schedule_lookups() -> size_t {
       }
       if (not part) {
         if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
-          part = it->second.second;
+          part = it->second.actor;
         } else if (auto it = persisted_partitions.find(partition_id);
                    it != persisted_partitions.end()) {
           part = inmem_partitions.get_or_load(partition_id);
@@ -1127,15 +1146,10 @@ std::size_t index_state::memusage() const {
     usage += as_bytes(type).size() + sizeof(partition_info);
   }
   for (const auto& [id, partition] : unpersisted) {
-    usage += sizeof(id) + as_bytes(partition.first).size()
-             + sizeof(partition.second);
+    usage += sizeof(id) + as_bytes(partition.schema).size() + sizeof(partition);
   }
   usage += persisted_partitions.size()
            * sizeof(decltype(persisted_partitions)::value_type);
-  usage += recent_partition_pins.size()
-           * sizeof(decltype(recent_partition_pins)::value_type);
-  usage += retired_partitions.size()
-           * sizeof(decltype(retired_partitions)::value_type);
   usage += pending_queries.memusage();
   for (const auto& [addr, uuids] : monitored_queries) {
     usage += sizeof(addr) + calculate_usage(uuids);
@@ -1278,7 +1292,7 @@ index(index_actor::stateful_pointer<index_state> self,
         }
         rp.deliver(std::move(*result));
       };
-      auto track_partition
+      auto track_unpersisted_partition
         = [pending, pinned_partitions, &state = self->state()](const uuid& id) {
             state.pin_recent_partition(id);
             pinned_partitions->push_back(id);
@@ -1289,7 +1303,7 @@ index(index_actor::stateful_pointer<index_state> self,
         if (schema.attribute("internal").has_value() != internal) {
           continue;
         }
-        track_partition(info.id);
+        *pending += 1;
         self->mail(atom::get_v)
           .request(info.actor, caf::infinite)
           .then(
@@ -1310,14 +1324,14 @@ index(index_actor::stateful_pointer<index_state> self,
             });
       }
       // Collect from unpersisted partitions (being written to disk).
-      for (const auto& [uuid, pair] : self->state().unpersisted) {
-        const auto& [type, actor] = pair;
-        if (type.attribute("internal").has_value() != internal) {
+      for (const auto& [uuid, partition] : self->state().unpersisted) {
+        if (not partition.visible_for_recent
+            or partition.schema.attribute("internal").has_value() != internal) {
           continue;
         }
-        track_partition(uuid);
+        track_unpersisted_partition(uuid);
         self->mail(atom::get_v)
-          .request(actor, caf::infinite)
+          .request(partition.actor, caf::infinite)
           .then(
             [result, pending,
              finish](std::vector<table_slice>& slices) mutable {
