@@ -1,0 +1,6 @@
+warning: field `x` not found
+ --> tests/operators/unroll/missing_field.tql:2:8
+  |
+2 | unroll x
+  |        ~ 
+  |
