@@ -135,7 +135,7 @@ auto replace_series(const basic_series<record_type>& input,
                     const type& what_type, const data& what, const data& with)
   -> std::vector<basic_series<record_type>> {
   auto fields = collect(input.fields());
-  if (fields.empty()) {
+  if (input.length() == 0 or fields.empty()) {
     return {input};
   }
   auto split_indices = std::set<int64_t>{0, input.length()};
