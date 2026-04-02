@@ -965,7 +965,6 @@ type::to_arrow_field(std::string_view name, bool nullable) const {
 }
 
 std::shared_ptr<arrow::Schema> type::to_arrow_schema() const {
-  TENZIR_ASSERT(! name().empty());
   TENZIR_ASSERT(is<record_type>(*this));
   return arrow::schema(as<record_type>(*this).to_arrow_type()->fields(),
                        make_arrow_metadata());

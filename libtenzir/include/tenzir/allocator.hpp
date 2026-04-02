@@ -12,6 +12,7 @@
 
 #include "tenzir/allocator_config.hpp"
 #include "tenzir/execution_node_name_guard.hpp"
+#include "tenzir/option.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/abstract_actor.hpp>
@@ -19,9 +20,12 @@
 #include <folly/SharedMutex.h>
 #include <tsl/robin_map.h>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <concepts>
 #include <cstddef>
+#include <cstring>
 #include <mutex>
 #include <pthread.h>
 #include <shared_mutex>
@@ -36,17 +40,23 @@
 
 namespace tenzir::memory {
 
-inline auto write_error(const char* txt) noexcept {
-  write(STDERR_FILENO, txt, strlen(txt));
+inline auto write_error(const char* txt, std::size_t size) noexcept {
+  write(STDERR_FILENO, txt, size);
 }
-#define TENZIR_STRINGIZE(x) TENZIR_STRINGIZE2(x)
-#define TENZIR_STRINGIZE2(x) #x
+inline auto write_error(const char* txt) noexcept {
+  write_error(txt, std::strlen(txt));
+}
+inline auto write_error(std::string_view txt) noexcept {
+  write_error(txt.data(), txt.size());
+}
+#define TENZIR_ALLOCATOR_STRINGIFY(x) TENZIR_ALLOCATOR_STRINGIFY2(x)
+#define TENZIR_ALLOCATOR_STRINGIFY2(x) #x
 
 #if TENZIR_ENABLE_ASSERTIONS
 #  define TENZIR_ALLOCATOR_ASSERT(COND)                                        \
     if (not static_cast<bool>(COND)) {                                         \
       write_error("assertion '" #COND "' failed" __FILE__                      \
-                  ":" TENZIR_STRINGIZE(__LINE__) "\n");                        \
+                  ":" TENZIR_ALLOCATOR_STRINGIFY(__LINE__) "\n");              \
       std::_Exit(EXIT_FAILURE);                                                \
     }                                                                          \
     (void)0
@@ -233,14 +243,15 @@ public:
     return alignment_;
   }
 
-  [[nodiscard]] auto as_comparable() const -> __uint128_t {
+  [[nodiscard]] auto as_comparable() const noexcept -> __uint128_t {
     // Mask out the alignment byte (byte 15, bits 120-127) when comparing
     constexpr static auto mask = (__uint128_t{1} << 120) - 1;
     return std::bit_cast<__uint128_t>(*this) & mask;
   }
 
 private:
-  std::array<char, 15> storage_ = {}; // make sure this is 0 initialized.
+  std::array<char, 15> storage_
+    = {'u', 'n', 'k', 'n', 'o', 'w', 'n'}; // make sure this is 0 initialized.
   alignment_t alignment_{std::align_val_t{1}};
 
   friend struct allocation_tag;
@@ -312,11 +323,12 @@ struct allocation_tag {
     const auto uint_data_ptr = reinterpret_cast<std::uintptr_t>(data_ptr);
     const auto* const tag_ptr = reinterpret_cast<const allocation_tag*>(
       uint_data_ptr - sizeof(allocation_tag));
+    const auto& tag = *tag_ptr;
     const void* const storage_ptr = reinterpret_cast<const void*>(
-      uint_data_ptr - tag_ptr->source_identifier.alignment().value());
+      uint_data_ptr - tag.source_identifier.alignment().value());
     return {
       .storage_ptr = storage_ptr,
-      .tag = *tag_ptr,
+      .tag = tag,
     };
   }
   /// Gets both the storage pointer and tag from a data pointer
@@ -432,37 +444,28 @@ class actor_stats final {
 public:
   auto note_allocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
-    auto read_lock = std::shared_lock{mut_};
-    auto it = allocations_by_entity_.find(tag.source_identifier);
-    if (it == allocations_by_entity_.end()) {
-      read_lock.unlock();
-      const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, success]
-        = allocations_by_entity_.try_emplace(tag.source_identifier);
-      auto& value = it->second;
-      value.note_allocation(size);
+    const auto success = try_note_impl(tag, &stats::note_allocation, size);
+    if (success) {
       return;
     }
+    const auto write_lock = std::scoped_lock{mut_};
+    const auto [it, _]
+      = allocations_by_entity_.try_emplace(tag.source_identifier);
     auto& value = it->second;
     value.note_allocation(size);
   }
 
   auto note_reallocation(const detail::allocation_tag& tag,
                          std::int64_t old_size, std::int64_t new_size) -> void {
-    auto read_lock = std::shared_lock{mut_};
-    const auto it = allocations_by_entity_.find(tag.source_identifier);
-    TENZIR_ALLOCATOR_ASSERT(it != allocations_by_entity_.end());
-    auto& value = it->second;
-    value.note_reallocation(false, old_size, new_size);
+    const auto success = try_note_impl(tag, &stats::note_reallocation, false,
+                                       old_size, new_size);
+    TENZIR_ALLOCATOR_ASSERT(success && "unexpected unknown reallocation");
   }
 
   auto note_deallocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
-    auto read_lock = std::shared_lock{mut_};
-    const auto it = allocations_by_entity_.find(tag.source_identifier);
-    TENZIR_ALLOCATOR_ASSERT(it != allocations_by_entity_.end());
-    auto& value = it->second;
-    value.note_deallocation(size);
+    const auto success = try_note_impl(tag, &stats::note_deallocation, size);
+    TENZIR_ALLOCATOR_ASSERT(success && "unexpected unknown deallocation");
   }
 
   /// Obtains the internal data as a copy
@@ -471,10 +474,39 @@ public:
     return {allocations_by_entity_, &resource_};
   }
 
+  [[nodiscard]] auto is_known(const detail::allocation_tag& tag) -> bool {
+    auto read_lock = std::shared_lock{mut_};
+    auto it = allocations_by_entity_.find(tag.source_identifier);
+    return it != allocations_by_entity_.end();
+  }
+
 private:
+  template <class... Args>
+  auto try_note_impl(const detail::allocation_tag& tag,
+                     void (stats::*f)(Args...), Args... args) -> bool {
+    auto read_lock = std::shared_lock{mut_};
+    auto it = allocations_by_entity_.find(tag.source_identifier);
+    if (it == allocations_by_entity_.end()) {
+      return false;
+    }
+    auto& value = it->second;
+    (value.*f)(args...);
+    return true;
+  }
+
   static inline basic_pmr_resource<InternalTrait> resource_;
   folly::SharedMutex mut_;
   actor_stats_map allocations_by_entity_{actor_stats_allocator{&resource_}};
+};
+
+template <detail::allocator_trait InternalTrait>
+union actor_stats_storage {
+  actor_stats<InternalTrait> value{};
+
+  constexpr actor_stats_storage() noexcept = default;
+
+  ~actor_stats_storage() {
+  }
 };
 
 } // namespace detail
@@ -503,9 +535,16 @@ struct polymorphic_allocator {
   virtual auto has_actor_stats() const noexcept -> bool = 0;
   virtual auto backend() const noexcept -> enum backend = 0;
   virtual auto backend_name() const noexcept -> std::string_view = 0;
+
+private:
+  friend auto destroy_allocator_actor_stats_on_shutdown() noexcept -> void;
+
+  virtual auto destroy_actor_stats() noexcept -> void = 0;
 };
 
 static_assert(detail::allocator<polymorphic_allocator>);
+
+auto destroy_allocator_actor_stats_on_shutdown() noexcept -> void;
 
 namespace detail {
 
@@ -521,8 +560,11 @@ template <allocator_trait Traits, allocator_trait InternalTrait>
 class basic_allocator final : public polymorphic_allocator {
 public:
   constexpr explicit basic_allocator(
-    struct stats* stats, detail::actor_stats<InternalTrait>* actor_stats)
-    : stats_{stats}, actor_stats_{actor_stats} {
+    struct stats* stats, detail::actor_stats<InternalTrait>* actor_stats,
+    std::string_view allocator_type)
+    : stats_{stats},
+      actor_stats_{actor_stats},
+      allocator_type_{allocator_type} {
   }
 
   static_assert(sizeof(allocation_tag)
@@ -531,7 +573,7 @@ public:
                 "into the width of the default alignment.");
 
   [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2)]]
-  auto allocate(std::size_t size) noexcept -> void* final override {
+  auto allocate(std::size_t size) noexcept -> void* final {
     if (size == 0) {
       return &zero_size_area;
     }
@@ -560,7 +602,7 @@ public:
   [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2),
     gnu::alloc_align(3)]]
   auto allocate(std::size_t size, std::align_val_t alignment) noexcept
-    -> void* final override {
+    -> void* final {
     if (alignment <= Traits::default_alignment) {
       return allocate(size);
     }
@@ -591,8 +633,7 @@ public:
 
   [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc,
     gnu::alloc_size(2, 3)]]
-  auto calloc(std::size_t count, std::size_t size) noexcept
-    -> void* final override {
+  auto calloc(std::size_t count, std::size_t size) noexcept -> void* final {
     if (size * count == 0) {
       return &zero_size_area;
     }
@@ -624,7 +665,7 @@ public:
   [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2, 3),
     gnu::alloc_align(4)]]
   auto calloc(std::size_t count, std::size_t size,
-              std::align_val_t alignment) noexcept -> void* final override {
+              std::align_val_t alignment) noexcept -> void* final {
     if (alignment <= Traits::default_alignment) {
       return calloc(count, size);
     }
@@ -655,8 +696,7 @@ public:
   }
 
   [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(3)]]
-  auto reallocate(void* old_ptr, std::size_t new_size) noexcept
-    -> void* final override {
+  auto reallocate(void* old_ptr, std::size_t new_size) noexcept -> void* final {
     if (new_size == 0) {
       deallocate(old_ptr);
       return &zero_size_area;
@@ -665,10 +705,14 @@ public:
       return allocate(new_size);
     }
     if (actor_stats_) {
-      new_size
-        = allocation_tag::storage_size_for(new_size, Traits::default_alignment);
       const auto [old_storage_ptr, old_tag]
         = allocation_tag::get_storage_and_tag(old_ptr);
+      if (not actor_stats_->is_known(old_tag)) {
+        write_unknown_pointer_warning("reallocate", old_tag);
+        return nullptr;
+      }
+      new_size
+        = allocation_tag::storage_size_for(new_size, Traits::default_alignment);
       TENZIR_ALLOCATOR_ASSERT(old_tag.source_identifier.alignment()
                               == Traits::default_alignment);
       const auto old_size = Traits::usable_size(old_storage_ptr);
@@ -685,7 +729,8 @@ public:
         new_storage_ptr, Traits::default_alignment);
       actor_stats_->note_reallocation(*new_tag, old_size, actual_new_size);
       return new_data_ptr;
-    } else if (stats_) {
+    }
+    if (stats_) {
       const auto old_size = Traits::usable_size(old_ptr);
       const auto new_ptr = Traits::realloc(old_ptr, new_size);
       if (new_ptr == nullptr) {
@@ -701,7 +746,7 @@ public:
   [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(3),
     gnu::alloc_align(4)]]
   auto reallocate(void* old_ptr, std::size_t new_size,
-                  std::align_val_t alignment) noexcept -> void* final override {
+                  std::align_val_t alignment) noexcept -> void* final {
     if (alignment <= Traits::default_alignment) {
       return reallocate(old_ptr, new_size);
     }
@@ -713,9 +758,13 @@ public:
       return allocate(new_size, alignment);
     }
     if (actor_stats_) {
-      new_size = allocation_tag::storage_size_for(new_size, alignment);
       const auto [old_storage_ptr, old_tag]
         = allocation_tag::get_storage_and_tag(old_ptr);
+      if (not actor_stats_->is_known(old_tag)) {
+        write_unknown_pointer_warning("reallocate", old_tag);
+        return nullptr;
+      }
+      new_size = allocation_tag::storage_size_for(new_size, alignment);
       TENZIR_ALLOCATOR_ASSERT(old_tag.source_identifier.alignment()
                               == alignment);
       const auto old_size = Traits::usable_size(old_storage_ptr);
@@ -733,7 +782,8 @@ public:
         = allocation_tag::obtain_from(new_storage_ptr, alignment);
       actor_stats_->note_reallocation(*new_tag, old_size, actual_new_size);
       return data_ptr;
-    } else if (stats_) {
+    }
+    if (stats_) {
       const auto old_size = Traits::usable_size(old_ptr);
       const auto new_ptr = Traits::realloc_aligned(
         old_ptr, new_size, std::to_underlying(alignment));
@@ -749,7 +799,7 @@ public:
   }
 
   [[gnu::hot, gnu::always_inline]]
-  auto deallocate(void* ptr) noexcept -> void final override {
+  auto deallocate(void* ptr) noexcept -> void final {
     if (ptr == nullptr) {
       return;
     }
@@ -759,6 +809,10 @@ public:
     void* storage_ptr = ptr;
     if (actor_stats_) {
       const auto [storage, tag] = allocation_tag::get_storage_and_tag(ptr);
+      if (not actor_stats_->is_known(tag)) {
+        write_unknown_pointer_warning("deallocate", tag);
+        return;
+      }
       storage_ptr = storage;
       const auto usable = Traits::usable_size(storage_ptr);
       if (stats_) {
@@ -773,20 +827,27 @@ public:
   }
 
   [[gnu::hot, gnu::always_inline]]
-  auto size(const void* ptr) const noexcept -> std::size_t final override {
+  auto size(const void* ptr) const noexcept -> std::size_t final {
+    if (ptr == nullptr or ptr == &zero_size_area) {
+      return 0;
+    }
     if (actor_stats_) {
-      auto [storage_ptr, _] = allocation_tag::get_storage_and_tag(ptr);
+      const auto [storage_ptr, tag] = allocation_tag::get_storage_and_tag(ptr);
+      if (not actor_stats_->is_known(tag)) {
+        write_unknown_pointer_warning("size", tag);
+        return 0;
+      }
       return Traits::usable_size(storage_ptr);
     }
     return Traits::usable_size(ptr);
   }
 
-  auto trim() noexcept -> void final override {
+  auto trim() noexcept -> void final {
     Traits::trim();
   }
 
   [[nodiscard]]
-  auto stats() const noexcept -> const struct stats& final override {
+  auto stats() const noexcept -> const struct stats& final {
     return stats_ ? *stats_ : zero_stats;
   }
 
@@ -802,18 +863,77 @@ public:
   }
 
   [[nodiscard]]
-  auto backend() const noexcept -> enum backend final override {
+  auto backend() const noexcept -> enum backend final {
     return Traits::backend_value;
   }
 
   [[nodiscard]]
-  auto backend_name() const noexcept -> std::string_view final override {
+  auto backend_name() const noexcept -> std::string_view final {
     return Traits::name;
   }
 
 private:
+  auto write_unknown_pointer_warning(std::string_view operation,
+                                     const allocation_tag& tag) const noexcept
+    -> void {
+    auto buffer = std::array<char, 192>{};
+    auto used = size_t{0};
+    auto append = [&](std::string_view text) {
+      TENZIR_ALLOCATOR_ASSERT(used + text.size() <= buffer.size());
+      const auto free_size = buffer.size() - used;
+      const auto copy_size = std::min(free_size, text.size());
+      std::memcpy(buffer.data() + used, text.data(), copy_size);
+      used += copy_size;
+    };
+    auto append_hex = [&](std::byte byte) {
+      constexpr auto hex_digits = std::string_view{"0123456789abcdef"};
+      if (used + 2 > buffer.size()) {
+        return false;
+      }
+      const auto value = std::to_integer<std::uint8_t>(byte);
+      buffer[used++] = hex_digits[value >> 4];
+      buffer[used++] = hex_digits[value & 0x0f];
+      return true;
+    };
+    const auto name = tag.source_identifier.name();
+    const auto raw_identifier
+      = std::bit_cast<std::array<std::byte, sizeof(actor_identifier)>>(
+        tag.source_identifier);
+    append("WARNING: allocator actor stats: unknown tag '");
+    append(name);
+    append("' rem=");
+    for (auto i = name.size(); i < raw_identifier.size(); ++i) {
+      if (i != name.size()) {
+        if (used + 1 > buffer.size()) {
+          break;
+        }
+        buffer[used++] = ':';
+      }
+      if (not append_hex(raw_identifier[i])) {
+        break;
+      }
+    }
+    append(" op=");
+    append(operation);
+    append(" cat=");
+    append(allocator_type_);
+    append(" backend=");
+    append(Traits::name);
+    append("\n");
+    write_error(buffer.data(), used);
+  }
+
   struct stats* const stats_{nullptr};
   detail::actor_stats<InternalTrait>* const actor_stats_{nullptr};
+  const std::string_view allocator_type_;
+
+  auto destroy_actor_stats() noexcept -> void final {
+    if (actor_stats_ == nullptr) {
+      return;
+    }
+    using actor_stats_type = detail::actor_stats<InternalTrait>;
+    actor_stats_->~actor_stats_type();
+  }
 };
 
 } // namespace detail
@@ -1052,7 +1172,8 @@ auto selected_backend(const char* env) noexcept -> backend;
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
           enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)           \
             ? &actor_stats_                                                    \
-            : nullptr                                                          \
+            : nullptr,                                                         \
+          ENV_SUFFIX                                                           \
       }
 #    define TENZIR_ALLOCATOR_JEMALLOC_CASE()                                   \
       case backend::jemalloc:                                                  \
@@ -1071,7 +1192,8 @@ auto selected_backend(const char* env) noexcept -> backend;
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
           enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)           \
             ? &actor_stats_                                                    \
-            : nullptr                                                          \
+            : nullptr,                                                         \
+          ENV_SUFFIX                                                           \
       }
 #    define TENZIR_ALLOCATOR_MIMALLOC_CASE()                                   \
       case backend::mimalloc:                                                  \
@@ -1087,12 +1209,14 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> polymorphic_allocator& {                                              \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<system::traits>{};        \
+      static auto actor_stats_                                                 \
+        = detail::actor_stats_storage<system::traits>{};                       \
       static auto system_ = system::allocator{                                 \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
         enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
-          : nullptr};                                                          \
+          ? &actor_stats_.value                                                \
+          : nullptr,                                                           \
+        ENV_SUFFIX};                                                           \
       TENZIR_ALLOCATOR_JEMALLOC_INSTANCE(ENV_SUFFIX);                          \
       TENZIR_ALLOCATOR_MIMALLOC_INSTANCE(ENV_SUFFIX);                          \
       static auto& instance = []() -> polymorphic_allocator& {                 \
@@ -1113,12 +1237,14 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> jemalloc::allocator& {                                                \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<jemalloc::traits>{};      \
+      static auto actor_stats_                                                 \
+        = detail::actor_stats_storage<jemalloc::traits>{};                     \
       static auto instance = jemalloc::allocator{                              \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
         enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
-          : nullptr};                                                          \
+          ? &actor_stats_.value                                                \
+          : nullptr,                                                           \
+        ENV_SUFFIX};                                                           \
       return instance;                                                         \
     }
 
@@ -1128,12 +1254,14 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> mimalloc::allocator& {                                                \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<mimalloc::traits>{};      \
+      static auto actor_stats_                                                 \
+        = detail::actor_stats_storage<mimalloc::traits>{};                     \
       static auto instance = mimalloc::allocator{                              \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
         enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
-          : nullptr};                                                          \
+          ? &actor_stats_.value                                                \
+          : nullptr,                                                           \
+        ENV_SUFFIX};                                                           \
       return instance;                                                         \
     }
 
@@ -1143,12 +1271,14 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> system::allocator& {                                                  \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<system::traits>{};        \
+      static auto actor_stats_                                                 \
+        = detail::actor_stats_storage<system::traits>{};                       \
       static auto instance = system::allocator{                                \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
         enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
-          : nullptr};                                                          \
+          ? &actor_stats_.value                                                \
+          : nullptr,                                                           \
+        ENV_SUFFIX};                                                           \
       return instance;                                                         \
     }
 
@@ -1182,5 +1312,8 @@ TENZIR_MAKE_ALLOCATOR(c_allocator, "C")
 #undef TENZIR_ALLOCATOR_MIMALLOC_CASE
 #undef TENZIR_ALLOCATOR_JEMALLOC_INSTANCE
 #undef TENZIR_ALLOCATOR_JEMALLOC_CASE
+#undef TENZIR_ALLOCATOR_STRINGIFY
+#undef TENZIR_ALLOCATOR_STRINGIFY2
+#undef TENZIR_ALLOCATOR_ASSERT
 
 } // namespace tenzir::memory

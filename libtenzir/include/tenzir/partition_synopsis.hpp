@@ -93,13 +93,11 @@ struct partition_synopsis final : public caf::ref_counted {
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis&,
          partition_synopsis&);
 
-private:
   // Returns a raw pointer to a deep copy of this partition synopsis.
   // For use by the `caf::intrusive_cow_ptr`.
-  friend partition_synopsis* ::caf::default_intrusive_cow_ptr_unshare<
-    partition_synopsis>(partition_synopsis*& ptr);
   partition_synopsis* copy() const;
 
+private:
   // Cached memory usage.
   mutable std::atomic<size_t> memusage_ = 0ull;
 };
