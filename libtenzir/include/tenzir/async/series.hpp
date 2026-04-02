@@ -10,12 +10,11 @@
 
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
-#include "tenzir/box.hpp"
 #include "tenzir/series_builder.hpp"
 
 namespace tenzir {
 
-using WaitChannel = Box<UnboundedQueue<std::chrono::steady_clock::duration>>;
+using WaitChannel = UnboundedQueue<std::chrono::steady_clock::duration>;
 
 /// Takes result of series_builder::yield_ready and pushes data or triggers
 /// a wait for timeout that should call this function again.
@@ -33,4 +32,4 @@ push_or_wait(series_builder::YieldReadyResult result, Push<table_slice>& push,
   }
 }
 
-}; // namespace tenzir
+} // namespace tenzir

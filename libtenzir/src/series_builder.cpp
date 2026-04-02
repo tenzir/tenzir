@@ -1547,7 +1547,6 @@ auto series_builder::yield_ready(std::string_view name, duration timeout)
       .data = None{},
       .wait_for = timeout,
     };
-    ;
   }
   auto const waiting = now - *oldest_event_;
   if (waiting >= timeout) {

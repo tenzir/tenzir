@@ -37,8 +37,6 @@ namespace tenzir::plugins::lines {
 
 namespace {
 
-using std::chrono::steady_clock;
-
 struct parser_args {
   parser_args() = default;
 
@@ -660,7 +658,7 @@ private:
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
   series_builder builder_;
-  mutable Box<UnboundedQueue<steady_clock::duration>> wait_for_;
+  mutable Box<WaitChannel> wait_for_{std::in_place};
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;

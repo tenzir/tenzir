@@ -22,8 +22,6 @@ namespace tenzir::plugins::read_delimited_regex {
 
 namespace {
 
-using std::chrono::steady_clock;
-
 struct ReadDelimitedRegexArgs {
   located<data> separator;
   Option<bool> binary;
@@ -161,7 +159,7 @@ private:
   // we don't match at this position again.
   bool last_match_zero_ = false;
   series_builder builder_;
-  mutable WaitChannel wait_for_;
+  mutable Box<WaitChannel> wait_for_{std::in_place};
 };
 
 class plugin final : public virtual OperatorPlugin {

@@ -128,7 +128,7 @@ private:
   bool binary_ = false;
   std::string buffer_;
   series_builder builder_;
-  mutable WaitChannel wait_for_;
+  mutable Box<WaitChannel> wait_for_{std::in_place};
 };
 
 class plugin final : public virtual OperatorPlugin {
