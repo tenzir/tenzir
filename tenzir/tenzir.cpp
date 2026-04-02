@@ -421,19 +421,22 @@ auto main(int argc, char** argv) -> int try {
         __attribute__((no_sanitize_address))
 #endif
         {
-          int signum = 0;
-          sigwait(&sigset, &signum);
-          TENZIR_WARN("received signal {}", signum);
-          if (not stop) {
+          while (not stop) {
+            int signum = 0;
+            sigwait(&sigset, &signum);
+            if (stop) {
+              break;
+            }
+            TENZIR_WARN("received signal {}", signum);
             caf::anon_mail(atom::internal_v, atom::signal_v, signum)
               .urgent().send(reflector.get());
           }
         });
     auto signal_monitoring_joiner = detail::scope_guard{[&]() noexcept {
       stop = true;
-      if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
-        TENZIR_ERROR("failed to cancel signal monitoring thread");
-      }
+      // Wake the thread from sigwait() by sending it SIGTERM. This avoids
+      // pthread_cancel(), whose forced unwinding can crash in libunwind.
+      pthread_kill(signal_monitoring_thread.native_handle(), SIGTERM);
       signal_monitoring_thread.join();
     }};
     // clang-format on
