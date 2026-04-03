@@ -1,6 +1,6 @@
 finalPkgs: prevPkgs:
 let
-  inherit (prevPkgs) lib config;
+  inherit (prevPkgs) lib;
   inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };

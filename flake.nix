@@ -84,10 +84,10 @@
       {
         packages =
           flake-utils.lib.flattenTree {
-            tenzir-de = package.tenzir-de;
-            tenzir-de-static = package.tenzir-de-static;
-            tenzir = package.tenzir;
-            tenzir-static = package.tenzir-static;
+            inherit (package) tenzir-de;
+            inherit (package) tenzir-de-static;
+            inherit (package) tenzir;
+            inherit (package) tenzir-static;
             tenzir-de-clang = package-clang.tenzir-de;
             tenzir-de-static-clang = package-clang.tenzir-de-static;
             tenzir-clang = package-clang.tenzir;
@@ -110,8 +110,8 @@
         # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
         apps.generate-sbom =
           let
-            nix = nixpkgs.legacyPackages."${system}".nix;
-            sbomnix = inputs.sbomnix.packages.${system}.sbomnix;
+            inherit (nixpkgs.legacyPackages."${system}") nix;
+            inherit (inputs.sbomnix.packages.${system}) sbomnix;
           in
           # We use tenzir-de-static so we don't require proprietary plugins,
           # they don't influence the final result.

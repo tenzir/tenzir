@@ -23,9 +23,7 @@ fizz.overrideAttrs (orig: {
       hash
       ;
   };
-  patches = (
-    builtins.filter (x: (builtins.match ".*-glog-0\.7\.patch$" "${x}") == null) orig.patches
-  );
+  patches = builtins.filter (x: (builtins.match ".*-glog-0\.7\.patch$" "${x}") == null) orig.patches;
   env =
     let
       origEnv = orig.env or { };

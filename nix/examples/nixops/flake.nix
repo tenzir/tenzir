@@ -10,7 +10,6 @@
 
   outputs =
     {
-      self,
       nixpkgs,
       nixops-plugged,
       flake-utils,
