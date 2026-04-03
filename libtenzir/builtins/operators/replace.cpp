@@ -10,8 +10,10 @@
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/async.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/series.hpp"
@@ -133,7 +135,7 @@ auto replace_series(const basic_series<record_type>& input,
                     const type& what_type, const data& what, const data& with)
   -> std::vector<basic_series<record_type>> {
   auto fields = collect(input.fields());
-  if (fields.empty()) {
+  if (input.length() == 0 or fields.empty()) {
     return {input};
   }
   auto split_indices = std::set<int64_t>{0, input.length()};
@@ -326,7 +328,78 @@ private:
   replace_args args_;
 };
 
-struct replace : public virtual operator_plugin2<replace_operator> {
+struct ReplaceArgs {
+  std::vector<ast::field_path> path;
+  located<data> what;
+  located<data> with;
+};
+
+class Replace final : public Operator<table_slice, table_slice> {
+public:
+  explicit Replace(ReplaceArgs args)
+    : args_{std::move(args)},
+      what_type_{type::infer(args_.what.inner).value()},
+      replace_with_null_{
+        type::infer(args_.with.inner).value().kind().is<null_type>()} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& /*ctx*/)
+    -> Task<void> override {
+    auto s = basic_series<record_type>{input};
+    if (replace_with_null_) {
+      auto rs = replace_series_with_null(s, args_.path, 0, what_type_,
+                                         args_.what.inner);
+      co_await push(table_slice{
+        arrow::RecordBatch::Make(input.schema().to_arrow_schema(), rs.length(),
+                                 rs.array->fields()),
+        input.schema(),
+      });
+      co_return;
+    }
+    auto rs = replace_series(s, args_.path, what_type_, args_.what.inner,
+                             args_.with.inner);
+    auto attrs = collect(input.schema().attributes());
+    for (auto& r : rs) {
+      auto rty = type{input.schema().name(), r.type, auto{attrs}};
+      co_await push(table_slice{
+        arrow::RecordBatch::Make(rty.to_arrow_schema(), r.array->length(),
+                                 r.array->fields()),
+        std::move(rty),
+      });
+    }
+  }
+
+private:
+  ReplaceArgs args_;
+  type what_type_;
+  bool replace_with_null_ = false;
+};
+
+struct replace : public virtual operator_plugin2<replace_operator>,
+                 public virtual OperatorPlugin {
+  auto describe() const -> Description override {
+    auto d = Describer<ReplaceArgs, Replace>{};
+    auto what = d.named("what", &ReplaceArgs::what);
+    auto with = d.named("with", &ReplaceArgs::with);
+    d.optional_variadic("fields", &ReplaceArgs::path, "field");
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto what_value, ctx.get(what));
+      TRY(auto with_value, ctx.get(with));
+      if (not type::infer(what_value.inner)) {
+        diagnostic::error("failed to infer type of `what`")
+          .primary(what_value.source)
+          .emit(ctx);
+      }
+      if (not type::infer(with_value.inner)) {
+        diagnostic::error("failed to infer type of `with`")
+          .primary(with_value.source)
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = replace_args{};
