@@ -153,6 +153,7 @@ def _start_node(
     state_dir.mkdir(parents=True, exist_ok=True)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_handle = log_path.open("w", encoding="utf-8")
+    process: subprocess.Popen[str] | None = None
     try:
         process = context.runtime.popen_tenzir_node(
             args=[
@@ -173,6 +174,8 @@ def _start_node(
             startup_timeout_seconds=startup_timeout_seconds,
         )
     except Exception:
+        if process is not None:
+            _stop_node(process, shutdown_timeout_seconds=5.0)
         log_handle.close()
         raise
     _LOG.info("Started tenzir-node for catalog lookup benchmark at %s", endpoint)
