@@ -19,6 +19,11 @@
     sbomnix.url = "github:tiiuae/sbomnix";
     sbomnix.inputs.nixpkgs.follows = "nixpkgs";
 
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -74,6 +79,7 @@
           inherit tenzirPythonPkgs;
           forceClang = true;
         };
+        treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
       in
       {
         packages =
@@ -151,25 +157,11 @@
             '';
           };
         # Legacy aliases for backwards compatibility.
-        devShell = import ./shell.nix { inherit pkgs package; };
-        formatter = pkgs.nixfmt;
-        hydraJobs = {
-          packages = self.packages.${system};
-        }
-        // (
-          let
-            tenzir-vm-tests = nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix {
-              # FIXME: the pkgs channel has an issue made the testing creashed
-              makeTest = import (nixpkgs.outPath + "/nixos/tests/make-test-python.nix");
-              inherit self pkgs;
-            };
-          in
-          pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            inherit (tenzir-vm-tests)
-              tenzir-vm-systemd
-              ;
-          }
-        );
+        devShells.default = import ./shell.nix { inherit pkgs package; };
+        formatter = treefmtEval.config.build.wrapper;
+        checks = {
+          formatting = treefmtEval.config.build.check self;
+        };
       }
     );
 }
