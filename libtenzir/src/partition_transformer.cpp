@@ -506,10 +506,11 @@ auto partition_transformer(
         self->mail(atom::persist_v)
           .request(partition_data.builder, caf::infinite)
           .then(
-            [](resource&) {
-              // This is handled via the down handler.
-              // TODO: The logic needs to be moved here when updating to CAF
-              // 1.0.
+            [self, builder = partition_data.builder](resource&) {
+              // Unlike active partitions, the transformer no longer needs the
+              // store builder after `persist` succeeds, so we explicitly shut
+              // it down to preserve the existing completion signal.
+              self->send_exit(builder, caf::exit_reason::normal);
             },
             [self](caf::error& err) {
               auto annotated_error = diagnostic::error(err).note("").to_error();
