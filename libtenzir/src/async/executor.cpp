@@ -797,6 +797,9 @@ private:
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
+    // TODO: Empty subpipelines need special treatment. We currently assume that
+    // they don't exist. Perhaps we should simply insert `pass` if they are empty.
+    TENZIR_ASSERT(not spawned.empty());
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
@@ -806,10 +809,12 @@ private:
         tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
         auto chain
           = OperatorChain<In, Out>::try_from(std::move(spawned)).unwrap();
-        auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
-          = exec_ctx_.make_channel<In>(sub_id.op(chain.size() - 1).to(id_));
+          = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+        // We already checked for non-empty chain above.
+        TENZIR_ASSERT(chain.size() > 0);
+        auto [push_downstream, pull_downstream]
+          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
         auto runner
           = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
                                     std::move(push_downstream),
