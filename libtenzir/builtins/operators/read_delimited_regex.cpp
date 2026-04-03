@@ -50,14 +50,13 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    auto duration = co_await wait_for_->dequeue();
-    co_await sleep_for(duration);
+    co_await pusher_.wait();
     co_return {};
   }
 
   auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    co_await push_or_wait(builder_.yield_ready(TY_NAME), push, *wait_for_);
+    co_await pusher_.push(builder_.yield_ready(TY_NAME), push);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -67,7 +66,7 @@ public:
     }
     buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
     match_and_consume(/*has_finished=*/false, ctx);
-    co_await push_or_wait(builder_.yield_ready(TY_NAME), push, *wait_for_);
+    co_await pusher_.push(builder_.yield_ready(TY_NAME), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -159,7 +158,7 @@ private:
   // we don't match at this position again.
   bool last_match_zero_ = false;
   series_builder builder_;
-  mutable Box<WaitChannel> wait_for_ = new_wait_channel();
+  SeriesPusher pusher_;
 };
 
 class plugin final : public virtual OperatorPlugin {

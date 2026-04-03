@@ -22,6 +22,7 @@
 #include <optional>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 namespace tenzir {
 
@@ -174,16 +175,38 @@ public:
   auto length() const -> int64_t;
 
   struct YieldReadyResult {
-    Option<table_slice> data = None{};
+    std::vector<table_slice> slices = {};
     Option<duration> wait_for = None{};
+
+    auto begin() -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    auto begin() const -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() const -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    operator std::vector<table_slice>&&() && {
+      return std::move(slices);
+    }
   };
 
   /// Returns either one ready table slice, or the remaining wait duration.
   ///
   /// The method tracks when the current buffered run started and compares that
   /// against `timeout` on subsequent calls.
-  auto yield_ready(std::string_view name = "",
-                   duration timeout = defaults::import::batch_timeout)
+  auto
+  yield_ready(std::string_view name = "", clock::time_point now = clock::now(),
+              uint64_t desired_size = defaults::import::table_slice_size,
+              duration timeout = defaults::import::batch_timeout)
     -> YieldReadyResult;
 
   /// Removes the element that is currently being built.

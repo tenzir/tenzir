@@ -246,38 +246,11 @@ public:
   using time_point = clock::time_point;
   using duration = clock::duration;
 
-  /// @returns a vector of all currently ready (based on timeout or size) series
-  [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready() -> std::vector<series>;
-
-  struct YieldReadyResult {
-    std::vector<table_slice> slices = {};
-    duration wait_for = duration::max();
-
-    auto begin() -> decltype(slices.begin()) {
-      return slices.begin();
-    }
-
-    auto end() -> decltype(slices.end()) {
-      return slices.end();
-    }
-
-    auto begin() const -> decltype(slices.begin()) {
-      return slices.begin();
-    }
-
-    auto end() const -> decltype(slices.end()) {
-      return slices.end();
-    }
-
-    operator std::vector<table_slice>&&() && {
-      return std::move(slices);
-    }
-  };
   /// @returns all currently ready (based on timeout or size)table slices as
   /// well as a duration after which the next would be ready.
   [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready_as_table_slice() -> YieldReadyResult;
+  auto yield_ready_as_table_slice(time_point now = clock::now())
+    -> series_builder::YieldReadyResult;
 
   /// @brief Starts building a new record.
   [[nodiscard]] auto record() -> record_generator;
@@ -450,7 +423,7 @@ private:
   /// or requests ready events.
   /// This function is responsible for computing the signature and
   /// committing the event to the correct `series_builder` based on that.
-  void complete_last_event(time_point now = clock::now());
+  void complete_last_event();
 
   /// @brief clears the currently build raw event.
   void clear_raw_event();
@@ -465,39 +438,22 @@ private:
     entry_data(const tenzir::type* schema = nullptr) : builder{schema} {
     }
 
-    auto flush(time_point now) -> std::vector<series> {
-      oldest_event = {};
-      last_flush = now;
+    auto flush() -> std::vector<series> {
       return builder.finish();
     }
 
     series_builder builder;
-    // The time when the oldest event present in `builder` was added.
-    time_point oldest_event;
-    // The time when this entry was last flushed. This is used for garbage
-    // collection.
-    time_point last_flush;
     bool unused = false;
   };
 
-  /// @brief Makes all currently ready (based on timeout or size)  events
-  /// available in `ready_events_` and returns a duration after which the
-  /// builder expects to have more events ready.
-  auto make_events_available_on_timeout(time_point now) -> duration;
-
   /// @brief appends `new_events` to `ready_events_`
-  void append_ready_events(std::vector<series>&& new_events);
+  void append_ready_events(std::vector<series> new_events);
 
   /// @brief "garbage collects" all entries in `entries_` that satisfy the
   /// predicate.
   /// The implementation is in the source file, since its a private/internal
   /// function and thus will only be instantiated by other member functions.
   void garbage_collect_where(std::predicate<const entry_data&> auto pred);
-
-  /// Besides the `series_builder` instances in `entries_`, there also is
-  /// `merging_builder_`. This function flushes that builder, appending its
-  /// current results to `ready_events_`.
-  void flush_merging_builder();
 
   using signature_type = typename data_builder::signature_type;
 
@@ -533,8 +489,6 @@ private:
   // events that have been made ready (timeout,  batch size, ordered mode
   // builder switch)
   std::vector<series> ready_events_;
-  // The point at which the oldest event was put into the merging builder.
-  time_point oldest_event_in_merging_;
   // currently active builder index. used in ordered mode to check whether we
   // need to yield on builder switch
   size_t active_index_ = 0;
@@ -567,7 +521,7 @@ auto object_generator::data(T d) -> void {
       raw->data(d);
     },
   };
-  return std::visit(visitor, var_);
+  std::visit(visitor, var_);
 }
 
 template <tenzir::detail::data_builder::non_structured_data_type T>
@@ -576,9 +530,9 @@ auto object_generator::data(std::optional<T> d) -> void {
     return;
   }
   if (d) {
-    return data(*d);
+    data(*d);
   } else {
-    return null();
+    null();
   }
 }
 } // namespace detail::multi_series_builder

@@ -16,36 +16,41 @@
 
 namespace tenzir {
 
-/// Single-slot channel for batch timeout durations.
-///
-/// Capacity 1 ensures at most one timer is queued at a time. Writing
-/// replaces any stale pending duration so the consumer always wakes
-/// with the most recent remaining wait.
-using WaitChannel
-  = folly::coro::BoundedQueue<std::chrono::steady_clock::duration>;
+/// Pushes results from series_builder and coordinates builder timeouts between
+/// `Operator::process_task()` and `Operator::await_task()`.
+class SeriesPusher {
+public:
+  using duration = std::chrono::steady_clock::duration;
 
-/// Creates a heap-allocated WaitChannel with the correct capacity.
-inline auto new_wait_channel() -> Box<WaitChannel> {
-  return Box<WaitChannel>{std::in_place, 1u};
-}
+  SeriesPusher() : wait_for_{std::in_place, 1u} {
+  }
 
-/// Takes result of series_builder::yield_ready and pushes data or schedules
-/// a timer via `wait_for` to call this function again after the timeout.
-///
-/// Importantly, this will not wait in this task, but will send the duration
-/// that needs to be waited via the `wait_for` channel.
-inline auto push_or_wait(series_builder::YieldReadyResult result,
-                         Push<table_slice>& push, WaitChannel& wait_for)
-  -> Task<void> {
-  if (result.data) {
-    co_await push(std::move(result.data.unwrap()));
+  /// Waits for the next scheduled timeout and sleeps for that duration.
+  auto wait() const -> Task<void> {
+    auto next = co_await wait_for_->dequeue();
+    co_await sleep_for(next);
   }
-  if (result.wait_for) {
-    // drop the stale duration (if any) so the consumer always wakes
-    // with the freshest remaining wait
-    wait_for.try_dequeue();
-    wait_for.try_enqueue(result.wait_for.unwrap());
+
+  /// Pushes one ready slice and schedules the next timeout.
+  auto push(series_builder::YieldReadyResult result,
+            Push<table_slice>& push) const -> Task<void> {
+    for (auto slice : result.slices) {
+      co_await push(std::move(slice));
+    }
+    if (result.wait_for) {
+      set_wait_for(result.wait_for.unwrap());
+    }
   }
-}
+
+private:
+  auto set_wait_for(duration wait_for) const -> void {
+    // Drop stale duration (if any) so consumers always wake with the freshest
+    // remaining wait.
+    wait_for_->try_dequeue();
+    wait_for_->try_enqueue(wait_for);
+  }
+
+  mutable Box<folly::coro::BoundedQueue<duration>> wait_for_;
+};
 
 } // namespace tenzir

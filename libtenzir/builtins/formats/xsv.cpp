@@ -10,6 +10,7 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/series.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/base64.hpp"
@@ -948,7 +949,6 @@ public:
     }
     if (args_.batch_timeout) {
       msb_opts.settings.timeout = *args_.batch_timeout;
-      next_tick_ = msb_opts.settings.timeout;
     }
     if (args_.batch_size) {
       msb_opts.settings.desired_batch_size = *args_.batch_size;
@@ -1064,7 +1064,7 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_await sleep_for(next_tick_);
+    co_await pusher_.wait();
     co_return PeriodicTick{};
   }
 
@@ -1074,7 +1074,7 @@ public:
     if (not msb_) {
       co_return;
     }
-    co_await flush(push);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -1111,9 +1111,9 @@ public:
         }
       }
       begin = current + 1;
-      co_await flush(push);
     }
     buffer_.append(begin, end);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1133,20 +1133,15 @@ public:
 
   auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (msb_) {
-      co_await flush(push);
+    if (not msb_) {
+      co_return;
     }
-  }
-
-private:
-  auto flush(Push<table_slice>& push) -> Task<void> {
-    auto ready = msb_->yield_ready_as_table_slice();
-    next_tick_ = ready.wait_for;
-    for (auto& slice : ready) {
+    for (auto& slice : msb_->finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
   }
 
+private:
   auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
     ++line_counter_;
     if (line.empty()) {
@@ -1182,8 +1177,7 @@ private:
   detail::quoting_escaping_policy quoting_;
   std::unique_ptr<transforming_diagnostic_handler> dh_;
   Option<multi_series_builder> msb_;
-  std::chrono::steady_clock::duration next_tick_
-    = defaults::import::batch_timeout;
+  SeriesPusher pusher_;
 };
 
 class xsv_parser final : public plugin_parser {

@@ -1452,6 +1452,7 @@ auto series_builder::list() -> builder_ref {
 }
 
 auto series_builder::finish() -> std::vector<series> {
+  oldest_event_ = None{};
   return impl_->finish();
 }
 
@@ -1488,7 +1489,6 @@ auto series_builder::finish_as_table_slice(std::string_view name)
 #endif
     result.emplace_back(batch, array.type);
   }
-  oldest_event_ = None{};
   return result;
 }
 
@@ -1523,19 +1523,18 @@ auto series_builder::length() const -> int64_t {
   return impl_->total_length();
 }
 
-auto series_builder::yield_ready(std::string_view name, duration timeout)
+auto series_builder::yield_ready(std::string_view name, clock::time_point now,
+                                 uint64_t desired_size, duration timeout)
   -> series_builder::YieldReadyResult {
-  auto const now = clock::now();
-  auto const current_length = length();
+  auto const current_length = detail::narrow<uint64_t>(length());
   if (current_length == 0) {
     oldest_event_ = None{};
-    return series_builder::YieldReadyResult{};
+    return {};
   }
-  if (current_length
-      >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
+  if (current_length >= desired_size) {
     oldest_event_ = None{};
     return series_builder::YieldReadyResult{
-      .data = finish_assert_one_slice(name),
+      .slices = {finish_assert_one_slice(name)},
     };
   }
   if (not oldest_event_) {
@@ -1548,7 +1547,7 @@ auto series_builder::yield_ready(std::string_view name, duration timeout)
   if (waiting >= timeout) {
     oldest_event_ = None{};
     return series_builder::YieldReadyResult{
-      .data = finish_assert_one_slice(name),
+      .slices = {finish_assert_one_slice(name)},
     };
   }
   return series_builder::YieldReadyResult{

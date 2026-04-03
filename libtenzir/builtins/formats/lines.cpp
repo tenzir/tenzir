@@ -341,8 +341,7 @@ public:
     if (args_.jobs > 0) {
       co_return co_await read_output_queue_->dequeue();
     } else {
-      auto duration = co_await wait_for_->dequeue();
-      co_await sleep_for(duration);
+      co_await pusher_.wait();
       co_return {};
     }
   }
@@ -366,7 +365,7 @@ public:
       }
       co_await push(std::move(slice));
     } else {
-      co_await push_or_wait(builder_.yield_ready(TNAME), push, *wait_for_);
+      co_await pusher_.push(builder_.yield_ready(TNAME), push);
       co_return;
     }
   }
@@ -380,7 +379,7 @@ public:
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input), ctx);
-      co_await push_or_wait(builder_.yield_ready(TNAME), push, *wait_for_);
+      co_await pusher_.push(builder_.yield_ready(TNAME), push);
     }
   }
 
@@ -658,7 +657,7 @@ private:
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
   series_builder builder_;
-  mutable Box<WaitChannel> wait_for_ = new_wait_channel();
+  SeriesPusher pusher_;
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
