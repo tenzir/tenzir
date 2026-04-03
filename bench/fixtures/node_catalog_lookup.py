@@ -39,12 +39,15 @@ def _resolve_binaries() -> tuple[Path, Path]:
     if configured_tenzir is not None:
         tenzir_path = Path(configured_tenzir).resolve()
     else:
-        tenzir_path = _resolve_tenzir_from_argv()
+        tenzir_path = _resolve_tenzir_from_env()
+        if tenzir_path is None:
+            tenzir_path = _resolve_tenzir_from_argv()
         if tenzir_path is None:
             tenzir = shutil.which("tenzir")
             if tenzir is None:
                 raise RuntimeError(
                     "node_catalog_lookup fixture requires `tenzir` in PATH, "
+                    "TENZIR_BENCH_BINARY, "
                     "a benchmark context with a configured tenzir binary, "
                     "or a tenzir-bench invocation with --tenzir-bin",
                 )
@@ -59,6 +62,13 @@ def _resolve_binaries() -> tuple[Path, Path]:
             )
         tenzir_node_path = Path(fallback).resolve()
     return tenzir_path, tenzir_node_path
+
+
+def _resolve_tenzir_from_env() -> Path | None:
+    value = os.getenv("TENZIR_BENCH_BINARY", "").strip()
+    if not value:
+        return None
+    return Path(value).expanduser().resolve()
 
 
 def _resolve_tenzir_from_argv() -> Path | None:

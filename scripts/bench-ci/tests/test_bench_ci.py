@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -424,3 +425,48 @@ def test_download_reference_reports_filters_by_hardware_key(monkeypatch: pytest.
     )
 
     assert set(reports) == {"from_file_route53_ocsf/neo"}
+
+
+def test_run_local_build_sets_benchmark_binary_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    binary = tmp_path / "bin" / "tenzir"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text("", encoding="utf-8")
+    observed: list[str | None] = []
+
+    class FakeExecutor:
+        def __init__(self, _paths: object, passed_binary: Path, _registry: object, target: str) -> None:
+            assert passed_binary == binary
+            assert target == "static"
+
+        def build_info(self) -> object:
+            return type("BuildInfo", (), {"version": "v1.2.3"})()
+
+        def ensure_reports(self, _contexts: object, _output_dir: Path, force: bool) -> None:
+            assert force is True
+            observed.append(os.environ.get("TENZIR_BENCH_BINARY"))
+
+    monkeypatch.setattr(run_benchmarks_module, "resolve_build_entry", lambda _paths, _build: binary)
+    monkeypatch.setattr(run_benchmarks_module, "BenchmarkExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "load_contexts",
+        lambda executor, bench_root, benchmarks=None: [type("Context", (), {"definition": object()})()],
+    )
+    monkeypatch.setattr(run_benchmarks_module, "load_reports", lambda _path: [])
+    monkeypatch.setattr(run_benchmarks_module, "select_fastest", lambda reports: reports)
+    monkeypatch.delenv("TENZIR_BENCH_BINARY", raising=False)
+
+    result = run_benchmarks_module.run_local_build(
+        run_benchmarks_module.BuildSpec(
+            label="static-build",
+            target="static",
+            kind="static",
+            path=str(binary),
+        ),
+        bench_root=tmp_path / "bench",
+        paths=type("Paths", (), {"results_state_dir": tmp_path / "state"})(),
+    )
+
+    assert result == []
+    assert observed == [str(binary)]
+    assert os.environ.get("TENZIR_BENCH_BINARY") is None

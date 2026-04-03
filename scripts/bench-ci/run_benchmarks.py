@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -202,14 +203,15 @@ def run_local_build(
     force: bool = True,
 ) -> dict[str, Report]:
     binary = resolve_build_entry(paths, build)
-    executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
-    contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
-    if not contexts:
-        return {}
-    safe_label = build.label.replace(" ", "-").replace("/", "-")
-    output_dir = paths.results_state_dir / "benchmark-ci" / safe_label
-    executor.ensure_reports(contexts, output_dir, force=force)
-    return select_fastest(load_reports(output_dir))
+    with _benchmark_binary_env(binary):
+        executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
+        contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
+        if not contexts:
+            return {}
+        safe_label = build.label.replace(" ", "-").replace("/", "-")
+        output_dir = paths.results_state_dir / "benchmark-ci" / safe_label
+        executor.ensure_reports(contexts, output_dir, force=force)
+        return select_fastest(load_reports(output_dir))
 
 
 def report_identity(report: Report) -> tuple[str, str]:
@@ -242,8 +244,9 @@ def expected_report_identities(
             contexts.append(type("DefinitionContext", (), {"definition": definition})())
     else:
         binary = resolve_build_entry(paths, build)
-        executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
-        contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
+        with _benchmark_binary_env(binary):
+            executor = BenchmarkExecutor(paths, binary, RunnerRegistry(), target=build.target)
+            contexts = load_contexts(executor, bench_root, benchmarks=benchmarks)
     identities: set[tuple[str, str]] = set()
     for context in contexts:
         definition = context.definition
@@ -257,6 +260,19 @@ def expected_report_identities(
             )
         identities.add((benchmark_id, implementation_id))
     return identities
+
+
+@contextlib.contextmanager
+def _benchmark_binary_env(binary: Path):
+    previous = os.environ.get("TENZIR_BENCH_BINARY")
+    os.environ["TENZIR_BENCH_BINARY"] = str(binary)
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("TENZIR_BENCH_BINARY", None)
+        else:
+            os.environ["TENZIR_BENCH_BINARY"] = previous
 
 
 def normalize_reports(reports: dict[str, Report]) -> dict[tuple[str, str], Report]:
