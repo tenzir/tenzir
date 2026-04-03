@@ -400,6 +400,9 @@ public:
                                                   .content_encoding = "",
                                                   .finished = finish_callback});
         }
+        if (not finish_callback->empty()) {
+          co_return proxygen::coro::HTTPSourceReader::Cancel;
+        }
 
         if (not queue.empty()) {
           auto iobuf = queue.move();
@@ -594,6 +597,7 @@ public:
     active_requests_.erase(request_id);
     if (lifecycle_ == Lifecycle::draining and active_requests_.empty()) {
       server_ = None{};
+      lifecycle_ = Lifecycle::done;
     }
     co_return;
   }
@@ -667,6 +671,7 @@ private:
     lifecycle_ = Lifecycle::draining;
     if (active_requests_.empty()) {
       server_ = None{};
+      lifecycle_ = Lifecycle::done;
     }
     co_return;
   }
