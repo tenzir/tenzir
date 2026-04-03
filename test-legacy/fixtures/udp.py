@@ -48,9 +48,10 @@ def udp_sink() -> Iterator[dict[str, str]]:
     os.close(fd)
 
     def run() -> None:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock, open(
-            path, "w", encoding="utf-8"
-        ) as fh:
+        with (
+            socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock,
+            open(path, "w", encoding="utf-8") as fh,
+        ):
             sock.bind(("127.0.0.1", port))
             sock.settimeout(0.1)
             while not stop_event.is_set():
