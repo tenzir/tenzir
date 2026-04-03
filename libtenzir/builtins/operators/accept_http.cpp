@@ -22,7 +22,6 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/set.hpp"
-#include "tenzir/unit.hpp"
 #include "tenzir/variant.hpp"
 
 #include <folly/ScopeGuard.h>
@@ -264,7 +263,7 @@ struct Response {
   std::string body;
 };
 
-using FinishCallback = folly::coro::BoundedQueue<Unit>;
+using FinishCallback = folly::coro::BoundedQueue<uint16_t>;
 
 struct RequestStarted {
   uint64_t request_id;
@@ -374,7 +373,7 @@ public:
                      proxygen::coro::HTTPSourceHolder request_source)
     -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
-    auto response = Response{};
+    std::string path;
     auto bytes_received = size_t{};
     Arc<FinishCallback> finish_callback{std::in_place, 1};
     auto started = false;
@@ -383,7 +382,7 @@ public:
       .onHeadersAsync([&](std::unique_ptr<proxygen::HTTPMessage> msg, bool,
                           bool) -> folly::coro::Task<bool> {
         auto metadata = make_request_metadata(*msg);
-        response = get_response_for_path(args_, metadata.path);
+        path = metadata.path;
         auto encoding
           = std::string{msg->getHeaders().getSingleOrEmpty("Content-Encoding")};
         co_await queue_->enqueue(
@@ -425,8 +424,12 @@ public:
     co_await reader.read(detail::narrow<uint32_t>(max_request_size_));
     // notify request finished
     co_await queue_->enqueue(RequestFinished{request_id});
-    co_await finish_callback->dequeue();
+    auto status = co_await finish_callback->dequeue();
     // send response
+    if (status != 200) {
+      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(status);
+    }
+    auto response = get_response_for_path(args_, path);
     co_return make_fixed_response(response);
   }
 
@@ -470,7 +473,7 @@ public:
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
       for (auto it : active_requests_) {
-        co_await it.second.finished->enqueue(Unit{});
+        co_await it.second.finished->enqueue(200); // ok
       }
     });
     lifecycle_ = Lifecycle::running;
@@ -489,13 +492,18 @@ public:
     co_await co_match(
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
+        if (lifecycle_ != Lifecycle::running) {
+          co_await msg.finished->enqueue(503); // service unavailable
+          co_return;
+        }
+
         auto pipeline = args_.parser.inner;
         if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
           diagnostic::warning("failed to prepare parser pipeline for request")
             .primary(args_.endpoint)
             .note("request path: {}", msg.metadata.path)
             .emit(ctx);
-          co_await msg.finished->enqueue(Unit{});
+          co_await msg.finished->enqueue(500); // internal server error
           co_return;
         }
         auto decompressor
@@ -582,9 +590,9 @@ public:
     }
     // notify the handler to respond
     // TODO: send the status back
-    co_await it->second.finished->enqueue(Unit{});
+    co_await it->second.finished->enqueue(200); // ok
     active_requests_.erase(request_id);
-    if (active_requests_.empty()) {
+    if (lifecycle_ == Lifecycle::draining and active_requests_.empty()) {
       server_ = None{};
     }
     co_return;
@@ -593,6 +601,7 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
+    // finalize will only be called when state() returns done
     TENZIR_ASSERT(lifecycle_ == Lifecycle::done);
     co_return FinalizeBehavior::done;
   }
