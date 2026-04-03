@@ -15,9 +15,9 @@ from pathlib import Path
 
 from tenzir_bench.compare import (
     CompareBuild,
-    _resolve_entry,
     expected_report_identities,
     prepare_compare_reports_for_build,
+    resolve_entry,
 )
 from tenzir_bench.executor import BenchmarkExecutor
 from tenzir_bench.hardware import current_hardware_key
@@ -159,11 +159,11 @@ def resolve_build_entry(paths: BenchPaths, build: BuildSpec) -> Path:
     if build.kind == "docker":
         if not build.image:
             raise RuntimeError(f"{build.label}: docker build is missing an image ref")
-        return _resolve_entry(paths, f"docker://{build.image}")
+        return resolve_entry(paths, f"docker://{build.image}")
     if build.kind == "static":
         if build.path:
-            return _resolve_entry(paths, build.path)
-        return _resolve_entry(paths, str(_materialize_static_artifact(paths, build)))
+            return resolve_entry(paths, build.path)
+        return resolve_entry(paths, str(_materialize_static_artifact(paths, build)))
     raise RuntimeError(f"{build.label}: unsupported build kind {build.kind}")
 
 
@@ -187,12 +187,12 @@ def _to_compare_build(
     if build.kind == "docker":
         if not build.image:
             raise RuntimeError(f"{build.label}: docker build is missing an image ref")
-        binary = _resolve_entry(paths, f"docker://{build.image}")
+        binary = resolve_entry(paths, f"docker://{build.image}")
     elif build.kind == "static":
         if build.path:
-            binary = _resolve_entry(paths, build.path)
+            binary = resolve_entry(paths, build.path)
         elif materialize_static:
-            binary = _resolve_entry(
+            binary = resolve_entry(
                 paths, str(_materialize_static_artifact(paths, build))
             )
     else:
