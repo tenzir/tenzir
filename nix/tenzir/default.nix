@@ -286,7 +286,7 @@ let
             yaml-cpp
             xxHash
           ]
-          ++ lib.optionals stdenv.isLinux [
+          ++ lib.optionals (stdenv.isLinux && !(isStatic && stdenv.hostPlatform.isMusl)) [
             liburing
           ]
           ++ lib.optionals (!isStatic) [
