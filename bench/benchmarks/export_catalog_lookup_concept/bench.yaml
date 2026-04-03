@@ -7,16 +7,17 @@ tags:
   benchmark: node
   area: catalog
   lookup: concept
-input:
-  path: suricata-dns.seed.ndjson
-  source: synthetic
-  events: 100000
-  measure: true
+inputs:
+  seed:
+    path: suricata-dns.seed.ndjson
+    repetitions: 100000
+    source:
+      num_events: 1
 env:
   TENZIR_CONSOLE_FORMAT: none
 fixtures:
   - node_catalog_lookup:
-      events: 100000
+      inputs: [seed]
       max_partition_size: 1
       schema: suricata
       query_hit_index: 50000
