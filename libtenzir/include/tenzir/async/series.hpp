@@ -34,7 +34,7 @@ public:
   /// Pushes one ready slice and schedules the next timeout.
   auto push(series_builder::YieldReadyResult result,
             Push<table_slice>& push) const -> Task<void> {
-    for (auto slice : result.slices) {
+    for (auto&& slice : result.slices) {
       co_await push(std::move(slice));
     }
     if (result.wait_for) {

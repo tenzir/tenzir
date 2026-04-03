@@ -736,14 +736,13 @@ void multi_series_builder::complete_last_event() {
   }
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(
-    std::move(signature_raw_), free_index.value_or(entries_.size()));
+    std::move(signature_raw_), free_index.unwrap_or(entries_.size()));
   const auto new_index = it->second;
   if (inserted) { // the signature wasn't in the map yet
-    if (not free_index) {
+    if (free_index.is_none()) {
       entries_.emplace_back(builder_schema_);
     } else {
       auto& entry = entries_[new_index];
-      entry.unused = false;
       entry.builder = series_builder{builder_schema_};
     }
   }
@@ -763,13 +762,13 @@ void multi_series_builder::clear_raw_event() {
   signature_raw_.clear();
 }
 
-std::optional<size_t> multi_series_builder::next_free_index() const {
+Option<size_t> multi_series_builder::next_free_index() const {
   for (size_t i = 0; i < entries_.size(); ++i) {
-    if (entries_[i].unused) {
+    if (entries_[i].builder.length() == 0) {
       return i;
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto multi_series_builder::type_for_schema(std::string_view name)
@@ -792,29 +791,6 @@ void multi_series_builder::append_ready_events(std::vector<series> new_events) {
   ready_events_.insert(ready_events_.end(),
                        std::make_move_iterator(new_events.begin()),
                        std::make_move_iterator(new_events.end()));
-}
-
-void multi_series_builder::garbage_collect_where(
-  std::predicate<const entry_data&> auto pred) {
-  if (uses_merging_builder()) {
-    return;
-  }
-  for (auto it = signature_map_.begin(); it != signature_map_.end();) {
-    auto const index = it.value();
-    TENZIR_ASSERT(index < entries_.size());
-    auto& entry = entries_[index];
-    if (pred(entry)) {
-      TENZIR_ASSERT(entry.builder.length() == 0,
-                    "The predicate for garbage collection should be strictly "
-                    "wider than the predicate for yielding in call cases. GC "
-                    "should never trigger on builders that still have "
-                    "events in them.");
-      entry.unused = true;
-      it = signature_map_.erase(it);
-      continue;
-    }
-    ++it;
-  }
 }
 
 } // namespace tenzir

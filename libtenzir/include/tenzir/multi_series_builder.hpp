@@ -429,7 +429,7 @@ private:
   void clear_raw_event();
 
   /// @brief Gets the next free index into `entries_`.
-  std::optional<size_t> next_free_index() const;
+  Option<size_t> next_free_index() const;
 
   /// @brief Look up a schema by name.
   auto type_for_schema(std::string_view name) -> const type*;
@@ -443,17 +443,10 @@ private:
     }
 
     series_builder builder;
-    bool unused = false;
   };
 
   /// @brief appends `new_events` to `ready_events_`
   void append_ready_events(std::vector<series> new_events);
-
-  /// @brief "garbage collects" all entries in `entries_` that satisfy the
-  /// predicate.
-  /// The implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions.
-  void garbage_collect_where(std::predicate<const entry_data&> auto pred);
 
   using signature_type = typename data_builder::signature_type;
 
@@ -521,7 +514,7 @@ auto object_generator::data(T d) -> void {
       raw->data(d);
     },
   };
-  std::visit(visitor, var_);
+  return std::visit(visitor, var_);
 }
 
 template <tenzir::detail::data_builder::non_structured_data_type T>
@@ -530,9 +523,9 @@ auto object_generator::data(std::optional<T> d) -> void {
     return;
   }
   if (d) {
-    data(*d);
+    return data(*d);
   } else {
-    null();
+    return null();
   }
 }
 } // namespace detail::multi_series_builder

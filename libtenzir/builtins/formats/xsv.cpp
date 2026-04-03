@@ -1065,12 +1065,11 @@ public:
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
     co_await pusher_.wait();
-    co_return PeriodicTick{};
+    co_return {};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx&)
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    TENZIR_ASSERT(result.try_as<PeriodicTick>());
     if (not msb_) {
       co_return;
     }
@@ -1164,8 +1163,6 @@ private:
     parse_line(line, *header_, *original_field_count_, r, opts_, line_counter_,
                quoting_, dh);
   }
-
-  struct PeriodicTick {};
 
   ReadXsvArgs args_;
   std::string buffer_;

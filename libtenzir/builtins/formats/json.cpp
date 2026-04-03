@@ -1502,8 +1502,8 @@ private:
           begin = current + 1;
         }
         // Yield ready results to the output queue.
-        for (auto slice : parser.builder.yield_ready_as_table_slice()) {
-          read_output_queue_->enqueue(slice);
+        for (auto&& slice : parser.builder.yield_ready_as_table_slice()) {
+          read_output_queue_->enqueue(std::move(slice));
         }
       }
     } catch (folly::OperationCancelled const&) {
