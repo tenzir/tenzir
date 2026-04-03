@@ -12,6 +12,7 @@
 #include <tenzir/bitmap.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -333,8 +334,76 @@ private:
   bool unordered_ = {};
 };
 
+struct UnrollArgs {
+  ast::field_path field;
+};
+
+class Unroll final : public Operator<table_slice, table_slice> {
+public:
+  explicit Unroll(UnrollArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
+    const auto get_offset
+      = [&](const table_slice& slice) -> std::optional<offset> {
+      return resolve(args_.field, slice.schema())
+        .match(
+          [&](offset result) -> std::optional<offset> {
+            if (result.empty()) {
+              return result;
+            }
+            const auto& field_type
+              = as<record_type>(slice.schema()).field(result).type;
+            if (is<null_type>(field_type)) {
+              return {};
+            }
+            if (not is<list_type>(field_type)
+                and not is<record_type>(field_type)) {
+              diagnostic::warning("expected `list` or `record`, but got `{}`",
+                                  field_type.kind())
+                .primary(args_.field)
+                .emit(ctx);
+              return {};
+            }
+            return result;
+          },
+          [&](const resolve_error& err) -> std::optional<offset> {
+            err.reason.match(
+              [&](const resolve_error::field_not_found&) {
+                diagnostic::warning("field `{}` not found", err.ident.name)
+                  .primary(err.ident)
+                  .emit(ctx);
+              },
+              [&](const resolve_error::field_not_found_no_error&) {},
+              [&](const resolve_error::field_of_non_record& reason) {
+                diagnostic::warning("type `{}` has no field `{}`",
+                                    reason.type.kind(), err.ident.name)
+                  .primary(err.ident)
+                  .emit(ctx);
+              });
+            return {};
+          });
+    };
+    const auto off = get_offset(input);
+    if (not off) {
+      co_return;
+    }
+    for (auto unrolled : unroll(input, *off, /*unordered=*/false)) {
+      co_await push(std::move(unrolled));
+    }
+  }
+
+private:
+  UnrollArgs args_;
+};
+
 class plugin final : public virtual operator_plugin<unroll_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -356,6 +425,13 @@ public:
       = argument_parser2::operator_(name()).positional("field", field, "list");
     TRY(parser.parse(inv, ctx));
     return std::make_unique<unroll_operator>(std::move(field));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<UnrollArgs, Unroll>{};
+    d.positional("field", &UnrollArgs::field);
+    // TODO: when we do sorting optimizations, pass `unroll(unordered)`
+    return d.without_optimize();
   }
 };
 
