@@ -19,7 +19,7 @@ if [[ $# -ne 0 ]]; then
   exit 1
 fi
 
-if [[ -z "$out_dir" ]]; then
+if [[ -z $out_dir ]]; then
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
   out_dir="build/benchmarks/compile-times-${ts}"
 fi
@@ -65,7 +65,7 @@ run_build "incremental" "$incremental_file"
 
 echo "==> summary"
 while IFS=$'\t' read -r scenario seconds file; do
-  [[ "$scenario" == "scenario" ]] && continue
+  [[ $scenario == "scenario" ]] && continue
   printf '%-15s %8ss  %s\n' "$scenario" "$seconds" "$file"
 done <"$results_tsv"
 

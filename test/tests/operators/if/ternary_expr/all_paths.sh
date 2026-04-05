@@ -2,7 +2,7 @@
 # runner: shell
 set -eu
 
-dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 run_case() {
   mode="$1"
