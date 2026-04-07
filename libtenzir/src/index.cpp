@@ -1312,45 +1312,6 @@ index(index_actor::stateful_pointer<index_state> self,
                                                 "when arriving at the index");
       }
       query_context.id = self->state().pending_queries.create_query_id();
-      // Monitor the sender so we can cancel the query in case it goes down.
-      if (const auto it
-          = self->state().monitored_queries.find(sender->address());
-          it == self->state().monitored_queries.end()) {
-        self->state().monitored_queries.emplace_hint(
-          it, sender->address(), std::unordered_set{query_context.id});
-        self->monitor(sender, [self, source
-                                     = sender->address()](const caf::error&) {
-          auto it = self->state().monitored_queries.find(source);
-          TENZIR_ASSERT(it != self->state().monitored_queries.end());
-          const auto& [_, ids] = *it;
-          if (not ids.empty()) {
-            // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing
-            // views as lvalues is disallowed" when not formating the join view
-            // separately.
-            const auto ids_string = fmt::to_string(fmt::join(ids, ", "));
-            TENZIR_DEBUG("{} received DOWN for queries [{}] and drops "
-                         "remaining "
-                         "query results",
-                         *self, ids_string);
-            for (const auto& id : ids) {
-              self->state().query_id_to_sender.erase(id);
-              if (auto err = self->state().pending_queries.remove_query(id);
-                  err.valid()) {
-                TENZIR_DEBUG("{} did not remove {} from the query queue. It "
-                             "was "
-                             "presumably already removed upon completion ({})",
-                             *self, id, err);
-              }
-            }
-          }
-          self->state().monitored_queries.erase(it);
-        });
-      } else {
-        auto& [_, ids] = *it;
-        ids.emplace(query_context.id);
-      }
-      self->state().query_id_to_sender.emplace(query_context.id,
-                                               sender->address());
       std::vector<std::pair<uuid, type>> candidates;
       candidates.reserve(self->state().active_partitions.size()
                          + self->state().unpersisted.size());
@@ -1413,6 +1374,55 @@ index(index_actor::stateful_pointer<index_state> self,
               self->mail(atom::done_v).send(client);
               return;
             }
+            // Monitor the sender so we can cancel the query in case it goes
+            // down. We defer this until we know the query will actually be
+            // enqueued, avoiding stale tracking state for queries that
+            // returned early above.
+            auto sender_addr = sender->address();
+            if (auto mon
+                = self->state().monitored_queries.find(sender_addr);
+                mon == self->state().monitored_queries.end()) {
+              self->state().monitored_queries.emplace(
+                sender_addr, std::unordered_set{query_id});
+              self->monitor(
+                sender,
+                [self, source = sender_addr](const caf::error&) {
+                  auto it
+                    = self->state().monitored_queries.find(source);
+                  TENZIR_ASSERT(
+                    it != self->state().monitored_queries.end());
+                  const auto& [_, ids] = *it;
+                  if (not ids.empty()) {
+                    // Workaround to {fmt} 7 / gcc 10 combo, which errors
+                    // with "passing views as lvalues is disallowed" when
+                    // not formating the join view separately.
+                    const auto ids_string
+                      = fmt::to_string(fmt::join(ids, ", "));
+                    TENZIR_DEBUG(
+                      "{} received DOWN for queries [{}] and drops "
+                      "remaining query results",
+                      *self, ids_string);
+                    for (const auto& id : ids) {
+                      self->state().query_id_to_sender.erase(id);
+                      if (auto err
+                          = self->state().pending_queries.remove_query(
+                            id);
+                          err.valid()) {
+                        TENZIR_DEBUG(
+                          "{} did not remove {} from the query queue. "
+                          "It was presumably already removed upon "
+                          "completion ({})",
+                          *self, id, err);
+                      }
+                    }
+                  }
+                  self->state().monitored_queries.erase(it);
+                });
+            } else {
+              mon->second.emplace(query_id);
+            }
+            self->state().query_id_to_sender.emplace(query_id,
+                                                     sender_addr);
             auto num_candidates
               = detail::narrow<uint32_t>(lookup_result.size());
             auto taste_size = query_context.taste
