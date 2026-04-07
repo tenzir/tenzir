@@ -653,6 +653,7 @@ struct exec_node_state {
 
   /// Whether the previous execution node exited.
   caf::actor_addr prev_addr = nullptr;
+  bool pending_previous_exit_msg = false;
 
   /// The inbound buffer.
   std::deque<Input> inbound_buffer = {};
@@ -1113,6 +1114,7 @@ struct exec_node_state {
           issue_demand_inflight = false;
           if (err == caf::sec::request_receiver_down
               or err == caf::exit_reason::remote_link_unreachable) {
+            pending_previous_exit_msg = true;
             previous = nullptr;
             schedule_run(false);
             return;
@@ -1253,7 +1255,8 @@ struct exec_node_state {
       on_error(msg.reason);
       return;
     } else {
-      if (not previous and msg.source == prev_addr) {
+      if (not previous and msg.source == prev_addr
+          and not pending_previous_exit_msg) {
         // Ignore duplicate exit message from the previous node.
         // For some reason, we can get multiple exit messages from the previous
         // exec node. This can cause the current operator to ungracefully quit.
@@ -1279,6 +1282,7 @@ struct exec_node_state {
       TENZIR_DEBUG("{} {} got exit message from previous execution node with "
                    "address {}: {}",
                    *self, op->name(), msg.source, msg.reason);
+      pending_previous_exit_msg = false;
       if (msg.reason.valid() and msg.reason != caf::exit_reason::unreachable) {
         on_error(msg.reason);
         return;
