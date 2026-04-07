@@ -200,14 +200,10 @@ using index_actor = typed_actor_fwd<
   auto(atom::subscribe, atom::create, partition_creation_listener_actor,
        send_initial_dbstate)
     ->caf::result<void>,
-  // Evaluates a query, ie. sends matching events to the caller.
-  auto(atom::evaluate, query_context)->caf::result<query_cursor>,
   // Resolves a query to its candidate partitions per type.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
   auto(atom::resolve, expression)->caf::result<catalog_lookup_result>,
-  // Queries PARTITION actors for a given query id.
-  auto(atom::query, uuid, uint32_t)->caf::result<void>,
   // Erases the given partition from the INDEX.
   auto(atom::erase, uuid)->caf::result<atom::done>,
   // Erases the given set of partitions from the INDEX.

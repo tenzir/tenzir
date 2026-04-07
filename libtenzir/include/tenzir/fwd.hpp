@@ -257,7 +257,6 @@ struct passive_partition_state;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
-struct query_cursor;
 struct query_status;
 struct resource;
 struct rest_endpoint;
@@ -512,7 +511,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
 
   TENZIR_ADD_TYPE_ID((tenzir::connect_request))
-  TENZIR_ADD_TYPE_ID((tenzir::query_cursor))
   TENZIR_ADD_TYPE_ID((tenzir::query_status))
   TENZIR_ADD_TYPE_ID((tenzir::resource))
   TENZIR_ADD_TYPE_ID((tenzir::keep_original_partition))

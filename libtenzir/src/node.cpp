@@ -200,9 +200,8 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
              defaults::max_partition_size),
       get_or(settings, "tenzir.active-partition-timeout",
              defaults::active_partition_timeout),
-      defaults::max_in_mem_partitions, defaults::taste_partitions,
-      defaults::num_query_supervisors, self->state().dir / "index",
-      std::move(index_config));
+      defaults::max_in_mem_partitions, defaults::num_query_supervisors,
+      self->state().dir / "index", std::move(index_config));
   }();
   TENZIR_ASSERT(index);
   if (auto err

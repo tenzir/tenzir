@@ -657,18 +657,12 @@ caf::error index_state::load_from_disk() {
   // behavior if the responses arrive in the same order to how they were sent.
   TENZIR_DEBUG("{} requesting bulk merge of {} partitions", *self,
                synopses.size());
-  this->accept_queries = false;
   self->mail(atom::start_v, std::move(synopses))
     .request(catalog, caf::infinite)
     .then(
       [this](atom::ok) {
         TENZIR_VERBOSE(
           "{} finished initializing and is ready to accept queries", *self);
-        this->accept_queries = true;
-        for (auto&& [rp, query_context] : std::exchange(delayed_queries, {})) {
-          rp.delegate(static_cast<index_actor>(self), atom::evaluate_v,
-                      std::move(query_context));
-        }
       },
       [this](caf::error& err) {
         TENZIR_ERROR("{} failed to load catalog state from disk: {}", *self,
@@ -1013,20 +1007,6 @@ auto index_state::schedule_lookups() -> size_t {
         if (auto client = pending_queries.handle_completion(qid)) {
           self->mail(atom::done_v).send(*client);
         }
-        // Remove the query ID from monitored_queries once it is fully done
-        // (i.e. erased from pending_queries). Without this, completed query IDs
-        // would accumulate in the set for the sender's actor address until the
-        // sender eventually goes down.
-        if (!pending_queries.queries().contains(qid)) {
-          if (auto rev = query_id_to_sender.find(qid);
-              rev != query_id_to_sender.end()) {
-            if (auto mon = monitored_queries.find(rev->second);
-                mon != monitored_queries.end()) {
-              mon->second.erase(qid);
-            }
-            query_id_to_sender.erase(rev);
-          }
-        }
         // 4. recursively call schedule_lookups in the done handler. ...or
         //    when all done? (5)
         // 5. decrement running_partition_lookups when all queries that
@@ -1098,11 +1078,6 @@ std::size_t index_state::memusage() const {
   usage += persisted_partitions.size()
            * sizeof(decltype(persisted_partitions)::value_type);
   usage += pending_queries.memusage();
-  for (const auto& [addr, uuids] : monitored_queries) {
-    usage += sizeof(addr) + calculate_usage(uuids);
-  }
-  usage += query_id_to_sender.size()
-           * sizeof(decltype(query_id_to_sender)::value_type);
   usage += calculate_usage(flush_listeners);
   usage += calculate_usage(partition_creation_listeners);
   usage += calculate_usage(partitions_in_transformation);
@@ -1115,13 +1090,13 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   TENZIR_TRACE("index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
                TENZIR_ARG(partition_capacity),
                TENZIR_ARG(active_partition_timeout),
-               TENZIR_ARG(max_inmem_partitions), TENZIR_ARG(taste_partitions),
+               TENZIR_ARG(max_inmem_partitions),
                TENZIR_ARG(max_concurrent_partition_lookups),
                TENZIR_ARG(catalog_dir), TENZIR_ARG(index_config));
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
@@ -1137,7 +1112,6 @@ index(index_actor::stateful_pointer<index_state> self,
   }
   // Set members.
   self->state().self = self;
-  self->state().accept_queries = true;
   self->state().max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
   self->state().store_actor_plugin
@@ -1161,7 +1135,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().partition_capacity = partition_capacity;
   self->state().max_buffered_events = max_buffered_events;
   self->state().active_partition_timeout = active_partition_timeout;
-  self->state().taste_partitions = taste_partitions;
   self->state().inmem_partitions.factory().filesystem()
     = self->state().filesystem;
   self->state().inmem_partitions.resize(max_inmem_partitions);
@@ -1281,192 +1254,12 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       return rp;
     },
-    [self](atom::evaluate,
-           tenzir::query_context query_context) -> caf::result<query_cursor> {
-      // Query handling
-      auto sender = self->current_sender();
-      // Sanity check.
-      if (not sender) {
-        TENZIR_WARN("{} ignores an anonymous query", *self);
-        return caf::sec::invalid_argument;
-      }
-      // Abort if the index is already shutting down.
-      if (self->state().shutting_down) {
-        TENZIR_WARN("{} ignores query {} because it is shutting down", *self,
-                    query_context);
-        return ec::remote_node_down;
-      }
-      // If we're not yet ready to start, we delay the query until further
-      // notice.
-      if (not self->state().accept_queries) {
-        TENZIR_VERBOSE("{} delays query {} because it is still starting up",
-                       *self, query_context);
-        auto rp = self->make_response_promise<query_cursor>();
-        self->state().delayed_queries.emplace_back(rp,
-                                                   std::move(query_context));
-        return rp;
-      }
-      // Allows the client to query further results after initial taste.
-      if (query_context.id != uuid::null()) {
-        return caf::make_error(ec::logic_error, "query must not have an ID "
-                                                "when arriving at the index");
-      }
-      query_context.id = self->state().pending_queries.create_query_id();
-      std::vector<std::pair<uuid, type>> candidates;
-      candidates.reserve(self->state().active_partitions.size()
-                         + self->state().unpersisted.size());
-      query_state::type_query_context_map query_contexts;
-      auto rp = self->make_response_promise<query_cursor>();
-      self->mail(atom::candidates_v, query_context)
-        .request(self->state().catalog, caf::infinite)
-        .then(
-          [=, candidates = std::move(candidates),
-           query_contexts = std::move(query_contexts)](
-            catalog_lookup_result& lookup_result) mutable {
-            for (auto& [id, schema] : candidates) {
-              auto new_partition_info = partition_info{
-                id, 0u, time{}, schema, version::current_partition_version};
-              auto schema_candidate_infos_it
-                = lookup_result.candidate_infos.find(schema);
-              if (schema_candidate_infos_it
-                  == lookup_result.candidate_infos.end()) {
-                schema_candidate_infos_it
-                  = lookup_result.candidate_infos.insert(
-                    schema_candidate_infos_it, {schema, {}});
-                schema_candidate_infos_it->second.exp = query_context.expr;
-              }
-              const auto& schema_candidate_infos
-                = schema_candidate_infos_it->second.partition_infos;
-              if (std::find_if(
-                    schema_candidate_infos.begin(),
-                    schema_candidate_infos.end(),
-                    [&new_partition_info](const auto& partition_info) {
-                      return partition_info.uuid == new_partition_info.uuid;
-                    })
-                  == schema_candidate_infos.end()) {
-                lookup_result.candidate_infos[schema]
-                  .partition_infos.emplace_back(new_partition_info);
-              }
-            }
-            for (const auto& [type, lookup_result] :
-                 lookup_result.candidate_infos) {
-              query_contexts[type] = query_context;
-              query_contexts[type].expr = lookup_result.exp;
-              TENZIR_TRACE(
-                "{} got initial candidates {} for schema {} and from "
-                "catalog {}",
-                *self, candidates, type, lookup_result.partition_infos);
-            }
-            // Allows the client to query further results after initial taste.
-            auto query_id = query_context.id;
-            auto client
-              = match(query_context.cmd,
-                      detail::overload{
-                        [&](extract_query_context& extract) {
-                          return caf::actor_cast<receiver_actor<atom::done>>(
-                            extract.sink);
-                        },
-                      });
-            if (lookup_result.empty()) {
-              TENZIR_TRACE("{} returns without result: no partitions qualify",
-                           *self);
-              rp.deliver(query_cursor{query_id, 0u, 0u});
-              self->mail(atom::done_v).send(client);
-              return;
-            }
-            // Monitor the sender so we can cancel the query in case it goes
-            // down. We defer this until we know the query will actually be
-            // enqueued, avoiding stale tracking state for queries that
-            // returned early above.
-            auto sender_addr = sender->address();
-            if (auto mon
-                = self->state().monitored_queries.find(sender_addr);
-                mon == self->state().monitored_queries.end()) {
-              self->state().monitored_queries.emplace(
-                sender_addr, std::unordered_set{query_id});
-              self->monitor(
-                sender,
-                [self, source = sender_addr](const caf::error&) {
-                  auto it
-                    = self->state().monitored_queries.find(source);
-                  TENZIR_ASSERT(
-                    it != self->state().monitored_queries.end());
-                  const auto& [_, ids] = *it;
-                  if (not ids.empty()) {
-                    // Workaround to {fmt} 7 / gcc 10 combo, which errors
-                    // with "passing views as lvalues is disallowed" when
-                    // not formating the join view separately.
-                    const auto ids_string
-                      = fmt::to_string(fmt::join(ids, ", "));
-                    TENZIR_DEBUG(
-                      "{} received DOWN for queries [{}] and drops "
-                      "remaining query results",
-                      *self, ids_string);
-                    for (const auto& id : ids) {
-                      self->state().query_id_to_sender.erase(id);
-                      if (auto err
-                          = self->state().pending_queries.remove_query(
-                            id);
-                          err.valid()) {
-                        TENZIR_DEBUG(
-                          "{} did not remove {} from the query queue. "
-                          "It was presumably already removed upon "
-                          "completion ({})",
-                          *self, id, err);
-                      }
-                    }
-                  }
-                  self->state().monitored_queries.erase(it);
-                });
-            } else {
-              mon->second.emplace(query_id);
-            }
-            self->state().query_id_to_sender.emplace(query_id,
-                                                     sender_addr);
-            auto num_candidates
-              = detail::narrow<uint32_t>(lookup_result.size());
-            auto taste_size = query_context.taste
-                                ? *query_context.taste
-                                : self->state().taste_partitions;
-            auto scheduled = std::min(num_candidates, taste_size);
-            if (auto err = self->state().pending_queries.insert(
-                  query_state{.query_contexts_per_type = query_contexts,
-                              .client = client,
-                              .candidate_partitions = num_candidates,
-                              .requested_partitions = scheduled},
-                  std::move(lookup_result));
-                err.valid()) {
-              rp.deliver(err);
-            }
-            rp.deliver(query_cursor{query_id, num_candidates, scheduled});
-            const auto num_scheduled = self->state().schedule_lookups();
-            TENZIR_TRACE("{} scheduled {} partitions for lookup after a new "
-                         "query came in",
-                         *self, num_scheduled);
-          },
-          [rp](const caf::error& e) mutable {
-            rp.deliver(caf::make_error(
-              ec::system_error, fmt::format("catalog lookup failed: {}", e)));
-          });
-      return rp;
-    },
     [self](atom::resolve,
            tenzir::expression& expr) -> caf::result<catalog_lookup_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = tenzir::uuid::random();
       return self->mail(atom::candidates_v, std::move(query_context))
         .delegate(self->state().catalog);
-    },
-    [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
-      if (auto err
-          = self->state().pending_queries.activate(query_id, num_partitions);
-          err.valid()) {
-        TENZIR_WARN("{} can't activate unknown query: {}", *self, err);
-      }
-      const auto num_scheduled = self->state().schedule_lookups();
-      TENZIR_TRACE("{} scheduled {} partitions following the request to "
-                   "activate {} partitions for query {}",
-                   *self, num_scheduled, num_partitions, query_id);
     },
     [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
       TENZIR_VERBOSE("{} erases partition {}", *self, partition_id);
@@ -1909,9 +1702,6 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](const caf::exit_msg& msg) {
       TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
                      msg.source, msg.reason);
-      for (auto&& [rp, _] : std::exchange(self->state().delayed_queries, {})) {
-        rp.deliver(msg.reason);
-      }
       auto perform_shutdown = [self](auto reason) {
         auto dependents = std::vector<caf::actor>{};
         dependents.reserve(self->state().active_transformers.size());

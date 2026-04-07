@@ -19,7 +19,6 @@
 #include "tenzir/importer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/query_cursor.hpp"
 #include "tenzir/query_queue.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -180,9 +179,6 @@ struct index_state {
 
   // -- partition handling -----------------------------------------------------
 
-  /// Generates a unique query id.
-  tenzir::uuid create_query_id();
-
   /// Creates a new active partition.
   /// @param schema The schema of the new partition. All events routed to the
   /// partition are assumed to have the exact same schema.
@@ -240,10 +236,6 @@ struct index_state {
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions = {};
 
-  /// This set to true after the index finished reading the catalog state
-  /// from disk.
-  bool accept_queries = {};
-
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
@@ -260,20 +252,8 @@ struct index_state {
   /// read-only partition loaded to memory).
   size_t max_inmem_partitions = {};
 
-  /// The number of partitions initially returned for a query.
-  uint32_t taste_partitions = {};
-
   /// The queue of in-flight queries.
   query_queue pending_queries = {};
-
-  /// Maps exporter actor address to known query ID for monitoring
-  /// purposes.
-  std::unordered_map<caf::actor_addr, std::unordered_set<uuid>> monitored_queries
-    = {};
-
-  /// Reverse map from query ID to sender actor address, for O(1) cleanup when
-  /// a query completes normally (without the sender going down).
-  std::unordered_map<uuid, caf::actor_addr> query_id_to_sender = {};
 
   /// The maximum number of partitions to serve queries at the same time.
   size_t max_concurrent_partition_lookups = 0;
@@ -333,10 +313,6 @@ struct index_state {
   /// Config options for the index.
   caf::settings index_opts;
 
-  /// Requested queries before the index started up.
-  std::vector<std::pair<caf::typed_response_promise<query_cursor>, query_context>>
-    delayed_queries;
-
   /// The taxonomies for querying.
   std::shared_ptr<tenzir::taxonomies> taxonomies = {};
 
@@ -354,7 +330,6 @@ struct index_state {
 /// forcibly flushed.
 /// @param max_inmem_partitions The maximum number of passive partitions loaded
 /// into memory.
-/// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param max_concurrent_partition_lookups The maximum amount of concurrent
 /// lookups.
 /// @param catalog_dir The directory used by the catalog.
@@ -368,7 +343,7 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config);
 
 } // namespace tenzir
