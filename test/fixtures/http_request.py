@@ -88,6 +88,7 @@ def http_request() -> FixtureHandle:
     endpoint = f"{_HOST}:{port}"
     errors: list[str] = []
     sent_count = [0]
+    stopped_early = [False]
     stop_event = threading.Event()
 
     tls_dir: Path | None = None
@@ -105,6 +106,7 @@ def http_request() -> FixtureHandle:
             time.sleep(opts.initial_delay)
         for spec in request_specs:
             if stop_event.is_set():
+                stopped_early[0] = True
                 return
             proto = "https" if spec.tls else "http"
             target_url = urljoin(f"{proto}://{endpoint}/", spec.path.lstrip("/"))
@@ -114,8 +116,10 @@ def http_request() -> FixtureHandle:
             ssl_context: ssl.SSLContext | None = None
             if spec.tls and tls_dir and tls_ca is not None:
                 ssl_context = ssl.create_default_context(cafile=str(tls_ca))
+            connection_refused_error: str | None = None
             for _attempt in range(max(opts.max_attempts_per_request, 1)):
                 if stop_event.is_set():
+                    stopped_early[0] = True
                     return
                 req = Request(target_url, data=payload, method=spec.method, headers=headers)
                 try:
@@ -133,15 +137,18 @@ def http_request() -> FixtureHandle:
                         sent_count[0] += 1
                         sent = True
                         break
-                except URLError:
-                    time.sleep(opts.retry_delay)
-                except OSError:
+                except (URLError, OSError) as exc:
+                    if "connection refused" in str(exc).lower():
+                        connection_refused_error = str(exc)
                     time.sleep(opts.retry_delay)
             if not sent:
-                errors.append(
-                    "failed to deliver HTTP request after "
-                    f"{max(opts.max_attempts_per_request, 1)} attempts"
-                )
+                attempts = max(opts.max_attempts_per_request, 1)
+                if connection_refused_error is not None:
+                    errors.append(
+                        "connection refused while delivering HTTP request to "
+                        f"{target_url} after {attempts} attempts: "
+                        f"{connection_refused_error}"
+                    )
                 return
             if opts.inter_request_delay > 0:
                 time.sleep(opts.inter_request_delay)
@@ -161,7 +168,7 @@ def http_request() -> FixtureHandle:
             if errors:
                 raise AssertionError("; ".join(errors))
             expected_count = len(request_specs)
-            if sent_count[0] < expected_count:
+            if not stopped_early[0] and sent_count[0] < expected_count:
                 raise AssertionError(
                     f"expected to send {expected_count} requests, sent {sent_count[0]}"
                 )
