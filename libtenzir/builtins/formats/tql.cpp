@@ -229,7 +229,7 @@ public:
     co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
-  auto process(chunk_ptr input, Push<table_slice>&, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (done_ || not input || input->size() == 0) {
       co_return;
@@ -247,6 +247,10 @@ public:
     }
     // Process complete records from buffer
     process_buffer(ctx, false);
+    if (done_ or not builder_) {
+      co_return;
+    }
+    co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

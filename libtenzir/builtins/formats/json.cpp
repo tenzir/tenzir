@@ -1172,7 +1172,6 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -1182,6 +1181,7 @@ public:
     if (parser_->abort_requested) {
       co_return;
     }
+    co_await pusher_.push(parser_->builder.yield_ready_as_table_slice(), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1269,7 +1269,7 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(push, ctx);
+    TENZIR_UNUSED(ctx);
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -1277,6 +1277,9 @@ public:
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input));
+      TENZIR_ASSERT(parser_);
+      co_await pusher_.push(parser_->builder.yield_ready_as_table_slice(),
+                            push);
     }
     co_return;
   }
