@@ -1,0 +1,4 @@
+from_file env("GCL_CAPTURE_FILE") { read_json }
+entries = entries.length()
+summarize log_name=log_name,
+          total_entries=sum(entries)

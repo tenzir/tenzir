@@ -1,0 +1,14 @@
+// Send 3000 events with deeply nested structures, arrays, and mixed types.
+// Tests to_proto_value conversion for all supported types.
+from {meta: {source: "sensor", location: {building: "HQ", floor: 3}},
+      reading: 25.5, tags: ["temp", "indoor"], active: true},
+     {request: {method: "POST", headers: {content_type: "application/json"}},
+      status: 201, latency_ms: 42},
+     {user: {name: "alice", roles: ["admin", "viewer"]},
+      action: "update", targets: [1, 2, 3]}
+repeat 1000
+enumerate id
+to_google_cloud_logging log_id="nested-log",
+                        project="test-project",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

@@ -1,0 +1,4 @@
+{
+  log_name: "projects/test-project/logs/sev-log",
+  total_entries: 900,
+}

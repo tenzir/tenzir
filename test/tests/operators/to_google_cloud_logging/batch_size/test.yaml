@@ -1,0 +1,8 @@
+suite: batch-size
+fixtures:
+  - google_cloud_logging
+timeout: 120
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

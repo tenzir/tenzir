@@ -1,0 +1,4 @@
+{
+  log_name: "projects/test-project/logs/labeled-log",
+  total_entries: 3000,
+}

@@ -1,0 +1,5 @@
+{
+  total_entries: 10000,
+  num_batches: 100,
+  max_batch_entries: 100,
+}

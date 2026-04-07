@@ -1,0 +1,15 @@
+// Send ~5000 diverse events with text payloads across 5 different schemas.
+from {message: "text", severity: "info", source: "app"},
+     {code: 200, method: "GET", path: "/api/health"},
+     {alert: "disk full", host: "srv-1", priority: 1},
+     {metric: "cpu_usage", value: 87.5, unit: "percent"},
+     {user: "alice", action: "login", success: true}
+repeat 1000
+enumerate id
+to_google_cloud_logging log_id="test-log",
+                        project="test-project",
+                        payload=f"event-{id}",
+                        severity="info",
+                        resource_type="global",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

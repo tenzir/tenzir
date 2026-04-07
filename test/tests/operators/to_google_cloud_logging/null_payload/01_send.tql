@@ -1,0 +1,11 @@
+// Send 1000 events where payload evaluates to null. The operator should
+// warn "skipping log without a payload" and NOT send these events.
+from {data: "something"},
+     {other: 42}
+repeat 500
+enumerate id
+to_google_cloud_logging log_id="null-payload-log",
+                        project="test-project",
+                        payload=missing_field?,
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s
