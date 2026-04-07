@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -137,6 +137,20 @@ def http_request() -> FixtureHandle:
                         sent_count[0] += 1
                         sent = True
                         break
+                except HTTPError as exc:
+                    body = exc.read().decode("utf-8", errors="replace")
+                    if exc.code != spec.expected_status:
+                        errors.append(
+                            "expected HTTP status "
+                            f"{spec.expected_status}, got {exc.code}"
+                        )
+                    if spec.expected_body is not None and body != spec.expected_body:
+                        errors.append(
+                            f"expected HTTP body {spec.expected_body!r}, got {body!r}"
+                        )
+                    sent_count[0] += 1
+                    sent = True
+                    break
                 except (URLError, OSError) as exc:
                     if "connection refused" in str(exc).lower():
                         connection_refused_error = str(exc)

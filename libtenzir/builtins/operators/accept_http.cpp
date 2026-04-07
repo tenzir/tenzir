@@ -167,6 +167,20 @@ auto parse_port(std::string_view text) -> Option<uint16_t> {
   return value;
 }
 
+auto parse_content_length(std::string_view text) -> Option<size_t> {
+  if (text.empty()) {
+    return None{};
+  }
+  auto value = size_t{};
+  auto const* begin = text.data();
+  auto const* end = begin + text.size();
+  auto [ptr, ec] = std::from_chars(begin, end, value);
+  if (ec != std::errc{} or ptr != end) {
+    return None{};
+  }
+  return value;
+}
+
 auto parse_endpoint(std::string_view endpoint, location loc,
                     diagnostic_handler& dh) -> Option<ParsedEndpoint> {
   if (endpoint.contains("://")) {
@@ -383,6 +397,13 @@ public:
                           bool) -> folly::coro::Task<bool> {
         auto metadata = make_request_metadata(*msg);
         path = metadata.path;
+        auto content_length_header
+          = std::string_view{msg->getHeaders().getSingleOrEmpty("Content-Length")};
+        if (auto content_length = parse_content_length(content_length_header);
+            content_length and *content_length > max_request_size_) {
+          finish_callback->try_enqueue(413); // payload too large
+          co_return proxygen::coro::HTTPSourceReader::Cancel;
+        }
         auto encoding
           = std::string{msg->getHeaders().getSingleOrEmpty("Content-Encoding")};
         co_await queue_->enqueue(
@@ -408,6 +429,7 @@ public:
           auto iobuf = queue.move();
           iobuf->coalesce();
           if (bytes_received + iobuf->length() > max_request_size_) {
+            finish_callback->try_enqueue(413); // payload too large
             co_return proxygen::coro::HTTPSourceReader::Cancel;
           }
           bytes_received += iobuf->length();
@@ -475,8 +497,8 @@ public:
     // disconnected, but I guess this is fine.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      for (auto it : active_requests_) {
-        co_await it.second.finished->enqueue(200); // ok
+      for (auto& it : active_requests_) {
+        it.second.finished->try_enqueue(200); // ok
       }
     });
     lifecycle_ = Lifecycle::running;
@@ -549,9 +571,10 @@ public:
           diagnostic::warning("request body exceeds `max_request_size`")
             .primary(args_.endpoint)
             .note("request path: {}", req.metadata.path)
-            .note("ignoring remaining request body")
+            .note("rejecting request body")
             .emit(ctx);
           req.drop_body = true;
+          req.finished->try_enqueue(413); // payload too large
           co_return;
         }
         req.output_bytes += chunk->size();
@@ -592,8 +615,7 @@ public:
       co_return;
     }
     // notify the handler to respond
-    // TODO: send the status back
-    co_await it->second.finished->enqueue(200); // ok
+    it->second.finished->try_enqueue(200);
     active_requests_.erase(request_id);
     if (lifecycle_ == Lifecycle::draining and active_requests_.empty()) {
       server_ = None{};
