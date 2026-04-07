@@ -397,8 +397,8 @@ public:
                           bool) -> folly::coro::Task<bool> {
         auto metadata = make_request_metadata(*msg);
         path = metadata.path;
-        auto content_length_header
-          = std::string_view{msg->getHeaders().getSingleOrEmpty("Content-Length")};
+        auto content_length_header = std::string_view{
+          msg->getHeaders().getSingleOrEmpty("Content-Length")};
         if (auto content_length = parse_content_length(content_length_header);
             content_length and *content_length > max_request_size_) {
           finish_callback->try_enqueue(413); // payload too large
