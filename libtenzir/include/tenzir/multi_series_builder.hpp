@@ -438,15 +438,26 @@ private:
     entry_data(const tenzir::type* schema = nullptr) : builder{schema} {
     }
 
-    auto flush() -> std::vector<series> {
+    auto flush(time_point now) -> std::vector<series> {
+      last_flush = now;
       return builder.finish();
     }
 
     series_builder builder;
+    // The time when this entry was last flushed. This is used for garbage
+    // collection.
+    time_point last_flush;
+    bool unused = false;
   };
 
   /// @brief appends `new_events` to `ready_events_`
   void append_ready_events(std::vector<series> new_events);
+
+  /// @brief "garbage collects" all entries in `entries_` that satisfy the
+  /// predicate.
+  /// The implementation is in the source file, since its a private/internal
+  /// function and thus will only be instantiated by other member functions.
+  void garbage_collect_where(std::predicate<const entry_data&> auto pred);
 
   using signature_type = typename data_builder::signature_type;
 

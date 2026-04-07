@@ -527,10 +527,15 @@ auto multi_series_builder::yield_ready_as_table_slice(time_point now)
                                         settings_.timeout);
   }
   auto res = series_builder::YieldReadyResult{};
+  res.slices = detail::multi_series_builder::series_to_table_slice(
+    std::exchange(ready_events_, {}), settings_.default_schema_name);
   for (auto& entry : entries_) {
     auto r = entry.builder.yield_ready(settings_.default_schema_name, now,
                                        settings_.desired_batch_size,
                                        settings_.timeout);
+    if (not r.slices.empty()) {
+      entry.last_flush = now;
+    }
     if (r.wait_for) {
       if (res.wait_for.is_none()) {
         res.wait_for = r.wait_for;
@@ -542,6 +547,14 @@ auto multi_series_builder::yield_ready_as_table_slice(time_point now)
                       std::make_move_iterator(r.slices.begin()),
                       std::make_move_iterator(r.slices.end()));
   }
+  garbage_collect_where(
+    [now, timeout = settings_.timeout](entry_data const& e) {
+      if (e.builder.length() != 0) {
+        return false;
+      }
+      return std::chrono::duration_cast<duration>(now - e.last_flush)
+             >= 10 * timeout;
+    });
   return res;
 }
 
@@ -624,6 +637,7 @@ auto multi_series_builder::finalize_as_table_slice()
 }
 
 void multi_series_builder::complete_last_event() {
+  auto const now = clock::now();
   // Ensure that the slices emitted by us do not exceed `table_slice_size`. We
   // can't use `make_events_available_where` here as that would call
   // `complete_last_event` again.
@@ -637,7 +651,7 @@ void multi_series_builder::complete_last_event() {
   for (auto& entry : entries_) {
     if (entry.builder.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
-      append_ready_events(entry.builder.finish());
+      append_ready_events(entry.flush(now));
     }
   }
   if (not builder_raw_.has_elements()) {
@@ -743,6 +757,8 @@ void multi_series_builder::complete_last_event() {
       entries_.emplace_back(builder_schema_);
     } else {
       auto& entry = entries_[new_index];
+      entry.unused = false;
+      entry.last_flush = now;
       entry.builder = series_builder{builder_schema_};
     }
   }
@@ -750,7 +766,7 @@ void multi_series_builder::complete_last_event() {
     // Because it's the ordered mode, we know that that only this single
     // series builder can be active and hold elements. Since the active
     // builder changed, we flush the previous one.
-    append_ready_events(entries_[active_index_].builder.finish());
+    append_ready_events(entries_[active_index_].flush(now));
   }
   active_index_ = new_index;
   auto& entry = entries_[new_index];
@@ -764,7 +780,7 @@ void multi_series_builder::clear_raw_event() {
 
 Option<size_t> multi_series_builder::next_free_index() const {
   for (size_t i = 0; i < entries_.size(); ++i) {
-    if (entries_[i].builder.length() == 0) {
+    if (entries_[i].unused) {
       return i;
     }
   }
@@ -791,6 +807,29 @@ void multi_series_builder::append_ready_events(std::vector<series> new_events) {
   ready_events_.insert(ready_events_.end(),
                        std::make_move_iterator(new_events.begin()),
                        std::make_move_iterator(new_events.end()));
+}
+
+void multi_series_builder::garbage_collect_where(
+  std::predicate<const entry_data&> auto pred) {
+  if (uses_merging_builder()) {
+    return;
+  }
+  for (auto it = signature_map_.begin(); it != signature_map_.end();) {
+    auto const index = it.value();
+    TENZIR_ASSERT(index < entries_.size());
+    auto& entry = entries_[index];
+    if (pred(entry)) {
+      TENZIR_ASSERT(entry.builder.length() == 0,
+                    "The predicate for garbage collection should be strictly "
+                    "wider than the predicate for yielding in all cases. GC "
+                    "should never trigger on builders that still have "
+                    "events in them.");
+      entry.unused = true;
+      it = signature_map_.erase(it);
+      continue;
+    }
+    ++it;
+  }
 }
 
 } // namespace tenzir
