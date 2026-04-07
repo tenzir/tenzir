@@ -17,7 +17,9 @@
 
 #include <arrow/type_fwd.h>
 
+#include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -192,6 +194,18 @@ public:
 
     auto end() const -> decltype(slices.end()) {
       return slices.end();
+    }
+
+    auto merge(YieldReadyResult other) -> void {
+      slices.insert(slices.end(), std::make_move_iterator(other.slices.begin()),
+                    std::make_move_iterator(other.slices.end()));
+      if (other.wait_for) {
+        if (wait_for) {
+          wait_for = std::min(wait_for.unwrap(), other.wait_for.unwrap());
+        } else {
+          wait_for = other.wait_for;
+        }
+      }
     }
 
     operator std::vector<table_slice>&&() && {

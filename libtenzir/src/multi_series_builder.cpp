@@ -536,16 +536,7 @@ auto multi_series_builder::yield_ready_as_table_slice(time_point now)
     if (not r.slices.empty()) {
       entry.last_flush = now;
     }
-    if (r.wait_for) {
-      if (res.wait_for.is_none()) {
-        res.wait_for = r.wait_for;
-      } else {
-        res.wait_for = std::min(res.wait_for.unwrap(), r.wait_for.unwrap());
-      }
-    }
-    res.slices.insert(res.slices.end(),
-                      std::make_move_iterator(r.slices.begin()),
-                      std::make_move_iterator(r.slices.end()));
+    res.merge(std::move(r));
   }
   garbage_collect_where(
     [now, timeout = settings_.timeout](entry_data const& e) {
