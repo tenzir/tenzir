@@ -164,7 +164,7 @@ TEST("empty builder") {
     multi_series_builder::settings_type{.merge = true},
     dh,
   };
-  CHECK_EQUAL(b.yield_ready().size(), size_t{0});
+  CHECK_EQUAL(b.yield_ready_as_table_slice().slices.size(), size_t{0});
 }
 
 TEST("merging records") {
