@@ -521,14 +521,15 @@ multi_series_builder::multi_series_builder(
 auto multi_series_builder::yield_ready_as_table_slice(time_point now)
   -> series_builder::YieldReadyResult {
   complete_last_event();
-  if (uses_merging_builder()) {
-    return merging_builder_.yield_ready(settings_.default_schema_name, now,
-                                        settings_.desired_batch_size,
-                                        settings_.timeout);
-  }
   auto res = series_builder::YieldReadyResult{};
   res.slices = detail::multi_series_builder::series_to_table_slice(
     std::exchange(ready_events_, {}), settings_.default_schema_name);
+  if (uses_merging_builder()) {
+    res.merge(merging_builder_.yield_ready(settings_.default_schema_name, now,
+                                           settings_.desired_batch_size,
+                                           settings_.timeout));
+    return res;
+  }
   for (auto& entry : entries_) {
     auto r = entry.builder.yield_ready(settings_.default_schema_name, now,
                                        settings_.desired_batch_size,
