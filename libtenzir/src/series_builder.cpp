@@ -1534,7 +1534,7 @@ auto series_builder::yield_ready(std::string_view name, clock::time_point now,
   if (current_length >= desired_size) {
     oldest_event_ = None{};
     return series_builder::YieldReadyResult{
-      .slices = {finish_assert_one_slice(name)},
+      .slices = finish_as_table_slice(name),
     };
   }
   if (not oldest_event_) {
@@ -1547,7 +1547,7 @@ auto series_builder::yield_ready(std::string_view name, clock::time_point now,
   if (waiting >= timeout) {
     oldest_event_ = None{};
     return series_builder::YieldReadyResult{
-      .slices = {finish_assert_one_slice(name)},
+      .slices = finish_as_table_slice(name),
     };
   }
   return series_builder::YieldReadyResult{
