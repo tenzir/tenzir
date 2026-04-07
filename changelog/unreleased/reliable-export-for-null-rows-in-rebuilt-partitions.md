@@ -4,7 +4,7 @@ type: bugfix
 authors:
   - tobim
   - codex
-pr: 5987
+pr: 5988
 created: 2026-04-07T11:40:00.752835Z
 ---
 
