@@ -507,6 +507,12 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
+    if (lifecycle_ == Lifecycle::done) {
+      if (auto message = message_queue_->try_dequeue()) {
+        co_return std::move(*message);
+      }
+      co_return Message{ServerStopped{}};
+    }
     co_return co_await message_queue_->dequeue();
   }
 
@@ -593,7 +599,11 @@ public:
         }
       },
       [&](ServerStopped) -> Task<void> {
-        lifecycle_ = Lifecycle::done;
+        if (active_requests_.empty()) {
+          lifecycle_ = Lifecycle::done;
+        } else {
+          lifecycle_ = Lifecycle::draining;
+        }
         co_return;
       });
   }
