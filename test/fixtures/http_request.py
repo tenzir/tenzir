@@ -39,8 +39,8 @@ class HttpRequestOptions:
     # Retry/dispatch behavior.
     initial_delay: float = 0.5
     retry_delay: float = 0.1
-    request_timeout: float = 0.5
-    max_attempts_per_request: int = 200
+    request_timeout: float = 0.2
+    max_attempts_per_request: int = 30
     inter_request_delay: float = 0.0
 
     # Multi-request mode.
