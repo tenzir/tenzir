@@ -1897,8 +1897,7 @@ auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice {
   auto cast = std::dynamic_pointer_cast<arrow::StructArray>(std::move(result));
   TENZIR_ASSERT(cast);
   auto schema = type{slice.schema().name(), type::from_arrow(*cast->type())};
-  auto batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
-                                        cast->length(), cast->fields());
+  auto batch = record_batch_from_struct_array(schema.to_arrow_schema(), cast);
   auto out = table_slice{batch, std::move(schema)};
   out.import_time(slice.import_time());
   out.offset(slice.offset());

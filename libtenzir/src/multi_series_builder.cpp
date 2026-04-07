@@ -10,6 +10,7 @@
 #include "tenzir/data_builder.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
@@ -441,11 +442,10 @@ auto series_to_table_slice(series array, std::string_view fallback_name)
   if (array.type.name().empty()) {
     array.type = tenzir::type{fallback_name, array.type};
   }
-  auto* cast = dynamic_cast<arrow::StructArray*>(array.array.get());
+  auto cast = std::dynamic_pointer_cast<arrow::StructArray>(array.array);
   TENZIR_ASSERT(cast);
   auto arrow_schema = array.type.to_arrow_schema();
-  auto batch = arrow::RecordBatch::Make(std::move(arrow_schema), cast->length(),
-                                        cast->fields());
+  auto batch = record_batch_from_struct_array(std::move(arrow_schema), cast);
   TENZIR_ASSERT(batch);
   TENZIR_ASSERT_EXPENSIVE(batch->Validate().ok());
   return table_slice{std::move(batch), std::move(array.type)};

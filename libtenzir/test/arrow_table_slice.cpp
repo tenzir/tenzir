@@ -21,14 +21,14 @@ namespace tenzir {
 
 TEST("record batch from struct array preserves row nulls") {
   auto int_builder = arrow::Int64Builder{arrow_memory_pool()};
-  check(int_builder.Append(int64_t{42}));
-  check(int_builder.Append(int64_t{1337}));
+  tenzir::check(int_builder.Append(int64_t{42}));
+  tenzir::check(int_builder.Append(int64_t{1337}));
   auto ints = finish(int_builder);
   auto string_builder = arrow::StringBuilder{arrow_memory_pool()};
-  check(string_builder.Append("keep"));
-  check(string_builder.Append("leak"));
+  tenzir::check(string_builder.Append("keep"));
+  tenzir::check(string_builder.Append("leak"));
   auto strings = finish(string_builder);
-  auto bitmap = check(arrow::AllocateBitmap(2, arrow_memory_pool()));
+  auto bitmap = tenzir::check(arrow::AllocateBitmap(2, arrow_memory_pool()));
   std::memset(bitmap->mutable_data(), 0, bitmap->size());
   arrow::bit_util::SetBit(bitmap->mutable_data(), 0);
   auto fields = arrow::FieldVector{
