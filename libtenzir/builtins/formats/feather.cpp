@@ -61,11 +61,13 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 /// schema the input record batch is copied to the newly created record batch.
 auto unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb)
   -> std::shared_ptr<arrow::RecordBatch> {
-  auto event_col = rb->GetColumnByName("event");
+  auto event_col = std::dynamic_pointer_cast<arrow::StructArray>(
+    rb->GetColumnByName("event"));
+  TENZIR_ASSERT(event_col);
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
-  auto event_rb = check(arrow::RecordBatch::FromStructArray(
-    event_col, tenzir::arrow_memory_pool()));
-  return event_rb->ReplaceSchemaMetadata(schema_metadata);
+  auto event_schema
+    = arrow::schema(event_col->type()->fields(), std::move(schema_metadata));
+  return record_batch_from_struct_array(event_schema, event_col);
 }
 
 /// Create a constant column for the given import time with `rows` rows

@@ -8,6 +8,7 @@
 
 #include "tenzir/cast.hpp"
 
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <arrow/record_batch.h>
@@ -25,9 +26,8 @@ auto cast(table_slice from_slice, const type& to_schema) -> table_slice {
     = detail::cast_helper<record_type, record_type>::cast(
       as<record_type>(from_slice.schema()), from_struct_array,
       as<record_type>(to_schema));
-  const auto to_batch = arrow::RecordBatch::Make(to_schema.to_arrow_schema(),
-                                                 to_struct_array->length(),
-                                                 to_struct_array->fields());
+  const auto to_batch = record_batch_from_struct_array(
+    to_schema.to_arrow_schema(), to_struct_array);
   auto result = table_slice{to_batch, to_schema};
   result.offset(from_slice.offset());
   result.import_time(from_slice.import_time());

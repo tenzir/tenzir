@@ -291,8 +291,8 @@ public:
         auto rs = replace_series_with_null(s, args_.path, 0, what_type,
                                            args_.what.inner);
         co_yield table_slice{
-          arrow::RecordBatch::Make(slice.schema().to_arrow_schema(),
-                                   rs.length(), rs.array->fields()),
+          record_batch_from_struct_array(slice.schema().to_arrow_schema(),
+                                         rs.array),
           slice.schema(),
         };
       } else {
@@ -302,8 +302,7 @@ public:
         for (auto& r : rs) {
           auto rty = type{slice.schema().name(), r.type, auto{attrs}};
           co_yield table_slice{
-            arrow::RecordBatch::Make(rty.to_arrow_schema(), r.array->length(),
-                                     r.array->fields()),
+            record_batch_from_struct_array(rty.to_arrow_schema(), r.array),
             std::move(rty),
           };
         }
@@ -350,8 +349,8 @@ public:
       auto rs = replace_series_with_null(s, args_.path, 0, what_type_,
                                          args_.what.inner);
       co_await push(table_slice{
-        arrow::RecordBatch::Make(input.schema().to_arrow_schema(), rs.length(),
-                                 rs.array->fields()),
+        record_batch_from_struct_array(input.schema().to_arrow_schema(),
+                                       rs.array),
         input.schema(),
       });
       co_return;
@@ -362,8 +361,7 @@ public:
     for (auto& r : rs) {
       auto rty = type{input.schema().name(), r.type, auto{attrs}};
       co_await push(table_slice{
-        arrow::RecordBatch::Make(rty.to_arrow_schema(), r.array->length(),
-                                 r.array->fields()),
+        record_batch_from_struct_array(rty.to_arrow_schema(), r.array),
         std::move(rty),
       });
     }
