@@ -271,6 +271,10 @@ struct index_state {
   std::unordered_map<caf::actor_addr, std::unordered_set<uuid>> monitored_queries
     = {};
 
+  /// Reverse map from query ID to sender actor address, for O(1) cleanup when
+  /// a query completes normally (without the sender going down).
+  std::unordered_map<uuid, caf::actor_addr> query_id_to_sender = {};
+
   /// The maximum number of partitions to serve queries at the same time.
   size_t max_concurrent_partition_lookups = 0;
 

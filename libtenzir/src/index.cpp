@@ -1013,6 +1013,20 @@ auto index_state::schedule_lookups() -> size_t {
         if (auto client = pending_queries.handle_completion(qid)) {
           self->mail(atom::done_v).send(*client);
         }
+        // Remove the query ID from monitored_queries once it is fully done
+        // (i.e. erased from pending_queries). Without this, completed query IDs
+        // would accumulate in the set for the sender's actor address until the
+        // sender eventually goes down.
+        if (!pending_queries.queries().contains(qid)) {
+          if (auto rev = query_id_to_sender.find(qid);
+              rev != query_id_to_sender.end()) {
+            if (auto mon = monitored_queries.find(rev->second);
+                mon != monitored_queries.end()) {
+              mon->second.erase(qid);
+            }
+            query_id_to_sender.erase(rev);
+          }
+        }
         // 4. recursively call schedule_lookups in the done handler. ...or
         //    when all done? (5)
         // 5. decrement running_partition_lookups when all queries that
@@ -1087,6 +1101,8 @@ std::size_t index_state::memusage() const {
   for (const auto& [addr, uuids] : monitored_queries) {
     usage += sizeof(addr) + calculate_usage(uuids);
   }
+  usage += query_id_to_sender.size()
+           * sizeof(decltype(query_id_to_sender)::value_type);
   usage += calculate_usage(flush_listeners);
   usage += calculate_usage(partition_creation_listeners);
   usage += calculate_usage(partitions_in_transformation);
@@ -1317,6 +1333,7 @@ index(index_actor::stateful_pointer<index_state> self,
                          "query results",
                          *self, ids_string);
             for (const auto& id : ids) {
+              self->state().query_id_to_sender.erase(id);
               if (auto err = self->state().pending_queries.remove_query(id);
                   err.valid()) {
                 TENZIR_DEBUG("{} did not remove {} from the query queue. It "
@@ -1332,6 +1349,8 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_context.id);
       }
+      self->state().query_id_to_sender.emplace(query_context.id,
+                                               sender->address());
       std::vector<std::pair<uuid, type>> candidates;
       candidates.reserve(self->state().active_partitions.size()
                          + self->state().unpersisted.size());
