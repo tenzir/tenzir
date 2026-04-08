@@ -1092,7 +1092,7 @@ index(index_actor::stateful_pointer<index_state> self,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
-  TENZIR_TRACE("index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
+  TENZIR_TRACE("index {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
                TENZIR_ARG(partition_capacity),
                TENZIR_ARG(active_partition_timeout),
