@@ -8,7 +8,7 @@
 
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 
-#include <tenzir/async/series.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder.hpp>

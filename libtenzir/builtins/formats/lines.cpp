@@ -8,7 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
-#include <tenzir/async/series.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>

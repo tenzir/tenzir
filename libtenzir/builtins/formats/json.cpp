@@ -11,7 +11,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/async/series.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
