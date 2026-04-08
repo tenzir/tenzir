@@ -382,6 +382,8 @@ public:
     reader
       .onHeadersAsync([&](std::unique_ptr<proxygen::HTTPMessage> msg, bool,
                           bool) -> folly::coro::Task<bool> {
+        TENZIR_ASSERT(not started);
+        started = true;
         auto metadata = make_request_metadata(*msg);
         path = metadata.path;
         auto content_length_header = std::string_view{
@@ -398,16 +400,10 @@ public:
                          .metadata = std::move(metadata),
                          .content_encoding = std::move(encoding),
                          .finished = finish_callback});
-        started = true;
         co_return proxygen::coro::HTTPSourceReader::Continue;
       })
       .onBodyAsync([&](quic::BufQueue queue, bool) -> folly::coro::Task<bool> {
-        if (not started) {
-          co_await queue_->enqueue(RequestStarted{.request_id = request_id,
-                                                  .metadata = RequestMetadata{},
-                                                  .content_encoding = "",
-                                                  .finished = finish_callback});
-        }
+        TENZIR_ASSERT(started);
         if (not finish_callback->empty()) {
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
@@ -430,6 +426,7 @@ public:
       })
       .onError([&](proxygen::coro::HTTPSourceReader::ErrorContext,
                    const proxygen::coro::HTTPError&) {
+        finish_callback->try_enqueue(400);
         return proxygen::coro::HTTPSourceReader::Cancel;
       });
     // read request
