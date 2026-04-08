@@ -158,7 +158,7 @@ TEST("subprocess signals cached process group after wait") {
       if (::kill(child_pid, 0) != 0 and errno == ESRCH) {
         co_return;
       }
-      co_await tenzir::sleep(std::chrono::milliseconds{10});
+      co_await tenzir::sleep_for(std::chrono::milliseconds{10});
     }
     FAIL("background child {} still existed after process-group kill",
          child_pid);
