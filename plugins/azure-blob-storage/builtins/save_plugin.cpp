@@ -80,7 +80,15 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto file_info = fs.ValueUnsafe()->GetFileInfo(path);
+    auto file_info = arrow::Result<arrow::fs::FileInfo>{};
+    try {
+      file_info = fs.ValueUnsafe()->GetFileInfo(path);
+    } catch (const std::exception& e) {
+      diagnostic::error("failed to get file info: {}", e.what())
+        .primary(args_.op)
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info"
                         "{}",
@@ -89,7 +97,16 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
+    auto output_stream
+      = arrow::Result<std::shared_ptr<arrow::io::OutputStream>>{};
+    try {
+      output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
+    } catch (const std::exception& e) {
+      diagnostic::error("failed to open output stream: {}", e.what())
+        .primary(args_.op)
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
     if (not output_stream.ok()) {
       diagnostic::error("failed to open output stream: "
                         "{}",
@@ -100,12 +117,16 @@ public:
     }
     auto stream_guard
       = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
-          auto status = output_stream.ValueUnsafe()->Close();
-          if (not output_stream.ok()) {
-            diagnostic::error("failed to close stream: {}",
-                              status.ToStringWithoutContextLines())
-              .primary(args_.op)
-              .emit(ctrl.diagnostics());
+          try {
+            auto status = output_stream.ValueUnsafe()->Close();
+            if (not status.ok()) {
+              diagnostic::error("failed to close stream: {}",
+                                status.ToStringWithoutContextLines())
+                .primary(args_.op)
+                .emit(ctrl.diagnostics());
+            }
+          } catch (...) {
+            // Swallow exceptions to avoid std::terminate from noexcept.
           }
         });
     for (const auto& chunk : input) {
@@ -113,13 +134,20 @@ public:
         co_yield {};
         continue;
       }
-      auto status = output_stream.ValueUnsafe()->Write(
-        chunk->data(), detail::narrow<int64_t>(chunk->size()));
-      if (not output_stream.ok()) {
-        diagnostic::error("failed to write to stream: {}",
-                          status.ToStringWithoutContextLines())
+      try {
+        auto status = output_stream.ValueUnsafe()->Write(
+          chunk->data(), detail::narrow<int64_t>(chunk->size()));
+        if (not status.ok()) {
+          diagnostic::error("failed to write to stream: {}",
+                            status.ToStringWithoutContextLines())
+            .primary(args_.op)
+            .emit(ctrl.diagnostics());
+        }
+      } catch (const std::exception& e) {
+        diagnostic::error("failed to write to stream: {}", e.what())
           .primary(args_.op)
           .emit(ctrl.diagnostics());
+        co_return;
       }
       co_yield {};
     }
