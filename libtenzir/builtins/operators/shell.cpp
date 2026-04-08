@@ -436,7 +436,7 @@ auto spawn_shell_subprocess(std::string command, bool pipe_stdin)
     .pipe_input_fds = {},
     .pipe_output_fds = {},
     .use_path = false,
-    .process_group_leader = false,
+    .process_group_leader = true,
     .kill_child_on_destruction = true,
   };
   co_return co_await Subprocess::spawn(std::move(spec));
@@ -484,21 +484,19 @@ auto wait_for_exit(Arc<MessageQueue> queue, Subprocess& subprocess)
   }
 }
 
-auto wait_for_exit_after_write_failure(Arc<MessageQueue> queue,
-                                       Subprocess& subprocess) -> Task<void> {
+auto terminate_process_group_after_write_failure(Arc<MessageQueue> queue,
+                                                 Subprocess& subprocess)
+  -> Task<void> {
   auto failure = Option<TaskFailed>{};
   try {
-    auto return_code
-      = co_await subprocess.wait_timeout(std::chrono::milliseconds{50});
-    if (return_code.running()) {
-      return_code
-        = co_await subprocess.terminate_or_kill(std::chrono::seconds{1});
-    }
-    co_await queue->enqueue(ProcessExited{return_code});
+    co_await subprocess.send_signal_to_process_group(SIGTERM);
+    co_await sleep_for(std::chrono::seconds{1});
+    co_await subprocess.send_signal_to_process_group(SIGKILL);
   } catch (std::exception const& ex) {
     failure = TaskFailed{
       .error = ex.what(),
-      .note = "failed to terminate child process after stdin write failure",
+      .note = "failed to terminate child process group after stdin write "
+              "failure",
     };
   }
   if (failure.is_some()) {
@@ -636,6 +634,7 @@ public:
     try {
       subprocess_ = co_await spawn_shell_subprocess(std::move(*command), true);
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
+      start_wait_for_exit(ctx);
       lifecycle_ = Lifecycle::running;
     } catch (std::exception const& ex) {
       diagnostic::error("{}", ex.what())
@@ -664,6 +663,7 @@ public:
       if (write_failure_.is_none()) {
         write_failure_ = format_write_failure(ex);
       }
+      start_terminate_process_group_after_write_failure(ctx);
     } catch (std::exception const& ex) {
       lifecycle_ = Lifecycle::draining;
       if (write_failure_.is_none()) {
@@ -672,6 +672,7 @@ public:
           .code = None{},
         };
       }
+      start_terminate_process_group_after_write_failure(ctx);
     }
   }
 
@@ -736,8 +737,8 @@ public:
         }
       }
       start_wait_for_exit(ctx);
-    } else if (write_failure_.is_some() and not child_exited_) {
-      start_wait_for_exit_after_write_failure(ctx);
+    } else if (write_failure_.is_some()) {
+      start_terminate_process_group_after_write_failure(ctx);
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
@@ -765,14 +766,14 @@ private:
     ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
   }
 
-  auto start_wait_for_exit_after_write_failure(OpCtx& ctx) -> void {
+  auto start_terminate_process_group_after_write_failure(OpCtx& ctx) -> void {
     TENZIR_ASSERT(subprocess_);
-    if (exit_task_started_) {
+    if (termination_task_started_) {
       return;
     }
-    exit_task_started_ = true;
-    ctx.spawn_task(
-      wait_for_exit_after_write_failure(message_queue_, *subprocess_));
+    termination_task_started_ = true;
+    ctx.spawn_task(terminate_process_group_after_write_failure(message_queue_,
+                                                               *subprocess_));
   }
 
   auto finish_if_ready(diagnostic_handler& dh) -> Task<void> {
@@ -811,6 +812,7 @@ private:
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   bool exit_task_started_ = false;
+  bool termination_task_started_ = false;
   Option<std::string> exit_error_ = None{};
   Option<WriteFailure> write_failure_ = None{};
 };
