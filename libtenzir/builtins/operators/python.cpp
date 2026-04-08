@@ -923,6 +923,9 @@ public:
     if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
+    if (input.rows() == 0) {
+      co_return;
+    }
     auto failure = Option<std::string>{};
     try {
       if (not co_await ensure_child_running()) {
