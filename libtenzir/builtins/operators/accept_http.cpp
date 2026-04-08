@@ -92,7 +92,7 @@ auto parse_folly_tls_version(std::string_view input)
 }
 
 auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
-  -> Option<wangle::SSLContextConfig> {
+  -> failure_or<wangle::SSLContextConfig> {
   auto tls_opts
     = args.tls
         ? tls_options{*args.tls, {.tls_default = false, .is_server = true}}
@@ -102,7 +102,7 @@ auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
     diagnostic::error("`tls.certfile` is required when TLS is enabled")
       .primary(args.endpoint)
       .emit(dh);
-    return None{};
+    return failure::promise();
   }
   auto keyfile = tls_opts.get_keyfile(nullptr);
   auto password = tls_opts.get_password(nullptr);
@@ -116,7 +116,7 @@ auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
           .primary(*min)
           .hint("supported values are `tls1`, `tls1.2`, and `tls1.3`")
           .emit(dh);
-        return None{};
+        return failure::promise();
       }
     }
   }
@@ -128,7 +128,7 @@ auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
     diagnostic::error("failed to load TLS certificate: {}", ex.what())
       .primary(*certfile)
       .emit(dh);
-    return None{};
+    return failure::promise();
   }
   auto require_client_cert
     = tls_opts.get_tls_require_client_cert(nullptr).inner;
@@ -430,7 +430,7 @@ public:
       })
       .onError([&](proxygen::coro::HTTPSourceReader::ErrorContext,
                    const proxygen::coro::HTTPError&) {
-        return proxygen::coro::HTTPSourceReader::Continue;
+        return proxygen::coro::HTTPSourceReader::Cancel;
       });
     // read request
     co_await reader.read(detail::narrow<uint32_t>(max_request_size_));
