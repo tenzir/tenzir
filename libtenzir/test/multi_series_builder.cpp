@@ -786,9 +786,9 @@ TEST("yield_ready preserves schema names in selector mode") {
       .naming_prefix = "prefix",
     },
     multi_series_builder::settings_type{
+      .default_schema_name = "fallback.name",
       .ordered = false,
       .desired_batch_size = 1,
-      .default_schema_name = "fallback.name",
     },
     dh,
     schema_fn({seed_schema_1, seed_schema_2}),
