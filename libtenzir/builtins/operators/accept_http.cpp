@@ -153,25 +153,12 @@ auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
   return config;
 }
 
-auto parse_port(std::string_view text) -> Option<uint16_t> {
+template <class T>
+auto parse_number(std::string_view text) -> Option<T> {
   if (text.empty()) {
     return None{};
   }
-  auto value = uint16_t{};
-  auto const* begin = text.data();
-  auto const* end = begin + text.size();
-  auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} or ptr != end) {
-    return None{};
-  }
-  return value;
-}
-
-auto parse_content_length(std::string_view text) -> Option<size_t> {
-  if (text.empty()) {
-    return None{};
-  }
-  auto value = size_t{};
+  auto value = T{};
   auto const* begin = text.data();
   auto const* end = begin + text.size();
   auto [ptr, ec] = std::from_chars(begin, end, value);
@@ -230,7 +217,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
         .emit(dh);
       return None{};
     }
-    auto port = parse_port(rest.substr(1));
+    auto port = parse_number<uint16_t>(rest.substr(1));
     if (not port) {
       diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
       return None{};
@@ -250,7 +237,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
     return None{};
   }
   auto const host = endpoint.substr(0, colon);
-  auto port = parse_port(endpoint.substr(colon + 1));
+  auto port = parse_number<uint16_t>(endpoint.substr(colon + 1));
   if (not port) {
     diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
     return None{};
@@ -399,7 +386,7 @@ public:
         path = metadata.path;
         auto content_length_header = std::string_view{
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
-        if (auto content_length = parse_content_length(content_length_header);
+        if (auto content_length = parse_number<size_t>(content_length_header);
             content_length and *content_length > max_request_size_) {
           finish_callback->try_enqueue(413); // payload too large
           co_return proxygen::coro::HTTPSourceReader::Cancel;
