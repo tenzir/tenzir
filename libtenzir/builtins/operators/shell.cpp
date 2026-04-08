@@ -30,6 +30,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
+#include <folly/coro/BoundedQueue.h>
 #if __has_include(<boost/process/v1/child.hpp>)
 
 #  include <boost/process/v1/args.hpp>
@@ -406,10 +407,20 @@ struct WriteFailure {
 };
 
 using Message = variant<OutputChunk, OutputClosed, ProcessExited, TaskFailed>;
-// `process()` writes into child stdin synchronously. Keep stdout buffering
-// unbounded so echo-style commands cannot deadlock writes by filling a bounded
-// queue before the executor can drain it via `process_task()`.
-using MessageQueue = UnboundedQueue<Message>;
+using SourceMessageQueue = folly::coro::BoundedQueue<Message>;
+using TransformMessageQueue = UnboundedQueue<Message>;
+
+constexpr auto source_message_queue_capacity = uint32_t{16};
+
+auto enqueue_message(SourceMessageQueue& queue, Message message) -> Task<void> {
+  co_await queue.enqueue(std::move(message));
+}
+
+auto enqueue_message(TransformMessageQueue& queue, Message message)
+  -> Task<void> {
+  queue.enqueue(std::move(message));
+  co_return;
+}
 
 auto resolve_command(ShellArgs const& args, OpCtx& ctx)
   -> Task<Option<std::string>> {
@@ -442,8 +453,8 @@ auto spawn_shell_subprocess(std::string command, bool pipe_stdin)
   co_return co_await Subprocess::spawn(std::move(spec));
 }
 
-auto read_stdout(Arc<MessageQueue> queue, Subprocess& subprocess)
-  -> Task<void> {
+template <class Queue>
+auto read_stdout(Arc<Queue> queue, Subprocess& subprocess) -> Task<void> {
   auto pipe = subprocess.stdout_pipe();
   TENZIR_ASSERT(pipe.is_some());
   auto failure = Option<TaskFailed>{};
@@ -453,9 +464,9 @@ auto read_stdout(Arc<MessageQueue> queue, Subprocess& subprocess)
       if (chunk.is_none()) {
         break;
       }
-      co_await queue->enqueue(OutputChunk{std::move(*chunk)});
+      co_await enqueue_message(*queue, OutputChunk{std::move(*chunk)});
     }
-    co_await queue->enqueue(OutputClosed{});
+    co_await enqueue_message(*queue, OutputClosed{});
   } catch (std::exception const& ex) {
     failure = TaskFailed{
       .error = ex.what(),
@@ -463,16 +474,16 @@ auto read_stdout(Arc<MessageQueue> queue, Subprocess& subprocess)
     };
   }
   if (failure.is_some()) {
-    co_await queue->enqueue(std::move(*failure));
+    co_await enqueue_message(*queue, std::move(*failure));
   }
 }
 
-auto wait_for_exit(Arc<MessageQueue> queue, Subprocess& subprocess)
-  -> Task<void> {
+template <class Queue>
+auto wait_for_exit(Arc<Queue> queue, Subprocess& subprocess) -> Task<void> {
   auto failure = Option<TaskFailed>{};
   try {
     auto return_code = co_await subprocess.wait();
-    co_await queue->enqueue(ProcessExited{return_code});
+    co_await enqueue_message(*queue, ProcessExited{return_code});
   } catch (std::exception const& ex) {
     failure = TaskFailed{
       .error = ex.what(),
@@ -480,11 +491,12 @@ auto wait_for_exit(Arc<MessageQueue> queue, Subprocess& subprocess)
     };
   }
   if (failure.is_some()) {
-    co_await queue->enqueue(std::move(*failure));
+    co_await enqueue_message(*queue, std::move(*failure));
   }
 }
 
-auto terminate_process_group_after_write_failure(Arc<MessageQueue> queue,
+template <class Queue>
+auto terminate_process_group_after_write_failure(Arc<Queue> queue,
                                                  Subprocess& subprocess)
   -> Task<void> {
   auto failure = Option<TaskFailed>{};
@@ -500,7 +512,7 @@ auto terminate_process_group_after_write_failure(Arc<MessageQueue> queue,
     };
   }
   if (failure.is_some()) {
-    co_await queue->enqueue(std::move(*failure));
+    co_await enqueue_message(*queue, std::move(*failure));
   }
 }
 
@@ -613,7 +625,8 @@ private:
   ShellArgs args_;
   Lifecycle lifecycle_ = Lifecycle::starting;
   Option<Subprocess> subprocess_ = None{};
-  mutable Arc<MessageQueue> message_queue_{std::in_place};
+  mutable Arc<SourceMessageQueue> message_queue_{std::in_place,
+                                                 source_message_queue_capacity};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   Option<std::string> exit_error_ = None{};
@@ -806,7 +819,10 @@ private:
   ShellArgs args_;
   Lifecycle lifecycle_ = Lifecycle::starting;
   Option<Subprocess> subprocess_ = None{};
-  mutable Arc<MessageQueue> message_queue_{std::in_place};
+  // `process()` writes into child stdin synchronously. Keep transform stdout
+  // buffering unbounded so echo-style commands cannot deadlock writes by
+  // filling a bounded queue before the executor can drain it in `process_task`.
+  mutable Arc<TransformMessageQueue> message_queue_{std::in_place};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   bool exit_task_started_ = false;
