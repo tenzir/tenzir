@@ -8,6 +8,15 @@
   tzdata,
 }:
 arrow-cpp.overrideAttrs (orig: {
+  version = "23.0.1";
+
+  src = fetchFromGitHub {
+    owner = "apache";
+    repo = "arrow";
+    rev = "apache-arrow-23.0.1";
+    hash = lib.fakeHash;
+  };
+
   patches = [
     ./arrow-cpp-nixos-zoneinfo.patch
     ./arrow-cpp-eager-struct-fields.patch

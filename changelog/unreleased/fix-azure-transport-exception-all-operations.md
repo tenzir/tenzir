@@ -6,9 +6,10 @@ authors:
 created: 2026-04-08T00:00:00.000000Z
 ---
 
-The previous fix for Azure `TransportException` crashes (v5.30.0) only
-covered blob deletion operations. The same unhandled exception could still
-crash the node during file listing, reading, or writing via
-`load_azure_blob_storage`, `save_azure_blob_storage`, and
-`from_azure_blob_storage`. All Azure Blob Storage operations now catch
-transport-level exceptions (e.g., SSL certificate errors) gracefully.
+Bumped Apache Arrow from 23.0.0 to 23.0.1, which includes an upstream fix
+for unhandled `Azure::Core::Http::TransportException` in Arrow's
+`AzureFileSystem` methods. Previously, transport-level errors (e.g., SSL
+certificate failures) could crash the node during file listing, reading, or
+writing. Additionally, the direct Azure SDK calls in the blob deletion code
+paths now catch `std::exception` broadly instead of only specific Azure
+exception types.

@@ -83,15 +83,7 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto file_info = arrow::Result<arrow::fs::FileInfo>{};
-    try {
-      file_info = fs.ValueUnsafe()->GetFileInfo(path);
-    } catch (const std::exception& e) {
-      diagnostic::error("failed to get file info: {}", e.what())
-        .primary(args_.op)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
+    auto file_info = fs.ValueUnsafe()->GetFileInfo(path);
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info from path {}",
                         file_info.status().ToStringWithoutContextLines())
@@ -99,16 +91,7 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto input_stream
-      = arrow::Result<std::shared_ptr<arrow::io::InputStream>>{};
-    try {
-      input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
-    } catch (const std::exception& e) {
-      diagnostic::error("failed to open input stream: {}", e.what())
-        .primary(args_.op)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
+    auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
     if (not input_stream.ok()) {
       diagnostic::error("failed to open input stream: {}",
                         input_stream.status().ToStringWithoutContextLines())
@@ -117,16 +100,7 @@ public:
       co_return;
     }
     while (not input_stream.ValueUnsafe()->closed()) {
-      auto buffer
-        = arrow::Result<std::shared_ptr<arrow::Buffer>>{};
-      try {
-        buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
-      } catch (const std::exception& e) {
-        diagnostic::error("failed to read from input stream: {}", e.what())
-          .primary(args_.op)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
+      auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
       if (not buffer.ok()) {
         diagnostic::error("failed to read from input stream: {}",
                           buffer.status().ToStringWithoutContextLines())
