@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async.hpp>
-#include <tenzir/co_match.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
@@ -194,6 +193,9 @@ struct FlushingPublisher {
 
 class ToGoogleCloudPubsub final : public Operator<table_slice, void> {
 public:
+  using publish_future
+    = google::cloud::future<google::cloud::StatusOr<std::string>>;
+
   explicit ToGoogleCloudPubsub(to_args args) : args_{std::move(args)} {
   }
 
@@ -209,69 +211,63 @@ public:
     if (input.rows() == 0 or not publisher_) {
       co_return;
     }
-    auto pub = publisher_->inner;
-    auto* dh = &ctx.dh();
-    for (const auto& messages : eval(args_.message, input, *dh)) {
-      co_await co_match(
+    auto& dh = ctx.dh();
+    for (const auto& messages : eval(args_.message, input, dh)) {
+      match(
         *messages.array,
-        [&](const arrow::StringArray& array) -> Task<void> {
+        [&](const arrow::StringArray& array) {
           for (auto i = int64_t{}; i < array.length(); ++i) {
             if (array.IsNull(i)) {
               diagnostic::warning("expected `string`, got `null`")
                 .primary(args_.message)
-                .emit(*dh);
+                .emit(dh);
               continue;
             }
-            auto str = std::string{array.GetView(i)};
-            inflight_.push_back(ctx.spawn_task(
-              [pub, str = std::move(str), dh]() mutable -> Task<void> {
-                auto future = pub.Publish(
-                  pubsub::MessageBuilder{}.SetData(std::move(str)).Build());
-                auto result = co_await std::move(future);
-                if (not result) {
-                  diagnostic::error("failed to publish: {}",
-                                    result.status().message())
-                    .emit(*dh);
-                }
-              }));
-            if (inflight_.size() >= max_inflight_publishes) {
-              auto handle = std::move(inflight_.front());
-              inflight_.pop_front();
-              co_await handle.join();
-            }
+            inflight_.push_back(publisher_->inner.Publish(
+              pubsub::MessageBuilder{}
+                .SetData(std::string{array.GetView(i)})
+                .Build()));
           }
-          co_return;
         },
-        [&](const auto&) -> Task<void> {
+        [&](const auto&) {
           diagnostic::warning("expected `string`, got `{}`",
                               messages.type.kind())
             .primary(args_.message)
             .note("event is skipped")
-            .emit(*dh);
-          co_return;
+            .emit(dh);
         });
     }
+    co_return;
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    co_await drain_inflight(ctx.dh());
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    if (publisher_) {
-      publisher_->inner.Flush();
-    }
-    while (not inflight_.empty()) {
-      auto handle = std::move(inflight_.front());
-      inflight_.pop_front();
-      co_await handle.join();
-    }
+    co_await drain_inflight(ctx.dh());
     co_return FinalizeBehavior::done;
   }
 
 private:
-  static constexpr auto max_inflight_publishes = size_t{100};
+  auto drain_inflight(diagnostic_handler& dh) -> Task<void> {
+    if (publisher_) {
+      publisher_->inner.Flush();
+    }
+    while (not inflight_.empty()) {
+      auto future = std::move(inflight_.front());
+      inflight_.pop_front();
+      auto result = co_await std::move(future);
+      if (not result) {
+        diagnostic::error("failed to publish: {}", result.status().message())
+          .emit(dh);
+      }
+    }
+  }
 
   to_args args_;
   Option<FlushingPublisher> publisher_;
-  std::deque<AsyncHandle<void>> inflight_;
+  std::deque<publish_future> inflight_;
 };
 
 } // namespace
