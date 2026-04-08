@@ -415,7 +415,7 @@ private:
   }
 
   auto uses_merging_builder() const -> bool {
-    return not get_policy<policy_selector>() and settings_.merge;
+    return (get_policy<policy_selector>() == nullptr) and settings_.merge;
   };
 
   /// @brief Called internally to complete the last built event.
@@ -438,26 +438,40 @@ private:
     entry_data(const tenzir::type* schema = nullptr) : builder{schema} {
     }
 
-    auto flush(time_point now) -> std::vector<series> {
-      last_flush = now;
+    auto flush() -> std::vector<series> {
+      last_flush_age = builder.oldest_event();
       return builder.finish();
     }
 
+    auto yield_ready(time_point now, settings_type& settings)
+      -> series_builder::YieldReadyResult {
+      auto r
+        = builder.yield_ready(settings.default_schema_name, now,
+                              settings.desired_batch_size, settings.timeout);
+      if (not r.slices.empty()) {
+        last_flush_age = now;
+      }
+      return r;
+    }
+
+    auto recreate(const tenzir::type* builder_schema) {
+      builder = series_builder{builder_schema};
+      unused = false;
+      last_flush_age = None{};
+    }
+
     series_builder builder;
-    // The time when this entry was last flushed. This is used for garbage
-    // collection.
-    time_point last_flush;
+    // Timestamp of events at last flush. This is used for garbage collection.
+    Option<time_point> last_flush_age;
     bool unused = false;
   };
 
   /// @brief appends `new_events` to `ready_events_`
   void append_ready_events(std::vector<series> new_events);
 
-  /// @brief "garbage collects" all entries in `entries_` that satisfy the
-  /// predicate.
-  /// The implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions.
-  void garbage_collect_where(std::predicate<const entry_data&> auto pred);
+  /// @brief Marks builders that have last been used before some timestamp as
+  /// `unused`. This will cause such builders to be recreated with a new schema.
+  void garbage_collect(clock::time_point before);
 
   using signature_type = typename data_builder::signature_type;
 

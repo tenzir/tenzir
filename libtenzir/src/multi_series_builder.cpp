@@ -8,6 +8,7 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/data_builder.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
@@ -531,22 +532,10 @@ auto multi_series_builder::yield_ready_as_table_slice(time_point now)
     return res;
   }
   for (auto& entry : entries_) {
-    auto r = entry.builder.yield_ready(settings_.default_schema_name, now,
-                                       settings_.desired_batch_size,
-                                       settings_.timeout);
-    if (not r.slices.empty()) {
-      entry.last_flush = now;
-    }
+    auto r = entry.yield_ready(now, settings_);
     res.merge(std::move(r));
   }
-  garbage_collect_where(
-    [now, timeout = settings_.timeout](entry_data const& e) {
-      if (e.builder.length() != 0) {
-        return false;
-      }
-      return std::chrono::duration_cast<duration>(now - e.last_flush)
-             >= 10 * timeout;
-    });
+  garbage_collect(now - 10 * settings_.timeout);
   return res;
 }
 
@@ -629,10 +618,7 @@ auto multi_series_builder::finalize_as_table_slice()
 }
 
 void multi_series_builder::complete_last_event() {
-  auto const now = clock::now();
-  // Ensure that the slices emitted by us do not exceed `table_slice_size`. We
-  // can't use `make_events_available_where` here as that would call
-  // `complete_last_event` again.
+  // Ensure that the slices emitted by us do not exceed `table_slice_size`.
   if (uses_merging_builder()) {
     if (merging_builder_.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
@@ -643,7 +629,7 @@ void multi_series_builder::complete_last_event() {
   for (auto& entry : entries_) {
     if (entry.builder.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
-      append_ready_events(entry.flush(now));
+      append_ready_events(entry.flush());
     }
   }
   if (not builder_raw_.has_elements()) {
@@ -748,17 +734,14 @@ void multi_series_builder::complete_last_event() {
     if (free_index.is_none()) {
       entries_.emplace_back(builder_schema_);
     } else {
-      auto& entry = entries_[new_index];
-      entry.unused = false;
-      entry.last_flush = now;
-      entry.builder = series_builder{builder_schema_};
+      entries_[new_index].recreate(builder_schema_);
     }
   }
   if (settings_.ordered and new_index != active_index_) {
     // Because it's the ordered mode, we know that that only this single
     // series builder can be active and hold elements. Since the active
     // builder changed, we flush the previous one.
-    append_ready_events(entries_[active_index_].flush(now));
+    append_ready_events(entries_[active_index_].flush());
   }
   active_index_ = new_index;
   auto& entry = entries_[new_index];
@@ -801,21 +784,13 @@ void multi_series_builder::append_ready_events(std::vector<series> new_events) {
                        std::make_move_iterator(new_events.end()));
 }
 
-void multi_series_builder::garbage_collect_where(
-  std::predicate<const entry_data&> auto pred) {
-  if (uses_merging_builder()) {
-    return;
-  }
+void multi_series_builder::garbage_collect(clock::time_point before) {
   for (auto it = signature_map_.begin(); it != signature_map_.end();) {
     auto const index = it.value();
     TENZIR_ASSERT(index < entries_.size());
     auto& entry = entries_[index];
-    if (pred(entry)) {
-      TENZIR_ASSERT(entry.builder.length() == 0,
-                    "The predicate for garbage collection should be strictly "
-                    "wider than the predicate for yielding in all cases. GC "
-                    "should never trigger on builders that still have "
-                    "events in them.");
+    auto age = entry.last_flush_age.unwrap_or(clock::time_point{});
+    if (entry.builder.length() == 0 and not entry.unused and age < before) {
       entry.unused = true;
       it = signature_map_.erase(it);
       continue;

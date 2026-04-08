@@ -176,6 +176,9 @@ public:
   /// Returns the number of elements that would be returned by `finish()`.
   auto length() const -> int64_t;
 
+  /// Age of oldest event in buffer, if not empty.
+  auto oldest_event() const -> Option<clock::time_point>;
+
   struct YieldReadyResult {
     std::vector<table_slice> slices = {};
     Option<duration> wait_for = None{};

@@ -1523,6 +1523,10 @@ auto series_builder::length() const -> int64_t {
   return impl_->total_length();
 }
 
+auto series_builder::oldest_event() const -> Option<clock::time_point> {
+  return oldest_event_;
+}
+
 auto series_builder::yield_ready(std::string_view name, clock::time_point now,
                                  uint64_t desired_size, duration timeout)
   -> series_builder::YieldReadyResult {
