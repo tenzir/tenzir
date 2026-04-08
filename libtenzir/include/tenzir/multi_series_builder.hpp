@@ -445,9 +445,13 @@ private:
 
     auto yield_ready(time_point now, settings_type& settings)
       -> series_builder::YieldReadyResult {
-      auto r
-        = builder.yield_ready(settings.default_schema_name, now,
-                              settings.desired_batch_size, settings.timeout);
+      auto schema_name = std::string_view{};
+      auto builder_type = builder.type();
+      if (builder_type.name().empty()) {
+        schema_name = settings.default_schema_name;
+      }
+      auto r = builder.yield_ready(
+        schema_name, now, settings.desired_batch_size, settings.timeout);
       if (not r.slices.empty()) {
         last_flush_age = now;
       }
