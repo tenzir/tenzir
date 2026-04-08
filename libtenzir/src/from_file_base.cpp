@@ -630,8 +630,20 @@ auto from_file_state::start_stream(
           auto final_path_obj = std::filesystem::path(final_path);
           auto parent_path = final_path_obj.parent_path();
           if (not parent_path.empty() && parent_path != ".") {
-            auto create_status
-              = fs_->CreateDir(parent_path.string(), /*recursive=*/true);
+            auto create_status = arrow::Status{};
+            try {
+              create_status
+                = fs_->CreateDir(parent_path.string(), /*recursive=*/true);
+            } catch (const std::exception& e) {
+              diagnostic::warning("failed to create intermediate "
+                                  "directories "
+                                  "for `{}`",
+                                  final_path)
+                .primary(*args_.rename)
+                .note("{}", e.what())
+                .emit(*dh_);
+              return;
+            }
             if (not create_status.ok()) {
               diagnostic::warning("failed to create intermediate "
                                   "directories "
@@ -643,7 +655,17 @@ auto from_file_state::start_stream(
               return;
             }
           }
-          auto status = fs_->Move(path, final_path);
+          auto status = arrow::Status{};
+          try {
+            status = fs_->Move(path, final_path);
+          } catch (const std::exception& e) {
+            diagnostic::warning("failed to rename `{}` to `{}`", path,
+                                final_path)
+              .primary(*args_.rename)
+              .note("{}", e.what())
+              .emit(*dh_);
+            return;
+          }
           if (not status.ok()) {
             diagnostic::warning("failed to rename `{}` to `{}`", path,
                                 final_path)
