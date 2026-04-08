@@ -380,8 +380,12 @@ public:
     auto started = false;
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
     reader
-      .onHeadersAsync([&](std::unique_ptr<proxygen::HTTPMessage> msg, bool,
-                          bool) -> folly::coro::Task<bool> {
+      .onHeadersAsync([&](std::unique_ptr<proxygen::HTTPMessage> msg,
+                          bool is_final, bool) -> folly::coro::Task<bool> {
+        if (not is_final) {
+          // Ignore informational 1xx headers and wait for final headers.
+          co_return proxygen::coro::HTTPSourceReader::Continue;
+        }
         TENZIR_ASSERT(not started);
         started = true;
         auto metadata = make_request_metadata(*msg);
