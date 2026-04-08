@@ -11,6 +11,7 @@
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/subprocess.hpp>
+#include <tenzir/async/unbounded_queue.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
@@ -29,8 +30,6 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
-#include <folly/coro/BoundedQueue.h>
-
 #if __has_include(<boost/process/v1/child.hpp>)
 
 #  include <boost/process/v1/args.hpp>
@@ -407,9 +406,10 @@ struct WriteFailure {
 };
 
 using Message = variant<OutputChunk, OutputClosed, ProcessExited, TaskFailed>;
-using MessageQueue = folly::coro::BoundedQueue<Message>;
-
-constexpr auto message_queue_capacity = uint32_t{16};
+// `process()` writes into child stdin synchronously. Keep stdout buffering
+// unbounded so echo-style commands cannot deadlock writes by filling a bounded
+// queue before the executor can drain it via `process_task()`.
+using MessageQueue = UnboundedQueue<Message>;
 
 auto resolve_command(ShellArgs const& args, OpCtx& ctx)
   -> Task<Option<std::string>> {
@@ -613,8 +613,7 @@ private:
   ShellArgs args_;
   Lifecycle lifecycle_ = Lifecycle::starting;
   Option<Subprocess> subprocess_ = None{};
-  mutable Arc<MessageQueue> message_queue_{std::in_place,
-                                           message_queue_capacity};
+  mutable Arc<MessageQueue> message_queue_{std::in_place};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   Option<std::string> exit_error_ = None{};
@@ -807,8 +806,7 @@ private:
   ShellArgs args_;
   Lifecycle lifecycle_ = Lifecycle::starting;
   Option<Subprocess> subprocess_ = None{};
-  mutable Arc<MessageQueue> message_queue_{std::in_place,
-                                           message_queue_capacity};
+  mutable Arc<MessageQueue> message_queue_{std::in_place};
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   bool exit_task_started_ = false;
