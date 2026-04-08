@@ -1,3 +1,7 @@
+---
+timeout: 60
+---
+
 from {value: 0}
 repeat 10000
 enumerate value

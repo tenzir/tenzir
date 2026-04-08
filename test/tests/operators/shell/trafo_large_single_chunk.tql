@@ -2,12 +2,9 @@
 timeout: 10
 ---
 
-from {value: 0}
-repeat 50000
-enumerate value
-value = value + 1
+from {payload: ""}
+payload = pad_end(payload, 300000, "x")
 write_ndjson
-_combine_all_chunks
 shell "cat"
 read_json
-summarize rows=count(), total=sum(value), min=min(value), max=max(value)
+summarize rows=count(), bytes=sum(length_bytes(payload))

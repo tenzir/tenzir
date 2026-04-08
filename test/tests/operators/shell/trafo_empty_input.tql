@@ -1,5 +1,5 @@
 from {x: 1}
 where false
 write_lines
-shell "wc -c"
+shell "wc -c | awk '{print $1}'"
 read_lines

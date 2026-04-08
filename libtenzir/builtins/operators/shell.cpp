@@ -411,6 +411,8 @@ using SourceMessageQueue = folly::coro::BoundedQueue<Message>;
 using TransformMessageQueue = UnboundedQueue<Message>;
 
 constexpr auto source_message_queue_capacity = uint32_t{16};
+constexpr auto write_failure_termination_grace_period
+  = std::chrono::milliseconds{100};
 
 auto enqueue_message(SourceMessageQueue& queue, Message message) -> Task<void> {
   co_await queue.enqueue(std::move(message));
@@ -501,6 +503,9 @@ auto terminate_process_group_after_write_failure(Arc<Queue> queue,
   -> Task<void> {
   auto failure = Option<TaskFailed>{};
   try {
+    // Give short-lived shells a chance to flush buffered stdout and exit before
+    // we start sending process-group signals to clean up detached descendants.
+    co_await sleep_for(write_failure_termination_grace_period);
     co_await subprocess.send_signal_to_process_group(SIGTERM);
     co_await sleep_for(std::chrono::seconds{1});
     co_await subprocess.send_signal_to_process_group(SIGKILL);
