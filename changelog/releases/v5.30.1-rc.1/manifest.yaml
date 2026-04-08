@@ -1,0 +1,10 @@
+created: 2026-04-08
+title: Reliable exports under load
+intro: >-
+  This release candidate improves correctness for export workloads by preventing missing
+  or partially populated events while partitions are rebuilt or flushed under load.
+  It also fixes HTTP requests to non-standard ports by including the port in the Host
+  header, restoring compatibility with strict servers such as pre-signed URL endpoints.
+source:
+  mode: snapshot-prerelease
+  previous_stable: v5.30.0
