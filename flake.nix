@@ -99,7 +99,7 @@
           // {
             default = self.packages.${system}.tenzir-static;
             generate-sbom = pkgs.callPackage ./nix/generate-sbom.nix {
-              inherit (self.packages.${system}) tenzir-static;
+              package = self.packages.${system}.tenzir-de-static;
             };
           };
         legacyPackages = pkgs;
