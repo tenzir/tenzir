@@ -8,18 +8,23 @@
 
 #pragma once
 
-#include "tenzir/data.hpp"
+#include "tenzir/defaults.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/variant.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/type_fwd.h>
 
+#include <algorithm>
+#include <chrono>
+#include <iterator>
 #include <memory>
+#include <optional>
 #include <string_view>
-#include <type_traits>
+#include <variant>
+#include <vector>
 
 namespace tenzir {
 
@@ -83,6 +88,8 @@ struct atom_view;
 /// afterwards.
 class series_builder {
 public:
+  using clock = std::chrono::steady_clock;
+  using duration = clock::duration;
   /// Initializes the builder, optionally with a given type (see above).
   series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty);
   series_builder(const tenzir::type* ty = nullptr);
@@ -169,11 +176,62 @@ public:
   /// Returns the number of elements that would be returned by `finish()`.
   auto length() const -> int64_t;
 
+  /// Age of oldest event in buffer, if not empty.
+  auto oldest_event() const -> Option<clock::time_point>;
+
+  struct YieldReadyResult {
+    std::vector<table_slice> slices = {};
+    Option<duration> wait_for = None{};
+
+    auto begin() -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    auto begin() const -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() const -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    auto merge(YieldReadyResult other) -> void {
+      slices.insert(slices.end(), std::make_move_iterator(other.slices.begin()),
+                    std::make_move_iterator(other.slices.end()));
+      if (other.wait_for) {
+        if (wait_for) {
+          wait_for = std::min(wait_for.unwrap(), other.wait_for.unwrap());
+        } else {
+          wait_for = other.wait_for;
+        }
+      }
+    }
+
+    operator std::vector<table_slice>&&() && {
+      return std::move(slices);
+    }
+  };
+
+  /// Returns either one ready table slice, or the remaining wait duration.
+  ///
+  /// The method tracks when the current buffered run started and compares that
+  /// against `timeout` on subsequent calls.
+  auto
+  yield_ready(std::string_view name = "", clock::time_point now = clock::now(),
+              uint64_t desired_size = defaults::import::table_slice_size,
+              duration timeout = defaults::import::batch_timeout)
+    -> YieldReadyResult;
+
   /// Removes the element that is currently being built.
   void remove_last();
 
 private:
   std::unique_ptr<detail::series_builder_impl> impl_;
+  Option<clock::time_point> oldest_event_ = None{};
 
   friend class builder_ref;
 };

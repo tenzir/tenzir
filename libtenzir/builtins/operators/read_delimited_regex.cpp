@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/pusher.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -47,6 +49,16 @@ public:
                          boost::regex_constants::optimize};
   }
 
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    co_await pusher_.push(builder_.yield_ready(type_name), push);
+  }
+
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (not input or input->size() == 0) {
@@ -54,7 +66,7 @@ public:
     }
     buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
     match_and_consume(/*has_finished=*/false, ctx);
-    co_await flush(push);
+    co_await pusher_.push(builder_.yield_ready(type_name), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -62,6 +74,12 @@ public:
     match_and_consume(/*has_finished=*/true, ctx);
     co_await flush(push);
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -129,6 +147,8 @@ private:
     }
   }
 
+  constexpr static const auto type_name = "tenzir.data";
+
   ReadDelimitedRegexArgs args_;
   boost::regex expr_;
   bool binary_ = false;
@@ -138,6 +158,7 @@ private:
   // we don't match at this position again.
   bool last_match_zero_ = false;
   series_builder builder_;
+  SeriesPusher pusher_;
 };
 
 class plugin final : public virtual OperatorPlugin {

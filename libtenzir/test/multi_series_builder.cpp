@@ -164,7 +164,7 @@ TEST("empty builder") {
     multi_series_builder::settings_type{.merge = true},
     dh,
   };
-  CHECK_EQUAL(b.yield_ready().size(), size_t{0});
+  CHECK_EQUAL(b.yield_ready_as_table_slice().slices.size(), size_t{0});
 }
 
 TEST("merging records") {
@@ -765,6 +765,49 @@ TEST("selector unordered") {
   // fmt::print("exp:\n");
   // print(expected_result);
   check_outcome(res, expected_result);
+}
+
+TEST("yield_ready preserves schema names in selector mode") {
+  const type seed_schema_1 = {
+    "prefix.seed1",
+    record_type{
+      {"0", uint64_type{}},
+    },
+  };
+  const type seed_schema_2 = {
+    "prefix.seed2",
+    record_type{
+      {"0", int64_type{}},
+    },
+  };
+  multi_series_builder b{
+    multi_series_builder::policy_selector{
+      .field_name = "selector",
+      .naming_prefix = "prefix",
+    },
+    multi_series_builder::settings_type{
+      .default_schema_name = "fallback.name",
+      .ordered = false,
+      .desired_batch_size = 1,
+    },
+    dh,
+    schema_fn({seed_schema_1, seed_schema_2}),
+  };
+  {
+    auto r = b.record();
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("0").data(uint64_t{1});
+  }
+  {
+    auto r = b.record();
+    r.exact_field("selector").data("seed2"s);
+    r.exact_field("0").data(int64_t{2});
+  }
+
+  auto ready = b.yield_ready_as_table_slice();
+  REQUIRE_EQUAL(ready.slices.size(), size_t{2});
+  CHECK_EQUAL(ready.slices[0].schema().name(), "prefix.seed1"s);
+  CHECK_EQUAL(ready.slices[1].schema().name(), "prefix.seed2"s);
 }
 
 TEST("selector unordered schema_only") {

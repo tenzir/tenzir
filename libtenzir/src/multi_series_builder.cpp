@@ -8,6 +8,7 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/data_builder.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/arrow_table_slice.hpp"
@@ -20,6 +21,7 @@
 #include <caf/none.hpp>
 #include <fmt/core.h>
 
+#include <iterator>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -517,77 +519,36 @@ multi_series_builder::multi_series_builder(
   // inputs
 }
 
-auto multi_series_builder::make_events_available_on_timeout(
-  std::chrono::steady_clock::time_point now) -> duration {
-  auto const timeout = settings_.timeout;
-  auto const target_size
-    = detail::narrow<int64_t>(settings_.desired_batch_size);
-  complete_last_event(now);
-  if (uses_merging_builder()) {
-    auto const length = merging_builder_.length();
-    if (length > 0) {
-      if (length >= target_size
-          or (length > 0
-              and std::chrono::duration_cast<duration>(
-                    now - oldest_event_in_merging_)
-                    >= timeout)) {
-        flush_merging_builder();
-        return timeout;
-      }
-      return now - oldest_event_in_merging_ + timeout;
-    }
-    return timeout;
-  }
-  auto res = settings_.timeout;
-  for (auto& entry : entries_) {
-    auto length = detail::narrow<std::size_t>(entry.builder.length());
-    if (length == 0) {
-      continue;
-    }
-    if (length >= settings_.desired_batch_size) {
-      append_ready_events(entry.flush(now));
-      continue;
-    }
-    auto const waiting = now - entry.oldest_event;
-    if (waiting >= timeout) {
-      append_ready_events(entry.flush(now));
-      continue;
-    }
-    res = std::min(res, timeout - waiting);
-  }
-  garbage_collect_where([now, timeout](entry_data const& e) {
-    if (e.builder.length() != 0) {
-      return false;
-    }
-    return std::chrono::duration_cast<duration>(now - e.last_flush)
-           >= 10 * timeout;
-  });
-  res = std::max(res, duration{});
-  return res;
-}
-
-auto multi_series_builder::yield_ready() -> std::vector<series> {
-  auto const now = std::chrono::steady_clock::now();
-  std::ignore = make_events_available_on_timeout(now);
-  return std::exchange(ready_events_, {});
-}
-
-auto multi_series_builder::yield_ready_as_table_slice()
-  -> multi_series_builder::YieldReadyResult {
-  auto const now = std::chrono::steady_clock::now();
-  auto result = multi_series_builder::YieldReadyResult{};
-  result.wait_for = make_events_available_on_timeout(now);
-  result.slices = detail::multi_series_builder::series_to_table_slice(
+auto multi_series_builder::yield_ready_as_table_slice(time_point now)
+  -> series_builder::YieldReadyResult {
+  complete_last_event();
+  auto res = series_builder::YieldReadyResult{};
+  res.slices = detail::multi_series_builder::series_to_table_slice(
     std::exchange(ready_events_, {}), settings_.default_schema_name);
-  return result;
+  if (uses_merging_builder()) {
+    auto schema_name = std::string_view{};
+    auto builder_type = merging_builder_.type();
+    if (builder_type.name().empty()) {
+      schema_name = settings_.default_schema_name;
+    }
+    res.merge(merging_builder_.yield_ready(
+      schema_name, now, settings_.desired_batch_size, settings_.timeout));
+    return res;
+  }
+  for (auto& entry : entries_) {
+    auto r = entry.yield_ready(now, settings_);
+    res.merge(std::move(r));
+  }
+  garbage_collect(now - 10 * settings_.timeout);
+  return res;
 }
 
 auto multi_series_builder::data(tenzir::data value) -> void {
   complete_last_event();
   if (uses_merging_builder()) {
-    return merging_builder_.data(value);
+    merging_builder_.data(value);
   } else {
-    return builder_raw_.data(std::move(value));
+    builder_raw_.data(std::move(value));
   }
 }
 
@@ -644,12 +605,11 @@ void multi_series_builder::remove_last() {
 
 auto multi_series_builder::finalize() -> std::vector<series> {
   if (uses_merging_builder()) {
-    flush_merging_builder();
+    append_ready_events(merging_builder_.finish());
   } else {
-    auto const now = clock::now();
-    complete_last_event(now);
+    complete_last_event();
     for (auto& entry : entries_) {
-      append_ready_events(entry.flush(now));
+      append_ready_events(entry.builder.finish());
     }
   }
   return std::exchange(ready_events_, {});
@@ -661,16 +621,9 @@ auto multi_series_builder::finalize_as_table_slice()
     finalize(), settings_.default_schema_name);
 }
 
-void multi_series_builder::complete_last_event(time_point now) {
-  // Ensure that the slices emitted by us do not exceed `table_slice_size`. We
-  // can't use `make_events_available_where` here as that would call
-  // `complete_last_event` again.
+void multi_series_builder::complete_last_event() {
+  // Ensure that the slices emitted by us do not exceed `table_slice_size`.
   if (uses_merging_builder()) {
-    // Since `complete_last_event` is called also when somebody is adding a new
-    // event, we need to potentially setup the timeout.
-    if (oldest_event_in_merging_ == time_point{}) {
-      oldest_event_in_merging_ = now;
-    }
     if (merging_builder_.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
       append_ready_events(merging_builder_.finish());
@@ -680,14 +633,14 @@ void multi_series_builder::complete_last_event(time_point now) {
   for (auto& entry : entries_) {
     if (entry.builder.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
-      append_ready_events(entry.flush(now));
+      append_ready_events(entry.flush());
     }
   }
   if (not builder_raw_.has_elements()) {
     return; // an empty raw field does not need to be written back
   }
   signature_raw_.clear();
-  if (auto p = get_policy<policy_selector>()) {
+  if (auto* p = get_policy<policy_selector>()) {
     auto* selected_schema = builder_raw_.find_field_raw(p->field_name);
     if (not selected_schema) {
       diagnostic::warning("event did not contain selector field")
@@ -766,7 +719,7 @@ void multi_series_builder::complete_last_event(time_point now) {
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
-  } else if (auto p = get_policy<policy_schema>()) {
+  } else if (auto* p = get_policy<policy_schema>()) {
     if (not p->seed_schema.empty()) {
       // technically there is no need to repeat these steps every iteration
       // But we would need special handling for writing the schema name into the
@@ -779,28 +732,23 @@ void multi_series_builder::complete_last_event(time_point now) {
   }
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(
-    std::move(signature_raw_), free_index.value_or(entries_.size()));
+    std::move(signature_raw_), free_index.unwrap_or(entries_.size()));
   const auto new_index = it->second;
   if (inserted) { // the signature wasn't in the map yet
-    if (not free_index) {
+    if (free_index.is_none()) {
       entries_.emplace_back(builder_schema_);
     } else {
-      auto& entry = entries_[new_index];
-      entry.unused = false;
-      entry.builder = series_builder{builder_schema_};
+      entries_[new_index].recreate(builder_schema_);
     }
   }
   if (settings_.ordered and new_index != active_index_) {
     // Because it's the ordered mode, we know that that only this single
     // series builder can be active and hold elements. Since the active
     // builder changed, we flush the previous one.
-    append_ready_events(entries_[active_index_].flush(now));
+    append_ready_events(entries_[active_index_].flush());
   }
   active_index_ = new_index;
   auto& entry = entries_[new_index];
-  if (entry.oldest_event == time_point{}) {
-    entry.oldest_event = now;
-  }
   builder_raw_.commit_to(entry.builder, true, parsing_signature_schema_);
 }
 
@@ -809,13 +757,13 @@ void multi_series_builder::clear_raw_event() {
   signature_raw_.clear();
 }
 
-std::optional<size_t> multi_series_builder::next_free_index() const {
+Option<size_t> multi_series_builder::next_free_index() const {
   for (size_t i = 0; i < entries_.size(); ++i) {
     if (entries_[i].unused) {
       return i;
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto multi_series_builder::type_for_schema(std::string_view name)
@@ -831,45 +779,27 @@ auto multi_series_builder::type_for_schema(std::string_view name)
   return &it->second;
 }
 
-void multi_series_builder::append_ready_events(
-  std::vector<series>&& new_events) {
+void multi_series_builder::append_ready_events(std::vector<series> new_events) {
+  if (new_events.empty()) {
+    return;
+  }
   ready_events_.insert(ready_events_.end(),
                        std::make_move_iterator(new_events.begin()),
                        std::make_move_iterator(new_events.end()));
 }
 
-void multi_series_builder::garbage_collect_where(
-  std::predicate<const entry_data&> auto pred) {
-  if (uses_merging_builder()) {
-    return;
-  }
+void multi_series_builder::garbage_collect(clock::time_point before) {
   for (auto it = signature_map_.begin(); it != signature_map_.end();) {
     auto const index = it.value();
     TENZIR_ASSERT(index < entries_.size());
     auto& entry = entries_[index];
-    if (pred(entry)) {
-      TENZIR_ASSERT(entry.builder.length() == 0,
-                    "The predicate for garbage collection should be strictly "
-                    "wider than the predicate for yielding in call cases. GC "
-                    "should never trigger on builders that still have "
-                    "events in them.");
+    auto age = entry.last_flush_age.unwrap_or(clock::time_point{});
+    if (entry.builder.length() == 0 and not entry.unused and age < before) {
       entry.unused = true;
       it = signature_map_.erase(it);
       continue;
     }
     ++it;
-  }
-}
-
-void multi_series_builder::flush_merging_builder() {
-  oldest_event_in_merging_ = {};
-  auto result = merging_builder_.finish();
-  if (ready_events_.empty()) {
-    ready_events_ = std::move(result);
-  } else {
-    ready_events_.insert(ready_events_.end(),
-                         std::make_move_iterator(result.begin()),
-                         std::make_move_iterator(result.end()));
   }
 }
 

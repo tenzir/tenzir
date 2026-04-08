@@ -8,6 +8,7 @@
 
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder.hpp>
@@ -15,8 +16,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/parser.hpp>
-
-#include <folly/coro/Sleep.h>
 
 #include <algorithm>
 #include <cctype>
@@ -214,8 +213,6 @@ public:
   explicit ReadTql(ReadTqlArgs args) : opts_{std::move(args.msb_options)} {
   }
 
-  struct PeriodicTick {};
-
   auto start(OpCtx& ctx) -> Task<void> override {
     builder_.emplace(opts_, ctx);
     co_return;
@@ -223,25 +220,16 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
-    co_return PeriodicTick{};
+    co_await pusher_.wait();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    TENZIR_ASSERT(result.try_as<PeriodicTick>());
-    TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(builder_);
-    auto ready = builder_->yield_ready_as_table_slice();
-    TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
-    next_tick_ = ready.wait_for;
-    for (auto& slice : ready) {
-      co_await push(std::move(slice));
-    }
+    co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
-  auto process(chunk_ptr input, Push<table_slice>&, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (done_ || not input || input->size() == 0) {
       co_return;
@@ -259,6 +247,10 @@ public:
     }
     // Process complete records from buffer
     process_buffer(ctx, false);
+    if (done_ or not builder_) {
+      co_return;
+    }
+    co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -360,7 +352,7 @@ private:
   }
 
   multi_series_builder::options opts_;
-  duration next_tick_ = opts_.settings.timeout;
+  SeriesPusher pusher_;
   size_t buffer_offset_ = 0;
   std::string buffer_;
   std::optional<multi_series_builder> builder_;

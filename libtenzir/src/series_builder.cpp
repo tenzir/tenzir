@@ -9,7 +9,6 @@
 #include "tenzir/series_builder.hpp"
 
 #include "tenzir/arrow_memory_pool.hpp"
-#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
@@ -1453,6 +1452,7 @@ auto series_builder::list() -> builder_ref {
 }
 
 auto series_builder::finish() -> std::vector<series> {
+  oldest_event_ = None{};
   return impl_->finish();
 }
 
@@ -1520,6 +1520,42 @@ auto series_builder::type() -> tenzir::type {
 
 auto series_builder::length() const -> int64_t {
   return impl_->total_length();
+}
+
+auto series_builder::oldest_event() const -> Option<clock::time_point> {
+  return oldest_event_;
+}
+
+auto series_builder::yield_ready(std::string_view name, clock::time_point now,
+                                 uint64_t desired_size, duration timeout)
+  -> series_builder::YieldReadyResult {
+  auto const current_length = detail::narrow<uint64_t>(length());
+  if (current_length == 0) {
+    oldest_event_ = None{};
+    return {};
+  }
+  if (current_length >= desired_size) {
+    oldest_event_ = None{};
+    return series_builder::YieldReadyResult{
+      .slices = finish_as_table_slice(name),
+    };
+  }
+  if (not oldest_event_) {
+    oldest_event_ = now;
+    return series_builder::YieldReadyResult{
+      .wait_for = timeout,
+    };
+  }
+  auto const waiting = now - *oldest_event_;
+  if (waiting >= timeout) {
+    oldest_event_ = None{};
+    return series_builder::YieldReadyResult{
+      .slices = finish_as_table_slice(name),
+    };
+  }
+  return series_builder::YieldReadyResult{
+    .wait_for = timeout - waiting,
+  };
 }
 
 void series_builder::remove_last() {
