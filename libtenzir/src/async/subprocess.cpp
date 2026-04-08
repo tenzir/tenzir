@@ -54,6 +54,7 @@ auto configure_pipe_mode(folly::Subprocess::Options& options, int child_fd,
 
 struct SpawnResult {
   folly::Subprocess subprocess;
+  pid_t process_group_id = -1;
   std::vector<folly::Subprocess::ChildPipe> pipes;
 };
 
@@ -198,13 +199,14 @@ auto ReadPipe::native_fd() const noexcept -> int {
   return pipe_.fd();
 }
 
-Subprocess::Subprocess(folly::Subprocess subprocess,
+Subprocess::Subprocess(folly::Subprocess subprocess, pid_t process_group_id,
                        Option<WritePipe> stdin_pipe,
                        Option<ReadPipe> stdout_pipe,
                        Option<ReadPipe> stderr_pipe,
                        std::vector<WritePipe> input_pipes,
                        std::vector<ReadPipe> output_pipes)
   : subprocess_{std::move(subprocess)},
+    process_group_id_{process_group_id},
     stdin_pipe_{std::move(stdin_pipe)},
     stdout_pipe_{std::move(stdout_pipe)},
     stderr_pipe_{std::move(stderr_pipe)},
@@ -245,9 +247,11 @@ auto Subprocess::spawn(SubprocessSpec spec) -> Task<Subprocess> {
     }
     auto* env = spec.env ? &*spec.env : nullptr;
     auto subprocess = folly::Subprocess{spec.argv, options, nullptr, env};
+    auto process_group_id = spec.process_group_leader ? subprocess.pid() : -1;
     auto pipes = subprocess.takeOwnershipOfPipes();
     return SpawnResult{
       .subprocess = std::move(subprocess),
+      .process_group_id = process_group_id,
       .pipes = std::move(pipes),
     };
   });
@@ -281,9 +285,10 @@ auto Subprocess::spawn(SubprocessSpec spec) -> Task<Subprocess> {
     TENZIR_UNREACHABLE();
   }
   co_return Subprocess{
-    std::move(result.subprocess), std::move(stdin_pipe),
-    std::move(stdout_pipe),       std::move(stderr_pipe),
-    std::move(input_pipes),       std::move(output_pipes),
+    std::move(result.subprocess), result.process_group_id,
+    std::move(stdin_pipe),        std::move(stdout_pipe),
+    std::move(stderr_pipe),       std::move(input_pipes),
+    std::move(output_pipes),
   };
 }
 
@@ -358,12 +363,11 @@ auto Subprocess::terminate_or_kill(std::chrono::milliseconds timeout)
 auto Subprocess::terminate_or_kill_process_group(
   std::chrono::milliseconds timeout) -> Task<folly::ProcessReturnCode> {
   co_return co_await spawn_blocking([this, timeout]() {
-    auto pid = subprocess_.pid();
-    if (pid <= 0) {
+    if (process_group_id_ <= 0) {
       throw std::logic_error{"cannot signal a finished subprocess group"};
     }
     if (timeout.count() > 0) {
-      auto result = ::kill(-pid, SIGTERM);
+      auto result = ::kill(-process_group_id_, SIGTERM);
       if (result != 0 and errno != ESRCH) {
         throw_last_system_error("kill");
       }
@@ -372,7 +376,7 @@ auto Subprocess::terminate_or_kill_process_group(
         return return_code;
       }
     }
-    auto result = ::kill(-pid, SIGKILL);
+    auto result = ::kill(-process_group_id_, SIGKILL);
     if (result != 0 and errno != ESRCH) {
       throw_last_system_error("kill");
     }
@@ -388,11 +392,10 @@ auto Subprocess::send_signal(int signal) -> Task<void> {
 
 auto Subprocess::send_signal_to_process_group(int signal) -> Task<void> {
   co_await spawn_blocking([this, signal]() {
-    auto pid = subprocess_.pid();
-    if (pid <= 0) {
+    if (process_group_id_ <= 0) {
       throw std::logic_error{"cannot signal a finished subprocess group"};
     }
-    auto result = ::kill(-pid, signal);
+    auto result = ::kill(-process_group_id_, signal);
     if (result != 0 and errno != ESRCH) {
       throw_last_system_error("kill");
     }

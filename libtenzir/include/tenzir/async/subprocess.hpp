@@ -126,7 +126,7 @@ public:
   auto return_code() const noexcept -> folly::ProcessReturnCode;
 
 private:
-  explicit Subprocess(folly::Subprocess subprocess,
+  explicit Subprocess(folly::Subprocess subprocess, pid_t process_group_id,
                       Option<WritePipe> stdin_pipe,
                       Option<ReadPipe> stdout_pipe,
                       Option<ReadPipe> stderr_pipe,
@@ -134,6 +134,7 @@ private:
                       std::vector<ReadPipe> output_pipes);
 
   folly::Subprocess subprocess_;
+  pid_t process_group_id_ = -1;
   Option<WritePipe> stdin_pipe_ = None{};
   Option<ReadPipe> stdout_pipe_ = None{};
   Option<ReadPipe> stderr_pipe_ = None{};

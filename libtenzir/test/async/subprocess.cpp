@@ -14,6 +14,10 @@
 #include <folly/io/IOBufQueue.h>
 
 #include <array>
+#include <cerrno>
+#include <chrono>
+#include <csignal>
+#include <cstdlib>
 #include <string>
 #include <unistd.h>
 
@@ -128,6 +132,36 @@ TEST("subprocess terminate_or_kill stops a running child") {
     check(not return_code.running());
     check(return_code.killed() or return_code.exited());
     check(not return_code.succeeded());
+  }());
+}
+
+TEST("subprocess signals cached process group after wait") {
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto spec = SubprocessSpec{};
+    spec.argv = {"sh", "-c", "sleep 30 & echo $!; exit 0"};
+    spec.stdout_mode = PipeMode::pipe;
+    spec.use_path = true;
+    spec.process_group_leader = true;
+    spec.kill_child_on_destruction = true;
+    auto subprocess = co_await Subprocess::spawn(std::move(spec));
+    auto stdout_pipe = subprocess.stdout_pipe();
+    check(stdout_pipe.is_some());
+    auto chunk = co_await (*stdout_pipe).read_chunk();
+    check(chunk.is_some());
+    auto child_pid = std::strtol(to_string(*chunk).c_str(), nullptr, 10);
+    check(child_pid > 0);
+    auto return_code = co_await subprocess.wait();
+    check(return_code.succeeded());
+    co_await subprocess.send_signal_to_process_group(SIGKILL);
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (std::chrono::steady_clock::now() < deadline) {
+      if (::kill(child_pid, 0) != 0 and errno == ESRCH) {
+        co_return;
+      }
+      co_await sleep(std::chrono::milliseconds{10});
+    }
+    FAIL("background child {} still existed after process-group kill",
+         child_pid);
   }());
 }
 
