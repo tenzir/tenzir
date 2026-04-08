@@ -101,7 +101,7 @@ public:
     auto stream_guard
       = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
-          if (not status.ok()) {
+          if (not output_stream.ok()) {
             diagnostic::error("failed to close stream: {}",
                               status.ToStringWithoutContextLines())
               .primary(args_.op)
@@ -115,7 +115,7 @@ public:
       }
       auto status = output_stream.ValueUnsafe()->Write(
         chunk->data(), detail::narrow<int64_t>(chunk->size()));
-      if (not status.ok()) {
+      if (not output_stream.ok()) {
         diagnostic::error("failed to write to stream: {}",
                           status.ToStringWithoutContextLines())
           .primary(args_.op)
