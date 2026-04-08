@@ -225,7 +225,7 @@ protected:
           = service_client->GetBlobContainerClient(container);
         auto blob_client = container_client.GetBlobClient(blob_path);
         blob_client.Delete();
-      } catch (const std::exception& e) {
+      } catch (const Azure::Core::RequestFailedException& e) {
         diagnostic::warning("failed to delete `{}`", path)
           .primary(args_.url)
           .note("{}", e.what())

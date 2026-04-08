@@ -173,7 +173,7 @@ auto delete_file_azure(arrow::fs::AzureFileSystem* fs, const std::string& path)
     auto container_client = service_client->GetBlobContainerClient(container);
     auto blob_client = container_client.GetBlobClient(blob_path);
     blob_client.Delete();
-  } catch (const std::exception& e) {
+  } catch (const Azure::Core::RequestFailedException& e) {
     return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
   }
   return arrow::Status::OK();
