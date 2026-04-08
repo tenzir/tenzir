@@ -1,0 +1,6 @@
+error: `query` must not be empty
+ --> tests/operators/from_sentinelone_data_lake/validate_empty_query.tql:7:9
+  |
+7 |   query=""
+  |         ^^ 
+  |

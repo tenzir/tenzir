@@ -1,0 +1,7 @@
+error: erroneous http status: 500
+ --> tests/operators/from_sentinelone_data_lake/http_error.tql:7:1
+  |
+7 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: {"error": "internal server error"}

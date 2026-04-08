@@ -1,0 +1,56 @@
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  id: 1,
+  user: "alice",
+  action: "login",
+  success: true,
+}
+{
+  timestamp: 2024-01-01T00:00:01Z,
+  id: 2,
+  user: "alice",
+  action: "read",
+  success: true,
+}
+{
+  timestamp: 2024-01-01T00:00:02Z,
+  id: 3,
+  user: "bob",
+  action: "login",
+  success: true,
+}
+{
+  timestamp: 2024-01-01T00:00:03Z,
+  id: 4,
+  user: "bob",
+  action: "write",
+  success: true,
+}
+{
+  timestamp: 2024-01-01T00:00:04Z,
+  id: 5,
+  user: "charlie",
+  action: "login",
+  success: false,
+}
+{
+  timestamp: 2024-01-01T00:00:05Z,
+  id: 6,
+  user: "alice",
+  action: "delete",
+  success: false,
+}
+{
+  timestamp: 2024-01-01T00:00:06Z,
+  id: 7,
+  user: "bob",
+  action: "read",
+  success: true,
+}
+{
+  timestamp: 2024-01-01T00:00:07Z,
+  id: 8,
+  user: "alice",
+  action: "logout",
+  success: true,
+}

@@ -1,0 +1,9 @@
+error: `start` must not be greater than `end`
+ --> tests/operators/from_sentinelone_data_lake/validate_start_gt_end.tql:8:9
+  |
+8 |   start=2024-06-01,
+  |         ^^^^^^^^^^ 
+  ⋮
+9 |   end=2024-01-01
+  |       ^^^^^^^^^^ 
+  |

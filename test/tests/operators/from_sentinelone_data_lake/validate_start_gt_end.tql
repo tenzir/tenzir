@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from_sentinelone_data_lake "http://127.0.0.1:0",
+  token=secret("x", _literal=true),
+  query="select_basic",
+  start=2024-06-01,
+  end=2024-01-01
