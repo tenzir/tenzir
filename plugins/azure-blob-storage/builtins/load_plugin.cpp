@@ -101,7 +101,7 @@ public:
     }
     while (not input_stream.ValueUnsafe()->closed()) {
       auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
-      if (not buffer.ok()) {
+      if (not input_stream.ok()) {
         diagnostic::error("failed to read from input stream: {}",
                           buffer.status().ToStringWithoutContextLines())
           .primary(args_.op)
