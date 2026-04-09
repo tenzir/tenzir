@@ -1,0 +1,6 @@
+error: URL contains `**` but `partition_by` is not set
+ --> tests/operators/to_file/validation/error_glob_without_partition.tql:6:9
+  |
+6 | to_file "/tmp/**/data.json" {
+  |         ^^^^^^^^^^^^^^^^^^^ 
+  |

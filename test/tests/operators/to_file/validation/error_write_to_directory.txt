@@ -1,0 +1,6 @@
+error: failed to open output stream `/tmp`: IOError: Failed to open local file '/tmp'. Detail: [errno 21] Is a directory
+ --> tests/operators/to_file/validation/error_write_to_directory.tql:6:9
+  |
+6 | to_file "/tmp" {
+  |         ^^^^^^ 
+  |

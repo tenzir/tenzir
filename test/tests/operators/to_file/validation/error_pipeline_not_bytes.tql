@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+to_file "/tmp/test.json" {
+  pass
+}

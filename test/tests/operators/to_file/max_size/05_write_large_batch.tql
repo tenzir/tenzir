@@ -1,0 +1,8 @@
+// Large volume: 5000 events with max_size=8192. Tests that rotation works
+// correctly under sustained throughput and that no data is lost.
+from {payload: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+repeat 5000
+enumerate seq
+to_file env("FILE_ROOT") + "/out/maxsize_large/{uuid}.json", max_size=8192 {
+  write_ndjson
+}

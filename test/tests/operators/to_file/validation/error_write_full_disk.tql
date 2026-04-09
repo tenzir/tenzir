@@ -1,0 +1,10 @@
+---
+error: true
+skip: relies on Linux-specific /dev/full ENOSPC semantics
+---
+
+// /dev/full accepts open() but returns ENOSPC on every write().
+from {x: 1}
+to_file "/dev/full" {
+  write_ndjson
+}

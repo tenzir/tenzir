@@ -1,0 +1,7 @@
+// Write 500 events to a single NDJSON file.
+from {msg: "hello"}
+repeat 500
+enumerate x
+to_file env("FILE_ROOT") + "/out/roundtrip.json" {
+  write_ndjson
+}
