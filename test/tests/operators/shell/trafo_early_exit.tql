@@ -4,5 +4,5 @@ error: true
 
 from {x: 1}, {x: 2}, {x: 3}
 | write_lines
-| shell "read _; printf 'done\n'; exec 1>&-; exec 0<&-; sleep 1; exit 7"
+| shell "read _; exec 1>&-; exec 0<&-; sleep 1; exit 7"
 | read_lines

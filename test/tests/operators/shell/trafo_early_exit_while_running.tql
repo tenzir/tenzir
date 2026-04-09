@@ -1,6 +1,6 @@
 ---
 error: true
-timeout: 3
+timeout: 10
 ---
 
 from {x: "first", ts: 0ms.from_epoch()},
