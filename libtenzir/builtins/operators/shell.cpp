@@ -414,8 +414,7 @@ using SourceMessageQueue = folly::coro::BoundedQueue<Message>;
 using TransformMessageQueue = UnboundedQueue<Message>;
 
 constexpr auto source_message_queue_capacity = uint32_t{16};
-constexpr auto write_failure_grace_period
-  = std::chrono::milliseconds{100};
+constexpr auto write_failure_grace_period = std::chrono::seconds{1};
 
 auto enqueue_message(SourceMessageQueue& queue, Message message) -> Task<void> {
   co_await queue.enqueue(std::move(message));
@@ -689,7 +688,6 @@ public:
       if (write_failure_.is_none()) {
         write_failure_ = format_write_failure(ex);
       }
-      start_write_failure_grace_timer(ctx);
     } catch (std::exception const& ex) {
       lifecycle_ = Lifecycle::draining;
       if (write_failure_.is_none()) {
@@ -698,7 +696,6 @@ public:
           .code = None{},
         };
       }
-      start_write_failure_grace_timer(ctx);
     }
   }
 
@@ -729,6 +726,9 @@ public:
       [&](ProcessExited exited) -> Task<void> {
         child_exited_ = true;
         exit_error_ = process_exit_error(exited.return_code);
+        if (write_failure_.is_some() and not stdout_closed_) {
+          start_write_failure_grace_timer(ctx);
+        }
         co_await finish_if_ready(ctx.dh());
       },
       [&](TaskFailed failure) -> Task<void> {
@@ -742,7 +742,7 @@ public:
         if (write_failure_.is_none()) {
           co_return;
         }
-        if (stdout_closed_ and child_exited_) {
+        if (stdout_closed_) {
           co_return;
         }
         start_terminate_process_group_after_write_failure(ctx);
@@ -772,7 +772,8 @@ public:
         }
       }
       start_wait_for_exit(ctx);
-    } else if (write_failure_.is_some()) {
+    } else if (write_failure_.is_some() and child_exited_
+               and not stdout_closed_) {
       start_write_failure_grace_timer(ctx);
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
