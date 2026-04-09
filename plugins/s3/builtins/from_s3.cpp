@@ -455,11 +455,11 @@ class from_s3 final : public operator_plugin2<from_s3_operator>,
     auto anon = d.named("anonymous", &FromS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &FromS3Args::aws_iam);
     FromArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
-      auto has_anon = ctx.get_location(anon).has_value();
+      auto anon_value = ctx.get(anon).value_or(false);
       auto has_iam = ctx.get_location(aws_iam_arg).has_value();
-      if (has_anon and has_iam) {
+      if (anon_value and has_iam) {
         diagnostic::error("`anonymous` cannot be used with `aws_iam`")
-          .primary(ctx.get_location(anon).value_or(location::unknown))
+          .primary(*ctx.get_location(anon))
           .emit(ctx);
       }
       if (auto iam = ctx.get(aws_iam_arg); iam) {
