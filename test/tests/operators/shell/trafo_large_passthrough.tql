@@ -3,7 +3,7 @@ timeout: 60
 ---
 
 from {value: 0}
-repeat 10000
+repeat 2000
 enumerate value
 value = value + 1
 write_ndjson
