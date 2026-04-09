@@ -438,7 +438,8 @@ auto resolve_command(ShellArgs const& args, OpCtx& ctx)
   co_return command;
 }
 
-auto spawn_shell_subprocess(std::string command, PipeMode stdin_mode)
+auto spawn_shell_subprocess(std::string command, PipeMode stdin_mode,
+                            bool process_group_leader = true)
   -> Task<Subprocess> {
   auto spec = SubprocessSpec{
     .argv = {"/bin/sh", "-c", std::move(command)},
@@ -450,7 +451,7 @@ auto spawn_shell_subprocess(std::string command, PipeMode stdin_mode)
     .pipe_input_fds = {},
     .pipe_output_fds = {},
     .use_path = false,
-    .process_group_leader = true,
+    .process_group_leader = process_group_leader,
     .kill_child_on_destruction = true,
   };
   co_return co_await Subprocess::spawn(std::move(spec));
@@ -559,8 +560,12 @@ public:
     try {
       auto stdin_mode
         = ctx.has_terminal() ? PipeMode::inherit : PipeMode::dev_null;
-      subprocess_
-        = co_await spawn_shell_subprocess(std::move(*command), stdin_mode);
+      // Interactive source-mode shells must stay in the foreground process
+      // group when inheriting the controlling terminal.
+      auto process_group_leader = stdin_mode != PipeMode::inherit;
+      subprocess_ = co_await spawn_shell_subprocess(std::move(*command),
+                                                    stdin_mode,
+                                                    process_group_leader);
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
       ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
       lifecycle_ = Lifecycle::running;
@@ -691,6 +696,9 @@ public:
       if (write_failure_.is_none()) {
         write_failure_ = format_write_failure(ex);
       }
+      if (child_exited_ and not stdout_closed_) {
+        start_write_failure_grace_timer(ctx);
+      }
     } catch (std::exception const& ex) {
       lifecycle_ = Lifecycle::draining;
       if (write_failure_.is_none()) {
@@ -698,6 +706,9 @@ public:
           .message = ex.what(),
           .code = None{},
         };
+      }
+      if (child_exited_ and not stdout_closed_) {
+        start_write_failure_grace_timer(ctx);
       }
     }
   }
