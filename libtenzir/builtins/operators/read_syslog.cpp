@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/async/series.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/detail/syslog.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
