@@ -1,0 +1,6 @@
+suite: to-abs-finalize-close-race
+fixtures: [abs_slow_proxy]
+timeout: 240
+skip:
+  on:
+    - fixture-unavailable
