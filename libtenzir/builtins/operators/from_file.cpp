@@ -19,14 +19,15 @@ namespace tenzir::plugins::from_file {
 
 namespace {
 
-struct FromFileArgs : ArrowFsArgs {
+struct FromFileArgs : FromArrowFsArgs {
   Option<location> mmap;
 };
 
-class FromFileOperator final : public ArrowFsOperator {
+class FromFileOperator final : public FromArrowFsOperator {
 public:
   explicit FromFileOperator(FromFileArgs args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+      args_{std::move(args)} {
   }
 
 protected:
@@ -91,7 +92,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromFileArgs, FromFileOperator>{};
-    ArrowFsArgs::describe_to(d);
+    FromArrowFsArgs::describe_to(d);
     d.named("mmap", &FromFileArgs::mmap);
     return d.without_optimize();
   }
