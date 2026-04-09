@@ -18,6 +18,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
+#include <folly/coro/BoundedQueue.h>
 #include <google/cloud/pubsub/subscriber.h>
 #include <google/cloud/pubsub/subscription_admin_client.h>
 
@@ -223,8 +224,7 @@ struct MessageData {
 // checkpoints.
 
 struct SharedState {
-  std::mutex mutex;
-  std::vector<MessageData> pending;
+  folly::coro::BoundedQueue<MessageData> queue{1024};
   Notify notify;
   std::atomic<bool> session_done{false};
   std::string session_error;
@@ -252,8 +252,8 @@ struct SessionHandle {
     if (not fut.is_ready()) {
       fut.cancel();
     }
-    // Blocking wait: ensures no GCP background threads access shared state.
-    fut.get();
+    // Wait with a timeout to avoid blocking indefinitely during shutdown.
+    fut.wait_for(std::chrono::seconds{5});
   }
 };
 
@@ -289,22 +289,22 @@ public:
     // (e.g., due to an error), setting session_done and notifying the operator.
     auto session_fut = subscriber.Subscribe(
       [shared, has_metadata](pubsub::Message const& m, pubsub::AckHandler h) {
-        {
-          auto guard = std::scoped_lock{shared->mutex};
-          auto msg = MessageData{
-            .data = std::string{m.data()},
-            .message_id = m.message_id(),
-            .publish_time = time{m.publish_time()},
-            .attributes = {},
-          };
-          if (has_metadata) {
-            for (const auto& [key, value] : m.attributes()) {
-              msg.attributes.emplace(key, value);
-            }
+        auto msg = MessageData{
+          .data = std::string{m.data()},
+          .message_id = m.message_id(),
+          .publish_time = time{m.publish_time()},
+          .attributes = {},
+        };
+        if (has_metadata) {
+          for (const auto& [key, value] : m.attributes()) {
+            msg.attributes.emplace(key, value);
           }
-          shared->pending.push_back(std::move(msg));
         }
-        std::move(h).ack();
+        if (shared->queue.try_enqueue(std::move(msg))) {
+          std::move(h).ack();
+        } else {
+          std::move(h).nack();
+        }
         shared->notify.notify_one();
       });
     session_.emplace(SessionHandle{
@@ -313,7 +313,6 @@ public:
           auto status = f.get();
           if (not status.ok()
               and status.code() != google::cloud::StatusCode::kCancelled) {
-            auto guard = std::scoped_lock{shared->mutex};
             shared->session_error = status.message();
           }
           shared->session_done.store(true, std::memory_order_release);
@@ -327,8 +326,8 @@ public:
     if (done_) {
       co_await wait_forever();
     }
-    // If the session has already ended (set by the .then() callback), skip wait.
-    if (shared_->session_done.load(std::memory_order_acquire)) {
+    if (not shared_->queue.empty()
+        or shared_->session_done.load(std::memory_order_acquire)) {
       co_return {};
     }
     co_await shared_->notify.wait();
@@ -337,11 +336,10 @@ public:
 
   auto process_task(Any, Push<table_slice>& push,
                     OpCtx& ctx) -> Task<void> override {
-    // Drain all pending messages under the lock, then process outside.
+    // Drain all available messages from the queue.
     auto messages = std::vector<MessageData>{};
-    {
-      auto guard = std::scoped_lock{shared_->mutex};
-      messages = std::exchange(shared_->pending, {});
+    while (auto msg = shared_->queue.try_dequeue()) {
+      messages.push_back(std::move(*msg));
     }
 
     if (not messages.empty()) {
@@ -372,11 +370,7 @@ public:
 
     // Check whether the session ended (set by the .then() callback).
     if (shared_->session_done.load(std::memory_order_acquire)) {
-      auto error = std::string{};
-      {
-        auto guard = std::scoped_lock{shared_->mutex};
-        error = std::exchange(shared_->session_error, {});
-      }
+      auto error = std::move(shared_->session_error);
       if (not error.empty()) {
         diagnostic::error("google-cloud-subscriber: {}", error)
           .primary(args_.operator_location)
@@ -421,7 +415,7 @@ public:
     d.named("project_id", &from_args::project_id);
     d.named("subscription_id", &from_args::subscription_id);
     d.named("metadata_field", &from_args::metadata_field);
-    d.named("_yield_timeout", &from_args::yield_timeout);
+    d.named_optional("_yield_timeout", &from_args::yield_timeout);
     return d.without_optimize();
   }
 

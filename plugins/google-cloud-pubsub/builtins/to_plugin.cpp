@@ -184,12 +184,11 @@ private:
   to_args args_;
 };
 
-struct FlushingPublisher {
-  pubsub::Publisher inner;
-  ~FlushingPublisher() noexcept {
-    inner.Flush();
-  }
-};
+// Note: We intentionally do not flush the publisher in its destructor.
+// During regular shutdown, finalize() handles flushing and awaiting all
+// inflight futures. During abnormal shutdown (hard stop), a destructor-only
+// flush would be insufficient since it doesn't wait for inflight futures
+// to complete.
 
 class ToGoogleCloudPubsub final : public Operator<table_slice, void> {
 public:
@@ -202,8 +201,7 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
-    publisher_.emplace(FlushingPublisher{
-      pubsub::Publisher{pubsub::MakePublisherConnection(std::move(topic))}});
+    publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
     co_return;
   }
 
@@ -223,10 +221,10 @@ public:
                 .emit(dh);
               continue;
             }
-            inflight_.push_back(publisher_->inner.Publish(
-              pubsub::MessageBuilder{}
-                .SetData(std::string{array.GetView(i)})
-                .Build()));
+            inflight_.push_back(
+              publisher_->Publish(pubsub::MessageBuilder{}
+                                    .SetData(std::string{array.GetView(i)})
+                                    .Build()));
           }
         },
         [&](const auto&) {
@@ -236,6 +234,15 @@ public:
             .note("event is skipped")
             .emit(dh);
         });
+    }
+    // Prune completed publish futures to prevent unbounded memory growth.
+    while (not inflight_.empty() and inflight_.front().is_ready()) {
+      auto result = inflight_.front().get();
+      inflight_.pop_front();
+      if (not result) {
+        diagnostic::error("failed to publish: {}", result.status().message())
+          .emit(dh);
+      }
     }
     co_return;
   }
@@ -252,7 +259,7 @@ public:
 private:
   auto drain_inflight(diagnostic_handler& dh) -> Task<void> {
     if (publisher_) {
-      publisher_->inner.Flush();
+      publisher_->Flush();
     }
     while (not inflight_.empty()) {
       auto future = std::move(inflight_.front());
@@ -266,7 +273,7 @@ private:
   }
 
   to_args args_;
-  Option<FlushingPublisher> publisher_;
+  Option<pubsub::Publisher> publisher_;
   std::deque<publish_future> inflight_;
 };
 
