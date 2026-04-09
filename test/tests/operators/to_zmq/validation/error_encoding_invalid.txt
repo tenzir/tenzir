@@ -1,0 +1,6 @@
+error: unsupported encoding `csv`
+ --> tests/operators/to_zmq/validation/error_encoding_invalid.tql:1:36
+  |
+1 | to_zmq "127.0.0.1:31337", encoding="csv"
+  |                                    ^^^^^
+  |

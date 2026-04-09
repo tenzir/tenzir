@@ -77,6 +77,7 @@ rec {
     (pkgs.python3.withPackages (ps: [
       ps.trustme
       ps.pymysql
+      ps.pyzmq
     ]))
     tenzir-test
   ];

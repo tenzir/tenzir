@@ -1,0 +1,13 @@
+---
+fixtures:
+  - zmq:
+      role: publisher
+      mode: connect
+      payload: 'alerts/hello-from-accept-zmq-prefix'
+timeout: 60
+---
+
+accept_zmq env("ZMQ_ENDPOINT"), prefix="alerts/", keep_prefix=true {
+  read_all
+}
+head 1

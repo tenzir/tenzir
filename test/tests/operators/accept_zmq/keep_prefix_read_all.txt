@@ -1,0 +1,3 @@
+{
+  data: "alerts/hello-from-accept-zmq-prefix",
+}

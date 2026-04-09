@@ -1,0 +1,13 @@
+---
+fixtures:
+  - zmq:
+      role: publisher
+      mode: connect
+      payload: '{"line":"hello-from-accept-zmq"}'
+timeout: 60
+---
+
+accept_zmq env("ZMQ_ENDPOINT") {
+  read_json
+}
+head 1

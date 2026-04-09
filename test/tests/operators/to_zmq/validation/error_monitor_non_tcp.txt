@@ -1,0 +1,6 @@
+error: `monitor` requires a TCP endpoint
+ --> tests/operators/to_zmq/validation/error_monitor_non_tcp.tql:1:43
+  |
+1 | to_zmq "inproc://test", encoding="json", monitor=true
+  |                                           ^^^^^^^^^^^^
+  |
