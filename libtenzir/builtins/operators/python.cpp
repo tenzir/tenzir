@@ -860,6 +860,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    auto startup_failure = Option<std::string>{};
     try {
       auto code = co_await resolve_code(ctx);
       if (not code) {
@@ -912,7 +913,24 @@ public:
       co_await (*code_pipe).close();
       lifecycle_ = Lifecycle::running;
     } catch (const std::exception& ex) {
-      diagnostic::error("{}", ex.what()).emit(ctx.dh());
+      startup_failure = std::string{ex.what()};
+    }
+    if (startup_failure.is_some()) {
+      auto error = std::string{};
+      if (subprocess_) {
+        try {
+          error = co_await drain_error_pipe();
+        } catch (const std::exception&) {
+          error.clear();
+        }
+      }
+      if (error.empty()) {
+        diagnostic::error("{}", *startup_failure).emit(ctx.dh());
+      } else {
+        diagnostic::error("{}", error)
+          .note("{}", *startup_failure)
+          .emit(ctx.dh());
+      }
       lifecycle_ = Lifecycle::done;
       cleanup_venv();
     }

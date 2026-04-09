@@ -194,6 +194,9 @@ public:
 
   /// Returns whether the pipeline is hidden.
   virtual auto is_hidden() const -> bool = 0;
+
+  /// Returns whether the operator has access to an interactive terminal.
+  virtual auto has_terminal() const -> bool = 0;
 };
 
 enum class OperatorState {

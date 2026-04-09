@@ -241,6 +241,10 @@ public:
     return inner_.is_hidden();
   }
 
+  auto has_terminal() const -> bool override {
+    return inner_.has_terminal();
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
     return inner_.make_fused_channel<void>(std::move(id));
@@ -490,6 +494,10 @@ private:
 
   auto is_hidden() const -> bool override {
     return exec_ctx_.is_hidden();
+  }
+
+  auto has_terminal() const -> bool override {
+    return exec_ctx_.has_terminal();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)

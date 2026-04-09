@@ -366,19 +366,22 @@ auto Subprocess::terminate_or_kill_process_group(
     if (process_group_id_ <= 0) {
       throw std::logic_error{"cannot signal a finished subprocess group"};
     }
+    auto return_code = folly::ProcessReturnCode{};
+    auto child_exited = false;
     if (timeout.count() > 0) {
       auto result = ::kill(-process_group_id_, SIGTERM);
       if (result != 0 and errno != ESRCH) {
         throw_last_system_error("kill");
       }
-      auto return_code = subprocess_.waitTimeout(timeout);
-      if (not return_code.running()) {
-        return return_code;
-      }
+      return_code = subprocess_.waitTimeout(timeout);
+      child_exited = not return_code.running();
     }
     auto result = ::kill(-process_group_id_, SIGKILL);
     if (result != 0 and errno != ESRCH) {
       throw_last_system_error("kill");
+    }
+    if (child_exited) {
+      return return_code;
     }
     return subprocess_.wait();
   });

@@ -1049,6 +1049,10 @@ public:
     return is_hidden_;
   }
 
+  auto has_terminal() const -> bool override {
+    return false;
+  }
+
   auto take_metrics_snapshot() -> std::vector<MetricsSnapshotEntry> {
     return metrics_->take_snapshot();
   }

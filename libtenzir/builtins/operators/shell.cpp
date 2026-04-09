@@ -438,9 +438,8 @@ auto resolve_command(ShellArgs const& args, OpCtx& ctx)
   co_return command;
 }
 
-auto spawn_shell_subprocess(std::string command, bool pipe_stdin)
+auto spawn_shell_subprocess(std::string command, PipeMode stdin_mode)
   -> Task<Subprocess> {
-  auto stdin_mode = pipe_stdin ? PipeMode::pipe : PipeMode::dev_null;
   auto spec = SubprocessSpec{
     .argv = {"/bin/sh", "-c", std::move(command)},
     .env = None{},
@@ -558,7 +557,10 @@ public:
       co_return;
     }
     try {
-      subprocess_ = co_await spawn_shell_subprocess(std::move(*command), false);
+      auto stdin_mode
+        = ctx.has_terminal() ? PipeMode::inherit : PipeMode::dev_null;
+      subprocess_
+        = co_await spawn_shell_subprocess(std::move(*command), stdin_mode);
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
       ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
       lifecycle_ = Lifecycle::running;
@@ -657,7 +659,8 @@ public:
       co_return;
     }
     try {
-      subprocess_ = co_await spawn_shell_subprocess(std::move(*command), true);
+      subprocess_
+        = co_await spawn_shell_subprocess(std::move(*command), PipeMode::pipe);
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
       start_wait_for_exit(ctx);
       lifecycle_ = Lifecycle::running;
