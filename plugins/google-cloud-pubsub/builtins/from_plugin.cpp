@@ -369,7 +369,10 @@ public:
     }
 
     // Check whether the session ended (set by the .then() callback).
-    if (shared_->session_done.load(std::memory_order_acquire)) {
+    // Only transition to done when the queue is also empty, since a message
+    // callback may have enqueued items just before the session terminated.
+    if (shared_->session_done.load(std::memory_order_acquire)
+        and shared_->queue.empty()) {
       auto error = std::move(shared_->session_error);
       if (not error.empty()) {
         diagnostic::error("google-cloud-subscriber: {}", error)
