@@ -170,7 +170,7 @@ public:
     if (count_ == 0 or phase_ == Phase::finished) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {

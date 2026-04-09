@@ -198,9 +198,11 @@ public:
 
 enum class OperatorState {
   /// The operator doesn't request any specific state.
-  unspecified,
+  normal,
   /// The operator wants to finalize.
   done,
+  /// The operator does not want input right now.
+  blocked,
 };
 
 enum class FinalizeBehavior {
@@ -390,7 +392,7 @@ public:
 
   /// Return operator state. See file-level docs.
   virtual auto state() -> OperatorState {
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
   /// Called to signal that a source should gracefully shut down.

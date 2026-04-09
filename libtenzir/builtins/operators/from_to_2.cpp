@@ -130,7 +130,7 @@ public:
     if (next_ == events_.size()) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
   auto snapshot(Serde& serde) -> void override {

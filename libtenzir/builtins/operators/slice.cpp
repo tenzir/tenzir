@@ -406,7 +406,7 @@ public:
     if (not needs_buffering_ && done_) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
   auto snapshot(Serde& serde) -> void override {

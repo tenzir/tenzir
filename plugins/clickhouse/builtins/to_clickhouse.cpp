@@ -284,9 +284,8 @@ public:
 
   auto state() -> OperatorState override {
     TENZIR_ASSERT(state_);
-    return state_->done.load(std::memory_order_acquire)
-             ? OperatorState::done
-             : OperatorState::unspecified;
+    return state_->done.load(std::memory_order_acquire) ? OperatorState::done
+                                                        : OperatorState::normal;
   }
 
   auto snapshot(Serde& serde) -> void override {

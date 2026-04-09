@@ -474,7 +474,7 @@ public:
 
   auto state() -> OperatorState override {
     return done_.load(std::memory_order_acquire) ? OperatorState::done
-                                                 : OperatorState::unspecified;
+                                                 : OperatorState::normal;
   }
 
 private:

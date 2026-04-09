@@ -1,0 +1,5 @@
+from {name: "alice", n: 1}, {name: "bob", n: 2}
+each {
+  from $this
+}
+sort name
