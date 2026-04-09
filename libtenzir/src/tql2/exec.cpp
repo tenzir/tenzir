@@ -1827,6 +1827,7 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
                        size_t num_ops, time start_time, time now,
                        std::unordered_map<OpId, OpSnapshot>& prev_snapshots) {
+  TENZIR_UNUSED(num_ops);
   auto entries = exec_ctx.take_metrics_snapshot();
   auto external_read_bytes = uint64_t{0};
   auto external_write_bytes = uint64_t{0};

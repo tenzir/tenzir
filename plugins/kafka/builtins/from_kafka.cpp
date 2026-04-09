@@ -470,13 +470,19 @@ public:
       TENZIR_UNREACHABLE();
     }
     if (not runtime_.table_slice_queue) {
-      co_return TableSliceResult{.end_of_stream = true};
+      co_return TableSliceResult{
+        .frame = std::nullopt,
+        .end_of_stream = true,
+      };
     }
     try {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         request_pipeline_stop();
-        co_return TableSliceResult{.end_of_stream = true};
+        co_return TableSliceResult{
+          .frame = std::nullopt,
+          .end_of_stream = true,
+        };
       }
       if (optimization_mode_ == OptimizationMode::ordered) {
         co_return co_await await_ordered_batch();
@@ -493,7 +499,10 @@ public:
       }
       if (not next) {
         emit_perf_summary("end_of_stream");
-        co_return TableSliceResult{.end_of_stream = true};
+        co_return TableSliceResult{
+          .frame = std::nullopt,
+          .end_of_stream = true,
+        };
       }
       co_return TableSliceResult{
         .frame = std::move(*next),
@@ -501,7 +510,10 @@ public:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
       emit_perf_summary("cancelled");
-      co_return TableSliceResult{.end_of_stream = true};
+      co_return TableSliceResult{
+        .frame = std::nullopt,
+        .end_of_stream = true,
+      };
     }
   }
 
@@ -1590,7 +1602,10 @@ private:
       if (ready == runtime_.ordered_slices.end()
           and runtime_.builders_finished) {
         if (runtime_.ordered_slices.empty()) {
-          co_return TableSliceResult{.end_of_stream = true};
+          co_return TableSliceResult{
+            .frame = std::nullopt,
+            .end_of_stream = true,
+          };
         }
         ready = runtime_.ordered_slices.begin();
         runtime_.next_emit_seq = ready->first;

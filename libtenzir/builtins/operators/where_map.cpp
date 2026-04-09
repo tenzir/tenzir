@@ -404,7 +404,7 @@ auto make_where_function(function_invocation inv, session ctx)
               return builder.finish_assert_one_array();
             }
             auto builder = series_builder{field.type};
-            match(list_values.type, [&](const auto& list_values_type) {
+            match(list_values.type, [&](const auto&) {
               for (int64_t i = 0; i < lists.length(); ++i) {
                 if (lists.array->IsNull(i)) {
                   builder.null();

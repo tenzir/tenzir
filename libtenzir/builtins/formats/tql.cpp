@@ -221,6 +221,7 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     co_await pusher_.wait();
+    co_return {};
   }
 
   auto process_task(Any, Push<table_slice>& push, OpCtx&)
