@@ -88,10 +88,24 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    // Flush the last partial line (non-octet mode only; incomplete octet
-    // frames are silently dropped, consistent with the legacy implementation).
-    if (not args_.octet_counting and not buffer_.empty()) {
+    if (args_.octet_counting) {
+      if (remaining_message_length_ > 0) {
+        auto const buffered_bytes = buffer_.size();
+        auto const missing_bytes = remaining_message_length_ > buffered_bytes
+                                   ? remaining_message_length_ - buffered_bytes
+                                   : size_t{0};
+        diagnostic::error(
+          "unexpected end of input in octet-counted syslog message")
+          .note("missing {} of {} bytes", missing_bytes,
+                remaining_message_length_)
+          .emit(make_dh(ctx.dh()));
+      } else if (not buffer_.empty()) {
+        diagnostic::error(
+          "unexpected end of input in octet-counting length prefix")
+          .emit(make_dh(ctx.dh()));
+      }
+    } else if (not buffer_.empty()) {
+      // Flush trailing bytes as a final line in delimiter-based mode.
       co_await process_one_line(buffer_, push);
       buffer_.clear();
     }
