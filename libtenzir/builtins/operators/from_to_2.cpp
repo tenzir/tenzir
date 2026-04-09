@@ -171,6 +171,7 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
+    TENZIR_UNUSED(dh);
     // FIXME
     TENZIR_ASSERT(input.is<void>());
     return tag_v<table_slice>;

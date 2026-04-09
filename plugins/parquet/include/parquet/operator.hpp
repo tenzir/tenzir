@@ -52,17 +52,15 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   try {
     auto input_buffer = ::parquet::ParquetFileReader::Open(
       std::move(input_file), parquet_reader_properties);
-    ::arrow::Status arrow_file_reader_status
-      = ::parquet::arrow::FileReader::Make(arrow_memory_pool(),
-                                           std::move(input_buffer),
-                                           arrow_reader_properties,
-                                           &out_buffer);
-    if (! arrow_file_reader_status.ok()) {
+    auto out_buffer_result = ::parquet::arrow::FileReader::Make(
+      arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
+    if (not out_buffer_result.ok()) {
       diagnostic::error("{}",
-                        arrow_file_reader_status.ToStringWithoutContextLines())
+                        out_buffer_result.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
+    out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
   } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
     diagnostic::error("invalid or corrupted parquet file: {}", err.what())
       .emit(ctrl.diagnostics());

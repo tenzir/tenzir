@@ -1806,6 +1806,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   LOGI("end of data is leaving pipeline");
                 },
                 [&](Checkpoint checkpoint) {
+                  TENZIR_UNUSED(checkpoint);
                   LOGI("checkpoint {} is leaving pipeline", checkpoint.id);
                 });
             });

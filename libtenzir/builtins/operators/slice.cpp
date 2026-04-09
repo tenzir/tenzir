@@ -611,7 +611,11 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SliceArgs, Slice>{SliceArgs{.stride = -1}};
+    auto d = Describer<SliceArgs, Slice>{SliceArgs{
+      .begin = None{},
+      .end = None{},
+      .stride = int64_t{-1},
+    }};
     return d.without_optimize();
   }
 };

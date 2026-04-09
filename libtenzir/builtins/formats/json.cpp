@@ -1160,8 +1160,10 @@ public:
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
 
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
     co_await pusher_.wait();
+    co_return {};
   }
 
   auto process_task(Any, Push<table_slice>& push, OpCtx&)
@@ -1236,6 +1238,7 @@ public:
       co_return co_await read_output_queue_->dequeue();
     } else {
       co_await pusher_.wait();
+      co_return {};
     }
   }
 
