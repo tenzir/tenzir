@@ -127,14 +127,15 @@ private:
   event_order order_{event_order::ordered};
 };
 
-struct FromGcsArgs : ArrowFsArgs {
+struct FromGoogleCloudStorageArgs : FromArrowFsArgs {
   bool anonymous = false;
 };
 
-class FromGcsOperator final : public ArrowFsOperator {
+class FromGoogleCloudStorageOperator final : public FromArrowFsOperator {
 public:
-  explicit FromGcsOperator(FromGcsArgs args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+  explicit FromGoogleCloudStorageOperator(FromGoogleCloudStorageArgs args)
+    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+      args_{std::move(args)} {
   }
 
 protected:
@@ -215,11 +216,10 @@ protected:
   }
 
 private:
-  FromGcsArgs args_;
+  FromGoogleCloudStorageArgs args_;
 };
 
-class from_gcs final : public operator_plugin2<from_gcs_operator>,
-                       public OperatorPlugin {
+class from_gcs final : public operator_plugin2<from_gcs_operator> {
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_gcs_args{};
@@ -231,11 +231,19 @@ class from_gcs final : public operator_plugin2<from_gcs_operator>,
     result.prepend(std::make_unique<from_gcs_operator>(std::move(args)));
     return std::make_unique<pipeline>(std::move(result));
   }
+};
+
+class FromGoogleCloudStoragePlugin final : public OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.from_google_cloud_storage";
+  }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromGcsArgs, FromGcsOperator>{};
-    d.named("anonymous", &FromGcsArgs::anonymous);
-    ArrowFsArgs::describe_to(d);
+    auto d
+      = Describer<FromGoogleCloudStorageArgs, FromGoogleCloudStorageOperator>{};
+    d.named("anonymous", &FromGoogleCloudStorageArgs::anonymous);
+    FromArrowFsArgs::describe_to(d);
     return d.without_optimize();
   }
 };
@@ -244,3 +252,4 @@ class from_gcs final : public operator_plugin2<from_gcs_operator>,
 } // namespace tenzir::plugins::gcs
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::gcs::from_gcs)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::gcs::FromGoogleCloudStoragePlugin)
