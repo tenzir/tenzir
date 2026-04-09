@@ -6,21 +6,22 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/weak_run_delayed.hpp"
-
+#include <tenzir/async.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
-#include <tenzir/tql2/resolve.hpp>
 #include <tenzir/variant.hpp>
 
 #include <google/cloud/future.h>
+#include <google/cloud/internal/future_coroutines.h>
 #include <google/cloud/pubsub/publisher.h>
 
 #include <chrono>
+#include <deque>
 #include <string_view>
 #include <vector>
 
@@ -183,10 +184,104 @@ private:
   to_args args_;
 };
 
+// Note: We intentionally do not flush the publisher in its destructor.
+// During regular shutdown, finalize() handles flushing and awaiting all
+// inflight futures. During abnormal shutdown (hard stop), a destructor-only
+// flush would be insufficient since it doesn't wait for inflight futures
+// to complete.
+
+class ToGoogleCloudPubsub final : public Operator<table_slice, void> {
+public:
+  using publish_future
+    = google::cloud::future<google::cloud::StatusOr<std::string>>;
+
+  explicit ToGoogleCloudPubsub(to_args args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
+    publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
+    co_return;
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (input.rows() == 0 or not publisher_) {
+      co_return;
+    }
+    auto& dh = ctx.dh();
+    for (const auto& messages : eval(args_.message, input, dh)) {
+      match(
+        *messages.array,
+        [&](const arrow::StringArray& array) {
+          for (auto i = int64_t{}; i < array.length(); ++i) {
+            if (array.IsNull(i)) {
+              diagnostic::warning("expected `string`, got `null`")
+                .primary(args_.message)
+                .emit(dh);
+              continue;
+            }
+            inflight_.push_back(
+              publisher_->Publish(pubsub::MessageBuilder{}
+                                    .SetData(std::string{array.GetView(i)})
+                                    .Build()));
+          }
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected `string`, got `{}`",
+                              messages.type.kind())
+            .primary(args_.message)
+            .note("event is skipped")
+            .emit(dh);
+        });
+    }
+    // Prune completed publish futures to prevent unbounded memory growth.
+    while (not inflight_.empty() and inflight_.front().is_ready()) {
+      auto result = inflight_.front().get();
+      inflight_.pop_front();
+      if (not result) {
+        diagnostic::error("failed to publish: {}", result.status().message())
+          .emit(dh);
+      }
+    }
+    co_return;
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    co_await drain_inflight(ctx.dh());
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    co_await drain_inflight(ctx.dh());
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  auto drain_inflight(diagnostic_handler& dh) -> Task<void> {
+    if (publisher_) {
+      publisher_->Flush();
+    }
+    while (not inflight_.empty()) {
+      auto future = std::move(inflight_.front());
+      inflight_.pop_front();
+      auto result = co_await std::move(future);
+      if (not result) {
+        diagnostic::error("failed to publish: {}", result.status().message())
+          .emit(dh);
+      }
+    }
+  }
+
+  to_args args_;
+  Option<pubsub::Publisher> publisher_;
+  std::deque<publish_future> inflight_;
+};
+
 } // namespace
 
 class to_plugin final
-  : public operator_plugin2<to_google_cloud_pubsub_operator> {
+  : public virtual operator_plugin2<to_google_cloud_pubsub_operator>,
+    public virtual OperatorPlugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -198,6 +293,15 @@ public:
           .parse(inv, ctx));
     args.op = inv.self.get_location();
     return std::make_unique<to_google_cloud_pubsub_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<to_args, ToGoogleCloudPubsub>{};
+    d.operator_location(&to_args::op);
+    d.named("project_id", &to_args::project_id);
+    d.named("topic_id", &to_args::topic_id);
+    d.named("message", &to_args::message, "string");
+    return d.without_optimize();
   }
 };
 
