@@ -13,8 +13,8 @@ arrow-cpp.overrideAttrs (orig: {
   src = fetchFromGitHub {
     owner = "apache";
     repo = "arrow";
-    rev = "apache-arrow-23.0.1";
-    hash = lib.fakeHash;
+    tag = "apache-arrow-23.0.1";
+    hash = "sha256-p/IUYanW11u7gusZad1Bb4VhisTKBm4a+XGOuNXjx+I=";
   };
 
   patches = [
