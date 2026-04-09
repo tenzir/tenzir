@@ -10,6 +10,8 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/pusher.hpp"
+#include "tenzir/async/task.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
@@ -30,7 +32,6 @@
 #include <fmt/core.h>
 
 #include <algorithm>
-#include <cctype>
 #include <string_view>
 
 namespace tenzir::plugins::xsv {
@@ -1060,15 +1061,26 @@ public:
     co_return;
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     if (not msb_) {
       co_return;
     }
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not msb_) {
+      co_return;
+    }
     if (not input or input->size() == 0) {
-      for (auto& slice : msb_->yield_ready_as_table_slice()) {
-        co_await push(std::move(slice));
-      }
       co_return;
     }
     auto& dh = *dh_;
@@ -1078,6 +1090,7 @@ public:
       ++begin;
     }
     ended_on_carriage_return_ = false;
+    auto now = multi_series_builder::clock::now();
     for (const auto* current = begin; current != end; ++current) {
       if (*current != '\n' and *current != '\r') {
         continue;
@@ -1089,6 +1102,7 @@ public:
         process_line(buffer_, dh);
         buffer_.clear();
       }
+      co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
       if (*current == '\r') {
         if (current + 1 == end) {
           ended_on_carriage_return_ = true;
@@ -1097,11 +1111,9 @@ public:
         }
       }
       begin = current + 1;
-      for (auto& slice : msb_->yield_ready_as_table_slice()) {
-        co_await push(std::move(slice));
-      }
     }
     buffer_.append(begin, end);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1117,6 +1129,16 @@ public:
       co_await push(std::move(slice));
     }
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    if (not msb_) {
+      co_return;
+    }
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
   }
 
 private:
@@ -1153,6 +1175,7 @@ private:
   detail::quoting_escaping_policy quoting_;
   std::unique_ptr<transforming_diagnostic_handler> dh_;
   Option<multi_series_builder> msb_;
+  SeriesPusher pusher_;
 };
 
 class xsv_parser final : public plugin_parser {

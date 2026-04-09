@@ -1,0 +1,5 @@
+from_stdin {
+  compress_gzip format="deflate"
+  decompress_gzip format="deflate"
+  read_json
+}

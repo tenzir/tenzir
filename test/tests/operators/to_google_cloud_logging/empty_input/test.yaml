@@ -1,0 +1,8 @@
+suite: empty-input
+fixtures:
+  - google_cloud_logging
+timeout: 60
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

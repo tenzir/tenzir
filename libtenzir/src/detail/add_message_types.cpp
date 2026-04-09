@@ -34,7 +34,6 @@
 #include "tenzir/port.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/query_cursor.hpp"
 #include "tenzir/query_options.hpp"
 #include "tenzir/query_status.hpp"
 #include "tenzir/report.hpp"

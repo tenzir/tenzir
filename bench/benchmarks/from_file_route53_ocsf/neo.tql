@@ -2,7 +2,7 @@
 bench:
   id: neo
   description: Read Route53 resolver logs from a file, map them to OCSF DNS Activity, and discard the result.
-  min_version: "5.23.0"
+  min_version: "5.27.0"
   tenzir_args:
     - --neo
 ---

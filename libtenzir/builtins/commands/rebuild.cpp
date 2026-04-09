@@ -24,7 +24,6 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
-#include <tenzir/query_cursor.hpp>
 #include <tenzir/read_query.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>

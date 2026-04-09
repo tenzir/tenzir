@@ -194,6 +194,15 @@ table_slice
 transform_columns(const table_slice& slice,
                   std::vector<indexed_transformation> transformations);
 
+/// Create a record batch from a struct array.
+///
+/// If the struct array has row-level nulls, they are flattened into the child
+/// arrays so the resulting record batch preserves the same semantics.
+auto record_batch_from_struct_array(
+  const std::shared_ptr<arrow::Schema>& schema,
+  const std::shared_ptr<arrow::StructArray>& array)
+  -> std::shared_ptr<arrow::RecordBatch>;
+
 /// Remove all unspecified columns from both a Tenzir schema and an Arrow record
 /// batch.
 /// @pre Tenzir schema and Arrow schema must match.

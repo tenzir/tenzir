@@ -1,0 +1,12 @@
+// Send 1000 events where resource_type evaluates to null.
+// The operator should warn and default to "global".
+from {msg: "test", rt: null},
+     {msg: "other", rt: null}
+repeat 500
+enumerate id
+to_google_cloud_logging log_id="null-rt-log",
+                        project="test-project",
+                        payload=f"null-rt-{id}",
+                        resource_type=rt,
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

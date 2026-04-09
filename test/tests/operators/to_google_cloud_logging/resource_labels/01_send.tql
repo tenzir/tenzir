@@ -1,0 +1,13 @@
+// Send ~3000 events with resource labels across different schemas.
+from {message: "app log", env: "prod"},
+     {code: 500, endpoint: "/api/data"},
+     {alert: "OOM", pid: 1234}
+repeat 1000
+enumerate id
+to_google_cloud_logging log_id="labeled-log",
+                        project="test-project",
+                        payload=f"labeled-{id}",
+                        resource_type="gce_instance",
+                        resource_labels={zone: "us-east1-b", instance_id: f"i-{id}"},
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

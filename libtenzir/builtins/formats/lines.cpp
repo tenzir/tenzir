@@ -6,14 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/defaults.hpp"
-#include "tenzir/diagnostics.hpp"
-#include "tenzir/location.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/pusher.hpp>
+#include <tenzir/async/task.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/location.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/parser.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -336,11 +337,13 @@ public:
     }
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     if (args_.jobs > 0) {
       co_return co_await read_output_queue_->dequeue();
+    } else {
+      co_await pusher_.wait();
+      co_return {};
     }
-    co_return co_await Operator<chunk_ptr, table_slice>::await_task(dh);
   }
 
   auto state() -> OperatorState override {
@@ -354,12 +357,17 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    auto slice = std::move(result).as<table_slice>();
-    if (slice.rows() == 0) {
-      ++finished_workers_;
+    if (args_.jobs > 0) {
+      auto slice = std::move(result).as<table_slice>();
+      if (slice.rows() == 0) {
+        ++finished_workers_;
+        co_return;
+      }
+      co_await push(std::move(slice));
+    } else {
+      co_await pusher_.push(builder_.yield_ready(TNAME), push);
       co_return;
     }
-    co_await push(std::move(slice));
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -371,10 +379,7 @@ public:
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input), ctx);
-      // Flush if we've accumulated enough data.
-      if (builder_.length() > 0) {
-        co_await push(builder_.finish_assert_one_slice("tenzir.line"));
-      }
+      co_await pusher_.push(builder_.yield_ready(TNAME), push);
     }
   }
 
@@ -400,10 +405,16 @@ public:
       emit_line(buffer_, ctx);
       buffer_.clear();
     }
-    if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
-    }
+    co_await flush_non_parallel(push);
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (args_.jobs == 0) {
+      co_await flush_non_parallel(push);
+    }
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -412,6 +423,12 @@ public:
   }
 
 private:
+  auto flush_non_parallel(Push<table_slice>& push) -> Task<void> {
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+    }
+  }
+
   auto emit_line(std::string_view line, OpCtx& ctx) -> void {
     if (line.empty() and args_.skip_empty) {
       return;
@@ -625,6 +642,8 @@ private:
     read_output_queue_->enqueue(table_slice{});
   }
 
+  constexpr static const auto TNAME = "tenzir.line";
+
   using ReadInputQueue = folly::coro::BoundedQueue<Option<chunk_ptr>>;
   /// The output queue is unbounded to avoid a theoretical deadlock where the
   /// main thread wants to push to a full input queue while all workers want to
@@ -638,6 +657,7 @@ private:
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
   series_builder builder_;
+  SeriesPusher pusher_;
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;

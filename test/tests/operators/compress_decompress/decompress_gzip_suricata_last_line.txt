@@ -1,0 +1,3 @@
+{
+  line: "{\"timestamp\":\"2018-10-30T10:42:41.365021+0100\",\"flow_id\":557968277457102,\"event_type\":\"flow\",\"src_ip\":\"192.168.168.100\",\"src_port\":61210,\"dest_ip\":\"72.247.178.18\",\"dest_port\":80,\"proto\":\"TCP\",\"flow\":{\"pkts_toserver\":4,\"pkts_toclient\":3,\"bytes_toserver\":276,\"bytes_toclient\":206,\"start\":\"2018-10-30T09:57:29.346318+0100\",\"end\":\"2018-10-30T09:57:34.380403+0100\",\"age\":5,\"state\":\"new\",\"reason\":\"shutdown\",\"alerted\":true},\"community_id\":\"1:XW8RnI0g5aEs7vhnOuehNkGD8H4=\",\"tcp\":{\"tcp_flags\":\"00\",\"tcp_flags_ts\":\"00\",\"tcp_flags_tc\":\"00\"}}",
+}

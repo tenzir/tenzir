@@ -7,12 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/chunk.hpp"
-#include "tenzir/compile_ctx.hpp"
 #include "tenzir/json_parser.hpp"
-#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -46,7 +45,6 @@
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
-#include <folly/coro/Sleep.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/GlobalExecutor.h>
 
@@ -1153,8 +1151,7 @@ struct ReadJsonArgs {
 
 class ReadJson final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadJson(ReadJsonArgs args)
-    : args_{std::move(args)}, next_tick_{args_.msb_options.settings.timeout} {
+  explicit ReadJson(ReadJsonArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -1163,29 +1160,18 @@ public:
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
-    co_return PeriodicTick{};
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    TENZIR_ASSERT(result.try_as<PeriodicTick>());
-    TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
-    auto ready = parser_->builder.yield_ready_as_table_slice();
-    TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
-    next_tick_ = ready.wait_for;
-    for (auto& slice : ready) {
-      co_await push(std::move(slice));
-    }
+    co_await pusher_.push(parser_->builder.yield_ready_as_table_slice(), push);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -1195,6 +1181,7 @@ public:
     if (parser_->abort_requested) {
       co_return;
     }
+    co_await pusher_.push(parser_->builder.yield_ready_as_table_slice(), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1212,17 +1199,14 @@ public:
   }
 
 private:
-  struct PeriodicTick {};
-
   ReadJsonArgs args_;
-  duration next_tick_;
+  SeriesPusher pusher_;
   std::unique_ptr<default_parser> parser_;
 };
 
 class ReadNdjson final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadNdjson(ReadJsonArgs args)
-    : args_{std::move(args)}, next_tick_{args_.msb_options.settings.timeout} {
+  explicit ReadNdjson(ReadJsonArgs args) : args_{std::move(args)} {
   }
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
@@ -1250,10 +1234,9 @@ public:
     TENZIR_UNUSED(dh);
     if (args_.jobs > 0) {
       co_return co_await read_output_queue_->dequeue();
+    } else {
+      co_await pusher_.wait();
     }
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
-    co_return PeriodicTick{};
   }
 
   auto state() -> OperatorState override {
@@ -1267,29 +1250,26 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (result.try_as<PeriodicTick>()) {
+    if (args_.jobs > 0) {
+      // Parallel mode: output from workers.
+      auto slice = std::move(result).as<table_slice>();
+      if (slice.rows() == 0) {
+        ++finished_workers_;
+        co_return;
+      }
+      co_await push(std::move(slice));
+    } else {
       // Non-parallel mode: periodic flush.
       TENZIR_ASSERT(parser_);
-      auto ready = parser_->builder.yield_ready_as_table_slice();
-      TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
-      next_tick_ = ready.wait_for;
-      for (auto& slice : ready) {
-        co_await push(std::move(slice));
-      }
+      co_await pusher_.push(parser_->builder.yield_ready_as_table_slice(),
+                            push);
       co_return;
     }
-    // Parallel mode: output from workers.
-    auto slice = std::move(result).as<table_slice>();
-    if (slice.rows() == 0) {
-      ++finished_workers_;
-      co_return;
-    }
-    co_await push(std::move(slice));
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(push, ctx);
+    TENZIR_UNUSED(ctx);
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -1297,6 +1277,9 @@ public:
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input));
+      TENZIR_ASSERT(parser_);
+      co_await pusher_.push(parser_->builder.yield_ready_as_table_slice(),
+                            push);
     }
     co_return;
   }
@@ -1522,7 +1505,7 @@ private:
           begin = current + 1;
         }
         // Yield ready results to the output queue.
-        for (auto& slice : parser.builder.yield_ready_as_table_slice()) {
+        for (auto&& slice : parser.builder.yield_ready_as_table_slice()) {
           read_output_queue_->enqueue(std::move(slice));
         }
       }
@@ -1566,7 +1549,7 @@ private:
   using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
 
   ReadJsonArgs args_;
-  duration next_tick_;
+  SeriesPusher pusher_;
   bool draining_ = false;
   size_t finished_workers_ = 0;
   // Non-parallel mode state:

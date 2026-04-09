@@ -1,0 +1,2 @@
+<4>1 2019-11-21T13:44:36Z LAPTOP-45Q5L6E5 Microsoft-Windows-Security-Mitigations 4340 - - LEEF:2.0|Microsoft|Microsoft-Windows-Security-Mitigations|4.6.4640-trial|10|0x09|devTime=2019-11-21 13:44:35\tidentHostName=LAPTOP-45Q5L6E5\tsev=6\tEventID=10\tMessage=Process 'chrome.exe' was blocked
+<4>1 2019-11-21T13:44:37Z ZSCALER NSS - - - LEEF:2.0|Zscaler|NSS|3.6|ALLOW|cat=firewall\tusrName=jane.doe\tsrc=203.0.113.10\tdst=198.51.100.20

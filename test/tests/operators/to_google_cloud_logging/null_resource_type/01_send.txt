@@ -1,0 +1,13 @@
+warning: expected `string`, got `null`
+  --> tests/operators/to_google_cloud_logging/null_resource_type/01_send.tql:10:39
+   |
+10 |                         resource_type=rt,
+   |                                       ~~ 
+   |
+
+warning: defaulting `null` resource to `global`
+  --> tests/operators/to_google_cloud_logging/null_resource_type/01_send.tql:10:39
+   |
+10 |                         resource_type=rt,
+   |                                       ~~ 
+   |

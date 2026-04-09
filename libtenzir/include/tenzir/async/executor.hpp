@@ -12,6 +12,7 @@
 #pragma once
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/channel.hpp"
 #include "tenzir/async/generator.hpp"
 #include "tenzir/async/signal.hpp"
 #include "tenzir/result.hpp"
@@ -125,12 +126,6 @@ TENZIR_ENUM(
   // TODO: Checkpoint messages need data, move into variant.
   /// Inform the controller what checkpoint state we are in.
   checkpoint_begin, checkpoint_done);
-
-// TODO: Where to place this?
-template <class T>
-class Receiver;
-template <class T>
-class Sender;
 
 class Never {
 private:

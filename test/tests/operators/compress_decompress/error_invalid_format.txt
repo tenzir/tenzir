@@ -1,0 +1,6 @@
+error: `format` must be one of `zlib`, `deflate` or `gzip`
+ --> tests/operators/compress_decompress/error_invalid_format.tql:7:22
+  |
+7 | compress_gzip format="invalid"
+  |                      ^^^^^^^^^ 
+  |

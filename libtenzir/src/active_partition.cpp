@@ -345,6 +345,11 @@ active_partition_actor::behavior_type active_partition(
           caf::actor_cast<caf::actor>(self));
         return;
       }
+      if (msg.reason.valid()) {
+        self->send_exit(self->state().store_builder, msg.reason);
+      } else {
+        self->send_exit(self->state().store_builder, caf::exit_reason::normal);
+      }
       TENZIR_TRACE("{} shuts down after persisting partition state", *self);
       if (msg.reason.valid()) {
         self->quit(

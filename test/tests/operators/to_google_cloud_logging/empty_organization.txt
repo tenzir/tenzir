@@ -1,0 +1,6 @@
+error: expected a non-empty string
+ --> tests/operators/to_google_cloud_logging/empty_organization.tql:6:53
+  |
+6 | to_google_cloud_logging log_id="test", organization=""
+  |                                                     ^^ 
+  |

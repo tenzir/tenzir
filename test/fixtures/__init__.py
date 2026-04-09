@@ -6,6 +6,7 @@ from __future__ import annotations
 from . import abs  # noqa: F401
 from . import clickhouse  # noqa: F401
 from . import gcs  # noqa: F401
+from . import google_cloud_logging  # noqa: F401
 from . import google_secops  # noqa: F401
 from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
@@ -20,6 +21,7 @@ __all__ = [
     "abs",
     "clickhouse",
     "gcs",
+    "google_cloud_logging",
     "google_secops",
     "http_paginate",
     "http_server",

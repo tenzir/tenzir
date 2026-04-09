@@ -1,0 +1,20 @@
+// Send ~900 events cycling through all 9 severity levels.
+// Each batch of 9 covers: default, debug, info, notice, warning, error,
+// critical, alert, emergency.
+from {sev: "default"},
+     {sev: "debug"},
+     {sev: "info"},
+     {sev: "notice"},
+     {sev: "warning"},
+     {sev: "error"},
+     {sev: "critical"},
+     {sev: "alert"},
+     {sev: "emergency"}
+repeat 100
+enumerate id
+to_google_cloud_logging log_id="sev-log",
+                        project="test-project",
+                        payload=f"sev-test-{id}",
+                        severity=sev,
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

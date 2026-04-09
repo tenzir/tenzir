@@ -1,0 +1,6 @@
+error: `log_id` must not be empty
+ --> tests/operators/to_google_cloud_logging/empty_log_id.tql:6:32
+  |
+6 | to_google_cloud_logging log_id="", project="test"
+  |                                ^^ 
+  |

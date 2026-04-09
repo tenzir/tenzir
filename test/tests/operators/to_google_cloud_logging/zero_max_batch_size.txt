@@ -1,0 +1,6 @@
+error: `max_batch_size` must not be zero
+ --> tests/operators/to_google_cloud_logging/zero_max_batch_size.tql:6:68
+  |
+6 | to_google_cloud_logging log_id="test", project="p", max_batch_size=0
+  |                                                                    ^ 
+  |

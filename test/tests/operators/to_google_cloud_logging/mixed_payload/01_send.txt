@@ -1,0 +1,13 @@
+warning: expected `string`, got `null`
+ --> tests/operators/to_google_cloud_logging/mixed_payload/01_send.tql:9:33
+  |
+9 |                         payload=message?,
+  |                                 ~~~~~~~ 
+  |
+
+warning: skipping log without a payload
+ --> tests/operators/to_google_cloud_logging/mixed_payload/01_send.tql:9:33
+  |
+9 |                         payload=message?,
+  |                                 ~~~~~~~ 
+  |
