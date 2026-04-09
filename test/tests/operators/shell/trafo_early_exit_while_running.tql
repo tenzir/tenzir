@@ -7,5 +7,5 @@ from {x: "first", ts: 0ms.from_epoch()},
      {x: "second", ts: 10s.from_epoch()}
 delay ts
 write_lines
-shell "read _; printf 'done\n'; exit 7"
+shell "read _; printf 'done\n'; exec 0<&-; sleep 1; exit 7"
 read_lines

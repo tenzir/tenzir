@@ -1,2 +1,2 @@
-error: child process killed by signal 15
- = note: child process execution failed
+error: writeFull: Broken pipe (32: Broken pipe)
+ = note: failed to write to child process
