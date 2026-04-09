@@ -1,0 +1,6 @@
+suite: to-s3-close-failure-warning
+fixtures: [s3_fail_complete]
+timeout: 240
+skip:
+  on:
+    - fixture-unavailable
