@@ -912,6 +912,10 @@ public:
       co_await (*code_pipe).write(bytes);
       co_await (*code_pipe).close();
       lifecycle_ = Lifecycle::running;
+    } catch (const folly::OperationCancelled&) {
+      lifecycle_ = Lifecycle::done;
+      cleanup_venv();
+      throw;
     } catch (const std::exception& ex) {
       startup_failure = std::string{ex.what()};
     }

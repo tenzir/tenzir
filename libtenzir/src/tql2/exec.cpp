@@ -60,6 +60,7 @@
 #include <span>
 #include <string_view>
 #include <thread>
+#include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -987,12 +988,14 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
 
 class TestExecCtx final : public ExecCtx {
 public:
-  explicit TestExecCtx(Profiler const& profiler, bool is_hidden = false)
+  explicit TestExecCtx(Profiler const& profiler, bool has_terminal = false,
+                       bool is_hidden = false)
     : profiling_{not is<NoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
       metrics_receiver_{try_as<NodeProfiler>(profiler)
                           ? try_as<NodeProfiler>(profiler)->metrics
                           : metrics_receiver_actor{}},
+      has_terminal_{has_terminal},
       is_hidden_{is_hidden} {
   }
 
@@ -1050,7 +1053,7 @@ public:
   }
 
   auto has_terminal() const -> bool override {
-    return false;
+    return has_terminal_;
   }
 
   auto take_metrics_snapshot() -> std::vector<MetricsSnapshotEntry> {
@@ -1175,6 +1178,7 @@ private:
   bool profiling_;
   bool record_backpressure_;
   metrics_receiver_actor metrics_receiver_;
+  bool has_terminal_;
   bool is_hidden_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
@@ -2019,11 +2023,11 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
 } // namespace
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool is_hidden)
-  -> Task<failure_or<void>> {
+              DiagHandler& dh, Profiler profiler, bool has_terminal,
+              bool is_hidden) -> Task<failure_or<void>> {
   auto num_ops = chain.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto exec_ctx = TestExecCtx{profiler, is_hidden};
+  auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
@@ -2032,6 +2036,13 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
     scope.cancel();
   });
   co_return {};
+}
+
+auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
+              DiagHandler& dh, Profiler profiler, bool is_hidden)
+  -> Task<failure_or<void>> {
+  co_return co_await run_plan(std::move(chain), sys, dh, std::move(profiler),
+                              false, is_hidden);
 }
 
 namespace {
@@ -2078,10 +2089,12 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   }
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
+  auto has_terminal = ::isatty(STDIN_FILENO) == 1;
   auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
     co_return co_await catch_cancellation(folly::coro::co_withCancellation(
-      cancel_source.getToken(), run_plan(std::move(chain), sys, diag_handler,
-                                         std::move(profiler), false)));
+      cancel_source.getToken(),
+      run_plan(std::move(chain), sys, diag_handler, std::move(profiler),
+               has_terminal, false)));
   });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
