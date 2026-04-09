@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/to_file/validation/error_pipeline_not_bytes.tql:5:26
+  |
+5 | to_file "/tmp/test.json" {
+  |                          ^^^^^^^^^^ 
+  |

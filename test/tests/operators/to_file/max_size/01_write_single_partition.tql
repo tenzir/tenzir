@@ -1,0 +1,8 @@
+// No partitioning, but max_size forces rotation into multiple {uuid} files.
+// ~40 bytes per NDJSON line, 500 events = ~20KB. max_size=2048 → ~10 files.
+from {msg: "hello"}
+repeat 500
+enumerate id
+to_file env("FILE_ROOT") + "/out/maxsize_single/{uuid}.json", max_size=2048 {
+  write_ndjson
+}

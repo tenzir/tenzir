@@ -1,0 +1,4 @@
+partition_dirs: ['region=ap', 'region=eu', 'region=us']
+region=ap: 200
+region=eu: 200
+region=us: 200

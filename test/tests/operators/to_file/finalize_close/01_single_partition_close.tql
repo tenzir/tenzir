@@ -1,0 +1,7 @@
+// Minimal single-partition write. If the sub-pipeline close for the only
+// partition gets cancelled during shutdown, the operator hangs
+// (`partition_count_` stays 1 and `state()` never returns `done`).
+from {x: 1}
+to_file env("FILE_ROOT") + "/out/finalize/single.json" {
+  write_ndjson
+}

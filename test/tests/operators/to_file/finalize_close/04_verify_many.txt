@@ -1,0 +1,4 @@
+partitions: 20
+all_present: True
+empty_files: 0
+bad_json: 0

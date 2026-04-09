@@ -1,0 +1,6 @@
+partition_dirs: ['region=ap', 'region=eu', 'region=us']
+region=ap: rows=300
+region=eu: rows=300
+region=us: rows=300
+total_rows: 900
+all_ids_present: True
