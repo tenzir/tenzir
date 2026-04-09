@@ -401,17 +401,20 @@ struct TaskFailed {
   std::string note;
 };
 
+struct WriteFailureGraceElapsed {};
+
 struct WriteFailure {
   std::string message;
   Option<std::error_code> code = None{};
 };
 
-using Message = variant<OutputChunk, OutputClosed, ProcessExited, TaskFailed>;
+using Message = variant<OutputChunk, OutputClosed, ProcessExited, TaskFailed,
+                        WriteFailureGraceElapsed>;
 using SourceMessageQueue = folly::coro::BoundedQueue<Message>;
 using TransformMessageQueue = UnboundedQueue<Message>;
 
 constexpr auto source_message_queue_capacity = uint32_t{16};
-constexpr auto write_failure_termination_grace_period
+constexpr auto write_failure_grace_period
   = std::chrono::milliseconds{100};
 
 auto enqueue_message(SourceMessageQueue& queue, Message message) -> Task<void> {
@@ -498,14 +501,17 @@ auto wait_for_exit(Arc<Queue> queue, Subprocess& subprocess) -> Task<void> {
 }
 
 template <class Queue>
+auto notify_write_failure_grace_elapsed(Arc<Queue> queue) -> Task<void> {
+  co_await sleep_for(write_failure_grace_period);
+  co_await enqueue_message(*queue, WriteFailureGraceElapsed{});
+}
+
+template <class Queue>
 auto terminate_process_group_after_write_failure(Arc<Queue> queue,
                                                  Subprocess& subprocess)
   -> Task<void> {
   auto failure = Option<TaskFailed>{};
   try {
-    // Give short-lived shells a chance to flush buffered stdout and exit before
-    // we start sending process-group signals to clean up detached descendants.
-    co_await sleep_for(write_failure_termination_grace_period);
     co_await subprocess.send_signal_to_process_group(SIGTERM);
     co_await sleep_for(std::chrono::seconds{1});
     co_await subprocess.send_signal_to_process_group(SIGKILL);
@@ -600,6 +606,9 @@ public:
           .note("{}", failure.note)
           .emit(ctx.dh());
         co_return;
+      },
+      [&](WriteFailureGraceElapsed) -> Task<void> {
+        co_return;
       });
   }
 
@@ -680,7 +689,7 @@ public:
       if (write_failure_.is_none()) {
         write_failure_ = format_write_failure(ex);
       }
-      start_terminate_process_group_after_write_failure(ctx);
+      start_write_failure_grace_timer(ctx);
     } catch (std::exception const& ex) {
       lifecycle_ = Lifecycle::draining;
       if (write_failure_.is_none()) {
@@ -689,7 +698,7 @@ public:
           .code = None{},
         };
       }
-      start_terminate_process_group_after_write_failure(ctx);
+      start_write_failure_grace_timer(ctx);
     }
   }
 
@@ -728,6 +737,15 @@ public:
           .note("{}", failure.note)
           .emit(ctx.dh());
         co_return;
+      },
+      [&](WriteFailureGraceElapsed) -> Task<void> {
+        if (write_failure_.is_none()) {
+          co_return;
+        }
+        if (stdout_closed_ and child_exited_) {
+          co_return;
+        }
+        start_terminate_process_group_after_write_failure(ctx);
       });
   }
 
@@ -755,7 +773,7 @@ public:
       }
       start_wait_for_exit(ctx);
     } else if (write_failure_.is_some()) {
-      start_terminate_process_group_after_write_failure(ctx);
+      start_write_failure_grace_timer(ctx);
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
@@ -781,6 +799,14 @@ private:
     }
     exit_task_started_ = true;
     ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
+  }
+
+  auto start_write_failure_grace_timer(OpCtx& ctx) -> void {
+    if (write_failure_grace_timer_started_) {
+      return;
+    }
+    write_failure_grace_timer_started_ = true;
+    ctx.spawn_task(notify_write_failure_grace_elapsed(message_queue_));
   }
 
   auto start_terminate_process_group_after_write_failure(OpCtx& ctx) -> void {
@@ -831,6 +857,7 @@ private:
   bool stdout_closed_ = false;
   bool child_exited_ = false;
   bool exit_task_started_ = false;
+  bool write_failure_grace_timer_started_ = false;
   bool termination_task_started_ = false;
   Option<std::string> exit_error_ = None{};
   Option<WriteFailure> write_failure_ = None{};
