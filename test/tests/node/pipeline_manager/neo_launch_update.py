@@ -183,8 +183,8 @@ def _check_launch_compile_diagnostics(base_url: str) -> None:
 
 
 def _check_sink_id_escaping(base_url: str) -> None:
-    cache_id = "cache id: \"quoted\" \\ backslash \n newline"
-    serve_id = "serve id: \"quoted\" \\ backslash \n newline"
+    cache_id = 'cache id: "quoted" \\ backslash \n newline'
+    serve_id = 'serve id: "quoted" \\ backslash \n newline'
     created_id = ""
     try:
         status, body = _post_api(
@@ -253,7 +253,9 @@ def _check_update_parse_compatibility(base_url: str) -> None:
             {"id": created_id, "definition": neo_updated_definition},
         )
         assert status == 200, body
-        assert body.get("pipeline", {}).get("definition") == neo_updated_definition, body
+        assert body.get("pipeline", {}).get("definition") == neo_updated_definition, (
+            body
+        )
         print("update-accepts-legacy-and-neo-definitions: ok")
     finally:
         if created_id:

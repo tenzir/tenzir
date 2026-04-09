@@ -8,4 +8,4 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 
-df -P "$@" | awk '(NR>1){print $5}' | tr -d \%
+df -P "$@" | awk '(NR>1){print $5}' | tr -d '%'

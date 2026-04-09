@@ -13,9 +13,17 @@ def ch_query(sql: str) -> str:
     container = os.environ["CLICKHOUSE_CONTAINER_ID"]
     password = os.environ["CLICKHOUSE_PASSWORD"]
     result = subprocess.run(
-        [runtime, "exec", container, "clickhouse-client",
-         f"--password={password}", f"--query={sql}"],
-        capture_output=True, text=True, check=True,
+        [
+            runtime,
+            "exec",
+            container,
+            "clickhouse-client",
+            f"--password={password}",
+            f"--query={sql}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 

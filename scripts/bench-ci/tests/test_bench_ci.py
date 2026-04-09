@@ -423,7 +423,11 @@ def test_resolve_compare_manifest_falls_back_when_merge_base_metadata_is_unavail
 
     manifest = resolve_compare_manifest(
         repo="tenzir/tenzir",
-        request={"benchmarks": ["from_kafka_route53"], "targets": ["docker"], "refs": []},
+        request={
+            "benchmarks": ["from_kafka_route53"],
+            "targets": ["docker"],
+            "refs": [],
+        },
         baselines={"latest_stable_tag": None},
         head_sha="cafebabe",
         run_temp=tmp_path,
@@ -797,18 +801,28 @@ def test_cmd_compare_materializes_static_only_when_reference_backfill_is_needed(
     )
     materialize_calls: list[bool] = []
 
-    def fake_to_compare_build(paths: object, build: object, *, materialize_static: bool) -> object:
+    def fake_to_compare_build(
+        paths: object, build: object, *, materialize_static: bool
+    ) -> object:
         materialize_calls.append(materialize_static)
         return type("Build", (), {"label": "main static"})()
 
-    monkeypatch.setattr(run_benchmarks_module, "_to_compare_build", fake_to_compare_build)
+    monkeypatch.setattr(
+        run_benchmarks_module, "_to_compare_build", fake_to_compare_build
+    )
     monkeypatch.setattr(
         run_benchmarks_module,
         "prepare_compare_reports_for_build",
         lambda *args, **kwargs: {"pipeline": report},
     )
-    monkeypatch.setattr(run_benchmarks_module, "render_markdown_for_builds", lambda builds: "")
-    monkeypatch.setattr(run_benchmarks_module, "current_hardware_key", lambda: "ubuntu-latest_x86_64_unknown_4c")
+    monkeypatch.setattr(
+        run_benchmarks_module, "render_markdown_for_builds", lambda builds: ""
+    )
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "current_hardware_key",
+        lambda: "ubuntu-latest_x86_64_unknown_4c",
+    )
 
     args = type(
         "Args",

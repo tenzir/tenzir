@@ -1,5 +1,6 @@
 # Utility alias for detecting changes to files.
 shopt -s expand_aliases
+# shellcheck disable=SC2139,SC2154
 alias is_changed="! git diff --quiet --exit-code ${before_sha} --"
 
 run_if_changed_default() {
@@ -8,13 +9,13 @@ run_if_changed_default() {
   shift
   shift
   job_shellvar="run_$(echo "$job" | tr '-' '_')"
-  local changed=${default}
+  local changed="${default}"
   # Any extra positional arguments are fed into `git diff`.
   if [ $# -ne 0 ] && is_changed "${@}"; then
     changed=true
   fi
   declare -g "$job_shellvar"="${changed}"
-  echo "run-${job}=${changed}" >>$GITHUB_OUTPUT
+  echo "run-${job}=${changed}" >>"$GITHUB_OUTPUT"
 }
 
 run_if_changed() {

@@ -107,6 +107,7 @@ def _stop_mysql(container: ManagedContainer) -> None:
 
 def _wait_for_mysql(container: ManagedContainer, timeout: float) -> None:
     """Wait for MySQL to become ready."""
+
     def _probe() -> tuple[bool, dict[str, str]]:
         running = container.is_running()
         if not running:
@@ -265,7 +266,9 @@ def _extract_tls_files(container: ManagedContainer, dest_dir: str) -> dict[str, 
     paths = {}
     for name, filename in files.items():
         local_path = str(Path(dest_dir) / filename)
-        result = container.copy_from(f"/var/lib/mysql/{filename}", local_path, check=False)
+        result = container.copy_from(
+            f"/var/lib/mysql/{filename}", local_path, check=False
+        )
         if result.returncode != 0:
             raise RuntimeError(f"Failed to extract {filename}: {result.stderr}")
         logger.info("Extracted %s to %s", filename, local_path)

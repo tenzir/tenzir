@@ -146,7 +146,9 @@ def verify_signed_pkg_identifier(pkg_path: Path, expected_identifier: str) -> No
             text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"pkgutil --expand failed for {pkg_path}: {result.stderr}")
+            raise RuntimeError(
+                f"pkgutil --expand failed for {pkg_path}: {result.stderr}"
+            )
         package_infos = sorted(expanded_dir.glob("*.pkg/PackageInfo"))
         if len(package_infos) != 1:
             raise RuntimeError(
@@ -165,7 +167,9 @@ def find_macho_binaries(directory: Path) -> list[Path]:
     for path in directory.rglob("*"):
         if not path.is_file() or path.is_symlink():
             continue
-        result = subprocess.run(["file", "-b", str(path)], capture_output=True, text=True)
+        result = subprocess.run(
+            ["file", "-b", str(path)], capture_output=True, text=True
+        )
         if result.returncode == 0 and "Mach-O" in result.stdout:
             binaries.append(path)
     return binaries
@@ -222,7 +226,10 @@ def verify_binary_signature(
         raise RuntimeError(
             f"binary is not signed with Developer ID Application: {binary_path}"
         )
-    if expected_team_identifier and f"TeamIdentifier={expected_team_identifier}" not in detail_output:
+    if (
+        expected_team_identifier
+        and f"TeamIdentifier={expected_team_identifier}" not in detail_output
+    ):
         raise RuntimeError(
             "binary team identifier mismatch for "
             f"{binary_path}; expected {expected_team_identifier}"
@@ -735,7 +742,9 @@ def cmd_sign(args: argparse.Namespace) -> int:
     notice(f"Signing binaries in {tarball.name}")
     expected_team_identifier = parse_team_identifier(signing_identity)
     if not expected_team_identifier:
-        warning(f"Could not extract team identifier from signing identity: {signing_identity}")
+        warning(
+            f"Could not extract team identifier from signing identity: {signing_identity}"
+        )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -878,7 +887,9 @@ def cmd_sign(args: argparse.Namespace) -> int:
                     return 1
                 for payload_binary in payload_binaries:
                     try:
-                        verify_binary_signature(payload_binary, expected_team_identifier)
+                        verify_binary_signature(
+                            payload_binary, expected_team_identifier
+                        )
                     except RuntimeError as exc:
                         error(str(exc))
                         return 1
@@ -977,7 +988,9 @@ def cmd_sign(args: argparse.Namespace) -> int:
     if args.notarize_macos:
         signed_pkgs = sorted(signed_pkg_dir.glob("*.pkg"))
         if len(signed_pkgs) != 1:
-            error(f"Expected exactly one signed .pkg for notarization, found {len(signed_pkgs)}")
+            error(
+                f"Expected exactly one signed .pkg for notarization, found {len(signed_pkgs)}"
+            )
             return 1
         try:
             notarize_macos_package(signed_pkgs[0])
@@ -1031,14 +1044,20 @@ def cmd_upload(args: argparse.Namespace) -> int:
                 # Always upload canonical package names to configured stores.
                 dest = f"{store}/{label}/{pkg_file.name}"
                 notice(f"Copying artifact to {dest}")
-                _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
+                _ = subprocess.run(
+                    ["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True
+                )
 
                 # Create alias copies directly from local file
                 for alias in args.package_aliases:
                     alias_name = re.sub(r"[0-9]+\.[0-9]+\.[0-9]+", alias, pkg_file.name)
                     alias_dest = f"{store}/{label}/{alias_name}"
                     notice(f"Copying artifact to {alias_dest}")
-                    _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), alias_dest], env=env, check=True)
+                    _ = subprocess.run(
+                        ["rclone", "-q", "copyto", str(pkg_file), alias_dest],
+                        env=env,
+                        check=True,
+                    )
 
     # Attach to GitHub release
     if args.release_tag:

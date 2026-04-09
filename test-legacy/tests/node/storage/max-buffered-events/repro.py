@@ -72,7 +72,11 @@ def run_round(round_index: int) -> None:
                     "--bare-mode",
                     "--console-verbosity=warning",
                     "--multi",
-                    *([f"--endpoint={executor._endpoint}"] if executor._endpoint else []),
+                    *(
+                        [f"--endpoint={executor._endpoint}"]
+                        if executor._endpoint
+                        else []
+                    ),
                     make_import_pipeline(current_round),
                 ],
                 stdout=subprocess.PIPE,

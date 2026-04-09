@@ -102,7 +102,9 @@ def _run(
     if not check or result.returncode == 0:
         return result
     detail = (result.stderr or result.stdout or "").strip() or "no output"
-    raise RuntimeError(f"{description} failed (exit code {result.returncode}): {detail}")
+    raise RuntimeError(
+        f"{description} failed (exit code {result.returncode}): {detail}"
+    )
 
 
 def _wait_for_cluster(
@@ -252,7 +254,9 @@ def _publish_dataset(
             time.monotonic() - started_at,
         )
         return
-    detail = (stderr or stdout or b"").decode("utf-8", errors="replace").strip() or "no output"
+    detail = (stderr or stdout or b"").decode(
+        "utf-8", errors="replace"
+    ).strip() or "no output"
     raise RuntimeError(
         "publish benchmark dataset to kafka topic "
         f"{topic} failed (exit code {process.returncode}): {detail}",
@@ -331,9 +335,13 @@ def kafka() -> FixtureHandle:
         input_path=input_path,
         repetitions=options.repetitions,
     )
-    group_prefix = f"{_group_id(context.definition.path, options.topic)}-{uuid.uuid4().hex[:8]}"
+    group_prefix = (
+        f"{_group_id(context.definition.path, options.topic)}-{uuid.uuid4().hex[:8]}"
+    )
 
-    def _before_run(*, phase: str, run_index: int, env: dict[str, str], **_kwargs: object) -> None:
+    def _before_run(
+        *, phase: str, run_index: int, env: dict[str, str], **_kwargs: object
+    ) -> None:
         env["BENCHMARK_KAFKA_GROUP_ID"] = f"{group_prefix}-{phase}-{run_index}"
         _LOG.info(
             "Using Kafka consumer group %s for %s run %s",

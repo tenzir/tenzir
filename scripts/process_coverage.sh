@@ -4,7 +4,7 @@ set -euo pipefail
 # Script to process code coverage data from integration tests
 
 # Parse command line arguments
-VERBOSE=${VERBOSE:-0}
+VERBOSE="${VERBOSE:-0}"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --coverage-dir=*)
@@ -83,13 +83,13 @@ fi
 
 # Log function that respects verbosity
 log() {
-  if [ $VERBOSE -eq 1 ]; then
+  if [ "$VERBOSE" -eq 1 ]; then
     echo "$1" >&2
   fi
 }
 
 run() {
-  if [ $VERBOSE -eq 1 ]; then
+  if [ "$VERBOSE" -eq 1 ]; then
     "$@"
   else
     "$@" >/dev/null 2>&1
@@ -114,7 +114,7 @@ fi
 if [ -z "${PROFDATA:-}" ]; then
   PROFDATA="${COVERAGE_DIR}/integration.profdata"
   echo "Merging coverage data to ${PROFDATA}..." >&2
-  if [ $VERBOSE -eq 1 ]; then
+  if [ "$VERBOSE" -eq 1 ]; then
     "${LLVM_PROFDATA}" merge -sparse "${COVERAGE_DIR}"/*.profraw -o "${PROFDATA}"
   else
     "${LLVM_PROFDATA}" merge -sparse "${COVERAGE_DIR}"/*.profraw -o "${PROFDATA}" >/dev/null 2>&1
@@ -133,34 +133,34 @@ if [ ! -f "${TENZIR_BINARY}" ]; then
 fi
 
 log "Using tenzir binary: ${TENZIR_BINARY}"
-OBJECTS="-object=${TENZIR_BINARY}"
+OBJECTS=("-object=${TENZIR_BINARY}")
 
 # Add other shared libraries that might be instrumented
 log "Scanning for additional instrumented libraries..."
 for EXTENSION in dylib so; do
-  find "${BINARY_DIR}" -name "*.${EXTENSION}" | while read LIB_PATH; do
+  find "${BINARY_DIR}" -name "*.${EXTENSION}" | while read -r LIB_PATH; do
     if grep -q "__llvm_covmap" <(otool -l "${LIB_PATH}" 2>/dev/null) ||
       grep -q "__llvm_covmap" <(objdump -h "${LIB_PATH}" 2>/dev/null); then
       log "Found instrumented library: ${LIB_PATH}"
-      OBJECTS="${OBJECTS} -object=${LIB_PATH}"
+      OBJECTS+=("-object=${LIB_PATH}")
     fi
   done
 done
 
 # Print the final objects if verbose
-log "Coverage objects: ${OBJECTS}"
+log "Coverage objects: ${OBJECTS[*]}"
 
 # Generate coverage report
 
 log "Generating coverage report..."
-run ${LLVM_COV} report ${OBJECTS} \
+run ${LLVM_COV} report "${OBJECTS[@]}" \
   -instr-profile="${PROFDATA}" \
   -path-equivalence="${BINARY_DIR},${SOURCE_DIR}" \
   -path-equivalence="${BUILD_DIR_RELATIVE},${SOURCE_DIR}"
 
 # Generate HTML report
 log "Generating HTML report..."
-run ${LLVM_COV} show ${OBJECTS} \
+run ${LLVM_COV} show "${OBJECTS[@]}" \
   -instr-profile="${PROFDATA}" \
   -path-equivalence="${BINARY_DIR},${SOURCE_DIR}" \
   -path-equivalence="${BUILD_DIR_RELATIVE},${SOURCE_DIR}" \
@@ -170,13 +170,13 @@ run ${LLVM_COV} show ${OBJECTS} \
 echo "Coverage report available at: ${COVERAGE_DIR}/integration-html/index.html" >&2
 
 # Check for warnings and show them if in verbose mode
-WARNINGS=$(${LLVM_COV} report ${OBJECTS} \
+WARNINGS="$(${LLVM_COV} report "${OBJECTS[@]}" \
   -instr-profile="${PROFDATA}" \
   -path-equivalence="${BINARY_DIR},${SOURCE_DIR}" \
-  -path-equivalence="${BUILD_DIR_RELATIVE},${SOURCE_DIR}" 2>&1 | grep -i "warning:" || true)
+  -path-equivalence="${BUILD_DIR_RELATIVE},${SOURCE_DIR}" 2>&1 | grep -i "warning:" || true)"
 
 if [ -n "$WARNINGS" ]; then
-  if [ $VERBOSE -eq 1 ]; then
+  if [ "$VERBOSE" -eq 1 ]; then
     log "Warnings in coverage report:"
     log "$WARNINGS"
     log "This might indicate mismatched binaries or incomplete data."

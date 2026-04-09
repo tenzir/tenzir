@@ -1,7 +1,6 @@
 {
   lib,
   stdenv,
-  fetchFromGitHub,
   pkgsBuildBuild,
   arrow-cpp,
   iconv,
@@ -67,13 +66,10 @@ arrow-cpp.overrideAttrs (orig: {
 
   doCheck = false;
 
-  env = (
-    (orig.env or { })
-    // {
-      NIX_LDFLAGS = lib.optionalString (
-        stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
-      ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
-      GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
-    }
-  );
+  env = (orig.env or { }) // {
+    NIX_LDFLAGS = lib.optionalString (
+      stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
+    ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+    GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
+  };
 })

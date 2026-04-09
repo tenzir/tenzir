@@ -407,7 +407,9 @@ def cmd_compare(args: argparse.Namespace) -> int:
             and build.artifact_name is not None
         ):
             preflight_build = _to_compare_build(paths, build, materialize_static=False)
-            expected = expected_report_identities(paths, preflight_build, benchmark_dirs)
+            expected = expected_report_identities(
+                paths, preflight_build, benchmark_dirs
+            )
             remote_reports = download_reference_reports(
                 destination=build.storage_prefix,
                 benchmarks=args.benchmark,

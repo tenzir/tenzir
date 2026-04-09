@@ -9,13 +9,13 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 
 # Use BUILD_DIR env var if set, otherwise auto-discover
-if [[ -n "${BUILD_DIR:-}" ]]; then
+if [[ -n ${BUILD_DIR:-} ]]; then
   build_dir="$BUILD_DIR"
 else
-  build_dir=$(find "$repo_root/build" -name CMakeCache.txt -print -quit 2>/dev/null | xargs -r dirname)
+  build_dir=$(find "$repo_root/build" -name CMakeCache.txt -print0 -quit 2>/dev/null | xargs -0 -r dirname)
 fi
 
-if [[ -z "$build_dir" ]]; then
+if [[ -z $build_dir ]]; then
   echo "error: no build directory found (run cmake first or set BUILD_DIR)" >&2
   exit 1
 fi
