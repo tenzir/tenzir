@@ -27,6 +27,7 @@
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -50,6 +51,8 @@
 
 namespace tenzir::plugins::export_ {
 
+TENZIR_ENUM(export_special_filter, none, diagnostics, metrics);
+
 namespace {
 
 struct ExportArgs {
@@ -57,7 +60,13 @@ struct ExportArgs {
   bool retro = false;
   bool internal = false;
   uint64_t parallel = 3;
+  /// The filter pushed down by `describer.optimize_filter`.
   ir::optimize_filter filter;
+  /// Setting for a special filter added by the `diagnostics` or `metrics`
+  /// operators.
+  export_special_filter special_filter;
+  /// A metric name to use in the `metrics` version
+  Option<std::string> metrics_name;
 };
 
 class Export final : public Operator<void, table_slice> {
@@ -101,6 +110,35 @@ public:
             },
           };
         }
+      }
+    }
+    switch (args_.special_filter) {
+      using enum export_special_filter;
+      case none: {
+        break;
+      }
+      case diagnostics: {
+        legacy_clauses.emplace_back(predicate{
+          meta_extractor{meta_extractor::schema},
+          relational_operator::equal,
+          data{"tenzir.diagnostic"},
+        });
+        break;
+      }
+      case metrics: {
+        static const auto all_metrics = [] {
+          auto result = pattern::make("tenzir\\.metrics\\..*");
+          TENZIR_ASSERT(result);
+          return std::move(*result);
+        }();
+        legacy_clauses.emplace_back(predicate{
+          meta_extractor{meta_extractor::schema},
+          relational_operator::equal,
+          args_.metrics_name
+            ? data{fmt::format("tenzir.metrics.{}", *args_.metrics_name)}
+            : data{all_metrics},
+        });
+        break;
       }
     }
     auto expr = legacy_clauses.size() == 1
@@ -365,7 +403,8 @@ public:
 };
 
 class diagnostics_plugin final : public virtual operator_parser_plugin,
-                                 public virtual operator_factory_plugin {
+                                 public virtual operator_factory_plugin,
+                                 public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "diagnostics";
@@ -373,6 +412,28 @@ public:
 
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ExportArgs, Export>{ExportArgs{
+      .internal = true,
+      .filter = {},
+      .special_filter = export_special_filter::diagnostics,
+      .metrics_name = {},
+    }};
+    d.named("live", &ExportArgs::live);
+    d.named("retro", &ExportArgs::retro);
+    auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(parallel));
+      if (value == 0) {
+        diagnostic::error("parallel level must be greater than zero")
+          .primary(ctx.get_location(parallel).value())
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.optimize_filter(&ExportArgs::filter);
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
@@ -441,7 +502,8 @@ public:
 };
 
 class metrics_plugin final : public virtual operator_parser_plugin,
-                             public virtual operator_factory_plugin {
+                             public virtual operator_factory_plugin,
+                             public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "metrics";
@@ -449,6 +511,33 @@ public:
 
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ExportArgs, Export>{ExportArgs{
+      .internal = true,
+      .filter = {},
+      .special_filter = export_special_filter::metrics,
+      .metrics_name = {},
+    }};
+    auto name = d.positional("name", &ExportArgs::metrics_name);
+    d.named("live", &ExportArgs::live);
+    d.named("retro", &ExportArgs::retro);
+    auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      if (auto value = ctx.get(parallel); value and value == 0) {
+        diagnostic::error("parallel level must be greater than zero")
+          .primary(ctx.get_location(parallel).value())
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(name); value and value == "operator") {
+        diagnostic::error("operator metrics have been removed")
+          .primary(ctx.get_location(name).value())
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.optimize_filter(&ExportArgs::filter);
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

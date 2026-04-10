@@ -12,7 +12,19 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd)
 if [[ -n ${BUILD_DIR:-} ]]; then
   build_dir="$BUILD_DIR"
 else
-  build_dir=$(find "$repo_root/build" -name CMakeCache.txt -print0 -quit 2>/dev/null | xargs -0 -r dirname)
+  # Pick the configured build dir with the most recently modified CMakeCache.txt.
+  latest_cache=$(
+    find "$repo_root/build" -type f -name CMakeCache.txt -print0 2>/dev/null |
+      xargs -0 -r stat --format '%Y %n' |
+      LC_ALL=C sort -k1,1nr -k2,2 |
+      head -n 1 |
+      cut -d' ' -f2-
+  )
+  if [[ -n "$latest_cache" ]]; then
+    build_dir=$(dirname "$latest_cache")
+  else
+    build_dir=""
+  fi
 fi
 
 if [[ -z $build_dir ]]; then

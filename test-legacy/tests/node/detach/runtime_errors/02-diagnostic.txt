@@ -1,5 +1,6 @@
 {
   pipeline_id: "test-id",
+  pipeline_name: "pipeline::detach",
   hidden: true,
   run: 1,
   message: "json parser: SCALAR_DOCUMENT_AS_VALUE: A JSON document made of a scalar (number, Boolean, null or string) is treated as a value. Use get_bool(), get_double(), etc. on the document instead. ",
