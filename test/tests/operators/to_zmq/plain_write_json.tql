@@ -12,5 +12,32 @@ timeout: 60
 
 from {
   line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
+},
+{
+  line: "hello-from-to_zmq",
 }
-to_zmq env("ZMQ_ENDPOINT"), encoding="json"
+to_zmq env("ZMQ_ENDPOINT"), encoding="json", monitor=true

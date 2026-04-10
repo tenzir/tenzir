@@ -79,8 +79,12 @@ public:
 
   auto num_peers() const -> size_t;
 
+  auto last_error() const -> const std::string&;
+
 private:
   class Monitor;
+
+  auto ensure_socket() -> caf::expected<void>;
 
   auto make_error(const ::zmq::error_t& error) const -> caf::error;
 
@@ -88,9 +92,11 @@ private:
 
   auto make_error() const -> caf::error;
 
-  ::zmq::socket_t socket_;
+  SocketRole role_;
+  std::optional<::zmq::socket_t> socket_;
   std::unique_ptr<Monitor> monitor_;
   size_t num_peers_ = 0;
+  mutable std::string last_error_;
 };
 
 } // namespace tenzir::plugins::zmq::transport

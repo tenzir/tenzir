@@ -13,5 +13,13 @@ timeout: 60
 from {
   channel: "alerts/",
   line: "hello-from-to_zmq-prefix",
+},
+{
+  channel: "alerts/",
+  line: "hello-from-to_zmq-prefix",
+},
+{
+  channel: "alerts/",
+  line: "hello-from-to_zmq-prefix",
 }
-to_zmq env("ZMQ_ENDPOINT"), encoding="json", prefix=channel
+to_zmq env("ZMQ_ENDPOINT"), encoding="json", prefix=channel, monitor=true

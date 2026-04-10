@@ -174,11 +174,7 @@ auto prepend_prefix(chunk_ptr payload, std::string_view prefix)
   return chunk::make(std::move(buffer));
 }
 
-Socket::Socket(SocketRole role)
-  : socket_{global_context(), role == SocketRole::publisher
-                                ? ::zmq::socket_type::pub
-                                : ::zmq::socket_type::sub} {
-  socket_.set(::zmq::sockopt::linger, 0);
+Socket::Socket(SocketRole role) : role_{role} {
 }
 
 Socket::~Socket() = default;
@@ -189,7 +185,10 @@ auto Socket::operator=(Socket&&) noexcept -> Socket& = default;
 
 auto Socket::enable_peer_monitoring() -> caf::expected<void> {
   try {
-    monitor_ = std::make_unique<Monitor>(socket_);
+    if (auto err = ensure_socket(); not err) {
+      return err;
+    }
+    monitor_ = std::make_unique<Monitor>(*socket_);
     return {};
   } catch (const ::zmq::error_t& e) {
     return make_error(e);
@@ -200,13 +199,16 @@ auto Socket::open(ConnectionMode mode, std::string_view endpoint,
                   std::chrono::milliseconds reconnect_interval)
   -> caf::expected<void> {
   try {
+    if (auto err = ensure_socket(); not err) {
+      return err;
+    }
     auto ms = detail::narrow_cast<int>(reconnect_interval.count());
     auto endpoint_string = std::string{endpoint};
-    socket_.set(::zmq::sockopt::reconnect_ivl, ms);
+    socket_->set(::zmq::sockopt::reconnect_ivl, ms);
     if (mode == ConnectionMode::bind) {
-      socket_.bind(endpoint_string.c_str());
+      socket_->bind(endpoint_string.c_str());
     } else {
-      socket_.connect(endpoint_string.c_str());
+      socket_->connect(endpoint_string.c_str());
     }
     return {};
   } catch (const ::zmq::error_t& e) {
@@ -217,7 +219,10 @@ auto Socket::open(ConnectionMode mode, std::string_view endpoint,
 auto Socket::set_subscription_prefix(std::string_view prefix)
   -> caf::expected<void> {
   try {
-    socket_.set(::zmq::sockopt::subscribe, prefix);
+    if (auto err = ensure_socket(); not err) {
+      return err;
+    }
+    socket_->set(::zmq::sockopt::subscribe, prefix);
     return {};
   } catch (const ::zmq::error_t& e) {
     return make_error(e);
@@ -228,11 +233,12 @@ auto Socket::send(const chunk_ptr& chunk,
                   std::optional<std::chrono::milliseconds> timeout)
   -> caf::error {
   try {
-    if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
+    TENZIR_ASSERT(socket_);
+    if (not poll(*socket_, ZMQ_POLLOUT, timeout)) {
       return caf::make_error(ec::timeout, "timed out while polling socket");
     }
     auto message = ::zmq::message_t{chunk->begin(), chunk->end()};
-    auto bytes = socket_.send(message, ::zmq::send_flags::none);
+    auto bytes = socket_->send(message, ::zmq::send_flags::none);
     TENZIR_ASSERT(bytes);
     return {};
   } catch (const ::zmq::error_t& e) {
@@ -243,11 +249,12 @@ auto Socket::send(const chunk_ptr& chunk,
 auto Socket::receive(std::optional<std::chrono::milliseconds> timeout)
   -> caf::expected<chunk_ptr> {
   try {
-    if (not poll(socket_, ZMQ_POLLIN, timeout)) {
+    TENZIR_ASSERT(socket_);
+    if (not poll(*socket_, ZMQ_POLLIN, timeout)) {
       return caf::make_error(ec::timeout, "timed out while polling socket");
     }
     auto message = std::make_shared<::zmq::message_t>();
-    auto bytes = socket_.recv(*message, ::zmq::recv_flags::none);
+    auto bytes = socket_->recv(*message, ::zmq::recv_flags::none);
     TENZIR_ASSERT(bytes);
     auto* data = message->data();
     auto size = message->size();
@@ -291,7 +298,27 @@ auto Socket::num_peers() const -> size_t {
   return num_peers_;
 }
 
+auto Socket::last_error() const -> const std::string& {
+  return last_error_;
+}
+
+auto Socket::ensure_socket() -> caf::expected<void> {
+  if (socket_) {
+    return {};
+  }
+  try {
+    socket_.emplace(global_context(), role_ == SocketRole::publisher
+                                      ? ::zmq::socket_type::pub
+                                      : ::zmq::socket_type::sub);
+    socket_->set(::zmq::sockopt::linger, 0);
+    return {};
+  } catch (const ::zmq::error_t& e) {
+    return make_error(e);
+  }
+}
+
 auto Socket::make_error(const ::zmq::error_t& error) const -> caf::error {
+  last_error_ = error.what();
   return caf::make_error(ec::unspecified,
                          fmt::format("ZeroMQ: {}", error.what()));
 }
