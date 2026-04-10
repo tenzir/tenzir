@@ -35,6 +35,8 @@ jobs:
       - name: Check out submodule
         run: |
           git submodule update --init --recommend-shallow contrib/tenzir-plugins
+          sleep 5
+          GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
       - run: |
           nix -L flake check --all-systems
 

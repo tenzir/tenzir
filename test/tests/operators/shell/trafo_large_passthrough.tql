@@ -1,0 +1,12 @@
+---
+timeout: 60
+---
+
+from {value: 0}
+repeat 2000
+enumerate value
+value = value + 1
+write_ndjson
+shell "cat"
+read_json
+summarize rows=count(), total=sum(value), min=min(value), max=max(value)

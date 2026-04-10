@@ -1,0 +1,2 @@
+from {value: 41}, {value: 99}
+python file=f"{env("TENZIR_INPUTS")}/python/file_mode.code"

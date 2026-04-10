@@ -1,0 +1,11 @@
+---
+error: true
+timeout: 10
+---
+
+from {x: "first", ts: 0ms.from_epoch()},
+     {x: "second", ts: 100ms.from_epoch()}
+delay ts
+write_lines
+shell "read _; exec 1>&-; exec 0<&-; sleep 1; exit 7"
+read_lines

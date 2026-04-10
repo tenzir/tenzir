@@ -1,0 +1,2 @@
+from {_keep: 7, other: 1}
+python "self.keep_copy = self._keep; _tmp = 42"
