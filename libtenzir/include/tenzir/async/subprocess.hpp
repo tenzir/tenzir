@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/option.hpp"
@@ -126,15 +127,15 @@ public:
   auto return_code() const noexcept -> folly::ProcessReturnCode;
 
 private:
-  explicit Subprocess(folly::Subprocess subprocess, pid_t process_group_id,
-                      Option<WritePipe> stdin_pipe,
+  struct SharedState;
+
+  explicit Subprocess(Arc<SharedState> state, Option<WritePipe> stdin_pipe,
                       Option<ReadPipe> stdout_pipe,
                       Option<ReadPipe> stderr_pipe,
                       std::vector<WritePipe> input_pipes,
                       std::vector<ReadPipe> output_pipes);
 
-  folly::Subprocess subprocess_;
-  pid_t process_group_id_ = -1;
+  Arc<SharedState> state_;
   Option<WritePipe> stdin_pipe_ = None{};
   Option<ReadPipe> stdout_pipe_ = None{};
   Option<ReadPipe> stderr_pipe_ = None{};

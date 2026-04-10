@@ -60,6 +60,15 @@ struct SpawnResult {
 
 } // namespace
 
+struct Subprocess::SharedState {
+  explicit SharedState(folly::Subprocess subprocess, pid_t process_group_id)
+    : subprocess{std::move(subprocess)}, process_group_id{process_group_id} {
+  }
+
+  folly::Subprocess subprocess;
+  pid_t process_group_id = -1;
+};
+
 WritePipe::WritePipe(folly::File pipe, int child_fd)
   : pipe_{std::move(pipe)}, child_fd_{child_fd} {
   TENZIR_ASSERT(pipe_);
@@ -199,14 +208,12 @@ auto ReadPipe::native_fd() const noexcept -> int {
   return pipe_.fd();
 }
 
-Subprocess::Subprocess(folly::Subprocess subprocess, pid_t process_group_id,
-                       Option<WritePipe> stdin_pipe,
+Subprocess::Subprocess(Arc<SharedState> state, Option<WritePipe> stdin_pipe,
                        Option<ReadPipe> stdout_pipe,
                        Option<ReadPipe> stderr_pipe,
                        std::vector<WritePipe> input_pipes,
                        std::vector<ReadPipe> output_pipes)
-  : subprocess_{std::move(subprocess)},
-    process_group_id_{process_group_id},
+  : state_{std::move(state)},
     stdin_pipe_{std::move(stdin_pipe)},
     stdout_pipe_{std::move(stdout_pipe)},
     stderr_pipe_{std::move(stderr_pipe)},
@@ -284,11 +291,11 @@ auto Subprocess::spawn(SubprocessSpec spec) -> Task<Subprocess> {
     }
     TENZIR_UNREACHABLE();
   }
+  auto state = Arc<SharedState>{std::in_place, std::move(result.subprocess),
+                                result.process_group_id};
   co_return Subprocess{
-    std::move(result.subprocess), result.process_group_id,
-    std::move(stdin_pipe),        std::move(stdout_pipe),
-    std::move(stderr_pipe),       std::move(input_pipes),
-    std::move(output_pipes),
+    std::move(state),       std::move(stdin_pipe),  std::move(stdout_pipe),
+    std::move(stderr_pipe), std::move(input_pipes), std::move(output_pipes),
   };
 }
 
@@ -341,64 +348,70 @@ auto Subprocess::output_pipe(int child_fd) -> Option<ReadPipe&> {
 }
 
 auto Subprocess::wait() -> Task<folly::ProcessReturnCode> {
-  co_return co_await spawn_blocking([this]() {
-    return subprocess_.wait();
+  auto state = state_;
+  co_return co_await spawn_blocking([state]() mutable {
+    return state->subprocess.wait();
   });
 }
 
 auto Subprocess::wait_timeout(std::chrono::milliseconds timeout)
   -> Task<folly::ProcessReturnCode> {
-  co_return co_await spawn_blocking([this, timeout]() {
-    return subprocess_.waitTimeout(timeout);
+  auto state = state_;
+  co_return co_await spawn_blocking([state, timeout]() mutable {
+    return state->subprocess.waitTimeout(timeout);
   });
 }
 
 auto Subprocess::terminate_or_kill(std::chrono::milliseconds timeout)
   -> Task<folly::ProcessReturnCode> {
-  co_return co_await spawn_blocking([this, timeout]() {
-    return subprocess_.terminateOrKill(timeout);
+  auto state = state_;
+  co_return co_await spawn_blocking([state, timeout]() mutable {
+    return state->subprocess.terminateOrKill(timeout);
   });
 }
 
 auto Subprocess::terminate_or_kill_process_group(
   std::chrono::milliseconds timeout) -> Task<folly::ProcessReturnCode> {
-  co_return co_await spawn_blocking([this, timeout]() {
-    if (process_group_id_ <= 0) {
+  auto state = state_;
+  co_return co_await spawn_blocking([state, timeout]() mutable {
+    if (state->process_group_id <= 0) {
       throw std::logic_error{"cannot signal a finished subprocess group"};
     }
     auto return_code = folly::ProcessReturnCode{};
     auto child_exited = false;
     if (timeout.count() > 0) {
-      auto result = ::kill(-process_group_id_, SIGTERM);
+      auto result = ::kill(-state->process_group_id, SIGTERM);
       if (result != 0 and errno != ESRCH) {
         throw_last_system_error("kill");
       }
-      return_code = subprocess_.waitTimeout(timeout);
+      return_code = state->subprocess.waitTimeout(timeout);
       child_exited = not return_code.running();
     }
-    auto result = ::kill(-process_group_id_, SIGKILL);
+    auto result = ::kill(-state->process_group_id, SIGKILL);
     if (result != 0 and errno != ESRCH) {
       throw_last_system_error("kill");
     }
     if (child_exited) {
       return return_code;
     }
-    return subprocess_.wait();
+    return state->subprocess.wait();
   });
 }
 
 auto Subprocess::send_signal(int signal) -> Task<void> {
-  co_await spawn_blocking([this, signal]() {
-    subprocess_.sendSignal(signal);
+  auto state = state_;
+  co_await spawn_blocking([state, signal]() mutable {
+    state->subprocess.sendSignal(signal);
   });
 }
 
 auto Subprocess::send_signal_to_process_group(int signal) -> Task<void> {
-  co_await spawn_blocking([this, signal]() {
-    if (process_group_id_ <= 0) {
+  auto state = state_;
+  co_await spawn_blocking([state, signal]() mutable {
+    if (state->process_group_id <= 0) {
       throw std::logic_error{"cannot signal a finished subprocess group"};
     }
-    auto result = ::kill(-process_group_id_, signal);
+    auto result = ::kill(-state->process_group_id, signal);
     if (result != 0 and errno != ESRCH) {
       throw_last_system_error("kill");
     }
@@ -406,11 +419,11 @@ auto Subprocess::send_signal_to_process_group(int signal) -> Task<void> {
 }
 
 auto Subprocess::pid() const noexcept -> pid_t {
-  return subprocess_.pid();
+  return state_->subprocess.pid();
 }
 
 auto Subprocess::return_code() const noexcept -> folly::ProcessReturnCode {
-  return subprocess_.returnCode();
+  return state_->subprocess.returnCode();
 }
 
 } // namespace tenzir
