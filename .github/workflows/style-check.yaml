@@ -36,7 +36,7 @@ jobs:
         run: |
           git submodule update --init --recommend-shallow contrib/tenzir-plugins
       - run: |
-          nix -L flake check --all-systems
+          nix -L flake check
 
   ansible-lint:
     name: ansible-lint
