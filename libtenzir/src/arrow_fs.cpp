@@ -207,7 +207,7 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
     });
 }
 
-auto ArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx& ctx)
+auto ArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
   -> Task<void> {
   auto slot = static_cast<size_t>(as<int64_t>(key));
   co_await results_->enqueue(SubFinished{slot});

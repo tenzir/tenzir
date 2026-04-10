@@ -244,7 +244,7 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
     [self](std::exception_ptr exception) -> caf::error {
       try {
         std::rethrow_exception(exception);
-      } catch (diagnostic diag) {
+      } catch (diagnostic& diag) {
         self->state().ctrl->diagnostics().emit(std::move(diag));
         return {};
       } catch (const std::exception& err) {

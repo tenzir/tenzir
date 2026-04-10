@@ -1012,7 +1012,7 @@ private:
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
       co_await main_loop();
-    } catch (folly::OperationCancelled) {
+    } catch (folly::OperationCancelled const&) {
       // Sanity check: We should only propagate this if we actually got cancelled.
       auto cancelled = cancellation_token.isCancellationRequested();
       LOGV("shutting down operator after cancellation: {}", cancelled);
