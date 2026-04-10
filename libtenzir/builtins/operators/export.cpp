@@ -117,7 +117,7 @@ public:
     bridge_ = std::move(*result);
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     if (done_) {
       // TODO: Properly suspend.
       co_await wait_forever();

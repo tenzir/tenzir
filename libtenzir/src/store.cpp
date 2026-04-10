@@ -186,6 +186,7 @@ default_passive_store_actor::behavior_type default_passive_store(
       // everything.
       const auto num_events = self->state().store->num_events();
       TENZIR_DEBUG("{} erases {} events", *self, num_events);
+      TENZIR_UNUSED(selection);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
                               || rank(selection) == num_events);
       auto rp = self->make_response_promise<uint64_t>();
@@ -226,6 +227,7 @@ default_active_store_actor::behavior_type default_active_store(
       // For new, partition-local stores we know that we always erase
       // everything.
       const auto num_events = self->state().store->num_events();
+      TENZIR_UNUSED(selection);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
                               || rank(selection) == num_events);
       // We don't actually need to erase anything in the store itself, but

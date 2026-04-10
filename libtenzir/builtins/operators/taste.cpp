@@ -72,7 +72,7 @@ public:
   explicit Taste(TasteArgs args) : limit_{args.limit} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     auto it = schemas_.find(input.schema());
     if (it == schemas_.end()) {

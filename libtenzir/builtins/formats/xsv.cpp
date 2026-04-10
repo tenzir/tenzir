@@ -1116,7 +1116,7 @@ public:
     co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
     if (not msb_) {
       co_return FinalizeBehavior::done;

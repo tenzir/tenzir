@@ -886,6 +886,7 @@ struct cast_helper<enumeration_type, enumeration_type> {
        std::shared_ptr<type_to_arrow_array_t<enumeration_type>> array,
        const enumeration_type& to)
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
+    TENZIR_UNUSED(from, to);
     TENZIR_ASSERT_EXPENSIVE(can_cast(from, to));
     return array;
   }
