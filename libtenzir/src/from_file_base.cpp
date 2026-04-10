@@ -168,14 +168,12 @@ auto delete_file_azure(arrow::fs::AzureFileSystem* fs, const std::string& path)
   if (not service_client_result.ok()) {
     return service_client_result.status();
   }
-  auto service_client = std::move(*service_client_result);
-  auto container_client = service_client->GetBlobContainerClient(container);
-  auto blob_client = container_client.GetBlobClient(blob_path);
   try {
+    auto service_client = std::move(*service_client_result);
+    auto container_client = service_client->GetBlobContainerClient(container);
+    auto blob_client = container_client.GetBlobClient(blob_path);
     blob_client.Delete();
-  } catch (const Azure::Storage::StorageException& e) {
-    return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
-  } catch (const Azure::Core::Http::TransportException& e) {
+  } catch (const Azure::Core::RequestFailedException& e) {
     return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
   }
   return arrow::Status::OK();
