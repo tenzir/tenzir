@@ -324,9 +324,11 @@ auto catalog_state::lookup_impl(const expression& expr,
             }
             case meta_extractor::schema_id: {
               auto result = catalog_lookup_result::candidate_info{};
-              for (const auto& [part_id, part_syn] : partition_synopses) {
+#if TENZIR_ENABLE_ASSERTIONS
+              for (const auto& [_, part_syn] : partition_synopses) {
                 TENZIR_ASSERT_EXPENSIVE(part_syn->schema == schema);
               }
+#endif
               if (evaluate(schema.make_fingerprint(), x.op, d)) {
                 for (const auto& [part_id, part_syn] : partition_synopses) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
