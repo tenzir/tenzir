@@ -755,7 +755,7 @@ public:
       return std::make_unique<parser_adapter<grok_parser>>(grok_parser{
         std::move(pattern_definitions), std::move(raw_pattern),
         indexed_captures, include_unnamed, std::move(opts), ctx.dh()});
-    } catch (diagnostic diag) {
+    } catch (diagnostic& diag) {
       std::move(diag).modify().emit(ctx);
       return failure::promise();
     } catch (...) {
@@ -825,7 +825,7 @@ public:
           return multi_series{std::move(output)};
         });
       });
-    } catch (diagnostic diag) {
+    } catch (diagnostic& diag) {
       std::move(diag).modify().emit(ctx);
       return failure::promise();
     } catch (...) {

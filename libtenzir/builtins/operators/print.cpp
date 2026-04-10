@@ -133,7 +133,7 @@ public:
             std::erase_if(chunks, [](const chunk_ptr& chunk) {
               return not chunk or chunk->size() == 0;
             });
-          } catch (diagnostic diag) {
+          } catch (diagnostic& diag) {
             std::move(diag)
               .modify()
               .severity(severity::warning)
