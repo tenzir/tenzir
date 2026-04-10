@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  fetchFromGitHub,
   pkgsBuildBuild,
   arrow-cpp,
   iconv,
