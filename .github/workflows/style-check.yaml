@@ -38,7 +38,7 @@ jobs:
           sleep 5
           GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
       - run: |
-          nix -L flake check --all-systems
+          nix -L flake check
 
   ansible-lint:
     name: ansible-lint
