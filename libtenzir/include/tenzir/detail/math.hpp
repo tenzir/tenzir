@@ -90,7 +90,7 @@ constexpr T pow(T base) {
 /// @returns The integer logarithm of *x*.
 template <int base, std::integral T>
 constexpr int ilog(T x) {
-  static_assert(!(base <= 0), "ilog is not useful for base <= 0");
+  static_assert(not (base <= 0), "ilog is not useful for base <= 0");
   static_assert(base != 1, "ilog is not useful for base == 1");
   return x > 0 ? ilog_helper<base>(x) : -1;
 }

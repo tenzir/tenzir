@@ -60,7 +60,7 @@ public:
     enter(const_cast<T&>(x));
   }
 
-  auto result() && -> std::vector<ast::field_path> {
+  auto result() and -> std::vector<ast::field_path> {
     return std::move(captures_);
   }
 

@@ -176,10 +176,10 @@ struct rebuilder_state {
       return caf::make_error(ec::invalid_configuration,
                              "rebuild requires a non-zero parallel level");
     }
-    if (options.automatic && run) {
+    if (options.automatic and run) {
       return {};
     }
-    if (run && not run->options.automatic) {
+    if (run and not run->options.automatic) {
       return caf::make_error(
         ec::invalid_argument,
         fmt::format(
@@ -188,7 +188,7 @@ struct rebuilder_state {
           "stop'",
           *self, run->statistics.num_completed, run->statistics.num_total));
     }
-    if (not options.automatic && run && run->options.automatic) {
+    if (not options.automatic and run and run->options.automatic) {
       auto rp = self->make_response_promise<void>();
       self->mail(atom::stop_v, stop_options{.detached = false})
         .request(static_cast<rebuilder_actor>(self), caf::infinite)
@@ -259,7 +259,7 @@ struct rebuilder_state {
                     return false;
                   }
                   if (run->options.undersized
-                      && partition.events < detail::narrow_cast<size_t>(
+                      and partition.events < detail::narrow_cast<size_t>(
                            detail::narrow_cast<double>(max_partition_size)
                            * undersized_threshold)) {
                     return false;
@@ -278,7 +278,7 @@ struct rebuilder_state {
                   + detail::narrow<ptrdiff_t>(run->options.max_partitions),
                 result.partition_infos.end());
               if (result.partition_infos.size() == 1
-                  && result.partition_infos.front().version
+                  and result.partition_infos.front().version
                        < version::current_partition_version) {
                 // Edge case: we can't do anything if we have a single
                 // undersized partition for a given schema.
@@ -374,7 +374,7 @@ struct rebuilder_state {
       run->remaining_partitions.begin(), run->remaining_partitions.end(),
       [&](const partition_info& partition) {
         if (schema == partition.schema
-            && current_run_events < max_partition_size) {
+            and current_run_events < max_partition_size) {
           current_run_events += partition.events;
           current_run_partitions.push_back(partition);
           TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
@@ -392,10 +392,10 @@ struct rebuilder_state {
     // intent was to merge undersized partitions, unless the partition is
     // oversized or not of the latest partition version.
     const auto skip_rebuild
-      = run->options.undersized && current_run_partitions.size() == 1
-        && current_run_partitions[0].version
+      = run->options.undersized and current_run_partitions.size() == 1
+        and current_run_partitions[0].version
              == version::current_partition_version
-        && current_run_partitions[0].events <= max_partition_size;
+        and current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
       TENZIR_DEBUG("{} skips rebuilding of undersized partition {} because no "
                    "other partition of schema {} exists",

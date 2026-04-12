@@ -170,7 +170,7 @@ struct time_point_printer : printer_base<time_point_printer<Clock, Duration>> {
     auto m = duration_cast<minutes>(t - h);
     auto s = duration_cast<seconds>(t - h - m);
     auto ns = duration_cast<nanoseconds>(t - h - m - s).count();
-    if (!p(out, static_cast<int>(Y), static_cast<unsigned>(M),
+    if (not p(out, static_cast<int>(Y), static_cast<unsigned>(M),
            static_cast<unsigned>(D), static_cast<int>(h.count()),
            static_cast<int>(m.count()), static_cast<int>(s.count())))
       return false;

@@ -828,9 +828,9 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
           /// Retrieve the pointer to the object
           auto box = static_cast<T*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
-          TENZIR_ASSERT(box && "The object must not be over aligned or null!");
+          TENZIR_ASSERT(box and "The object must not be over aligned or null!");
 
-          if (!IsInplace) {
+          if (not IsInplace) {
             // Just swap both pointers if we allocated on the heap
             to->ptr_ = from->ptr_;
 
@@ -855,10 +855,10 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         case opcode::op_copy: {
           auto box = static_cast<T const*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
-          TENZIR_ASSERT(box && "The object must not be over aligned or null!");
+          TENZIR_ASSERT(box and "The object must not be over aligned or null!");
 
           TENZIR_ASSERT(std::is_copy_constructible<T>::value
-                        && "The box is required to be copyable here!");
+                        and "The box is required to be copyable here!");
 
           // Try to allocate the object inplace
           construct(std::is_copy_constructible<T>{}, *box, to_table, to,
@@ -867,7 +867,7 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         }
         case opcode::op_destroy:
         case opcode::op_weak_destroy: {
-          TENZIR_ASSERT(!to && !to_capacity && "Arg overflow!");
+          TENZIR_ASSERT(not to and not to_capacity and "Arg overflow!");
           auto box = static_cast<T*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
 
@@ -1396,7 +1396,7 @@ template <typename T>
 struct has_bool_op<T, std::void_t<decltype(bool(std::declval<T>()))>>
   : std::true_type {
 #  ifndef NDEBUG
-  static_assert(!std::is_pointer<T>::value, "Missing deduction for function "
+  static_assert(not std::is_pointer<T>::value, "Missing deduction for function "
                                             "pointer!");
 #  endif
 };
@@ -1427,8 +1427,8 @@ struct use_bool_op<Ret(Args...) noexcept> : std::false_type {};
 
 template <typename Config, typename T>
 struct assert_wrong_copy_assign {
-  static_assert(!Config::is_owning || !Config::is_copyable
-                  || std::is_copy_constructible<std::decay_t<T>>::value,
+  static_assert(not Config::is_owning or not Config::is_copyable
+                  or std::is_copy_constructible<std::decay_t<T>>::value,
                 "Can't wrap a non copyable object into a unique function!");
 
   using type = void;
@@ -1436,9 +1436,9 @@ struct assert_wrong_copy_assign {
 
 template <bool IsStrongExceptGuaranteed, typename T>
 struct assert_no_strong_except_guarantee {
-  static_assert(!IsStrongExceptGuaranteed
-                  || (std::is_nothrow_move_constructible<T>::value
-                      && std::is_nothrow_destructible<T>::value),
+  static_assert(not IsStrongExceptGuaranteed
+                  or (std::is_nothrow_move_constructible<T>::value
+                      and std::is_nothrow_destructible<T>::value),
                 "Can't wrap a object an object that has no strong exception "
                 "guarantees "
                 "if this is required by the wrapper!");
@@ -1449,7 +1449,7 @@ struct assert_no_strong_except_guarantee {
 /// SFINAES out if the given callable is not copyable correct to the left one.
 template <typename LeftConfig, typename RightConfig>
 using enable_if_copyable_correct_t
-  = std::enable_if_t<(!LeftConfig::is_copyable || RightConfig::is_copyable)>;
+  = std::enable_if_t<(not LeftConfig::is_copyable or RightConfig::is_copyable)>;
 
 template <typename LeftConfig, typename RightConfig>
 using is_owning_correct
@@ -1492,11 +1492,11 @@ class function<Config, property<IsThrowing, HasStrongExceptGuarantee, Args...>>
 
   template <typename T>
   using enable_if_not_convertible_to_this
-    = std::enable_if_t<!is_convertible_to_this<std::decay_t<T>>::value>;
+    = std::enable_if_t<not is_convertible_to_this<std::decay_t<T>>::value>;
 
   template <typename T>
   using enable_if_owning_t
-    = std::enable_if_t<std::is_same<T, T>::value && Config::is_owning>;
+    = std::enable_if_t<std::is_same<T, T>::value and Config::is_owning>;
 
   template <typename T>
   using assert_wrong_copy_assign_t =
@@ -1606,7 +1606,7 @@ public:
 
   /// Returns true when the function isn't empty
   explicit operator bool() const noexcept {
-    return !empty();
+    return not empty();
   }
 
   /// Assigns a new target with an optional allocator
@@ -1644,7 +1644,7 @@ public:
 
 template <typename Config, typename Property>
 bool operator==(function<Config, Property> const& f, std::nullptr_t) {
-  return !bool(f);
+  return not bool(f);
 }
 
 template <typename Config, typename Property>
@@ -1654,7 +1654,7 @@ bool operator!=(function<Config, Property> const& f, std::nullptr_t) {
 
 template <typename Config, typename Property>
 bool operator==(std::nullptr_t, function<Config, Property> const& f) {
-  return !bool(f);
+  return not bool(f);
 }
 
 template <typename Config, typename Property>

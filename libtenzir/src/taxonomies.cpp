@@ -29,7 +29,7 @@ namespace tenzir {
 concept_ mappend(concept_ lhs, concept_ rhs) {
   if (lhs.description.empty()) {
     lhs.description = std::move(rhs.description);
-  } else if (! rhs.description.empty() && lhs.description != rhs.description) {
+  } else if (not rhs.description.empty() and lhs.description != rhs.description) {
     TENZIR_WARN("encountered conflicting descriptions: \"{}\" and \"{}\"",
                 lhs.description, rhs.description);
   }
@@ -51,7 +51,7 @@ concept_ mappend(concept_ lhs, concept_ rhs) {
 }
 
 bool operator==(const concept_& lhs, const concept_& rhs) {
-  return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
+  return lhs.concepts == rhs.concepts and lhs.fields == rhs.fields;
 }
 
 const type concepts_data_schema = type{map_type{
@@ -84,25 +84,25 @@ caf::error convert(const data& src, concepts_map& dst) {
   // The data is expected to be a list of records, where each record has a
   // "concept" field containing {name, description, fields, concepts}.
   const auto* src_list = try_as<list>(&src);
-  if (! src_list) {
+  if (not src_list) {
     return caf::make_error(ec::convert_error,
                            "expected a list for concepts_map conversion");
   }
   for (const auto& item : *src_list) {
     const auto* item_rec = try_as<record>(&item);
-    if (! item_rec) {
+    if (not item_rec) {
       return caf::make_error(ec::convert_error,
                              "expected record in concepts list");
     }
     // Extract the "concept" sub-record
     const auto* concept_rec = get_if<record>(item_rec, "concept");
-    if (! concept_rec) {
+    if (not concept_rec) {
       return caf::make_error(ec::convert_error,
                              "missing or invalid 'concept' field in record");
     }
     // Extract fields from concept record
     const auto* name = get_if<std::string>(concept_rec, "name");
-    if (! name) {
+    if (not name) {
       return caf::make_error(ec::convert_error,
                              "missing or invalid 'name' in concept");
     }
@@ -223,7 +223,7 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
         disjunction d;
         auto make_pred = make_predicate(op, data);
         for (auto& x : target_fields) {
-          if (! schema || contains(schema, x, op, data)) {
+          if (not schema or contains(schema, x, op, data)) {
             d.emplace_back(make_pred(std::move(x)));
           }
         }

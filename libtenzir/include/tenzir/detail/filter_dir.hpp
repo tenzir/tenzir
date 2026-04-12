@@ -48,7 +48,7 @@ filter_dir(const std::filesystem::path& root_dir,
                              fmt::format("reached recursion limit when "
                                          "filtering directory {}",
                                          root_dir));
-    if (!filter || filter(current_path))
+    if (not filter or filter(current_path))
       result.push_back(current_path);
     ++begin;
   }

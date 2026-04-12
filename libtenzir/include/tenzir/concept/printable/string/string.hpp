@@ -23,7 +23,7 @@ struct string_printer : printer_base<string_printer> {
     auto f = str.begin();
     auto l = str.end();
     while (f != l)
-      if (!printers::any.print(out, *f++))
+      if (not printers::any.print(out, *f++))
         return false;
     return true;
   }

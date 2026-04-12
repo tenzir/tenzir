@@ -22,7 +22,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    return condition_() && parser_(f, l, x);
+    return condition_() and parser_(f, l, x);
   }
 
 private:

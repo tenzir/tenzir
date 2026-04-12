@@ -66,7 +66,7 @@ auto operator_def::make(operator_factory_invocation inv, session ctx) const
       auto op_name = make_operator_name(inv.self);
       auto dh = udo_diagnostic_handler(&ctx.dh(), op_name, udo);
       // If there are no parameters defined, check that no arguments were provided
-      if (udo.positional_params.empty() && udo.named_params.empty()) {
+      if (udo.positional_params.empty() and udo.named_params.empty()) {
         if (not inv.args.empty()) {
           diagnostic::error("operator '{}' does not support arguments", op_name)
             .primary(inv.self)
@@ -310,7 +310,7 @@ void registry::add_module(const entity_pkg& package, std::string_view name,
     parent = set.mod.get();
   }
   auto& set = parent->defs[std::string{path.back()}];
-  TENZIR_ASSERT(not set.mod && "module already exists at path");
+  TENZIR_ASSERT(not set.mod and "module already exists at path");
   set.mod = std::move(mod);
 }
 
@@ -344,7 +344,7 @@ void registry::remove_module(const entity_pkg& package, std::string_view name) {
       break;
     }
     auto it = parent->defs.find(std::string{segment});
-    if (it == parent->defs.end() || ! it->second.mod) {
+    if (it == parent->defs.end() or not it->second.mod) {
       // Nothing to remove; path does not exist.
       return;
     }
@@ -355,7 +355,7 @@ void registry::remove_module(const entity_pkg& package, std::string_view name) {
     return;
   }
   it->second.mod.reset();
-  if (not it->second.fn && ! it->second.op && ! it->second.mod) {
+  if (not it->second.fn and not it->second.op and not it->second.mod) {
     parent->defs.erase(it);
   }
 }

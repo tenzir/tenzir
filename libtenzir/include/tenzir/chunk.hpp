@@ -233,7 +233,7 @@ public:
   /// is intended to guard against accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-    requires(not std::is_lvalue_reference_v<Buffer> && //
+    requires(not std::is_lvalue_reference_v<Buffer> and //
              requires(const Buffer& buffer) {
                { as_bytes(buffer) } -> std::convertible_to<view_type>;
              })

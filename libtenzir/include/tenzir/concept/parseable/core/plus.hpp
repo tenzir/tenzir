@@ -26,7 +26,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (!container::parse(parser_, f, l, a))
+    if (not container::parse(parser_, f, l, a))
       return false;
     while (container::parse(parser_, f, l, a))
       ;

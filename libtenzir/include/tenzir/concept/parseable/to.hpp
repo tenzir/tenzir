@@ -22,7 +22,7 @@ template <class To, class Iterator>
 requires(parseable<Iterator, To>) auto to(Iterator& f, const Iterator& l)
   -> caf::expected<To> {
   caf::expected<To> t{To{}};
-  if (!parse(f, l, *t))
+  if (not parse(f, l, *t))
     return caf::make_error(ec::parse_error);
   return t;
 }
@@ -35,7 +35,7 @@ requires(parseable<decltype(std::begin(rng)), To>) {
   auto f = begin(rng);
   auto l = end(rng);
   auto res = to<To>(f, l);
-  if (res && f != l)
+  if (res and f != l)
     return caf::make_error(ec::parse_error);
   return res;
 }

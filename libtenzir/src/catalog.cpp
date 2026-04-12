@@ -272,7 +272,7 @@ auto catalog_state::lookup_impl(const expression& expr,
                 // The field has no dedicated synopsis. Check if there is one
                 // for the type in general.
               } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
-                         it != part_syn->type_synopses_.end() && it->second) {
+                         it != part_syn->type_synopses_.end() and it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (not opt or *opt) {
                   TENZIR_TRACE("{} selects {} at predicate {}",
@@ -386,7 +386,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               if (field_name.length() >= key.length()) {
                 auto pos = field_name.length() - key.length();
                 auto sub = field_name.substr(pos);
-                return sub == key && (pos == 0 || field_name[pos - 1] == '.');
+                return sub == key and (pos == 0 or field_name[pos - 1] == '.');
               }
               auto schema_name = field.schema_name();
               if (key.length()
@@ -403,7 +403,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               }
               auto fpos = schema_name.length() - (pos - 1);
               return key.substr(0, pos - 1) == schema_name.substr(fpos)
-                     && (fpos == 0 || schema_name[fpos - 1] == '.');
+                     and (fpos == 0 or schema_name[fpos - 1] == '.');
             };
             if (not match_name()) {
               return false;

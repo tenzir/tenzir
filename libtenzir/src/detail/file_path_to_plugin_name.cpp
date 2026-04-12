@@ -54,7 +54,7 @@ auto file_path_to_plugin_name(const std::filesystem::path& path)
   if (auto result = find_map_entry(extension_to_plugin_map, ext)) {
     return result;
   }
-  TENZIR_ASSERT(ext.size() > 1 && ext.front() == '.');
+  TENZIR_ASSERT(ext.size() > 1 and ext.front() == '.');
   return ext.substr(1);
 }
 

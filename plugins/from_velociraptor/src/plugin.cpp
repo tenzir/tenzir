@@ -437,7 +437,7 @@ public:
       .named("profile", profile)
       .parse(inv, ctx)
       .ignore();
-    if (max_wait && max_wait->inner < 1s) {
+    if (max_wait and max_wait->inner < 1s) {
       diagnostic::error("`max_wait` too low")
         .primary(max_wait->source)
         .hint("value must be great than 1s")
@@ -544,7 +544,7 @@ public:
     parser.add("-w,--max-wait", max_wait, "<duration>");
     parser.add("--profile", profile, "<profile>");
     parser.parse(p);
-    if (max_wait && max_wait->inner < 1s) {
+    if (max_wait and max_wait->inner < 1s) {
       diagnostic::error("--max-wait too low")
         .primary(max_wait->source)
         .hint("value must be great than 1s")

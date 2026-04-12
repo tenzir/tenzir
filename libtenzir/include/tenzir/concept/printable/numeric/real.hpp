@@ -44,7 +44,7 @@ struct real_printer : printer_base<real_printer<T, MaxDigits, MinDigits>> {
     for (auto i = 1.0; i < MaxDigits - magnitude; ++i)
       *out++ = '0';
     // Chop off trailing zeros of the decimal digits.
-    while (right > 0 && right % 10 == 0)
+    while (right > 0 and right % 10 == 0)
       right /= 10;
     if constexpr (MinDigits == 0)
       detail::print_numeric(out, right);

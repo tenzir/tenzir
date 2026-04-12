@@ -1377,7 +1377,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(mode_value_);
     TENZIR_ASSERT(id_value_);
     auto args = CacheArgs{};

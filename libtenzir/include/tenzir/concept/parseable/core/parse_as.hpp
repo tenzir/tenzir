@@ -24,7 +24,7 @@ public:
   template <class Iterator, class Attr>
   bool parse(Iterator& f, const Iterator& l, Attr& a) const {
     attribute x;
-    if (!parser_(f, l, x))
+    if (not parser_(f, l, x))
       return false;
     a = Attr(std::move(x));
     return true;

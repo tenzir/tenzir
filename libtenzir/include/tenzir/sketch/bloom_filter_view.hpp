@@ -34,7 +34,7 @@ namespace tenzir::sketch {
 template <class Word>
 struct bloom_filter_view {
   static_assert(
-    std::is_same_v<Word, uint64_t> || std::is_same_v<Word, const uint64_t>);
+    std::is_same_v<Word, uint64_t> or std::is_same_v<Word, const uint64_t>);
 
   /// Default-constructs an invalid view.
   bloom_filter_view() {

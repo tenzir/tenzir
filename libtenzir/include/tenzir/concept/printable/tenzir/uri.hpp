@@ -27,8 +27,8 @@ struct key_value_printer : printer_base<key_value_printer> {
   bool print(Iterator& out, const std::pair<std::string,std::string>& kv) const {
     using namespace printers;
     return str.print(out, detail::percent_escape(kv.first)) 
-        && str.print(out, "=") 
-        && str.print(out, detail::percent_escape(kv.second));
+        and str.print(out, "=") 
+        and str.print(out, detail::percent_escape(kv.second));
   }
 };
 
@@ -45,41 +45,41 @@ struct uri_printer : printer_base<uri_printer> {
     using namespace printers;
     
     if (u.scheme != "") {
-      if (!(str.print(out, u.scheme) && any.print(out, ':')))
+      if (not (str.print(out, u.scheme) and any.print(out, ':')))
         return false;
     }
     if (u.host != "") {
-      if (!(str.print(out, "//") && str.print(out, detail::percent_escape(u.host))))
+      if (not (str.print(out, "//") and str.print(out, detail::percent_escape(u.host))))
         return false;
     }
     if (u.port != 0) {
-      if (!(any.print(out, ':') && u16.print(out, u.port)))
+      if (not (any.print(out, ':') and u16.print(out, u.port)))
         return false;
     }
     
-    if (!(any.print(out, '/')))
+    if (not (any.print(out, '/')))
       return false;
-    if (!detail::print_delimited(u.path.begin(), u.path.end(), out, '/'))
+    if (not detail::print_delimited(u.path.begin(), u.path.end(), out, '/'))
       return false;
     
-    if (!u.query.empty()) {
-      if (!(any.print(out, '?')))
+    if (not u.query.empty()) {
+      if (not (any.print(out, '?')))
         return false;
       
       auto begin = u.query.begin();
       auto end = u.query.end();
       auto p = make_printer<std::pair<std::string,std::string>>();
-      if (!(p.print(out,*begin)))
+      if (not (p.print(out,*begin)))
           return false;
       while (++begin != end)
-        if (!(any.print(out, '&') && p.print(out,*begin)))
+        if (not (any.print(out, '&') and p.print(out,*begin)))
           return false;
       
       /*if (!detail::print_delimited(u.query.begin(), u.query.end(), out, '&'))
         return false;*/
     }
     if (u.fragment != "") {
-      if (!(any.print(out, '#') && str.print(out, detail::percent_escape(u.fragment))))
+      if (not (any.print(out, '#') and str.print(out, detail::percent_escape(u.fragment))))
         return false;
     }
     return true;

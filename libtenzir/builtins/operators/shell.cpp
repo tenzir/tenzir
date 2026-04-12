@@ -135,7 +135,7 @@ public:
   }
 
   auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
-    TENZIR_ASSERT(! buffer.empty());
+    TENZIR_ASSERT(not buffer.empty());
     TENZIR_TRACE("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
     auto size = detail::narrow<int>(buffer.size());
@@ -145,7 +145,7 @@ public:
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error {
-    TENZIR_ASSERT(! buffer.empty());
+    TENZIR_ASSERT(not buffer.empty());
     TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
@@ -187,7 +187,7 @@ public:
 
 private:
   explicit child(std::string command) : command_{std::move(command)} {
-    TENZIR_ASSERT(! command_.empty());
+    TENZIR_ASSERT(not command_.empty());
   }
 
   std::string command_;
@@ -210,7 +210,7 @@ public:
       {make_secret_request("command", command_, command, ctrl.diagnostics())});
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
     auto child = child::make(command, mode);
-    if (! child) {
+    if (not child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
@@ -248,7 +248,7 @@ public:
       {make_secret_request("command", command_, command, ctrl.diagnostics())});
     // TODO: Handle exceptions from `boost::process`.
     auto child = child::make(command, stdin_mode::pipe);
-    if (! child) {
+    if (not child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());

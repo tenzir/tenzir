@@ -21,7 +21,7 @@ auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args) -> bool {
 }
 
 template <class Iterator, access_parser T, class... Args>
-  requires(!registered_parser_type<T>)
+  requires(not registered_parser_type<T>)
 auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args) -> bool {
   return access::parser_base<T>{std::forward<Args>(args)...}(f, l, x);
 }
@@ -35,13 +35,13 @@ bool conjunctive_parse(Iterator& f, const Iterator& l, T& x) {
 
 template <class Iterator, class T, class... Ts>
 bool conjunctive_parse(Iterator& f, const Iterator& l, T& x, Ts&... xs) {
-  return conjunctive_parse(f, l, x) && conjunctive_parse(f, l, xs...);
+  return conjunctive_parse(f, l, x) and conjunctive_parse(f, l, xs...);
 }
 
 } // namespace detail
 
 template <class Iterator, access_state T>
-  requires(!registered_parser_type<T>)
+  requires(not registered_parser_type<T>)
 auto parse(Iterator& f, const Iterator& l, T& x) -> bool {
   bool r;
   auto fun = [&](auto&... xs) {

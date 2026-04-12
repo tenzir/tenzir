@@ -30,7 +30,7 @@ namespace tenzir::test::detail {
 
 template <class T>
 concept data_like = std::same_as<std::remove_cvref_t<T>, tenzir::data>
-                    || std::same_as<std::remove_cvref_t<T>, tenzir::data_view3>;
+                    or std::same_as<std::remove_cvref_t<T>, tenzir::data_view3>;
 
 template <class T>
 concept non_data_like = not data_like<T>;
@@ -264,7 +264,7 @@ namespace tenzir::test {
 
 template <class T>
 T unbox(std::optional<T> x) {
-  if (! x) {
+  if (not x) {
     FAIL("x == none");
   }
   return std::move(*x);
@@ -272,7 +272,7 @@ T unbox(std::optional<T> x) {
 
 template <class T>
 T unbox(caf::expected<T> x) {
-  if (! x) {
+  if (not x) {
     FAIL("expected<T> contains an error: {}", x.error());
   }
   return std::move(*x);
@@ -280,7 +280,7 @@ T unbox(caf::expected<T> x) {
 
 template <class T>
 T unbox(T* x) {
-  if (! x) {
+  if (not x) {
     FAIL("T* contains nullptr");
   }
   return std::move(*x);

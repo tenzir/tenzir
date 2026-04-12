@@ -209,11 +209,11 @@ private:
     next_timeout_ = None{};
     for (const auto& [_, entry] : buffers_) {
       auto deadline = entry.start_time + timeout_;
-      if (not next_timeout_ || deadline < *next_timeout_) {
+      if (not next_timeout_ or deadline < *next_timeout_) {
         next_timeout_ = deadline;
       }
     }
-    if (was_null && next_timeout_) {
+    if (was_null and next_timeout_) {
       buffer_ready_->notify_one();
     }
   }

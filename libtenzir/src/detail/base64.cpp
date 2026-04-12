@@ -65,7 +65,7 @@ std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len) {
   unsigned char c3[3], c4[4];
   int i = 0;
   int j = 0;
-  while (len-- && *in != '=') {
+  while (len-- and *in != '=') {
     auto const v = inverse[*in];
     if (v == -1)
       break;

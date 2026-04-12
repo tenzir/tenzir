@@ -12,7 +12,7 @@ namespace tenzir::plugins::web {
 
 server_t make_server(server_config config, std::unique_ptr<router_t> router,
                      restinio::io_context_holder_t io_context) {
-  if (!config.require_tls) {
+  if (not config.require_tls) {
     return std::make_unique<dev_server_t>(io_context, [&](auto& settings) {
       settings.port(config.port)
         .address(config.bind_address)

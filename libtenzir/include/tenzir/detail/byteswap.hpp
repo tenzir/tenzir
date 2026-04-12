@@ -62,8 +62,8 @@ auto to_host_order(T x) -> T {
 /// @see endian byte swap to_host_order to_network_order
 template <std::endian From, std::endian To, class T>
 auto swap(T x) -> T {
-  if constexpr ((From == std::endian::little && To == std::endian::little)
-                || (From == std::endian::big && To == std::endian::big))
+  if constexpr ((From == std::endian::little and To == std::endian::little)
+                or (From == std::endian::big and To == std::endian::big))
     return x;
   else
     return byteswap(x);

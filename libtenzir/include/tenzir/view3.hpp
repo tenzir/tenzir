@@ -112,7 +112,7 @@ public:
     }
 
     auto operator!=(iterator other) const -> bool {
-      return ! (*this == other);
+      return not (*this == other);
     }
   };
 
@@ -179,7 +179,7 @@ public:
     }
 
     auto operator!=(iterator other) const -> bool {
-      return ! (*this == other);
+      return not (*this == other);
     }
   };
 

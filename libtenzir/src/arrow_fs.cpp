@@ -43,7 +43,7 @@ constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
     if (const auto* prefix = try_as<std::string>(glob_[0])) {
       if (glob_.size() == 1) {
         auto result = *prefix;
-        if (expanded.ends_with('/') && not result.ends_with('/')) {
+        if (expanded.ends_with('/') and not result.ends_with('/')) {
           result += '/';
         }
         return result;

@@ -20,7 +20,7 @@ namespace tenzir::io {
 caf::error
 write(const std::filesystem::path& filename, std::span<const std::byte> xs) {
   file f{filename};
-  if (auto result = f.open(file::write_only); !result) {
+  if (auto result = f.open(file::write_only); not result) {
     return result.error();
   }
   return f.write(xs.data(), xs.size());

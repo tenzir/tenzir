@@ -71,7 +71,7 @@ static record get_status_proc() {
     if (lines.done())
       break;
     auto line = lines.get();
-    if (!p(line))
+    if (not p(line))
       TENZIR_WARN("failed to parse /proc/self/status: {}", line);
   }
   return result;
@@ -127,9 +127,9 @@ namespace {
 
 caf::expected<std::filesystem::path> objectpath_dynamic(const void* addr) {
   Dl_info info;
-  if (!dladdr(addr, &info))
+  if (not dladdr(addr, &info))
     return caf::make_error(ec::unspecified, "failed to execute dladdr()");
-  if (!info.dli_fname)
+  if (not info.dli_fname)
     return caf::make_error(ec::unspecified, "addr not in an mmapped region");
   // FIXME: On Linux, if addr is inside the main executable,
   // dli_fname seems to be the same argv[0] instead of the full path.
@@ -184,7 +184,7 @@ caf::expected<std::string> execute_blocking(const std::string& command) {
   std::string result;
   std::array<char, 4096> buffer; // Try to read one full page at a time.
   auto* out = ::popen(command.c_str(), "r");
-  if (!out)
+  if (not out)
     return caf::make_error(ec::system_error,
                            "popen() failed: "s + detail::describe_errno());
   size_t nread = 0;

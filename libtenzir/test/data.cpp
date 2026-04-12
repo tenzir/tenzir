@@ -40,7 +40,7 @@ TEST("maps") {
   REQUIRE(i != ports.end());
   CHECK(i->second == 993u);
   CHECK(ports.emplace("telnet", 23u).second);
-  CHECK(! ports.emplace("http", 8080u).second);
+  CHECK(not ports.emplace("http", 8080u).second);
 }
 
 TEST("merge") {
@@ -139,23 +139,23 @@ TEST("relational_operators") {
   data d1;
   data d2;
   CHECK(d1 == d2);
-  CHECK(! (d1 < d2));
+  CHECK(not (d1 < d2));
   CHECK(d1 <= d2);
   CHECK(d1 >= d2);
-  CHECK(! (d1 > d2));
+  CHECK(not (d1 > d2));
 
   d2 = int64_t{42};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
-  CHECK(! (d1 >= d2));
-  CHECK(! (d1 > d2));
+  CHECK(not (d1 >= d2));
+  CHECK(not (d1 > d2));
 
   d1 = int64_t{42};
   d2 = caf::none;
   CHECK(d1 != d2);
-  CHECK(! (d1 < d2));
-  CHECK(! (d1 <= d2));
+  CHECK(not (d1 < d2));
+  CHECK(not (d1 <= d2));
   CHECK(d1 >= d2);
   CHECK(d1 > d2);
 
@@ -163,8 +163,8 @@ TEST("relational_operators") {
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
-  CHECK(! (d1 >= d2));
-  CHECK(! (d1 > d2));
+  CHECK(not (d1 >= d2));
+  CHECK(not (d1 > d2));
 }
 
 TEST("evaluation") {
@@ -181,7 +181,7 @@ TEST("evaluation") {
   CHECK(evaluate(lhs, relational_operator::less_equal, rhs));
   CHECK(evaluate(lhs, relational_operator::less, rhs));
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
-  CHECK(! evaluate(lhs, relational_operator::equal, rhs));
+  CHECK(not evaluate(lhs, relational_operator::equal, rhs));
   MESSAGE("network types");
   lhs = *to<ip>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
@@ -189,10 +189,10 @@ TEST("evaluation") {
   lhs = *to<subnet>("10.0.42.0/16");
   CHECK(evaluate(lhs, relational_operator::in, rhs));
   rhs = *to<subnet>("10.0.42.0/17");
-  CHECK(! evaluate(lhs, relational_operator::in, rhs));
+  CHECK(not evaluate(lhs, relational_operator::in, rhs));
   MESSAGE("mixed types");
   rhs = double{4.2};
-  CHECK(! evaluate(lhs, relational_operator::equal, rhs));
+  CHECK(not evaluate(lhs, relational_operator::equal, rhs));
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
 }
 
@@ -331,7 +331,7 @@ TEST("convert - caf::config_value - null") {
   // clang-format on
   using namespace caf;
   auto y = to<dictionary<config_value>>(x);
-  REQUIRE(! y.has_value());
+  REQUIRE(not y.has_value());
   CHECK_EQUAL(y.error(), ec::type_clash);
   // If we flatten the record first and weed out null values, it'll work.
   auto flat = flatten(x);
@@ -406,7 +406,7 @@ TEST("get_if") {
   REQUIRE(foo);
   CHECK_EQUAL(*foo, "bar");
   auto invalid = get_if<ip>(&x, "foo");
-  CHECK(! invalid);
+  CHECK(not invalid);
   auto baz = get_if<record>(&x, "baz");
   CHECK(baz);
   auto qux = get_if<int64_t>(&x, "baz.qux");
@@ -419,7 +419,7 @@ TEST("get_if") {
   REQUIRE(quuux);
   CHECK_EQUAL(*quuux, 3.14);
   auto unknown = get_if<ip>(&x, "foo.baz");
-  CHECK(! unknown);
+  CHECK(not unknown);
 }
 
 TEST("get_or") {

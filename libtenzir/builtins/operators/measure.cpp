@@ -98,7 +98,7 @@ public:
     auto counter = uint64_t{};
     for (auto&& chunk : input) {
       const auto now = std::chrono::steady_clock::now();
-      if (! chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         if (builder.length() > 0
             and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;

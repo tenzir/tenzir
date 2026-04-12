@@ -202,7 +202,7 @@ inline auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
       return time{std::chrono::duration_cast<duration>(secs)};
     },
     [](const msgpack_object_ext& ext) -> std::optional<time> {
-      if (ext.type != 0 || ext.size != 8) {
+      if (ext.type != 0 or ext.size != 8) {
         return std::nullopt;
       }
       // Fluent Bit encodes seconds and nanoseconds as two 32-bit unsigned
@@ -577,7 +577,7 @@ private:
       return false;
     }
     TENZIR_DEBUG("stopping Fluent Bit engine");
-    for (size_t i = 0; ctx_->status == FLB_LIB_OK && i < num_stop_polls_; ++i) {
+    for (size_t i = 0; ctx_->status == FLB_LIB_OK and i < num_stop_polls_; ++i) {
       TENZIR_DEBUG("sleeping while Fluent Bit context is okay");
       std::this_thread::sleep_for(poll_interval_);
     }

@@ -58,14 +58,14 @@ auto try_lossless_cast(T x) -> std::optional<T> {
 
 template <typename To, typename From>
 auto try_lossless_cast(From from) -> std::optional<To>
-  requires std::integral<From> && std::integral<To>
-           && (not std::same_as<From, To>)
+  requires std::integral<From> and std::integral<To>
+           and (not std::same_as<From, To>)
 {
   // Adapted from narrow.hpp
   auto to = detail::narrow_cast<To>(from);
   if (static_cast<From>(to) != from
-      && (detail::is_same_signedness<To, From>::value
-          || (to < To{}) != (from < From{}))) {
+      and (detail::is_same_signedness<To, From>::value
+          or (to < To{}) != (from < From{}))) {
     return std::nullopt;
   }
   return to;
@@ -73,11 +73,11 @@ auto try_lossless_cast(From from) -> std::optional<To>
 
 template <typename To, typename From>
 auto try_lossless_cast(From from) -> std::optional<To>
-  requires(std::floating_point<From> || std::floating_point<To>)
-          && (not std::same_as<From, To>)
+  requires(std::floating_point<From> or std::floating_point<To>)
+          and (not std::same_as<From, To>)
 {
   if constexpr (std::integral<To>) {
-    if (not std::is_signed_v<To> && from < From{}) {
+    if (not std::is_signed_v<To> and from < From{}) {
       return std::nullopt;
     }
   }
@@ -128,8 +128,8 @@ public:
       return data_;
     }
     auto visitor = [&]<typename T>(T&& x) -> data {
-      if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>
-                    || std::is_same_v<T, double>) {
+      if constexpr (std::is_same_v<T, int64_t> or std::is_same_v<T, uint64_t>
+                    or std::is_same_v<T, double>) {
         return to_original_data_impl<T>();
       } else {
         return x;
@@ -142,8 +142,8 @@ public:
   /// `*this` can be losslessly converted to.
   void populate_snapshot_data(auto& out) const {
     auto visitor = [&]<typename T>(const T& x) {
-      if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>
-                    || std::is_same_v<T, double>) {
+      if constexpr (std::is_same_v<T, int64_t> or std::is_same_v<T, uint64_t>
+                    or std::is_same_v<T, double>) {
         if (auto y = try_lossless_cast<int64_t>(x)) {
           out.emplace_back(data{*y});
         }
@@ -167,8 +167,8 @@ public:
 private:
   static auto from_data(data d) -> data {
     auto visitor = []<typename T>(T x) -> data {
-      if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>
-                    || std::is_same_v<T, double>) {
+      if constexpr (std::is_same_v<T, int64_t> or std::is_same_v<T, uint64_t>
+                    or std::is_same_v<T, double>) {
         // First try int64, then uint64, fall back to double
         if (auto y = try_lossless_cast<int64_t>(x)) {
           return data{*y};

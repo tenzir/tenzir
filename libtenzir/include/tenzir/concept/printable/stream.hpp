@@ -19,7 +19,7 @@ template <class Char, class Traits, class T>
 auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
   -> decltype(out) requires(printable<std::ostreambuf_iterator<Char>, T>) {
   using tenzir::print; // enable ADL
-  if (!print(std::ostreambuf_iterator<Char>{out}, x))
+  if (not print(std::ostreambuf_iterator<Char>{out}, x))
     out.setstate(std::ios_base::failbit);
   return out;
 }

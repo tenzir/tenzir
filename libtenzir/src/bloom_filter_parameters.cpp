@@ -22,17 +22,17 @@ namespace tenzir {
 
 std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
   // Check basic invariants first.
-  if (xs.m && *xs.m <= 0)
+  if (xs.m and *xs.m <= 0)
     return {};
-  if (xs.n && *xs.n <= 0)
+  if (xs.n and *xs.n <= 0)
     return {};
-  if (xs.k && *xs.k <= 0)
+  if (xs.k and *xs.k <= 0)
     return {};
-  if (xs.p && (*xs.p < 0 || *xs.p > 1))
+  if (xs.p and (*xs.p < 0 or *xs.p > 1))
     return {};
   // Test if we can compute the missing parameters.
   static const double ln2 = std::log(2.0);
-  if (xs.m && xs.n && xs.k && !xs.p) {
+  if (xs.m and xs.n and xs.k and not xs.p) {
     auto m = static_cast<double>(*xs.m);
     auto n = static_cast<double>(*xs.n);
     auto k = static_cast<double>(*xs.k);
@@ -40,7 +40,7 @@ std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
     auto q = std::exp(-k / r);
     xs.p = std::pow(1 - q, k);
     return xs;
-  } else if (!xs.m && xs.n && !xs.k && xs.p) {
+  } else if (not xs.m and xs.n and not xs.k and xs.p) {
     auto n = static_cast<double>(*xs.n);
     auto m = std::ceil(n * std::log(*xs.p) / std::log(1 / std::exp2(ln2)));
     auto r = m / n;
@@ -50,7 +50,7 @@ std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
     xs.k = k;
     xs.p = std::pow(1 - q, k);
     return xs;
-  } else if (xs.m && xs.n && !xs.k && !xs.p) {
+  } else if (xs.m and xs.n and not xs.k and not xs.p) {
     auto m = static_cast<double>(*xs.m);
     auto n = static_cast<double>(*xs.n);
     auto r = m / n;
@@ -59,7 +59,7 @@ std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
     xs.k = std::round(ln2 * r);
     xs.p = std::pow(1 - q, k);
     return xs;
-  } else if (xs.m && !xs.n && !xs.k && xs.p) {
+  } else if (xs.m and not xs.n and not xs.k and xs.p) {
     auto m = static_cast<double>(*xs.m);
     auto n = std::ceil(m * std::log(1.0 / std::exp2(ln2)) / std::log(*xs.p));
     auto r = m / n;
@@ -88,12 +88,12 @@ std::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
 
 bool operator==(const bloom_filter_parameters& x,
                 const bloom_filter_parameters& y) {
-  return x.m == y.m && x.n == y.n && x.k == y.k && x.p == y.p;
+  return x.m == y.m and x.n == y.n and x.k == y.k and x.p == y.p;
 }
 
 bool operator!=(const bloom_filter_parameters& x,
                 const bloom_filter_parameters& y) {
-  return !(x == y);
+  return not (x == y);
 }
 
 } // namespace tenzir

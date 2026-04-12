@@ -21,8 +21,8 @@ namespace tenzir {
 
 template <class T>
 struct is_uniquely_represented
-  : std::bool_constant<std::is_integral<T>{} || std::is_enum<T>{}
-                       || std::is_pointer<T>{}> {};
+  : std::bool_constant<std::is_integral<T>{} or std::is_enum<T>{}
+                       or std::is_pointer<T>{}> {};
 
 template <class T>
 struct is_uniquely_represented<T const> : is_uniquely_represented<T> {};
@@ -30,13 +30,13 @@ struct is_uniquely_represented<T const> : is_uniquely_represented<T> {};
 template <class T, class U>
 struct is_uniquely_represented<std::pair<T, U>>
   : std::bool_constant<is_uniquely_represented<T>{}
-                       && is_uniquely_represented<U>{}
-                       && sizeof(T) + sizeof(U) == sizeof(std::pair<T, U>)> {};
+                       and is_uniquely_represented<U>{}
+                       and sizeof(T) + sizeof(U) == sizeof(std::pair<T, U>)> {};
 
 template <class... Ts>
 struct is_uniquely_represented<std::tuple<Ts...>>
-  : std::bool_constant<(is_uniquely_represented<Ts>{} && ...)
-                       && ((0 + ... + sizeof(Ts)) == sizeof(std::tuple<Ts...>))> {
+  : std::bool_constant<(is_uniquely_represented<Ts>{} and ...)
+                       and ((0 + ... + sizeof(Ts)) == sizeof(std::tuple<Ts...>))> {
 };
 
 template <class T, size_t N>
@@ -45,7 +45,7 @@ struct is_uniquely_represented<T[N]> : is_uniquely_represented<T> {};
 template <class T, size_t N>
 struct is_uniquely_represented<std::array<T, N>>
   : std::bool_constant<is_uniquely_represented<T>{}
-                       && sizeof(T) * N == sizeof(std::array<T, N>)> {};
+                       and sizeof(T) * N == sizeof(std::array<T, N>)> {};
 
 template <class T>
 concept uniquely_represented = is_uniquely_represented<T>::value;

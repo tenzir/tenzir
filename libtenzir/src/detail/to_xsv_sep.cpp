@@ -19,7 +19,7 @@ auto to_xsv_sep(std::string_view x) -> caf::expected<char> {
   if (x == "\\t") {
     return '\t';
   }
-  if (x == "\\0" || x == "NUL") {
+  if (x == "\\0" or x == "NUL") {
     return '\0';
   }
   if (x.size() == 1) {

@@ -309,7 +309,7 @@ public:
   /// Accesses the underlying chunk.
   /// @note The returned chunk may contain more than just the FlatBuffers table
   /// if it is not a root table.
-  [[nodiscard]] auto chunk() && noexcept -> chunk_ptr {
+  [[nodiscard]] auto chunk() and noexcept -> chunk_ptr {
     return std::move(chunk_);
   }
 

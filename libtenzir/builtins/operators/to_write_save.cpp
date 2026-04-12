@@ -82,7 +82,7 @@ public:
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     if (printer_->allows_joining()) {
       auto p = printer_->instantiate(type{}, ctrl);
-      if (!p) {
+      if (not p) {
         diagnostic::error(p.error())
           .note("failed to instantiate printer")
           .emit(ctrl.diagnostics());
@@ -107,9 +107,9 @@ public:
           co_yield {};
           continue;
         }
-        if (!state) {
+        if (not state) {
           auto p = printer_->instantiate(slice.schema(), ctrl);
-          if (!p) {
+          if (not p) {
             diagnostic::error(p.error())
               .note("failed to initialize printer")
               .emit(ctrl.diagnostics());
@@ -179,7 +179,7 @@ public:
     auto usage = "write <printer> <args>...";
     auto docs = "https://docs.tenzir.com/operators/write";
     auto name = p.accept_shell_arg();
-    if (!name) {
+    if (not name) {
       diagnostic::error("expected printer name")
         .primary(p.current_span())
         .usage(usage)
@@ -187,7 +187,7 @@ public:
         .throw_();
     }
     auto plugin = plugins::find<printer_parser_plugin>(name->inner);
-    if (!plugin) {
+    if (not plugin) {
       throw_printer_not_found(*name);
     }
     auto printer = plugin->parse_printer(p);
@@ -211,7 +211,7 @@ public:
     -> generator<std::monostate> {
     // TODO: Extend API to allow schema-less make_saver().
     auto new_saver = saver_->instantiate(ctrl, std::nullopt);
-    if (!new_saver) {
+    if (not new_saver) {
       diagnostic::error(new_saver.error())
         .note("failed to instantiate saver")
         .emit(ctrl.diagnostics());
@@ -358,7 +358,7 @@ public:
   }
 
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {
-    return plugin_inspect(f, x.printer_) && plugin_inspect(f, x.saver_);
+    return plugin_inspect(f, x.printer_) and plugin_inspect(f, x.saver_);
   }
 
 protected:
@@ -403,9 +403,9 @@ public:
     } else {
       compress = detail::resolve_compressor(saver_path);
       auto read = p.accept_identifier();
-      TENZIR_DIAG_ASSERT(read && read->name == "write");
+      TENZIR_DIAG_ASSERT(read and read->name == "write");
       auto p_name = p.accept_shell_arg();
-      if (!p_name) {
+      if (not p_name) {
         diagnostic::error("expected printer name")
           .primary(p.current_span())
           .note(usage)
@@ -413,7 +413,7 @@ public:
           .throw_();
       }
       auto p_plugin = plugins::find<printer_parser_plugin>(p_name->inner);
-      if (!p_plugin) {
+      if (not p_plugin) {
         throw_printer_not_found(*p_name);
       }
       printer = p_plugin->parse_printer(p);
@@ -426,7 +426,7 @@ public:
     // but `saver->is_joining()` is true. The implementation of `write_operator`
     // contains the necessary check that it is only passed one single schema in
     // that case, and it otherwise aborts the execution.
-    if (not saver->is_joining() && not compress) {
+    if (not saver->is_joining() and not compress) {
       return std::make_unique<write_and_save_operator>(std::move(printer),
                                                        std::move(saver));
     }

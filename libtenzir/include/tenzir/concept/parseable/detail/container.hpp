@@ -60,9 +60,9 @@ struct container_t {
   template <class Parser, class Iterator, class Attribute>
   static bool parse(const Parser& p, Iterator& f, const Iterator& l,
                     Attribute& a) {
-    if constexpr (!is_pair_v<typename Attribute::value_type>) {
+    if constexpr (not is_pair_v<typename Attribute::value_type>) {
       value_type x;
-      if (!p(f, l, x))
+      if (not p(f, l, x))
         return false;
       push_back(a, std::move(x));
     } else {
@@ -72,7 +72,7 @@ struct container_t {
           typename Attribute::value_type::second_type
         >;
       pair_type pair;
-      if (!p(f, l, pair))
+      if (not p(f, l, pair))
         return false;
       push_back(a, std::move(pair));
     }

@@ -58,7 +58,7 @@ inline const char* content_type_by_file_extension(const std::string_view& ext) {
     return "application/epub+zip";
   if (ext == ".gif")
     return "image/gif";
-  if (ext == ".htm" || ext == ".html")
+  if (ext == ".htm" or ext == ".html")
     return "text/html";
   if (ext == ".ico")
     return "image/x-icon";
@@ -66,13 +66,13 @@ inline const char* content_type_by_file_extension(const std::string_view& ext) {
     return "text/calendar";
   if (ext == ".jar")
     return "application/java-archive";
-  if (ext == ".jpeg" || ext == ".jpg")
+  if (ext == ".jpeg" or ext == ".jpg")
     return "image/jpeg";
   if (ext == ".js")
     return "application/javascript";
   if (ext == ".json")
     return "application/json";
-  if (ext == ".mid" || ext == ".midi")
+  if (ext == ".mid" or ext == ".midi")
     return "audio/midi";
   if (ext == ".mpeg")
     return "video/mpeg";
@@ -113,7 +113,7 @@ inline const char* content_type_by_file_extension(const std::string_view& ext) {
     return "application/x-shockwave-flash";
   if (ext == ".tar")
     return "application/x-tar";
-  if (ext == ".tif" || ext == ".tiff")
+  if (ext == ".tif" or ext == ".tiff")
     return "image/tiff";
   if (ext == ".ts")
     return "application/typescript";

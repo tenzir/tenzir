@@ -76,7 +76,7 @@ struct port_parser : parser_base<port_parser> {
     } else {
       port::number_type n;
       auto t = port_type::unknown;
-      if (!p(f, l, n, t))
+      if (not p(f, l, n, t))
         return false;
       x = port{n, t};
       return true;

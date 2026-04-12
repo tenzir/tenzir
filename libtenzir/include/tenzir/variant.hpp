@@ -61,7 +61,7 @@ public:
   using types = detail::type_list<Ts...>;
 
   template <class T>
-  static constexpr auto can_have = (std::same_as<T, Ts> || ...);
+  static constexpr auto can_have = (std::same_as<T, Ts> or ...);
 
   template <typename Inspector>
   static auto apply_compressed_index(Inspector& f, size_t& idx) -> bool {
@@ -106,7 +106,7 @@ public:
             name = name.substr(index + 1);
           }
         }
-        return dbg->prepend("{} ", name) && dbg->apply(y);
+        return dbg->prepend("{} ", name) and dbg->apply(y);
       });
     }
     // Unlike `caf::inspector_access<std::variant<Ts...>>::apply(f, x)`, this
@@ -114,9 +114,9 @@ public:
     // `caf::json_writer`. We use index-based serialization if the inspector
     // does not represent a human-readable format, and type names otherwise.
     if constexpr (Inspector::is_loading) {
-      if (!f.has_human_readable_format()) {
+      if (not f.has_human_readable_format()) {
         auto index = size_t{};
-        if (!apply_compressed_index(f, index)) {
+        if (not apply_compressed_index(f, index)) {
           return false;
         }
         if (index >= sizeof...(Ts)) {
@@ -134,13 +134,13 @@ public:
           return f.apply(y);
         };
         auto emplace = [&]<size_t... Is>(std::index_sequence<Is...>) {
-          return (emplace_idx.template operator()<Is>() || ...);
+          return (emplace_idx.template operator()<Is>() or ...);
         };
         return emplace(std::index_sequence_for<Ts...>());
       }
       auto type_name = std::string{};
       auto count = size_t{};
-      if (!f.begin_associative_array(count)) {
+      if (not f.begin_associative_array(count)) {
         return false;
       }
       if (count != 1) {
@@ -150,7 +150,7 @@ public:
                                                 count)));
         return false;
       }
-      if (!(f.begin_key_value_pair() && f.value(type_name))) {
+      if (not (f.begin_key_value_pair() and f.value(type_name))) {
         return false;
       }
       auto success = false;
@@ -164,25 +164,25 @@ public:
         return true;
       };
       auto check_all = [&]<size_t... Is>(std::index_sequence<Is...>) {
-        auto found = (check.template operator()<Is>() || ...);
-        if (!found) {
+        auto found = (check.template operator()<Is>() or ...);
+        if (not found) {
           f.set_error(caf::make_error(
             ec::serialization_error,
             fmt::format("could not resolve type name `{}`", type_name)));
         }
       };
       check_all(std::index_sequence_for<Ts...>());
-      return success && f.end_key_value_pair() && f.end_associative_array();
+      return success and f.end_key_value_pair() and f.end_associative_array();
     } else {
       return std::visit(
         [&](auto& y) {
-          if (!f.has_human_readable_format()) {
+          if (not f.has_human_readable_format()) {
             auto idx = x.index();
-            return apply_compressed_index(f, idx) && f.apply(y);
+            return apply_compressed_index(f, idx) and f.apply(y);
           }
-          return f.begin_associative_array(1) && f.begin_key_value_pair()
-                 && f.value(detail::pretty_type_name(typeid(y))) && f.apply(y)
-                 && f.end_key_value_pair() && f.end_associative_array();
+          return f.begin_associative_array(1) and f.begin_key_value_pair()
+                 and f.value(detail::pretty_type_name(typeid(y))) and f.apply(y)
+                 and f.end_key_value_pair() and f.end_associative_array();
         },
         x);
     }
@@ -199,7 +199,7 @@ public:
   }
 
   template <class Result = void, class... Fs>
-  auto match(Fs&&... fs) && -> decltype(auto) {
+  auto match(Fs&&... fs) and -> decltype(auto) {
     return detail::match<Result>(std::move(*this), std::forward<Fs>(fs)...);
   }
 

@@ -49,7 +49,7 @@ public:
     write(*x.params_.m);
     write(x.num_elements_);
     // Write Bloom filter.
-    if (! inspect(*this, const_cast<bloom_filter_type&>(x.bloom_filter_))) {
+    if (not inspect(*this, const_cast<bloom_filter_type&>(x.bloom_filter_))) {
       return false;
     }
     // Write auxiliary data.
@@ -72,7 +72,7 @@ public:
 
   template <class T, class... Ts>
   auto operator()(const Ts&... xs) noexcept -> result_type {
-    return ((*this)(xs) && ...);
+    return ((*this)(xs) and ...);
   }
 
   auto apply(auto& x) -> result_type {
@@ -143,7 +143,7 @@ public:
                     bloom_filter_bytes, remaining_bytes));
       return false;
     }
-    if (! inspect(*this, x.bloom_filter_)) {
+    if (not inspect(*this, x.bloom_filter_)) {
       return false;
     }
     // Interpret remaining bytes as auxiliary data.
@@ -180,14 +180,14 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) != 1)
   auto operator()(Ts&... xs) noexcept -> result_type {
-    return ((*this)(xs) && ...);
+    return ((*this)(xs) and ...);
   }
 
   auto apply(auto& x) -> result_type {
     return (*this)(x);
   }
 
-  auto last_error() && -> caf::error {
+  auto last_error() and -> caf::error {
     return std::move(last_error_);
   }
 
@@ -205,7 +205,7 @@ private:
 };
 
 auto dcso_bloom_filter::m(uint64_t n, double p) -> uint64_t {
-  TENZIR_ASSERT(p > 0 && p < 1);
+  TENZIR_ASSERT(p > 0 and p < 1);
   TENZIR_ASSERT(n > 0);
   auto result = double(n) * std::log(p) / std::pow(std::log(2.0), 2.0);
   return std::abs(std::ceil(result));
@@ -255,7 +255,7 @@ auto convert(std::span<const std::byte> xs, dcso_bloom_filter& x)
     return caf::make_error(ec::parse_error, "bloom filter buffer too small");
   }
   dcso_bloom_filter::deserializer source{xs};
-  if (! source(x)) {
+  if (not source(x)) {
     if (auto err = std::move(source).last_error(); err.valid()) {
       return err;
     }
@@ -277,8 +277,8 @@ auto convert(const dcso_bloom_filter& x, std::vector<std::byte>& xs)
 
 auto operator==(const dcso_bloom_filter& x, const dcso_bloom_filter& y)
   -> bool {
-  return x.bloom_filter_ == y.bloom_filter_ && x.params_ == y.params_
-         && x.num_elements_ == y.num_elements_ && x.data_ == y.data_;
+  return x.bloom_filter_ == y.bloom_filter_ and x.params_ == y.params_
+         and x.num_elements_ == y.num_elements_ and x.data_ == y.data_;
 }
 
 } // namespace tenzir

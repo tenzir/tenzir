@@ -85,7 +85,7 @@ auto prepend_token::parse_int() -> located<int64_t> {
 }
 
 auto prepend_token::at_end() -> bool {
-  return not token_ && next_.at_end();
+  return not token_ and next_.at_end();
 }
 
 auto prepend_token::current_span() -> location {

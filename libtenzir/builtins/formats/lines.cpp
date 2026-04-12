@@ -161,7 +161,7 @@ struct lines_printer_impl {
       if (is<caf::none_t>(v)) {
         continue;
       }
-      if (! first) {
+      if (not first) {
         ++out = ' ';
       } else {
         first = false;
@@ -214,10 +214,10 @@ struct lines_printer_impl {
         if (is<caf::none_t>(v)) {
           continue;
         }
-        if (! sequence_empty) {
+        if (not sequence_empty) {
           ++out = ',';
         }
-        if (! match(v, *this)) {
+        if (not match(v, *this)) {
           return false;
         }
       }
@@ -683,7 +683,7 @@ public:
       .named("split_at_regex", args.split_at_regex)
       .parse(inv, ctx)
       .ignore();
-    if (args.split_at_regex && args.null) {
+    if (args.split_at_regex and args.null) {
       diagnostic::error(
         "cannot use `split_at_regex` and `split_at_null` at the same time")
         .primary(*args.split_at_regex)

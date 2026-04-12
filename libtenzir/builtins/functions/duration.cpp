@@ -155,7 +155,7 @@ public:
               } else {
                 const auto result
                   = static_cast<double>(v.value()) * unit.count();
-                if (not(result > min) || not(result < max)) {
+                if (not(result > min) or not(result < max)) {
                   check(b->AppendNull());
                   overflow = true;
                   continue;

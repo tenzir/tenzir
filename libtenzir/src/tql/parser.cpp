@@ -151,11 +151,11 @@ private:
       return {};
     };
     if (x == "=") {
-      return impl('=' >> !parsers::chr{'='});
+      return impl('=' >> not parsers::chr{'='});
     }
     if (x == "if") {
       // TODO: Hacky.
-      return impl("if" >> !(parsers::alnum | '_'));
+      return impl("if" >> not (parsers::alnum | '_'));
     }
     return impl(std::string{x});
   }
@@ -202,7 +202,7 @@ public:
   }
 
   auto accept_equals() -> std::optional<location> override {
-    if (auto result = accept_with_span("=" >> !parsers::chr{'='})) {
+    if (auto result = accept_with_span("=" >> not parsers::chr{'='})) {
       return result->second;
     }
     return {};
@@ -258,7 +258,7 @@ public:
         }
       } else {
         auto dot = accept('.');
-        if (dot || first) {
+        if (dot or first) {
           if (auto star = accept('*')) {
             path.emplace_back(star_projection{*star});
           } else if (auto ident = accept<identifier>()) {
@@ -281,7 +281,7 @@ public:
             throw_at_current("expected `*` or identifier");
           }
         } else {
-          TENZIR_DIAG_ASSERT(!path.empty());
+          TENZIR_DIAG_ASSERT(not path.empty());
           auto source = location{start, path.back().source().end};
           return extractor{std::move(path), source};
         }
@@ -332,7 +332,7 @@ private:
     auto result = std::vector<located<operator_ptr>>{};
     while (true) {
       result.push_back(parse_operator());
-      if (!accept_operator_sep()) {
+      if (not accept_operator_sep()) {
         if (legacy_accept(parsers::eoi)) {
           break;
         }
@@ -361,7 +361,7 @@ private:
       }
       auto copy = recursed_;
       auto inserted = copy.emplace(ident.name).second;
-      if (!inserted) {
+      if (not inserted) {
         diagnostic::error("operator `{}` is self-recursive", ident.name)
           .primary(ident.source)
           .throw_();
@@ -371,7 +371,7 @@ private:
       auto pipe = std::make_unique<pipeline>(to_pipeline(std::move(result)));
       return located<operator_ptr>{std::move(pipe), ident.source};
     }
-    if (!plugin) {
+    if (not plugin) {
       diagnostic::error("no such operator: `{}`", ident.name)
         .primary(ident.source)
         .docs("https://docs.tenzir.com/operators")
@@ -401,15 +401,15 @@ private:
     // TODO: Remove this legacy fallback.
     auto [rest, op] = plugin->make_operator({current_, end_});
     auto op_end = rest.data();
-    while (*(op_end - 1) == ' ' || *(op_end - 1) == '|') {
+    while (*(op_end - 1) == ' ' or *(op_end - 1) == '|') {
       --op_end;
     }
     auto source = location::unknown;
-    if (!internal_) {
+    if (not internal_) {
       source.begin = ident.source.begin;
       source.end = detail::narrow<size_t>(op_end - source_.data());
     }
-    if (!op) {
+    if (not op) {
       diagnostic::error("could not parse `{}` operator", ident.name)
         .primary(source)
         .note(fmt::to_string(op.error()))
@@ -424,11 +424,11 @@ private:
     if (auto result = parsers::data.apply(current_, end_)) {
       // The current `data` parser is too greedy and parses `true_or_false` as
       // `true`. We thus discard its result if an identifier character follows.
-      if (current_ != end_ && (std::isalnum(*current_) || *current_ == '_')) {
+      if (current_ != end_ and (std::isalnum(*current_) or *current_ == '_')) {
         current_ = start;
       } else {
         auto source = location::unknown;
-        if (!internal_) {
+        if (not internal_) {
           source.begin = detail::narrow<size_t>(start - source_.data());
           source.end = detail::narrow<size_t>(current_ - source_.data());
         }
@@ -437,7 +437,7 @@ private:
     }
     if (peek<identifier>()) {
       auto extr = parse_extractor();
-      if (extr.path.size() == 1 && legacy_accept("(")) {
+      if (extr.path.size() == 1 and legacy_accept("(")) {
         // TODO: Make this better, remove assertion.
         auto ident_ptr = std::get_if<identifier>(&extr.path[0]);
         TENZIR_DIAG_ASSERT(ident_ptr);
@@ -450,7 +450,7 @@ private:
             return expression{call_expr{std::move(ident), std::move(args)},
                               source};
           }
-          if (!args.empty() && !legacy_accept(",")) {
+          if (not args.empty() and not legacy_accept(",")) {
             throw_at_current("expected `,` or `)`");
           }
           args.push_back(parse_expression());
@@ -477,7 +477,7 @@ private:
     // }
     if (auto open_par = accept('(')) {
       auto expr = parse_expression();
-      if (!accept(')')) {
+      if (not accept(')')) {
         diagnostic::error("missing closing parenthesis")
           .primary(current_span(), "expected `)`")
           .secondary(*open_par, "matching this `(`")
@@ -562,7 +562,7 @@ private:
   }
 
   void advance_to_token() {
-    auto line_comment = (parsers::str{"//"} | ("#" >> !parsers::alpha))
+    auto line_comment = (parsers::str{"//"} | ("#" >> not parsers::alpha))
                         >> (*(parsers::any - '\n'));
     auto multiline_comment
       = "/*" >> *(parsers::any - (parsers::chr{'*'} >> &parsers::chr{'/'}))

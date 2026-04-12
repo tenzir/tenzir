@@ -48,7 +48,7 @@ template <class T, class F>
 void absorb_bytes(const unsigned char* data, size_t len, size_t bs,
                   size_t bschk, unsigned char* m, size_t& pos, T& total,
                   F transform) {
-  if (pos && pos + len >= bschk) {
+  if (pos and pos + len >= bschk) {
     std::memcpy(m + pos, data, bs - pos);
     transform(m, 1);
     len -= bs - pos;

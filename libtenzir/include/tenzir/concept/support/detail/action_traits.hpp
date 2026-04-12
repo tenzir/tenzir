@@ -27,10 +27,10 @@ struct action_traits {
 
   static constexpr auto arity = traits::num_args;
   static constexpr bool returns_void = std::is_void_v<result_type>;
-  static constexpr bool no_args_returns_void = arity == 0 && returns_void;
-  static constexpr bool one_arg_returns_void = arity == 1 && returns_void;
-  static constexpr bool no_args_returns_non_void = arity == 0 && !returns_void;
-  static constexpr bool one_arg_returns_non_void = arity == 1 && !returns_void;
+  static constexpr bool no_args_returns_void = arity == 0 and returns_void;
+  static constexpr bool one_arg_returns_void = arity == 1 and returns_void;
+  static constexpr bool no_args_returns_non_void = arity == 0 and not returns_void;
+  static constexpr bool one_arg_returns_non_void = arity == 1 and not returns_void;
 };
 
 } // namespace tenzir::detail

@@ -28,11 +28,11 @@ struct kvp {
 
 template <class Inspector>
 auto inspect(Inspector& f, kvp& x) {
-  return f.apply(x.key) && f.apply(x.value);
+  return f.apply(x.key) and f.apply(x.value);
 }
 
 bool operator==(const kvp& x, const kvp& y) {
-  return x.key == y.key && x.value == y.value;
+  return x.key == y.key and x.value == y.value;
 }
 
 struct has_key {

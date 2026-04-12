@@ -137,13 +137,13 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Set{std::move(assignments_), order_};
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
+                event_order order) and -> ir::optimize_result override {
     // Remember the order for potential rebatches.
     order_ = order;
     auto ops = std::vector<Box<ir::Operator>>{};
@@ -366,7 +366,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
@@ -451,7 +451,7 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
 
 } // namespace
 
-auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
+auto ast::pipeline::compile(compile_ctx ctx) and -> failure_or<ir::pipeline> {
   // TODO: Or do we assume that entities are already resolved?
   TRY(resolve_entities(*this, ctx));
   auto lets = std::vector<ir::let>{};
@@ -597,7 +597,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
+auto ir::pipeline::spawn(element_type_tag input) and -> std::vector<AnyOperator> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   // TODO: This is probably not the right place for optimizations.
@@ -635,7 +635,7 @@ auto ir::pipeline::infer_type(element_type_tag input,
 }
 
 auto ir::pipeline::optimize(optimize_filter filter,
-                            event_order order) && -> optimize_result {
+                            event_order order) and -> optimize_result {
   auto replacement = pipeline{std::move(lets), {}};
   for (auto& op : std::ranges::reverse_view(operators)) {
     auto opt = std::move(*op).optimize(std::move(filter), order);
@@ -650,7 +650,7 @@ auto ir::pipeline::optimize(optimize_filter filter,
 }
 
 auto ir::Operator::optimize(optimize_filter filter,
-                            event_order order) && -> optimize_result {
+                            event_order order) and -> optimize_result {
   (void)order;
   auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
@@ -686,7 +686,7 @@ auto ir::Operator::copy() const -> Box<Operator> {
   return Box<Operator>::from_non_null(std::move(copy));
 }
 
-auto ir::Operator::move() && -> Box<Operator> {
+auto ir::Operator::move() and -> Box<Operator> {
   // TODO: This should be overriden by something like CRTP.
   return copy();
 }

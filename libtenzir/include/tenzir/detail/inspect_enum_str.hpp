@@ -23,12 +23,12 @@ template <class Inspector, class Enum>
 auto inspect_enum_str(Inspector& f, Enum& x,
                       std::initializer_list<std::string_view> strings) -> bool {
   using underlying_type = std::underlying_type_t<Enum>;
-  if (!f.has_human_readable_format()) {
+  if (not f.has_human_readable_format()) {
     return inspect_enum(f, x);
   }
   if constexpr (Inspector::is_loading) {
     auto y = std::string{};
-    if (!f.apply(y)) {
+    if (not f.apply(y)) {
       return false;
     }
     for (auto&& z : strings) {
@@ -45,7 +45,7 @@ auto inspect_enum_str(Inspector& f, Enum& x,
   } else {
     auto index = static_cast<underlying_type>(x);
     auto size = detail::narrow<underlying_type>(strings.size());
-    if (!(0 <= index && index < size)) {
+    if (not (0 <= index and index < size)) {
       f.set_error(
         caf::make_error(ec::serialization_error,
                         fmt::format("index `{}` is out of bounds for enum `{}`",

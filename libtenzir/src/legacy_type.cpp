@@ -37,7 +37,7 @@ legacy_attribute::legacy_attribute(std::string key,
 }
 
 bool operator==(const legacy_attribute& x, const legacy_attribute& y) {
-  return x.key == y.key && x.value == y.value;
+  return x.key == y.key and x.value == y.value;
 }
 
 bool operator<(const legacy_attribute& x, const legacy_attribute& y) {
@@ -53,13 +53,13 @@ legacy_none_type legacy_none_type_singleton;
 // -- type ---------------------------------------------------------------------
 
 bool operator==(const legacy_type& x, const legacy_type& y) {
-  if (x.ptr_ && y.ptr_)
+  if (x.ptr_ and y.ptr_)
     return *x.ptr_ == *y.ptr_;
   return x.ptr_ == y.ptr_;
 }
 
 bool operator<(const legacy_type& x, const legacy_type& y) {
-  if (x.ptr_ && y.ptr_)
+  if (x.ptr_ and y.ptr_)
     return *x.ptr_ < *y.ptr_;
   return x.ptr_ < y.ptr_;
 }
@@ -70,7 +70,7 @@ legacy_type& legacy_type::name(const std::string& x) & {
   return *this;
 }
 
-legacy_type legacy_type::name(const std::string& x) && {
+legacy_type legacy_type::name(const std::string& x) and {
   if (ptr_)
     ptr_.unshared().name_ = x;
   return std::move(*this);
@@ -94,7 +94,7 @@ legacy_type::update_attributes(std::vector<legacy_attribute> xs) & {
 }
 
 legacy_type
-legacy_type::update_attributes(std::vector<legacy_attribute> xs) && {
+legacy_type::update_attributes(std::vector<legacy_attribute> xs) and {
   if (ptr_) {
     auto& attrs = ptr_.unshared().attributes_;
     for (auto& x : xs) {
@@ -152,8 +152,8 @@ legacy_abstract_type::~legacy_abstract_type() {
 }
 
 bool legacy_abstract_type::equals(const legacy_abstract_type& other) const {
-  return typeid(*this) == typeid(other) && name_ == other.name_
-         && attributes_ == other.attributes_;
+  return typeid(*this) == typeid(other) and name_ == other.name_
+         and attributes_ == other.attributes_;
 }
 
 bool legacy_abstract_type::less_than(const legacy_abstract_type& other) const {
@@ -178,7 +178,7 @@ bool operator<(const legacy_abstract_type& x, const legacy_abstract_type& y) {
 // --------------------------------------------------------------
 
 bool operator==(const record_field& x, const record_field& y) {
-  return x.name == y.name && x.type == y.type;
+  return x.name == y.name and x.type == y.type;
 }
 
 bool operator<(const record_field& x, const record_field& y) {
@@ -197,11 +197,11 @@ legacy_record_type::legacy_record_type(
 }
 
 bool legacy_record_type::equals(const legacy_abstract_type& other) const {
-  return super::equals(other) && fields == downcast(other).fields;
+  return super::equals(other) and fields == downcast(other).fields;
 }
 
 bool legacy_record_type::less_than(const legacy_abstract_type& other) const {
-  return super::less_than(other) || fields < downcast(other).fields;
+  return super::less_than(other) or fields < downcast(other).fields;
 }
 
 caf::expected<legacy_record_type>
@@ -221,7 +221,7 @@ merge(const legacy_record_type& lhs, const legacy_record_type& rhs) {
         continue;
       const auto* lrec = try_as<legacy_record_type>(&it->type);
       const auto* rrec = try_as<legacy_record_type>(&rfield.type);
-      if (!(rrec && lrec))
+      if (not (rrec and lrec))
         return caf::make_error(ec::convert_error, //
                                fmt::format("failed to merge {} and {} because "
                                            "of duplicate field {}",
@@ -229,7 +229,7 @@ merge(const legacy_record_type& lhs, const legacy_record_type& rhs) {
                                            type::from_legacy_type(rhs),
                                            rfield.name));
       auto x = merge(*lrec, *rrec);
-      if (!x)
+      if (not x)
         return x.error();
       it->type = legacy_type{std::move(*x)};
     } else {
@@ -257,7 +257,7 @@ priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
         continue;
       const auto* lrec = try_as<legacy_record_type>(&it->type);
       const auto* rrec = try_as<legacy_record_type>(&rfield.type);
-      if (rrec && lrec)
+      if (rrec and lrec)
         it->type = priority_merge(*lrec, *rrec, p);
       else if (p == merge_policy::prefer_right)
         it->type = rfield.type;
@@ -277,20 +277,20 @@ priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
 
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
-  TENZIR_ASSERT(!path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto result = legacy_record_type{}.name(r.name()).attributes(r.attributes());
   for (const auto& f : r.fields) {
     if (f.name == path.front()) {
       if (path.size() > 1) {
         path.erase(path.begin());
         const auto* field_rec = try_as<legacy_record_type>(&f.type);
-        if (!field_rec)
+        if (not field_rec)
           return std::nullopt;
         auto new_rec = remove_field(*field_rec, path);
-        if (!new_rec)
+        if (not new_rec)
           return std::nullopt;
         // TODO: Remove this condition if empty records get allowed.
-        if (!new_rec->fields.empty())
+        if (not new_rec->fields.empty())
           result.fields.emplace_back(f.name, *new_rec);
       }
       // else skips this field. It is the leaf to remove!
@@ -303,7 +303,7 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
 
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, offset o) {
-  TENZIR_ASSERT(!o.empty());
+  TENZIR_ASSERT(not o.empty());
   auto result = legacy_record_type{}.name(r.name()).attributes(r.attributes());
   if (o.front() >= r.fields.size())
     return {};
@@ -313,13 +313,13 @@ remove_field(const legacy_record_type& r, offset o) {
       if (o.size() > 1) {
         o.erase(o.begin());
         const auto* field_rec = try_as<legacy_record_type>(&field.type);
-        if (!field_rec)
+        if (not field_rec)
           return {};
         auto new_rec = remove_field(*field_rec, std::move(o));
-        if (!new_rec)
+        if (not new_rec)
           return {};
         // TODO: Remove this condition if empty records get allowed.
-        if (!new_rec->fields.empty())
+        if (not new_rec->fields.empty())
           result.fields.emplace_back(f.name, *new_rec);
       }
     } else {

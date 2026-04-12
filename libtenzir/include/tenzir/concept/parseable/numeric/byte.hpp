@@ -36,7 +36,7 @@ template <>
 struct extract<2> {
   template <class Iterator, class Attribute>
   static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
-    if (!extract<1>::parse(f, l, a))
+    if (not extract<1>::parse(f, l, a))
       return false;
     a <<= 8;
     return extract<1>::parse(f, l, a);
@@ -47,7 +47,7 @@ template <>
 struct extract<4> {
   template <class Iterator, class Attribute>
   static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
-    if (!extract<2>::parse(f, l, a))
+    if (not extract<2>::parse(f, l, a))
       return false;
     a <<= 8;
     return extract<2>::parse(f, l, a);
@@ -58,7 +58,7 @@ template <>
 struct extract<8> {
   template <class Iterator, class Attribute>
   static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
-    if (!extract<4>::parse(f, l, a))
+    if (not extract<4>::parse(f, l, a))
       return false;
     a <<= 8;
     return extract<4>::parse(f, l, a);
@@ -82,7 +82,7 @@ struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
   static auto extract(Iterator& f, const Iterator& l, T& x) -> bool {
     auto save = f;
     x = 0;
-    if (!detail::extract<Bytes>::parse(save, l, x))
+    if (not detail::extract<Bytes>::parse(save, l, x))
       return false;
     f = save;
     return true;
@@ -100,7 +100,7 @@ struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
 
   template <class Iterator>
   auto parse(Iterator& f, const Iterator& l, T& x) const -> bool {
-    if (!extract(f, l, x))
+    if (not extract(f, l, x))
       return false;
     if constexpr (std::is_same_v<Policy, policy::little_endian>)
       x = detail::byteswap(x);
@@ -153,7 +153,7 @@ struct dynamic_bytes_parser : parser_base<dynamic_bytes_parser<N, T>> {
   template <class Iterator, size_t M>
   auto parse(Iterator& f, const Iterator& l, std::array<T, M>& xs) const
     -> bool {
-    if (M < n_ || static_cast<N>(l - f) < n_)
+    if (M < n_ or static_cast<N>(l - f) < n_)
       return false;
     for (auto i = N{0}; i < n_; i++)
       xs[i] = *f++ & 0xFF;

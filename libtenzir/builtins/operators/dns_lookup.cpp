@@ -307,7 +307,7 @@ private:
   static auto callback(void* arg, int status, int /*timeouts*/,
                        struct hostent* host) -> void {
     auto* res = static_cast<forward_result*>(arg);
-    if (status == ARES_SUCCESS && host && host->h_name) {
+    if (status == ARES_SUCCESS and host and host->h_name) {
       res->hostname = host->h_name;
     }
     res->done();

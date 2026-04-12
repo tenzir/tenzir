@@ -66,7 +66,7 @@ std::string encode(std::string_view str);
 
 template <class R>
   requires std::ranges::contiguous_range<R>
-           && std::same_as<std::ranges::range_value_t<R>, std::byte>
+           and std::same_as<std::ranges::range_value_t<R>, std::byte>
 std::string encode(R&& range) {
   return encode(
     std::string_view{reinterpret_cast<const char*>(std::ranges::data(range)),

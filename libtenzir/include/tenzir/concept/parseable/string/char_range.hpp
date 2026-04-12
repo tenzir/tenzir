@@ -21,7 +21,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (f == l || !check<From, To, Ranges...>(*f))
+    if (f == l or not check<From, To, Ranges...>(*f))
       return false;
     detail::absorb(a, *f);
     ++f;
@@ -31,12 +31,12 @@ public:
 private:
   template <char L, char R>
   static bool check(char c) {
-    return L <= c && c <= R;
+    return L <= c and c <= R;
   }
 
   template <char L0, char R0, char L1, char R1, char... Cs>
   static bool check(char c) {
-    return check<L0, R0>(c) && check<L1, R1, Cs...>;
+    return check<L0, R0>(c) and check<L1, R1, Cs...>;
   }
 };
 

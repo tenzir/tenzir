@@ -54,12 +54,12 @@ struct cast_helper {
 };
 
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
-  requires(! concrete_type<FromType> || ! concrete_type<ToType>)
+  requires(not concrete_type<FromType> or not concrete_type<ToType>)
 struct cast_helper<FromType, ToType> {
   template <type_or_concrete_type Type>
   static auto is_valid(const Type& type) {
-    if constexpr (! concrete_type<Type>) {
-      if (! type) {
+    if constexpr (not concrete_type<Type>) {
+      if (not type) {
         return false;
       }
     }
@@ -68,7 +68,7 @@ struct cast_helper<FromType, ToType> {
 
   static auto can_cast(const FromType& from_type, const ToType& to_type)
     -> caf::expected<void> {
-    if (! is_valid(from_type) || ! is_valid(to_type)) {
+    if (not is_valid(from_type) or not is_valid(to_type)) {
       return caf::make_error(ec::logic_error,
                              fmt::format("cannot cast from '{}' to '{}': both "
                                          "types must be valid",
@@ -125,7 +125,7 @@ struct cast_helper<FromType, ToType> {
 
   template <class InputType>
     requires(std::same_as<type_to_data_t<FromType>, InputType>
-             || std::same_as<view<type_to_data_t<FromType>>, InputType>)
+             or std::same_as<view<type_to_data_t<FromType>>, InputType>)
   static auto cast_value(const FromType& from_type, const InputType& data,
                          const ToType& to_type)
     -> caf::expected<type_to_data_t<ToType>> {
@@ -240,7 +240,7 @@ struct cast_helper<list_type, list_type> {
     -> caf::expected<void> {
     auto can_cast_value_types = cast_helper<type, type>::can_cast(
       from_type.value_type(), to_type.value_type());
-    if (! can_cast_value_types) {
+    if (not can_cast_value_types) {
       return caf::make_error(ec::convert_error,
                              fmt::format("cannot cast from '{}' to '{}': {}",
                                          from_type, to_type,
@@ -344,7 +344,7 @@ struct cast_helper<record_type, record_type> {
         const auto& from_field = from_type.field(*from_field_index);
         auto can_cast_field_types = cast_helper<type, type>::can_cast(
           from_field.type, to_leaf.field.type);
-        if (! can_cast_field_types) {
+        if (not can_cast_field_types) {
           return caf::make_error(ec::unspecified,
                                  fmt::format("cannot cast from '{}' to '{}' as "
                                              "cast for matching field '{}' is "
@@ -384,7 +384,7 @@ struct cast_helper<record_type, record_type> {
           continue;
         }
         const auto index = from_type.resolve_key(key);
-        if (! index) {
+        if (not index) {
           // The field does not exist, so we insert a bunch of nulls.
           children.push_back(check(arrow::MakeArrayOfNull(
             to_field.type.to_arrow_type(), from_array->length(),

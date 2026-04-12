@@ -43,13 +43,13 @@ private:
   static constexpr auto attribute_type() {
     if constexpr (std::is_same_v<
                     lhs_attribute,
-                    unused_type> && std::is_same_v<rhs_attribute, unused_type>)
+                    unused_type> and std::is_same_v<rhs_attribute, unused_type>)
       return unused_type{};
     else if constexpr (std::is_same_v<lhs_attribute, unused_type>)
       return rhs_attribute{};
     else if constexpr (
       std::is_same_v<rhs_attribute,
-                     unused_type> || std::is_same_v<lhs_attribute, rhs_attribute>)
+                     unused_type> or std::is_same_v<lhs_attribute, rhs_attribute>)
       return lhs_attribute{};
     else
       return detail::flattened_variant<lhs_attribute, rhs_attribute>{};
@@ -92,7 +92,7 @@ private:
       // Parse one element of the variant and assign it to the passed-in
       // attribute.
       auto attr = parser_attribute{};
-      if (!p(f, l, attr))
+      if (not p(f, l, attr))
         return false;
       a = std::move(attr);
       return true;

@@ -60,7 +60,7 @@ bool bool_synopsis::equals(const synopsis& other) const noexcept {
   if (typeid(other) != typeid(bool_synopsis))
     return false;
   auto& rhs = static_cast<const bool_synopsis&>(other);
-  return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
+  return type() == rhs.type() and false_ == rhs.false_ and true_ == rhs.true_;
 }
 
 bool bool_synopsis::any_false() {
@@ -74,7 +74,7 @@ bool bool_synopsis::any_true() {
 bool bool_synopsis::inspect_impl(supported_inspectors& inspector) {
   return std::visit(
     [this](auto inspector) {
-      return inspector.get().apply(false_) && inspector.get().apply(true_);
+      return inspector.get().apply(false_) and inspector.get().apply(true_);
     },
     inspector);
 }

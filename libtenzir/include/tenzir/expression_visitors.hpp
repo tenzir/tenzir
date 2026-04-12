@@ -166,7 +166,7 @@ struct matcher {
   bool operator()(const data_extractor&, const data&);
 
   template <class T>
-    requires(!std::is_same_v<T, data>)
+    requires(not std::is_same_v<T, data>)
   bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }
@@ -202,7 +202,7 @@ public:
   void operator()(const T& xs) {
     static_assert(detail::is_any_v<T, conjunction, disjunction>);
     visit(xs);
-    if (!xs.empty()) {
+    if (not xs.empty()) {
       push();
       match(xs[0], *this);
       for (size_t i = 1; i < xs.size(); ++i) {
@@ -239,7 +239,7 @@ private:
   }
 
   void next() {
-    TENZIR_ASSERT(!offset_.empty());
+    TENZIR_ASSERT(not offset_.empty());
     ++offset_.back();
   }
 

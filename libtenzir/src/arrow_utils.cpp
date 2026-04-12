@@ -153,12 +153,12 @@ arrow::Status
 append_builder(const subnet_type&,
                type_to_arrow_builder_t<subnet_type>& builder,
                const view<type_to_data_t<subnet_type>>& view) noexcept {
-  if (auto status = builder.Append(); ! status.ok()) {
+  if (auto status = builder.Append(); not status.ok()) {
     return status;
   }
   if (auto status
       = append_builder(ip_type{}, builder.ip_builder(), view.network());
-      ! status.ok()) {
+      not status.ok()) {
     return status;
   }
   return builder.length_builder().Append(view.length());
@@ -187,14 +187,14 @@ arrow::Status
 append_builder(const list_type& hint,
                type_to_arrow_builder_t<list_type>& builder,
                const view<type_to_data_t<list_type>>& view) noexcept {
-  if (auto status = builder.Append(); ! status.ok()) {
+  if (auto status = builder.Append(); not status.ok()) {
     return status;
   }
   auto append_values = [&](const concrete_type auto& value_type) noexcept {
     auto& value_builder = *builder.value_builder();
     for (const auto& value_view : view) {
       if (auto status = append_builder(value_type, value_builder, value_view);
-          ! status.ok()) {
+          not status.ok()) {
         return status;
       }
     }
@@ -206,7 +206,7 @@ append_builder(const list_type& hint,
 arrow::Status
 append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
                const view<type_to_data_t<map_type>>& view) noexcept {
-  if (auto status = builder.Append(); ! status.ok()) {
+  if (auto status = builder.Append(); not status.ok()) {
     return status;
   }
   auto append_values = [&](const concrete_type auto& key_type,
@@ -215,11 +215,11 @@ append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
     auto& item_builder = *builder.item_builder();
     for (const auto& [key_view, item_view] : view) {
       if (auto status = append_builder(key_type, key_builder, key_view);
-          ! status.ok()) {
+          not status.ok()) {
         return status;
       }
       if (auto status = append_builder(item_type, item_builder, item_view);
-          ! status.ok()) {
+          not status.ok()) {
         return status;
       }
     }
@@ -232,13 +232,13 @@ arrow::Status
 append_builder(const record_type& hint,
                type_to_arrow_builder_t<record_type>& builder,
                const view<type_to_data_t<record_type>>& view) noexcept {
-  if (auto status = builder.Append(); ! status.ok()) {
+  if (auto status = builder.Append(); not status.ok()) {
     return status;
   }
   for (int index = 0; const auto& [_, field_type] : hint.fields()) {
     if (auto status = append_builder(field_type, *builder.field_builder(index),
                                      view->at(index).second);
-        ! status.ok()) {
+        not status.ok()) {
       return status;
     }
     ++index;
@@ -341,14 +341,14 @@ void for_each_true_run(const arrow::BooleanArray& mask, F&& fn) {
   auto i = int64_t{0};
   auto len = mask.length();
   while (i < len) {
-    while (i < len && not(mask.IsValid(i) and mask.Value(i))) {
+    while (i < len and not(mask.IsValid(i) and mask.Value(i))) {
       ++i;
     }
     if (i >= len) {
       break;
     }
     auto begin = i;
-    while (i < len && mask.IsValid(i) && mask.Value(i)) {
+    while (i < len and mask.IsValid(i) and mask.Value(i)) {
       ++i;
     }
     fn(begin, i);

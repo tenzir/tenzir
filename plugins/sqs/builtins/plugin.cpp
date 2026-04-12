@@ -65,7 +65,7 @@ public:
                   dur->source};
     }
     if (args.poll_time) {
-      if (args.poll_time->inner < 1s || args.poll_time->inner > 20s) {
+      if (args.poll_time->inner < 1s or args.poll_time->inner > 20s) {
         diagnostic::error("invalid poll time: {}", args.poll_time->inner)
           .primary(args.poll_time->source)
           .hint("poll time must be in the interval [1s, 20s]")

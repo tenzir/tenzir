@@ -99,7 +99,7 @@ public:
                   - 1.0;
               auto max
                 = static_cast<double>(std::numeric_limits<Data>::max()) + 1.0;
-              if (not(val > min) || not(val < max)) {
+              if (not(val > min) or not(val < max)) {
                 check(b.AppendNull());
                 overflow = true;
                 continue;

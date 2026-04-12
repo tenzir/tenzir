@@ -43,7 +43,7 @@ size_t query_queue::num_queries() const {
 }
 
 [[nodiscard]] bool query_queue::has_work() const {
-  return !partitions.empty();
+  return not partitions.empty();
 }
 
 [[nodiscard]] bool query_queue::reachable(const uuid& qid) const {
@@ -55,7 +55,7 @@ size_t query_queue::num_queries() const {
                          });
     });
   };
-  return run(partitions) || run(inactive_partitions);
+  return run(partitions) or run(inactive_partitions);
 }
 
 [[nodiscard]] uuid query_queue::create_query_id() const {
@@ -84,7 +84,7 @@ query_queue::insert(query_state&& query_state,
   auto qid = query_state.query_contexts_per_type.begin()->second.id;
   auto [query_state_it, emplace_success]
     = queries_.emplace(qid, std::move(query_state));
-  if (!emplace_success)
+  if (not emplace_success)
     return caf::make_error(ec::unspecified, "A query with this ID exists "
                                             "already");
   for (const auto& [schema, cand_info] : candidates.candidate_infos) {
@@ -95,7 +95,7 @@ query_queue::insert(query_state&& query_state,
                           ->second.priority;
         it->queries.push_back(qid);
         TENZIR_ASSERT_EXPENSIVE(
-          !detail::contains(inactive_partitions, cand.uuid),
+          not detail::contains(inactive_partitions, cand.uuid),
           "A partition must not be active and inactive at the same "
           "time");
         continue;
@@ -174,7 +174,7 @@ bool query_queue::mark_partition_erased(const uuid& pid) {
   auto it = std::find(partitions.begin(), partitions.end(), pid);
   if (it != partitions.end()) {
     it->erased = true;
-    TENZIR_ASSERT(!detail::contains(inactive_partitions, pid),
+    TENZIR_ASSERT(not detail::contains(inactive_partitions, pid),
                   "A partition must not be active and inactive at the "
                   "same "
                   "time");
@@ -189,7 +189,7 @@ bool query_queue::mark_partition_erased(const uuid& pid) {
 }
 
 std::optional<query_queue::entry> query_queue::next() {
-  while (!partitions.empty()) {
+  while (not partitions.empty()) {
     auto result = std::move(partitions.back());
     partitions.pop_back();
     auto active
@@ -211,7 +211,7 @@ std::optional<query_queue::entry> query_queue::next() {
         return query_state.requested_partitions
                > query_state.scheduled_partitions;
       });
-    if (!inactive.queries.empty()) {
+    if (not inactive.queries.empty()) {
       for (auto qid_it = inactive.queries.begin();
            qid_it != inactive.queries.end();) {
         auto it = queries_.find(*qid_it);
@@ -226,7 +226,7 @@ std::optional<query_queue::entry> query_queue::next() {
       }
       inactive_partitions.push_back(std::move(inactive));
     }
-    if (!active.queries.empty()) {
+    if (not active.queries.empty()) {
       for (const auto& qid : active.queries) {
         auto it = queries_.find(qid);
         if (it == queries_.end()) {
@@ -256,7 +256,7 @@ query_queue::handle_completion(const uuid& qid) {
   if (query_state.completed_partitions == query_state.requested_partitions)
     result = query_state.client;
   if (query_state.completed_partitions == query_state.candidate_partitions) {
-    TENZIR_ASSERT_EXPENSIVE(!reachable(qid));
+    TENZIR_ASSERT_EXPENSIVE(not reachable(qid));
     queries_.erase(qid);
   }
   return result;

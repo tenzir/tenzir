@@ -190,10 +190,10 @@ public:
     // TODO: This could be easier, but `plugin_inspect` does not seem to play
     // well with the `.object()` DSL.
     return f.begin_object(caf::invalid_type_id, "print_operator")
-           && f.begin_field("input") && f.apply(x.input_) && f.end_field()
-           && f.begin_field("printer_name") && f.apply(x.printer_name_)
-           && f.end_field() && f.begin_field("printer")
-           && plugin_inspect(f, x.printer_) && f.end_field() && f.end_object();
+           and f.begin_field("input") and f.apply(x.input_) and f.end_field()
+           and f.begin_field("printer_name") and f.apply(x.printer_name_)
+           and f.end_field() and f.begin_field("printer")
+           and plugin_inspect(f, x.printer_) and f.end_field() and f.end_object();
   }
 
 private:

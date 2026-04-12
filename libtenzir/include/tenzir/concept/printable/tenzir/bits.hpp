@@ -31,11 +31,11 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
   auto print(Iterator& out, const bits<T>& b) const -> bool {
     auto print_run = [&](auto bit, auto length) {
       using size_type = typename word_type::size_type;
-      return printers::integral<size_type>(out, length) &&
+      return printers::integral<size_type>(out, length) and
              printers::any(out, bit ? 'T' : 'F');
     };
     if (b.homogeneous()) {
-      if (!print_run(!!b.data(), b.size()))
+      if (not print_run(!!b.data(), b.size()))
         return false;
     } else {
       auto n = 1u;
@@ -44,14 +44,14 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
         bool y = b.data() & word_type::mask(i);
         if (x == y) {
           ++n;
-        } else if (!print_run(x, n)) {
+        } else if (not print_run(x, n)) {
           return false;
         } else {
           n = 1;
           x = y;
         }
       }
-      if (!print_run(x, n))
+      if (not print_run(x, n))
         return false;
     }
     return true;
@@ -62,12 +62,12 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
     if (b.size() > word_type::width) {
       auto c = b.data() ? '1' : '0';
       for (auto i = 0u; i < b.size(); ++i)
-        if (!printers::any(out, c))
+        if (not printers::any(out, c))
           return false;
     } else {
       for (auto i = 0u; i < b.size(); ++i) {
         auto c = b.data() & word_type::mask(i) ? '1' : '0';
-        if (!printers::any(out, c))
+        if (not printers::any(out, c))
           return false;
        }
     }

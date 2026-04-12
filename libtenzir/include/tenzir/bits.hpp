@@ -53,7 +53,7 @@ class bits : detail::equality_comparable<bits<T>> {
   bits(value_type x, size_type n)
     : data_{n < width() ? value_type(x & word<T>::lsb_mask(n)) : x},
       size_{n} {
-    TENZIR_ASSERT(n <= width() || word<T>::all_or_none(x));
+    TENZIR_ASSERT(n <= width() or word<T>::all_or_none(x));
   }
 
   /// @returns The data block of the bit sequence.
@@ -126,7 +126,7 @@ class bits : detail::equality_comparable<bits<T>> {
   }
 
   friend bool operator==(const bits& x, const bits& y) {
-    return x.data() == y.data() && x.size() == y.size();
+    return x.data() == y.data() and x.size() == y.size();
   }
 
   friend bool operator<(const bits& x, const bits& y) {

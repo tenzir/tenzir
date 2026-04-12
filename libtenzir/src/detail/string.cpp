@@ -346,18 +346,18 @@ std::string json_unescape(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
   // Need at least two delimiting double quotes.
-  if (f == l || l - f < 2) {
+  if (f == l or l - f < 2) {
     return {};
   }
   // Only consider double-quoted strings.
-  if (! (*f++ == '"' && (*--l == '"'))) {
+  if (not (*f++ == '"' and (*--l == '"'))) {
     return {};
   }
   std::string result;
   result.reserve(str.size());
   auto out = std::back_inserter(result);
   while (f != l) {
-    if (! json_unescaper(f, l, out)) {
+    if (not json_unescaper(f, l, out)) {
       return {};
     }
   }
@@ -392,20 +392,20 @@ std::string replace_all(std::string str, std::string_view search,
 
 std::vector<std::string_view>
 split(std::string_view str, std::string_view sep, size_t max_splits) {
-  TENZIR_ASSERT(! sep.empty());
+  TENZIR_ASSERT(not sep.empty());
   if (str.empty()) {
     return {""};
   }
   std::vector<std::string_view> out;
   auto it = str.begin();
   size_t splits = 0;
-  while (it != str.end() && splits++ != max_splits) {
+  while (it != str.end() and splits++ != max_splits) {
     auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
     out.emplace_back(it, next_sep.begin());
     it = next_sep.end();
     // Final char in `str` is a separator ->
     // add empty element
-    if (! next_sep.empty() && it == str.end()) {
+    if (not next_sep.empty() and it == str.end()) {
       out.emplace_back("");
     }
   }
@@ -429,8 +429,8 @@ split_once(std::string_view str, std::string_view sep) {
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits) {
-  TENZIR_ASSERT(! sep.empty());
-  TENZIR_ASSERT(! esc.empty());
+  TENZIR_ASSERT(not sep.empty());
+  TENZIR_ASSERT(not esc.empty());
   if (str.empty()) {
     return {""};
   }
@@ -438,7 +438,7 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
   auto it = str.begin();
   std::string current{};
   size_t splits = 0;
-  while (it != str.end() && splits != max_splits) {
+  while (it != str.end() and splits != max_splits) {
     auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
     if (std::distance(it, next_sep.begin()) >= std::ssize(esc)) {
       // Possibly escaped separator
@@ -455,7 +455,7 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
     out.emplace_back(std::move(current));
     current = {};
     it = next_sep.end();
-    if (! next_sep.empty() && it == str.end()) {
+    if (not next_sep.empty() and it == str.end()) {
       out.emplace_back("");
     }
     ++splits;

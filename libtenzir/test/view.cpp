@@ -120,9 +120,9 @@ TEST("comparison with data") {
   CHECK(is_equal(x, y));
   CHECK(is_equal(y, x));
   y = make_data_view(false);
-  CHECK(! is_equal(x, y));
+  CHECK(not is_equal(x, y));
   y = caf::none;
-  CHECK(! is_equal(x, y));
+  CHECK(not is_equal(x, y));
   x = caf::none;
   CHECK(is_equal(x, y));
   x = list{int64_t{1}, "foo", 4.2};
@@ -146,7 +146,7 @@ TEST("container comparison") {
   data xs = list{int64_t{42}};
   data ys = list{int64_t{42}};
   CHECK(make_view(xs) == make_view(ys));
-  CHECK(! (make_view(xs) < make_view(ys)));
+  CHECK(not (make_view(xs) < make_view(ys)));
   as<list>(ys).push_back(int64_t{0});
   CHECK(make_view(xs) != make_view(ys));
   CHECK(make_view(xs) < make_view(ys));

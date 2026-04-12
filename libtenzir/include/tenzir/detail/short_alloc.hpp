@@ -67,7 +67,7 @@ public:
                   "you've chosen an alignment that is larger than "
                   "alignof(std::max_align_t), and cannot be guaranteed "
                   "by normal operator new");
-    TENZIR_ASSERT(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+    TENZIR_ASSERT(pointer_in_buffer(ptr_) and "short_alloc has outlived arena");
     auto const aligned_n = align_up(n);
     if (static_cast<decltype(aligned_n)>(buf_ + N - ptr_) >= aligned_n) {
       char* r = ptr_;
@@ -78,7 +78,7 @@ public:
   }
 
   void deallocate(char* p, size_t n) noexcept {
-    TENZIR_ASSERT(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+    TENZIR_ASSERT(pointer_in_buffer(ptr_) and "short_alloc has outlived arena");
     if (pointer_in_buffer(p)) {
       n = align_up(n);
       if (p + n == ptr_)
@@ -106,7 +106,7 @@ private:
   }
 
   bool pointer_in_buffer(char* p) noexcept {
-    return buf_ <= p && p <= buf_ + N;
+    return buf_ <= p and p <= buf_ + N;
   }
 
   alignas(Alignment) char buf_[N];
@@ -161,13 +161,13 @@ private:
 template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
 bool operator==(const short_alloc<T0, N0, A0>& x,
                 const short_alloc<T1, N1, A1>& y) noexcept {
-  return N0 == N1 && A0 == A1 && &x.a_ == &y.a_;
+  return N0 == N1 and A0 == A1 and &x.a_ == &y.a_;
 }
 
 template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
 bool operator!=(const short_alloc<T0, N0, A0>& x,
                 const short_alloc<T1, N1, A1>& y) noexcept {
-  return !(x == y);
+  return not (x == y);
 }
 
 } // namespace tenzir::detail

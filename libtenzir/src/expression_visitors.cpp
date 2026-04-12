@@ -75,7 +75,7 @@ expression meta_pruner::operator()(const negation& n) const {
 }
 
 expression meta_pruner::operator()(const predicate& p) const {
-  if (is<meta_extractor>(p.lhs) || is<meta_extractor>(p.rhs)) {
+  if (is<meta_extractor>(p.lhs) or is<meta_extractor>(p.rhs)) {
     return expression{};
   }
   return {p};
@@ -147,10 +147,10 @@ expression aligner::operator()(const negation& n) const {
 
 expression aligner::operator()(const predicate& p) const {
   auto is_extractor = [](auto& operand) {
-    return !is<data>(operand);
+    return not is<data>(operand);
   };
   // Already aligned if LHS is an extractor or no extractor present.
-  if (is_extractor(p.lhs) || !is_extractor(p.rhs)) {
+  if (is_extractor(p.lhs) or not is_extractor(p.rhs)) {
     return p;
   }
   return predicate{p.rhs, flip(p.op), p.lhs};
@@ -189,7 +189,7 @@ expression denegator::operator()(const negation& n) const {
     return match(inner->expr(), *this);
   }
   // Apply De Morgan from here downward.
-  return match(n.expr(), denegator{!negate_});
+  return match(n.expr(), denegator{not negate_});
 }
 
 expression denegator::operator()(const predicate& p) const {
@@ -279,7 +279,7 @@ caf::expected<void> validator::operator()(caf::none_t) {
 caf::expected<void> validator::operator()(const conjunction& c) {
   for (auto& op : c) {
     auto m = match(op, *this);
-    if (!m) {
+    if (not m) {
       return m;
     }
   }
@@ -289,7 +289,7 @@ caf::expected<void> validator::operator()(const conjunction& c) {
 caf::expected<void> validator::operator()(const disjunction& d) {
   for (auto& op : d) {
     auto m = match(op, *this);
-    if (!m) {
+    if (not m) {
       return m;
     }
   }
@@ -308,25 +308,25 @@ caf::expected<void> validator::operator()(const predicate& p) {
 caf::expected<void>
 validator::operator()(const meta_extractor& ex, const data& d) {
   if (ex.kind == meta_extractor::schema
-      && !(is<std::string>(d) || is<pattern>(d))) {
+      and not (is<std::string>(d) or is<pattern>(d))) {
     return caf::make_error(ec::syntax_error,
                            "schema meta extractor requires string or pattern "
                            "operand",
                            "#schema", op_, d);
   }
   if (ex.kind == meta_extractor::schema_id
-      && !(is<std::string>(d) || is<pattern>(d))) {
+      and not (is<std::string>(d) or is<pattern>(d))) {
     return caf::make_error(ec::syntax_error,
                            "schema_id meta extractor requires string or "
                            "pattern operand",
                            "#schema_id", op_, d);
   }
   if (ex.kind == meta_extractor::import_time) {
-    if (!is<time>(d)
-        || !(op_ == relational_operator::less
-             || op_ == relational_operator::less_equal
-             || op_ == relational_operator::greater
-             || op_ == relational_operator::greater_equal)) {
+    if (not is<time>(d)
+        or not (op_ == relational_operator::less
+             or op_ == relational_operator::less_equal
+             or op_ == relational_operator::greater
+             or op_ == relational_operator::greater_equal)) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("import_time attribute extractor only "
                                          "supports time comparisons "
@@ -341,10 +341,10 @@ caf::expected<void>
 validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
-  if (!ex.type) {
+  if (not ex.type) {
     return {};
   }
-  if (!compatible(ex.type, op_, d)) {
+  if (not compatible(ex.type, op_, d)) {
     return caf::make_error(
       ec::syntax_error, "type extractor type check failure", ex.type, op_, d);
   }
@@ -370,7 +370,7 @@ caf::expected<expression> type_resolver::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
     auto r = match(op, *this);
-    if (!r) {
+    if (not r) {
       return r;
     } else if (is<caf::none_t>(*r)) {
       return expression{};
@@ -392,9 +392,9 @@ caf::expected<expression> type_resolver::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
     auto r = match(op, *this);
-    if (!r) {
+    if (not r) {
       return r;
-    } else if (!is<caf::none_t>(*r)) {
+    } else if (not is<caf::none_t>(*r)) {
       result.push_back(std::move(*r));
     }
   }
@@ -410,9 +410,9 @@ caf::expected<expression> type_resolver::operator()(const disjunction& d) {
 
 caf::expected<expression> type_resolver::operator()(const negation& n) {
   auto r = match(n.expr(), *this);
-  if (!r) {
+  if (not r) {
     return r;
-  } else if (!is<caf::none_t>(*r)) {
+  } else if (not is<caf::none_t>(*r)) {
     return {negation{std::move(*r)}};
   } else {
     return expression{};
@@ -433,7 +433,7 @@ type_resolver::operator()(const meta_extractor& ex, const data& d) {
 
 caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
-  if (!ex.type) {
+  if (not ex.type) {
     auto matches = [&](const type& t) {
       return t.name() == ex.type.name() and compatible(t, op_, d);
     };
@@ -490,7 +490,7 @@ bool matcher::operator()(caf::none_t) {
 
 bool matcher::operator()(const conjunction& c) {
   for (auto& op : c) {
-    if (!match(op, *this)) {
+    if (not match(op, *this)) {
       return false;
     }
   }

@@ -52,7 +52,7 @@ public:
   template <class Inspector>
   friend auto inspect(Inspector& f, hasher& x) {
     uint32_t k;
-    if constexpr (!Inspector::is_loading) {
+    if constexpr (not Inspector::is_loading) {
       k = static_cast<uint32_t>(x.size());
       return f.apply(k);
     } else {
@@ -152,7 +152,7 @@ public:
   // -- concepts -------------------------------------------------------------
 
   friend bool operator==(const double_hasher& x, const double_hasher& y) {
-    return x.size() == y.size() && x.seed1_ == y.seed1_ && x.seed2_ == y.seed2_;
+    return x.size() == y.size() and x.seed1_ == y.seed1_ and x.seed2_ == y.seed2_;
   }
 
   template <class Inspector>

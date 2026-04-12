@@ -30,7 +30,7 @@ inline auto hex_unescaper = [](auto& f, auto l, auto out) {
   if (f == l)
     return false;
   auto lo = *f++;
-  if (!std::isxdigit(hi) || !std::isxdigit(lo))
+  if (not std::isxdigit(hi) or not std::isxdigit(lo))
     return false;
   *out++ = hex_to_byte(hi, lo);
   return true;
@@ -102,7 +102,7 @@ inline auto json_escaper = [](auto& f, auto out) {
     *out++ = c;
   };
   auto json_print_escaper = [](auto& f, auto out) {
-    if (!std::iscntrl(*f)) {
+    if (not std::iscntrl(*f)) {
       *out++ = *f++;
     } else {
       auto hex = byte_to_hex(*f++);
@@ -187,14 +187,14 @@ inline auto json_unescaper = [](auto& f, auto l, auto out) {
       bytes[1] = *++f;
       bytes[2] = *++f;
       bytes[3] = *++f;
-      if (bytes[0] != '0' || bytes[1] != '0') {
+      if (bytes[0] != '0' or bytes[1] != '0') {
         // Leave input as is, we don't know how to handle it (yet).
         *out++ = '\\';
         *out++ = 'u';
         std::copy(bytes.begin(), bytes.end(), out);
       } else {
         // Hex-unescape the XX portion of \u00XX.
-        if (!std::isxdigit(bytes[2]) || !std::isxdigit(bytes[3]))
+        if (not std::isxdigit(bytes[2]) or not std::isxdigit(bytes[3]))
           return false;
         *out++ = hex_to_byte(bytes[2], bytes[3]);
       }
@@ -207,7 +207,7 @@ inline auto json_unescaper = [](auto& f, auto l, auto out) {
 
 inline auto percent_escaper = [](auto& f, auto out) {
   auto is_unreserved = [](char c) {
-    return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~';
+    return std::isalnum(c) or c == '-' or c == '_' or c == '.' or c == '~';
   };
   if (is_unreserved(*f)) {
     *out++ = *f++;
@@ -257,7 +257,7 @@ inline auto make_double_unescaper(std::string_view esc) {
     }
     *out++ = x;
     auto y = *f++;
-    if (x == y && esc.find(x) == std::string_view::npos)
+    if (x == y and esc.find(x) == std::string_view::npos)
       *out++ = y;
     return true;
   };

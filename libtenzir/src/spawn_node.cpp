@@ -44,9 +44,9 @@ auto spawn_node(caf::scoped_actor& self)
                                        db_dir, err.message()));
   }
   const auto dir_exists = std::filesystem::exists(abs_dir, err);
-  if (! dir_exists) {
+  if (not dir_exists) {
     if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
-        ! created_dir) {
+        not created_dir) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("unable to create state-directory {}: "
                                          "{}",
@@ -54,7 +54,7 @@ auto spawn_node(caf::scoped_actor& self)
     }
   }
   if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
-      ! is_writable) {
+      not is_writable) {
     return caf::make_error(
       ec::filesystem_error,
       "unable to write to state-directory:", abs_dir.string());
@@ -82,7 +82,7 @@ auto spawn_node(caf::scoped_actor& self)
     const auto* cache_directory
       = get_if<std::string>(&opts, "tenzir.cache-directory");
     if (cache_directory != nullptr
-        && std::filesystem::exists(*cache_directory)) {
+        and std::filesystem::exists(*cache_directory)) {
       for (auto const& item :
            std::filesystem::directory_iterator{*cache_directory}) {
         std::filesystem::remove_all(item.path(), err);

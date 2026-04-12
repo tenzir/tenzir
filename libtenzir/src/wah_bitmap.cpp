@@ -89,7 +89,7 @@ void wah_bitmap::append_bits(bool bit, size_type n) {
     blocks_.push_back(word_type::make_fill(bit, fills));
   // No more fill words, back to the last active word.
   blocks_.push_back(word_type::none);
-  if (partial > 0 && bit)
+  if (partial > 0 and bit)
     blocks_.back() = word_type::lsb_mask(partial);
   num_last_ = partial;
   num_bits_ += n;
@@ -131,7 +131,7 @@ void wah_bitmap::flip() {
 }
 
 void wah_bitmap::merge_active_word() {
-  TENZIR_ASSERT(!blocks_.empty());
+  TENZIR_ASSERT(not blocks_.empty());
   TENZIR_ASSERT(num_last_ == word_type::literal_word_size);
   auto guard = detail::scope_guard([&]() noexcept {
     blocks_.push_back(word_type::none);
@@ -139,7 +139,7 @@ void wah_bitmap::merge_active_word() {
   });
   auto is_fill
     = word_type::all_or_none(blocks_.back(), word_type::literal_word_size);
-  if (!is_fill)
+  if (not is_fill)
     return;
   // If there's no other word than the active word, we have nothing to merge.
   if (blocks_.size() == 1) {
@@ -153,7 +153,7 @@ void wah_bitmap::merge_active_word() {
     // All 1s.
     auto& prev = *(blocks_.rbegin() + 1);
     if (word_type::is_fill(prev, true)
-        && word_type::fill_words(prev) < word_type::max_fill_words) {
+        and word_type::fill_words(prev) < word_type::max_fill_words) {
       prev = word_type::make_fill(true, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
@@ -163,7 +163,7 @@ void wah_bitmap::merge_active_word() {
     // All 0s.
     auto& prev = *(blocks_.rbegin() + 1);
     if (word_type::is_fill(prev, false)
-        && word_type::fill_words(prev) < word_type::max_fill_words) {
+        and word_type::fill_words(prev) < word_type::max_fill_words) {
       prev = word_type::make_fill(false, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
@@ -173,7 +173,7 @@ void wah_bitmap::merge_active_word() {
 }
 
 bool operator==(const wah_bitmap& x, const wah_bitmap& y) {
-  return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
+  return x.blocks_ == y.blocks_ and x.num_bits_ == y.num_bits_;
 }
 
 auto pack(flatbuffers::FlatBufferBuilder& builder, const wah_bitmap& from)
@@ -212,7 +212,7 @@ void wah_bitmap_range::scan() {
   if (word_type::is_fill(*begin_)) {
     auto n = word_type::fill_words(*begin_) * word_type::literal_word_size;
     auto value = word_type::fill_type(*begin_);
-    while (++begin_ != end_ && word_type::is_fill(*begin_, value))
+    while (++begin_ != end_ and word_type::is_fill(*begin_, value))
       n += word_type::fill_words(*begin_) * word_type::literal_word_size;
     bits_ = {value ? word_type::word::all : word_type::word::none, n};
     --begin_;

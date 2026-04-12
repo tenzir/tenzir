@@ -42,7 +42,7 @@ namespace ssl = caf::net::ssl;
 
 auto split_at_newline(const chunk_ptr& chunk)
   -> std::vector<std::vector<std::byte>> {
-  if (not chunk || chunk->size() == 0) {
+  if (not chunk or chunk->size() == 0) {
     return {};
   }
   auto svs = std::vector<std::vector<std::byte>>{};

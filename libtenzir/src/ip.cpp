@@ -111,29 +111,29 @@ auto ip::is_v4() const -> bool {
 }
 
 auto ip::is_v6() const -> bool {
-  return !is_v4();
+  return not is_v4();
 }
 
 auto ip::is_loopback() const -> bool {
   if (is_v4()) {
     return bytes_[12] == 127;
   } else {
-    return ((bytes_[0] == 0) && (bytes_[1] == 0) && (bytes_[2] == 0)
-            && (bytes_[3] == 0) && (bytes_[4] == 0) && (bytes_[5] == 0)
-            && (bytes_[6] == 0) && (bytes_[7] == 0) && (bytes_[8] == 0)
-            && (bytes_[9] == 0) && (bytes_[10] == 0) && (bytes_[11] == 0)
-            && (bytes_[12] == 0) && (bytes_[13] == 0) && (bytes_[14] == 0)
-            && (bytes_[15] == 1));
+    return ((bytes_[0] == 0) and (bytes_[1] == 0) and (bytes_[2] == 0)
+            and (bytes_[3] == 0) and (bytes_[4] == 0) and (bytes_[5] == 0)
+            and (bytes_[6] == 0) and (bytes_[7] == 0) and (bytes_[8] == 0)
+            and (bytes_[9] == 0) and (bytes_[10] == 0) and (bytes_[11] == 0)
+            and (bytes_[12] == 0) and (bytes_[13] == 0) and (bytes_[14] == 0)
+            and (bytes_[15] == 1));
   }
 }
 
 auto ip::is_broadcast() const -> bool {
-  return is_v4() && bytes_[12] == 0xff && bytes_[13] == 0xff
-         && bytes_[14] == 0xff && bytes_[15] == 0xff;
+  return is_v4() and bytes_[12] == 0xff and bytes_[13] == 0xff
+         and bytes_[14] == 0xff and bytes_[15] == 0xff;
 }
 
 auto ip::is_multicast() const -> bool {
-  return is_v4() ? (bytes_[12] >= 224 && bytes_[12] <= 239) : bytes_[0] == 0xff;
+  return is_v4() ? (bytes_[12] >= 224 and bytes_[12] <= 239) : bytes_[0] == 0xff;
 }
 
 auto ip::is_private() const -> bool {
@@ -144,13 +144,13 @@ auto ip::is_private() const -> bool {
     // 192.168.0.0/16 (192.168.0.0 - 192.168.255.255)
     // Note: 169.254.0.0/16 (link-local) is NOT included here
     return (bytes_[12] == 10)
-           || (bytes_[12] == 172 && bytes_[13] >= 16 && bytes_[13] <= 31)
-           || (bytes_[12] == 192 && bytes_[13] == 168);
+           or (bytes_[12] == 172 and bytes_[13] >= 16 and bytes_[13] <= 31)
+           or (bytes_[12] == 192 and bytes_[13] == 168);
   } else {
     // IPv6 private addresses:
     // fc00::/7 - Unique Local Addresses (ULA)
     // Note: fe80::/10 (link-local) is NOT included here
-    return (bytes_[0] >= 0xfc && bytes_[0] <= 0xfd);
+    return (bytes_[0] >= 0xfc and bytes_[0] <= 0xfd);
   }
 }
 
@@ -166,8 +166,8 @@ auto ip::is_global() const -> bool {
   // Check for unspecified address
   if (is_v4()) {
     // For IPv4, check if the last 4 bytes are all zero (0.0.0.0)
-    if (bytes_[12] == 0 && bytes_[13] == 0 && bytes_[14] == 0
-        && bytes_[15] == 0) {
+    if (bytes_[12] == 0 and bytes_[13] == 0 and bytes_[14] == 0
+        and bytes_[15] == 0) {
       return false;
     }
   } else {
@@ -184,17 +184,17 @@ auto ip::is_global() const -> bool {
     }
   }
 
-  return ! is_loopback() && ! is_private() && ! is_link_local()
-         && ! is_multicast() && ! is_broadcast();
+  return not is_loopback() and not is_private() and not is_link_local()
+         and not is_multicast() and not is_broadcast();
 }
 
 auto ip::is_link_local() const -> bool {
   if (is_v4()) {
     // IPv4 link-local: 169.254.0.0/16
-    return bytes_[12] == 169 && bytes_[13] == 254;
+    return bytes_[12] == 169 and bytes_[13] == 254;
   } else {
     // IPv6 link-local: fe80::/10
-    return (bytes_[0] == 0xfe) && ((bytes_[1] & 0xc0) == 0x80);
+    return (bytes_[0] == 0xfe) and ((bytes_[1] & 0xc0) == 0x80);
   }
 }
 
@@ -202,8 +202,8 @@ auto ip::type() const -> ip_address_class {
   // Check for unspecified address first (0.0.0.0 or ::)
   if (is_v4()) {
     // For IPv4, check if the last 4 bytes are all zero (0.0.0.0)
-    if (bytes_[12] == 0 && bytes_[13] == 0 && bytes_[14] == 0
-        && bytes_[15] == 0) {
+    if (bytes_[12] == 0 and bytes_[13] == 0 and bytes_[14] == 0
+        and bytes_[15] == 0) {
       return ip_address_class::unspecified;
     }
   } else {
@@ -274,7 +274,7 @@ auto ip::operator|=(const ip& other) -> ip& {
 }
 
 auto ip::operator^=(const ip& other) -> ip& {
-  if (is_v4() || other.is_v4()) {
+  if (is_v4() or other.is_v4()) {
     for (auto i = 12u; i < 16u; ++i) {
       bytes_[i] ^= other.bytes_[i];
     }

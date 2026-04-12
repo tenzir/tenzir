@@ -22,7 +22,7 @@ namespace {
 auto get_process_statistics() -> caf::expected<record> {
   auto result = record{};
   auto os = os::make();
-  if (!os)
+  if (not os)
     return caf::make_error(ec::system_error, "failed to create os");
   auto process = os->current_process();
   auto assign_optional = [&result](std::string_view key, auto value) {

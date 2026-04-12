@@ -33,7 +33,7 @@ concept incremental_hash
 /// An incremental hash algorithm that can be reset to its initial state.
 template <class HashAlgorithm>
 concept reusable_hash
-  = incremental_hash<HashAlgorithm> && requires(HashAlgorithm& h) {
+  = incremental_hash<HashAlgorithm> and requires(HashAlgorithm& h) {
       // clang-format off
       { h.reset() } noexcept -> std::same_as<void>;
       // clang-format on
@@ -54,6 +54,6 @@ concept oneshot_hash = requires(std::span<const std::byte> bytes) {
 /// *incremental*, or both.
 template <class HashAlgorithm>
 concept hash_algorithm
-  = incremental_hash<HashAlgorithm> || oneshot_hash<HashAlgorithm>;
+  = incremental_hash<HashAlgorithm> or oneshot_hash<HashAlgorithm>;
 
 } // namespace tenzir

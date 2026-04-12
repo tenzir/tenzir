@@ -103,7 +103,7 @@ TEST("compound durations") {
   check_duration("-10m8ms1ns", -(10min + 8ms + 1ns));
   MESSAGE("no intermediate signs");
   auto p = parsers::duration >> parsers::eoi;
-  CHECK(!p("-10m-8ms1ns"));
+  CHECK(not p("-10m-8ms1ns"));
 }
 
 bool verify_date(tenzir::time ts, int y, int m, int d) {
@@ -112,7 +112,7 @@ bool verify_date(tenzir::time ts, int y, int m, int d) {
   std::tm tm = {};
   if (nullptr == gmtime_r(&time, &tm))
     return false;
-  return tm.tm_year + 1900 == y && tm.tm_mon + 1 == m && tm.tm_mday == d;
+  return tm.tm_year + 1900 == y and tm.tm_mon + 1 == m and tm.tm_mday == d;
 }
 
 tenzir::duration to_hours(tenzir::duration ts) {

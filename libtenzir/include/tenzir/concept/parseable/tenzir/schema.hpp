@@ -62,14 +62,14 @@ struct symbol_resolver {
       return x;
     }
     auto concrete = lookup(x.name());
-    if (!concrete)
+    if (not concrete)
       return concrete.error();
     return concrete->update_attributes(x.attributes());
   }
 
   caf::expected<legacy_type> operator()(legacy_alias_type x) {
     auto y = match(x.value_type, *this);
-    if (!y)
+    if (not y)
       return y.error();
     x.value_type = *y;
     return x;
@@ -84,10 +84,10 @@ struct symbol_resolver {
       return false;
     };
     auto y = match(x.value_type, *this);
-    if (!y)
+    if (not y)
       return y.error();
     x.value_type = *y;
-    if (is<legacy_record_type>(x.value_type) && !has_skip_attribute(x)) {
+    if (is<legacy_record_type>(x.value_type) and not has_skip_attribute(x)) {
       x.update_attributes({{"skip", std::nullopt}});
     }
     return x;
@@ -95,11 +95,11 @@ struct symbol_resolver {
 
   caf::expected<legacy_type> operator()(legacy_map_type x) {
     auto y = match(x.value_type, *this);
-    if (!y)
+    if (not y)
       return y.error();
     x.value_type = *y;
     auto z = match(x.key_type, *this);
-    if (!z)
+    if (not z)
       return z.error();
     x.key_type = *z;
     return x;
@@ -115,7 +115,7 @@ struct symbol_resolver {
     };
     for (auto& [field_name, field_type] : x.fields) {
       auto y = match(field_type, *this);
-      if (!y)
+      if (not y)
         return y.error();
       field_type = *y;
     }
@@ -130,7 +130,7 @@ struct symbol_resolver {
         TENZIR_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
-          if (!result)
+          if (not result)
             return result.error();
           acc = *result;
         } else if (it->name == "<+") {
@@ -142,7 +142,7 @@ struct symbol_resolver {
           for (const auto& f : rhs->fields)
             path.emplace_back(f.name);
           auto acc_removed = remove_field(acc, path);
-          if (!acc_removed)
+          if (not acc_removed)
             return caf::make_error( //
               ec::parse_error,
               fmt::format("cannot delete non-existing field {} from type {}",
@@ -160,7 +160,7 @@ struct symbol_resolver {
                                        "supported.",
                                        x.name()));
       for (const auto& field : acc.fields)
-        TENZIR_ASSERT(!field.name.empty());
+        TENZIR_ASSERT(not field.name.empty());
       return acc.name(x.name());
     }
     return x;
@@ -173,10 +173,10 @@ struct symbol_resolver {
                              value.first);
     local.erase(next);
     auto x = match(value.second, *this);
-    if (!x)
+    if (not x)
       return x.error();
     auto [iter, inserted] = resolved.emplace(value.first, std::move(*x));
-    if (!inserted)
+    if (not inserted)
       return caf::make_error(ec::parse_error, "failed to extend resolved "
                                               "symbols");
     // TODO: The schema parser will soon be obsoleted by the YAML schema
@@ -203,8 +203,8 @@ struct symbol_resolver {
   // That means that a single iteration of this loop can remove between 1 and
   // all remaining elements from the local set.
   caf::expected<module> resolve() {
-    while (!local.empty())
-      if (auto x = resolve(local.begin()); !x)
+    while (not local.empty())
+      if (auto x = resolve(local.begin()); not x)
         return x.error();
     // Finally we replace the now empty local set with the set of resolved
     // symbols for further use by the caller.
@@ -235,10 +235,10 @@ struct symbol_map_parser : parser_base<symbol_map_parser> {
       auto [name, ty] = std::move(t);
       // If the type has already a name, we're dealing with a symbol and have
       // to create an alias.
-      if (!ty.name().empty())
+      if (not ty.name().empty())
         ty = legacy_alias_type{ty}; // TODO: attributes
       ty.name(name);
-      if (!out.emplace(name, ty).second) {
+      if (not out.emplace(name, ty).second) {
         TENZIR_ERROR("multiple definitions of {} detected", name);
         duplicate_symbol = true;
       }
@@ -252,7 +252,7 @@ struct symbol_map_parser : parser_base<symbol_map_parser> {
           ->* to_type;
     // clang-format on
     auto declarations = +(skp >> decl) >> skp;
-    if (!declarations(f, l, unused))
+    if (not declarations(f, l, unused))
       return false;
     if (duplicate_symbol)
       return false;
@@ -279,11 +279,11 @@ struct schema_parser : parser_base<schema_parser> {
     symbol_map global;
     symbol_map local;
     auto p = symbol_map_parser{};
-    if (!p(f, l, local))
+    if (not p(f, l, local))
       return false;
     auto r = symbol_resolver{global, local};
     auto sch = r.resolve();
-    if (!sch) {
+    if (not sch) {
       TENZIR_WARN("failed to resolve symbol table: {}", sch.error());
       return false;
     }

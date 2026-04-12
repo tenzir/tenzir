@@ -103,13 +103,13 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv4) {
+                  or Policy == ip_parser_policy::ipv4) {
       static auto v4 = make_v4();
       if (v4(f, l, unused))
         return true;
     }
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv6) {
+                  or Policy == ip_parser_policy::ipv6) {
       static auto v6 = make_v6();
       if (v6(f, l, unused))
         return true;
@@ -122,7 +122,7 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
     std::array<uint8_t, 16> bytes = {};
     auto begin = f;
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv4) {
+                  or Policy == ip_parser_policy::ipv4) {
       static auto const v4 = make_v4();
       if (v4(f, l, bytes[12], bytes[13], bytes[14], bytes[15])) {
         a = ip::v4(std::span<const uint8_t, 4>{bytes.data() + 12, 4});
@@ -130,7 +130,7 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
       }
     }
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv6) {
+                  or Policy == ip_parser_policy::ipv6) {
       static auto const v6 = make_v6();
       if (v6(f, l, unused)) {
         // We still need to enhance the parseable concept with a few more tools

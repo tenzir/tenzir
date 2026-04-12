@@ -17,7 +17,7 @@ namespace tenzir::detail {
 template <class T, class U = T>
 struct equality_comparable {
   friend bool operator!=(const T& x, const U& y) {
-    return !(x == y);
+    return not (x == y);
   }
 };
 
@@ -28,11 +28,11 @@ struct less_than_comparable {
   }
 
   friend bool operator<=(const T& x, const U& y) {
-    return !(y < x);
+    return not (y < x);
   }
 
   friend bool operator>=(const T& x, const U& y) {
-    return !(x < y);
+    return not (x < y);
   }
 };
 
@@ -43,11 +43,11 @@ struct partially_ordered {
   }
 
   friend bool operator<=(const T& x, const U& y) {
-    return x < y || x == y;
+    return x < y or x == y;
   }
 
   friend bool operator>=(const T& x, const U& y) {
-    return y < x || x == y;
+    return y < x or x == y;
   }
 };
 

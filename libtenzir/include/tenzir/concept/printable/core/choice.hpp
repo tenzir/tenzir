@@ -43,7 +43,7 @@ public:
   using attribute =
     std::conditional_t<
       std::is_same<lhs_attribute, unused_type>{}
-        && std::is_same<rhs_attribute, unused_type>{},
+        and std::is_same<rhs_attribute, unused_type>{},
       unused_type,
       std::conditional_t<
         std::is_same<lhs_attribute, unused_type>{},
@@ -66,7 +66,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
-    return print_left<Lhs>(out, a) || print_right(out, a);
+    return print_left<Lhs>(out, a) or print_right(out, a);
   }
 
 private:
@@ -81,10 +81,10 @@ private:
   }
 
   template <class Left, class Iterator, class Attribute>
-    requires(!choice_printer<Left>)
+    requires(not choice_printer<Left>)
   auto print_left(Iterator& out, const Attribute& a) const {
     auto x = try_as<lhs_attribute>(&a);
-    return x && lhs_.print(out, *x);
+    return x and lhs_.print(out, *x);
   }
 
   template <class Iterator>
@@ -95,7 +95,7 @@ private:
   template <class Iterator, class Attribute>
   auto print_right(Iterator& out, const Attribute& a) const {
     auto x = try_as<rhs_attribute>(&a);
-    return x && rhs_.print(out, *x);
+    return x and rhs_.print(out, *x);
   }
 
   Lhs lhs_;

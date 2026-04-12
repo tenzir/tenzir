@@ -31,7 +31,7 @@ multiply_overflows(std::size_t lhs, std::size_t rhs,
   return __builtin_mul_overflow(lhs, rhs, &result);
 #    endif
 #  endif
-  if (lhs == 0 || rhs == 0) {
+  if (lhs == 0 or rhs == 0) {
     result = 0;
     return false;
   }
@@ -49,12 +49,12 @@ multiply_overflows(std::size_t lhs, std::size_t rhs,
 
 [[nodiscard]] constexpr auto
 is_valid_posix_alignment(std::size_t alignment) noexcept -> bool {
-  return is_power_of_two(alignment) && alignment % sizeof(void*) == 0;
+  return is_power_of_two(alignment) and alignment % sizeof(void*) == 0;
 }
 
 [[nodiscard]] auto allocate_bytes(std::size_t size) noexcept -> void* {
   auto* ptr = tenzir::memory::c_allocator().allocate(size);
-  if (ptr == nullptr && size != 0) {
+  if (ptr == nullptr and size != 0) {
     errno = ENOMEM;
   }
   return ptr;
@@ -63,7 +63,7 @@ is_valid_posix_alignment(std::size_t alignment) noexcept -> bool {
 [[nodiscard]] auto
 allocate_bytes(std::size_t size, std::align_val_t alignment) noexcept -> void* {
   auto* ptr = tenzir::memory::c_allocator().allocate(size, alignment);
-  if (ptr == nullptr && size != 0) {
+  if (ptr == nullptr and size != 0) {
     errno = ENOMEM;
   }
   return ptr;
@@ -92,7 +92,7 @@ auto deallocate_bytes(void* ptr) noexcept -> void {
 [[nodiscard]] auto calloc_bytes(std::size_t count, std::size_t size) noexcept
   -> void* {
   auto* ptr = tenzir::memory::c_allocator().calloc(count, size);
-  if (ptr == nullptr && count != 0 && size != 0) {
+  if (ptr == nullptr and count != 0 and size != 0) {
     errno = ENOMEM;
   }
   return ptr;
@@ -135,7 +135,7 @@ auto __wrap_malloc_usable_size(const void* ptr) -> std::size_t {
 }
 
 auto __wrap_aligned_alloc(std::size_t alignment, std::size_t size) -> void* {
-  if (! is_power_of_two(alignment) || size % alignment != 0) {
+  if (not is_power_of_two(alignment) or size % alignment != 0) {
     errno = EINVAL;
     return nullptr;
   }
@@ -156,7 +156,7 @@ auto __wrap_posix_memalign(void** out, std::size_t alignment, std::size_t size)
     return EINVAL;
   }
   auto* ptr = allocate_bytes(size, std::align_val_t{alignment});
-  if (ptr == nullptr && size != 0) {
+  if (ptr == nullptr and size != 0) {
     *out = nullptr;
     return ENOMEM;
   }
@@ -210,7 +210,7 @@ auto malloc_size(const void* ptr) -> std::size_t {
 
 [[gnu::hot, gnu::alloc_size(2), gnu::alloc_align(1)]]
 auto aligned_alloc(std::size_t alignment, std::size_t size) -> void* {
-  if (! is_power_of_two(alignment) || size % alignment != 0) {
+  if (not is_power_of_two(alignment) or size % alignment != 0) {
     errno = EINVAL;
     return nullptr;
   }
@@ -233,7 +233,7 @@ auto posix_memalign(void** out, std::size_t alignment, std::size_t size)
     return EINVAL;
   }
   auto* ptr = allocate_bytes(size, std::align_val_t{alignment});
-  if (ptr == nullptr && size != 0) {
+  if (ptr == nullptr and size != 0) {
     *out = nullptr;
     return ENOMEM;
   }

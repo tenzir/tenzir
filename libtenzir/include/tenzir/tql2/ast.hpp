@@ -51,7 +51,7 @@ struct identifier {
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
       return dbg->fmt_value("`{}`", x.name)
-             && dbg->append(" @ {:?}", x.location);
+             and dbg->append(" @ {:?}", x.location);
     }
     return f.object(x).fields(f.field("symbol", x.name),
                               f.field("location", x.location));
@@ -102,8 +102,8 @@ struct dollar_var {
 
   friend auto inspect(auto& f, dollar_var& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("`{}`", x.id.name) && dbg->append(" -> {:?}", x.let)
-             && dbg->append(" @ {:?}", x.id.location);
+      return dbg->fmt_value("`{}`", x.id.name) and dbg->append(" -> {:?}", x.let)
+             and dbg->append(" @ {:?}", x.id.location);
     }
     return f.object(x).fields(f.field("id", x.id), f.field("let", x.let));
   }
@@ -221,7 +221,7 @@ struct expression {
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
   template <class Result = void, class... Fs>
-  auto match(Fs&&... fs) && -> decltype(auto);
+  auto match(Fs&&... fs) and -> decltype(auto);
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const& -> decltype(auto);
   template <class Result = void, class... Fs>
@@ -276,7 +276,7 @@ public:
     return expr_;
   };
 
-  auto unwrap() && -> ast::expression {
+  auto unwrap() and -> ast::expression {
     return std::move(expr_);
   }
 
@@ -671,7 +671,7 @@ struct pipeline {
     return f.apply(x.body);
   }
 
-  auto compile(compile_ctx ctx) && -> failure_or<ir::pipeline>;
+  auto compile(compile_ctx ctx) and -> failure_or<ir::pipeline>;
 };
 
 /// Substitute occurrences of named dollar variables with the given
@@ -841,7 +841,7 @@ auto expression::match(Fs&&... fs) & -> decltype(auto) {
 }
 
 template <class Result, class... Fs>
-auto expression::match(Fs&&... fs) && -> decltype(auto) {
+auto expression::match(Fs&&... fs) and -> decltype(auto) {
   TENZIR_ASSERT(kind);
   return kind->match<Result>(std::forward<Fs>(fs)...);
 }
@@ -1078,7 +1078,7 @@ auto inspect(Inspector& f, expression& x) -> bool {
     x.kind = std::make_unique<expression_kind>();
   } else {
     if (auto dbg = as_debug_writer(f);
-        dbg && not detail::make_dependent<Inspector>(x.kind)) {
+        dbg and not detail::make_dependent<Inspector>(x.kind)) {
       return dbg->fmt_value("<invalid>");
     }
     TENZIR_ASSERT(x.kind);

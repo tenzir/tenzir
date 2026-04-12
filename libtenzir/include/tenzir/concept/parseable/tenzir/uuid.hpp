@@ -39,14 +39,14 @@ struct uuid_parser : parser_base<uuid_parser> {
           return false;
         c = *f++;
       }
-      if (i == 4 && c == '-') {
+      if (i == 4 and c == '-') {
         if (f == l)
           return false;
         with_dashes = true;
         c = *f++;
       }
-      if (with_dashes && (i == 6 || i == 8 || i == 10)) {
-        if (c != '-' || f == l)
+      if (with_dashes and (i == 6 or i == 8 or i == 10)) {
+        if (c != '-' or f == l)
           return false;
         c = *f++;
       }

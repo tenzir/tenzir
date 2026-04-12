@@ -28,7 +28,7 @@ inline std::istream& absorb_line(std::istream& is, std::string& t) {
   // That is faster than reading them one-by-one using the std::istream.
   // Code that uses streambuf this way must be guarded by a sentry object.
   std::istream::sentry sentry(is, true);
-  if (!sentry)
+  if (not sentry)
     return is;
   size_t n = 0;
   std::streambuf* sb = is.rdbuf();

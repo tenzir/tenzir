@@ -33,7 +33,7 @@ public:
     if (f == l)
       return false;
     do {
-      if (!printer_.print(out, *f++))
+      if (not printer_.print(out, *f++))
         return false;
     } while (f != l);
     return true;

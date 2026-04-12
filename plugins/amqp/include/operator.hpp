@@ -348,7 +348,7 @@ public:
     }
     do {
       status = amqp_simple_wait_frame_noblock(conn_, &frame, &tv);
-      if (AMQP_STATUS_TIMEOUT != status && AMQP_STATUS_OK != status) {
+      if (AMQP_STATUS_TIMEOUT != status and AMQP_STATUS_OK != status) {
         diagnostic::warning("unexpected error while processing heartbeats")
           .note("{}", amqp_error_string2(status))
           .emit(ctrl.diagnostics());
@@ -847,7 +847,7 @@ public:
         });
     }
     for (auto chunk : input) {
-      if (not chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }

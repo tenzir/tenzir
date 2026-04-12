@@ -27,10 +27,10 @@ bool print_delimited(InputIterator begin, InputIterator end,
   static auto const delim = Delimiter{};
   if (begin == end)
     return true;
-  if (!printer.print(out, *begin))
+  if (not printer.print(out, *begin))
     return false;
   while (++begin != end)
-    if (!(delim.print(out, unused) && printer.print(out, *begin)))
+    if (not (delim.print(out, unused) and printer.print(out, *begin)))
       return false;
   return true;
 }
@@ -41,10 +41,10 @@ bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out, const Delimiter& delim) {
   if (begin == end)
     return true;
-  if (!print(out, *begin))
+  if (not print(out, *begin))
     return false;
   while (++begin != end)
-    if (!(print(out, delim) && print(out, *begin)))
+    if (not (print(out, delim) and print(out, *begin)))
       return false;
   return true;
 }

@@ -8,7 +8,7 @@ namespace tenzir::fbs {
 flatbuffer_container::flatbuffer_container(tenzir::chunk_ptr chunk) {
   using flatbuffers::soffset_t;
   using flatbuffers::uoffset_t;
-  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+  if (not chunk or chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
     return;
   }
   auto const* header = tenzir::fbs::GetSegmentedFileHeader(chunk->data());
@@ -23,7 +23,7 @@ tenzir::chunk_ptr flatbuffer_container::chunk() const {
   return chunk_;
 }
 
-tenzir::chunk_ptr flatbuffer_container::dissolve() && {
+tenzir::chunk_ptr flatbuffer_container::dissolve() and {
   header_ = nullptr;
   return std::exchange(chunk_, {});
 }
@@ -69,7 +69,7 @@ void flatbuffer_container_builder::add(std::span<const std::byte> bytes) {
 }
 
 flatbuffer_container
-flatbuffer_container_builder::finish(const char* identifier) && {
+flatbuffer_container_builder::finish(const char* identifier) and {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto segments_offset = builder.CreateVectorOfStructs(segments_);
   auto v0_builder = fbs::segmented_file::v0Builder(builder);

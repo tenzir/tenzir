@@ -30,8 +30,8 @@ namespace {
 
 template <class LhsView, class Rhs>
 inline constexpr auto requires_stdcmp
-  = std::is_integral_v<LhsView> && std::is_integral_v<Rhs>
-    && !std::is_same_v<LhsView, Rhs> && !detail::is_any_v<bool, LhsView, Rhs>;
+  = std::is_integral_v<LhsView> and std::is_integral_v<Rhs>
+    and not std::is_same_v<LhsView, Rhs> and not detail::is_any_v<bool, LhsView, Rhs>;
 
 template <relational_operator Op>
 struct cell_evaluator;
@@ -82,7 +82,7 @@ struct cell_evaluator<relational_operator::equal> {
 template <>
 struct cell_evaluator<relational_operator::not_equal> {
   static bool evaluate(auto lhs, const auto& rhs) noexcept {
-    return !cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
+    return not cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
   }
 };
 
@@ -134,13 +134,13 @@ struct cell_evaluator<relational_operator::less_equal> {
   static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
     const auto order = partial_order(lhs, rhs);
     return order == std::partial_ordering::less
-           || order == std::partial_ordering::equivalent;
+           or order == std::partial_ordering::equivalent;
   }
 
   static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
     const auto order = partial_order(lhs, rhs);
     return order == std::partial_ordering::less
-           || order == std::partial_ordering::equivalent;
+           or order == std::partial_ordering::equivalent;
   }
 };
 
@@ -192,13 +192,13 @@ struct cell_evaluator<relational_operator::greater_equal> {
   static bool evaluate(list_view3 lhs, const list& rhs) noexcept {
     const auto order = partial_order(lhs, rhs);
     return order == std::partial_ordering::greater
-           || order == std::partial_ordering::equivalent;
+           or order == std::partial_ordering::equivalent;
   }
 
   static bool evaluate(record_view3 lhs, const record& rhs) noexcept {
     const auto order = partial_order(lhs, rhs);
     return order == std::partial_ordering::greater
-           || order == std::partial_ordering::equivalent;
+           or order == std::partial_ordering::equivalent;
   }
 };
 
@@ -237,7 +237,7 @@ struct cell_evaluator<relational_operator::in> {
 template <>
 struct cell_evaluator<relational_operator::not_in> {
   static bool evaluate(auto lhs, const auto& rhs) noexcept {
-    return !cell_evaluator<relational_operator::in>::evaluate(lhs, rhs);
+    return not cell_evaluator<relational_operator::in>::evaluate(lhs, rhs);
   }
 };
 
@@ -272,7 +272,7 @@ struct cell_evaluator<relational_operator::ni> {
 template <>
 struct cell_evaluator<relational_operator::not_ni> {
   static bool evaluate(auto lhs, const auto& rhs) noexcept {
-    return !cell_evaluator<relational_operator::ni>::evaluate(lhs, rhs);
+    return not cell_evaluator<relational_operator::ni>::evaluate(lhs, rhs);
   }
 };
 
@@ -346,7 +346,7 @@ struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
     for (auto id : select(selection)) {
       TENZIR_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
-      if (!array.IsNull(row)) {
+      if (not array.IsNull(row)) {
         continue;
       }
       result.append(false, id - result.size());
@@ -549,7 +549,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
         ids selection) -> ids {
       // If no bit in the selection is set we have no results, but we can avoid
       // an allocation by simply returning the already empty selection.
-      if (!any(selection)) {
+      if (not any(selection)) {
         return selection;
       }
       if (evaluate_meta_extractor(slice, lhs, op, rhs)) {
@@ -559,7 +559,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
     },
     [&](const data_extractor& lhs, relational_operator op, const data& rhs,
         const ids& selection) -> ids {
-      if (!any(selection)) {
+      if (not any(selection)) {
         return ids{offset + num_rows, false};
       }
       const auto index
@@ -607,7 +607,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
       },
       [&](const conjunction& conjunction, ids selection) {
         for (const auto& connective : conjunction) {
-          if (!any(selection)) {
+          if (not any(selection)) {
             return selection;
           }
           selection = self(self, connective, std::move(selection));
@@ -617,7 +617,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
       [&](const disjunction& disjunction, const ids& selection) {
         auto mask = selection;
         for (const auto& connective : disjunction) {
-          if (!any(mask)) {
+          if (not any(mask)) {
             return selection;
           }
           mask &= ~self(self, connective, mask);

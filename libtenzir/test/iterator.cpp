@@ -72,10 +72,10 @@ TEST("basic_custom_iterator") {
   CHECK((end - begin) == 4);
   CHECK((begin + 4) == end);
 
-  CHECK(!(begin == end));
+  CHECK(not (begin == end));
   CHECK(begin != end);
   CHECK(begin < end);
-  CHECK(!(end < begin));
+  CHECK(not (end < begin));
   CHECK(begin <= end);
 }
 

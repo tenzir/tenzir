@@ -39,7 +39,7 @@ struct try_plugin_by_url_result {
     return plugin != nullptr;
   }
   [[nodiscard]] bool valid_url_parsed() const {
-    return !scheme.inner.empty();
+    return not scheme.inner.empty();
   }
 };
 
@@ -77,7 +77,7 @@ auto try_plugin_by_url(located<std::string_view> src)
     // We need to skip that before forwarding it to the loader
     non_scheme_offset += 2;
   result.plugin = find_plugin_by_scheme<Plugin>(result.scheme.inner);
-  if (!result.plugin)
+  if (not result.plugin)
     return result;
   result.non_scheme = make_located_string_view(src, non_scheme_offset);
   auto non_scheme_without_locator = make_located_string_view(

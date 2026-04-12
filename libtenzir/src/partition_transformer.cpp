@@ -244,12 +244,12 @@ void partition_transformer_state::fulfill(
     self->quit();
     return;
   }
-  if (! stream_data.partition_chunks) {
+  if (not stream_data.partition_chunks) {
     promise.deliver(stream_data.partition_chunks.error());
     self->quit();
     return;
   }
-  if (! stream_data.synopsis_chunks) {
+  if (not stream_data.synopsis_chunks) {
     promise.deliver(stream_data.synopsis_chunks.error());
     self->quit();
     return;
@@ -258,7 +258,7 @@ void partition_transformer_state::fulfill(
   // no error during packing, so at least one of these chunks must be
   // nonnull.
   for (auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
-    if (! synopsis_chunk) {
+    if (not synopsis_chunk) {
       continue;
     }
     auto filename = fmt::format(
@@ -353,7 +353,7 @@ auto partition_transformer(
       // We copy the pipeline because we will modify it.
       auto pipe = self->state().transform;
       auto open = pipe.check_type<table_slice, table_slice>();
-      if (! open) {
+      if (not open) {
         return open.error();
       }
       pipe.prepend(
@@ -361,7 +361,7 @@ auto partition_transformer(
       auto output = std::make_shared<std::vector<table_slice>>();
       pipe.append(std::make_unique<collecting_sink>(output));
       auto closed = pipe.check_type<void, void>();
-      if (! closed) {
+      if (not closed) {
         return caf::make_error(ec::logic_error, "internal error: {}",
                                closed.error());
       }
@@ -377,7 +377,7 @@ auto partition_transformer(
                       false, false, std::string{});
       // Monitor the executor to detect when it finishes and process results.
       self->monitor(executor, [self, output, executor](const caf::error& err) {
-        if (err.valid() && err != caf::exit_reason::normal) {
+        if (err.valid() and err != caf::exit_reason::normal) {
           TENZIR_ERROR("{} pipeline executor failed: {}", *self, err);
           self->state().transform_error = err;
         } else {
@@ -386,7 +386,7 @@ auto partition_transformer(
         // Process the collected output slices.
         for (auto& slice : *output) {
           auto& partition_data = self->state().create_or_get_partition(slice);
-          if (! partition_data.synopsis) {
+          if (not partition_data.synopsis) {
             partition_data.id = tenzir::uuid::random();
             partition_data.store_id = self->state().store_id;
             partition_data.events = 0ull;
@@ -419,7 +419,7 @@ auto partition_transformer(
         auto store_id = self->state().store_id;
         auto const* store_actor_plugin
           = plugins::find<tenzir::store_actor_plugin>(store_id);
-        if (! store_actor_plugin) {
+        if (not store_actor_plugin) {
           self->state().stream_error
             = caf::make_error(ec::invalid_argument,
                               "could not find a store plugin named {}",
@@ -433,7 +433,7 @@ auto partition_transformer(
           }
           auto builder_and_header = store_actor_plugin->make_store_builder(
             self->state().fs, partition_data.id, self->state().origin);
-          if (! builder_and_header) {
+          if (not builder_and_header) {
             self->state().stream_error
               = caf::make_error(ec::invalid_argument,
                                 "could not create store builder for backend {}",
@@ -547,7 +547,7 @@ auto partition_transformer(
             return;
           }
           auto partition = pack_full(partition_data, record_type{});
-          if (! partition) {
+          if (not partition) {
             stream_data.partition_chunks = partition.error();
             return;
           }
@@ -558,7 +558,7 @@ auto partition_transformer(
              self->state().data) { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
           auto synopsis = pack(builder, *partition_data.synopsis);
-          if (! synopsis) {
+          if (not synopsis) {
             stream_data.synopsis_chunks = synopsis.error();
             return;
           }

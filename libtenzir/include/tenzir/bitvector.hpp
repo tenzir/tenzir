@@ -40,7 +40,7 @@ template <class Block = size_t, class Allocator = std::allocator<Block>>
 class bitvector : detail::equality_comparable<bitvector<Block, Allocator>> {
   static_assert(std::is_unsigned_v<Block>, "Block must be unsigned for "
                                            "well-defined bit operations");
-  static_assert(!std::is_same_v<Block, bool>, "Block cannot be bool; you may "
+  static_assert(not std::is_same_v<Block, bool>, "Block cannot be bool; you may "
                                               "want std::vector<bool> instead");
 
 public:
@@ -376,7 +376,7 @@ private:
   }
 
   [[nodiscard]] auto dereference() const {
-    TENZIR_ASSERT(!bitvector_->empty());
+    TENZIR_ASSERT(not bitvector_->empty());
     TENZIR_ASSERT(i_ < bitvector_->size());
     return (*bitvector_)[i_];
   }
@@ -554,28 +554,28 @@ bitvector<Block, Allocator>::at(size_type i) const {
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::front() {
-  TENZIR_ASSERT(!empty());
+  TENZIR_ASSERT(not empty());
   return (*this)[0];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::front() const {
-  TENZIR_ASSERT(!empty());
+  TENZIR_ASSERT(not empty());
   return (*this)[0];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::back() {
-  TENZIR_ASSERT(!empty());
+  TENZIR_ASSERT(not empty());
   return (*this)[size_ - 1];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::back() const {
-  TENZIR_ASSERT(!empty());
+  TENZIR_ASSERT(not empty());
   return (*this)[size_ - 1];
 }
 
@@ -603,7 +603,7 @@ void bitvector<Block, Allocator>::push_back(const value_type& x) {
 
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::pop_back() {
-  TENZIR_ASSERT(!empty());
+  TENZIR_ASSERT(not empty());
   if (partial_bits() == 1)
     blocks_.pop_back();
   --size_;
@@ -642,7 +642,7 @@ bool operator==(const bitvector<Block, Allocator>& x,
     return true;
   --xend;
   --yend;
-  if (!std::equal(xbegin, xend, ybegin, yend))
+  if (not std::equal(xbegin, xend, ybegin, yend))
     return false;
   // Compare last block.
   using word_type = typename bitvector<Block, Allocator>::word_type;

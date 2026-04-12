@@ -89,7 +89,7 @@ handle_query(const auto& self, const query_context& query_context) {
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state().store->schema();
   const auto tailored_expr = tailor(query_context.expr, schema);
-  if (! tailored_expr) {
+  if (not tailored_expr) {
     // In case the query was delegated from an active partition the
     // taxonomy resolution is not guaranteed to have worked (whenever the
     // type in this store did not exist in the catalog when the partition
@@ -111,7 +111,7 @@ handle_query(const auto& self, const query_context& query_context) {
       });
       auto [state, inserted] = self->state().running_extractions.try_emplace(
         query_context.id, extract_query_state{});
-      if (! inserted) {
+      if (not inserted) {
         rp.deliver(caf::make_error(
           ec::logic_error, fmt::format("{} received duplicated query id {}",
                                        *self, query_context.id)));
@@ -188,7 +188,7 @@ default_passive_store_actor::behavior_type default_passive_store(
       TENZIR_DEBUG("{} erases {} events", *self, num_events);
       TENZIR_UNUSED(selection);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
-                              || rank(selection) == num_events);
+                              or rank(selection) == num_events);
       auto rp = self->make_response_promise<uint64_t>();
       self->mail(atom::erase_v, self->state().path)
         .request(self->state().filesystem, caf::infinite)
@@ -229,7 +229,7 @@ default_active_store_actor::behavior_type default_active_store(
       const auto num_events = self->state().store->num_events();
       TENZIR_UNUSED(selection);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
-                              || rank(selection) == num_events);
+                              or rank(selection) == num_events);
       // We don't actually need to erase anything in the store itself, but
       // rather just don't need to persist when shutting down the stream, so
       // we set a flag for that in the actor state.
@@ -241,7 +241,7 @@ default_active_store_actor::behavior_type default_active_store(
         return {};
       }
       auto chunk = self->state().store->finish();
-      if (! chunk) {
+      if (not chunk) {
         self->quit(diagnostic::error(std::move(chunk.error()))
                      .note("while persisting store to disk")
                      .to_error());

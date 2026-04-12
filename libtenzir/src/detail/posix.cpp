@@ -59,7 +59,7 @@ int uds_listen(const std::string& path) {
   std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path) - 1);
   ::unlink(path.c_str()); // Always remove previous socket file.
   auto sa = reinterpret_cast<sockaddr*>(&un);
-  if (::bind(fd, sa, sizeof(un)) < 0 || ::listen(fd, 10) < 0) {
+  if (::bind(fd, sa, sizeof(un)) < 0 or ::listen(fd, 10) < 0) {
     ::close(fd);
     return -1;
   }
@@ -174,7 +174,7 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
                                        "bytes in a single datagram",
                                        sent, data.size()));
   }
-  if (errno != EAGAIN && errno != EWOULDBLOCK) {
+  if (errno != EAGAIN and errno != EWOULDBLOCK) {
     return caf::make_error(ec::system_error,
                            "::sendto: ", detail::describe_errno());
   }
@@ -182,7 +182,7 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
     return ec::timeout;
   }
   auto ready = wpoll(src_fd, timeout_usec);
-  if (! ready) {
+  if (not ready) {
     return ready.error();
   }
   // We just attempt to send again instead of returning ec::timeout outright.
@@ -201,7 +201,7 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
                                        "bytes in a single datagram",
                                        sent, data.size()));
   }
-  if (errno != EAGAIN && errno != EWOULDBLOCK) {
+  if (errno != EAGAIN and errno != EWOULDBLOCK) {
     return caf::make_error(ec::system_error,
                            "::sendto: ", detail::describe_errno());
   }
@@ -239,7 +239,7 @@ int uds_connect(const std::string& path, uds_socket_type type) {
   srv.sun_family = AF_UNIX;
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
-    if (! (type == uds_socket_type::datagram && errno == ENOENT)) {
+    if (not (type == uds_socket_type::datagram and errno == ENOENT)) {
       TENZIR_WARN("{} failed in connect: {}", __func__,
                   detail::describe_errno());
       return -1;
@@ -306,7 +306,7 @@ int uds_recv_fd(int socket) {
   }
   // Iterate over control message headers until we find the descriptor.
   for (auto c = CMSG_FIRSTHDR(&m); c != nullptr; c = CMSG_NXTHDR(&m, c)) {
-    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS) {
+    if (c->cmsg_level == SOL_SOCKET and c->cmsg_type == SCM_RIGHTS) {
       return *reinterpret_cast<int*>(CMSG_DATA(c));
     }
   }
@@ -319,7 +319,7 @@ int uds_sendmsg(int socket, const std::string& destination,
                 const std::string& msg, int flags) {
   struct sockaddr_un dst;
   std::memset(&dst, 0, sizeof(dst));
-  if (destination.empty() || destination.size() >= sizeof(dst.sun_path)) {
+  if (destination.empty() or destination.size() >= sizeof(dst.sun_path)) {
     return -EINVAL;
   }
   dst.sun_family = AF_UNIX;
@@ -430,7 +430,7 @@ caf::error close(int fd) {
   int result;
   do {
     result = ::close(fd);
-  } while (result < 0 && errno == EINTR);
+  } while (result < 0 and errno == EINTR);
   if (result != 0) {
     return caf::make_error(ec::filesystem_error,
                            "failed in close(2):", detail::describe_errno());
@@ -452,7 +452,7 @@ caf::expected<size_t> read(int fd, void* buffer, size_t bytes) {
     auto request_size = std::min(read_max, bytes - total);
     do {
       taken = ::read(fd, buf + total, request_size);
-    } while (taken < 0 && errno == EINTR);
+    } while (taken < 0 and errno == EINTR);
     if (taken < 0) { // error
       return caf::make_error(ec::filesystem_error,
                              "failed in read(2):", detail::describe_errno());
@@ -479,7 +479,7 @@ caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
     auto request_size = std::min(write_max, bytes - total);
     do {
       written = ::write(fd, buf + total, request_size);
-    } while (written < 0 && errno == EINTR);
+    } while (written < 0 and errno == EINTR);
     if (written < 0) {
       return caf::make_error(ec::filesystem_error,
                              "failed in write(2):", detail::describe_errno());

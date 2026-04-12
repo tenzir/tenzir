@@ -140,7 +140,7 @@ struct detection_parser : parser_base<detection_parser> {
       if (op == bool_operator::logical_and) {
         con.emplace_back(std::move(expr));
       } else if (op == bool_operator::logical_or) {
-        TENZIR_ASSERT(!con.empty());
+        TENZIR_ASSERT(not con.empty());
         if (con.size() == 1)
           dis.emplace_back(std::move(con[0]));
         else
@@ -283,7 +283,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 if constexpr (std::is_same_v<T, std::string>) {
                   auto result = transform_sigma_string(
                     detail::control_char_escape(x), ".*{}.*");
-                  if (!result)
+                  if (not result)
                     return std::move(result.error());
                   return std::move(*result);
                 } else if constexpr (detail::is_any_v<T, subnet, list>) {
@@ -308,7 +308,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "base64offset") {
           auto encode = [](const data& x) -> caf::expected<data> {
             const auto* str = try_as<std::string>(&x);
-            if (!str)
+            if (not str)
               return caf::make_error(ec::type_clash, //
                                      "base64offset only works with strings");
             static constexpr std::array<size_t, 3> start = {{0, 2, 3}};
@@ -323,14 +323,14 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             return list{xs[0], xs[1], xs[2]};
           };
           transforms.emplace_back(encode);
-        } else if (*i == "utf16le" || *i == "wide") {
+        } else if (*i == "utf16le" or *i == "wide") {
           return caf::make_error(ec::unimplemented, //
                                  "utf16le/wide not yet implemented");
           // FIXME: the attempt below doesn't work yet, but gives an idea on
           // what needs to be done algorithmically.
           auto convert = [](const data& x) -> caf::expected<data> {
             const auto* str = try_as<std::string>(&x);
-            if (!str)
+            if (not str)
               return caf::make_error(ec::type_clash, //
                                      "utf16le/wide only works with strings");
             // Hand-roll conversion.
@@ -354,7 +354,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
               auto result = transform_sigma_string(str, "^{}.*");
-              if (!result)
+              if (not result)
                 return std::move(result.error());
               return std::move(*result);
             }};
@@ -367,7 +367,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
               auto result = transform_sigma_string(str, ".*{}$");
-              if (!result)
+              if (not result)
                 return std::move(result.error());
               return std::move(*result);
             }};
@@ -381,7 +381,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
               [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
                 auto result = transform_sigma_string(str, {});
-                if (!result)
+                if (not result)
                   return std::move(result.error());
                 if (str == result->string()) {
                   return str;
@@ -390,7 +390,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
               },
               [](const std::string& x) -> caf::expected<data> {
                 auto result = pattern::make(x);
-                if (!result)
+                if (not result)
                   return std::move(result.error());
                 return std::move(*result);
               },
@@ -491,7 +491,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
 
 caf::expected<expression> parse_rule(const data& yaml) {
   auto xs = try_as<record>(&yaml);
-  if (!xs)
+  if (not xs)
     return caf::make_error(ec::type_clash, "rule must be a record");
   // Extract detection attribute.
   const record* detection;
@@ -499,7 +499,7 @@ caf::expected<expression> parse_rule(const data& yaml) {
     return caf::make_error(ec::invalid_query, "no detection attribute");
   else
     detection = try_as<record>(&i->second);
-  if (!detection)
+  if (not detection)
     return caf::make_error(ec::type_clash, "detection not a record");
   // Resolve all named sub-expression except for "condition".
   expression_map exprs;
@@ -517,12 +517,12 @@ caf::expected<expression> parse_rule(const data& yaml) {
     return caf::make_error(ec::invalid_query, "no condition key");
   else
     condition = try_as<std::string>(&i->second);
-  if (!condition)
+  if (not condition)
     return caf::make_error(ec::type_clash, "condition not a string");
   // Parse condition.
   expression result;
   detection_parser p{exprs};
-  if (!p(*condition, result))
+  if (not p(*condition, result))
     return caf::make_error(ec::parse_error, "invalid condition syntax");
   return result;
 }

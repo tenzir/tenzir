@@ -45,7 +45,7 @@ public:
   using attribute =
     std::conditional_t<
       std::is_same_v<lhs_attribute, unused_type>
-        && std::is_same_v<rhs_attribute, unused_type>,
+        and std::is_same_v<rhs_attribute, unused_type>,
       unused_type,
       std::conditional_t<
         std::is_same_v<lhs_attribute, unused_type>,
@@ -67,7 +67,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
-    return print_left(out, a) && print_right(out, a);
+    return print_left(out, a) and print_right(out, a);
   }
 
 private:

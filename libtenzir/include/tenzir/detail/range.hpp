@@ -18,7 +18,7 @@ template <class Derived>
 class range {
 public:
   explicit operator bool() const {
-    return !empty();
+    return not empty();
   }
 
   [[nodiscard]] bool empty() const {
@@ -52,7 +52,7 @@ private:
 
   void increment() {
     TENZIR_ASSERT(rng_);
-    TENZIR_ASSERT(!rng_->complete());
+    TENZIR_ASSERT(not rng_->complete());
     rng_->increment();
   }
 

@@ -27,7 +27,7 @@ public:
     auto begin = str_.begin();
     auto end = str_.end();
     while (begin != end)
-      if (i == l || *i++ != *begin++)
+      if (i == l or *i++ != *begin++)
         return false;
     f = i;
     return true;
@@ -41,7 +41,7 @@ public:
     auto begin = str_.begin();
     auto end = str_.end();
     while (begin != end)
-      if (i == l || *i != *begin++)
+      if (i == l or *i != *begin++)
         return false;
       else
         *out++ = *i++;

@@ -89,14 +89,14 @@ void null_bitmap_range::scan() {
     // Process the last block.
     auto partial = bitvector_->size() % word_type::width;
     bits_ = {*block_, partial == 0 ? word_type::width : partial};
-  } else if (!word_type::all_or_none(*block_)) {
+  } else if (not word_type::all_or_none(*block_)) {
     // Process an intermediate inhomogeneous block.
     bits_ = {*block_, word_type::width};
   } else {
     // Scan for consecutive runs of all-0 or all-1 blocks.
     auto n = word_type::width;
     auto data = *block_;
-    while (++block_ != last && *block_ == data)
+    while (++block_ != last and *block_ == data)
       n += word_type::width;
     if (block_ == last) {
       auto partial = bitvector_->size() % word_type::width;

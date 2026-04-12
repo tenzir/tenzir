@@ -33,7 +33,7 @@ struct bitvector_printer : printer_base<bitvector_printer<Bitvector, Order>> {
   bool print(Iterator& out, const Bitvector& bv) const {
     auto render = [&](auto f, auto l) {
       for (; f != l; ++f)
-        if (!printers::any.print(out, *f ? '1' : '0'))
+        if (not printers::any.print(out, *f ? '1' : '0'))
           return false;
       return true;
     };

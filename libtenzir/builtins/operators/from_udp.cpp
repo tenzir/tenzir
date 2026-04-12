@@ -214,7 +214,7 @@ public:
       auto peer = event.field("peer").record();
       peer.field("ip").data(peer_ip);
       peer.field("port").data(peer_port);
-      if (args_.resolve_hostnames && peer_hostname) {
+      if (args_.resolve_hostnames and peer_hostname) {
         peer.field("hostname").data(*peer_hostname);
       }
     }

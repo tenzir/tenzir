@@ -41,14 +41,14 @@ TEST("callback is invoked and the fields invocation "
   // create fields
   auto field1 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
-    REQUIRE(! field2_invoked);
+    REQUIRE(not field2_invoked);
     field1_invoked = true;
     return true;
   };
   auto field2 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
     REQUIRE(field1_invoked);
-    REQUIRE(! field2_invoked);
+    REQUIRE(not field2_invoked);
     field2_invoked = true;
     return true;
   };
@@ -72,7 +72,7 @@ TEST("callback and second field arent invoked and the fields invocation "
   bool field2_invoked = false;
   auto field1 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
-    REQUIRE(! field2_invoked);
+    REQUIRE(not field2_invoked);
     field1_invoked = true;
     return false;
   };
@@ -80,10 +80,10 @@ TEST("callback and second field arent invoked and the fields invocation "
     return true;
   };
   // verify
-  CHECK(! sut.fields(field1, field2));
+  CHECK(not sut.fields(field1, field2));
   CHECK_EQUAL(callback_calls_count, 0u);
   CHECK(field1_invoked);
-  CHECK(! field2_invoked);
+  CHECK(not field2_invoked);
 }
 
 TEST("fields invocation returns false when callback returns false") {
@@ -94,7 +94,7 @@ TEST("fields invocation returns false when callback returns false") {
     return false;
   };
   auto sut = tenzir::detail::inspection_object{inspector}.on_save(callback);
-  CHECK(! sut.fields([&](auto&) {
+  CHECK(not sut.fields([&](auto&) {
     return true;
   }));
   CHECK_EQUAL(callback_calls_count, 1u);

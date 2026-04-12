@@ -59,7 +59,7 @@ template <class T, class U>
 using variant_type_concat =
   tl_distinct_t<
     typename std::conditional_t<
-      is_variant<T>{} && is_variant<U>{},
+      is_variant<T>{} and is_variant<U>{},
       lazy_variant_concat<T, U>,
       std::conditional_t<
         is_variant<T>{},

@@ -87,7 +87,7 @@ public:
       while (true) {
         auto length = sizeof(file_header);
         auto bytes = read_n(length);
-        if (!bytes) {
+        if (not bytes) {
           co_yield {};
           continue;
         }
@@ -109,7 +109,7 @@ public:
         co_return;
       }
       auto need_swap = need_byte_swap(input_file_header.magic_number);
-      if (!need_swap) {
+      if (not need_swap) {
         diagnostic::error("invalid PCAP magic number: {0:x}",
                           uint32_t{input_file_header.magic_number})
           .note("from `pcap`")
@@ -155,7 +155,7 @@ public:
           TENZIR_DEBUG("reading packet header");
           auto length = sizeof(packet_header);
           auto bytes = read_n(length);
-          if (!bytes) {
+          if (not bytes) {
             if (last_finish != now) {
               co_yield {};
             }
@@ -187,7 +187,7 @@ public:
               constexpr auto length
                 = sizeof(file_header::snaplen) + sizeof(file_header::linktype);
               auto bytes = read_n(length);
-              if (!bytes) {
+              if (not bytes) {
                 co_yield {};
                 continue;
               }
@@ -237,7 +237,7 @@ public:
                        uint32_t{packet.header.captured_packet_length});
           auto length = packet.header.captured_packet_length;
           auto bytes = read_n(length);
-          if (!bytes) {
+          if (not bytes) {
             if (last_finish != now) {
               co_yield {};
             }
@@ -303,14 +303,14 @@ struct printer_args {};
 /// Creates a file header from the first row of table slice (that is assumed to
 /// have one row).
 auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
-  if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0) {
+  if (slice.schema().name() != "pcap.file_header" or slice.rows() == 0) {
     return std::nullopt;
   }
   auto result = file_header{};
   auto array = check(to_record_batch(slice)->ToStructArray());
   auto xs = values(slice.schema(), *array);
   auto begin = xs.begin();
-  if (begin == xs.end() || is<caf::none_t>(*begin)) {
+  if (begin == xs.end() or is<caf::none_t>(*begin)) {
     return std::nullopt;
   }
   const auto row = *begin;

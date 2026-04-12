@@ -89,12 +89,12 @@ void account_table_slice_resources(
   const chunk_ptr& chunk, bool is_serialized,
   const std::shared_ptr<arrow::RecordBatch>& batch, uint64_t approx_bytes,
   table_slice::size_type rows) noexcept {
-  if (! chunk) {
+  if (not chunk) {
     return;
   }
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
-  const auto account_rows_with_chunk = is_serialized || ! batch;
+  const auto account_rows_with_chunk = is_serialized or not batch;
   auto& chunk_entry = state.chunks[chunk->data()];
   if (chunk_entry.refcount++ == 0) {
     auto bytes = static_cast<uint64_t>(chunk->size());
@@ -107,7 +107,7 @@ void account_table_slice_resources(
                            std::memory_order_relaxed);
     }
   }
-  if (is_serialized || ! batch) {
+  if (is_serialized or not batch) {
     return;
   }
   auto& batch_entry = state.record_batches[batch.get()];
@@ -127,7 +127,7 @@ void account_table_slice_resources(
 void release_table_slice_resources(
   const chunk_ptr& chunk, bool is_serialized,
   const std::shared_ptr<arrow::RecordBatch>& batch) noexcept {
-  if (! chunk) {
+  if (not chunk) {
     return;
   }
   auto& state = accounting_state();
@@ -145,7 +145,7 @@ void release_table_slice_resources(
     }
     state.chunks.erase(it);
   }
-  if (is_serialized || ! batch) {
+  if (is_serialized or not batch) {
     return;
   }
   auto jt = state.record_batches.find(batch.get());
@@ -503,7 +503,7 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
 const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
   using flatbuffers::soffset_t;
   using flatbuffers::uoffset_t;
-  if (not chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+  if (not chunk or chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
     return nullptr;
   }
   return fbs::GetTableSlice(chunk->data());
@@ -516,7 +516,7 @@ const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
 /// @note This is a no-op if `verify == table_slice::verify::no`.
 chunk_ptr
 verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
-  if (verify == table_slice::verify::yes && chunk) {
+  if (verify == table_slice::verify::yes and chunk) {
     const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
     auto verifier = flatbuffers::Verifier{data, chunk->size()};
     if (not verifier.template VerifyBuffer<fbs::TableSlice>()) {
@@ -548,7 +548,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          type schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   increment_instances();
-  TENZIR_ASSERT(not chunk_ || chunk_->unique());
+  TENZIR_ASSERT(not chunk_ or chunk_->unique());
   if (chunk_) {
     auto f = detail::overload{
       []() noexcept {
@@ -662,7 +662,7 @@ table_slice table_slice::unshare() const noexcept {
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  if (not lhs.chunk_ && not rhs.chunk_) {
+  if (not lhs.chunk_ and not rhs.chunk_) {
     return true;
   }
   constexpr auto check_metadata = true;
@@ -748,7 +748,7 @@ void table_slice::modify_state(F&& f) {
   // creating a new table slice here that points to the same data as the current
   // table slice. This implies that the table slice is no longer in one
   // contiguous buffer.
-  if (chunk_ && not chunk_->unique()) {
+  if (chunk_ and not chunk_->unique()) {
     *this = table_slice{to_record_batch(*this), schema()};
   }
   auto g = detail::overload{
@@ -767,7 +767,7 @@ void table_slice::modify_state(F&& f) {
 }
 
 void table_slice::retain_accounting() const noexcept {
-  if (! chunk_) {
+  if (not chunk_) {
     return;
   }
   auto is_serialized = true;
@@ -779,14 +779,14 @@ void table_slice::retain_accounting() const noexcept {
     [&](const auto& encoded) noexcept {
       const auto* ptr = state(encoded, state_);
       is_serialized = ptr->is_serialized();
-      if (! is_serialized) {
+      if (not is_serialized) {
         record_batch = ptr->record_batch();
       }
     },
   };
   visit(f, as_flatbuffer(chunk_));
   auto approx_bytes = uint64_t{0};
-  if (! is_serialized && record_batch) {
+  if (not is_serialized and record_batch) {
     approx_bytes = this->approx_bytes();
   }
   account_table_slice_resources(chunk_, is_serialized, record_batch,
@@ -794,7 +794,7 @@ void table_slice::retain_accounting() const noexcept {
 }
 
 void table_slice::release_accounting() const noexcept {
-  if (! chunk_) {
+  if (not chunk_) {
     return;
   }
   auto is_serialized = true;
@@ -806,7 +806,7 @@ void table_slice::release_accounting() const noexcept {
     [&](const auto& encoded) noexcept {
       const auto* ptr = state(encoded, state_);
       is_serialized = ptr->is_serialized();
-      if (! is_serialized) {
+      if (not is_serialized) {
         record_batch = ptr->record_batch();
       }
     },
@@ -1064,7 +1064,7 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
   -> table_slice {
   TENZIR_ASSERT(begin <= end);
   TENZIR_ASSERT(end <= slice.rows());
-  if (begin == 0 && end == slice.rows()) {
+  if (begin == 0 and end == slice.rows()) {
     return slice;
   }
   if (begin == end) {
@@ -1545,7 +1545,7 @@ auto flatten_record(
   // transform_columns to hit a fallback path that drops the struct's null
   // bitmap. To avoid losing null information, we pre-flatten the struct to
   // merge its null bitmap into the children before transforming.
-  if (not list_offsets.empty() && struct_array->null_bitmap()) {
+  if (not list_offsets.empty() and struct_array->null_bitmap()) {
     auto flat_children
       = check(struct_array->Flatten(tenzir::arrow_memory_pool()));
     struct_array = std::make_shared<arrow::StructArray>(
@@ -1783,7 +1783,7 @@ auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray> {
 auto bitmap_or(const std::shared_ptr<arrow::Buffer>& x,
                const std::shared_ptr<arrow::Buffer>& y)
   -> std::shared_ptr<arrow::Buffer> {
-  if (not x || not y) {
+  if (not x or not y) {
     return nullptr;
   }
   auto size = std::min(x->size(), y->size());

@@ -61,7 +61,7 @@ auto finish_transformation(flatbuffers::FlatBufferBuilder& fbb,
 }
 
 template <typename... StringViews>
-  requires(std::same_as<StringViews, std::string_view> && ...)
+  requires(std::same_as<StringViews, std::string_view> and ...)
 auto make_literal(flatbuffers::FlatBufferBuilder& fbb, StringViews... parts)
   -> secret_offset_t {
   auto str = std::string{};

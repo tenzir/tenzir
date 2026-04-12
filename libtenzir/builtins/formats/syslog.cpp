@@ -144,7 +144,7 @@ struct parameter_parser : parser_base<parameter_parser> {
     auto value = escaped | not_escaped;
     auto quoted_value = '"' >> *value >> '"';
     // Some emitters omit quotes around PARAM-VALUE entirely.
-    auto bare_value = ! ch<'"'> >> +(printable - ' ' - ';' - ']');
+    auto bare_value = not ch<'"'> >> +(printable - ' ' - ';' - ']');
     auto p = ' ' >> key >> '=' >> (quoted_value | bare_value);
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
@@ -221,7 +221,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
       = parsers::eoi | ' '_p | '\n'_p | '['_p | ';'_p;
     auto value_terminator
       = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
-    auto value_char = escaped | (! value_terminator >> printable);
+    auto value_char = escaped | (not value_terminator >> printable);
     auto quoted_value = '"'_p >> *value_char >> '"'_p;
     // Some emitters omit quotes around PARAM-VALUE entirely.
     auto bare_value = ! '"'_p >> +(printable - ' '_p - ';'_p - ']'_p);
@@ -405,9 +405,9 @@ struct legacy_message_timestamp_parser
     const auto word = +(parsers::printable - parsers::space);
     const auto ws = +parsers::space;
     const auto is_month = [](const std::string& mon) {
-      return mon == "Jan" || mon == "Feb" || mon == "Mar" || mon == "Apr"
-             || mon == "May" || mon == "Jun" || mon == "Jul" || mon == "Aug"
-             || mon == "Sep" || mon == "Oct" || mon == "Nov" || mon == "Dec";
+      return mon == "Jan" or mon == "Feb" or mon == "Mar" or mon == "Apr"
+             or mon == "May" or mon == "Jun" or mon == "Jul" or mon == "Aug"
+             or mon == "Sep" or mon == "Oct" or mon == "Nov" or mon == "Dec";
     };
     const auto is_day = [&](const std::string& day) -> bool {
       const auto p = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t day) {
@@ -418,7 +418,7 @@ struct legacy_message_timestamp_parser
     const auto is_year = [&](const std::string& year) -> bool {
       const auto p = integral_parser<uint16_t, 4>{}.with([](uint16_t year) {
         // Reasonable-ish assumption for a year
-        return year >= 1900 && year <= 2100;
+        return year >= 1900 and year <= 2100;
       });
       return p(year, unused);
     };
@@ -436,7 +436,7 @@ struct legacy_message_timestamp_parser
       auto sv = std::string_view{time};
       const auto* f = sv.begin();
       const auto* const l = sv.end();
-      return p(f, l, unused) && f == l;
+      return p(f, l, unused) and f == l;
     };
     auto p = word.with(is_month) >> ws >> word.with(is_day) >> ws
              >> ~(word.with(is_year) >> ws) >> word.with(is_time);
@@ -1000,7 +1000,7 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
   auto buffer = std::string{};
   auto remaining_message_length = size_t{};
   for (auto&& chunk : input) {
-    if (not chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
@@ -1605,11 +1605,11 @@ public:
                 auto stated_length = uint32_t{};
                 auto content = input;
                 const auto is_explicit
-                  = octet_counting.has_value() && *octet_counting;
+                  = octet_counting.has_value() and *octet_counting;
                 if (octet_counting.value_or(true)) { // true or auto-detect
                   auto it = input.begin();
                   if (octet_length_parser(it, input.end(), stated_length)
-                      && stated_length <= max_syslog_message_size) {
+                      and stated_length <= max_syslog_message_size) {
                     has_prefix = true;
                     content = std::string_view{it, input.end()};
                   } else if (is_explicit) {

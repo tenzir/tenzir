@@ -60,7 +60,7 @@ fdinbuf::int_type fdinbuf::underflow() {
     if (res == 0)
       timeout_fail_ = true;
     // Poll failure (memory/file descriptor limit exceeded; or no readable data)
-    if (res < 1 || !((pfd.revents & POLLIN) || (pfd.revents & POLLHUP)))
+    if (res < 1 or not ((pfd.revents & POLLIN) or (pfd.revents & POLLHUP)))
       return traits_type::eof();
   }
   timeout_fail_ = false;

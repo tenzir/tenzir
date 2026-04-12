@@ -181,8 +181,8 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
     // - src/format/pcap.cpp
     t = type{"port", uint64_type{}};
   }
-  if (! t
-      && (zeek_type.starts_with("vector") or zeek_type.starts_with("set")
+  if (not t
+      and (zeek_type.starts_with("vector") or zeek_type.starts_with("set")
           or zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
@@ -194,14 +194,14 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
                              std::string{zeek_type});
     }
     auto elem = parse_type(zeek_type.substr(open + 1, close - open - 1));
-    if (! elem) {
+    if (not elem) {
       return elem.error();
     }
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In Tenzir, they are all lists.
     t = type{list_type{*elem}};
   }
-  if (! t) {
+  if (not t) {
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
   }
@@ -893,7 +893,7 @@ class write_zeek_tsv final
           .parse(inv, ctx));
     if (set_separator) {
       auto converted = to_xsv_sep(set_separator->inner);
-      if (! converted) {
+      if (not converted) {
         diagnostic::error("`{}` is not a valid separator", set_separator->inner)
           .primary(set_separator->source)
           .note(fmt::to_string(converted.error()))

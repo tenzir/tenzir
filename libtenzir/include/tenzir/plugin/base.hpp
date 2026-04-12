@@ -73,8 +73,8 @@ public:
 /// of `plugin::name()` based on `Concrete::name()`.
 template <class Base, class Concrete>
   requires std::is_base_of_v<Base, Concrete>
-           && std::is_default_constructible_v<Concrete>
-           && std::is_final_v<Concrete>
+           and std::is_default_constructible_v<Concrete>
+           and std::is_final_v<Concrete>
 class inspection_plugin : public virtual serialization_plugin<Base> {
 public:
   auto name() const -> std::string override {

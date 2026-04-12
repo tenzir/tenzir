@@ -21,7 +21,7 @@ auto generate_token_command(const tenzir::invocation& inv,
   // defined in the main tenzir namespace, so we have to work around manually.
   auto timeout = caf::infinite;
   auto authenticator = get_authenticator(self, node, timeout);
-  if (!authenticator) {
+  if (not authenticator) {
     return caf::make_message(authenticator.error());
   }
   auto result = caf::message{};

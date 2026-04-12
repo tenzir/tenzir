@@ -32,7 +32,7 @@ auto empty(const table_slice& slice) -> bool {
 }
 
 auto empty(const chunk_ptr& chunk) -> bool {
-  return ! chunk || chunk->size() == 0;
+  return not chunk or chunk->size() == 0;
 }
 
 class repeat_operator final : public crtp_operator<repeat_operator> {
@@ -110,7 +110,7 @@ public:
       co_return;
     }
     // Cache non-empty slices for repetition
-    if (input.rows() > 0 && count_ > 1) {
+    if (input.rows() > 0 and count_ > 1) {
       buffer_.push_back(input);
     }
     // Always emit the input during first pass

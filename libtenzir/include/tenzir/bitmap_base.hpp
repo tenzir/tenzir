@@ -104,7 +104,7 @@ public:
   void append(bits_type xs) {
     if (xs.is_run()) {
       derived().append_bits(xs.data(), xs.size());
-    } else if (!xs.empty()) {
+    } else if (not xs.empty()) {
       derived().append_block(xs.data(), xs.size());
     }
   }
@@ -119,7 +119,7 @@ public:
     TENZIR_ASSERT(i < derived().size());
     auto n = size_type{0};
     for (auto bits : bit_range(derived())) {
-      if (i >= n && i < n + bits.size()) {
+      if (i >= n and i < n + bits.size()) {
         return bits[i - n];
       }
       n += bits.size();

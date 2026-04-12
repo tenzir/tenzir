@@ -38,7 +38,7 @@ public:
     }
 
     friend bool operator==(const param_type& lhs, const param_type& rhs) {
-      return lhs.shape_ == rhs.shape_ && lhs.scale_ == rhs.scale_;
+      return lhs.shape_ == rhs.shape_ and lhs.scale_ == rhs.scale_;
     }
 
   private:

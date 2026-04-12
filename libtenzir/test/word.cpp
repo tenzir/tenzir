@@ -49,10 +49,10 @@ TEST("masks") {
 TEST("tests") {
   CHECK(w8::all_or_none(w8::all));
   CHECK(w8::all_or_none(w8::none));
-  CHECK(! w8::all_or_none(w8::msb0));
-  CHECK(! w8::all_or_none(w8::msb1));
-  CHECK(! w8::all_or_none(w8::lsb0));
-  CHECK(! w8::all_or_none(w8::lsb1));
+  CHECK(not w8::all_or_none(w8::msb0));
+  CHECK(not w8::all_or_none(w8::msb1));
+  CHECK(not w8::all_or_none(w8::lsb0));
+  CHECK(not w8::all_or_none(w8::lsb1));
   for (auto i = 0u; i < w8::width; ++i) {
     CHECK(w8::all_or_none(w8::all, i));
     CHECK(w8::all_or_none(w8::none, i));
@@ -62,16 +62,16 @@ TEST("tests") {
     CHECK(w8::all_or_none(0b00000111, i));
   }
   for (auto i = w8::width / 2; i < w8::width; ++i) {
-    CHECK(! w8::all_or_none(0b11111000, i));
-    CHECK(! w8::all_or_none(0b00000111, i));
+    CHECK(not w8::all_or_none(0b11111000, i));
+    CHECK(not w8::all_or_none(0b00000111, i));
   }
   CHECK(w8::test(w8::all, 0));
   CHECK(w8::test(w8::all, 7));
-  CHECK(! w8::test(w8::none, 0));
-  CHECK(! w8::test(w8::none, 7));
-  CHECK(! w8::test(0b00100000, 4));
+  CHECK(not w8::test(w8::none, 0));
+  CHECK(not w8::test(w8::none, 7));
+  CHECK(not w8::test(0b00100000, 4));
   CHECK(w8::test(0b00100000, 5));
-  CHECK(! w8::test(0b00100000, 6));
+  CHECK(not w8::test(0b00100000, 6));
 }
 
 TEST("manipulation") {

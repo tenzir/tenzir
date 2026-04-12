@@ -34,7 +34,7 @@ public:
   // std::optional<RHS>>
   using attribute = std::conditional_t<
     std::is_same<lhs_attribute, unused_type>{}
-      && std::is_same<rhs_attribute, unused_type>{},
+      and std::is_same<rhs_attribute, unused_type>{},
     unused_type,
     std::conditional_t<
       std::is_same<rhs_attribute, unused_type>{}, std::optional<lhs_attribute>,
@@ -49,7 +49,7 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     std::optional<rhs_attribute> rhs_attr;
-    if (lhs_(f, l, left_attr(a)) && rhs_opt_(f, l, rhs_attr)) {
+    if (lhs_(f, l, left_attr(a)) and rhs_opt_(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);
       return true;
     }
@@ -65,13 +65,13 @@ private:
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
   static auto left_attr(Attribute& a) -> std::optional<L>& requires(
-    !std::is_same_v<L, unused_type> && std::is_same_v<R, unused_type>) {
+    not std::is_same_v<L, unused_type> and std::is_same_v<R, unused_type>) {
     return a;
   }
 
   template <class... Ts, class L = lhs_attribute, class R = rhs_attribute>
   static auto left_attr(std::tuple<Ts...>& t) -> std::optional<L>& requires(
-    !(std::is_same_v<L, unused_type> || std::is_same_v<R, unused_type>)) {
+    not (std::is_same_v<L, unused_type> or std::is_same_v<R, unused_type>)) {
     return std::get<0>(t);
   }
 
@@ -83,13 +83,13 @@ private:
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
   static auto right_attr(Attribute& a) -> std::optional<R>& requires(
-    std::is_same_v<L, unused_type> && !std::is_same_v<R, unused_type>) {
+    std::is_same_v<L, unused_type> and not std::is_same_v<R, unused_type>) {
     return a;
   }
 
   template <class... Ts, class L = lhs_attribute, class R = rhs_attribute>
   static auto right_attr(std::tuple<Ts...>& t) -> std::optional<R>& requires(
-    !(std::is_same_v<L, unused_type> || std::is_same_v<R, unused_type>)) {
+    not (std::is_same_v<L, unused_type> or std::is_same_v<R, unused_type>)) {
     return std::get<1>(t);
   }
 

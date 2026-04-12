@@ -23,7 +23,7 @@ const std::string& line_range::get() const {
 }
 
 void line_range::next_impl() {
-  if (!input_)
+  if (not input_)
     return;
   // Get the next non-empty line.
   do {
@@ -35,7 +35,7 @@ void line_range::next_impl() {
 }
 
 void line_range::next() {
-  TENZIR_ASSERT(!done());
+  TENZIR_ASSERT(not done());
   line_.clear();
   next_impl();
 }
@@ -45,7 +45,7 @@ bool line_range::next_timeout(std::chrono::milliseconds timeout) {
   if (p)
     p->read_timeout() = timeout;
   // Clear if the previous read did not time out.
-  if (!timed_out_)
+  if (not timed_out_)
     line_.clear();
   // Try to read next line.
   next_impl();
@@ -62,7 +62,7 @@ bool line_range::next_timeout(std::chrono::milliseconds timeout) {
 }
 
 bool line_range::done() const {
-  return line_.empty() && !input_;
+  return line_.empty() and not input_;
 }
 
 std::string& line_range::line() {

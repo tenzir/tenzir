@@ -177,7 +177,7 @@ struct partial_timestamp {
     //
     // Thus, we'll require `other` to be complete, and translate it to the same
     // timezone as `*this`.
-    if (tm_zone && TENZIR_HAS_DATE_H) {
+    if (tm_zone and TENZIR_HAS_DATE_H) {
       if (not other.transform_to_tz(*tm_zone, diag))
         return false;
     } else if (tm_gmtoff) {
@@ -186,7 +186,7 @@ struct partial_timestamp {
     }
     // Now, the timezones match, and we can just blindly assign to the members
     auto do_field = []<typename T>(T& self, const T& other_field) {
-      if (!self)
+      if (not self)
         self = other_field;
     };
     do_field(tm_sec, other.tm_sec);
@@ -201,14 +201,14 @@ struct partial_timestamp {
   /// Returns `true` if `*this` contains the minimum information needed for a
   /// timestamp, i.e. year, month, day, hour, and minute.
   [[nodiscard]] auto is_complete() const -> bool {
-    return tm_min && tm_hour && tm_mday && tm_mon && tm_year;
+    return tm_min and tm_hour and tm_mday and tm_mon and tm_year;
   }
 
   /// Returns `true` if `*this` is doesn't have a set timezone, or it's
   /// explicitly UTC/GMT.
   [[nodiscard]] auto is_utc() const -> bool {
-    return (not tm_gmtoff || *tm_gmtoff == 0)
-           && (not tm_zone || *tm_zone == "UTC" || *tm_zone == "GMT");
+    return (not tm_gmtoff or *tm_gmtoff == 0)
+           and (not tm_zone or *tm_zone == "UTC" or *tm_zone == "GMT");
   }
 
   /// Adjusts the members in `*this`, so that `is_utc()` returns `true`.
@@ -281,7 +281,7 @@ struct partial_timestamp {
       if (not transform_to_utc(diag))
         return false;
     }
-    if (new_tz_name == "UTC" || new_tz_name == "GMT")
+    if (new_tz_name == "UTC" or new_tz_name == "GMT")
       // UTC was requested
       return true;
     tm_gmtoff.reset();
@@ -324,7 +324,7 @@ struct partial_timestamp {
       return {std::nullopt, std::nullopt, std::nullopt};
     auto time = std::chrono::seconds{tm_value->tm_sec + 60 * tm_value->tm_min
                                      + 60 * 60 * tm_value->tm_hour};
-    if (time >= std::chrono::seconds{86400} || time < std::chrono::seconds{0}) {
+    if (time >= std::chrono::seconds{86400} or time < std::chrono::seconds{0}) {
       diagnostic::error("invalid time").note("value: {}", time).emit(diag);
       return {std::nullopt, std::nullopt, std::nullopt};
     }
@@ -395,7 +395,7 @@ struct partial_timestamp {
     if (is_utc()) {
       builder.field("utc_offset", 0);
       builder.field("timezone", "UTC");
-    } else if (tm_zone && TENZIR_HAS_DATE_H) {
+    } else if (tm_zone and TENZIR_HAS_DATE_H) {
       add_field_if_set("utc_offset", tm_gmtoff);
       builder.field("timezone", *tm_zone);
     } else if (tm_gmtoff) {
@@ -549,7 +549,7 @@ public:
           TENZIR_ASSERT(today_beginning.is_utc());
           auto time_tp = time->to_system_time_point(diag);
           auto today_beg_tp = today_beginning.to_system_time_point(diag);
-          if (not time_tp || not today_beg_tp)
+          if (not time_tp or not today_beg_tp)
             return {};
           if (std::chrono::floor<std::chrono::days>(*time_tp) > *today_beg_tp)
             *time->tm_year -= 1;
@@ -560,7 +560,7 @@ public:
       // `to_time_point` (in the non --components branch below) requires UTC,
       // and `to_record` can yield more useful results, if the client code
       // doesn't have to deal with timezones.
-      if (time->is_complete() && not time->transform_to_utc(diag))
+      if (time->is_complete() and not time->transform_to_utc(diag))
         return {};
       if (components_) {
         // --components is ON:

@@ -23,8 +23,8 @@ namespace tenzir {
 
 qualified_record_field::qualified_record_field(const class type& schema,
                                                const offset& index) noexcept {
-  TENZIR_ASSERT(!schema.name().empty());
-  TENZIR_ASSERT(!index.empty());
+  TENZIR_ASSERT(not schema.name().empty());
+  TENZIR_ASSERT(not index.empty());
   const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
   schema_name_ = schema.name();

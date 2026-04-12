@@ -28,10 +28,10 @@ struct uuid_printer : printer_base<uuid_printer> {
     for (size_t i = 0; i < 16; ++i) {
       auto hi = detail::byte_to_char((x[i] >> 4) & std::byte{0x0f});
       auto lo = detail::byte_to_char(x[i] & std::byte{0x0f});
-      if (!hexbyte(out, hi, lo))
+      if (not hexbyte(out, hi, lo))
         return false;
-      if (i == 3 || i == 5 || i == 7 || i == 9)
-        if (!printers::chr<'-'>(out))
+      if (i == 3 or i == 5 or i == 7 or i == 9)
+        if (not printers::chr<'-'>(out))
           return false;
     }
     return true;

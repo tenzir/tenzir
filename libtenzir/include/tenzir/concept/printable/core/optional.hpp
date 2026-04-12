@@ -36,7 +36,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
-    return !a || printer_.print(out, *a);
+    return not a or printer_.print(out, *a);
   }
 
 private:

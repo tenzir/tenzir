@@ -262,7 +262,7 @@ auto main(int argc, char** argv) -> int try {
       return EXIT_FAILURE;
     }
     if (compression_level < min_level.ValueUnsafe()
-        || compression_level > max_level.ValueUnsafe()) {
+        or compression_level > max_level.ValueUnsafe()) {
       TENZIR_ERROR(
         "Zstd compression level '{}' outside of valid range [{}, {}]",
         compression_level, min_level.ValueUnsafe(), max_level.ValueUnsafe());
@@ -424,7 +424,7 @@ auto main(int argc, char** argv) -> int try {
           int signum = 0;
           sigwait(&sigset, &signum);
           TENZIR_WARN("received signal {}", signum);
-          if (!stop) {
+          if (not stop) {
             caf::anon_mail(atom::internal_v, atom::signal_v, signum)
               .urgent().send(reflector.get());
           }

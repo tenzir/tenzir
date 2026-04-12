@@ -98,7 +98,7 @@ public:
         // TODO: This is a hack for the case where we don't have the information.
         break;
       }
-      if (! annotation.source) {
+      if (not annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
@@ -224,7 +224,7 @@ auto make_diagnostic_printer(std::optional<location_origin> origin,
 auto diagnostic::builder(enum severity s, caf::error err,
                          std::source_location location) -> diagnostic_builder {
   if (err.category() == caf::type_id_v<tenzir::ec>
-      && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
+      and static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
     auto ctx = err.context();
     auto* inner = static_cast<diagnostic*>(nullptr);
     caf::message_handler{
@@ -264,7 +264,7 @@ auto diagnostic::builder(enum severity s, caf::error err,
     .note("source: {}:{}", location.file_name(), location.line());
 }
 
-void diagnostic_builder::emit(const shared_diagnostic_handler& diag) && {
+void diagnostic_builder::emit(const shared_diagnostic_handler& diag) and {
   return diag.emit(std::move(result_));
 }
 

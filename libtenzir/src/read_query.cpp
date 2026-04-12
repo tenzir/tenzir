@@ -57,7 +57,7 @@ caf::expected<std::string> read_query(std::istream& in) {
 
 caf::expected<std::string> read_query(const std::string& path) {
   std::ifstream f{path};
-  if (!f)
+  if (not f)
     return caf::make_error(ec::no_such_file,
                            fmt::format("unable to read from '{}'", path));
   return read_query(f);
@@ -95,7 +95,7 @@ read_query(const invocation& inv, std::string_view file_option,
     struct stat stats = {};
     if (::fstat(::fileno(stdin), &stats) != 0)
       return false;
-    return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
+    return S_ISFIFO(stats.st_mode) or S_ISREG(stats.st_mode);
   }();
   if (fname) {
     if (has_query_cli)
@@ -121,12 +121,12 @@ read_query(const invocation& inv, std::string_view file_option,
   std::string cin_query;
   if (has_query_stdin) {
     auto query = read_query(std::cin);
-    if (!query || query->empty())
+    if (not query or query->empty())
       has_query_stdin = false;
     else
       cin_query = *query;
   }
-  if (has_query_stdin && has_query_cli)
+  if (has_query_stdin and has_query_cli)
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("got query '{}' on the command line and '{}' via stdin",

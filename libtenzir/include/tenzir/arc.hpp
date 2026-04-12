@@ -95,7 +95,7 @@ public:
   explicit(false) operator T const&() const {
     return deref();
   }
-  explicit(false) operator T&&() && {
+  explicit(false) operator T&&() and {
     return std::move(*this).deref();
   }
 

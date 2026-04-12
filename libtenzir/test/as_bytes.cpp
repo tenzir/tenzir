@@ -42,13 +42,13 @@ struct fixed {
 
 } // namespace
 
-static_assert(!byte_sequence<invalid>);
+static_assert(not byte_sequence<invalid>);
 static_assert(byte_sequence<fixed>);
 static_assert(byte_sequence<variable>);
-static_assert(!variable_byte_sequence<fixed>);
+static_assert(not variable_byte_sequence<fixed>);
 static_assert(variable_byte_sequence<variable>);
 static_assert(fixed_byte_sequence<fixed>);
-static_assert(!fixed_byte_sequence<variable>);
+static_assert(not fixed_byte_sequence<variable>);
 
 TEST("byte sequences") {
   CHECK(as_bytes(invalid{}).empty());

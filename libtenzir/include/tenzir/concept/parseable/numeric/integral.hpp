@@ -21,7 +21,7 @@ namespace detail {
 template <class Iterator>
 bool parse_sign(Iterator& i) {
   auto minus = *i == '-';
-  if (minus || *i == '+') {
+  if (minus or *i == '+') {
     ++i;
     return minus;
   }

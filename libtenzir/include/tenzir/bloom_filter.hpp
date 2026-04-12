@@ -79,7 +79,7 @@ public:
   bool lookup(T&& x) const {
     auto& digests = hasher_(std::forward<T>(x));
     for (size_t i = 0; i < digests.size(); ++i)
-      if (!bits_[position(i, digests[i])])
+      if (not bits_[position(i, digests[i])])
         return false;
     return true;
   }
@@ -106,7 +106,7 @@ public:
   // -- concepts --------------------------------------------------------------
 
   friend bool operator==(const bloom_filter& x, const bloom_filter& y) {
-    return x.hasher_ == y.hasher_ && x.bits_ == y.bits_;
+    return x.hasher_ == y.hasher_ and x.bits_ == y.bits_;
   }
 
   template <class Inspector>
@@ -157,7 +157,7 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
     TENZIR_TRACE("evaluated bloom filter parameters: {} {} {} {}",
                  TENZIR_ARG(ys->k), TENZIR_ARG(ys->m), TENZIR_ARG(ys->n),
                  TENZIR_ARG(ys->p));
-    if (*ys->m == 0 || *ys->k == 0)
+    if (*ys->m == 0 or *ys->k == 0)
       return {};
     if (seeds.empty()) {
       if constexpr (std::is_same_v<hasher_type, double_hasher<HashFunction>>) {

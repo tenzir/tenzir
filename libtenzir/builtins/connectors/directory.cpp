@@ -48,7 +48,7 @@ public:
   auto
   instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    if (!info) {
+    if (not info) {
       return caf::make_error(ec::syntax_error,
                              "cannot use directory saver outside of `to "
                              "directory write ...`");
@@ -66,7 +66,7 @@ public:
         / fmt::format("{}.{}.{}", info->input_schema.name(),
                       info->input_schema.make_fingerprint(), info->format);
     auto const* p = plugins::find<saver_parser_plugin>("file");
-    if (!p) {
+    if (not p) {
       return caf::make_error(ec::unspecified, "could not find `file` saver");
     }
     auto diag = null_diagnostic_handler{};

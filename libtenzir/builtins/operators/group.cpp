@@ -103,7 +103,7 @@ public:
     return pipe_.infer_type(input, dh);
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Group<table_slice>{std::move(over_), std::move(pipe_), id_};
   }

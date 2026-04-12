@@ -41,7 +41,7 @@ bool operator==(pattern_view lhs, pattern_view rhs) noexcept {
 
 std::strong_ordering operator<=>(pattern_view lhs, pattern_view rhs) noexcept {
   // This is a polyfill for std::lexicographical_compare_threeway
-  while (!lhs.pattern_.empty() && !rhs.pattern_.empty()) {
+  while (not lhs.pattern_.empty() and not rhs.pattern_.empty()) {
     if (lhs.pattern_[0] < rhs.pattern_[0])
       return std::strong_ordering::less;
     if (lhs.pattern_[0] > rhs.pattern_[0])
@@ -71,20 +71,20 @@ bool is_equal(const data& x, const data_view& y) {
     },
     [&](const pattern& lhs, const view<pattern>& rhs) {
       return lhs.string() == rhs.string()
-             && lhs.options().case_insensitive == rhs.case_insensitive();
+             and lhs.options().case_insensitive == rhs.case_insensitive();
     },
     [&](const list& lhs, const view<list>& rhs) {
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
     },
     [&](const map& lhs, const view<map>& rhs) {
       auto f = [](const auto& xs, const auto& ys) {
-        return is_equal(xs.first, ys.first) && is_equal(xs.second, ys.second);
+        return is_equal(xs.first, ys.first) and is_equal(xs.second, ys.second);
       };
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
     },
     [&](const record& lhs, const view<record>& rhs) {
       auto f = [](const auto& xs, const auto& ys) {
-        return xs.first == ys.first && is_equal(xs.second, ys.second);
+        return xs.first == ys.first and is_equal(xs.second, ys.second);
       };
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
     },
@@ -214,7 +214,7 @@ bool type_check(const type& x, const data_view& y) {
       return true;
     },
     [&](const enumeration_type& t, const view<enumeration>& u) {
-      return !t.field(u).empty();
+      return not t.field(u).empty();
     },
     [&](const list_type& t, const view<list>& u) {
       if (u.empty())
@@ -241,7 +241,7 @@ bool type_check(const type& x, const data_view& y) {
       const auto vt = t.value_type();
       auto it = u.begin();
       const auto check = [&](const auto& d) noexcept {
-        return type_check(kt, d.first) && type_check(vt, d.second);
+        return type_check(kt, d.first) and type_check(vt, d.second);
       };
       if (check(*it)) {
         // Technically maps can contain heterogeneous data,
@@ -258,7 +258,7 @@ bool type_check(const type& x, const data_view& y) {
         return false;
       for (size_t i = 0; const auto& [k, v] : u) {
         const auto field = t.field(i++);
-        if (field.name != k || type_check(field.type, v))
+        if (field.name != k or type_check(field.type, v))
           return false;
       }
       return true;
@@ -273,7 +273,7 @@ bool type_check(const type& x, const data_view& y) {
     },
     [&]<complex_type T, class U>(const T&, const U&) {
       // We don't have a matching overload.
-      static_assert(!std::is_same_v<view<type_to_data_t<T>>, U>, //
+      static_assert(not std::is_same_v<view<type_to_data_t<T>>, U>, //
                     "missing type check overload");
       return false;
     },
@@ -284,7 +284,7 @@ bool type_check(const type& x, const data_view& y) {
 data_view to_canonical(const type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<enumeration>& x, const enumeration_type& t) -> data_view {
-      if (auto result = t.field(materialize(x)); !result.empty())
+      if (auto result = t.field(materialize(x)); not result.empty())
         return result;
       return caf::none;
     },
@@ -311,9 +311,9 @@ data_view to_internal(const type& t, const data_view& x) {
 
 auto descend(view<record> r, std::string_view path)
   -> caf::expected<data_view> {
-  TENZIR_ASSERT(!path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto names = detail::split(path, ".");
-  TENZIR_ASSERT(!names.empty());
+  TENZIR_ASSERT(not names.empty());
   auto current = r;
   for (auto& name : names) {
     auto last = &name == &names.back();
@@ -332,7 +332,7 @@ auto descend(view<record> r, std::string_view path)
       return field;
     }
     auto maybe_rec = try_as<view<record>>(&field);
-    if (!maybe_rec) {
+    if (not maybe_rec) {
       // This is not a record, but path continues.
       return caf::make_error(
         ec::lookup_error,

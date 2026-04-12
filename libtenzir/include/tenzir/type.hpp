@@ -90,16 +90,16 @@ concept concrete_type = requires(const T& value) {
 /// A concept that models any concrete type, or the abstract type class itself.
 template <class T>
 concept type_or_concrete_type
-  = std::is_same_v<std::remove_cv_t<T>, type> || concrete_type<T>;
+  = std::is_same_v<std::remove_cv_t<T>, type> or concrete_type<T>;
 
 /// A concept that models basic concrete types, i.e., types that do not hold
 /// additional state.
 template <class T>
 concept basic_type =
   // The type must be a concrete type.
-  concrete_type<T> &&
+  concrete_type<T> and
   // The type must not hold any state.
-  std::is_empty_v<T> &&
+  std::is_empty_v<T> and
   // The type must not define any constructors.
   std::is_trivial_v<T>;
 
@@ -107,14 +107,14 @@ concept basic_type =
 template <class T>
 concept numeric_type
   = concrete_type<T> and basic_type<T>
-    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>
-         || std::same_as<T, double_type>);
+    and (std::same_as<T, int64_type> or std::same_as<T, uint64_type>
+         or std::same_as<T, double_type>);
 
 /// Either `int64_type` or `uint64_type`.
 template <class T>
 concept integral_type
   = numeric_type<T>
-    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>);
+    and (std::same_as<T, int64_type> or std::same_as<T, uint64_type>);
 
 /// A concept that models basic concrete types, i.e., types that hold
 /// additional state and extend the lifetime of the surrounding type.
@@ -131,7 +131,7 @@ concept complex_type = requires {
 
 template <class T>
 concept extension_type
-  = concrete_type<T> && arrow::is_extension_type<typename T::arrow_type>::value;
+  = concrete_type<T> and arrow::is_extension_type<typename T::arrow_type>::value;
 
 // -- type --------------------------------------------------------------------
 
@@ -362,7 +362,7 @@ public:
   template <class Hasher>
   friend auto inspect(detail::hash_inspector<Hasher>& f, type& x) ->
     typename detail::hash_inspector<Hasher>::result_type {
-    static_assert(! detail::hash_inspector<Hasher>::is_loading,
+    static_assert(not detail::hash_inspector<Hasher>::is_loading,
                   "this inspect overload is read-only");
     // Because the underlying table is a chunk_ptr, which cannot be hashed
     // directly, we instead forward the unique representation of it to the hash
@@ -384,7 +384,7 @@ public:
   /// @note The result is empty if the contained type is unnammed. Built-in
   /// types have no name. Use the {fmt} API to render a type's signature.
   [[nodiscard]] std::string_view name() const& noexcept;
-  [[nodiscard]] std::string_view name() && = delete;
+  [[nodiscard]] std::string_view name() and = delete;
 
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
@@ -396,7 +396,7 @@ public:
   [[nodiscard]] std::optional<std::string_view>
   attribute(const char* key) const& noexcept;
   [[nodiscard]] std::optional<std::string_view>
-  attribute(const char* key) && = delete;
+  attribute(const char* key) and = delete;
 
   /// Returns whether the type has any attributes.
   [[nodiscard]] bool has_attributes() const noexcept;
@@ -405,7 +405,7 @@ public:
   [[nodiscard]] generator<attribute_view>
   attributes(type::recurse recurse = type::recurse::yes) const& noexcept;
   [[nodiscard]] generator<attribute_view>
-  attributes(type::recurse recurse = type::recurse::yes) && = delete;
+  attributes(type::recurse recurse = type::recurse::yes) and = delete;
 
   /// Returns a string generated from hashing the contents of a type.
   std::string make_fingerprint() const;
@@ -987,11 +987,11 @@ public:
 
   /// Returns the field at the given key, or an empty string if it does not exist.
   [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
-  [[nodiscard]] std::string_view field(uint32_t key) && = delete;
+  [[nodiscard]] std::string_view field(uint32_t key) and = delete;
 
   /// Returns a view onto all fields, sorted by key.
   [[nodiscard]] std::vector<field_view> fields() const& noexcept;
-  [[nodiscard]] std::vector<field_view> fields() && = delete;
+  [[nodiscard]] std::vector<field_view> fields() and = delete;
 
   /// Returns the value of the field with the given name, or nullopt if the key
   /// does not exist.
@@ -1078,7 +1078,7 @@ public:
   explicit list_type(const type& value_type) noexcept;
 
   template <concrete_type T>
-    requires(! std::is_same_v<T, list_type>) // avoid calling copy constructor
+    requires(not std::is_same_v<T, list_type>) // avoid calling copy constructor
   explicit list_type(const T& value_type) noexcept
     : list_type{type{value_type}} {
     // nop
@@ -1145,8 +1145,8 @@ public:
   explicit map_type(const type& key_type, const type& value_type) noexcept;
 
   template <type_or_concrete_type T, type_or_concrete_type U>
-    requires(! std::is_same_v<T, tenzir::type>
-             || ! std::is_same_v<U, tenzir::type>)
+    requires(not std::is_same_v<T, tenzir::type>
+             or not std::is_same_v<U, tenzir::type>)
   explicit map_type(const T& key_type, const U& value_type) noexcept
     : map_type{type{key_type}, type{value_type}} {
     // nop
@@ -1357,7 +1357,7 @@ public:
 
   /// Computes the flattened field name at a given index.
   [[nodiscard]] std::string_view key(size_t index) const& noexcept;
-  [[nodiscard]] std::string_view key(size_t index) && = delete;
+  [[nodiscard]] std::string_view key(size_t index) and = delete;
   [[nodiscard]] std::string key(const offset& index) const noexcept;
 
   /// Returns the field at the given index.
@@ -1645,7 +1645,7 @@ struct type_to_arrow_array_storage<T> {
 };
 
 template <type_or_concrete_type T>
-  requires(! arrow::is_extension_type<type_to_arrow_type_t<T>>::value)
+  requires(not arrow::is_extension_type<type_to_arrow_type_t<T>>::value)
 struct type_to_arrow_array_storage<T> {
   using type = type_to_arrow_array_t<T>;
 };
@@ -1842,11 +1842,11 @@ struct formatter<tenzir::type> {
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     auto it = ctx.begin();
     auto end = ctx.end();
-    if (it != end && (*it++ == '-') && it != end && (*it++ == 'a')) {
+    if (it != end and (*it++ == '-') and it != end and (*it++ == 'a')) {
       print_attributes = false;
     }
     // continue until end of range
-    while (it != end && *it != '}') {
+    while (it != end and *it != '}') {
       ++it;
     }
     return it;
@@ -1856,7 +1856,7 @@ struct formatter<tenzir::type> {
   auto format(const tenzir::type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
-    if (const auto& name = value.name(); ! name.empty()) {
+    if (const auto& name = value.name(); not name.empty()) {
       out = fmt::format_to(out, "{}", name);
     } else {
       match(value, [&](const auto& x) {
@@ -1866,7 +1866,7 @@ struct formatter<tenzir::type> {
     if (print_attributes) {
       for (bool first = false; const auto& attribute :
                                value.attributes(tenzir::type::recurse::no)) {
-        if (! first) {
+        if (not first) {
           out = fmt::format_to(out, " ");
           first = false;
         }

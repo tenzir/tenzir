@@ -98,7 +98,7 @@ public:
   // stores the copy and sets the value pointer in await_suspend, ensuring the
   // awaiter's address is stable before storing the pointer.
   auto yield_value(const T& v)
-    requires(! std::is_reference_v<T> && std::copy_constructible<T>)
+    requires(not std::is_reference_v<T> and std::copy_constructible<T>)
   {
     return copy_awaiter<value_type, pointer_type>{value_type(v), m_value};
   }
@@ -160,12 +160,12 @@ public:
 
   friend bool
   operator==(const generator_iterator& it, generator_sentinel) noexcept {
-    return ! it.m_coroutine || it.m_coroutine.done();
+    return not it.m_coroutine or it.m_coroutine.done();
   }
 
   friend bool
   operator!=(const generator_iterator& it, generator_sentinel s) noexcept {
-    return ! (it == s);
+    return not (it == s);
   }
 
   friend bool

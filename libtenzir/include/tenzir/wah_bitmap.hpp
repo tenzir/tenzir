@@ -42,7 +42,7 @@ struct wah_word : word<Block> {
 
   // Checks whether a block is a fill of a specific type.
   static constexpr bool is_fill(Block block, bool bit) {
-    return is_fill(block) && fill_type(block) == bit;
+    return is_fill(block) and fill_type(block) == bit;
   }
 
   // Counts the number literal words in a fill block.

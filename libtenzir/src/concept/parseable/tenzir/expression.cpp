@@ -186,7 +186,7 @@ auto make_extractor_parser() {
   // A field cannot start with:
   //  - '-' to leave room for potential arithmetic expressions in operands
   //  - ':' so it won't be interpreted as a type extractor
-  auto field = !(':'_p | '-') >> (+make_field_char_parser() % '.');
+  auto field = not (':'_p | '-') >> (+make_field_char_parser() % '.');
   // clang-format off
   auto extractor
     = ':' >> parsers::legacy_type ->* to_type_extractor
@@ -199,7 +199,7 @@ auto make_extractor_parser() {
 auto make_operand_parser() {
   using namespace parser_literals;
   // clang-format off
-  return (parsers::data >> !(make_field_char_parser() | '.')) ->* to_data_operand
+  return (parsers::data >> not (make_field_char_parser() | '.')) ->* to_data_operand
     | "#schema_id"_p  ->* [] { return meta_extractor{meta_extractor::schema_id}; }
     | "#schema"_p  ->* [] { return meta_extractor{meta_extractor::schema}; }
     | "#import_time"_p ->* [] { return meta_extractor{meta_extractor::import_time}; }
@@ -227,7 +227,7 @@ auto make_predicate_parser() {
     | "!in"_p ->* [] { return relational_operator::not_in; }
     | "ni"_p  ->* [] { return relational_operator::ni; }
     | "!ni"_p ->* [] { return relational_operator::not_ni; }
-    | ("not"_p >> !&identifier) >> required_ws_or_comment >> "in"_p
+    | ("not"_p >> not &identifier) >> required_ws_or_comment >> "in"_p
       ->* [] { return relational_operator::not_in; }
     ;
   auto pred
@@ -258,7 +258,7 @@ static auto make_expression_parser() {
       if (op == bool_operator::logical_and) {
         con.emplace_back(std::move(expr));
       } else if (op == bool_operator::logical_or) {
-        TENZIR_ASSERT(!con.empty());
+        TENZIR_ASSERT(not con.empty());
         if (con.size() == 1)
           dis.emplace_back(std::move(con[0]));
         else
@@ -286,8 +286,8 @@ static auto make_expression_parser() {
     ;
   group
     = '(' >> optional_ws_or_comment >> ref(expr) >> optional_ws_or_comment >> ')'
-    | ('!'_p | ("not"_p >> !&identifier)) >> optional_ws_or_comment >> pred_expr ->* negate_expr
-    | ('!'_p |  ("not"_p >> !&identifier)) >> optional_ws_or_comment >> '(' >> optional_ws_or_comment >> (ref(expr) ->* negate_expr) >> optional_ws_or_comment >> ')'
+    | ('!'_p | ("not"_p >> not &identifier)) >> optional_ws_or_comment >> pred_expr ->* negate_expr
+    | ('!'_p |  ("not"_p >> not &identifier)) >> optional_ws_or_comment >> '(' >> optional_ws_or_comment >> (ref(expr) ->* negate_expr) >> optional_ws_or_comment >> ')'
     | pred_expr
     ;
   auto and_or

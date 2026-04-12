@@ -1028,7 +1028,7 @@ auto validate_chart_common(auto y, auto limit, auto x_min, auto x_max,
 
   // Validate fill
   if (auto f = ctx.get(fill)) {
-    if (! ctx.get_location(res)) {
+    if (not ctx.get_location(res)) {
       diagnostic::error("`fill` cannot be specified without `resolution`")
         .primary(*f)
         .emit(ctx);

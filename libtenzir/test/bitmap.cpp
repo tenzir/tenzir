@@ -263,7 +263,7 @@ struct bitmap_test_harness {
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), last);
     rng.select(42); // nothing left
-    CHECK(! rng);
+    CHECK(not rng);
     MESSAGE("bitwise_range::next(n)");
     rng = each(b);
     rng.next(b.size() - 1); // start at 0, then go to last bit.
@@ -278,7 +278,7 @@ struct bitmap_test_harness {
     CHECK_EQUAL(rng.get(), 227u);
     rng = each(b);
     rng.next(1024); // out of range
-    CHECK(! rng);
+    CHECK(not rng);
     MESSAGE("bitwise_range::select_from(x)");
     rng = each(b);
     rng.select_from(225);
@@ -384,36 +384,36 @@ struct bitmap_test_harness {
     MESSAGE("all");
     CHECK(all<0>(Bitmap{}));
     CHECK(all<1>(Bitmap{}));
-    CHECK(! all<0>(a));
-    CHECK(! all<0>(b));
-    CHECK(! all<1>(a));
-    CHECK(! all<1>(b));
+    CHECK(not all<0>(a));
+    CHECK(not all<0>(b));
+    CHECK(not all<1>(a));
+    CHECK(not all<1>(b));
     CHECK(all<0>(Bitmap{10, false}));
     CHECK(all<0>(Bitmap{1000, false}));
-    CHECK(! all<0>(Bitmap{10, true}));
-    CHECK(! all<0>(Bitmap{1000, true}));
+    CHECK(not all<0>(Bitmap{10, true}));
+    CHECK(not all<0>(Bitmap{1000, true}));
     CHECK(all<1>(Bitmap{10, true}));
     CHECK(all<1>(Bitmap{1000, true}));
-    CHECK(! all<1>(Bitmap{10, false}));
-    CHECK(! all<1>(Bitmap{1000, false}));
+    CHECK(not all<1>(Bitmap{10, false}));
+    CHECK(not all<1>(Bitmap{1000, false}));
   }
 
   void test_any() {
     MESSAGE("any");
-    CHECK(! any<0>(Bitmap{}));
-    CHECK(! any<1>(Bitmap{}));
+    CHECK(not any<0>(Bitmap{}));
+    CHECK(not any<1>(Bitmap{}));
     CHECK(any<0>(a));
     CHECK(any<0>(b));
     CHECK(any<1>(a));
     CHECK(any<1>(b));
     CHECK(any<0>(Bitmap{10, false}));
     CHECK(any<0>(Bitmap{1000, false}));
-    CHECK(! any<0>(Bitmap{10, true}));
-    CHECK(! any<0>(Bitmap{1000, true}));
+    CHECK(not any<0>(Bitmap{10, true}));
+    CHECK(not any<0>(Bitmap{1000, true}));
     CHECK(any<1>(Bitmap{10, true}));
     CHECK(any<1>(Bitmap{1000, true}));
-    CHECK(! any<1>(Bitmap{10, false}));
-    CHECK(! any<1>(Bitmap{1000, false}));
+    CHECK(not any<1>(Bitmap{10, false}));
+    CHECK(not any<1>(Bitmap{1000, false}));
   }
 
   void test_flatbuffers() {
@@ -734,24 +734,24 @@ TEST("EWAH element access 1") {
   auto bm = make_ewah1();
   CHECK(bm[0]);
   CHECK(bm[9]);
-  CHECK(! bm[10]);
+  CHECK(not bm[10]);
   CHECK(bm[64]);
-  CHECK(! bm[1024]);
+  CHECK(not bm[1024]);
   CHECK(bm[1344]);
   CHECK(bm[2473901163905 - 1]);
 }
 
 TEST("EWAH element access 2") {
   auto bm = make_ewah2();
-  CHECK(! bm[0]);
+  CHECK(not bm[0]);
   CHECK(bm[1]);
-  CHECK(! bm[2]);
-  CHECK(! bm[63]);
-  CHECK(! bm[64]);
-  CHECK(! bm[65]);
-  CHECK(! bm[384]);
-  CHECK(! bm[385]);
-  CHECK(! bm[422]);
+  CHECK(not bm[2]);
+  CHECK(not bm[63]);
+  CHECK(not bm[64]);
+  CHECK(not bm[65]);
+  CHECK(not bm[384]);
+  CHECK(not bm[385]);
+  CHECK(not bm[422]);
   CHECK(bm[423]);
   CHECK(bm[424]);
 }
@@ -862,12 +862,12 @@ TEST("EWAH block append") {
   bm.append_bits(true, 10);
   bm.append_block(0xf00);
   CHECK_EQUAL(bm.size(), 10 + ewah_bitmap::word_type::width);
-  CHECK(! bm[17]);
+  CHECK(not bm[17]);
   CHECK(bm[18]);
   CHECK(bm[19]);
   CHECK(bm[20]);
   CHECK(bm[21]);
-  CHECK(! bm[22]);
+  CHECK(not bm[22]);
   bm.append_bits(true, 2048);
   bm.append_block(0xff00);
   auto str

@@ -39,7 +39,7 @@ struct subnet_parser : tenzir::parser_base<subnet_parser> {
     static auto p = make();
     ip network;
     uint8_t length;
-    if (!p(f, l, network, length))
+    if (not p(f, l, network, length))
       return false;
     a = {network, length};
     return true;

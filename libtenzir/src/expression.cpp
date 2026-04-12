@@ -64,7 +64,7 @@ data_extractor::data_extractor(const record_type& rt, const offset& o)
 }
 
 bool operator==(const data_extractor& x, const data_extractor& y) {
-  return x.type == y.type && x.column == y.column;
+  return x.type == y.type and x.column == y.column;
 }
 
 bool operator<(const data_extractor& x, const data_extractor& y) {
@@ -78,7 +78,7 @@ predicate::predicate(operand l, relational_operator o, operand r)
 }
 
 bool operator==(const predicate& x, const predicate& y) {
-  return x.lhs == y.lhs && x.op == y.op && x.rhs == y.rhs;
+  return x.lhs == y.lhs and x.op == y.op and x.rhs == y.rhs;
 }
 
 bool operator<(const predicate& x, const predicate& y) {
@@ -193,7 +193,7 @@ expression normalize(expression expr) {
 
 caf::expected<expression> normalize_and_validate(expression expr) {
   expr = normalize(std::move(expr));
-  if (auto result = match(std::move(expr), validator{}); !result)
+  if (auto result = match(std::move(expr), validator{}); not result)
     return result.error();
   return expr;
 }
@@ -205,7 +205,7 @@ caf::expected<expression> tailor(expression expr, const type& schema) {
                                                         "empty expression"));
   }
   auto result = match(std::move(expr), type_resolver{schema});
-  if (!result)
+  if (not result)
     return result;
   if (is<caf::none_t>(*result)) {
     return caf::make_error(ec::unspecified, fmt::format("failed to tailor "
@@ -261,12 +261,12 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
   auto v = detail::overload{
     [&](const auto& xs) { // conjunction or disjunction
       o.emplace_back(0);
-      if (!xs.empty()) {
-        if (!resolve_impl(result, xs[0], t, o))
+      if (not xs.empty()) {
+        if (not resolve_impl(result, xs[0], t, o))
           return false;
         for (size_t i = 1; i < xs.size(); ++i) {
           o.back() += 1;
-          if (!resolve_impl(result, xs[i], t, o))
+          if (not resolve_impl(result, xs[i], t, o))
             return false;
         }
       }
@@ -275,7 +275,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
     },
     [&](const negation& x) {
       o.emplace_back(0);
-      if (!resolve_impl(result, x.expr(), t, o))
+      if (not resolve_impl(result, x.expr(), t, o))
         return false;
       o.pop_back();
       return true;
@@ -284,7 +284,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
       auto resolved = type_resolver{t}(x);
       // Abort on first type error and return a
       // default-constructed vector.
-      if (!resolved)
+      if (not resolved)
         return false;
       for (auto& pred : match(*resolved, predicatizer{}))
         result.emplace_back(o, std::move(pred));
