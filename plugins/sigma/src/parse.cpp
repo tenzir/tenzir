@@ -51,8 +51,9 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
   /// Constructs a search ID symbol table from an expression map.
   explicit search_id_symbol_table(const expression_map& exprs) {
     id.symbols.reserve(exprs.size());
-    for (auto& [key, value] : exprs)
+    for (auto& [key, value] : exprs) {
       id.symbols.emplace(key, value);
+    }
   }
 
   /// Joins a set of sub-expressions into a conjunction or disjunction.
@@ -71,14 +72,16 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
       auto xs = static_cast<std::vector<expression>&>(connective);
       return expression{Connective{std::move(xs)}};
     };
-    if constexpr (std::is_same_v<Connective, conjunction>)
+    if constexpr (std::is_same_v<Connective, conjunction>) {
       if (auto xs = try_as<disjunction>(&x)) {
         return transform(std::move(*xs));
       }
-    if constexpr (std::is_same_v<Connective, disjunction>)
+    }
+    if constexpr (std::is_same_v<Connective, disjunction>) {
       if (auto xs = try_as<conjunction>(&x)) {
         return transform(std::move(*xs));
       }
+    }
     return x;
   }
 
@@ -87,9 +90,11 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
     auto rx_str = std::regex_replace(str, std::regex("\\*"), ".*");
     auto rx = std::regex{rx_str};
     std::vector<expression> result;
-    for (auto& [sym, expr] : id.symbols)
-      if (std::regex_search(sym.begin(), sym.end(), rx))
+    for (auto& [sym, expr] : id.symbols) {
+      if (std::regex_search(sym.begin(), sym.end(), rx)) {
         result.push_back(expr);
+      }
+    }
     return result;
   }
 
@@ -130,29 +135,33 @@ struct detection_parser : parser_base<detection_parser> {
     std::tuple<expression, std::vector<std::tuple<bool_operator, expression>>>
       expr) {
     auto& [x, xs] = expr;
-    if (xs.empty())
+    if (xs.empty()) {
       return x;
+    }
     // We split the expression chain at each OR node in order to take care of
     // operator precedance: AND binds stronger than OR.
     disjunction dis;
     auto con = conjunction{x};
-    for (auto& [op, expr] : xs)
+    for (auto& [op, expr] : xs) {
       if (op == bool_operator::logical_and) {
         con.emplace_back(std::move(expr));
       } else if (op == bool_operator::logical_or) {
         TENZIR_ASSERT(not con.empty());
-        if (con.size() == 1)
+        if (con.size() == 1) {
           dis.emplace_back(std::move(con[0]));
-        else
+        } else {
           dis.emplace_back(std::move(con));
+        }
         con = conjunction{std::move(expr)};
       } else {
-        TENZIR_ASSERT(!"negations must not exist here");
+        TENZIR_ASSERT(! "negations must not exist here");
       }
-    if (con.size() == 1)
+    }
+    if (con.size() == 1) {
       dis.emplace_back(std::move(con[0]));
-    else
+    } else {
       dis.emplace_back(std::move(con));
+    }
     return dis.size() == 1 ? std::move(dis[0]) : expression{dis};
   };
 
@@ -283,8 +292,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 if constexpr (std::is_same_v<T, std::string>) {
                   auto result = transform_sigma_string(
                     detail::control_char_escape(x), ".*{}.*");
-                  if (not result)
+                  if (not result) {
                     return std::move(result.error());
+                  }
                   return std::move(*result);
                 } else if constexpr (detail::is_any_v<T, subnet, list>) {
                   op = relational_operator::ni;
@@ -308,9 +318,10 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "base64offset") {
           auto encode = [](const data& x) -> caf::expected<data> {
             const auto* str = try_as<std::string>(&x);
-            if (not str)
+            if (not str) {
               return caf::make_error(ec::type_clash, //
                                      "base64offset only works with strings");
+            }
             static constexpr std::array<size_t, 3> start = {{0, 2, 3}};
             static constexpr std::array<size_t, 3> end = {{0, 3, 2}};
             std::vector<std::string> xs(3);
@@ -330,9 +341,10 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           // what needs to be done algorithmically.
           auto convert = [](const data& x) -> caf::expected<data> {
             const auto* str = try_as<std::string>(&x);
-            if (not str)
+            if (not str) {
               return caf::make_error(ec::type_clash, //
                                      "utf16le/wide only works with strings");
+            }
             // Hand-roll conversion.
             std::string result;
             result.reserve(str->size() * 2);
@@ -354,8 +366,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
               auto result = transform_sigma_string(str, "^{}.*");
-              if (not result)
+              if (not result) {
                 return std::move(result.error());
+              }
               return std::move(*result);
             }};
             return tenzir::match(d, f);
@@ -367,8 +380,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
               auto result = transform_sigma_string(str, ".*{}$");
-              if (not result)
+              if (not result) {
                 return std::move(result.error());
+              }
               return std::move(*result);
             }};
             return tenzir::match(d, f);
@@ -381,8 +395,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
               [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
                 auto result = transform_sigma_string(str, {});
-                if (not result)
+                if (not result) {
                   return std::move(result.error());
+                }
                 if (str == result->string()) {
                   return str;
                 }
@@ -390,8 +405,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
               },
               [](const std::string& x) -> caf::expected<data> {
                 auto result = pattern::make(x);
-                if (not result)
+                if (not result) {
                   return std::move(result.error());
+                }
                 return std::move(*result);
               },
               [](pattern x) -> caf::expected<data> {
@@ -414,19 +430,22 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       // Helper to apply all modifiers over a value.
       auto modify = [&](const data& x) -> caf::expected<data> {
         auto result = x;
-        for (const auto& f : transforms)
-          if (auto x = f(result))
+        for (const auto& f : transforms) {
+          if (auto x = f(result)) {
             result = std::move(*x);
-          else
+          } else {
             return x.error();
+          }
+        }
         return result;
       };
       // Helper to create an expression from a (transformed) value.
       auto make_predicate_expr = [&](const data& value) -> expression {
         // Convert strings to case-insensitive patterns.
         if (auto str = try_as<std::string>(&value)) {
-          if (auto pat = transform_sigma_string(*str, {}))
+          if (auto pat = transform_sigma_string(*str, {})) {
             return predicate{extractor, op, data{std::move(*pat)}};
+          }
         }
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then
@@ -437,8 +456,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           // allowed as values.
           TENZIR_ASSERT(xs->size() == 3);
           disjunction result;
-          for (const auto& x : *xs)
+          for (const auto& x : *xs) {
             result.emplace_back(predicate{extractor, op, x});
+          }
           return result;
         }
         // By default, we take the (potentially modified) operator.
@@ -457,29 +477,33 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           if (is<record>(value)) {
             return caf::make_error(ec::type_clash, "nested records disallowed");
           }
-          if (auto x = modify(value))
+          if (auto x = modify(value)) {
             connective.emplace_back(make_predicate_expr(*x));
-          else
+          } else {
             return x.error();
+          }
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
         result.emplace_back(hoist(std::move(expr)));
       } else {
-        if (auto x = modify(rhs))
+        if (auto x = modify(rhs)) {
           result.emplace_back(make_predicate_expr(*x));
-        else
+        } else {
           return x.error();
+        }
       }
     }
     return result.size() == 1 ? result[0] : result;
   } else if (auto xs = try_as<list>(&yaml)) {
     disjunction result;
-    for (auto& search_id : *xs)
-      if (auto expr = parse_search_id(search_id))
+    for (auto& search_id : *xs) {
+      if (auto expr = parse_search_id(search_id)) {
         result.push_back(std::move(*expr));
-      else
+      } else {
         return expr.error();
+      }
+    }
     return result.size() == 1 ? result[0] : result;
     // } else if (auto x = try_as<std::string>(&yaml)) {
     //   return parse_search_id(*x);
@@ -491,39 +515,47 @@ caf::expected<expression> parse_search_id(const data& yaml) {
 
 caf::expected<expression> parse_rule(const data& yaml) {
   auto xs = try_as<record>(&yaml);
-  if (not xs)
+  if (not xs) {
     return caf::make_error(ec::type_clash, "rule must be a record");
+  }
   // Extract detection attribute.
   const record* detection;
-  if (auto i = xs->find("detection"); i == xs->end())
+  if (auto i = xs->find("detection"); i == xs->end()) {
     return caf::make_error(ec::invalid_query, "no detection attribute");
-  else
+  } else {
     detection = try_as<record>(&i->second);
-  if (not detection)
+  }
+  if (not detection) {
     return caf::make_error(ec::type_clash, "detection not a record");
+  }
   // Resolve all named sub-expression except for "condition".
   expression_map exprs;
   for (auto& [key, value] : *detection) {
-    if (key == "condition")
+    if (key == "condition") {
       continue;
-    if (auto expr = parse_search_id(value))
+    }
+    if (auto expr = parse_search_id(value)) {
       exprs[key] = std::move(*expr);
-    else
+    } else {
       return expr.error();
+    }
   }
   // Extract condition.
   const std::string* condition;
-  if (auto i = detection->find("condition"); i == detection->end())
+  if (auto i = detection->find("condition"); i == detection->end()) {
     return caf::make_error(ec::invalid_query, "no condition key");
-  else
+  } else {
     condition = try_as<std::string>(&i->second);
-  if (not condition)
+  }
+  if (not condition) {
     return caf::make_error(ec::type_clash, "condition not a string");
+  }
   // Parse condition.
   expression result;
   detection_parser p{exprs};
-  if (not p(*condition, result))
+  if (not p(*condition, result)) {
     return caf::make_error(ec::parse_error, "invalid condition syntax");
+  }
   return result;
 }
 

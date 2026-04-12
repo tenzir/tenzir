@@ -52,12 +52,13 @@ throw_saver_not_found(located<std::string_view> x, bool use_uri_schemes) {
       available.push_back(p->name());
     }
   }
-  if (use_uri_schemes)
+  if (use_uri_schemes) {
     diagnostic::error("saver for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
       .docs("https://docs.tenzir.com/connectors")
       .throw_();
+  }
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -132,10 +133,11 @@ public:
           co_return;
         }
       }
-      if (state)
+      if (state) {
         for (auto&& chunk : state->first->finish()) {
           co_yield std::move(chunk);
         }
+      }
     }
   }
 
@@ -432,8 +434,9 @@ public:
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<write_operator>(std::move(printer)));
-    if (compress)
+    if (compress) {
       ops.push_back(std::move(compress));
+    }
     ops.push_back(std::make_unique<save_operator>(std::move(saver)));
     return std::make_unique<pipeline>(std::move(ops));
   }

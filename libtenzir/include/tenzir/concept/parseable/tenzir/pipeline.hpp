@@ -38,7 +38,7 @@ constexpr inline auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
 // An extractor cannot start with:
 //  - '-' to leave room for potential arithmetic expressions in operands
 const inline auto extractor
-  = (not (chr{'-'}) >> (+extractor_char % '.'))
+  = (not(chr{'-'}) >> (+extractor_char % '.'))
       .then([](std::vector<std::string> in) {
         return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
       });
@@ -64,7 +64,7 @@ const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws_or_comment));
 
 const inline auto unquoted_operator_arg
-  = &not (chr{'\''} | '"') >> +(printable - '|' - space - comment_start);
+  = &not(chr{'\''} | '"') >> +(printable - '|' - space - comment_start);
 
 const inline auto operator_arg = qstr | qqstr | unquoted_operator_arg;
 

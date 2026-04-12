@@ -38,7 +38,7 @@
 #  include <unistd.h>
 #endif
 
-#if TENZIR_POSIX && !TENZIR_LINUX
+#if TENZIR_POSIX && ! TENZIR_LINUX
 #  include <sys/resource.h>
 #  include <sys/sysctl.h>
 #  include <sys/time.h>
@@ -68,11 +68,13 @@ static record get_status_proc() {
   auto p = rss | size | swap | skip;
   while (true) {
     lines.next();
-    if (lines.done())
+    if (lines.done()) {
       break;
+    }
     auto line = lines.get();
-    if (not p(line))
+    if (not p(line)) {
       TENZIR_WARN("failed to parse /proc/self/status: {}", line);
+    }
   }
   return result;
 }
@@ -87,8 +89,9 @@ namespace tenzir::detail {
 static record get_settings_mach() {
   record result;
   task_t task = MACH_PORT_NULL;
-  if (task_for_pid(current_task(), getpid(), &task) != KERN_SUCCESS)
+  if (task_for_pid(current_task(), getpid(), &task) != KERN_SUCCESS) {
     return {};
+  }
   struct task_basic_info t_info;
   mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
   task_info(task, TASK_BASIC_INFO, (task_info_t)&t_info, &t_info_count);
@@ -102,7 +105,7 @@ static record get_settings_mach() {
 
 #endif
 
-#if TENZIR_POSIX && !TENZIR_LINUX
+#if TENZIR_POSIX && ! TENZIR_LINUX
 
 namespace tenzir::detail {
 
@@ -127,10 +130,12 @@ namespace {
 
 caf::expected<std::filesystem::path> objectpath_dynamic(const void* addr) {
   Dl_info info;
-  if (not dladdr(addr, &info))
+  if (not dladdr(addr, &info)) {
     return caf::make_error(ec::unspecified, "failed to execute dladdr()");
-  if (not info.dli_fname)
+  }
+  if (not info.dli_fname) {
     return caf::make_error(ec::unspecified, "addr not in an mmapped region");
+  }
   // FIXME: On Linux, if addr is inside the main executable,
   // dli_fname seems to be the same argv[0] instead of the full path.
   // We should detect and return an error in that case.
@@ -141,12 +146,14 @@ caf::expected<std::filesystem::path> objectpath_static() {
 #if TENZIR_LINUX
   struct stat sb;
   auto self = "/proc/self/exe";
-  if (lstat(self, &sb) == -1)
+  if (lstat(self, &sb) == -1) {
     return caf::make_error(ec::unspecified, "lstat() returned with error");
+  }
   auto size = sb.st_size ? sb.st_size + 1 : PATH_MAX;
   std::vector<char> buf(size);
-  if (readlink(self, buf.data(), size) == -1)
+  if (readlink(self, buf.data(), size) == -1) {
     return caf::make_error(ec::unspecified, "readlink() returned with error");
+  }
   return std::filesystem::path{buf.data()};
 #else
   return caf::make_error(ec::unimplemented);
@@ -156,10 +163,12 @@ caf::expected<std::filesystem::path> objectpath_static() {
 } // namespace
 
 caf::expected<std::filesystem::path> objectpath(const void* addr) {
-  if (addr == nullptr)
+  if (addr == nullptr) {
     addr = reinterpret_cast<const void*>(objectpath_dynamic);
-  if (auto result = objectpath_dynamic(addr))
+  }
+  if (auto result = objectpath_dynamic(addr)) {
     return result;
+  }
   return objectpath_static();
 }
 
@@ -184,20 +193,23 @@ caf::expected<std::string> execute_blocking(const std::string& command) {
   std::string result;
   std::array<char, 4096> buffer; // Try to read one full page at a time.
   auto* out = ::popen(command.c_str(), "r");
-  if (not out)
+  if (not out) {
     return caf::make_error(ec::system_error,
                            "popen() failed: "s + detail::describe_errno());
+  }
   size_t nread = 0;
   do {
     nread = ::fread(buffer.data(), 1, buffer.size(), out);
     result += std::string_view{buffer.data(), nread};
   } while (nread == buffer.size());
   auto error = ::ferror(out);
-  if (::pclose(out) < 0)
+  if (::pclose(out) < 0) {
     return caf::make_error(ec::system_error,
                            "pclose() failed: "s + detail::describe_errno());
-  if (error)
+  }
+  if (error) {
     return caf::make_error(ec::system_error, "fread() failed");
+  }
   return result;
 }
 

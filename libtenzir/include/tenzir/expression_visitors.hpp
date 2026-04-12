@@ -132,16 +132,20 @@ struct type_resolver {
       return predicate{data_extractor{std::move(t), i}, op_, x};
     };
     for (size_t flat_index = 0; const auto& [field, _] : schema_.leaves()) {
-      if (f(field.type))
+      if (f(field.type)) {
         connective.emplace_back(make_predicate(field.type, flat_index));
+      }
       ++flat_index;
     }
-    if (connective.empty())
+    if (connective.empty()) {
       return expression{}; // did not resolve
-    if (connective.size() == 1)
+    }
+    if (connective.size() == 1) {
       return {std::move(connective[0])}; // hoist expression
-    if (is_negated(op_))
+    }
+    if (is_negated(op_)) {
       return {conjunction{std::move(connective)}};
+    }
     return {disjunction{std::move(connective)}};
   }
 

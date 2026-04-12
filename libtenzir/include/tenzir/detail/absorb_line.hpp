@@ -28,8 +28,9 @@ inline std::istream& absorb_line(std::istream& is, std::string& t) {
   // That is faster than reading them one-by-one using the std::istream.
   // Code that uses streambuf this way must be guarded by a sentry object.
   std::istream::sentry sentry(is, true);
-  if (not sentry)
+  if (not sentry) {
     return is;
+  }
   size_t n = 0;
   std::streambuf* sb = is.rdbuf();
   while (t.size() < t.max_size()) {
@@ -38,15 +39,17 @@ inline std::istream& absorb_line(std::istream& is, std::string& t) {
       case '\n':
         return is;
       case '\r':
-        if (sb->sgetc() == '\n')
+        if (sb->sgetc() == '\n') {
           sb->sbumpc();
+        }
         return is;
       case std::streambuf::traits_type::eof():
         is.setstate(std::ios::eofbit);
         // If `std::getline` extracts no characters, failbit is set.
         // (21.4.8.9/7.9 [string.io])
-        if (n == 0)
+        if (n == 0) {
           is.setstate(std::ios::failbit);
+        }
         return is;
       default:
         t += static_cast<char>(c);

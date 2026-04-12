@@ -70,13 +70,15 @@ null_bitmap_range::null_bitmap_range(const null_bitmap& bm)
   : bitvector_{&bm.bitvector_},
     block_{bm.bitvector_.blocks().begin()},
     end_{bm.bitvector_.blocks().end()} {
-  if (block_ != end_)
+  if (block_ != end_) {
     scan();
+  }
 }
 
 void null_bitmap_range::next() {
-  if (++block_ != end_)
+  if (++block_ != end_) {
     scan();
+  }
 }
 
 bool null_bitmap_range::done() const {
@@ -96,8 +98,9 @@ void null_bitmap_range::scan() {
     // Scan for consecutive runs of all-0 or all-1 blocks.
     auto n = word_type::width;
     auto data = *block_;
-    while (++block_ != last and *block_ == data)
+    while (++block_ != last and *block_ == data) {
       n += word_type::width;
+    }
     if (block_ == last) {
       auto partial = bitvector_->size() % word_type::width;
       if (partial > 0) {

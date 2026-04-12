@@ -45,7 +45,7 @@ void port::type(port_type t) {
 bool operator==(const port& x, const port& y) {
   return x.number() == y.number()
          and (x.type() == y.type() or x.type() == port_type::unknown
-             or y.type() == port_type::unknown);
+              or y.type() == port_type::unknown);
 }
 
 bool operator<(const port& x, const port& y) {

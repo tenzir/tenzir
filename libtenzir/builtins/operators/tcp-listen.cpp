@@ -315,13 +315,13 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
         auto remote_ip = "unknown address"s;
         auto remote_endpoint
           = state.socket->remote_endpoint(remote_endpoint_ec);
-        if (! remote_endpoint_ec) {
+        if (not remote_endpoint_ec) {
 #if BOOST_VERSION >= 108700
           remote_ip = remote_endpoint.address().to_string();
 #else
           auto remote_ip_string
             = remote_endpoint.address().to_string(remote_endpoint_ec);
-          if (! remote_endpoint_ec) {
+          if (not remote_endpoint_ec) {
             remote_ip = remote_ip_string;
           }
 #endif

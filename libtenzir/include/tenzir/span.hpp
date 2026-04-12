@@ -25,6 +25,6 @@ constexpr bool operator==(const std::span<T, LHSExtent>& lhs,
 template <class T, std::size_t LHSExtent, class U, std::size_t RHSExtent>
 constexpr bool operator!=(const std::span<T, LHSExtent>& lhs,
                           const std::span<U, RHSExtent>& rhs) {
-  return not (lhs == rhs);
+  return not(lhs == rhs);
 }
 } // namespace tenzir

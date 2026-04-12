@@ -61,8 +61,9 @@ template <class T, T base>
 constexpr int max_pot_exp(int result = 1) {
   // Despite the fact that this can never overflow we still have to check for
   // overflow or the compiler will complain.
-  return can_square(base)                                  ? max_pot_exp < T,
-         can_square(base) ? base * base : 1 > (result * 2) : result;
+  return can_square(base)
+           ? max_pot_exp<T, can_square(base) ? base * base : 1>(result * 2)
+           : result;
 }
 
 template <int base, class T, int i = max_pot_exp<T, base>()>
@@ -90,7 +91,7 @@ constexpr T pow(T base) {
 /// @returns The integer logarithm of *x*.
 template <int base, std::integral T>
 constexpr int ilog(T x) {
-  static_assert(not (base <= 0), "ilog is not useful for base <= 0");
+  static_assert(not(base <= 0), "ilog is not useful for base <= 0");
   static_assert(base != 1, "ilog is not useful for base == 1");
   return x > 0 ? ilog_helper<base>(x) : -1;
 }

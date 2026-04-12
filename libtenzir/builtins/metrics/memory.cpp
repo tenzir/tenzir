@@ -223,17 +223,17 @@ auto make_malloc_metrics() -> record {
        }) {
     result.try_emplace(key, caf::none);
   }
-#if defined(__GLIBC__)
+#  if defined(__GLIBC__)
   auto set_field = [&result](std::string_view key, uint64_t value) {
     if (auto it = result.find(std::string{key}); it != result.end()) {
       it->second = value;
     }
   };
-#  if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
+#    if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
   const auto info = ::mallinfo2();
-#  else
+#    else
   const auto info = ::mallinfo();
-#  endif
+#    endif
   set_field("arena_bytes", static_cast<uint64_t>(info.arena));
   set_field("uordblks_bytes", static_cast<uint64_t>(info.uordblks));
   set_field("fordblks_bytes", static_cast<uint64_t>(info.fordblks));
@@ -241,7 +241,7 @@ auto make_malloc_metrics() -> record {
   set_field("hblkhd_bytes", static_cast<uint64_t>(info.hblkhd));
   set_field("ordblks_count", static_cast<uint64_t>(info.ordblks));
   set_field("smblks_count", static_cast<uint64_t>(info.smblks));
-#endif
+#  endif
   return result;
 }
 #endif

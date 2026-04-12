@@ -20,8 +20,8 @@ template <class Action>
 struct action_traits {
   using traits = caf::detail::get_callable_trait<Action>;
 
-  using first_arg_type =
-    std::remove_reference_t<tl_head_t<typename traits::arg_types>>;
+  using first_arg_type
+    = std::remove_reference_t<tl_head_t<typename traits::arg_types>>;
 
   using result_type = typename traits::result_type;
 
@@ -29,8 +29,10 @@ struct action_traits {
   static constexpr bool returns_void = std::is_void_v<result_type>;
   static constexpr bool no_args_returns_void = arity == 0 and returns_void;
   static constexpr bool one_arg_returns_void = arity == 1 and returns_void;
-  static constexpr bool no_args_returns_non_void = arity == 0 and not returns_void;
-  static constexpr bool one_arg_returns_non_void = arity == 1 and not returns_void;
+  static constexpr bool no_args_returns_non_void
+    = arity == 0 and not returns_void;
+  static constexpr bool one_arg_returns_non_void
+    = arity == 1 and not returns_void;
 };
 
 } // namespace tenzir::detail

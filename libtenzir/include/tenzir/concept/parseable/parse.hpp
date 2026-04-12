@@ -52,8 +52,6 @@ auto parse(Iterator& f, const Iterator& l, T& x) -> bool {
 }
 
 template <class I, class T>
-concept parseable = requires(I first, I last, T& t) {
-  parse(first, last, t);
-};
+concept parseable = requires(I first, I last, T& t) { parse(first, last, t); };
 
 } // namespace tenzir

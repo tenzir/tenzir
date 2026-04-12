@@ -58,8 +58,9 @@ public:
     } else {
       static_assert(Inspector::is_loading);
       auto cb = [&]() {
-        if (k == 0)
+        if (k == 0) {
           return false;
+        }
         x.digests_.resize(k);
         return true;
       };
@@ -96,8 +97,9 @@ public:
   template <class T, class Ts>
   void hash(const T& x, Ts& xs) {
     TENZIR_ASSERT(xs.size() == seeds_.size());
-    for (size_t i = 0; i < xs.size(); ++i)
+    for (size_t i = 0; i < xs.size(); ++i) {
       xs[i] = seeded_hash<HashFunction>{seeds_[i]}(x);
+    }
   }
 
   // -- concepts -------------------------------------------------------------
@@ -145,14 +147,16 @@ public:
   void hash(const T& x, Ts& xs) {
     auto d1 = seeded_hash<HashFunction>{seed1_}(x);
     auto d2 = seeded_hash<HashFunction>{seed2_}(x);
-    for (size_t i = 0; i < xs.size(); ++i)
+    for (size_t i = 0; i < xs.size(); ++i) {
       xs[i] = d1 + i * d2;
+    }
   }
 
   // -- concepts -------------------------------------------------------------
 
   friend bool operator==(const double_hasher& x, const double_hasher& y) {
-    return x.size() == y.size() and x.seed1_ == y.seed1_ and x.seed2_ == y.seed2_;
+    return x.size() == y.size() and x.seed1_ == y.seed1_
+           and x.seed2_ == y.seed2_;
   }
 
   template <class Inspector>

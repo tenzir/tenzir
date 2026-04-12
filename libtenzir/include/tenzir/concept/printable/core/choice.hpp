@@ -40,25 +40,17 @@ public:
   // LHS = unused && RHS = T       =>  RHS
   // LHS = T && RHS = T            =>  T
   // LHS = T && RHS = U            =>  variant<T, U>
-  using attribute =
+  using attribute = std::conditional_t<
+    std::is_same<lhs_attribute, unused_type>{}
+      and std::is_same<rhs_attribute, unused_type>{},
+    unused_type,
     std::conditional_t<
-      std::is_same<lhs_attribute, unused_type>{}
-        and std::is_same<rhs_attribute, unused_type>{},
-      unused_type,
+      std::is_same<lhs_attribute, unused_type>{}, rhs_attribute,
       std::conditional_t<
-        std::is_same<lhs_attribute, unused_type>{},
-        rhs_attribute,
+        std::is_same<rhs_attribute, unused_type>{}, lhs_attribute,
         std::conditional_t<
-          std::is_same<rhs_attribute, unused_type>{},
-          lhs_attribute,
-          std::conditional_t<
-            std::is_same<lhs_attribute, rhs_attribute>{},
-            lhs_attribute,
-            detail::flattened_variant<lhs_attribute, rhs_attribute>
-          >
-        >
-      >
-    >;
+          std::is_same<lhs_attribute, rhs_attribute>{}, lhs_attribute,
+          detail::flattened_variant<lhs_attribute, rhs_attribute>>>>>;
 
   constexpr choice_printer_t(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {

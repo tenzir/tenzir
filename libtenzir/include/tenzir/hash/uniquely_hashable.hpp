@@ -33,7 +33,8 @@ template <class T, size_t N, class HashAlgorithm>
 struct is_uniquely_hashable<T[N], HashAlgorithm>
   : std::bool_constant<uniquely_represented<T[N]>
                        and (sizeof(T) == 1
-                           or HashAlgorithm::endian == std::endian::native)> {};
+                            or HashAlgorithm::endian == std::endian::native)> {
+};
 
 template <class T, class HashAlgorithm>
 concept uniquely_hashable = is_uniquely_hashable<T, HashAlgorithm>::value;

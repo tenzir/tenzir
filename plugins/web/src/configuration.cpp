@@ -94,7 +94,8 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   }
   result.bind_address = config.bind_address;
   if (result.require_localhost) {
-    if (result.bind_address != "localhost" and result.bind_address != "127.0.0.1"
+    if (result.bind_address != "localhost"
+        and result.bind_address != "127.0.0.1"
         and result.bind_address != "::1") {
       return caf::make_error(
         ec::invalid_argument,

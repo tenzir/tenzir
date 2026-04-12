@@ -52,8 +52,7 @@ template <class T>
 void inplace_unify(T& result, T xs) {
   // Adapted from https://stackoverflow.com/a/3633142/1170277.
   auto n = result.size();
-  result.insert(result.end(),
-                std::make_move_iterator(xs.begin()),
+  result.insert(result.end(), std::make_move_iterator(xs.begin()),
                 std::make_move_iterator(xs.end()));
   std::inplace_merge(result.begin(), result.begin() + n, result.end());
   result.erase(std::unique(result.begin(), result.end()), result.end());

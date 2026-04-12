@@ -96,7 +96,7 @@ bool operator==(const flow& x, const flow& y);
 
 /// @relates flow
 inline bool operator!=(const flow& x, const flow& y) {
-  return not (x == y);
+  return not(x == y);
 }
 
 /// @relates flow

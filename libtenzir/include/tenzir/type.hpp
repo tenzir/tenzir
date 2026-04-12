@@ -131,7 +131,8 @@ concept complex_type = requires {
 
 template <class T>
 concept extension_type
-  = concrete_type<T> and arrow::is_extension_type<typename T::arrow_type>::value;
+  = concrete_type<T>
+    and arrow::is_extension_type<typename T::arrow_type>::value;
 
 // -- type --------------------------------------------------------------------
 

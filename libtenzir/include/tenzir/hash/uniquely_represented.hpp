@@ -36,8 +36,8 @@ struct is_uniquely_represented<std::pair<T, U>>
 template <class... Ts>
 struct is_uniquely_represented<std::tuple<Ts...>>
   : std::bool_constant<(is_uniquely_represented<Ts>{} and ...)
-                       and ((0 + ... + sizeof(Ts)) == sizeof(std::tuple<Ts...>))> {
-};
+                       and ((0 + ... + sizeof(Ts))
+                            == sizeof(std::tuple<Ts...>))> {};
 
 template <class T, size_t N>
 struct is_uniquely_represented<T[N]> : is_uniquely_represented<T> {};

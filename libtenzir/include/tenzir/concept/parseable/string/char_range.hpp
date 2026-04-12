@@ -21,8 +21,9 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (f == l or not check<From, To, Ranges...>(*f))
+    if (f == l or not check<From, To, Ranges...>(*f)) {
       return false;
+    }
     detail::absorb(a, *f);
     ++f;
     return true;

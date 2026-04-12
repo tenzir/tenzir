@@ -577,7 +577,8 @@ private:
       return false;
     }
     TENZIR_DEBUG("stopping Fluent Bit engine");
-    for (size_t i = 0; ctx_->status == FLB_LIB_OK and i < num_stop_polls_; ++i) {
+    for (size_t i = 0; ctx_->status == FLB_LIB_OK and i < num_stop_polls_;
+         ++i) {
       TENZIR_DEBUG("sleeping while Fluent Bit context is okay");
       std::this_thread::sleep_for(poll_interval_);
     }

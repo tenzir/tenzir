@@ -866,7 +866,7 @@ auto validate_x_limit_type(located<data> const& d,
       .emit(ctx);
     return;
   }
-  if (res && ! t->kind().is_any<time_type, duration_type>()) {
+  if (res and not t->kind().is_any<time_type, duration_type>()) {
     diagnostic::error("cannot group type `{}` with resolution", t->kind())
       .primary(d)
       .primary(res->source)
@@ -918,7 +918,8 @@ auto validate_y_limit_type(located<data> const& d, DescribeCtx& ctx) -> void {
     diagnostic::error("failed to infer type of option").primary(d).emit(ctx);
     return;
   }
-  if (! t->kind().is_any<int64_type, uint64_type, double_type, duration_type>()) {
+  if (not t->kind()
+            .is_any<int64_type, uint64_type, double_type, duration_type>()) {
     diagnostic::error("y-axis cannot have type `{}`", t->kind())
       .primary(d)
       .emit(ctx);
@@ -929,7 +930,7 @@ auto validate_y_limit_type(located<data> const& d, DescribeCtx& ctx) -> void {
 // Validates the `position` argument for chart types that support it (area, bar).
 auto validate_position(auto position, DescribeCtx& ctx) -> void {
   if (auto pos = ctx.get(position)) {
-    if (pos->inner != "stacked" && pos->inner != "grouped") {
+    if (pos->inner != "stacked" and pos->inner != "grouped") {
       diagnostic::error("unsupported `position`")
         .primary(*pos)
         .hint("available positions: `grouped` (default) or `stacked`")

@@ -150,7 +150,7 @@ public:
                                                 count)));
         return false;
       }
-      if (not (f.begin_key_value_pair() and f.value(type_name))) {
+      if (not(f.begin_key_value_pair() and f.value(type_name))) {
         return false;
       }
       auto success = false;

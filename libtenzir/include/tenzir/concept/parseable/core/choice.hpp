@@ -41,18 +41,17 @@ private:
   // LHS = T && RHS = T            =>  T
   // LHS = T && RHS = U            =>  variant<T, U>
   static constexpr auto attribute_type() {
-    if constexpr (std::is_same_v<
-                    lhs_attribute,
-                    unused_type> and std::is_same_v<rhs_attribute, unused_type>)
+    if constexpr (std::is_same_v<lhs_attribute, unused_type>
+                  and std::is_same_v<rhs_attribute, unused_type>) {
       return unused_type{};
-    else if constexpr (std::is_same_v<lhs_attribute, unused_type>)
+    } else if constexpr (std::is_same_v<lhs_attribute, unused_type>) {
       return rhs_attribute{};
-    else if constexpr (
-      std::is_same_v<rhs_attribute,
-                     unused_type> or std::is_same_v<lhs_attribute, rhs_attribute>)
+    } else if constexpr (std::is_same_v<rhs_attribute, unused_type>
+                         or std::is_same_v<lhs_attribute, rhs_attribute>) {
       return lhs_attribute{};
-    else
+    } else {
       return detail::flattened_variant<lhs_attribute, rhs_attribute>{};
+    }
   }
 
 public:
@@ -65,11 +64,13 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto save = f;
-    if (do_parse(lhs_, f, l, a))
+    if (do_parse(lhs_, f, l, a)) {
       return true;
+    }
     f = save;
-    if (do_parse(rhs_, f, l, a))
+    if (do_parse(rhs_, f, l, a)) {
       return true;
+    }
     f = save;
     return false;
   }
@@ -92,8 +93,9 @@ private:
       // Parse one element of the variant and assign it to the passed-in
       // attribute.
       auto attr = parser_attribute{};
-      if (not p(f, l, attr))
+      if (not p(f, l, attr)) {
         return false;
+      }
       a = std::move(attr);
       return true;
     }

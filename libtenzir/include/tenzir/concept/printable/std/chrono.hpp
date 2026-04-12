@@ -99,18 +99,24 @@ public:
         d = -d;
       }
       using namespace std::chrono;
-      if (is_at_least<days>(d))
+      if (is_at_least<days>(d)) {
         return print_adaptive(out, count<days>(d), "d");
-      if (is_at_least<hours>(d))
+      }
+      if (is_at_least<hours>(d)) {
         return print_adaptive(out, count<hours>(d), "h");
-      if (is_at_least<minutes>(d))
+      }
+      if (is_at_least<minutes>(d)) {
         return print_adaptive(out, count<minutes>(d), "min");
-      if (is_at_least<seconds>(d))
+      }
+      if (is_at_least<seconds>(d)) {
         return print_adaptive(out, count<seconds>(d), "s");
-      if (is_at_least<milliseconds>(d))
+      }
+      if (is_at_least<milliseconds>(d)) {
         return print_adaptive(out, count<milliseconds>(d), "ms");
-      if (is_at_least<microseconds>(d))
+      }
+      if (is_at_least<microseconds>(d)) {
         return print_adaptive(out, count<microseconds>(d), "us");
+      }
       return print_adaptive(out, count<nanoseconds>(d), "ns");
     }
   }
@@ -171,9 +177,10 @@ struct time_point_printer : printer_base<time_point_printer<Clock, Duration>> {
     auto s = duration_cast<seconds>(t - h - m);
     auto ns = duration_cast<nanoseconds>(t - h - m - s).count();
     if (not p(out, static_cast<int>(Y), static_cast<unsigned>(M),
-           static_cast<unsigned>(D), static_cast<int>(h.count()),
-           static_cast<int>(m.count()), static_cast<int>(s.count())))
+              static_cast<unsigned>(D), static_cast<int>(h.count()),
+              static_cast<int>(m.count()), static_cast<int>(s.count()))) {
       return false;
+    }
     // We want to keep the full precision if possible, but only show as much
     // precision as necessary. Thus, if we have no subsecond resolution, we do
     // not print any fractional value. Otherwise, we try to print the number of
@@ -215,11 +222,8 @@ struct printer_registry<std::chrono::time_point<Clock, Duration>> {
 namespace printers {
 
 template <class Duration, class Policy = policy::adaptive>
-const auto duration = duration_printer<
-  typename Duration::rep,
-  typename Duration::period,
-  Policy
->{};
+const auto duration = duration_printer<typename Duration::rep,
+                                       typename Duration::period, Policy>{};
 
 template <class Clock, class Duration = typename Clock::duration>
 const auto time_point = time_point_printer<Clock, Duration>{};

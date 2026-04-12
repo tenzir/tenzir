@@ -23,9 +23,10 @@ namespace tenzir::detail {
 caf::expected<std::string> load_contents(const std::filesystem::path& p) {
   std::ifstream in{p};
   std::stringstream ss;
-  if (not in)
+  if (not in) {
     return caf::make_error(ec::filesystem_error,
                            "failed to read from file " + p.string());
+  }
   ss << in.rdbuf();
   return ss.str();
 }

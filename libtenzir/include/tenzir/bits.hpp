@@ -21,7 +21,7 @@ namespace tenzir {
 /// remaining bits in the block are guaranteed to be 0.
 template <class T>
 class bits : detail::equality_comparable<bits<T>> {
-  public:
+public:
   using word_type = word<T>;
   using value_type = typename word_type::value_type;
   using size_type = typename word_type::size_type;
@@ -51,8 +51,7 @@ class bits : detail::equality_comparable<bits<T>> {
   // x and word<T>::lsb_mask(n) have the same type. The compiler complains
   // about narrowing?! --MV
   bits(value_type x, size_type n)
-    : data_{n < width() ? value_type(x & word<T>::lsb_mask(n)) : x},
-      size_{n} {
+    : data_{n < width() ? value_type(x & word<T>::lsb_mask(n)) : x}, size_{n} {
     TENZIR_ASSERT(n <= width() or word<T>::all_or_none(x));
   }
 
@@ -103,7 +102,7 @@ class bits : detail::equality_comparable<bits<T>> {
   /// @pre `i < size`.
   bool operator[](size_type i) const {
     TENZIR_ASSERT(i < size_);
-    return is_run() ? !!data_ : data_ & word<T>::mask(i);
+    return is_run() ? ! ! data_ : data_ & word<T>::mask(i);
   }
 
   /// Creates a slice of the bit sequence.
@@ -185,12 +184,14 @@ bits<T> take_right(bits<T> xs, typename bits<T>::size_type n) {
 template <bool Bit = true, class T>
 auto find_first(const bits<T>& b) {
   if constexpr (Bit) {
-    if (b.size() > word<T>::width)
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::all ? 0 : bits<T>::npos;
+    }
     return find_first<1>(b.data());
   } else {
-    if (b.size() > word<T>::width)
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::none ? 0 : bits<T>::npos;
+    }
     T masked = b.data() | word<T>::msb_mask(word<T>::width - b.size());
     return find_first<0>(masked);
   }
@@ -203,16 +204,20 @@ auto find_first(const bits<T>& b) {
 template <bool Bit = true, class T>
 auto find_next(const bits<T>& b, typename bits<T>::size_type i) {
   if constexpr (Bit) {
-    if (i >= b.size() - 1)
+    if (i >= b.size() - 1) {
       return bits<T>::npos;
-    if (b.size() > word<T>::width)
+    }
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::all ? i + 1 : bits<T>::npos;
+    }
     return find_next(b.data(), i);
   } else {
-    if (i >= b.size() - 1)
+    if (i >= b.size() - 1) {
       return bits<T>::npos;
-    if (b.size() > word<T>::width)
+    }
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::none ? i + 1 : bits<T>::npos;
+    }
     T masked = ~b.data() & word<T>::lsb_fill(b.size());
     return find_next(masked, i);
   }
@@ -224,12 +229,14 @@ auto find_next(const bits<T>& b, typename bits<T>::size_type i) {
 template <bool Bit = true, class T>
 auto find_last(const bits<T>& b) {
   if constexpr (Bit) {
-    if (b.size() > word<T>::width)
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::all ? b.size() - 1 : bits<T>::npos;
+    }
     return find_last<1>(b.data());
   } else {
-    if (b.size() > word<T>::width)
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::none ? b.size() - 1 : bits<T>::npos;
+    }
     T masked = ~b.data() & word<T>::lsb_fill(b.size());
     return find_last<1>(masked);
   }
@@ -244,12 +251,14 @@ auto find_last(const bits<T>& b) {
 template <bool Bit = true, class T>
 auto rank(const bits<T>& b) {
   if constexpr (Bit) {
-    if (b.size() > word<T>::width)
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::all ? b.size() : 0;
+    }
     return rank<1>(b.data());
   } else {
-    if (b.size() > word<T>::width)
+    if (b.size() > word<T>::width) {
       return b.data() == word<T>::none ? b.size() : 0;
+    }
     T masked = ~b.data() & word<T>::lsb_fill(b.size());
     return rank<1>(masked);
   }
@@ -265,10 +274,12 @@ template <bool Bit = true, class T>
 auto rank(const bits<T>& b, typename bits<T>::size_type i) {
   TENZIR_ASSERT(i < b.size());
   T data = Bit ? b.data() : ~b.data();
-  if (b.size() > word<T>::width)
+  if (b.size() > word<T>::width) {
     return data == word<T>::none ? 0 : i + 1;
-  if (i == word<T>::width - 1)
+  }
+  if (i == word<T>::width - 1) {
     return word<T>::popcount(data);
+  }
   return rank(data, i);
 }
 
@@ -282,8 +293,9 @@ auto select(const bits<T>& b, typename bits<T>::size_type i) {
   TENZIR_ASSERT(i > 0);
   TENZIR_ASSERT(i <= b.size());
   T data = Bit ? b.data() : ~b.data();
-  if (b.size() > word<T>::width)
+  if (b.size() > word<T>::width) {
     return data == word<T>::all ? i - 1 : bits<T>::npos;
+  }
   return select(data, i);
 }
 

@@ -65,7 +65,7 @@ auto try_lossless_cast(From from) -> std::optional<To>
   auto to = detail::narrow_cast<To>(from);
   if (static_cast<From>(to) != from
       and (detail::is_same_signedness<To, From>::value
-          or (to < To{}) != (from < From{}))) {
+           or (to < To{}) != (from < From{}))) {
     return std::nullopt;
   }
   return to;

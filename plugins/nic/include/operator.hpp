@@ -95,7 +95,7 @@ public:
                                detail::narrow_cast<int>(snaplen),
                                put_iface_in_promiscuous_mode,
                                packet_buffer_timeout_ms, error.data());
-    if (! ptr) {
+    if (not ptr) {
       diagnostic::error("failed to open interface: {}",
                         std::string_view{error.data()})
         .note("from `nic`")

@@ -42,9 +42,9 @@ TEST("access") {
   CHECK(x[7]);
   x = bits8{0b10110010, 5};
   CHECK(x[4]);
-  CHECK(not (x.data() & w8::mask(5)));
-  CHECK(not (x.data() & w8::mask(6)));
-  CHECK(not (x.data() & w8::mask(7)));
+  CHECK(not(x.data() & w8::mask(5)));
+  CHECK(not(x.data() & w8::mask(6)));
+  CHECK(not(x.data() & w8::mask(7)));
   x = bits8{w8::all, 1337};
   CHECK(x[0]);
   CHECK(x[1000]);

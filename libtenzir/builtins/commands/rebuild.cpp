@@ -260,8 +260,8 @@ struct rebuilder_state {
                   }
                   if (run->options.undersized
                       and partition.events < detail::narrow_cast<size_t>(
-                           detail::narrow_cast<double>(max_partition_size)
-                           * undersized_threshold)) {
+                            detail::narrow_cast<double>(max_partition_size)
+                            * undersized_threshold)) {
                     return false;
                   }
                   return true;
@@ -279,7 +279,7 @@ struct rebuilder_state {
                 result.partition_infos.end());
               if (result.partition_infos.size() == 1
                   and result.partition_infos.front().version
-                       < version::current_partition_version) {
+                        < version::current_partition_version) {
                 // Edge case: we can't do anything if we have a single
                 // undersized partition for a given schema.
                 result.partition_infos.clear();
@@ -394,7 +394,7 @@ struct rebuilder_state {
     const auto skip_rebuild
       = run->options.undersized and current_run_partitions.size() == 1
         and current_run_partitions[0].version
-             == version::current_partition_version
+              == version::current_partition_version
         and current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
       TENZIR_DEBUG("{} skips rebuilding of undersized partition {} because no "

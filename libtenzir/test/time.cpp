@@ -110,8 +110,9 @@ bool verify_date(tenzir::time ts, int y, int m, int d) {
   auto time = system_clock::to_time_t(
     std::chrono::time_point_cast<system_clock::duration>(ts));
   std::tm tm = {};
-  if (nullptr == gmtime_r(&time, &tm))
+  if (nullptr == gmtime_r(&time, &tm)) {
     return false;
+  }
   return tm.tm_year + 1900 == y and tm.tm_mon + 1 == m and tm.tm_mday == d;
 }
 

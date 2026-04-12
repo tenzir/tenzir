@@ -8,10 +8,10 @@
 
 #include "tenzir/detail/subnet_tree.hpp"
 
+#include "tenzir/collect.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/test/test.hpp"
-#include "tenzir/collect.hpp"
 
 using namespace tenzir;
 using namespace tenzir::detail;
@@ -50,8 +50,9 @@ TEST("prefix matching") {
   CHECK(not xs.match(*to<ip>("10.0.0.1")).second);
   // Prefix match of IP addresses.
   auto subnets = std::set<subnet>{};
-  for (auto [sn, _] : xs.search(*to<ip>("192.168.0.1")))
+  for (auto [sn, _] : xs.search(*to<ip>("192.168.0.1"))) {
     subnets.insert(sn);
+  }
   auto expected = std::set{sn_0_24, sn_0_25, sn_0_23};
   CHECK_EQUAL(subnets, expected);
   // Remove one subnet.

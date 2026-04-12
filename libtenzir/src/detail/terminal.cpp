@@ -31,18 +31,22 @@ struct termios backup;
 struct termios current;
 
 void restore() {
-  if (initialized)
+  if (initialized) {
     tcsetattr(::fileno(stdin), TCSANOW, &backup);
+  }
 }
 
 bool initialize() {
-  if (!::isatty(::fileno(stdin)))
+  if (not ::isatty(::fileno(stdin))) {
     return false;
+  }
   std::atexit(&restore);
-  if (initialized)
+  if (initialized) {
     return false;
-  if (tcgetattr(0, &current) < 0 or tcgetattr(0, &backup) < 0)
+  }
+  if (tcgetattr(0, &current) < 0 or tcgetattr(0, &backup) < 0) {
     return false;
+  }
   initialized = true;
   return true;
 }
@@ -58,8 +62,9 @@ unbufferer::~unbufferer() {
 }
 
 bool unbuffer() {
-  if (not (initialized or initialize()))
+  if (not(initialized or initialize())) {
     return false;
+  }
   current.c_lflag &= ~(ICANON | ECHO);
   current.c_cc[VMIN] = 1;
   current.c_cc[VTIME] = 0;
@@ -67,8 +72,9 @@ bool unbuffer() {
 }
 
 bool buffer() {
-  if (not (initialized or initialize()))
+  if (not(initialized or initialize())) {
     return false;
+  }
   current.c_lflag |= ICANON | ECHO;
   current.c_cc[VMIN] = backup.c_cc[VMIN];
   current.c_cc[VTIME] = backup.c_cc[VTIME];
@@ -76,15 +82,17 @@ bool buffer() {
 }
 
 bool disable_echo() {
-  if (not (initialized or initialize()))
+  if (not(initialized or initialize())) {
     return false;
+  }
   current.c_lflag &= ~ECHO;
   return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
 }
 
 bool enable_echo() {
-  if (not (initialized or initialize()))
+  if (not(initialized or initialize())) {
     return false;
+  }
   current.c_lflag |= ECHO;
   return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
 }
@@ -95,11 +103,13 @@ bool get(char& c, int timeout) {
     TENZIR_ERROR("{} {}", __func__, render(ready.error()));
     return false;
   }
-  if (not *ready)
+  if (not *ready) {
     return false;
+  }
   auto i = ::fgetc(stdin);
-  if (::feof(stdin))
+  if (::feof(stdin)) {
     return false;
+  }
   c = static_cast<char>(i);
   return true;
 }

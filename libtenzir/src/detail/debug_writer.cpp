@@ -460,7 +460,7 @@ bool debug_writer::pop_if(type t) {
 bool debug_writer::pop_if_next(type t) {
   if (stack_.size() > 1
       and (stack_[stack_.size() - 2] == t
-          or can_morph(stack_[stack_.size() - 2].t, t))) {
+           or can_morph(stack_[stack_.size() - 2].t, t))) {
     stack_.pop_back();
     return true;
   } else {

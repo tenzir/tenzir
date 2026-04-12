@@ -45,10 +45,11 @@ struct factory_traits<synopsis> {
   ///       valid synopsis instance.
   template <class T>
   static result_type make(type x, const caf::settings& opts) {
-    if constexpr (std::is_constructible_v<T, type, const caf::settings&>)
+    if constexpr (std::is_constructible_v<T, type, const caf::settings&>) {
       return std::make_unique<T>(std::move(x), opts);
-    else
+    } else {
       return std::make_unique<T>(std::move(x));
+    }
   }
 };
 

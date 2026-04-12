@@ -37,7 +37,9 @@ bool operator==(const kvp& x, const kvp& y) {
 
 struct has_key {
   auto operator()(std::string_view key) const {
-    return [=](const kvp& x) { return x.key == key; };
+    return [=](const kvp& x) {
+      return x.key == key;
+    };
   }
 };
 

@@ -93,7 +93,7 @@ public:
 
   /// @relates synopsis
   friend inline bool operator!=(const synopsis& x, const synopsis& y) {
-    return not (x == y);
+    return not(x == y);
   }
 
 private:

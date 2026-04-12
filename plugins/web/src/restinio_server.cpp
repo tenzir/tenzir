@@ -26,12 +26,13 @@ server_t make_server(server_config config, std::unique_ptr<router_t> router,
     // [1]: https://www.openssl.org/docs/man1.0.2/man3/SSL_CTX_set_options.html
     tls_context.set_options(asio::ssl::context::tls_server
                             | asio::ssl::context::single_dh_use);
-    if (config.require_clientcerts)
+    if (config.require_clientcerts) {
       tls_context.set_verify_mode(
         asio::ssl::context::verify_peer
         | asio::ssl::context::verify_fail_if_no_peer_cert);
-    else
+    } else {
       tls_context.set_verify_mode(asio::ssl::context::verify_none);
+    }
     tls_context.use_certificate_chain_file(config.certfile);
     tls_context.use_private_key_file(config.keyfile, asio::ssl::context::pem);
     // Manually specifying DH parameters is deprecated in favor of using

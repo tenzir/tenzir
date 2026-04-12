@@ -23,14 +23,16 @@ const std::string& line_range::get() const {
 }
 
 void line_range::next_impl() {
-  if (not input_)
+  if (not input_) {
     return;
+  }
   // Get the next non-empty line.
   do {
-    if (detail::absorb_line(input_, line_))
+    if (detail::absorb_line(input_, line_)) {
       ++line_number_;
-    else
+    } else {
       break;
+    }
   } while (line_.empty());
 }
 
@@ -42,11 +44,13 @@ void line_range::next() {
 
 bool line_range::next_timeout(std::chrono::milliseconds timeout) {
   auto* p = dynamic_cast<fdinbuf*>(input_.rdbuf());
-  if (p)
+  if (p) {
     p->read_timeout() = timeout;
+  }
   // Clear if the previous read did not time out.
-  if (not timed_out_)
+  if (not timed_out_) {
     line_.clear();
+  }
   // Try to read next line.
   next_impl();
   timed_out_ = false;

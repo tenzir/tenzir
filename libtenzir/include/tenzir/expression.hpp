@@ -253,8 +253,9 @@ public:
   template <class T>
     requires(detail::contains_type_v<types, std::decay_t<T>>)
   expression(T&& x) : node_(std::forward<T>(x)) {
-    if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>)
+    if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>) {
       TENZIR_ASSERT(not as<std::decay_t<T>>(node_).empty());
+    }
   }
 
   /// @cond PRIVATE
@@ -322,10 +323,11 @@ private:
       if constexpr (std::is_convertible_v<result_type, typename T::value_type>) {
         result.push_back(std::move(x));
       } else {
-        if (not x)
+        if (not x) {
           return x;
-        else
+        } else {
           result.push_back(std::move(*x));
+        }
       }
     }
     return result;

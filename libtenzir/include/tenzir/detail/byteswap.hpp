@@ -39,10 +39,11 @@ inline auto byteswap(uint64_t x) -> uint64_t {
 /// @see byteswap to_host_order
 template <class T>
 auto to_network_order(T x) -> T {
-  if constexpr (std::endian::native == std::endian::little)
+  if constexpr (std::endian::native == std::endian::little) {
     return byteswap(x);
-  else
+  } else {
     return x;
+  }
 }
 
 /// Converts the bytes of an unsigned integer from network order to host order.
@@ -63,10 +64,11 @@ auto to_host_order(T x) -> T {
 template <std::endian From, std::endian To, class T>
 auto swap(T x) -> T {
   if constexpr ((From == std::endian::little and To == std::endian::little)
-                or (From == std::endian::big and To == std::endian::big))
+                or (From == std::endian::big and To == std::endian::big)) {
     return x;
-  else
+  } else {
     return byteswap(x);
+  }
 }
 
 } // namespace tenzir::detail

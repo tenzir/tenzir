@@ -13,8 +13,9 @@ flatbuffer_container::flatbuffer_container(tenzir::chunk_ptr chunk) {
   }
   auto const* header = tenzir::fbs::GetSegmentedFileHeader(chunk->data());
   if (header->header_type()
-      != tenzir::fbs::segmented_file::SegmentedFileHeader::v0)
+      != tenzir::fbs::segmented_file::SegmentedFileHeader::v0) {
     return;
+  }
   header_ = header->header_as_v0();
   chunk_ = std::move(chunk);
 }

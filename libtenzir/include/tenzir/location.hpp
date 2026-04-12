@@ -86,7 +86,8 @@ struct located {
 
   template <typename U>
     requires std::is_constructible_v<T, const U&>
-  explicit(not std::is_convertible_v<const U&, T>) located(const located<U>& other)
+  explicit(not std::is_convertible_v<const U&, T>)
+    located(const located<U>& other)
     : inner(other.inner), source(other.source) {
   }
 

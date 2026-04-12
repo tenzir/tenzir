@@ -165,7 +165,7 @@ public:
 
   friend bool
   operator!=(const generator_iterator& it, generator_sentinel s) noexcept {
-    return not (it == s);
+    return not(it == s);
   }
 
   friend bool

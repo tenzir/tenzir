@@ -239,7 +239,7 @@ int uds_connect(const std::string& path, uds_socket_type type) {
   srv.sun_family = AF_UNIX;
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
-    if (not (type == uds_socket_type::datagram and errno == ENOENT)) {
+    if (not(type == uds_socket_type::datagram and errno == ENOENT)) {
       TENZIR_WARN("{} failed in connect: {}", __func__,
                   detail::describe_errno());
       return -1;

@@ -30,11 +30,13 @@ public:
     using std::end;
     auto f = begin(a);
     auto l = end(a);
-    if (f == l)
+    if (f == l) {
       return false;
+    }
     do {
-      if (not printer_.print(out, *f++))
+      if (not printer_.print(out, *f++)) {
         return false;
+      }
     } while (f != l);
     return true;
   }

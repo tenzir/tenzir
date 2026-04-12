@@ -34,16 +34,19 @@ public:
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     inner_attribute attr;
     if constexpr (returns_bool) {
-      if (not (parser_(f, l, attr) and guard_(attr)))
+      if (not(parser_(f, l, attr) and guard_(attr))) {
         return false;
+      }
       a = Attribute(std::move(attr));
       return true;
     } else {
-      if (not (parser_(f, l, attr)))
+      if (not(parser_(f, l, attr))) {
         return false;
+      }
       auto fin = guard_(std::move(attr));
-      if (not fin)
+      if (not fin) {
         return false;
+      }
       a = Attribute(*std::move(fin));
       return true;
     }

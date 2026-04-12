@@ -31,7 +31,8 @@ namespace {
 template <class LhsView, class Rhs>
 inline constexpr auto requires_stdcmp
   = std::is_integral_v<LhsView> and std::is_integral_v<Rhs>
-    and not std::is_same_v<LhsView, Rhs> and not detail::is_any_v<bool, LhsView, Rhs>;
+    and not std::is_same_v<LhsView, Rhs>
+    and not detail::is_any_v<bool, LhsView, Rhs>;
 
 template <relational_operator Op>
 struct cell_evaluator;

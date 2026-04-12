@@ -149,7 +149,8 @@ public:
            and f.begin_field("input") and f.apply(x.input_) and f.end_field()
            and f.begin_field("parser_name") and f.apply(x.parser_name_)
            and f.end_field() and f.begin_field("parser")
-           and plugin_inspect(f, x.parser_) and f.end_field() and f.end_object();
+           and plugin_inspect(f, x.parser_) and f.end_field()
+           and f.end_object();
   }
 
 private:

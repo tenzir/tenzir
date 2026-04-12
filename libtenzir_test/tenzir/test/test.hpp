@@ -42,7 +42,8 @@ inline auto equal_for_test(const auto& lhs, const auto& rhs) -> bool {
   if constexpr (std::is_integral_v<lhs_type> and std::is_integral_v<rhs_type>
                 and not std::same_as<lhs_type, bool>
                 and not std::same_as<rhs_type, bool>
-                and (std::is_signed_v<lhs_type> != std::is_signed_v<rhs_type>)) {
+                and (std::is_signed_v<lhs_type>
+                     != std::is_signed_v<rhs_type>)) {
     if constexpr (std::is_signed_v<lhs_type>) {
       using unsigned_lhs_type = std::make_unsigned_t<lhs_type>;
       return lhs >= 0 and static_cast<unsigned_lhs_type>(lhs) == rhs;
@@ -209,7 +210,7 @@ bool check_eq(const T0& lhs, const T1& rhs,
 #define FAIL ::caf::test::runnable::current().fail
 // Checks that continue with the current test on failure
 #ifdef CHECK
-#undef CHECK
+#  undef CHECK
 #endif
 #define CHECK(x) ::caf::test::runnable::current().check(static_cast<bool>(x))
 #define CHECK_EQUAL(x, y) ::tenzir::test::detail::check_eq((x), (y))

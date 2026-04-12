@@ -83,7 +83,7 @@ auto order(T x) {
     return result;
   } else {
     static_assert(not std::is_same_v<T, T>, "T is neither an integral nor a "
-                                         "floating point number");
+                                            "floating point number");
   }
 }
 

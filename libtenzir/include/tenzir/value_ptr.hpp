@@ -43,7 +43,7 @@ public:
   auto operator=(value_ptr&&) noexcept -> value_ptr& = default;
 
   explicit operator bool() const {
-    return !!ptr_;
+    return ! ! ptr_;
   }
 
   auto operator*() const -> T& {

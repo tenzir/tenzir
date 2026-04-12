@@ -298,10 +298,11 @@ public:
       auto i = std::find_if(attrs.begin(), attrs.end(), [&](auto& attr) {
         return attr.key == x.key;
       });
-      if (i == attrs.end())
+      if (i == attrs.end()) {
         attrs.push_back(std::move(x));
-      else
+      } else {
         i->value = std::move(x).value;
+      }
     }
     return derived();
   }
@@ -312,10 +313,11 @@ public:
       auto i = std::find_if(attrs.begin(), attrs.end(), [&](auto& attr) {
         return attr.key == x.key;
       });
-      if (i == attrs.end())
+      if (i == attrs.end()) {
         attrs.push_back(std::move(x));
-      else
+      } else {
         i->value = std::move(x).value;
+      }
     }
     return std::move(derived());
   }
@@ -590,7 +592,7 @@ struct legacy_map_type final : legacy_recursive_type<legacy_map_type> {
   bool less_than(const legacy_abstract_type& other) const final {
     return super::less_than(other)
            and std::tie(key_type, downcast(other).key_type)
-                < std::tie(value_type, downcast(other).value_type);
+                 < std::tie(value_type, downcast(other).value_type);
   }
 };
 
@@ -613,7 +615,7 @@ struct record_field : detail::totally_ordered<record_field> {
     // nop
   }
 
-  std::string name;       ///< The name of the field.
+  std::string name;         ///< The name of the field.
   tenzir::legacy_type type; ///< The type of the field.
 
   friend bool operator==(const record_field& x, const record_field& y);
@@ -754,16 +756,17 @@ auto make_inspect(detail::type_list<Ts...>) {
     if constexpr (not Inspector::is_loading) {
       if (x.type_tag != invalid_type_id) {
         return match(x.x, [&f](auto& v) -> bool {
-            return f.apply(v);
-          });
+          return f.apply(v);
+        });
       }
       return true;
     } else {
       using reference = legacy_type&;
       using fun = bool (*)(Inspector&, reference);
       static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
-      if (x.type_tag != invalid_type_id)
+      if (x.type_tag != invalid_type_id) {
         return tbl[x.type_tag](f, x.x);
+      }
       x.x = legacy_type{};
       return true;
     }

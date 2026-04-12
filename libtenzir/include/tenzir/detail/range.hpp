@@ -32,9 +32,7 @@ class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
       std::remove_reference_t<decltype(std::declval<Range>().dereference())>,
-      std::forward_iterator_tag,
-      decltype(std::declval<Range>().dereference())
-    > {
+      std::forward_iterator_tag, decltype(std::declval<Range>().dereference())> {
   friend Range;
   friend iterator_access;
 
@@ -102,8 +100,7 @@ template <class ForwardIterator>
 class iterator_range : public range<iterator_range<ForwardIterator>> {
 public:
   template <class Iterator>
-  iterator_range(Iterator begin, Iterator end)
-    : begin_{begin}, end_{end} {
+  iterator_range(Iterator begin, Iterator end) : begin_{begin}, end_{end} {
   }
 
   ForwardIterator begin() const {

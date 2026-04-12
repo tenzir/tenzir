@@ -26,9 +26,11 @@ public:
     auto i = f;
     auto begin = str_.begin();
     auto end = str_.end();
-    while (begin != end)
-      if (i == l or *i++ != *begin++)
+    while (begin != end) {
+      if (i == l or *i++ != *begin++) {
         return false;
+      }
+    }
     f = i;
     return true;
   }
@@ -40,11 +42,13 @@ public:
     auto i = f;
     auto begin = str_.begin();
     auto end = str_.end();
-    while (begin != end)
-      if (i == l or *i != *begin++)
+    while (begin != end) {
+      if (i == l or *i != *begin++) {
         return false;
-      else
+      } else {
         *out++ = *i++;
+      }
+    }
     f = i;
     return true;
   }

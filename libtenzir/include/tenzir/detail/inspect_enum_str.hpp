@@ -45,7 +45,7 @@ auto inspect_enum_str(Inspector& f, Enum& x,
   } else {
     auto index = static_cast<underlying_type>(x);
     auto size = detail::narrow<underlying_type>(strings.size());
-    if (not (0 <= index and index < size)) {
+    if (not(0 <= index and index < size)) {
       f.set_error(
         caf::make_error(ec::serialization_error,
                         fmt::format("index `{}` is out of bounds for enum `{}`",

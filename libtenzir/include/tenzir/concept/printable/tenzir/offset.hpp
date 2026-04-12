@@ -32,7 +32,7 @@ struct printer_registry<offset> {
 };
 
 namespace printers {
-  auto const offset = offset_printer{};
+auto const offset = offset_printer{};
 } // namespace printers
 
 } // namespace tenzir

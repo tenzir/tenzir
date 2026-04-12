@@ -33,13 +33,17 @@ public:
     using std::end;
     auto f = begin(a);
     auto l = end(a);
-    if (f == l)
+    if (f == l) {
       return true;
-    if (not lhs_.print(out, *f))
+    }
+    if (not lhs_.print(out, *f)) {
       return false;
-    for (++f; f != l; ++f)
-      if (not (rhs_.print(out, unused) and lhs_.print(out, *f)))
+    }
+    for (++f; f != l; ++f) {
+      if (not(rhs_.print(out, unused) and lhs_.print(out, *f))) {
         return false;
+      }
+    }
     return true;
   }
 

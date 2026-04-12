@@ -224,7 +224,8 @@ public:
               }
             };
         for (auto i = int64_t{1}; i < length + 1; ++i) {
-          const auto next = i != length and array->IsValid(i) and array->Value(i);
+          const auto next
+            = i != length and array->IsValid(i) and array->Value(i);
           if (current_value == next) {
             continue;
           }

@@ -35,45 +35,45 @@ public:
     TRY(argument_parser2::function("ip")
           .positional("x", expr, "string")
           .parse(inv, ctx));
-    return function_use::make([expr
-                               = std::move(expr)](evaluator eval, session ctx) {
-      return map_series(eval(expr), [&](series arg) {
-        auto f = detail::overload{
-          [](const arrow::NullArray& arg) {
-            return series::null(ip_type{}, arg.length());
-          },
-          [](const arrow::StringArray& arg) {
-            auto b = ip_type::make_arrow_builder(arrow_memory_pool());
-            check(b->Reserve(arg.length()));
-            for (auto i = 0; i < arg.length(); ++i) {
-              if (arg.IsNull(i)) {
-                check(b->AppendNull());
-                continue;
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) {
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [](const arrow::NullArray& arg) {
+              return series::null(ip_type{}, arg.length());
+            },
+            [](const arrow::StringArray& arg) {
+              auto b = ip_type::make_arrow_builder(arrow_memory_pool());
+              check(b->Reserve(arg.length()));
+              for (auto i = 0; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
+                  check(b->AppendNull());
+                  continue;
+                }
+                auto result = tenzir::ip{};
+                if (parsers::ip(arg.GetView(i), result)) {
+                  check(append_builder(ip_type{}, *b, result));
+                } else {
+                  // TODO: ?
+                  check(b->AppendNull());
+                }
               }
-              auto result = tenzir::ip{};
-              if (parsers::ip(arg.GetView(i), result)) {
-                check(append_builder(ip_type{}, *b, result));
-              } else {
-                // TODO: ?
-                check(b->AppendNull());
-              }
-            }
-            return series{ip_type{}, check(b->Finish())};
-          },
-          [&](const ip_type::array_type&) {
-            return arg;
-          },
-          [&](const auto&) {
-            diagnostic::warning("`ip` expected `string`, but got `{}`",
-                                arg.type.kind())
-              .primary(expr)
-              .emit(ctx);
-            return series::null(ip_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+              return series{ip_type{}, check(b->Finish())};
+            },
+            [&](const ip_type::array_type&) {
+              return arg;
+            },
+            [&](const auto&) {
+              diagnostic::warning("`ip` expected `string`, but got `{}`",
+                                  arg.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              return series::null(ip_type{}, arg.length());
+            },
+          };
+          return match(*arg.array, f);
+        });
       });
-    });
   }
 };
 

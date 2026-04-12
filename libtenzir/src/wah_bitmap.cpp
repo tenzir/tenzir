@@ -36,10 +36,11 @@ const wah_bitmap::block_vector& wah_bitmap::blocks() const {
 }
 
 void wah_bitmap::append_bit(bool bit) {
-  if (blocks_.empty())
+  if (blocks_.empty()) {
     blocks_.push_back(word_type::none);
-  else if (num_last_ == word_type::literal_word_size)
+  } else if (num_last_ == word_type::literal_word_size) {
     merge_active_word();
+  }
   blocks_.back() |= static_cast<block_type>(bit) << num_last_;
   ++num_last_;
   ++num_bits_;
@@ -47,22 +48,26 @@ void wah_bitmap::append_bit(bool bit) {
 }
 
 void wah_bitmap::append_bits(bool bit, size_type n) {
-  if (n == 0)
+  if (n == 0) {
     return;
-  if (blocks_.empty())
+  }
+  if (blocks_.empty()) {
     blocks_.push_back(word_type::none);
-  else if (num_last_ == word_type::literal_word_size)
+  } else if (num_last_ == word_type::literal_word_size) {
     merge_active_word();
+  }
   // Fill up the active word.
   auto unused = word_type::literal_word_size - num_last_;
   auto inject = std::min(unused, n);
   TENZIR_ASSERT(inject > 0);
-  if (bit)
+  if (bit) {
     blocks_.back() |= word_type::word::lsb_fill(inject) << num_last_;
+  }
   num_last_ += inject;
   num_bits_ += inject;
-  if (n <= inject)
+  if (n <= inject) {
     return;
+  }
   merge_active_word();
   n -= inject;
   blocks_.pop_back();
@@ -85,12 +90,14 @@ void wah_bitmap::append_bits(bool bit, size_type n) {
     fills -= word_type::max_fill_words;
   }
   // Add incomplete fill.
-  if (fills > 0)
+  if (fills > 0) {
     blocks_.push_back(word_type::make_fill(bit, fills));
+  }
   // No more fill words, back to the last active word.
   blocks_.push_back(word_type::none);
-  if (partial > 0 and bit)
+  if (partial > 0 and bit) {
     blocks_.back() = word_type::lsb_mask(partial);
+  }
   num_last_ = partial;
   num_bits_ += n;
 }
@@ -98,18 +105,20 @@ void wah_bitmap::append_bits(bool bit, size_type n) {
 void wah_bitmap::append_block(block_type value, size_type bits) {
   TENZIR_ASSERT(bits > 0);
   TENZIR_ASSERT(bits <= word_type::width);
-  if (blocks_.empty())
+  if (blocks_.empty()) {
     blocks_.push_back(word_type::none);
-  else if (num_last_ == word_type::literal_word_size)
+  } else if (num_last_ == word_type::literal_word_size) {
     merge_active_word();
+  }
   auto unused = word_type::literal_word_size - num_last_;
   auto inject = std::min(unused, bits);
   TENZIR_ASSERT(inject > 0);
   blocks_.back() |= (value & word_type::word::lsb_fill(inject)) << num_last_;
   num_last_ += inject;
   num_bits_ += inject;
-  if (bits <= inject)
+  if (bits <= inject) {
     return;
+  }
   merge_active_word();
   value >>= inject;
   auto remaining = bits - inject;
@@ -119,11 +128,13 @@ void wah_bitmap::append_block(block_type value, size_type bits) {
 }
 
 void wah_bitmap::flip() {
-  if (blocks_.empty())
+  if (blocks_.empty()) {
     return;
-  for (auto& block : blocks_)
+  }
+  for (auto& block : blocks_) {
     block
       ^= (word_type::is_fill(block) ? word_type::msb1 : word_type::all) >> 1;
+  }
   // Undo flipping of unused bits in last block.
   auto mask = word_type::lsb_mask(word_type::literal_word_size - num_last_)
               << num_last_;
@@ -139,8 +150,9 @@ void wah_bitmap::merge_active_word() {
   });
   auto is_fill
     = word_type::all_or_none(blocks_.back(), word_type::literal_word_size);
-  if (not is_fill)
+  if (not is_fill) {
     return;
+  }
   // If there's no other word than the active word, we have nothing to merge.
   if (blocks_.size() == 1) {
     blocks_.back() = word_type::make_fill(blocks_.back(), 1);
@@ -194,8 +206,9 @@ auto unpack(const fbs::bitmap::WAHBitmap& from, wah_bitmap& to) -> caf::error {
 
 wah_bitmap_range::wah_bitmap_range(const wah_bitmap& bm)
   : bm_{&bm}, begin_{bm.blocks_.begin()}, end_{bm.blocks_.end()} {
-  if (begin_ != end_)
+  if (begin_ != end_) {
     scan();
+  }
 }
 
 bool wah_bitmap_range::done() const {
@@ -203,8 +216,9 @@ bool wah_bitmap_range::done() const {
 }
 
 void wah_bitmap_range::next() {
-  if (++begin_ != end_)
+  if (++begin_ != end_) {
     scan();
+  }
 }
 
 void wah_bitmap_range::scan() {
@@ -212,8 +226,9 @@ void wah_bitmap_range::scan() {
   if (word_type::is_fill(*begin_)) {
     auto n = word_type::fill_words(*begin_) * word_type::literal_word_size;
     auto value = word_type::fill_type(*begin_);
-    while (++begin_ != end_ and word_type::is_fill(*begin_, value))
+    while (++begin_ != end_ and word_type::is_fill(*begin_, value)) {
       n += word_type::fill_words(*begin_) * word_type::literal_word_size;
+    }
     bits_ = {value ? word_type::word::all : word_type::word::none, n};
     --begin_;
   } else if (begin_ + 1 != end_) {

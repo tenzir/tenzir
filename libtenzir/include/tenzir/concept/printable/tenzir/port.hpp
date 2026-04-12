@@ -22,8 +22,9 @@ struct port_printer : printer_base<port_printer> {
   template <class Iterator>
   bool print(Iterator& out, const port& p) const {
     using namespace printers;
-    if (not (u16(out, p.number()) and chr<'/'>(out)))
+    if (not(u16(out, p.number()) and chr<'/'>(out))) {
       return false;
+    }
     switch (p.type()) {
       default:
         return chr<'?'>(out);

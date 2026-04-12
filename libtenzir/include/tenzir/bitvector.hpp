@@ -40,8 +40,9 @@ template <class Block = size_t, class Allocator = std::allocator<Block>>
 class bitvector : detail::equality_comparable<bitvector<Block, Allocator>> {
   static_assert(std::is_unsigned_v<Block>, "Block must be unsigned for "
                                            "well-defined bit operations");
-  static_assert(not std::is_same_v<Block, bool>, "Block cannot be bool; you may "
-                                              "want std::vector<bool> instead");
+  static_assert(not std::is_same_v<Block, bool>,
+                "Block cannot be bool; you may "
+                "want std::vector<bool> instead");
 
 public:
   using value_type = bool;
@@ -326,8 +327,9 @@ template <class InputIterator>
 void bitvector<Block, Allocator>::assign(InputIterator first,
                                          InputIterator last) {
   blocks_.clear();
-  while (first != last)
+  while (first != last) {
     push_back(*first++);
+  }
 }
 
 namespace detail {
@@ -538,16 +540,18 @@ bitvector<Block, Allocator>::operator[](size_type i) const {
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::at(size_type i) {
-  if (i >= size_)
+  if (i >= size_) {
     TENZIR_RAISE_ERROR(std::out_of_range, "bitvector out of range");
+  }
   return (*this)[i];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::at(size_type i) const {
-  if (i >= size_)
+  if (i >= size_) {
     TENZIR_RAISE_ERROR(std::out_of_range, "bitvector out of range");
+  }
   return (*this)[i];
 }
 
@@ -592,20 +596,22 @@ void bitvector<Block, Allocator>::emplace_back(Ts&&... xs) {
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::push_back(const value_type& x) {
   auto p = partial_bits();
-  if (p == 0)
+  if (p == 0) {
     blocks_.push_back(x ? word_type::all : word_type::none);
-  else if (x)
+  } else if (x) {
     blocks_.back() |= word_type::all << p;
-  else
+  } else {
     blocks_.back() &= ~(word_type::all << p);
+  }
   ++size_;
 }
 
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::pop_back() {
   TENZIR_ASSERT(not empty());
-  if (partial_bits() == 1)
+  if (partial_bits() == 1) {
     blocks_.pop_back();
+  }
   --size_;
 }
 
@@ -618,8 +624,9 @@ void bitvector<Block, Allocator>::swap(bitvector& other) {
 
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::flip() noexcept {
-  for (auto& block : blocks_)
+  for (auto& block : blocks_) {
     block = ~block;
+  }
 }
 
 template <class Block, class Allocator>
@@ -631,19 +638,22 @@ void bitvector<Block, Allocator>::clear() noexcept {
 template <class Block, class Allocator>
 bool operator==(const bitvector<Block, Allocator>& x,
                 const bitvector<Block, Allocator>& y) {
-  if (x.size_ != y.size_)
+  if (x.size_ != y.size_) {
     return false;
+  }
   // Compare all but last block.
   auto xbegin = x.blocks_.begin();
   auto xend = x.blocks_.end();
   auto ybegin = y.blocks_.begin();
   auto yend = y.blocks_.end();
-  if (xbegin == xend)
+  if (xbegin == xend) {
     return true;
+  }
   --xend;
   --yend;
-  if (not std::equal(xbegin, xend, ybegin, yend))
+  if (not std::equal(xbegin, xend, ybegin, yend)) {
     return false;
+  }
   // Compare last block.
   using word_type = typename bitvector<Block, Allocator>::word_type;
   auto xlast = *xend & word_type::lsb_mask(x.partial_bits());
@@ -668,8 +678,9 @@ void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
     auto& last = blocks_.back();
     last = (last & word_type::lsb_mask(p)) | (x << p);
     auto available = word_type::width - p;
-    if (bits > available)
+    if (bits > available) {
       blocks_.push_back(x >> available);
+    }
   }
   size_ += bits;
 }
@@ -702,9 +713,10 @@ rank(const bitvector<Block, Allocator>& bv) {
   auto result = size_type{0};
   auto n = bv.size();
   auto p = bv.blocks().data();
-  for (; n >= word_type::width; ++p, n -= word_type::width)
+  for (; n >= word_type::width; ++p, n -= word_type::width) {
     result += Bit ? word_type::popcount(*p)
                   : word_type::width - word_type::popcount(*p);
+  }
   if (n > 0) {
     auto last = word_type::popcount(*p & word_type::lsb_mask(n));
     result += Bit ? last : n - last;

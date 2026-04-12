@@ -27,12 +27,9 @@ struct container_t {
     using value_type = T;
   };
 
-  using value_type =
-    typename std::conditional_t<
-      std::is_same<attribute, std::decay_t<unused_type>>{},
-      lazy_value_type<unused_type>,
-      attribute
-    >::value_type;
+  using value_type = typename std::conditional_t<
+    std::is_same<attribute, std::decay_t<unused_type>>{},
+    lazy_value_type<unused_type>, attribute>::value_type;
 
   static constexpr bool modified = std::is_same_v<vector_type, attribute>;
 
@@ -52,28 +49,28 @@ struct container_t {
   }
 
   template <class Parser, class Iterator>
-  static bool parse(const Parser& p, Iterator& f, const Iterator& l,
-                    unused_type) {
+  static bool
+  parse(const Parser& p, Iterator& f, const Iterator& l, unused_type) {
     return p(f, l, unused);
   }
 
   template <class Parser, class Iterator, class Attribute>
-  static bool parse(const Parser& p, Iterator& f, const Iterator& l,
-                    Attribute& a) {
+  static bool
+  parse(const Parser& p, Iterator& f, const Iterator& l, Attribute& a) {
     if constexpr (not is_pair_v<typename Attribute::value_type>) {
       value_type x;
-      if (not p(f, l, x))
+      if (not p(f, l, x)) {
         return false;
+      }
       push_back(a, std::move(x));
     } else {
-      using pair_type =
-        std::pair<
-          std::remove_const_t<typename Attribute::value_type::first_type>,
-          typename Attribute::value_type::second_type
-        >;
+      using pair_type = std::pair<
+        std::remove_const_t<typename Attribute::value_type::first_type>,
+        typename Attribute::value_type::second_type>;
       pair_type pair;
-      if (not p(f, l, pair))
+      if (not p(f, l, pair)) {
         return false;
+      }
       push_back(a, std::move(pair));
     }
     return true;

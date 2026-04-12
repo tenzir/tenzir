@@ -285,7 +285,7 @@ public:
         co_yield builder.finish_assert_one_slice();
       }
     };
-    return make(ctrl, std::move(input), !!args_.emit_file_headers);
+    return make(ctrl, std::move(input), ! ! args_.emit_file_headers);
   }
 
   friend auto inspect(auto& f, pcap_parser& x) -> bool {

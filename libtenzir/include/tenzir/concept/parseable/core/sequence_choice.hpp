@@ -58,38 +58,46 @@ public:
 
 private:
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
-  requires(std::is_same_v<L, unused_type>) static auto left_attr(Attribute&)
-    -> unused_type& {
+    requires(std::is_same_v<L, unused_type>)
+  static auto left_attr(Attribute&) -> unused_type& {
     return unused;
   }
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
-  static auto left_attr(Attribute& a) -> std::optional<L>& requires(
-    not std::is_same_v<L, unused_type> and std::is_same_v<R, unused_type>) {
+  static auto left_attr(Attribute& a) -> std::optional<L>&
+    requires(not std::is_same_v<L, unused_type>
+             and std::is_same_v<R, unused_type>)
+  {
     return a;
   }
 
   template <class... Ts, class L = lhs_attribute, class R = rhs_attribute>
-  static auto left_attr(std::tuple<Ts...>& t) -> std::optional<L>& requires(
-    not (std::is_same_v<L, unused_type> or std::is_same_v<R, unused_type>)) {
+  static auto left_attr(std::tuple<Ts...>& t) -> std::optional<L>&
+    requires(not(std::is_same_v<L, unused_type>
+                 or std::is_same_v<R, unused_type>))
+  {
     return std::get<0>(t);
   }
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
-  requires(std::is_same_v<R, unused_type>) static auto right_attr(Attribute&)
-    -> unused_type& {
+    requires(std::is_same_v<R, unused_type>)
+  static auto right_attr(Attribute&) -> unused_type& {
     return unused;
   }
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
-  static auto right_attr(Attribute& a) -> std::optional<R>& requires(
-    std::is_same_v<L, unused_type> and not std::is_same_v<R, unused_type>) {
+  static auto right_attr(Attribute& a) -> std::optional<R>&
+    requires(std::is_same_v<L, unused_type>
+             and not std::is_same_v<R, unused_type>)
+  {
     return a;
   }
 
   template <class... Ts, class L = lhs_attribute, class R = rhs_attribute>
-  static auto right_attr(std::tuple<Ts...>& t) -> std::optional<R>& requires(
-    not (std::is_same_v<L, unused_type> or std::is_same_v<R, unused_type>)) {
+  static auto right_attr(std::tuple<Ts...>& t) -> std::optional<R>&
+    requires(not(std::is_same_v<L, unused_type>
+                 or std::is_same_v<R, unused_type>))
+  {
     return std::get<1>(t);
   }
 

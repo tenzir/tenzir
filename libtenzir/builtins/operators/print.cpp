@@ -193,7 +193,8 @@ public:
            and f.begin_field("input") and f.apply(x.input_) and f.end_field()
            and f.begin_field("printer_name") and f.apply(x.printer_name_)
            and f.end_field() and f.begin_field("printer")
-           and plugin_inspect(f, x.printer_) and f.end_field() and f.end_object();
+           and plugin_inspect(f, x.printer_) and f.end_field()
+           and f.end_object();
   }
 
 private:

@@ -141,8 +141,8 @@ public:
   /// unification, using a `series_builder`.
   /// Checks are performed using `unify( type, type ) -> std::optional<type>`
   /// @ref multi_series::join_conflict_strategy
-  auto to_series(to_series_strategy strategy
-                 = to_series_strategy::fail) const -> to_series_result;
+  auto to_series(to_series_strategy strategy = to_series_strategy::fail) const
+    -> to_series_result;
 
 private:
   auto resolve(int64_t row) const

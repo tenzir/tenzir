@@ -26,17 +26,20 @@ public:
     auto i = f;
     auto begin = str_.begin();
     auto end = str_.end();
-    while (begin != end)
-      if (i == l or *i++ != *begin++)
+    while (begin != end) {
+      if (i == l or *i++ != *begin++) {
         return false;
+      }
+    }
     f = i;
     return true;
   }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    if (not parse(f, l, unused))
+    if (not parse(f, l, unused)) {
       return false;
+    }
     x = Attribute{str_.data(), str_.size()};
     return true;
   }

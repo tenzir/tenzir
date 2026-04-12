@@ -350,7 +350,7 @@ std::string json_unescape(std::string_view str) {
     return {};
   }
   // Only consider double-quoted strings.
-  if (not (*f++ == '"' and (*--l == '"'))) {
+  if (not(*f++ == '"' and (*--l == '"'))) {
     return {};
   }
   std::string result;

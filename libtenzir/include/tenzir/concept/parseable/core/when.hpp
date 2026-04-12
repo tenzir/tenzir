@@ -17,7 +17,8 @@ class when_parser : public parser_base<when_parser<Parser, Condition>> {
 public:
   using attribute = typename Parser::attribute;
 
-  when_parser(Parser p, Condition fun) : parser_{std::move(p)}, condition_(fun) {
+  when_parser(Parser p, Condition fun)
+    : parser_{std::move(p)}, condition_(fun) {
   }
 
   template <class Iterator, class Attribute>

@@ -91,8 +91,8 @@ TEST("equality comparison") {
 }
 
 TEST("less - than comparison") {
-  CHECK(not (legacy_type{} < legacy_type{}));
-  CHECK(not (legacy_real_type{} < legacy_real_type{}));
+  CHECK(not(legacy_type{} < legacy_type{}));
+  CHECK(not(legacy_real_type{} < legacy_real_type{}));
   CHECK(legacy_string_type{}.name("a") < legacy_string_type{}.name("b"));
   CHECK(legacy_record_type{}.name("a") < legacy_record_type{}.name("b"));
 }

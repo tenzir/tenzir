@@ -24,8 +24,7 @@ public:
     = std::conditional_t<std::is_same_v<inner_attribute, unused_type>,
                          unused_type, std::optional<inner_attribute>>;
 
-  explicit optional_printer(Printer p)
-    : printer_{std::move(p)} {
+  explicit optional_printer(Printer p) : printer_{std::move(p)} {
   }
 
   template <class Iterator>

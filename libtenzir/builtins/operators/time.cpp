@@ -114,8 +114,9 @@ struct partial_timestamp {
     -> partial_timestamp {
     auto do_field = [&]<typename T, typename U>(std::optional<T>& self_field,
                                                 const U& other_field) {
-      if (not is_unset(other_field))
+      if (not is_unset(other_field)) {
         self_field = other_field;
+      }
     };
     partial_timestamp result{};
     do_field(result.tm_sec, time.tm_sec);
@@ -178,16 +179,19 @@ struct partial_timestamp {
     // Thus, we'll require `other` to be complete, and translate it to the same
     // timezone as `*this`.
     if (tm_zone and TENZIR_HAS_DATE_H) {
-      if (not other.transform_to_tz(*tm_zone, diag))
+      if (not other.transform_to_tz(*tm_zone, diag)) {
         return false;
+      }
     } else if (tm_gmtoff) {
-      if (not other.transform_to_utc_offset(*tm_gmtoff, diag))
+      if (not other.transform_to_utc_offset(*tm_gmtoff, diag)) {
         return false;
+      }
     }
     // Now, the timezones match, and we can just blindly assign to the members
     auto do_field = []<typename T>(T& self, const T& other_field) {
-      if (not self)
+      if (not self) {
         self = other_field;
+      }
     };
     do_field(tm_sec, other.tm_sec);
     do_field(tm_min, other.tm_min);
@@ -222,18 +226,21 @@ struct partial_timestamp {
   /// Requires `*this` to be complete.
   [[nodiscard]] bool transform_to_utc(diagnostic_handler& diag) {
     TENZIR_ASSERT(is_complete());
-    if (is_utc())
+    if (is_utc()) {
       return true;
+    }
     auto [local_datetime, utc_offset, tz_name]
       = to_clock_time_point<std::chrono::system_clock>(diag);
-    if (not local_datetime)
+    if (not local_datetime) {
       return false;
+    }
 #if TENZIR_HAS_DATE_H
     if (tz_name) {
       // Named timezone, resolve
       auto tz = find_tz_by_name(*tz_name, diag);
-      if (not tz)
+      if (not tz) {
         return false;
+      }
       date::zoned_time datetime{tz, *local_datetime};
       *this = from_system_time_point(datetime.get_sys_time());
       return true;
@@ -257,12 +264,14 @@ struct partial_timestamp {
     if (not is_utc()) {
       // Not UTC, ensuring consistency between UTC offset and named timezone
       // by first transforming `*this` to UTC
-      if (not transform_to_utc(diag))
+      if (not transform_to_utc(diag)) {
         return false;
+      }
     }
-    if (new_offset == 0)
+    if (new_offset == 0) {
       // UTC was requested
       return true;
+    }
     tm_gmtoff = new_offset;
     tm_zone.reset();
     return true;
@@ -278,12 +287,14 @@ struct partial_timestamp {
     if (not is_utc()) {
       // Not UTC, ensuring consistency between UTC offset and named timezone
       // by first transforming `*this` to UTC
-      if (not transform_to_utc(diag))
+      if (not transform_to_utc(diag)) {
         return false;
+      }
     }
-    if (new_tz_name == "UTC" or new_tz_name == "GMT")
+    if (new_tz_name == "UTC" or new_tz_name == "GMT") {
       // UTC was requested
       return true;
+    }
     tm_gmtoff.reset();
     tm_zone = new_tz_name;
     return true;
@@ -320,8 +331,9 @@ struct partial_timestamp {
       std::optional<std::chrono::time_point<Clock, std::chrono::seconds>>,
       std::optional<long>, std::optional<std::string>> {
     auto tm_value = to_tm(diag);
-    if (not tm_value)
+    if (not tm_value) {
       return {std::nullopt, std::nullopt, std::nullopt};
+    }
     auto time = std::chrono::seconds{tm_value->tm_sec + 60 * tm_value->tm_min
                                      + 60 * 60 * tm_value->tm_hour};
     if (time >= std::chrono::seconds{86400} or time < std::chrono::seconds{0}) {
@@ -365,8 +377,9 @@ struct partial_timestamp {
   auto to_system_time_point(diagnostic_handler& diag)
     -> std::optional<std::chrono::sys_seconds> {
     auto [tp, _1, _2] = to_clock_time_point<std::chrono::system_clock>(diag);
-    if (not tp)
+    if (not tp) {
       return std::nullopt;
+    }
     TENZIR_ASSERT(is_utc());
     return *tp;
   }
@@ -375,10 +388,11 @@ struct partial_timestamp {
     auto add_field_if_set
       = [&]<typename T>(std::string_view name, const std::optional<T>& val,
                         std::function<T(T)> mod = std::identity{}) {
-          if (val)
+          if (val) {
             builder.field(name, mod(*val));
-          else
+          } else {
             builder.field(name, caf::none);
+          }
         };
     add_field_if_set("second", tm_sec);
     add_field_if_set("minute", tm_min);
@@ -512,8 +526,9 @@ public:
       auto& diag = ctrl.diagnostics();
       auto time
         = strptime_partial(diag, std::string{*string}.c_str(), format_.c_str());
-      if (not time)
+      if (not time) {
         return {};
+      }
       if (not strict_) {
         // If --strict is not set,
         // we "enrich" `time` with the first second of today.
@@ -528,8 +543,9 @@ public:
         //                             to create a timestamp
         const bool year_set = time->tm_year.has_value();
         auto today_beginning = partial_timestamp::today_beginning();
-        if (not time->enrich(today_beginning, diag))
+        if (not time->enrich(today_beginning, diag)) {
           return {};
+        }
         TENZIR_ASSERT(time->is_complete());
         // A special case:
         // If `strptime_partial` didn't set the year, but the resulting enriched
@@ -544,15 +560,18 @@ public:
         // that to mean 2022-12-24. Instead, if we parse "Nov 24th", that'll
         // become 2023-11-24.
         if (not year_set) {
-          if (not time->transform_to_utc(diag))
+          if (not time->transform_to_utc(diag)) {
             return {};
+          }
           TENZIR_ASSERT(today_beginning.is_utc());
           auto time_tp = time->to_system_time_point(diag);
           auto today_beg_tp = today_beginning.to_system_time_point(diag);
-          if (not time_tp or not today_beg_tp)
+          if (not time_tp or not today_beg_tp) {
             return {};
-          if (std::chrono::floor<std::chrono::days>(*time_tp) > *today_beg_tp)
+          }
+          if (std::chrono::floor<std::chrono::days>(*time_tp) > *today_beg_tp) {
             *time->tm_year -= 1;
+          }
         }
       }
       auto builder = b.record();
@@ -560,8 +579,9 @@ public:
       // `to_time_point` (in the non --components branch below) requires UTC,
       // and `to_record` can yield more useful results, if the client code
       // doesn't have to deal with timezones.
-      if (time->is_complete() and not time->transform_to_utc(diag))
+      if (time->is_complete() and not time->transform_to_utc(diag)) {
         return {};
+      }
       if (components_) {
         // --components is ON:
         // yield a record with the parsed components
@@ -570,8 +590,9 @@ public:
         // --components is OFF:
         // create a timestamp (sys_seconds time_point)
         auto tp = time->to_system_time_point(diag);
-        if (not tp)
+        if (not tp) {
           return {};
+        }
         // TODO: Preferably, I'd do b.data(tp) here, but `parse` expects a record
         builder.field("timestamp", *tp);
       }

@@ -25,14 +25,18 @@ bloom_filter_params make(uint64_t m, uint64_t n, uint64_t k, double p) {
 
 std::optional<bloom_filter_params> evaluate(bloom_filter_config cfg) {
   // Check basic invariants first.
-  if (cfg.m and *cfg.m <= 0)
+  if (cfg.m and *cfg.m <= 0) {
     return {};
-  if (cfg.n and *cfg.n <= 0)
+  }
+  if (cfg.n and *cfg.n <= 0) {
     return {};
-  if (cfg.k and *cfg.k <= 0)
+  }
+  if (cfg.k and *cfg.k <= 0) {
     return {};
-  if (cfg.p and (*cfg.p < 0 or *cfg.p > 1))
+  }
+  if (cfg.p and (*cfg.p < 0 or *cfg.p > 1)) {
     return {};
+  }
   // Test if we can compute the missing parameters.
   static const double ln2 = std::log(2.0);
   if (cfg.m and cfg.n and cfg.k and not cfg.p) {

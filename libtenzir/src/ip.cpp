@@ -133,7 +133,8 @@ auto ip::is_broadcast() const -> bool {
 }
 
 auto ip::is_multicast() const -> bool {
-  return is_v4() ? (bytes_[12] >= 224 and bytes_[12] <= 239) : bytes_[0] == 0xff;
+  return is_v4() ? (bytes_[12] >= 224 and bytes_[12] <= 239)
+                 : bytes_[0] == 0xff;
 }
 
 auto ip::is_private() const -> bool {

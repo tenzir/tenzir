@@ -38,8 +38,9 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (f == l or not test_char(*f, CharClass{}))
+    if (f == l or not test_char(*f, CharClass{})) {
       return false;
+    }
     detail::absorb(a, *f);
     ++f;
     return true;

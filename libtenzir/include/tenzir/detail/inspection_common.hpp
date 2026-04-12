@@ -105,8 +105,9 @@ bool inspect_enum(Inspector& f, Enum& x) {
   using underlying_type = std::underlying_type_t<Enum>;
   if constexpr (Inspector::is_loading) {
     underlying_type tmp;
-    if (not f.apply(tmp))
+    if (not f.apply(tmp)) {
       return false;
+    }
     x = static_cast<Enum>(tmp);
     return true;
   } else {

@@ -103,7 +103,7 @@ TEST("IPv6") {
   auto b = *to<ip>("2001:db8:0:0:202:b3ff:fe1e:8329");
   auto c = *to<ip>("2001:db8::202:b3ff:fe1e:8329");
   CHECK(a.is_v6() and b.is_v6() and c.is_v6());
-  CHECK(not (a.is_v4() or b.is_v4() or c.is_v4()));
+  CHECK(not(a.is_v4() or b.is_v4() or c.is_v4()));
   CHECK(a == b and b == c);
 
   auto d = *to<ip>("ff01::1");

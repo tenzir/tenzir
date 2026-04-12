@@ -29,7 +29,8 @@ namespace tenzir {
 concept_ mappend(concept_ lhs, concept_ rhs) {
   if (lhs.description.empty()) {
     lhs.description = std::move(rhs.description);
-  } else if (not rhs.description.empty() and lhs.description != rhs.description) {
+  } else if (not rhs.description.empty()
+             and lhs.description != rhs.description) {
     TENZIR_WARN("encountered conflicting descriptions: \"{}\" and \"{}\"",
                 lhs.description, rhs.description);
   }

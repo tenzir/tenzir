@@ -55,8 +55,8 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
     auto out_buffer_result = ::parquet::arrow::FileReader::Make(
       arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
     if (not out_buffer_result.ok()) {
-      diagnostic::error("{}",
-                        out_buffer_result.status().ToStringWithoutContextLines())
+      diagnostic::error(
+        "{}", out_buffer_result.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -300,7 +300,7 @@ public:
         result_compression_type.MoveValueUnsafe());
       if (options_.compression_type->inner == "brotli"
           and (options_.compression_level->inner < 1
-              or options_.compression_level->inner > 11)) {
+               or options_.compression_level->inner > 11)) {
         diagnostic::error("invalid compression level")
           .note("must be a value between 1 and 11")
           .primary(options_.compression_level->source)
@@ -308,7 +308,7 @@ public:
       }
       if (options_.compression_type->inner == "gzip"
           and (options_.compression_level->inner < 1
-              or options_.compression_level->inner > 9)) {
+               or options_.compression_level->inner > 9)) {
         diagnostic::error("invalid compression level")
           .note("must be a value between 1 and 9")
           .primary(options_.compression_level->source)

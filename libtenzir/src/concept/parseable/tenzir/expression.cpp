@@ -58,15 +58,17 @@ struct expander {
 
   expression operator()(const conjunction& c) const {
     conjunction result;
-    for (auto& op : c)
+    for (auto& op : c) {
       result.push_back(match(op, *this));
+    }
     return result;
   }
 
   expression operator()(const disjunction& d) const {
     disjunction result;
-    for (auto& op : d)
+    for (auto& op : d) {
       result.push_back(match(op, *this));
+    }
     return result;
   }
 
@@ -99,10 +101,12 @@ struct expander {
       result.push_back(std::move(y));
       return result;
     };
-    if (auto addr_pred = build_addr_pred(p.lhs, p.op, p.rhs))
+    if (auto addr_pred = build_addr_pred(p.lhs, p.op, p.rhs)) {
       return make_disjunction(p, std::move(*addr_pred));
-    if (auto addr_pred = build_addr_pred(p.rhs, p.op, p.lhs))
+    }
+    if (auto addr_pred = build_addr_pred(p.rhs, p.op, p.lhs)) {
       return make_disjunction(p, std::move(*addr_pred));
+    }
     return {p};
   }
 };
@@ -151,8 +155,7 @@ static expression expand(data x) {
     }
     return result.empty() ? expression{} : expression{std::move(result)};
   };
-  if (auto expr = match(x, try_expand_numeric_literal);
-      expr != expression{}) {
+  if (auto expr = match(x, try_expand_numeric_literal); expr != expression{}) {
     return expr;
   }
   auto infer_type = [](const auto& d) -> type {
@@ -186,7 +189,7 @@ auto make_extractor_parser() {
   // A field cannot start with:
   //  - '-' to leave room for potential arithmetic expressions in operands
   //  - ':' so it won't be interpreted as a type extractor
-  auto field = not (':'_p | '-') >> (+make_field_char_parser() % '.');
+  auto field = not(':'_p | '-') >> (+make_field_char_parser() % '.');
   // clang-format off
   auto extractor
     = ':' >> parsers::legacy_type ->* to_type_extractor
@@ -248,29 +251,33 @@ static auto make_expression_parser() {
   // expression tree.
   auto to_expr = [](raw_expr expr) -> expression {
     auto& [x, xs] = expr;
-    if (xs.empty())
+    if (xs.empty()) {
       return x;
+    }
     // We split the expression chain at each OR node in order to take care of
     // operator precedance: AND binds stronger than OR.
     disjunction dis;
     auto con = conjunction{x};
-    for (auto& [op, expr] : xs)
+    for (auto& [op, expr] : xs) {
       if (op == bool_operator::logical_and) {
         con.emplace_back(std::move(expr));
       } else if (op == bool_operator::logical_or) {
         TENZIR_ASSERT(not con.empty());
-        if (con.size() == 1)
+        if (con.size() == 1) {
           dis.emplace_back(std::move(con[0]));
-        else
+        } else {
           dis.emplace_back(std::move(con));
+        }
         con = conjunction{std::move(expr)};
       } else {
-        TENZIR_ASSERT(!"negations must not exist here");
+        TENZIR_ASSERT(! "negations must not exist here");
       }
-    if (con.size() == 1)
+    }
+    if (con.size() == 1) {
       dis.emplace_back(std::move(con[0]));
-    else
+    } else {
       dis.emplace_back(std::move(con));
+    }
     return dis.size() == 1 ? std::move(dis[0]) : expression{dis};
   };
   auto negate_expr = [](expression expr) {

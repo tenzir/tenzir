@@ -81,8 +81,9 @@ public:
     TENZIR_ASSERT(pointer_in_buffer(ptr_) and "short_alloc has outlived arena");
     if (pointer_in_buffer(p)) {
       n = align_up(n);
-      if (p + n == ptr_)
+      if (p + n == ptr_) {
         ptr_ = p;
+      }
     } else {
       ::operator delete(p);
     }
@@ -167,7 +168,7 @@ bool operator==(const short_alloc<T0, N0, A0>& x,
 template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
 bool operator!=(const short_alloc<T0, N0, A0>& x,
                 const short_alloc<T1, N1, A1>& y) noexcept {
-  return not (x == y);
+  return not(x == y);
 }
 
 } // namespace tenzir::detail

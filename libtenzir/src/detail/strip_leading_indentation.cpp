@@ -47,12 +47,14 @@ auto strip_leading_indentation(std::string&& code) -> std::string {
       }
     }
   }
-  if (indentation.empty())
+  if (indentation.empty()) {
     return code;
+  }
   auto stripped_code = std::string{};
   for (auto line : each_line(code)) {
-    if (line.starts_with(indentation))
+    if (line.starts_with(indentation)) {
       line.remove_prefix(indentation.size());
+    }
     stripped_code += line;
   }
   return stripped_code;

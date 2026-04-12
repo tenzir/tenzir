@@ -597,7 +597,8 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::spawn(element_type_tag input) and -> std::vector<AnyOperator> {
+auto ir::pipeline::spawn(
+  element_type_tag input) and -> std::vector<AnyOperator> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   // TODO: This is probably not the right place for optimizations.

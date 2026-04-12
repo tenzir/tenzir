@@ -26,27 +26,30 @@ template <class Bitvector, class Order>
 struct bitvector_printer : printer_base<bitvector_printer<Bitvector, Order>> {
   using attribute = Bitvector;
 
-  static constexpr bool msb_to_lsb =
-    std::is_same_v<Order, policy::msb_to_lsb>;
+  static constexpr bool msb_to_lsb = std::is_same_v<Order, policy::msb_to_lsb>;
 
   template <class Iterator>
   bool print(Iterator& out, const Bitvector& bv) const {
     auto render = [&](auto f, auto l) {
-      for (; f != l; ++f)
-        if (not printers::any.print(out, *f ? '1' : '0'))
+      for (; f != l; ++f) {
+        if (not printers::any.print(out, *f ? '1' : '0')) {
           return false;
+        }
+      }
       return true;
     };
-    if (msb_to_lsb)
+    if (msb_to_lsb) {
       return render(bv.rbegin(), bv.rend());
-    else
+    } else {
       return render(bv.begin(), bv.end());
+    }
   }
 };
 
 template <class Block, class Allocator>
 struct printer_registry<bitvector<Block, Allocator>> {
-  using type = bitvector_printer<bitvector<Block, Allocator>, policy::lsb_to_msb>;
+  using type
+    = bitvector_printer<bitvector<Block, Allocator>, policy::lsb_to_msb>;
 };
 
 } // namespace tenzir

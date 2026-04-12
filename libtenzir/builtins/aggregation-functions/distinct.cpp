@@ -33,7 +33,8 @@ struct heterogeneous_data_hash {
   [[nodiscard]] auto
 
   operator()(const type_to_data_t<Type>& value) const -> size_t
-    requires(not std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+    requires(
+      not std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return hash(make_view(value));
   }
@@ -50,7 +51,8 @@ struct heterogeneous_data_equal {
 
   [[nodiscard]] auto operator()(const type_to_data_t<Type>& lhs,
                                 view<type_to_data_t<Type>> rhs) const -> bool
-    requires(not std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+    requires(
+      not std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return make_view(lhs) == rhs;
   }

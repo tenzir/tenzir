@@ -38,6 +38,9 @@
       "*.hxx"
     ];
   };
+  programs.clang-format.enable = true;
+  # alt-operators should run first.
+  programs.clang-format.priority = 1;
 
   # CMake
   programs.cmake-format.enable = true;

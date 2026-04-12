@@ -69,9 +69,10 @@ get_bytesize(caf::settings opts, std::string_view key, uint64_t defval) {
     result = caf::get<caf::config_value::integer>(opts, key);
   } else if (caf::holds_alternative<std::string>(opts, key)) {
     auto result_str = caf::get<std::string>(opts, key);
-    if (not parsers::bytesize(result_str, result))
+    if (not parsers::bytesize(result_str, result)) {
       return caf::make_error(ec::parse_error, "could not parse '" + result_str
                                                 + "' as valid byte size");
+    }
   } else {
     return caf::make_error(ec::invalid_argument,
                            "invalid value for key '" + std::string{key} + "'");

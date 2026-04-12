@@ -25,8 +25,9 @@ struct char_printer : printer_base<char_printer<Chars...>> {
     // TODO: in the future when we have ranges, we should add a mechanism to
     // check whether we exceed the bounds instead of just deref'ing the
     // iterator and pretending it'll work out.
-    for (auto c : chars)
+    for (auto c : chars) {
       *out++ = c;
+    }
     return true;
   }
 };

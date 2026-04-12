@@ -19,24 +19,27 @@
 namespace tenzir {
 
 template <class To, class Iterator>
-requires(parseable<Iterator, To>) auto to(Iterator& f, const Iterator& l)
-  -> caf::expected<To> {
+  requires(parseable<Iterator, To>)
+auto to(Iterator& f, const Iterator& l) -> caf::expected<To> {
   caf::expected<To> t{To{}};
-  if (not parse(f, l, *t))
+  if (not parse(f, l, *t)) {
     return caf::make_error(ec::parse_error);
+  }
   return t;
 }
 
 template <class To, class Range>
 auto to(Range&& rng) -> caf::expected<To>
-requires(parseable<decltype(std::begin(rng)), To>) {
+  requires(parseable<decltype(std::begin(rng)), To>)
+{
   using std::begin;
   using std::end;
   auto f = begin(rng);
   auto l = end(rng);
   auto res = to<To>(f, l);
-  if (res and f != l)
+  if (res and f != l) {
     return caf::make_error(ec::parse_error);
+  }
   return res;
 }
 

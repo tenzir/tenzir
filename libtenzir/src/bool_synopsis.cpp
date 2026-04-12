@@ -48,17 +48,20 @@ size_t bool_synopsis::memusage() const {
 std::optional<bool>
 bool_synopsis::lookup(relational_operator op, data_view rhs) const {
   if (auto b = try_as<view<bool>>(&rhs)) {
-    if (op == relational_operator::equal)
+    if (op == relational_operator::equal) {
       return *b ? true_ : false_;
-    if (op == relational_operator::not_equal)
+    }
+    if (op == relational_operator::not_equal) {
       return *b ? false_ : true_;
+    }
   }
   return {};
 }
 
 bool bool_synopsis::equals(const synopsis& other) const noexcept {
-  if (typeid(other) != typeid(bool_synopsis))
+  if (typeid(other) != typeid(bool_synopsis)) {
     return false;
+  }
   auto& rhs = static_cast<const bool_synopsis&>(other);
   return type() == rhs.type() and false_ == rhs.false_ and true_ == rhs.true_;
 }

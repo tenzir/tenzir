@@ -743,7 +743,7 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
   }
   return not lhs_bytes.empty()   ? std::strong_ordering::greater
          : not rhs_bytes.empty() ? std::strong_ordering::less
-                               : std::strong_ordering::equivalent;
+                                 : std::strong_ordering::equivalent;
 }
 
 uint8_t type::type_index() const noexcept {
@@ -3140,7 +3140,7 @@ record_type::resolve_key_suffix(std::string_view key,
                             remaining_key.rbegin(), remaining_key.rend());
           if (remaining_key_mismatch == remaining_key.rend()
               and (field_name_mismatch == field_name->rend()
-                  or *field_name_mismatch == '.')) {
+                   or *field_name_mismatch == '.')) {
             co_yield index;
             break;
           }

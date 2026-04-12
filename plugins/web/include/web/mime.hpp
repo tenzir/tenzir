@@ -25,132 +25,194 @@ namespace tenzir::plugins::web {
 inline const char* content_type_by_file_extension(const std::string_view& ext) {
   // Function from Incomplete list of mime types from here:
   // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
-  if (ext == ".aac")
+  if (ext == ".aac") {
     return "audio/aac";
-  if (ext == ".abw")
+  }
+  if (ext == ".abw") {
     return "application/x-abiword";
-  if (ext == ".arc")
+  }
+  if (ext == ".arc") {
     return "application/octet-stream";
-  if (ext == ".avi")
+  }
+  if (ext == ".avi") {
     return "video/x-msvideo";
-  if (ext == ".azw")
+  }
+  if (ext == ".azw") {
     return "application/vnd.amazon.ebook";
-  if (ext == ".bin")
+  }
+  if (ext == ".bin") {
     return "application/octet-stream";
-  if (ext == ".bz")
+  }
+  if (ext == ".bz") {
     return "application/x-bzip";
-  if (ext == ".bz2")
+  }
+  if (ext == ".bz2") {
     return "application/x-bzip2";
-  if (ext == ".csh")
+  }
+  if (ext == ".csh") {
     return "application/x-csh";
-  if (ext == ".css")
+  }
+  if (ext == ".css") {
     return "text/css";
-  if (ext == ".csv")
+  }
+  if (ext == ".csv") {
     return "text/csv";
-  if (ext == ".doc")
+  }
+  if (ext == ".doc") {
     return "application/msword";
-  if (ext == ".docx")
+  }
+  if (ext == ".docx") {
     return "application/"
            "vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (ext == ".eot")
+  }
+  if (ext == ".eot") {
     return "application/vnd.ms-fontobject";
-  if (ext == ".epub")
+  }
+  if (ext == ".epub") {
     return "application/epub+zip";
-  if (ext == ".gif")
+  }
+  if (ext == ".gif") {
     return "image/gif";
-  if (ext == ".htm" or ext == ".html")
+  }
+  if (ext == ".htm" or ext == ".html") {
     return "text/html";
-  if (ext == ".ico")
+  }
+  if (ext == ".ico") {
     return "image/x-icon";
-  if (ext == ".ics")
+  }
+  if (ext == ".ics") {
     return "text/calendar";
-  if (ext == ".jar")
+  }
+  if (ext == ".jar") {
     return "application/java-archive";
-  if (ext == ".jpeg" or ext == ".jpg")
+  }
+  if (ext == ".jpeg" or ext == ".jpg") {
     return "image/jpeg";
-  if (ext == ".js")
+  }
+  if (ext == ".js") {
     return "application/javascript";
-  if (ext == ".json")
+  }
+  if (ext == ".json") {
     return "application/json";
-  if (ext == ".mid" or ext == ".midi")
+  }
+  if (ext == ".mid" or ext == ".midi") {
     return "audio/midi";
-  if (ext == ".mpeg")
+  }
+  if (ext == ".mpeg") {
     return "video/mpeg";
-  if (ext == ".mpkg")
+  }
+  if (ext == ".mpkg") {
     return "application/vnd.apple.installer+xml";
-  if (ext == ".odp")
+  }
+  if (ext == ".odp") {
     return "application/vnd.oasis.opendocument.presentation";
-  if (ext == ".ods")
+  }
+  if (ext == ".ods") {
     return "application/vnd.oasis.opendocument.spreadsheet";
-  if (ext == ".odt")
+  }
+  if (ext == ".odt") {
     return "application/vnd.oasis.opendocument.text";
-  if (ext == ".oga")
+  }
+  if (ext == ".oga") {
     return "audio/ogg";
-  if (ext == ".ogv")
+  }
+  if (ext == ".ogv") {
     return "video/ogg";
-  if (ext == ".ogx")
+  }
+  if (ext == ".ogx") {
     return "application/ogg";
-  if (ext == ".otf")
+  }
+  if (ext == ".otf") {
     return "font/otf";
-  if (ext == ".png")
+  }
+  if (ext == ".png") {
     return "image/png";
-  if (ext == ".pdf")
+  }
+  if (ext == ".pdf") {
     return "application/pdf";
-  if (ext == ".ppt")
+  }
+  if (ext == ".ppt") {
     return "application/vnd.ms-powerpoint";
-  if (ext == ".pptx")
+  }
+  if (ext == ".pptx") {
     return "application/"
            "vnd.openxmlformats-officedocument.presentationml.presentation";
-  if (ext == ".rar")
+  }
+  if (ext == ".rar") {
     return "archive application/x-rar-compressed";
-  if (ext == ".rtf")
+  }
+  if (ext == ".rtf") {
     return "application/rtf";
-  if (ext == ".sh")
+  }
+  if (ext == ".sh") {
     return "application/x-sh";
-  if (ext == ".svg")
+  }
+  if (ext == ".svg") {
     return "image/svg+xml";
-  if (ext == ".swf")
+  }
+  if (ext == ".swf") {
     return "application/x-shockwave-flash";
-  if (ext == ".tar")
+  }
+  if (ext == ".tar") {
     return "application/x-tar";
-  if (ext == ".tif" or ext == ".tiff")
+  }
+  if (ext == ".tif" or ext == ".tiff") {
     return "image/tiff";
-  if (ext == ".ts")
+  }
+  if (ext == ".ts") {
     return "application/typescript";
-  if (ext == ".ttf")
+  }
+  if (ext == ".ttf") {
     return "font/ttf";
-  if (ext == ".vsd")
+  }
+  if (ext == ".vsd") {
     return "application/vnd.visio";
-  if (ext == ".wav")
+  }
+  if (ext == ".wav") {
     return "audio/x-wav";
-  if (ext == ".weba")
+  }
+  if (ext == ".weba") {
     return "audio/webm";
-  if (ext == ".webm")
+  }
+  if (ext == ".webm") {
     return "video/webm";
-  if (ext == ".webp")
+  }
+  if (ext == ".webp") {
     return "image/webp";
-  if (ext == ".woff")
+  }
+  if (ext == ".woff") {
     return "font/woff";
-  if (ext == ".woff2")
+  }
+  if (ext == ".woff2") {
     return "font/woff2";
-  if (ext == ".xhtml")
+  }
+  if (ext == ".xhtml") {
     return "application/xhtml+xml";
-  if (ext == ".xls")
+  }
+  if (ext == ".xls") {
     return "application/vnd.ms-excel";
-  if (ext == ".xlsx")
+  }
+  if (ext == ".xlsx") {
     return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  if (ext == ".xml")
+  }
+  if (ext == ".xml") {
     return "application/xml";
-  if (ext == ".xul")
+  }
+  if (ext == ".xul") {
     return "application/vnd.mozilla.xul+xml";
-  if (ext == ".zip")
+  }
+  if (ext == ".zip") {
     return "archive application/zip";
-  if (ext == ".3gp")
+  }
+  if (ext == ".3gp") {
     return "video/3gpp";
-  if (ext == ".3g2")
+  }
+  if (ext == ".3g2") {
     return "video/3gpp2";
-  if (ext == ".7z")
+  }
+  if (ext == ".7z") {
     return "application/x-7z-compressed";
+  }
 
   return "application/text";
 }

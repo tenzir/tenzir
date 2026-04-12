@@ -42,30 +42,39 @@ namespace tenzir {
 caf::expected<detail::scope_guard<void (*)() noexcept>>
 create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file) {
-  if (not tenzir::detail::setup_spdlog(is_server, cmd_invocation, cfg_file))
+  if (not tenzir::detail::setup_spdlog(is_server, cmd_invocation, cfg_file)) {
     return caf::make_error(tenzir::ec::unspecified);
+  }
   return {detail::scope_guard(tenzir::detail::shutdown_spdlog)};
 }
 
 /// Convert a log level to an int.
 /// @note x is passed by value because it is modified.
 int loglevel_to_int(std::string x, int default_value) {
-  for (auto& ch : x)
+  for (auto& ch : x) {
     ch = std::tolower(ch);
-  if (x == "quiet")
+  }
+  if (x == "quiet") {
     return TENZIR_LOG_LEVEL_QUIET;
-  if (x == "error")
+  }
+  if (x == "error") {
     return TENZIR_LOG_LEVEL_ERROR;
-  if (x == "warning")
+  }
+  if (x == "warning") {
     return TENZIR_LOG_LEVEL_WARNING;
-  if (x == "info")
+  }
+  if (x == "info") {
     return TENZIR_LOG_LEVEL_INFO;
-  if (x == "verbose")
+  }
+  if (x == "verbose") {
     return TENZIR_LOG_LEVEL_VERBOSE;
-  if (x == "debug")
+  }
+  if (x == "debug") {
     return TENZIR_LOG_LEVEL_DEBUG;
-  if (x == "trace")
+  }
+  if (x == "trace") {
     return TENZIR_LOG_LEVEL_TRACE;
+  }
   return default_value;
 }
 
@@ -147,18 +156,21 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
   // Helper to set the color mode
   spdlog::color_mode log_color = [&]() -> spdlog::color_mode {
     auto config_value = caf::get_or(cfg_file, "tenzir.console", "automatic");
-    if (config_value == "automatic")
+    if (config_value == "automatic") {
       return spdlog::color_mode::automatic;
-    if (config_value == "always")
+    }
+    if (config_value == "always") {
       return spdlog::color_mode::always;
+    }
 
     return spdlog::color_mode::never;
   }();
   auto log_file = caf::get_or(cfg_file, "tenzir.log-file",
                               std::string{defaults::logger::log_file});
   auto cmdline_log_file = caf::get_if<std::string>(&cfg_cmd, "tenzir.log-file");
-  if (cmdline_log_file)
+  if (cmdline_log_file) {
     log_file = *cmdline_log_file;
+  }
   if (is_server) {
     if (log_file == defaults::logger::log_file
         and tenzir_file_verbosity != TENZIR_LOG_LEVEL_QUIET) {
@@ -182,13 +194,15 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     // Please note, client file does not go to state_directory!
     auto client_log_file
       = caf::get_if<std::string>(&cfg_cmd, "tenzir.client-log-file");
-    if (not client_log_file)
+    if (not client_log_file) {
       client_log_file
         = caf::get_if<std::string>(&cfg_file, "tenzir.client-log-file");
-    if (client_log_file)
+    }
+    if (client_log_file) {
       log_file = *client_log_file;
-    else // If there is no client log file, turn off file logging
+    } else { // If there is no client log file, turn off file logging
       tenzir_file_verbosity = TENZIR_LOG_LEVEL_QUIET;
+    }
   }
   auto default_queue_size = is_server ? defaults::logger::server_queue_size
                                       : defaults::logger::client_queue_size;
@@ -209,7 +223,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
         = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
       return stderr_sink;
     } else if (sink_type == "journald") {
-#if !TENZIR_ENABLE_JOURNALD_LOGGING
+#if ! TENZIR_ENABLE_JOURNALD_LOGGING
       fmt::print(stderr,
                  "failed to start logger; tenzir.console-sink 'journald' "
                  "required Tenzir built with systemd support\n");
@@ -230,8 +244,9 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     }
     return nullptr;
   }();
-  if (not console_sink)
+  if (not console_sink) {
     return false;
+  }
   auto console_format
     = caf::get_or(cfg_file, "tenzir.console-format",
                   std::string{defaults::logger::console_format});

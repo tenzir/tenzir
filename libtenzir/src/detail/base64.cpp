@@ -67,16 +67,18 @@ std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len) {
   int j = 0;
   while (len-- and *in != '=') {
     auto const v = inverse[*in];
-    if (v == -1)
+    if (v == -1) {
       break;
+    }
     ++in;
     c4[i] = v;
     if (++i == 4) {
       c3[0] = (c4[0] << 2) + ((c4[1] & 0x30) >> 4);
       c3[1] = ((c4[1] & 0xf) << 4) + ((c4[2] & 0x3c) >> 2);
       c3[2] = ((c4[2] & 0x3) << 6) + c4[3];
-      for (i = 0; i < 3; i++)
+      for (i = 0; i < 3; i++) {
         *out++ = c3[i];
+      }
       i = 0;
     }
   }
@@ -84,8 +86,9 @@ std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len) {
     c3[0] = (c4[0] << 2) + ((c4[1] & 0x30) >> 4);
     c3[1] = ((c4[1] & 0xf) << 4) + ((c4[2] & 0x3c) >> 2);
     c3[2] = ((c4[2] & 0x3) << 6) + c4[3];
-    for (j = 0; j < i - 1; j++)
+    for (j = 0; j < i - 1; j++) {
       *out++ = c3[j];
+    }
   }
   return {out - static_cast<char*>(dst),
           in - reinterpret_cast<unsigned char const*>(src)};

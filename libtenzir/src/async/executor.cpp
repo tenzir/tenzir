@@ -835,8 +835,7 @@ private:
   }
 
   auto ensure_await_task() -> void {
-    if (await_task_pending_
-        or base_op().state() == OperatorState::done) {
+    if (await_task_pending_ or base_op().state() == OperatorState::done) {
       return;
     }
     await_task_pending_ = true;

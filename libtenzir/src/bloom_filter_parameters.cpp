@@ -22,14 +22,18 @@ namespace tenzir {
 
 std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
   // Check basic invariants first.
-  if (xs.m and *xs.m <= 0)
+  if (xs.m and *xs.m <= 0) {
     return {};
-  if (xs.n and *xs.n <= 0)
+  }
+  if (xs.n and *xs.n <= 0) {
     return {};
-  if (xs.k and *xs.k <= 0)
+  }
+  if (xs.k and *xs.k <= 0) {
     return {};
-  if (xs.p and (*xs.p < 0 or *xs.p > 1))
+  }
+  if (xs.p and (*xs.p < 0 or *xs.p > 1)) {
     return {};
+  }
   // Test if we can compute the missing parameters.
   static const double ln2 = std::log(2.0);
   if (xs.m and xs.n and xs.k and not xs.p) {
@@ -81,8 +85,9 @@ std::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
   bloom_filter_parameters xs;
   xs.n = 0;
   xs.p = 0;
-  if (parser(x, *xs.n, *xs.p))
+  if (parser(x, *xs.n, *xs.p)) {
     return xs;
+  }
   return {};
 }
 
@@ -93,7 +98,7 @@ bool operator==(const bloom_filter_parameters& x,
 
 bool operator!=(const bloom_filter_parameters& x,
                 const bloom_filter_parameters& y) {
-  return not (x == y);
+  return not(x == y);
 }
 
 } // namespace tenzir

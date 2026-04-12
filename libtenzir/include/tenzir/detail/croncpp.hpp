@@ -240,7 +240,7 @@ inline bool operator==(cronexpr const& e1, cronexpr const& e2) {
 }
 
 inline bool operator!=(cronexpr const& e1, cronexpr const& e2) {
-  return not (e1 == e2);
+  return not(e1 == e2);
 }
 
 inline std::string to_string(cronexpr const& cex) {

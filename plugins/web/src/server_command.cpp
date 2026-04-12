@@ -389,7 +389,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         // Catch the common mistake of sending a GET request to a POST endpoint.
         if (http_path.starts_with("/api")
             and std::find(api_routes.begin(), api_routes.end(), http_path)
-                 != api_routes.end()) {
+                  != api_routes.end()) {
           return req->create_response(restinio::status_not_found())
             .set_body("invalid request method\n")
             .done();
@@ -405,7 +405,8 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
           return restinio::request_rejected();
         }
         // Map e.g. /status -> /status.html on disk.
-        if (not exists(normalized_path) and not normalized_path.has_extension()) {
+        if (not exists(normalized_path)
+            and not normalized_path.has_extension()) {
           normalized_path.replace_extension("html");
         }
         if (not exists(normalized_path)) {

@@ -155,7 +155,8 @@ std::optional<caf::timespan> calculate_remaining_time(
 bool should_retry(const caf::error& err,
                   const std::optional<caf::timespan>& remaining_time,
                   caf::timespan delay) {
-  return remaining_time and *remaining_time > delay and is_recoverable_error(err);
+  return remaining_time and *remaining_time > delay
+         and is_recoverable_error(err);
 }
 
 std::string format_time(caf::timespan timespan) {

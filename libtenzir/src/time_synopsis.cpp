@@ -24,8 +24,9 @@ synopsis_ptr time_synopsis::clone() const {
 }
 
 bool time_synopsis::equals(const synopsis& other) const noexcept {
-  if (typeid(other) != typeid(time_synopsis))
+  if (typeid(other) != typeid(time_synopsis)) {
     return false;
+  }
   auto& dref = static_cast<const time_synopsis&>(other);
   return type() == dref.type() and min() == dref.min() and max() == dref.max();
 }

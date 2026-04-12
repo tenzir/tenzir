@@ -22,15 +22,17 @@ struct string_printer : printer_base<string_printer> {
   bool print(Iterator& out, std::string_view str) const {
     auto f = str.begin();
     auto l = str.end();
-    while (f != l)
-      if (not printers::any.print(out, *f++))
+    while (f != l) {
+      if (not printers::any.print(out, *f++)) {
         return false;
+      }
+    }
     return true;
   }
 };
 
 template <size_t N>
-struct printer_registry<const char(&)[N]> {
+struct printer_registry<const char (&)[N]> {
   using type = string_printer;
 };
 

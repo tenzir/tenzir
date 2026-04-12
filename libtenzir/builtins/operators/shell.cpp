@@ -563,9 +563,8 @@ public:
       // Interactive source-mode shells must stay in the foreground process
       // group when inheriting the controlling terminal.
       auto process_group_leader = stdin_mode != PipeMode::inherit;
-      subprocess_ = co_await spawn_shell_subprocess(std::move(*command),
-                                                    stdin_mode,
-                                                    process_group_leader);
+      subprocess_ = co_await spawn_shell_subprocess(
+        std::move(*command), stdin_mode, process_group_leader);
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
       ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
       lifecycle_ = Lifecycle::running;

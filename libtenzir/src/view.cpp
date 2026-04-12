@@ -42,10 +42,12 @@ bool operator==(pattern_view lhs, pattern_view rhs) noexcept {
 std::strong_ordering operator<=>(pattern_view lhs, pattern_view rhs) noexcept {
   // This is a polyfill for std::lexicographical_compare_threeway
   while (not lhs.pattern_.empty() and not rhs.pattern_.empty()) {
-    if (lhs.pattern_[0] < rhs.pattern_[0])
+    if (lhs.pattern_[0] < rhs.pattern_[0]) {
       return std::strong_ordering::less;
-    if (lhs.pattern_[0] > rhs.pattern_[0])
+    }
+    if (lhs.pattern_[0] > rhs.pattern_[0]) {
       return std::strong_ordering::greater;
+    }
     lhs.pattern_ = lhs.pattern_.substr(1);
     rhs.pattern_ = rhs.pattern_.substr(1);
   }
@@ -61,10 +63,11 @@ bool is_equal(const data& x, const data_view& y) {
     [&](const auto& lhs, const auto& rhs) {
       using lhs_type = std::decay_t<decltype(lhs)>;
       using rhs_type = std::decay_t<decltype(rhs)>;
-      if constexpr (std::is_same_v<view<lhs_type>, rhs_type>)
+      if constexpr (std::is_same_v<view<lhs_type>, rhs_type>) {
         return lhs == rhs;
-      else
+      } else {
         return false;
+      }
     },
     [&](const blob& lhs, const view<blob>& rhs) {
       return std::ranges::equal(make_view(lhs), rhs);
@@ -145,8 +148,8 @@ default_record_view::size_type default_record_view::size() const noexcept {
 
 data_view make_view(const data& x) {
   return match(x, [](const auto& z) {
-      return make_data_view(z);
-    });
+    return make_data_view(z);
+  });
 }
 
 // -- materialization ----------------------------------------------------------
@@ -179,9 +182,11 @@ auto materialize(std::pair<std::string_view, data_view> x) {
 template <class Result, class T>
 Result materialize_container(const T& xs) {
   Result result;
-  if (xs)
-    for (auto x : *xs)
+  if (xs) {
+    for (auto x : *xs) {
       result.insert(result.end(), materialize(x));
+    }
+  }
   return result;
 }
 
@@ -201,8 +206,8 @@ record materialize(record_view_handle xs) {
 
 data materialize(data_view x) {
   return match(x, [](auto y) {
-      return data{materialize(y)};
-    });
+    return data{materialize(y)};
+  });
 }
 
 // WARNING: making changes to the logic of this function requires adapting the
@@ -217,8 +222,9 @@ bool type_check(const type& x, const data_view& y) {
       return not t.field(u).empty();
     },
     [&](const list_type& t, const view<list>& u) {
-      if (u.empty())
+      if (u.empty()) {
         return true;
+      }
       const auto vt = t.value_type();
       auto it = u.begin();
       const auto check = [&](const auto& d) noexcept {
@@ -235,8 +241,9 @@ bool type_check(const type& x, const data_view& y) {
       return false;
     },
     [&](const map_type& t, const view<map>& u) {
-      if (u.empty())
+      if (u.empty()) {
         return true;
+      }
       const auto kt = t.key_type();
       const auto vt = t.value_type();
       auto it = u.begin();
@@ -254,12 +261,14 @@ bool type_check(const type& x, const data_view& y) {
       return false;
     },
     [&](const record_type& t, const view<record>& u) {
-      if (u.size() != t.num_fields())
+      if (u.size() != t.num_fields()) {
         return false;
+      }
       for (size_t i = 0; const auto& [k, v] : u) {
         const auto field = t.field(i++);
-        if (field.name != k or type_check(field.type, v))
+        if (field.name != k or type_check(field.type, v)) {
           return false;
+        }
       }
       return true;
     },
@@ -284,8 +293,9 @@ bool type_check(const type& x, const data_view& y) {
 data_view to_canonical(const type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<enumeration>& x, const enumeration_type& t) -> data_view {
-      if (auto result = t.field(materialize(x)); not result.empty())
+      if (auto result = t.field(materialize(x)); not result.empty()) {
         return result;
+      }
       return caf::none;
     },
     [&](auto&, auto&) {
@@ -298,8 +308,9 @@ data_view to_canonical(const type& t, const data_view& x) {
 data_view to_internal(const type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<std::string>& s, const enumeration_type& t) -> data_view {
-      if (auto key = t.resolve(s))
+      if (auto key = t.resolve(s)) {
         return detail::narrow_cast<enumeration>(*key);
+      }
       return caf::none;
     },
     [&](auto&, auto&) {

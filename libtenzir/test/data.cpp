@@ -139,23 +139,23 @@ TEST("relational_operators") {
   data d1;
   data d2;
   CHECK(d1 == d2);
-  CHECK(not (d1 < d2));
+  CHECK(not(d1 < d2));
   CHECK(d1 <= d2);
   CHECK(d1 >= d2);
-  CHECK(not (d1 > d2));
+  CHECK(not(d1 > d2));
 
   d2 = int64_t{42};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
-  CHECK(not (d1 >= d2));
-  CHECK(not (d1 > d2));
+  CHECK(not(d1 >= d2));
+  CHECK(not(d1 > d2));
 
   d1 = int64_t{42};
   d2 = caf::none;
   CHECK(d1 != d2);
-  CHECK(not (d1 < d2));
-  CHECK(not (d1 <= d2));
+  CHECK(not(d1 < d2));
+  CHECK(not(d1 <= d2));
   CHECK(d1 >= d2);
   CHECK(d1 > d2);
 
@@ -163,8 +163,8 @@ TEST("relational_operators") {
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
-  CHECK(not (d1 >= d2));
-  CHECK(not (d1 > d2));
+  CHECK(not(d1 >= d2));
+  CHECK(not(d1 > d2));
 }
 
 TEST("evaluation") {

@@ -183,7 +183,7 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
   }
   if (not t
       and (zeek_type.starts_with("vector") or zeek_type.starts_with("set")
-          or zeek_type.starts_with("table"))) {
+           or zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
     // If this will ever change, we'll have to enhance this simple parser.
@@ -424,8 +424,8 @@ struct zeek_printer {
         // this should be fine for now.
         auto c = static_cast<unsigned char>(b);
         auto high = (c & 0b1000'0000) != 0;
-        if (high || std::iscntrl(c) || c == printer.sep
-            || c == printer.set_sep) {
+        if (high or std::iscntrl(c) or c == printer.sep
+            or c == printer.set_sep) {
           auto hex = detail::byte_to_hex(c);
           *out++ = '\\';
           *out++ = 'x';

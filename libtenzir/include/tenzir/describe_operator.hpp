@@ -18,7 +18,8 @@ struct operator_description_builder {
   auto positional(std::string name,
                   std::string T::*) and -> operator_description_builder<T>;
 
-  auto named(std::string name, bool T::*) and -> operator_description_builder<T>;
+  auto
+  named(std::string name, bool T::*) and -> operator_description_builder<T>;
 
   auto
   named(std::string name, duration T::*) and -> operator_description_builder<T>;

@@ -197,7 +197,8 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
       return res.error();
     }
     pipe = std::move(*res);
-  } else if (out->is<table_slice>() and not config.implicit_events_sink.empty()) {
+  } else if (out->is<table_slice>()
+             and not config.implicit_events_sink.empty()) {
     auto res = add_implicit("events sink", std::move(pipe), dh,
                             config.implicit_events_sink);
     if (not res) {

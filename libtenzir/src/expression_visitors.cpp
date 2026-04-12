@@ -308,14 +308,14 @@ caf::expected<void> validator::operator()(const predicate& p) {
 caf::expected<void>
 validator::operator()(const meta_extractor& ex, const data& d) {
   if (ex.kind == meta_extractor::schema
-      and not (is<std::string>(d) or is<pattern>(d))) {
+      and not(is<std::string>(d) or is<pattern>(d))) {
     return caf::make_error(ec::syntax_error,
                            "schema meta extractor requires string or pattern "
                            "operand",
                            "#schema", op_, d);
   }
   if (ex.kind == meta_extractor::schema_id
-      and not (is<std::string>(d) or is<pattern>(d))) {
+      and not(is<std::string>(d) or is<pattern>(d))) {
     return caf::make_error(ec::syntax_error,
                            "schema_id meta extractor requires string or "
                            "pattern operand",
@@ -323,10 +323,10 @@ validator::operator()(const meta_extractor& ex, const data& d) {
   }
   if (ex.kind == meta_extractor::import_time) {
     if (not is<time>(d)
-        or not (op_ == relational_operator::less
-             or op_ == relational_operator::less_equal
-             or op_ == relational_operator::greater
-             or op_ == relational_operator::greater_equal)) {
+        or not(op_ == relational_operator::less
+               or op_ == relational_operator::less_equal
+               or op_ == relational_operator::greater
+               or op_ == relational_operator::greater_equal)) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("import_time attribute extractor only "
                                          "supports time comparisons "

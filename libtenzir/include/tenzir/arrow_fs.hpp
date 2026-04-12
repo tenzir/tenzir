@@ -278,15 +278,18 @@ protected:
   // Create the filesystem from the resolved URI.
   virtual auto
   make_filesystem(arrow::util::Uri const& uri, diagnostic_handler& dh)
-    -> Task<failure_or<MakeFilesystemResult>> = 0;
+    -> Task<failure_or<MakeFilesystemResult>>
+    = 0;
 
   /// SDK specific calls to remove files that bypass Arrow's directory markers.
-  virtual auto remove_file(std::string const& path,
-                           diagnostic_handler& dh) const -> Task<void> = 0;
+  virtual auto
+  remove_file(std::string const& path, diagnostic_handler& dh) const
+    -> Task<void>
+    = 0;
 
   /// Resolves the URL secret and returns the parsed URI.
-  virtual auto resolve_url(OpCtx& ctx)
-    -> Task<failure_or<arrow::util::Uri>> = 0;
+  virtual auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>>
+    = 0;
 
   auto filesystem() const -> std::shared_ptr<arrow::fs::FileSystem> const& {
     return fs_;

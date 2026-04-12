@@ -22,14 +22,16 @@ namespace {
 auto get_process_statistics() -> caf::expected<record> {
   auto result = record{};
   auto os = os::make();
-  if (not os)
+  if (not os) {
     return caf::make_error(ec::system_error, "failed to create os");
+  }
   auto process = os->current_process();
   auto assign_optional = [&result](std::string_view key, auto value) {
-    if (value)
+    if (value) {
       result[key] = *value;
-    else
+    } else {
       result[key] = caf::none;
+    }
   };
   assign_optional("swap_space_usage", process.swap);
   assign_optional("open_fds", process.open_fds);

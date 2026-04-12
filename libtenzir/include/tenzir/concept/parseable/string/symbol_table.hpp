@@ -46,8 +46,9 @@ struct symbol_table : parser_base<symbol_table<T>> {
         }
       }
     }
-    if (match == symbols.end())
+    if (match == symbols.end()) {
       return false;
+    }
     a = match->second;
     std::advance(f, max_len);
     return true;

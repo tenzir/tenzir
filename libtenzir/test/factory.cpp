@@ -92,7 +92,7 @@ WITH_FIXTURE(fixture) {
   TEST("convenient interface for conrete type registration") {
     CHECK_EQUAL(F::get<concrete>(), nullptr);     // not yet registered
     CHECK(F::add<concrete>());                    // register first
-    CHECK(not F::add<concrete>());                  // works only once per key
+    CHECK(not F::add<concrete>());                // works only once per key
     CHECK_NOT_EQUAL(F::get<concrete>(), nullptr); // now we have function
   }
 

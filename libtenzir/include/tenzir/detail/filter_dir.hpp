@@ -36,20 +36,23 @@ filter_dir(const std::filesystem::path& root_dir,
   std::vector<std::filesystem::path> result;
   std::error_code err{};
   auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
-  if (err)
+  if (err) {
     return caf::make_error(ec::filesystem_error, err.message());
+  }
   auto begin = std::filesystem::begin(dir);
   const auto end = std::filesystem::end(dir);
   while (begin != end) {
     const auto current_path = begin->path();
     const auto current_depth = static_cast<size_t>(begin.depth());
-    if (current_depth >= max_recursion)
+    if (current_depth >= max_recursion) {
       return caf::make_error(ec::recursion_limit_reached,
                              fmt::format("reached recursion limit when "
                                          "filtering directory {}",
                                          root_dir));
-    if (not filter or filter(current_path))
+    }
+    if (not filter or filter(current_path)) {
       result.push_back(current_path);
+    }
     ++begin;
   }
   std::sort(result.begin(), result.end());

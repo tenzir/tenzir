@@ -102,7 +102,8 @@ struct dollar_var {
 
   friend auto inspect(auto& f, dollar_var& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("`{}`", x.id.name) and dbg->append(" -> {:?}", x.let)
+      return dbg->fmt_value("`{}`", x.id.name)
+             and dbg->append(" -> {:?}", x.let)
              and dbg->append(" @ {:?}", x.id.location);
     }
     return f.object(x).fields(f.field("id", x.id), f.field("let", x.let));
