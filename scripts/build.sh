@@ -23,7 +23,7 @@ else
   latest_mtime=0
   while IFS= read -r -d '' f; do
     m=$(stat "${stat_mtime_fmt[@]}" "$f")
-    if (( m > latest_mtime )); then
+    if ((m > latest_mtime)); then
       latest_mtime=$m
       latest_cache=$f
     fi
