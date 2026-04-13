@@ -1033,10 +1033,10 @@ public:
                          std::move(name));
   }
 
-  auto make_io_executor(OpId id)
+  auto make_io_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
-    return wrap_executor<folly::IOExecutor>(std::move(id),
-                                            folly::getGlobalIOExecutor());
+    return wrap_executor<folly::IOExecutor>(
+      std::move(id), folly::getGlobalIOExecutor(), std::move(name));
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -1095,7 +1095,7 @@ private:
                      std::string name = {})
     -> folly::Executor::KeepAlive<Handle> {
     auto alloc_name = exec_node_name_guard::name_type{};
-    std::copy_n(id.value.begin(), std::min(id.value.size(), alloc_name.size()),
+    std::copy_n(name.begin(), std::min(name.size(), alloc_name.size()),
                 alloc_name.begin());
     auto stats = Option<Arc<ExecutorStats>>{};
     auto lock = std::scoped_lock{mutex_};
@@ -1109,7 +1109,8 @@ private:
       }
       if (stats.is_none()) {
         stats = Arc<ExecutorStats>{std::in_place};
-        executors_.push_back(ExecutorProfile{id, *stats, std::move(name)});
+        executors_.push_back(
+          ExecutorProfile{std::move(id), *stats, std::move(name)});
       }
     }
     return ProfilingExecutor<Handle>::make(std::move(inner), std::move(stats),

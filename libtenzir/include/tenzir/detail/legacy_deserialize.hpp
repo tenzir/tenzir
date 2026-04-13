@@ -19,6 +19,7 @@
 #include <caf/detail/ieee_754.hpp>
 #include <caf/detail/network_order.hpp>
 #include <caf/expected.hpp>
+#include <caf/make_counted.hpp>
 
 #include <array>
 #include <cstddef>

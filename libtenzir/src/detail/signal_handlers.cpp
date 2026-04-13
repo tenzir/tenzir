@@ -324,7 +324,7 @@ __attribute__((constructor(102))) void early_install_signal_handlers() {
 
 // Use a destructor attribute with low priority to uninstall our custom signal
 // handler late.
-__attribute__((destructor(65535))) void uninstall_signal_handlers() {
+__attribute__((destructor(65534))) void uninstall_signal_handlers() {
   stack_t ss{};
   sigaltstack(nullptr, &ss);
   std::free(ss.ss_sp);

@@ -12,6 +12,7 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <caf/detail/pretty_type_name.hpp>
@@ -99,7 +100,7 @@ public:
         } else if constexpr (std::same_as<T, std::uint64_t>) {
           name = "uint64";
         } else {
-          name = caf::detail::pretty_type_name(typeid(T));
+          name = detail::pretty_type_name(typeid(T));
           auto index = name.find_last_of('.');
           if (index != std::string::npos) {
             name = name.substr(index + 1);
@@ -155,7 +156,7 @@ public:
       auto success = false;
       auto check = [&]<size_t I>() -> bool {
         using type = std::variant_alternative_t<I, std::variant<Ts...>>;
-        if (caf::detail::pretty_type_name(typeid(type)) != type_name) {
+        if (detail::pretty_type_name(typeid(type)) != type_name) {
           return false;
         }
         auto& y = x.template emplace<I>();
@@ -180,9 +181,8 @@ public:
             return apply_compressed_index(f, idx) && f.apply(y);
           }
           return f.begin_associative_array(1) && f.begin_key_value_pair()
-                 && f.value(caf::detail::pretty_type_name(typeid(y)))
-                 && f.apply(y) && f.end_key_value_pair()
-                 && f.end_associative_array();
+                 && f.value(detail::pretty_type_name(typeid(y))) && f.apply(y)
+                 && f.end_key_value_pair() && f.end_associative_array();
         },
         x);
     }

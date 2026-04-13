@@ -10,6 +10,7 @@
 
 #include "caf/detail/pretty_type_name.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/merge_lists.hpp"
 #include "tenzir/variant_traits.hpp"
 
@@ -76,12 +77,12 @@ unpack_config_list_to_vector(const caf::config_value& cfg_value) {
   for (const auto& e : *list) {
     const auto* val = try_as<T>(&e);
     if (!val) {
-      return caf::make_error(
-        ec::invalid_configuration,
-        fmt::format("type mismatch while unpacking config list: expected {}, "
-                    "got {}",
-                    caf::detail::pretty_type_name(typeid(T)),
-                    caf::detail::pretty_type_name(typeid(e))));
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("type mismatch while unpacking config "
+                                         "list: expected {}, "
+                                         "got {}",
+                                         detail::pretty_type_name(typeid(T)),
+                                         detail::pretty_type_name(typeid(e))));
     }
     ret.push_back(*val);
   }

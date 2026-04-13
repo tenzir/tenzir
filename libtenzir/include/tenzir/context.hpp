@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "tenzir/async/fetch_node.hpp"
+#include "tenzir/async/mail.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -258,6 +261,23 @@ class context_factory_plugin
 public:
   using context_plugin::invocation;
 
+  static auto validate_name(const located<std::string>& name,
+                            diagnostic_handler& dh) -> failure_or<void> {
+    const auto is_valid_char = [](char ch) {
+      return static_cast<bool>(std::isalnum(static_cast<unsigned char>(ch)))
+             or ch == '-' or ch == '_';
+    };
+    if (not std::ranges::all_of(name.inner, is_valid_char)) {
+      diagnostic::error("context name contains invalid characters")
+        .primary(name)
+        .hint("only alphanumeric characters, hyphens, and underscores are "
+              "allowed")
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
 private:
   auto name() const -> std::string final {
     return fmt::format("context::create_{}",
@@ -271,21 +291,102 @@ private:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> final {
     TRY(auto result, this->make_context(std::move(inv), ctx));
-    const auto is_valid_char = [](char ch) {
-      return static_cast<bool>(std::isalnum(static_cast<unsigned char>(ch)))
-             or ch == '-' or ch == '_';
-    };
-    if (not std::ranges::all_of(result.name.inner, is_valid_char)) {
-      diagnostic::error("context name contains invalid characters")
-        .primary(result.name)
-        .hint("only alphanumeric characters, hyphens, and underscores are "
-              "allowed")
-        .emit(ctx);
-      return failure::promise();
-    }
+    TRY(validate_name(result.name, ctx));
     return std::make_unique<context_create_operator<Name>>(
       result.name, check(result.ctx->save()));
   }
+};
+
+template <detail::string_literal Name, class Concrete>
+class ContextCreateOperatorCrtp;
+
+template <detail::string_literal Name, class Concrete>
+class ContextFactoryPluginCrtp : public virtual context_factory_plugin<Name>,
+                                 public virtual OperatorPlugin {
+public:
+  using CreateOperator = ContextCreateOperatorCrtp<Name, Concrete>;
+};
+
+template <detail::string_literal Name, class Concrete>
+class ContextCreateOperatorCrtp : public Operator<void, void> {
+public:
+  using Args = Concrete::Args;
+  ContextCreateOperatorCrtp(Args args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (done_) {
+      co_return;
+    }
+    auto maybe_actor = co_await fetch_actor_from_node<context_create_actor>(
+      "context-manager", args_.operator_location, ctx.actor_system(), ctx.dh());
+    done_ |= maybe_actor.is_error();
+    if (maybe_actor) {
+      context_manager_ = std::move(*maybe_actor);
+    }
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+      co_return Empty{};
+    }
+    static_assert(
+      requires(Args args, diagnostic_handler& dh) {
+        {
+          Concrete::make_context(args, dh)
+        } -> std::same_as<failure_or<make_context_result>>;
+      }, "Concrete context must implement make_context.");
+    auto r = Concrete::make_context(args_, dh);
+    if (not r) {
+      co_return Empty{};
+    }
+    auto& [name, ctx] = *r;
+    TENZIR_ASSERT(ctx);
+    auto saved = ctx->save();
+    if (not saved) {
+      diagnostic::error(saved.error())
+        .primary(name)
+        .note("failed to serialize context")
+        .emit(dh);
+      co_return Empty{};
+    }
+    TENZIR_ASSERT(context_manager_);
+    auto res = co_await async_mail(atom::create_v, name.inner,
+                                   std::string{Name.str()}, std::move(*saved))
+                 .request(context_manager_);
+    if (not res) {
+      diagnostic::error(res.error())
+        .primary(name)
+        .note("failed to create "
+              "context")
+        .emit(dh);
+    }
+    co_return Empty{};
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    done_ = true;
+    TENZIR_ASSERT(result.try_as<Empty>());
+    TENZIR_UNUSED(ctx);
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+private:
+  Args args_;
+  context_create_actor context_manager_;
+  bool done_ = false;
 };
 
 namespace plugins {

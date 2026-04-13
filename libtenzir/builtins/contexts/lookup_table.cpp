@@ -46,6 +46,11 @@ namespace tenzir::plugins::lookup_table {
 
 namespace {
 
+struct LookupTableArgs {
+  located<std::string> name;
+  location operator_location;
+};
+
 template <typename T>
 auto try_lossless_cast(T x) -> std::optional<T> {
   return x;
@@ -885,7 +890,7 @@ struct v1_loader : public context_loader {
   }
 };
 
-class plugin : public virtual context_factory_plugin<"lookup-table"> {
+class plugin : public virtual ContextFactoryPluginCrtp<"lookup-table", plugin> {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     return caf::none;
@@ -894,6 +899,29 @@ class plugin : public virtual context_factory_plugin<"lookup-table"> {
   auto make_context(context_parameter_map) const
     -> caf::expected<std::unique_ptr<context>> override {
     return std::make_unique<lookup_table_context>();
+  }
+
+public:
+  using Args = LookupTableArgs;
+
+  auto describe() const -> Description override {
+    auto d = Describer<LookupTableArgs, CreateOperator>{};
+    auto name_arg = d.positional("name", &LookupTableArgs::name);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto name, ctx.get(name_arg));
+      std::ignore = validate_name(name, ctx);
+      return {};
+    });
+    d.operator_location(&LookupTableArgs::operator_location);
+    return d.without_optimize();
+  }
+
+  static auto make_context(LookupTableArgs args, diagnostic_handler&)
+    -> failure_or<make_context_result> {
+    return make_context_result{
+      std::move(args.name),
+      std::make_unique<lookup_table_context>(),
+    };
   }
 
   auto make_context(operator_factory_invocation inv, session ctx) const

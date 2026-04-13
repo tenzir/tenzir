@@ -33,6 +33,12 @@ namespace tenzir {
 // Forward declaration to avoid including registry.hpp.
 auto global_registry() -> std::shared_ptr<const registry>;
 
+namespace {
+
+auto demangle_op_type(std::type_info const& type) -> std::string;
+
+} // namespace
+
 /// Transforms a `Push<OperatorMsg<T>>` into a `Push<T>`.
 template <class T>
 class OpPushWrapper final : public Push<T> {
@@ -223,9 +229,9 @@ public:
     return inner_.make_executor(std::move(id), std::move(name));
   }
 
-  auto make_io_executor(OpId id)
+  auto make_io_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
-    return inner_.make_io_executor(std::move(id));
+    return inner_.make_io_executor(std::move(id), std::move(name));
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
@@ -817,7 +823,8 @@ private:
 
   auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     if (not io_executor_) {
-      io_executor_ = exec_ctx_.make_io_executor(id_);
+      io_executor_
+        = exec_ctx_.make_io_executor(id_, demangle_op_type(typeid(base_op())));
     }
     return io_executor_;
   }
@@ -828,7 +835,8 @@ private:
   }
 
   auto ensure_await_task() -> void {
-    if (await_task_pending_) {
+    if (await_task_pending_
+        or base_op().state() == OperatorState::done) {
       return;
     }
     await_task_pending_ = true;
