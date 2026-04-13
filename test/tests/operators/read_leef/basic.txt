@@ -1,0 +1,11 @@
+{
+  leef_version: "1.0",
+  vendor: "Vendor",
+  product_name: "Product",
+  product_version: "1.0",
+  event_class_id: "42",
+  attributes: {
+    src: "foo",
+    msg: "bar",
+  },
+}
