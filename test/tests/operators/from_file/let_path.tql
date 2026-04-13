@@ -1,0 +1,6 @@
+from_file env("FILE_ROOT") + "/single/data.json" {
+  read_json
+  source_path = $file.path
+}
+select source_path
+source_path = source_path.replace(env("FILE_ROOT"), "<ROOT>")

@@ -1,0 +1,3 @@
+{
+  source_path: "<ROOT>/single/data.json",
+}

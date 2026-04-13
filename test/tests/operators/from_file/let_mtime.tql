@@ -1,0 +1,5 @@
+from_file env("FILE_ROOT") + "/single/data.json" {
+  read_json
+  has_mtime = $file.mtime != null
+}
+select has_mtime

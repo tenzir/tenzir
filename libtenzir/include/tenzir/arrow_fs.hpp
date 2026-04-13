@@ -13,6 +13,7 @@
 #include "tenzir/glob.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/let_id.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -40,6 +41,7 @@ struct ArrowFsArgs {
   Option<ast::lambda_expr> rename;
   Option<duration> max_age;
   located<ir::pipeline> pipe;
+  let_id file_info;
 
   /// Registers the common ArrowFsArgs fields on a Describer.
   template <class Args, class... Impls>
@@ -52,7 +54,8 @@ struct ArrowFsArgs {
       = d.template named<ast::lambda_expr>("rename", &ArrowFsArgs::rename);
     auto max_age_arg
       = d.template named<duration>("max_age", &ArrowFsArgs::max_age);
-    auto pipe_arg = d.pipeline(&ArrowFsArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ArrowFsArgs::pipe, {{"file", &ArrowFsArgs::file_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
@@ -95,7 +98,8 @@ struct ArrowFsArgs {
       = d.template named<ast::lambda_expr>("rename", &ArrowFsArgs::rename);
     auto max_age_arg
       = d.template named<duration>("max_age", &ArrowFsArgs::max_age);
-    auto pipe_arg = d.pipeline(&ArrowFsArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ArrowFsArgs::pipe, {{"file", &ArrowFsArgs::file_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
@@ -152,7 +156,7 @@ inline auto arrow_future_to_task(arrow::Future<arrow::internal::Empty> future)
 /// Persisted state for a file that is pending or being actively processed.
 struct TrackedFile {
   std::string path;
-  int64_t mtime_ns = 0;
+  Option<time> mtime;
   int64_t offset = 0;
   uint64_t job_id = 0;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
@@ -160,7 +164,7 @@ struct TrackedFile {
   friend auto inspect(auto& f, TrackedFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
                               f.field("offset", x.offset),
-                              f.field("mtime_ns", x.mtime_ns),
+                              f.field("mtime", x.mtime),
                               f.field("job_id", x.job_id));
   }
 };
@@ -195,17 +199,26 @@ using FileSystemPtr = std::shared_ptr<arrow::fs::FileSystem>;
 auto split_at_first_slash(std::string_view path)
   -> std::pair<std::string, std::string>;
 
+/// Converts an Arrow filesystem TimePoint to an Option<time>.
+/// Returns None for Arrow's kNoTime sentinel.
+inline auto to_option_time(arrow::fs::TimePoint tp) -> Option<time> {
+  if (tp == arrow::fs::kNoTime) {
+    return {};
+  }
+  return tp;
+}
+
 /// Serializable representation of a previously seen file.
 struct SeenFile {
   std::string path;
-  int64_t mtime_ns = 0;
+  Option<time> mtime;
   int64_t size = 0;
 
   SeenFile() = default;
 
   SeenFile(arrow::fs::FileInfo const& file)
     : path{file.path()},
-      mtime_ns{file.mtime().time_since_epoch().count()},
+      mtime{to_option_time(file.mtime())},
       size{file.size()} {
   }
 
@@ -213,14 +226,14 @@ struct SeenFile {
 
   friend auto inspect(auto& f, SeenFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
-                              f.field("mtime_ns", x.mtime_ns),
+                              f.field("mtime", x.mtime),
                               f.field("size", x.size));
   }
 };
 
 struct SeenFileHasher {
   auto operator()(SeenFile const& file) const -> size_t {
-    return hash(file.path, file.mtime_ns, file.size);
+    return hash(file.path, data{file.mtime}, file.size);
   }
 };
 
