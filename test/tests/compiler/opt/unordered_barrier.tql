@@ -1,0 +1,5 @@
+export
+unordered {
+  head
+  where foo == 42
+}
