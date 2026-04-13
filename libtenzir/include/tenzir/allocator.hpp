@@ -709,6 +709,7 @@ public:
         = allocation_tag::get_storage_and_tag(old_ptr);
       if (not actor_stats_->is_known(old_tag)) {
         write_unknown_pointer_warning("reallocate", old_tag);
+        std::_Exit(EXIT_FAILURE);
         return nullptr;
       }
       new_size
@@ -762,6 +763,7 @@ public:
         = allocation_tag::get_storage_and_tag(old_ptr);
       if (not actor_stats_->is_known(old_tag)) {
         write_unknown_pointer_warning("reallocate", old_tag);
+        std::_Exit(EXIT_FAILURE);
         return nullptr;
       }
       new_size = allocation_tag::storage_size_for(new_size, alignment);
@@ -811,6 +813,7 @@ public:
       const auto [storage, tag] = allocation_tag::get_storage_and_tag(ptr);
       if (not actor_stats_->is_known(tag)) {
         write_unknown_pointer_warning("deallocate", tag);
+        std::_Exit(EXIT_FAILURE);
         return;
       }
       storage_ptr = storage;
@@ -835,6 +838,7 @@ public:
       const auto [storage_ptr, tag] = allocation_tag::get_storage_and_tag(ptr);
       if (not actor_stats_->is_known(tag)) {
         write_unknown_pointer_warning("size", tag);
+        std::_Exit(EXIT_FAILURE);
         return 0;
       }
       return Traits::usable_size(storage_ptr);
@@ -1171,7 +1175,7 @@ auto selected_backend(const char* env) noexcept -> backend;
         = detail::basic_allocator<jemalloc::traits, system::traits> {          \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
           enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)           \
-            ? &actor_stats_                                                    \
+            ? &actor_stats_.value                                              \
             : nullptr,                                                         \
           ENV_SUFFIX                                                           \
       }
@@ -1191,7 +1195,7 @@ auto selected_backend(const char* env) noexcept -> backend;
         = detail::basic_allocator<mimalloc::traits, system::traits> {          \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
           enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)           \
-            ? &actor_stats_                                                    \
+            ? &actor_stats_.value                                              \
             : nullptr,                                                         \
           ENV_SUFFIX                                                           \
       }
