@@ -98,6 +98,7 @@
           }
           // {
             default = self.packages.${system}.tenzir-static;
+            format = pkgs.callPackage ./nix/format.nix { inherit treefmtEval; };
             generate-sbom = pkgs.callPackage ./nix/generate-sbom.nix {
               package = self.packages.${system}.tenzir-de-static;
             };
@@ -105,7 +106,7 @@
         legacyPackages = pkgs;
         # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
         devShells.default = import ./shell.nix { inherit pkgs package; };
-        formatter = treefmtEval.config.build.wrapper;
+        formatter = self.packages.${system}.format;
         checks = {
           formatting = treefmtEval.config.build.check self;
         };

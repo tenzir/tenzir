@@ -11,18 +11,6 @@
   ];
 
   # C++
-  #settings.formatter.clang-tidy-alt-operators = {
-  #  command = pkgs.lib.getExe' pkgs.clang-tools "clang-tidy";
-  #  options = [
-  #    "-fix"
-  #    "--checks=-*,readability-operators-representation"
-  #    "--config={CheckOptions: {readability-operators-representation.BinaryOperators: 'and;or;not'}}"
-  #  ];
-  #  includes = [
-  #    "*.cpp"
-  #    "*.hpp"
-  #  ];
-  #};
   settings.formatter.alt-operators = {
     command = pkgs.lib.getExe pkgs.python3;
     options = [
