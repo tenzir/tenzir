@@ -1,3 +1,11 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "tenzir/systemd.hpp"
 
 #include "tenzir/concept/parseable/numeric.hpp"

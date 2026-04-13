@@ -1,3 +1,10 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /*  Minimal Fluent-Bit Header
  *
  *  This header exposes only the symbols needed to use the public

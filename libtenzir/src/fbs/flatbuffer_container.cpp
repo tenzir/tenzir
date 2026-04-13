@@ -1,3 +1,11 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "tenzir/fbs/flatbuffer_container.hpp"
 
 #include "tenzir/chunk.hpp"
