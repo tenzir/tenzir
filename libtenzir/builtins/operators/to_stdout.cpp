@@ -7,37 +7,68 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
-#include "tenzir/async/blocking_executor.hpp"
 
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/substitute_ctx.hpp>
 
-#include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Baton.h>
+#include <folly/executors/GlobalExecutor.h>
+#include <folly/io/IOBuf.h>
+#include <folly/io/async/AsyncPipe.h>
+#include <folly/io/async/AsyncSocketException.h>
+#include <folly/net/NetworkSocket.h>
 
-#include <cerrno>
-#include <cstdio>
+#include <fcntl.h>
+#include <string>
+#include <unistd.h>
 
 namespace tenzir::plugins::to_stdout {
 
 namespace {
-
-constexpr auto message_queue_capacity = uint32_t{16};
 
 struct ToStdoutArgs {
   location self;
   located<ir::pipeline> pipe;
 };
 
-class ToStdout final : public Operator<table_slice, void> {
-public:
-  enum class Lifecycle {
-    running,
-    draining,
-    done,
+auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
+  -> Task<Option<std::string>> {
+  class WriteCallback final : public folly::AsyncWriter::WriteCallback {
+  public:
+    WriteCallback(folly::coro::Baton& baton, Option<std::string>& error)
+      : baton_{baton}, error_{error} {
+    }
+
+    void writeSuccess() noexcept override {
+      baton_.post();
+      delete this;
+    }
+
+    void writeErr(size_t,
+                  folly::AsyncSocketException const& ex) noexcept override {
+      error_ = ex.what();
+      baton_.post();
+      delete this;
+    }
+
+  private:
+    folly::coro::Baton& baton_;
+    Option<std::string>& error_;
   };
 
+  TENZIR_ASSERT(chunk);
+  auto baton = folly::coro::Baton{};
+  auto error = Option<std::string>{};
+  writer.write(folly::IOBuf::copyBuffer(chunk->data(), chunk->size()),
+               new WriteCallback{baton, error});
+  co_await baton;
+  co_return error;
+}
+
+class ToStdout final : public Operator<table_slice, void> {
+public:
   explicit ToStdout(ToStdoutArgs args) : args_{std::move(args)} {
   }
 
@@ -47,127 +78,75 @@ public:
       diagnostic::error("failed to substitute pipeline")
         .primary(args_.pipe)
         .emit(ctx);
-      finish();
       co_return;
     }
+    auto orig_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
+    if (orig_flags < 0) {
+      diagnostic::error("failed to get stdout flags: {}",
+                        detail::describe_errno())
+        .primary(args_.self)
+        .emit(ctx);
+      co_return;
+    }
+    if (::fcntl(STDOUT_FILENO, F_SETFL, orig_flags | O_NONBLOCK) < 0) {
+      diagnostic::error("failed to enable non-blocking mode for stdout: {}",
+                        detail::describe_errno())
+        .primary(args_.self)
+        .emit(ctx);
+      co_return;
+    }
+    orig_flags_ = orig_flags;
+    evb_ = folly::getGlobalIOExecutor()->getEventBase();
+    TENZIR_ASSERT(evb_);
+    writer_ = folly::AsyncPipeWriter::newWriter(
+      evb_, folly::NetworkSocket::fromFd(STDOUT_FILENO));
+    // Avoid closing the process-global stdout when the writer shuts down.
+    writer_->setCloseCallback([](folly::NetworkSocket) {});
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ != Lifecycle::running) {
-      co_return;
-    }
     auto sub = ctx.get_sub(caf::none);
     if (not sub) {
-      finish();
       co_return;
     }
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
-    auto result = co_await pipeline.push(std::move(input));
-    if (result.is_err()) {
-      finish();
-    }
+    auto push_result = co_await pipeline.push(std::move(input));
+    TENZIR_UNUSED(push_result);
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (not chunk or chunk->size() == 0) {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx) -> Task<void> override {
+    if (not chunk or chunk->size() == 0 or not writer_) {
       co_return;
     }
-    co_await message_queue_->enqueue(std::move(chunk));
-  }
-
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return chunk_ptr{};
+    auto error = co_await folly::coro::co_withExecutor(
+      evb_, write_chunk(*writer_, std::move(chunk)));
+    if (error) {
+      diagnostic::error("failed to write to stdout: {}", *error)
+        .primary(args_.self)
+        .emit(ctx);
     }
-    co_return co_await message_queue_->dequeue();
-  }
-
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    auto* chunk = result.try_as<chunk_ptr>();
-    TENZIR_ASSERT(chunk);
-    if (not *chunk) {
-      finish();
-      co_return;
-    }
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    co_await write_chunk(*chunk, ctx);
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_await flush_stdout(ctx);
-      co_return FinalizeBehavior::done;
+    if (auto sub = ctx.get_sub(caf::none)) {
+      auto& pipeline = as<SubHandle<table_slice>>(*sub);
+      co_await pipeline.close();
+      co_return FinalizeBehavior::continue_;
     }
-    if (lifecycle_ == Lifecycle::running) {
-      lifecycle_ = Lifecycle::draining;
-      if (auto sub = ctx.get_sub(caf::none)) {
-        auto& pipeline = as<SubHandle<table_slice>>(*sub);
-        co_await pipeline.close();
-        co_return FinalizeBehavior::continue_;
-      }
-      finish();
-      co_await flush_stdout(ctx);
-      co_return FinalizeBehavior::done;
+    writer_.reset();
+    if (orig_flags_) {
+      ::fcntl(STDOUT_FILENO, F_SETFL, *orig_flags_);
+      orig_flags_ = {};
     }
-    co_return FinalizeBehavior::continue_;
-  }
-
-  auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    ctx.spawn_task([this]() -> Task<void> {
-      co_await message_queue_->enqueue(chunk_ptr{});
-    });
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
+    co_return FinalizeBehavior::done;
   }
 
 private:
-  using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
-
-  auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
-    TENZIR_ASSERT(chunk);
-    auto err = co_await spawn_blocking([chunk] {
-      auto written = std::fwrite(chunk->data(), 1, chunk->size(), stdout);
-      return written != chunk->size() ? errno : 0;
-    });
-    if (err != 0) {
-      diagnostic::error("failed to write to stdout: {}",
-                        detail::describe_errno(err))
-        .primary(args_.self)
-        .emit(ctx);
-      finish();
-    }
-  }
-
-  auto flush_stdout(OpCtx& ctx) -> Task<void> {
-    auto err = co_await spawn_blocking([] {
-      return std::fflush(stdout) != 0 ? errno : 0;
-    });
-    if (err != 0) {
-      diagnostic::warning("failed to flush stdout: {}",
-                          detail::describe_errno(err))
-        .primary(args_.self)
-        .emit(ctx);
-    }
-  }
-
-  auto finish() -> void {
-    lifecycle_ = Lifecycle::done;
-  }
-
   ToStdoutArgs args_;
-  mutable Box<MessageQueue> message_queue_{std::in_place,
-                                           message_queue_capacity};
-  Lifecycle lifecycle_ = Lifecycle::running;
+  folly::EventBase* evb_ = nullptr;
+  Option<int> orig_flags_;
+  folly::AsyncPipeWriter::UniquePtr writer_;
 };
 
 class ToStdoutPlugin final : public OperatorPlugin {
