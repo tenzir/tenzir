@@ -13,13 +13,21 @@ if [[ -n ${BUILD_DIR:-} ]]; then
   build_dir="$BUILD_DIR"
 else
   # Pick the configured build dir with the most recently modified CMakeCache.txt.
-  latest_cache=$(
-    find "$repo_root/build" -type f -name CMakeCache.txt -print0 2>/dev/null |
-      xargs -0 -r stat --format '%Y %n' |
-      LC_ALL=C sort -k1,1nr -k2,2 |
-      head -n 1 |
-      cut -d' ' -f2-
-  )
+  # stat(1) has incompatible syntax between GNU and BSD (macOS); pick per platform.
+  if [[ "$(uname)" == "Darwin" ]]; then
+    stat_mtime_fmt=(-f '%m')
+  else
+    stat_mtime_fmt=(--format '%Y')
+  fi
+  latest_cache=""
+  latest_mtime=0
+  while IFS= read -r -d '' f; do
+    m=$(stat "${stat_mtime_fmt[@]}" "$f")
+    if (( m > latest_mtime )); then
+      latest_mtime=$m
+      latest_cache=$f
+    fi
+  done < <(find "$repo_root/build" -type f -name CMakeCache.txt -print0 2>/dev/null)
   if [[ -n "$latest_cache" ]]; then
     build_dir=$(dirname "$latest_cache")
   else
