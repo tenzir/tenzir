@@ -1,0 +1,4 @@
+suite: partitions
+runner: neo
+fixtures: [node]
+timeout: 60

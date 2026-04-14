@@ -1,0 +1,4 @@
+partitions
+where not internal
+select schema, events
+sort schema
