@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "context.hpp"
 #include "transport.hpp"
 
 #include <tenzir/detail/narrow.hpp>
@@ -21,11 +22,6 @@ using namespace std::chrono_literals;
 namespace tenzir::plugins::zmq::transport {
 
 namespace {
-
-auto global_context() -> ::zmq::context_t& {
-  static auto ctx = ::zmq::context_t{};
-  return ctx;
-}
 
 auto poll(::zmq::socket_t& socket, short flags,
           std::optional<std::chrono::milliseconds> timeout = {}) -> bool {

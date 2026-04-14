@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -19,7 +20,6 @@ _STARTUP_POLL_INTERVAL = 0.05
 _ASSERTION_WAIT_TIMEOUT = 2.0
 _ASSERTION_WAIT_INTERVAL = 0.01
 _HELPER = Path(__file__).resolve().parent / "tools" / "zmq_peer.py"
-_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -59,11 +59,7 @@ def zmq() -> FixtureHandle:
     os.close(helper_log_fd)
     helper_stdout = open(helper_log_path, "wb")
     cmd = [
-        "nix",
-        "develop",
-        ".",
-        "-c",
-        "python3",
+        sys.executable,
         str(_HELPER),
         "--role",
         opts.role,
@@ -84,7 +80,6 @@ def zmq() -> FixtureHandle:
     ]
     proc = subprocess.Popen(
         cmd,
-        cwd=_REPO_ROOT,
         stdout=helper_stdout,
         stderr=subprocess.STDOUT,
         close_fds=True,
