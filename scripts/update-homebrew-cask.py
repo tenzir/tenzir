@@ -33,7 +33,9 @@ end
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cask", required=True, help="Path to Casks/tenzir.rb")
-    parser.add_argument("--version", required=True, help="Release version without the leading v")
+    parser.add_argument(
+        "--version", required=True, help="Release version without the leading v"
+    )
     parser.add_argument("--sha256", required=True, help="SHA256 of the release package")
     parser.add_argument(
         "--pkgutil-identifier",

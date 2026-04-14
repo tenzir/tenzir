@@ -24,7 +24,6 @@
 #include <tenzir/node.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
-#include <tenzir/query_cursor.hpp>
 #include <tenzir/validate.hpp>
 
 #include <caf/actor_cast.hpp>

@@ -279,11 +279,7 @@ target_compile_options(
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libtenzir_internal
                          INTERFACE -Wno-unknown-warning-option)
-  target_compile_options(libtenzir_internal
-                         INTERFACE -Wno-unknown-warning-option)
-  if (CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 22)
-    add_compile_options(-Wno-c2y-extensions)
-  endif ()
+  target_compile_options(libtenzir_internal INTERFACE -Wno-c2y-extensions)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning)
 endif ()
@@ -715,12 +711,13 @@ endif ()
 # CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
 
-set(TENZIR_CAF_LOG_LEVEL
-    "WARNING"
-    CACHE STRING "")
-
 option(TENZIR_ENABLE_BUNDLED_CAF "Use the CAF submodule"
        "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
+
+cmake_dependent_option(
+  TENZIR_CAF_ENABLE_TRACE_LOGGING "Enable CAF trace logging" OFF
+  "TENZIR_ENABLE_BUNDLED_CAF" OFF)
+
 if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
@@ -746,8 +743,8 @@ else ()
         libtenzir/aux/caf submodule")
   else ()
     set(TENZIR_ENABLE_BUNDLED_CAF ON)
-    set(CAF_LOG_LEVEL
-        "${TENZIR_CAF_LOG_LEVEL}"
+    set(CAF_ENABLE_TRACE_LOGGING
+        "${TENZIR_CAF_ENABLE_TRACE_LOGGING}"
         CACHE STRING "")
     set(CAF_ENABLE_EXAMPLES
         OFF

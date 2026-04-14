@@ -176,6 +176,7 @@ def _stop_kafka(container: ManagedContainer) -> None:
 
 def _wait_for_kafka(container: ManagedContainer, timeout: float) -> None:
     """Wait for Kafka to become ready."""
+
     def _probe() -> tuple[bool, dict[str, str]]:
         if not container.is_running():
             logger.debug("Kafka container not running yet")
@@ -351,10 +352,11 @@ def _build_helper(binary_path: Path) -> None:
         stderr = result.stderr.strip() or "<no stderr>"
         stdout = result.stdout.strip() or "<no stdout>"
         if _is_prerequisite_build_failure(result.stdout, result.stderr):
-            summary = _summarize_prerequisite_build_failure(result.stdout, result.stderr)
+            summary = _summarize_prerequisite_build_failure(
+                result.stdout, result.stderr
+            )
             raise FixtureUnavailable(
-                "kafka_iam_mock helper prerequisites are unavailable"
-                f" ({summary})"
+                f"kafka_iam_mock helper prerequisites are unavailable ({summary})"
             )
         raise RuntimeError(
             "failed to build kafka_iam_mock helper\n"
@@ -432,7 +434,9 @@ def _start_helper(
     return process
 
 
-def _wait_for_helper(process: subprocess.Popen[str], http_url: str, log_path: Path) -> None:
+def _wait_for_helper(
+    process: subprocess.Popen[str], http_url: str, log_path: Path
+) -> None:
     deadline = time.monotonic() + IAM_STARTUP_TIMEOUT
     health_url = f"{http_url}/health"
     while time.monotonic() < deadline:

@@ -13,6 +13,7 @@
 #include "tenzir/glob.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/let_id.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -28,7 +29,6 @@
 
 #include <array>
 #include <deque>
-#include <optional>
 #include <unordered_set>
 
 namespace tenzir {
@@ -41,6 +41,7 @@ struct ArrowFsArgs {
   Option<ast::lambda_expr> rename;
   Option<duration> max_age;
   located<ir::pipeline> pipe;
+  let_id file_info;
 
   /// Registers the common ArrowFsArgs fields on a Describer.
   template <class Args, class... Impls>
@@ -53,7 +54,8 @@ struct ArrowFsArgs {
       = d.template named<ast::lambda_expr>("rename", &ArrowFsArgs::rename);
     auto max_age_arg
       = d.template named<duration>("max_age", &ArrowFsArgs::max_age);
-    auto pipe_arg = d.pipeline(&ArrowFsArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ArrowFsArgs::pipe, {{"file", &ArrowFsArgs::file_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
@@ -96,7 +98,8 @@ struct ArrowFsArgs {
       = d.template named<ast::lambda_expr>("rename", &ArrowFsArgs::rename);
     auto max_age_arg
       = d.template named<duration>("max_age", &ArrowFsArgs::max_age);
-    auto pipe_arg = d.pipeline(&ArrowFsArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ArrowFsArgs::pipe, {{"file", &ArrowFsArgs::file_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
@@ -153,14 +156,16 @@ inline auto arrow_future_to_task(arrow::Future<arrow::internal::Empty> future)
 /// Persisted state for a file that is pending or being actively processed.
 struct TrackedFile {
   std::string path;
-  int64_t mtime_ns = 0;
+  Option<time> mtime;
   int64_t offset = 0;
+  uint64_t job_id = 0;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
 
   friend auto inspect(auto& f, TrackedFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
                               f.field("offset", x.offset),
-                              f.field("mtime_ns", x.mtime_ns));
+                              f.field("mtime", x.mtime),
+                              f.field("job_id", x.job_id));
   }
 };
 
@@ -171,19 +176,19 @@ struct ScanComplete {
 
 /// Result of opening a file for reading in a processing slot.
 struct FileOpen {
-  size_t slot;
+  uint64_t job_id;
   arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> file;
 };
 
 /// Result of reading a chunk from an active file.
 struct ReadProgress {
-  size_t slot;
+  uint64_t job_id;
   arrow::Result<std::shared_ptr<arrow::Buffer>> result;
 };
 
 /// Signals that a subpipeline has finished and its slot can be freed.
 struct SubFinished {
-  size_t slot;
+  uint64_t job_id;
 };
 
 using AwaitResult = variant<ScanComplete, FileOpen, ReadProgress, SubFinished>;
@@ -194,17 +199,26 @@ using FileSystemPtr = std::shared_ptr<arrow::fs::FileSystem>;
 auto split_at_first_slash(std::string_view path)
   -> std::pair<std::string, std::string>;
 
+/// Converts an Arrow filesystem TimePoint to an Option<time>.
+/// Returns None for Arrow's kNoTime sentinel.
+inline auto to_option_time(arrow::fs::TimePoint tp) -> Option<time> {
+  if (tp == arrow::fs::kNoTime) {
+    return {};
+  }
+  return tp;
+}
+
 /// Serializable representation of a previously seen file.
 struct SeenFile {
   std::string path;
-  int64_t mtime_ns = 0;
+  Option<time> mtime;
   int64_t size = 0;
 
   SeenFile() = default;
 
   SeenFile(arrow::fs::FileInfo const& file)
     : path{file.path()},
-      mtime_ns{file.mtime().time_since_epoch().count()},
+      mtime{to_option_time(file.mtime())},
       size{file.size()} {
   }
 
@@ -212,14 +226,14 @@ struct SeenFile {
 
   friend auto inspect(auto& f, SeenFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
-                              f.field("mtime_ns", x.mtime_ns),
+                              f.field("mtime", x.mtime),
                               f.field("size", x.size));
   }
 };
 
 struct SeenFileHasher {
   auto operator()(SeenFile const& file) const -> size_t {
-    return hash(file.path, file.mtime_ns, file.size);
+    return hash(file.path, data{file.mtime}, file.size);
   }
 };
 
@@ -264,18 +278,15 @@ protected:
   // Create the filesystem from the resolved URI.
   virtual auto
   make_filesystem(arrow::util::Uri const& uri, diagnostic_handler& dh)
-    -> Task<failure_or<MakeFilesystemResult>>
-    = 0;
+    -> Task<failure_or<MakeFilesystemResult>> = 0;
 
   /// SDK specific calls to remove files that bypass Arrow's directory markers.
-  virtual auto
-  remove_file(std::string const& path, diagnostic_handler& dh) const
-    -> Task<void>
-    = 0;
+  virtual auto remove_file(std::string const& path,
+                           diagnostic_handler& dh) const -> Task<void> = 0;
 
   /// Resolves the URL secret and returns the parsed URI.
-  virtual auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>>
-    = 0;
+  virtual auto resolve_url(OpCtx& ctx)
+    -> Task<failure_or<arrow::util::Uri>> = 0;
 
   auto filesystem() const -> std::shared_ptr<arrow::fs::FileSystem> const& {
     return fs_;
@@ -292,7 +303,8 @@ private:
   auto restore(OpCtx& ctx) -> Task<void>;
   auto spawn_scan_task(OpCtx& ctx) -> void;
   auto is_globbing() const -> bool;
-  auto find_free_slot() const -> std::optional<size_t>;
+  auto find_free_slot() const -> Option<size_t>;
+  auto find_slot_by_job(uint64_t job_id) const -> Option<size_t>;
   auto start_job_in_slot(size_t slot, OpCtx& ctx) -> void;
 
   template <class F>
@@ -312,7 +324,8 @@ private:
   SeenFileSet previous_;
   SeenFileSet current_;
   std::deque<TrackedFile> pending_;
-  std::array<std::optional<TrackedFile>, max_jobs> processing_;
+  std::array<Option<TrackedFile>, max_jobs> processing_{};
+  uint64_t next_job_id_ = 0;
   std::vector<std::string> cleanup_pending_;
   mutable std::unique_ptr<folly::coro::BoundedQueue<AwaitResult>> results_
     = std::make_unique<folly::coro::BoundedQueue<AwaitResult>>(max_jobs + 1);

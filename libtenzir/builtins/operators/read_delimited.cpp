@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/pusher.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -63,7 +65,17 @@ public:
       remaining = remaining.substr(pos + separator_.size());
     }
     buffer_ = buffer_.substr(buffer_.size() - remaining.size());
-    co_await flush(push);
+    co_await pusher_.push(builder_.yield_ready(type_name), push);
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    co_await pusher_.push(builder_.yield_ready(type_name), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -74,9 +86,13 @@ public:
       emit(buffer_, ctx);
     }
     buffer_.clear();
-    // push
     co_await flush(push);
     co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    co_await flush(push);
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -104,11 +120,14 @@ private:
     }
   }
 
+  constexpr static const auto type_name = "tenzir.data";
+
   ReadDelimitedArgs args_;
   std::string separator_;
   bool binary_ = false;
   std::string buffer_;
   series_builder builder_;
+  SeriesPusher pusher_;
 };
 
 class plugin final : public virtual OperatorPlugin {

@@ -13,9 +13,17 @@ def ch_query(sql: str) -> str:
     container = os.environ["CLICKHOUSE_CONTAINER_ID"]
     password = os.environ["CLICKHOUSE_PASSWORD"]
     result = subprocess.run(
-        [runtime, "exec", container, "clickhouse-client",
-         f"--password={password}", f"--query={sql}"],
-        capture_output=True, text=True, check=True,
+        [
+            runtime,
+            "exec",
+            container,
+            "clickhouse-client",
+            f"--password={password}",
+            f"--query={sql}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -29,9 +37,7 @@ def main() -> None:
     # 3 rows repeat in pattern: null-a, null-b, no-nulls. So 1/3 of
     # each column is null = 3333.
     for name, count in [("a", null_a), ("b", null_b)]:
-        assert count == 3333, (
-            f"null count for {name}: expected 3333, got {count}"
-        )
+        assert count == 3333, f"null count for {name}: expected 3333, got {count}"
     print(f"null_a={null_a} null_b={null_b}")
     print("ok")
 

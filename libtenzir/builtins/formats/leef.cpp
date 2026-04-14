@@ -60,6 +60,7 @@ namespace {
 auto unescape(std::string_view::iterator begin, std::string_view::iterator end,
               std::back_insert_iterator<std::string> out)
   -> std::string_view::iterator {
+  TENZIR_UNUSED(end);
   TENZIR_ASSERT_EXPENSIVE(*std::prev(begin) == '\\');
   TENZIR_ASSERT_EXPENSIVE(begin < end);
   switch (*begin) {

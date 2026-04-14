@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+to_google_cloud_logging log_id="", project="test"

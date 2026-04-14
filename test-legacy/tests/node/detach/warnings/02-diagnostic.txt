@@ -1,5 +1,6 @@
 {
   pipeline_id: "test-id",
+  pipeline_name: "pipeline::detach",
   hidden: true,
   run: 1,
   message: "assertion failure",

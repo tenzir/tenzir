@@ -208,6 +208,7 @@ auto make_chunk_info() -> record {
   };
 }
 
+#if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
 auto make_malloc_metrics() -> record {
   auto result = record{};
   result.reserve(7);
@@ -243,6 +244,7 @@ auto make_malloc_metrics() -> record {
 #endif
   return result;
 }
+#endif
 
 #if TENZIR_LINUX
 auto parse_proc_kb_value(std::string_view line, std::string_view key)

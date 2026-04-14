@@ -470,13 +470,19 @@ public:
       TENZIR_UNREACHABLE();
     }
     if (not runtime_.table_slice_queue) {
-      co_return TableSliceResult{.end_of_stream = true};
+      co_return TableSliceResult{
+        .frame = std::nullopt,
+        .end_of_stream = true,
+      };
     }
     try {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         request_pipeline_stop();
-        co_return TableSliceResult{.end_of_stream = true};
+        co_return TableSliceResult{
+          .frame = std::nullopt,
+          .end_of_stream = true,
+        };
       }
       if (optimization_mode_ == OptimizationMode::ordered) {
         co_return co_await await_ordered_batch();
@@ -493,7 +499,10 @@ public:
       }
       if (not next) {
         emit_perf_summary("end_of_stream");
-        co_return TableSliceResult{.end_of_stream = true};
+        co_return TableSliceResult{
+          .frame = std::nullopt,
+          .end_of_stream = true,
+        };
       }
       co_return TableSliceResult{
         .frame = std::move(*next),
@@ -501,7 +510,10 @@ public:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
       emit_perf_summary("cancelled");
-      co_return TableSliceResult{.end_of_stream = true};
+      co_return TableSliceResult{
+        .frame = std::nullopt,
+        .end_of_stream = true,
+      };
     }
   }
 
@@ -1430,7 +1442,7 @@ private:
       co_return;
     }
     auto diag_handler = BufferingDiagnosticHandler{};
-    auto builder_ptr = static_cast<multi_series_builder*>(nullptr);
+    auto* builder_ptr = static_cast<multi_series_builder*>(nullptr);
     auto standalone_builder = std::optional<multi_series_builder>{};
     auto builder_opts = multi_series_builder::options{};
     builder_opts.settings.ordered
@@ -1446,13 +1458,52 @@ private:
       standalone_builder.emplace(std::move(opts), diag_handler);
       builder_ptr = &*standalone_builder;
     }
+    // Reusable padded buffer for the JSON path: avoids a per-message
+    // malloc/memcpy/free by growing to the high-water mark and reusing
+    // the allocation across messages.
+    auto padded_buf = std::vector<char>{};
+    auto ct = co_await folly::coro::co_current_cancellation_token;
     try {
       while (true) {
         auto dequeue_started = std::chrono::steady_clock::time_point{};
         if (perf_enabled_) {
           dequeue_started = std::chrono::steady_clock::now();
         }
-        auto next = co_await runtime_.message_queue->dequeue();
+        auto next = Option<MessageBatch>{};
+        auto timed_out = false;
+        try {
+          next = co_await runtime_.message_queue->co_try_dequeue_for(
+            std::chrono::duration_cast<folly::Duration>(
+              builder_opts.settings.timeout));
+        } catch (folly::OperationCancelled const&) {
+          if (ct.isCancellationRequested()) {
+            throw;
+          }
+          // Dequeue timed out — flush ready builder events and keep waiting.
+          // Note: co_await is not permitted inside a catch handler, so we set
+          // a flag and handle the flush after the try/catch block.
+          timed_out = true;
+        }
+        if (timed_out) {
+          if (perf_enabled_) {
+            add_perf_counter(
+              perf_.build_dequeue_wait_ns,
+              as_ns(std::chrono::steady_clock::now() - dequeue_started));
+          }
+          auto ready = builder_ptr->yield_ready_as_table_slice();
+          if (not ready.slices.empty() or not diag_handler.empty()) {
+            auto flush_frame = TableSliceFrame{};
+            flush_frame.seq
+              = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
+            flush_frame.slices = std::move(ready.slices);
+            if (not diag_handler.empty()) {
+              flush_frame.diagnostics = diag_handler.drain();
+            }
+            co_await runtime_.table_slice_queue->enqueue(
+              std::move(flush_frame));
+          }
+          continue;
+        }
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_dequeue_wait_ns,
@@ -1472,25 +1523,32 @@ private:
           build_started = std::chrono::steady_clock::now();
         }
         auto flush = optimization_mode_ == OptimizationMode::ordered;
-        auto frame = args_._json
-                       ? build_table_slice(
-                           fetched, parser->builder, flush,
-                           [&](std::span<const std::byte> payload) {
-                             auto const* chars
-                               = reinterpret_cast<char const*>(payload.data());
-                             auto padded
-                               = simdjson::padded_string{chars, payload.size()};
-                             parser->parse(padded);
-                           })
-                       : build_table_slice(
-                           fetched, *standalone_builder, flush,
-                           [&](std::span<const std::byte> payload) {
-                             auto const* chars
-                               = reinterpret_cast<char const*>(payload.data());
-                             auto sv = std::string_view{chars, payload.size()};
-                             standalone_builder->record().field("message").data(
-                               std::string{sv});
-                           });
+        auto frame
+          = args_._json
+              ? build_table_slice(
+                  fetched, parser->builder, flush,
+                  [&](std::span<const std::byte> payload) {
+                    auto const needed
+                      = payload.size() + simdjson::SIMDJSON_PADDING;
+                    if (padded_buf.size() < needed) {
+                      padded_buf.resize(needed);
+                    }
+                    std::memcpy(padded_buf.data(),
+                                reinterpret_cast<char const*>(payload.data()),
+                                payload.size());
+                    auto padded_view = simdjson::padded_string_view{
+                      padded_buf.data(), payload.size(), padded_buf.size()};
+                    parser->parse(padded_view);
+                  })
+              : build_table_slice(
+                  fetched, *standalone_builder, flush,
+                  [&](std::span<const std::byte> payload) {
+                    auto const* chars
+                      = reinterpret_cast<char const*>(payload.data());
+                    auto sv = std::string_view{chars, payload.size()};
+                    standalone_builder->record().field("message").data(
+                      std::string{sv});
+                  });
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_compute_ns,
@@ -1544,7 +1602,10 @@ private:
       if (ready == runtime_.ordered_slices.end()
           and runtime_.builders_finished) {
         if (runtime_.ordered_slices.empty()) {
-          co_return TableSliceResult{.end_of_stream = true};
+          co_return TableSliceResult{
+            .frame = std::nullopt,
+            .end_of_stream = true,
+          };
         }
         ready = runtime_.ordered_slices.begin();
         runtime_.next_emit_seq = ready->first;

@@ -17,12 +17,12 @@ namespace tenzir {
 
 class [[nodiscard]] RawMutexGuard {
 private:
-  explicit RawMutexGuard(SemaphoreGuard guard) : guard_{std::move(guard)} {
+  explicit RawMutexGuard(SemaphorePermit guard) : guard_{std::move(guard)} {
   }
 
   friend class RawMutex;
 
-  SemaphoreGuard guard_;
+  SemaphorePermit guard_;
 };
 
 /// A cancellable mutex that can be locked asynchronously using 'co_await'.

@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/pcap/suricata/eve.json.gz" {
+  decompress_gzip
+  read_lines
+}
+tail 1

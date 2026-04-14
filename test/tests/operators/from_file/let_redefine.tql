@@ -1,0 +1,5 @@
+let $file = "shadowed"
+from_file env("FILE_ROOT") + "/single/data.json" {
+  let $file = "redefined"
+  read_json
+}

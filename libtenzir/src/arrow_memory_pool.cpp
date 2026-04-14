@@ -96,7 +96,7 @@ public:
   }
 
   auto Free(uint8_t* ptr, int64_t size, int64_t alignment) -> void override {
-    (void)alignment; // alignment is not needed for free
+    TENZIR_UNUSED(size, alignment);
     TENZIR_ASSERT_EXPENSIVE(ptr != nullptr);
     if (ptr == kZeroSizeArea) {
       TENZIR_ASSERT_EXPENSIVE(size == 0);

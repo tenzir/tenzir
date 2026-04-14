@@ -56,6 +56,7 @@ confirm() {
   if [ -t 1 ]; then
     echo
     echo "Press ${green}ENTER${normal} to continue."
+    # shellcheck disable=SC2034
     read -r response </dev/tty
   fi
 }
@@ -182,8 +183,7 @@ else
   elif check curl; then
     curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
   else
-    echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
-      "found in \$PATH."
+    echo "Neither ${bold}wget${normal} nor ${bold}curl${normal} found in \$PATH."
     exit 1
   fi
   echo "Successfully downloaded ${package}"

@@ -9,6 +9,15 @@
   tzdata,
 }:
 arrow-cpp.overrideAttrs (orig: {
+  version = "23.0.1";
+
+  src = fetchFromGitHub {
+    owner = "apache";
+    repo = "arrow";
+    tag = "apache-arrow-23.0.1";
+    hash = "sha256-p/IUYanW11u7gusZad1Bb4VhisTKBm4a+XGOuNXjx+I=";
+  };
+
   patches = [
     ./arrow-cpp-nixos-zoneinfo.patch
     ./arrow-cpp-eager-struct-fields.patch
@@ -67,13 +76,10 @@ arrow-cpp.overrideAttrs (orig: {
 
   doCheck = false;
 
-  env = (
-    (orig.env or { })
-    // {
-      NIX_LDFLAGS = lib.optionalString (
-        stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
-      ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
-      GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
-    }
-  );
+  env = (orig.env or { }) // {
+    NIX_LDFLAGS = lib.optionalString (
+      stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
+    ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+    GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
+  };
 })

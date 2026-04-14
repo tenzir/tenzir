@@ -1,0 +1,4 @@
+{
+  log_name: "projects/test-project/logs/env-fallback-log",
+  total_entries: 1000,
+}

@@ -1,0 +1,2 @@
+from {a: {"b.c": 1, "b.d": 2}, e: 3}
+a = unflatten(a)

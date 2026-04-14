@@ -1,0 +1,7 @@
+warning: field `name` not found
+  --> tests/operators/to_google_cloud_logging/json_payload/01_send.tql:10:24
+   |
+10 | name = f"user-{id}" if name != null else null
+   |                        ~~~~ 
+   |
+   = hint: append `?` to suppress this warning

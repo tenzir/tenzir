@@ -246,38 +246,11 @@ public:
   using time_point = clock::time_point;
   using duration = clock::duration;
 
-  /// @returns a vector of all currently ready (based on timeout or size) series
-  [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready() -> std::vector<series>;
-
-  struct YieldReadyResult {
-    std::vector<table_slice> slices = {};
-    duration wait_for = duration::max();
-
-    auto begin() -> decltype(slices.begin()) {
-      return slices.begin();
-    }
-
-    auto end() -> decltype(slices.end()) {
-      return slices.end();
-    }
-
-    auto begin() const -> decltype(slices.begin()) {
-      return slices.begin();
-    }
-
-    auto end() const -> decltype(slices.end()) {
-      return slices.end();
-    }
-
-    operator std::vector<table_slice>&&() && {
-      return std::move(slices);
-    }
-  };
   /// @returns all currently ready (based on timeout or size)table slices as
   /// well as a duration after which the next would be ready.
   [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready_as_table_slice() -> YieldReadyResult;
+  auto yield_ready_as_table_slice(time_point now = clock::now())
+    -> series_builder::YieldReadyResult;
 
   /// @brief Starts building a new record.
   [[nodiscard]] auto record() -> record_generator;
@@ -442,7 +415,7 @@ private:
   }
 
   auto uses_merging_builder() const -> bool {
-    return not get_policy<policy_selector>() and settings_.merge;
+    return (get_policy<policy_selector>() == nullptr) and settings_.merge;
   };
 
   /// @brief Called internally to complete the last built event.
@@ -450,13 +423,13 @@ private:
   /// or requests ready events.
   /// This function is responsible for computing the signature and
   /// committing the event to the correct `series_builder` based on that.
-  void complete_last_event(time_point now = clock::now());
+  void complete_last_event();
 
   /// @brief clears the currently build raw event.
   void clear_raw_event();
 
   /// @brief Gets the next free index into `entries_`.
-  std::optional<size_t> next_free_index() const;
+  Option<size_t> next_free_index() const;
 
   /// @brief Look up a schema by name.
   auto type_for_schema(std::string_view name) -> const type*;
@@ -465,39 +438,44 @@ private:
     entry_data(const tenzir::type* schema = nullptr) : builder{schema} {
     }
 
-    auto flush(time_point now) -> std::vector<series> {
-      oldest_event = {};
-      last_flush = now;
+    auto flush() -> std::vector<series> {
+      last_flush_age = builder.oldest_event();
       return builder.finish();
     }
 
+    auto yield_ready(time_point now, settings_type& settings)
+      -> series_builder::YieldReadyResult {
+      auto schema_name = std::string_view{};
+      auto builder_type = builder.type();
+      if (builder_type.name().empty()) {
+        schema_name = settings.default_schema_name;
+      }
+      auto r = builder.yield_ready(
+        schema_name, now, settings.desired_batch_size, settings.timeout);
+      if (not r.slices.empty()) {
+        last_flush_age = now;
+      }
+      return r;
+    }
+
+    auto recreate(const tenzir::type* builder_schema) {
+      builder = series_builder{builder_schema};
+      unused = false;
+      last_flush_age = None{};
+    }
+
     series_builder builder;
-    // The time when the oldest event present in `builder` was added.
-    time_point oldest_event;
-    // The time when this entry was last flushed. This is used for garbage
-    // collection.
-    time_point last_flush;
+    // Timestamp of events at last flush. This is used for garbage collection.
+    Option<time_point> last_flush_age;
     bool unused = false;
   };
 
-  /// @brief Makes all currently ready (based on timeout or size)  events
-  /// available in `ready_events_` and returns a duration after which the
-  /// builder expects to have more events ready.
-  auto make_events_available_on_timeout(time_point now) -> duration;
-
   /// @brief appends `new_events` to `ready_events_`
-  void append_ready_events(std::vector<series>&& new_events);
+  void append_ready_events(std::vector<series> new_events);
 
-  /// @brief "garbage collects" all entries in `entries_` that satisfy the
-  /// predicate.
-  /// The implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions.
-  void garbage_collect_where(std::predicate<const entry_data&> auto pred);
-
-  /// Besides the `series_builder` instances in `entries_`, there also is
-  /// `merging_builder_`. This function flushes that builder, appending its
-  /// current results to `ready_events_`.
-  void flush_merging_builder();
+  /// @brief Marks builders that have last been used before some timestamp as
+  /// `unused`. This will cause such builders to be recreated with a new schema.
+  void garbage_collect(clock::time_point before);
 
   using signature_type = typename data_builder::signature_type;
 
@@ -533,8 +511,6 @@ private:
   // events that have been made ready (timeout,  batch size, ordered mode
   // builder switch)
   std::vector<series> ready_events_;
-  // The point at which the oldest event was put into the merging builder.
-  time_point oldest_event_in_merging_;
   // currently active builder index. used in ordered mode to check whether we
   // need to yield on builder switch
   size_t active_index_ = 0;

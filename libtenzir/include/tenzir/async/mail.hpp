@@ -11,9 +11,8 @@
 #include "tenzir/error.hpp"
 
 #include <caf/actor_cast.hpp>
-#include <caf/actor_companion.hpp>
-#include <caf/actor_registry.hpp>
-#include <caf/mailbox_element.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/message.hpp>
 #include <caf/response_type.hpp>
 #include <caf/timespan.hpp>
@@ -21,7 +20,9 @@
 #include <folly/futures/Future.h>
 
 #include <atomic>
+#include <functional>
 #include <memory>
+#include <source_location>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -29,70 +30,73 @@
 namespace tenzir {
 
 template <class Result, class Handle, class F, class... Ts>
-void mail_with_callback(Handle receiver, F f, Ts&&... xs) {
-  auto companion = receiver->home_system().make_companion();
-  auto& registry = companion->home_system().registry();
-  auto companion_id = companion->id();
-  auto* companion_ptr = companion.get();
-  auto request_id = companion->new_request_id(caf::message_priority::normal);
-  auto response_id = request_id.response_id();
-  auto completed = std::make_shared<std::atomic<bool>>(false);
-  auto fn = std::make_shared<F>(std::move(f));
-  auto finish
-    = [fn, completed, &registry, companion_id](caf::expected<Result> res) {
-        auto expected = false;
-        if (not completed->compare_exchange_strong(expected, true,
-                                                   std::memory_order_relaxed)) {
-          return;
-        }
-        std::invoke(*fn, std::move(res));
-        // Remove any registry entry that may keep the temporary companion
-        // alive (e.g., when CAF registers it for remote routing).
-        registry.erase(companion_id);
-      };
-  companion->on_exit([companion_ptr, finish] {
-    finish(caf::expected<Result>{companion_ptr->fail_state()});
-  });
-  companion->on_enqueue([response_id,
-                         finish](caf::mailbox_element_ptr ptr) mutable {
-    TENZIR_ASSERT(ptr);
-    if (ptr->payload.match_element<caf::down_msg>(0)) {
-      auto dm = ptr->payload.get_as<caf::down_msg>(0);
-      finish(caf::expected<Result>{std::move(dm.reason)});
-      return;
+void mail_with_callback(Handle receiver, std::source_location location, F f,
+                        Ts&&... xs) {
+  struct state_t {
+    explicit state_t(F fn) : callback{std::move(fn)} {
     }
-    if (ptr->mid != response_id) {
-      return;
-    }
-    if (ptr->payload.match_elements<caf::error>()) {
-      finish(caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
-      return;
-    }
-    if constexpr (std::is_void_v<Result>) {
-      if (ptr->payload.empty() || ptr->payload.match_element<caf::unit_t>(0)) {
-        finish(caf::expected<void>{});
-      } else {
-        finish(caf::expected<void>{caf::make_error(
-          ec::logic_error, "unexpected non-empty payload for void response")});
+
+    auto finish(caf::expected<Result> result) -> void {
+      auto expected = false;
+      if (not completed.compare_exchange_strong(expected, true,
+                                                std::memory_order_relaxed)) {
+        return;
       }
-    } else if (ptr->payload.match_element<Result>(0)) {
-      finish(caf::expected<Result>{ptr->payload.get_as<Result>(0)});
-    } else {
-      finish(caf::expected<Result>{
-        caf::make_error(ec::logic_error, "unexpected response payload type")});
+      std::invoke(callback, std::move(result));
     }
-  });
-  companion->monitor(receiver);
-  auto* actor = caf::actor_cast<caf::abstract_actor*>(receiver);
-  if (not actor) {
-    finish(caf::expected<Result>{
-      caf::make_error(ec::logic_error, "invalid receiver in async_mail")});
+
+    std::atomic<bool> completed = false;
+    F callback;
+  };
+  if (not receiver) {
+    std::invoke(f, caf::expected<Result>{caf::make_error(
+                     ec::remote_node_down, "async_mail receiver down")});
     return;
   }
-  actor->enqueue(caf::make_mailbox_element(
-                   {companion->ctrl(), caf::add_ref}, request_id,
-                   caf::make_message_nowrap(std::forward<Ts>(xs)...)),
-                 companion->context());
+  auto state = std::make_shared<state_t>(std::move(f));
+  receiver->home_system().template spawn<caf::hidden>(
+    [receiver = std::move(receiver), location, state = std::move(state),
+     args = std::make_tuple(std::forward<Ts>(xs)...)](
+      caf::event_based_actor* self) mutable -> caf::behavior {
+      self->attach_functor([location, state] {
+        state->finish(caf::expected<Result>{
+          caf::make_error(ec::logic_error,
+                          fmt::format("async_mail helper terminated before "
+                                      "producing a response for request at "
+                                      "{}:{}",
+                                      location.file_name(), location.line()))});
+      });
+      std::apply(
+        [self, &receiver, &state](auto&&... ys) mutable {
+          if constexpr (std::is_void_v<Result>) {
+            self->mail(std::move(ys)...)
+              .request(receiver, caf::infinite)
+              .then(
+                [self, state]() mutable {
+                  state->finish(caf::expected<void>{});
+                  self->quit();
+                },
+                [self, state](caf::error& err) mutable {
+                  state->finish(caf::expected<void>{caf::error{err}});
+                  self->quit(err);
+                });
+          } else {
+            self->mail(std::move(ys)...)
+              .request(receiver, caf::infinite)
+              .then(
+                [self, state](Result result) mutable {
+                  state->finish(caf::expected<Result>{std::move(result)});
+                  self->quit();
+                },
+                [self, state](caf::error& err) mutable {
+                  state->finish(caf::expected<Result>{caf::error{err}});
+                  self->quit(err);
+                });
+          }
+        },
+        std::move(args));
+      return {};
+    });
 }
 
 template <class Handle, class... Args>
@@ -106,12 +110,15 @@ public:
   }
 
   template <class Handle, class Result = AsyncMailResult<Handle, Args...>>
-  auto request(Handle receiver) && -> folly::SemiFuture<Result> {
+  auto
+  request(Handle receiver,
+          std::source_location location
+          = std::source_location::current()) && -> folly::SemiFuture<Result> {
     auto [promise, future] = folly::makePromiseContract<Result>();
     std::apply(
       [&](auto&&... xs) mutable {
         mail_with_callback<typename Result::value_type>(
-          receiver,
+          receiver, location,
           [promise = std::move(promise)](Result result) mutable {
             promise.setValue(std::move(result));
           },

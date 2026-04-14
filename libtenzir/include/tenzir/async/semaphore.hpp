@@ -10,6 +10,7 @@
 
 #include "tenzir/async/task.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
 
 #include <folly/fibers/Semaphore.h>
 
@@ -18,7 +19,7 @@
 
 namespace tenzir {
 
-class SemaphoreGuard;
+class SemaphorePermit;
 
 /// An async semaphore (that is movable unlike Folly's version).
 class Semaphore {
@@ -50,8 +51,16 @@ public:
     impl_.signal();
   }
 
+  /// Tries to consume a permit without blocking.
+  auto try_consume() -> bool {
+    return impl_.try_wait();
+  }
+
   /// Acquires a permit and returns a guard that releases it.
-  auto acquire() -> Task<SemaphoreGuard>;
+  auto acquire() -> Task<SemaphorePermit>;
+
+  /// Tries to acquire a permit and returns a guard that releases it.
+  auto try_acquire() -> Option<SemaphorePermit>;
 
   /// Consumes a permit without returning a guard that restores it.
   auto consume() -> Task<void> {
@@ -59,29 +68,29 @@ public:
   }
 
 private:
-  friend class SemaphoreGuard;
+  friend class SemaphorePermit;
 
   folly::fibers::Semaphore impl_;
 };
 
-class [[nodiscard]] SemaphoreGuard {
+class [[nodiscard]] SemaphorePermit {
 public:
-  ~SemaphoreGuard() noexcept {
+  ~SemaphorePermit() noexcept {
     release();
   }
 
-  SemaphoreGuard(SemaphoreGuard&& other) noexcept
+  SemaphorePermit(SemaphorePermit&& other) noexcept
     : acquired_{std::exchange(other.acquired_, nullptr)} {
   }
-  auto operator=(SemaphoreGuard&& other) noexcept -> SemaphoreGuard& {
+  auto operator=(SemaphorePermit&& other) noexcept -> SemaphorePermit& {
     if (this != &other) {
       release();
       acquired_ = std::exchange(other.acquired_, nullptr);
     }
     return *this;
   }
-  SemaphoreGuard(SemaphoreGuard const& other) = delete;
-  auto operator=(SemaphoreGuard const& other) -> SemaphoreGuard& = delete;
+  SemaphorePermit(SemaphorePermit const& other) = delete;
+  auto operator=(SemaphorePermit const& other) -> SemaphorePermit& = delete;
 
   /// Releases this guard if it's still held.
   auto release() -> void {
@@ -100,15 +109,22 @@ public:
 private:
   friend class Semaphore;
 
-  explicit SemaphoreGuard(Semaphore& acquired) : acquired_{&acquired} {
+  explicit SemaphorePermit(Semaphore& acquired) : acquired_{&acquired} {
   }
 
   Semaphore* acquired_;
 };
 
-inline auto Semaphore::acquire() -> Task<SemaphoreGuard> {
+inline auto Semaphore::acquire() -> Task<SemaphorePermit> {
   co_await consume();
-  co_return SemaphoreGuard{*this};
+  co_return SemaphorePermit{*this};
+}
+
+inline auto Semaphore::try_acquire() -> Option<SemaphorePermit> {
+  if (not try_consume()) {
+    return None{};
+  }
+  return SemaphorePermit{*this};
 }
 
 } // namespace tenzir

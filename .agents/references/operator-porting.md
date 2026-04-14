@@ -178,7 +178,6 @@ and `finalize()` to flush the last partial record.
 | `Ref<T>`                                           | `std::reference_wrapper<T>`                      |
 | `Mutex<T>`                                         | `std::mutex` + separate data                     |
 
-
 ### Lifecycle modeling for complex shutdown
 
 Use a `Lifecycle` enum rather than multiple booleans when the operator has

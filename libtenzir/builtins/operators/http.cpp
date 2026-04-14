@@ -784,17 +784,17 @@ auto next_link_target(std::string_view header) -> next_link_target_result {
     return {};
   }
   if (item.front() != '<') {
-    return {.malformed = true};
+    return {.target = std::nullopt, .malformed = true};
   }
   const auto uri_end = item.find('>');
   if (uri_end == std::string_view::npos) {
-    return {.malformed = true};
+    return {.target = std::nullopt, .malformed = true};
   }
   auto target = item.substr(1, uri_end - 1);
   auto params = item.substr(uri_end + 1);
   auto [param_parts, ok] = split_link_params(params);
   if (not ok) {
-    return {.malformed = true};
+    return {.target = std::nullopt, .malformed = true};
   }
   auto has_next = false;
   for (const auto part : param_parts) {

@@ -1,0 +1,4 @@
+{
+  log_name: "organizations/123456789/logs/org-log",
+  total_entries: 1000,
+}

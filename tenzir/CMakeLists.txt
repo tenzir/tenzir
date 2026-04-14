@@ -327,10 +327,13 @@ if (EXISTS "${_neo_tests_root}")
   endforeach ()
 endif ()
 
-# Discover contrib plugin test directories (associated with legacy tests)
-set(_contrib_test_dirs)
+# Discover contrib plugin test directories split by legacy/neo layout.
+set(_contrib_legacy_test_dirs)
+set(_contrib_neo_test_dirs)
 if (EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
-  file(GLOB _contrib_test_dirs
+  file(GLOB _contrib_legacy_test_dirs
+       "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test-legacy")
+  file(GLOB _contrib_neo_test_dirs
        "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
 endif ()
 
@@ -344,7 +347,7 @@ tenzir_build_test_command(
   WORKING_DIR
   "${CMAKE_SOURCE_DIR}/test-legacy"
   SELECTION
-  ${_contrib_test_dirs})
+  ${_contrib_legacy_test_dirs})
 add_custom_command(
   TARGET integration-legacy
   POST_BUILD
@@ -353,7 +356,8 @@ add_custom_command(
 
 add_custom_target(integration-neo DEPENDS tenzir)
 tenzir_build_test_command(_neo_cmd EXTRA_ARGS "--jobs" "4" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test")
+                          "${CMAKE_SOURCE_DIR}/test" SELECTION
+                          ${_contrib_neo_test_dirs})
 add_custom_command(
   TARGET integration-neo
   POST_BUILD
@@ -380,7 +384,7 @@ tenzir_build_test_command(
   WORKING_DIR
   "${CMAKE_SOURCE_DIR}/test-legacy"
   SELECTION
-  ${_contrib_test_dirs})
+  ${_contrib_legacy_test_dirs})
 add_custom_command(
   TARGET update-integration-legacy
   POST_BUILD
@@ -389,7 +393,8 @@ add_custom_command(
 
 add_custom_target(update-integration-neo DEPENDS tenzir)
 tenzir_build_test_command(_update_neo_cmd EXTRA_ARGS "--update" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test")
+                          "${CMAKE_SOURCE_DIR}/test" SELECTION
+                          ${_contrib_neo_test_dirs})
 add_custom_command(
   TARGET update-integration-neo
   POST_BUILD

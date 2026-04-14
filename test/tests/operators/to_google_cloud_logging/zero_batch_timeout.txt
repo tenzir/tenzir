@@ -1,0 +1,6 @@
+error: `batch_timeout` must be a positive duration
+ --> tests/operators/to_google_cloud_logging/zero_batch_timeout.tql:6:67
+  |
+6 | to_google_cloud_logging log_id="test", project="p", batch_timeout=0s
+  |                                                                   ^^ 
+  |

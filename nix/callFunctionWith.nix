@@ -13,11 +13,9 @@ let
   # wouldn't be passed to it
   missingArgs =
     # Filter out arguments that have a default value
-    (
-      lib.filterAttrs (name: value: !value)
-        # Filter out arguments that would be passed
-        (removeAttrs fargs (lib.attrNames allArgs))
-    );
+    lib.filterAttrs (name: value: !value)
+      # Filter out arguments that would be passed
+      (removeAttrs fargs (lib.attrNames allArgs));
 
   # Get a list of suggested argument names for a given missing one
   getSuggestions =

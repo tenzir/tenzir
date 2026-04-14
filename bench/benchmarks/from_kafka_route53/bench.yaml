@@ -3,17 +3,19 @@ description: Read the CloudWatch Route53 dataset from Kafka and discard the pars
 tags:
   benchmark: kafka
   dataset: route53
-input:
-  path: cloudwatch/route53.ndjson
-  source: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
-  events: 258600
-  measure: true
+inputs:
+  main:
+    path: cloudwatch/route53.ndjson
+    repetitions: 100
+    source:
+      url: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
+      num_events: 2586
 env:
   TENZIR_CONSOLE_FORMAT: none
 fixtures:
   - kafka:
+      inputs: [main]
       topic: from-kafka-route53-bench
-      repetitions: 100
 runtime:
   warmup_runs: 1
   measurement_runs: 3

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/compile_ctx.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/format_utils.hpp>
@@ -65,9 +66,8 @@ public:
       auto cast = slice.as<record_type>();
       TENZIR_ASSERT(cast);
       auto schema = tenzir::type{"tenzir.from", cast->type};
-      co_yield table_slice{arrow::RecordBatch::Make(schema.to_arrow_schema(),
-                                                    cast->length(),
-                                                    cast->array->fields()),
+      co_yield table_slice{record_batch_from_struct_array(
+                             schema.to_arrow_schema(), cast->array),
                            schema};
     }
   }
@@ -118,9 +118,8 @@ public:
     auto cast = std::move(result).unwrap().as<record_type>();
     TENZIR_ASSERT(cast);
     auto schema = tenzir::type{"tenzir.from", cast->type};
-    auto slice = table_slice{arrow::RecordBatch::Make(schema.to_arrow_schema(),
-                                                      cast->length(),
-                                                      cast->array->fields()),
+    auto slice = table_slice{record_batch_from_struct_array(
+                               schema.to_arrow_schema(), cast->array),
                              schema};
     read_bytes_counter_.add(slice.approx_bytes());
     co_await push(std::move(slice));
@@ -172,6 +171,7 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
+    TENZIR_UNUSED(dh);
     // FIXME
     TENZIR_ASSERT(input.is<void>());
     return tag_v<table_slice>;

@@ -486,7 +486,10 @@ auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
     native_malloc_usable_size_fn
       = lookup_symbol<malloc_usable_size_function_type>("malloc_usable_size");
   }
-  TENZIR_ALLOCATOR_ASSERT(native_malloc_usable_size_fn != nullptr);
+  if (native_malloc_usable_size_fn == nullptr) [[unlikely]] {
+    write_error("failed to lookup symbol malloc_usable_size\n");
+    std::_Exit(EXIT_FAILURE);
+  }
   return native_malloc_usable_size_fn(ptr);
 #  elif TENZIR_MACOS
   static auto native_malloc_usable_size_fn
@@ -606,6 +609,15 @@ auto trim_interval() noexcept -> tenzir::duration {
                 var_name, sv, res);
   }
   return res;
+}
+
+__attribute__((destructor(65535))) auto
+destroy_allocator_actor_stats_on_shutdown() noexcept -> void {
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
+  static_cast<polymorphic_allocator&>(arrow_allocator()).destroy_actor_stats();
+  static_cast<polymorphic_allocator&>(cpp_allocator()).destroy_actor_stats();
+  static_cast<polymorphic_allocator&>(c_allocator()).destroy_actor_stats();
+#endif
 }
 
 } // namespace tenzir::memory

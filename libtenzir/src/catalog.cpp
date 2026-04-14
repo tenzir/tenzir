@@ -24,7 +24,6 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/prune.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
@@ -78,7 +77,6 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
   auto flat_data_map = std::unordered_map<tenzir::type, flat_data_list>{};
   for (auto& [uuid, synopsis] : partitions) {
     TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
-    update_unprunable_fields(*synopsis);
     flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
   }
   for (auto& [type, flat_data] : flat_data_map) {
@@ -97,7 +95,6 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
 auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
   -> caf::result<atom::ok> {
   for (auto& [id, synopsis] : partitions) {
-    update_unprunable_fields(*synopsis);
     auto& entry = synopses_per_type[synopsis->schema][id];
     entry = std::move(synopsis);
   }
@@ -140,8 +137,7 @@ auto catalog_state::lookup(expression expr) const
                                          "{}",
                                          *self, expr, resolved.error()));
     }
-    auto pruned = prune(*resolved, unprunable_fields);
-    auto candidates_per_type = lookup_impl(pruned, type);
+    auto candidates_per_type = lookup_impl(*resolved, type);
     if (candidates_per_type.partition_infos.empty()) {
       continue;
     }
@@ -328,9 +324,11 @@ auto catalog_state::lookup_impl(const expression& expr,
             }
             case meta_extractor::schema_id: {
               auto result = catalog_lookup_result::candidate_info{};
-              for (const auto& [part_id, part_syn] : partition_synopses) {
+#if TENZIR_ENABLE_ASSERTIONS
+              for (const auto& [_, part_syn] : partition_synopses) {
                 TENZIR_ASSERT_EXPENSIVE(part_syn->schema == schema);
               }
+#endif
               if (evaluate(schema.make_fingerprint(), x.op, d)) {
                 for (const auto& [part_id, part_syn] : partition_synopses) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
@@ -461,25 +459,6 @@ auto catalog_state::memusage() const -> size_t {
     }
   }
   return result;
-}
-
-void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
-  for (auto const& [field, synopsis] : ps.field_synopses_) {
-    if (synopsis != nullptr && is<string_type>(field.type())) {
-      unprunable_fields.insert(std::string{field.name()});
-    }
-  }
-  // TODO/BUG: We also need to prevent pruning for enum types,
-  // which also use string literals for lookup. We must be even
-  // more strict here than with string fields, because incorrectly
-  // pruning string fields will only cause false positives, but
-  // incorrectly pruning enum fields can actually cause false negatives.
-  //
-  // else if (field.type() == enumeration_type{}) {
-  //   auto full_name = field.name();
-  //   for (auto suffix : detail::all_suffixes(full_name, "."))
-  //     unprunable_fields.insert(suffix);
-  // }
 }
 
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self)

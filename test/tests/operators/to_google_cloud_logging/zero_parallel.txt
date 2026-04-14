@@ -1,0 +1,6 @@
+error: `parallel` must be at least 1
+ --> tests/operators/to_google_cloud_logging/zero_parallel.tql:6:62
+  |
+6 | to_google_cloud_logging log_id="test", project="p", parallel=0
+  |                                                              ^ 
+  |

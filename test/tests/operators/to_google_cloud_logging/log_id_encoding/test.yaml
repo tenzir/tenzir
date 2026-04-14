@@ -1,0 +1,8 @@
+suite: log-id-encoding
+fixtures:
+  - google_cloud_logging
+timeout: 60
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

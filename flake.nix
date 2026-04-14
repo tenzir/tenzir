@@ -19,6 +19,11 @@
     sbomnix.url = "github:tiiuae/sbomnix";
     sbomnix.inputs.nixpkgs.follows = "nixpkgs";
 
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -74,14 +79,15 @@
           inherit tenzirPythonPkgs;
           forceClang = true;
         };
+        treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
       in
       {
         packages =
           flake-utils.lib.flattenTree {
-            tenzir-de = package.tenzir-de;
-            tenzir-de-static = package.tenzir-de-static;
-            tenzir = package.tenzir;
-            tenzir-static = package.tenzir-static;
+            inherit (package) tenzir-de;
+            inherit (package) tenzir-de-static;
+            inherit (package) tenzir;
+            inherit (package) tenzir-static;
             tenzir-de-clang = package-clang.tenzir-de;
             tenzir-de-static-clang = package-clang.tenzir-de-static;
             tenzir-clang = package-clang.tenzir;
@@ -92,84 +98,17 @@
           }
           // {
             default = self.packages.${system}.tenzir-static;
+            generate-sbom = pkgs.callPackage ./nix/generate-sbom.nix {
+              package = self.packages.${system}.tenzir-de-static;
+            };
           };
         legacyPackages = pkgs;
-        apps.tenzir-de = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de; };
-        apps.tenzir-de-static = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de-static; };
-        apps.tenzir = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir; };
-        apps.tenzir-static = flake-utils.lib.mkApp {
-          drv = self.packages.${system}.tenzir-static;
-        };
-        apps.default = self.apps.${system}.tenzir-static;
         # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
-        apps.generate-sbom =
-          let
-            nix = nixpkgs.legacyPackages."${system}".nix;
-            sbomnix = inputs.sbomnix.packages.${system}.sbomnix;
-          in
-          # We use tenzir-de-static so we don't require proprietary plugins,
-          # they don't influence the final result.
-          flake-utils.lib.mkApp {
-            drv = pkgs.writeScriptBin "generate" ''
-              #!${pkgs.runtimeShell}
-              TMP="$(mktemp -d)"
-              OUTPUT="$1"
-              if [ -z "$OUTPUT" ]; then
-                OUTPUT="tenzir.spdx.json"
-              fi
-              mkdir -p "$(dirname "$OUTPUT")"
-              echo "Writing intermediate files to $TMP"
-              staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-de-static)"
-              echo "Converting vendored spdx info from KV to JSON"
-              ${pkgs.python3Packages.spdx-tools}/bin/pyspdxtools -i vendored.spdx -o $TMP/vendored.spdx.json
-              echo "Deriving SPDX from the Nix package"
-              ${sbomnix}/bin/sbomnix --buildtime ''${staticDrv} \
-                --spdx=$TMP/nix.spdx.json \
-                --csv=/dev/null \
-                --cdx=/dev/null
-              echo "Replacing the inferred SPDXID for Tenzir with a static id"
-              name=''$(${pkgs.jq}/bin/jq -r '.name' $TMP/nix.spdx.json)
-              sed -i "s|$name|SPDXRef-Tenzir|g" $TMP/nix.spdx.json
-              echo "Removing the generated Tenzir package entry"
-              ${pkgs.jq}/bin/jq 'del(.packages[] | select(.SPDXID == "SPDXRef-Tenzir"))' $TMP/nix.spdx.json > $TMP/nix2.spdx.json
-              echo "Merging the SPDX JSON files"
-              ${pkgs.jq}/bin/jq -s 'def deepmerge(a;b):
-                reduce b[] as $item (a;
-                  reduce ($item | keys_unsorted[]) as $key (.;
-                    $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
-                      deepmerge({}; [if .[$key] == null then {} else .[$key] end, $val])
-                    elif ($type == "array") then
-                      (.[$key] + $val | unique)
-                    else
-                      $val
-                    end)
-                  );
-                deepmerge({}; .)' $TMP/nix2.spdx.json $TMP/vendored.spdx.json > $TMP/nix3.spdx.json
-              echo "Sorting the output"
-              ${pkgs.jq}/bin/jq '.packages|=sort_by(.name)|.relationships|=sort_by(.spdxElementId,.relatedSpdxElement)' $TMP/nix3.spdx.json > "$OUTPUT"
-              echo "Wrote $OUTPUT"
-            '';
-          };
-        # Legacy aliases for backwards compatibility.
-        devShell = import ./shell.nix { inherit pkgs package; };
-        formatter = pkgs.nixfmt;
-        hydraJobs = {
-          packages = self.packages.${system};
-        }
-        // (
-          let
-            tenzir-vm-tests = nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix {
-              # FIXME: the pkgs channel has an issue made the testing creashed
-              makeTest = import (nixpkgs.outPath + "/nixos/tests/make-test-python.nix");
-              inherit self pkgs;
-            };
-          in
-          pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            inherit (tenzir-vm-tests)
-              tenzir-vm-systemd
-              ;
-          }
-        );
+        devShells.default = import ./shell.nix { inherit pkgs package; };
+        formatter = treefmtEval.config.build.wrapper;
+        checks = {
+          formatting = treefmtEval.config.build.check self;
+        };
       }
     );
 }

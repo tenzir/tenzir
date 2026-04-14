@@ -1,0 +1,10 @@
+// Send 1000 events using organization as the parent (not project).
+from {kind: "audit", actor: "admin"},
+     {kind: "policy", rule: "deny-all"}
+repeat 500
+enumerate id
+to_google_cloud_logging log_id="org-log",
+                        organization="123456789",
+                        payload=f"org-event-{id}",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

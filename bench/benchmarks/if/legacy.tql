@@ -1,0 +1,16 @@
+---
+bench:
+  id: legacy
+  description: benchmark if rebatching
+  min_version: "5.20.0"
+---
+
+from { key: true },
+     { key: false }
+repeat 100k
+batch
+if key {
+  value = "a"
+} else {
+  value = "b"
+}

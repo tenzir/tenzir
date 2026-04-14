@@ -1,0 +1,6 @@
+warning: expected `list` or `record`, but got `string`
+ --> tests/operators/unroll/wrong_type.tql:2:8
+  |
+2 | unroll x
+  |        ~ 
+  |

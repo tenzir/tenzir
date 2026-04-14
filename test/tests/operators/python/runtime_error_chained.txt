@@ -1,0 +1,12 @@
+error: Traceback (most recent call last):
+  File "<inline>", line 2, in <module>
+    raise ValueError('inner')
+ValueError: inner
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<inline>", line 4, in <module>
+    raise RuntimeError('outer') from err
+RuntimeError: outer
+on input event: {'x': 1}

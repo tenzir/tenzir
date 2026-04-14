@@ -12,6 +12,7 @@
 #pragma once
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/channel.hpp"
 #include "tenzir/async/generator.hpp"
 #include "tenzir/async/signal.hpp"
 #include "tenzir/result.hpp"
@@ -126,12 +127,6 @@ TENZIR_ENUM(
   /// Inform the controller what checkpoint state we are in.
   checkpoint_begin, checkpoint_done);
 
-// TODO: Where to place this?
-template <class T>
-class Receiver;
-template <class T>
-class Sender;
-
 class Never {
 private:
   Never() = default;
@@ -237,7 +232,7 @@ public:
     = 0;
 
   /// Returns a per-operator IO executor.
-  virtual auto make_io_executor(OpId id)
+  virtual auto make_io_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<folly::IOExecutor>
     = 0;
 
@@ -251,6 +246,9 @@ public:
 
   /// Returns whether the pipeline is hidden.
   virtual auto is_hidden() const -> bool = 0;
+
+  /// Returns whether the operator has access to an interactive terminal.
+  virtual auto has_terminal() const -> bool = 0;
 
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;

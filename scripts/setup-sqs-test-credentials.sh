@@ -153,7 +153,7 @@ echo "=== Creating Access Keys ==="
 # Use mapfile to safely handle the key list without word splitting issues
 mapfile -t EXISTING_KEYS < <(aws iam list-access-keys --user-name "$USER_NAME" --profile "$PROFILE" --query 'AccessKeyMetadata[].AccessKeyId' --output text | tr '\t' '\n')
 for key in "${EXISTING_KEYS[@]}"; do
-  [[ -z "$key" ]] && continue
+  [[ -z $key ]] && continue
   echo "Deleting existing access key: $key"
   aws iam delete-access-key --user-name "$USER_NAME" --access-key-id "$key" --profile "$PROFILE"
 done

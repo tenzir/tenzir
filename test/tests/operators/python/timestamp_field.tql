@@ -1,0 +1,2 @@
+from {ts: 2024-01-02T03:04:05.123456Z}
+python "self.ts_copy = self.ts"

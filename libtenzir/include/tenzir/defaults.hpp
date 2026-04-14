@@ -229,9 +229,6 @@ inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 /// Maximum number of in-memory INDEX partitions.
 inline constexpr size_t max_in_mem_partitions = 1;
 
-/// Number of immediately scheduled INDEX partitions.
-inline constexpr size_t taste_partitions = 5;
-
 /// Maximum number of concurrent INDEX queries.
 inline constexpr size_t num_query_supervisors = 10;
 

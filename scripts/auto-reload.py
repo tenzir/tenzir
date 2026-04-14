@@ -53,7 +53,7 @@ def main():
                 "tenzir",
                 "--color=always",
                 "-q",
-                "--implicit-events-sink=write_tql color=true | save_file \"/dev/stdout\"",
+                '--implicit-events-sink=write_tql color=true | save_file "/dev/stdout"',
                 "-f",
                 tql,
             ],
@@ -69,7 +69,6 @@ def main():
             sys.stdout.buffer.write(c)
             sys.stdout.flush()
             if check():
-
                 return
         if first:
             clear()

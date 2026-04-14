@@ -1,0 +1,4 @@
+{
+  log_name: "folders/987654321/logs/folder-log",
+  total_entries: 1000,
+}

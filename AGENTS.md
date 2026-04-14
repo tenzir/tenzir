@@ -61,6 +61,8 @@ Run `/compile` to compile the build. Fall back to `scripts/build.sh` if
 `/compile` is unavailable.
 
 These commands auto-discover a configured build directory under `build/`.
+By default, discovery picks the directory with the most recently modified
+`CMakeCache.txt`. Set `BUILD_DIR` to override this default.
 
 ### Run pipelines
 

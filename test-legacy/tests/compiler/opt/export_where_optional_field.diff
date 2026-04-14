@@ -56,8 +56,23 @@
 -        op: "eq" @ 89..91,
 -        right: constant int64 42 @ 92..94
 -      }
-+    SaveStdoutIr {
-+      
++    GenericIr {
++      op: {
++        path: [
++          `save_stdout` @ 0..0
++        ],
++        ref: std::save_stdout/op
++      },
++      desc: "save_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      named_args: [
++        
++      ]
      }
    ]
  }

@@ -1,0 +1,4 @@
+error: File "<inline>", line 1
+    if True print(1)
+            ^^^^^
+SyntaxError: invalid syntax

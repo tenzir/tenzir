@@ -13,8 +13,7 @@ foreach (_fb_lib folly mvfst proxygen)
   endif ()
 endforeach ()
 foreach (_fb_lib fizz wangle)
-  if (NOT
-      EXISTS
+  if (NOT EXISTS
       "${CMAKE_CURRENT_SOURCE_DIR}/${_fb_lib}/${_fb_lib}/CMakeLists.txt")
     message(
       FATAL_ERROR
@@ -29,11 +28,8 @@ find_package(glog REQUIRED)
 # Prefer bundled Facebook headers over any globally installed copies (e.g.
 # Homebrew) so all five libs compile against a consistent API surface.
 include_directories(
-  BEFORE
-  "${CMAKE_CURRENT_SOURCE_DIR}/folly"
-  "${CMAKE_CURRENT_SOURCE_DIR}/fizz"
-  "${CMAKE_CURRENT_SOURCE_DIR}/wangle"
-  "${CMAKE_CURRENT_SOURCE_DIR}/mvfst"
+  BEFORE "${CMAKE_CURRENT_SOURCE_DIR}/folly" "${CMAKE_CURRENT_SOURCE_DIR}/fizz"
+  "${CMAKE_CURRENT_SOURCE_DIR}/wangle" "${CMAKE_CURRENT_SOURCE_DIR}/mvfst"
   "${CMAKE_CURRENT_SOURCE_DIR}/proxygen")
 
 # Configure folly build options
@@ -114,6 +110,8 @@ set(CMAKE_SKIP_INSTALL_RULES ON)
 
 # ---- 1. FOLLY ----
 add_subdirectory(folly SYSTEM)
+target_compile_options(
+  folly INTERFACE $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-c2y-extensions>)
 if (NOT TARGET Folly::folly)
   add_library(Folly::folly ALIAS folly)
 endif ()
@@ -142,8 +140,7 @@ add_subdirectory(fizz/fizz SYSTEM)
 # Fix include path: fizz uses CMAKE_SOURCE_DIR which is wrong for subdirectory
 # builds
 target_include_directories(
-  fizz BEFORE
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/fizz>)
+  fizz BEFORE PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/fizz>)
 if (NOT TARGET fizz::fizz)
   add_library(fizz::fizz ALIAS fizz)
 endif ()
@@ -166,15 +163,14 @@ set(Fizz_DIR
 add_subdirectory(wangle/wangle SYSTEM)
 # Fix include path (same CMAKE_SOURCE_DIR issue)
 target_include_directories(
-  wangle BEFORE
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wangle>)
+  wangle BEFORE PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wangle>)
 # wangle's FizzAcceptorHandshakeHelper uses folly::AsyncFdSocket but the
 # upstream CMakeLists.txt is missing the dependency declaration.
 if (TARGET wangle_acceptor AND TARGET folly_io_async_fdsock_async_fd_socket)
   target_link_libraries(wangle_acceptor
     PUBLIC folly_io_async_fdsock_async_fd_socket)
 endif ()
-if (NOT TARGET wangle::wangle)
+  if (NOT TARGET wangle::wangle)
   add_library(wangle::wangle ALIAS wangle)
 endif ()
 file(
@@ -194,10 +190,8 @@ add_subdirectory(mvfst SYSTEM)
 # mvfst's install(EXPORT) adds the mvfst:: namespace, but add_subdirectory
 # only creates bare targets. Create aliases for all targets that proxygen
 # and other downstream libs reference with the mvfst:: prefix.
-file(
-  GLOB_RECURSE
-  _mvfst_cmake_files
-  "${CMAKE_CURRENT_SOURCE_DIR}/mvfst/quic/*/CMakeLists.txt")
+file(GLOB_RECURSE _mvfst_cmake_files
+     "${CMAKE_CURRENT_SOURCE_DIR}/mvfst/quic/*/CMakeLists.txt")
 foreach (_mvfst_cmake_file IN LISTS _mvfst_cmake_files)
   file(READ "${_mvfst_cmake_file}" _mvfst_cmake_content)
   string(REGEX MATCHALL "TARGETS mvfst_[a-z_]+" _mvfst_matches
@@ -226,7 +220,7 @@ TenzirSystemizeTarget(proxygen_coro_client)
 # from proxygen_utils_trace_event_types but does not declare the dependency.
 # Patch it here so the linker sees the archives in the correct order.
 target_link_libraries(proxygen_utils_trace
-  PUBLIC proxygen_utils_trace_event_types)
+                      PUBLIC proxygen_utils_trace_event_types)
 dependency_summary("proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/proxygen"
                    "Dependencies")
 
@@ -234,17 +228,15 @@ dependency_summary("proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/proxygen"
 # cmake_install.cmake files. The parent facebook install script still
 # includes these paths, so create no-op stubs to keep install steps working.
 foreach (_tenzir_fb_install_subdir folly fizz/fizz wangle/wangle mvfst proxygen)
-  set(
-    _tenzir_fb_install_stub
-    "${CMAKE_CURRENT_BINARY_DIR}/${_tenzir_fb_install_subdir}/cmake_install.cmake"
+  set(_tenzir_fb_install_stub
+      "${CMAKE_CURRENT_BINARY_DIR}/${_tenzir_fb_install_subdir}/cmake_install.cmake"
   )
   get_filename_component(_tenzir_fb_install_stub_dir
                          "${_tenzir_fb_install_stub}" DIRECTORY)
   file(MAKE_DIRECTORY "${_tenzir_fb_install_stub_dir}")
   if (NOT EXISTS "${_tenzir_fb_install_stub}")
-    file(
-      WRITE "${_tenzir_fb_install_stub}"
-      "# Bundled via Tenzir; install rules intentionally skipped.\n")
+    file(WRITE "${_tenzir_fb_install_stub}"
+         "# Bundled via Tenzir; install rules intentionally skipped.\n")
   endif ()
 endforeach ()
 unset(_tenzir_fb_install_subdir)
@@ -290,8 +282,7 @@ install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/proxygen/generated/proxygen"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   COMPONENT Development
-  OPTIONAL
-  FILES_MATCHING
+  OPTIONAL FILES_MATCHING
   PATTERN "*.h"
   PATTERN "*.hpp")
 

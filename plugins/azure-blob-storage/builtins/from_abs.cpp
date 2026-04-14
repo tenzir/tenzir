@@ -218,18 +218,14 @@ protected:
           .emit(dh);
         return;
       }
-      auto service_client = std::move(*service_client_result);
-      auto [container, blob_path] = split_at_first_slash(path);
-      auto container_client = service_client->GetBlobContainerClient(container);
-      auto blob_client = container_client.GetBlobClient(blob_path);
       try {
+        auto service_client = std::move(*service_client_result);
+        auto [container, blob_path] = split_at_first_slash(path);
+        auto container_client
+          = service_client->GetBlobContainerClient(container);
+        auto blob_client = container_client.GetBlobClient(blob_path);
         blob_client.Delete();
-      } catch (Azure::Storage::StorageException const& e) {
-        diagnostic::warning("failed to delete `{}`", path)
-          .primary(args_.url)
-          .note("{}", e.what())
-          .emit(dh);
-      } catch (Azure::Core::Http::TransportException const& e) {
+      } catch (const Azure::Core::RequestFailedException& e) {
         diagnostic::warning("failed to delete `{}`", path)
           .primary(args_.url)
           .note("{}", e.what())

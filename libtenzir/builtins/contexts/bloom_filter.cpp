@@ -40,6 +40,13 @@ namespace tenzir::plugins::bloom_filter {
 
 namespace {
 
+struct BloomFilterArgs {
+  located<std::string> name;
+  located<std::uint64_t> capacity;
+  located<double> fp_probability;
+  location operator_location;
+};
+
 class bloom_filter_context final : public virtual context {
 public:
   bloom_filter_context() noexcept = default;
@@ -275,7 +282,7 @@ struct v1_loader : public context_loader {
   }
 };
 
-class plugin : public virtual context_factory_plugin<"bloom-filter"> {
+class plugin : public virtual ContextFactoryPluginCrtp<"bloom-filter", plugin> {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     return caf::none;
@@ -316,6 +323,44 @@ class plugin : public virtual context_factory_plugin<"bloom-filter"> {
                              "--fp-probability not in (0,1)");
     }
     return std::make_unique<bloom_filter_context>(n, p);
+  }
+
+public:
+  using Args = BloomFilterArgs;
+
+  auto describe() const -> Description override {
+    auto d = Describer<BloomFilterArgs, CreateOperator>{};
+    auto name_arg = d.positional("name", &BloomFilterArgs::name);
+    auto cap_arg = d.named("capacity", &BloomFilterArgs::capacity);
+    auto prob_arg = d.named("fp_probability", &BloomFilterArgs::fp_probability);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto name, ctx.get(name_arg));
+      TRY(auto cap, ctx.get(cap_arg));
+      TRY(auto prob, ctx.get(prob_arg));
+      std::ignore = validate_name(name, ctx);
+      if (cap.inner == 0) {
+        diagnostic::error("capacity must be greater than zero")
+          .primary(cap)
+          .emit(ctx);
+      }
+      if (prob.inner <= 0.0 or prob.inner >= 1.0) {
+        diagnostic::error("false-positive probability must be in (0, 1)")
+          .primary(prob)
+          .emit(ctx);
+      }
+      return {};
+    });
+    d.operator_location(&BloomFilterArgs::operator_location);
+    return d.without_optimize();
+  }
+
+  static auto make_context(BloomFilterArgs args, diagnostic_handler&)
+    -> failure_or<make_context_result> {
+    return make_context_result{
+      std::move(args.name),
+      std::make_unique<bloom_filter_context>(args.capacity.inner,
+                                             args.fp_probability.inner),
+    };
   }
 
   auto make_context(operator_factory_invocation inv, session ctx) const

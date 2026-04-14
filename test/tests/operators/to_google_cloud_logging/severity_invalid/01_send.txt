@@ -1,0 +1,7 @@
+warning: got invalid `severity`
+  --> tests/operators/to_google_cloud_logging/severity_invalid/01_send.tql:10:34
+   |
+10 |                         severity=sev,
+   |                                  ~~~ 
+   |
+   = note: `bogus` is invalid; using `default`

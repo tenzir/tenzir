@@ -59,7 +59,7 @@ public:
     }
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     // Pass through data (should not be called since we return done)
     co_await push(std::move(input));
