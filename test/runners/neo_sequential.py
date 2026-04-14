@@ -11,35 +11,22 @@ from tenzir_test.runners._utils import get_run_module
 
 
 def _split_top_level_chunks(source: str) -> list[str]:
-    lets: list[str] = []
-    let_names: set[str] = set()
-    body_lines: list[str] = []
-    for line in source.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("let $"):
-            name = stripped.split("=", 1)[0].removeprefix("let").strip()
-            if name not in let_names:
-                lets.append(line)
-                let_names.add(name)
-            body_lines.append("")
-            continue
-        body_lines.append(line)
-    prefix = "\n".join(lets)
-    if any(line.strip() == "---tql" for line in body_lines):
-        return _split_marked_chunks(body_lines, prefix)
+    lines = source.splitlines()
+    if any(line.strip() == "---tql" for line in lines):
+        return _split_marked_chunks(lines)
     return [source.strip()] if source.strip() else []
 
 
-def _split_marked_chunks(lines: list[str], prefix: str) -> list[str]:
+def _split_marked_chunks(lines: list[str]) -> list[str]:
     chunks: list[str] = []
     current: list[str] = []
     for line in lines:
         if line.strip() == "---tql":
-            _append_chunk(chunks, prefix, current)
+            _append_chunk(chunks, current)
             current = []
             continue
         current.append(line)
-    _append_chunk(chunks, prefix, current)
+    _append_chunk(chunks, current)
     return chunks
 
 
@@ -53,7 +40,7 @@ def _strip_frontmatter(source: str) -> str:
     return source
 
 
-def _append_chunk(chunks: list[str], prefix: str, lines: list[str]) -> None:
+def _append_chunk(chunks: list[str], lines: list[str]) -> None:
     chunk = "\n".join(lines).strip()
     if not chunk:
         return
@@ -62,7 +49,7 @@ def _append_chunk(chunks: list[str], prefix: str, lines: list[str]) -> None:
         for line in chunk.splitlines()
     ):
         return
-    chunks.append(f"{prefix}\n\n{chunk}" if prefix else chunk)
+    chunks.append(chunk)
 
 
 class NeoSequentialRunner(TqlRunner):
