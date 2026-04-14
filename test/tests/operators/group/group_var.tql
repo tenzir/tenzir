@@ -1,0 +1,5 @@
+from {x: 1, cat: "a"}, {x: 2, cat: "b"}, {x: 3, cat: "a"}
+group cat {
+  this.g = $group
+}
+sort x
