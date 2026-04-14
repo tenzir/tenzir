@@ -50,6 +50,7 @@ def zmq() -> FixtureHandle:
     endpoint = f"tcp://{_HOST}:{find_free_port()}"
     ready_fd, ready_path = tempfile.mkstemp(prefix="zmq-ready-", suffix=".flag")
     os.close(ready_fd)
+    os.unlink(ready_path)
     capture_fd, capture_path = tempfile.mkstemp(prefix="zmq-capture-", suffix=".log")
     os.close(capture_fd)
     helper_log_fd, helper_log_path = tempfile.mkstemp(

@@ -8,6 +8,7 @@
 
 #include "transport.hpp"
 
+#include <tenzir/async/task.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -161,10 +162,21 @@ public:
         framed = std::move(*with_prefix);
       }
       while (args_.monitor and socket_.num_peers() == 0 and not done_) {
-        socket_.poll_monitor(250ms);
+        socket_.poll_monitor(0ms);
+        if (socket_.num_peers() == 0) {
+          co_await sleep_for(250ms);
+        }
       }
       socket_.poll_monitor(0ms);
-      auto err = socket_.send(framed, 250ms);
+      auto deadline = std::chrono::steady_clock::now() + 250ms;
+      auto err = socket_.send(framed, 0ms);
+      while (err == ec::timeout and not done_) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+          break;
+        }
+        co_await sleep_for(10ms);
+        err = socket_.send(framed, 0ms);
+      }
       if (not err) {
         continue;
       }

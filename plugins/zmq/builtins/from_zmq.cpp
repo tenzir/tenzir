@@ -106,9 +106,10 @@ public:
     if (done_ or stop_requested_) {
       co_await wait_forever();
     }
-    if (auto message = socket_.receive(250ms)) {
+    if (auto message = socket_.receive(0ms)) {
       co_return SourceMessage{std::move(*message)};
     } else if (message == ec::timeout) {
+      co_await sleep_for(250ms);
       co_return SourceMessage{PollTimeout{}};
     } else {
       diagnostic::error("failed to receive ZeroMQ message")
