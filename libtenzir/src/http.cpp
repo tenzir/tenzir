@@ -219,10 +219,6 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
 auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       std::span<std::byte const> input, diagnostic_handler& dh,
                       size_t max_output_size) -> Result<blob, uint16_t> {
-  if (max_output_size == 0) {
-    diagnostic::warning("decompressed output exceeds limit").emit(dh);
-    return Err{(uint16_t)413}; // payload too large
-  }
   auto out = blob{};
   auto initial_size
     = std::min(max_output_size, std::max<size_t>(input.size_bytes() * 2, 64));

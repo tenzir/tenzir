@@ -653,8 +653,8 @@ public:
       // notify the handler to respond
       it->second.finished->send(200);
       active_requests->erase(request_id);
-      should_finish
-        = lifecycle_ == Lifecycle::draining and active_requests->empty();
+      should_finish = lifecycle_ == Lifecycle::draining
+                      and active_requests->empty() and message_queue_->empty();
     }
     if (should_finish) {
       server_ = None{};
