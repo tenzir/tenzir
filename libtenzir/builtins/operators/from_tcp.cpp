@@ -19,6 +19,7 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/socket.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -32,6 +33,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -74,6 +76,26 @@ struct FromTcpArgs {
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
+
+auto socket_address_to_ip(folly::SocketAddress const& address) -> ip {
+  auto storage = sockaddr_storage{};
+  auto length = address.getAddress(&storage);
+  TENZIR_ASSERT(length > 0);
+  auto result = ip{};
+  if (storage.ss_family == AF_INET) {
+    auto sockaddr = sockaddr_in{};
+    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
+    auto err = convert(sockaddr, result);
+    TENZIR_ASSERT(not err);
+  } else {
+    TENZIR_ASSERT(storage.ss_family == AF_INET6);
+    auto sockaddr = sockaddr_in6{};
+    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
+    auto err = convert(sockaddr, result);
+    TENZIR_ASSERT(not err);
+  }
+  return result;
+}
 
 class FromTcpConnector final : public Operator<void, table_slice> {
 public:
@@ -176,13 +198,15 @@ public:
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
         auto peer_addr = transport->getPeerAddress();
+        auto peer_ip = socket_address_to_ip(peer_addr);
         auto peer_record = record{
-          {"ip", peer_addr.getAddressStr()},
+          {"ip", peer_ip},
           {"port", int64_t{peer_addr.getPort()}},
         };
         auto bytes_read_counter = ctx.make_counter(
-          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    peer_addr.getAddressStr())},
+          MetricsLabel{"peer_ip",
+                       MetricsLabel::FixedString::truncate(
+                         fmt::to_string(peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;

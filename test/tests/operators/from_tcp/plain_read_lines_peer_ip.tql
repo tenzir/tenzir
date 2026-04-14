@@ -1,0 +1,17 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+assertions:
+  fixtures:
+    tcp:
+      server_sent_contains: "foo"
+timeout: 60
+---
+
+from_tcp env("TCP_ENDPOINT") {
+  read_lines
+  peer_ip = $peer.ip
+}
+select peer_ip
+head 1

@@ -8,6 +8,7 @@ timeout: 60
 accept_tcp env("TCP_ENDPOINT"), resolve_hostnames=true {
   read_lines
   has_hostname = $peer.hostname != null
+  peer_ip = $peer.ip
 }
-select has_hostname
+select has_hostname, peer_ip
 head 1

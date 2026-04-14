@@ -1,4 +1,3 @@
 {
-  has_hostname: true,
   peer_ip: 127.0.0.1,
 }

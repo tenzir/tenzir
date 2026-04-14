@@ -76,7 +76,6 @@ struct AcceptTcpArgs {
 
 struct PeerInfo {
   ip address;
-  std::string address_str;
   int64_t port;
 };
 
@@ -99,7 +98,6 @@ auto make_peer_info(folly::SocketAddress const& address) -> PeerInfo {
   }
   return {
     .address = result,
-    .address_str = address.getAddressStr(),
     .port = int64_t{address.getPort()},
   };
 }
@@ -110,7 +108,7 @@ public:
 
   struct Accepted {
     Box<folly::coro::Transport> transport;
-    std::string peer_ip;
+    ip peer_ip;
     int64_t peer_port;
     ReverseDnsResult peer_reverse_dns;
   };
@@ -235,8 +233,8 @@ public:
         auto env = substitute_ctx::env_t{};
         env[args_.peer_info] = std::move(peer_record);
         auto bytes_read = ctx.make_counter(
-          MetricsLabel{"peer_ip",
-                       MetricsLabel::FixedString::truncate(accepted.peer_ip)},
+          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                     fmt::to_string(accepted.peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_);
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
@@ -461,7 +459,7 @@ private:
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
     co_await message_queue_->enqueue(Accepted{
       .transport = std::move(transport),
-      .peer_ip = std::move(peer_info.address_str),
+      .peer_ip = peer_info.address,
       .peer_port = peer_info.port,
       .peer_reverse_dns = std::move(peer_reverse_dns),
     });
