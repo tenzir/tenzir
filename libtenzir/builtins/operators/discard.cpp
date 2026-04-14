@@ -82,12 +82,12 @@ private:
   MetricsCounter write_bytes_counter_;
 };
 
-class discard_ir final : public ir::Operator {
+class DiscardIr final : public ir::Operator {
 public:
-  discard_ir() = default;
+  DiscardIr() = default;
 
   auto name() const -> std::string override {
-    return "discard_ir";
+    return "DiscardIr";
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -106,6 +106,18 @@ public:
     });
   }
 
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    TENZIR_UNUSED(order);
+    auto replacement = std::vector<Box<Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    return {
+      std::move(filter),
+      event_order::unordered,
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
     if (input.is<void>()) {
@@ -117,7 +129,7 @@ public:
     return tag_v<void>;
   }
 
-  friend auto inspect(auto& f, discard_ir& x) -> bool {
+  friend auto inspect(auto& f, DiscardIr& x) -> bool {
     return f.object(x).fields();
   }
 };
@@ -148,7 +160,7 @@ public:
     // TODO
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(inv.args.empty());
-    return discard_ir{};
+    return DiscardIr{};
   }
 };
 
@@ -159,4 +171,4 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::discard::plugin)
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::ir::Operator,
-                            tenzir::plugins::discard::discard_ir>);
+                            tenzir::plugins::discard::DiscardIr>);
