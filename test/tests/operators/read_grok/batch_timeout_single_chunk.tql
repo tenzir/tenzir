@@ -1,0 +1,10 @@
+from {
+  line: "foo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1\nfoo 1"
+}
+write_lines
+read_grok "%{WORD:word} %{NUMBER:value}", _batch_size=1000000, _batch_timeout=1ns
+measure
+drop timestamp, schema_id, schema
+summarize total=sum(events), slices=count()
+where slices > 1
+drop slices

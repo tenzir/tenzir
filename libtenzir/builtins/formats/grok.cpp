@@ -812,12 +812,11 @@ public:
       ++begin;
     }
     ended_on_carriage_return_ = false;
-    auto now = multi_series_builder::clock::now();
     for (auto current = begin; current != end; ++current) {
       if (*current != '\n' and *current != '\r') {
         continue;
       }
-      co_await pusher_.push(builder_->yield_ready_as_table_slice(now), push);
+      co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
       if (buffer_.empty()) {
         process_line({begin, current});
       } else {
@@ -835,7 +834,7 @@ public:
       begin = current + 1;
     }
     buffer_.append(begin, end);
-    co_await pusher_.push(builder_->yield_ready_as_table_slice(now), push);
+    co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx&)
