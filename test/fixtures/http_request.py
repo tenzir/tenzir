@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import os
 import shutil
 import ssl
-import subprocess
 import tempfile
 import threading
 import time
@@ -96,7 +94,7 @@ def http_request() -> FixtureHandle:
     tls_ca: Path | None = None
     if opts.generate_tls_cert:
         tls_dir = Path(tempfile.mkdtemp(prefix="http-request-tls-"))
-        cert_path, _key, tls_ca, tls_cert_and_key = generate_self_signed_cert(
+        _cert, _key, tls_ca, tls_cert_and_key = generate_self_signed_cert(
             tls_dir, common_name=endpoint, san_entries=[f"IP:{_HOST}"]
         )
     request_specs = _to_request_specs(opts)
@@ -121,16 +119,23 @@ def http_request() -> FixtureHandle:
                 if stop_event.is_set():
                     stopped_early[0] = True
                     return
-                req = Request(target_url, data=payload, method=spec.method, headers=headers)
+                req = Request(
+                    target_url, data=payload, method=spec.method, headers=headers
+                )
                 try:
-                    with urlopen(req, timeout=opts.request_timeout, context=ssl_context) as response:
+                    with urlopen(
+                        req, timeout=opts.request_timeout, context=ssl_context
+                    ) as response:
                         body = response.read().decode("utf-8", errors="replace")
                         if response.status != spec.expected_status:
                             errors.append(
                                 "expected HTTP status "
                                 f"{spec.expected_status}, got {response.status}"
                             )
-                        if spec.expected_body is not None and body != spec.expected_body:
+                        if (
+                            spec.expected_body is not None
+                            and body != spec.expected_body
+                        ):
                             errors.append(
                                 f"expected HTTP body {spec.expected_body!r}, got {body!r}"
                             )
@@ -170,7 +175,9 @@ def http_request() -> FixtureHandle:
     worker = threading.Thread(target=_worker, daemon=True)
     worker.start()
 
-    def _assert_test(*, test: Path, assertions: dict[str, Any] | None = None, **_: Any) -> None:
+    def _assert_test(
+        *, test: Path, assertions: dict[str, Any] | None = None, **_: Any
+    ) -> None:
         _ = (test, assertions)
 
     def _teardown() -> None:
@@ -178,7 +185,9 @@ def http_request() -> FixtureHandle:
         worker.join(timeout=2)
         try:
             if worker.is_alive():
-                raise RuntimeError("http_request fixture worker did not stop within 2 seconds")
+                raise RuntimeError(
+                    "http_request fixture worker did not stop within 2 seconds"
+                )
             if errors:
                 raise AssertionError("; ".join(errors))
             expected_count = len(request_specs)

@@ -1,0 +1,13 @@
+---
+fixtures:
+  - http_request_concurrent:
+      path: /ingest
+      body: '{"value":42}'
+      concurrent: 3
+      expected_statuses: [201, 503, 503]
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT"), max_connections=1, responses={"/ingest": {code: 201, content_type: "text/plain", body: "created"}} {
+  read_json
+}
+head 1

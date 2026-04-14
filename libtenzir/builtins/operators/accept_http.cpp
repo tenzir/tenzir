@@ -365,16 +365,30 @@ auto make_fixed_response(Response const& response)
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
   RequestHandler(AcceptHttpArgs args, Arc<MessageQueue> queue,
-                 Arc<Atomic<uint64_t>> request_id_gen, size_t max_request_size)
+                 Arc<Atomic<uint64_t>> request_id_gen,
+                 Arc<Atomic<uint64_t>> active_connections,
+                 size_t max_request_size, uint64_t max_connections)
     : args_{std::move(args)},
       queue_{std::move(queue)},
       request_id_gen_{std::move(request_id_gen)},
-      max_request_size_{max_request_size} {
+      active_connections_{std::move(active_connections)},
+      max_request_size_{max_request_size},
+      max_connections_{max_connections} {
   }
 
   auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
                      proxygen::coro::HTTPSourceHolder request_source)
     -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
+    auto previous
+      = active_connections_->fetch_add(1, std::memory_order_acq_rel);
+    if (previous >= max_connections_) {
+      active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(503);
+    }
+    auto connection_guard
+      = folly::makeGuard([active = active_connections_]() mutable {
+          active->fetch_sub(1, std::memory_order_acq_rel);
+        });
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
     std::string path;
     auto bytes_received = size_t{};
@@ -451,7 +465,9 @@ private:
   AcceptHttpArgs args_;
   Arc<MessageQueue> queue_;
   Arc<Atomic<uint64_t>> request_id_gen_;
+  Arc<Atomic<uint64_t>> active_connections_;
   size_t max_request_size_;
+  uint64_t max_connections_;
 };
 
 class AcceptHttp final : public Operator<void, table_slice> {
@@ -466,8 +482,10 @@ public:
       co_return;
     }
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
+    auto active_connections = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
     auto request_handler = std::make_shared<RequestHandler>(
-      args_, message_queue_, request_id_gen, get_max_request_size());
+      args_, message_queue_, request_id_gen, active_connections,
+      get_max_request_size(), get_max_connections());
     try {
       auto server = proxygen::coro::ScopedHTTPServer::start(
         std::move(config.unwrap()), std::move(request_handler));
@@ -755,8 +773,7 @@ private:
     }
     config.numIOThreads = 1;
     config.socketConfig.maxNumPendingConnectionsPerWorker
-      = detail::narrow<uint32_t>(
-        args_.max_connections ? args_.max_connections->inner : uint64_t{10});
+      = detail::narrow<uint32_t>(get_max_connections());
     if (tls_enabled) {
       auto tls_config = make_tls_config(args_, ctx.dh());
       if (not tls_config) {
@@ -773,6 +790,10 @@ private:
       return static_cast<size_t>(10 * 1024 * 1024);
     }
     return detail::narrow<size_t>(args_.max_request_size->inner);
+  }
+
+  auto get_max_connections() const -> uint64_t {
+    return args_.max_connections ? args_.max_connections->inner : uint64_t{10};
   }
 
   // --- config ---
