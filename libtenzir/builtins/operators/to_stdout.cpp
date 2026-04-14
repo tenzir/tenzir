@@ -17,7 +17,6 @@
 #include <folly/coro/Baton.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Error.h>
-#include <folly/executors/GlobalExecutor.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncPipe.h>
 #include <folly/io/async/AsyncSocketException.h>
@@ -25,7 +24,6 @@
 
 #include <fcntl.h>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unistd.h>
 
@@ -40,28 +38,40 @@ struct ToStdoutArgs {
   located<ir::pipeline> pipe;
 };
 
-class StdoutFlagsGuard {
+class StdoutNonblockingGuard {
 public:
-  StdoutFlagsGuard() = default;
-  StdoutFlagsGuard(StdoutFlagsGuard const&) = delete;
-  auto operator=(StdoutFlagsGuard const&) -> StdoutFlagsGuard& = delete;
-  StdoutFlagsGuard(StdoutFlagsGuard&& other) noexcept
+  StdoutNonblockingGuard() = default;
+  StdoutNonblockingGuard(StdoutNonblockingGuard const&) = delete;
+  auto operator=(StdoutNonblockingGuard const&)
+    -> StdoutNonblockingGuard& = delete;
+  StdoutNonblockingGuard(StdoutNonblockingGuard&& other) noexcept
     : orig_flags_{std::exchange(other.orig_flags_, -1)} {
   }
-  auto operator=(StdoutFlagsGuard&& other) noexcept -> StdoutFlagsGuard& {
+  auto operator=(StdoutNonblockingGuard&& other) noexcept
+    -> StdoutNonblockingGuard& {
     if (this != &other) {
       restore();
       orig_flags_ = std::exchange(other.orig_flags_, -1);
     }
     return *this;
   }
-  ~StdoutFlagsGuard() {
+  ~StdoutNonblockingGuard() {
     restore();
   }
 
-  auto activate(int orig_flags) -> void {
+  auto activate() -> Option<std::string> {
     TENZIR_ASSERT(orig_flags_ < 0);
+    auto orig_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
+    if (orig_flags < 0) {
+      return fmt::format("failed to get stdout flags: {}",
+                         detail::describe_errno());
+    }
+    if (::fcntl(STDOUT_FILENO, F_SETFL, orig_flags | O_NONBLOCK) < 0) {
+      return fmt::format("failed to enable non-blocking mode for stdout: {}",
+                         detail::describe_errno());
+    }
     orig_flags_ = orig_flags;
+    return {};
   }
 
   auto restore() -> void {
@@ -77,57 +87,36 @@ private:
 
 auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
   -> Task<Option<std::string>> {
-  struct WriteState {
-    folly::coro::Baton baton;
-    std::mutex mutex;
-    Option<std::string> error;
-    bool completed = false;
-  };
+  using ResultQueue = folly::coro::BoundedQueue<Option<std::string>>;
 
   class WriteCallback final : public folly::AsyncWriter::WriteCallback {
   public:
-    explicit WriteCallback(std::shared_ptr<WriteState> state)
-      : state_{std::move(state)} {
+    explicit WriteCallback(std::shared_ptr<ResultQueue> result_queue)
+      : result_queue_{std::move(result_queue)} {
     }
 
     void writeSuccess() noexcept override {
-      {
-        auto guard = std::lock_guard{state_->mutex};
-        state_->completed = true;
-      }
-      state_->baton.post();
+      std::ignore = result_queue_->try_enqueue(Option<std::string>{});
       delete this;
     }
 
     void writeErr(size_t,
                   folly::AsyncSocketException const& ex) noexcept override {
-      {
-        auto guard = std::lock_guard{state_->mutex};
-        state_->completed = true;
-        state_->error = ex.what();
-      }
-      state_->baton.post();
+      std::ignore = result_queue_->try_enqueue(Option<std::string>{ex.what()});
       delete this;
     }
 
   private:
-    std::shared_ptr<WriteState> state_;
+    std::shared_ptr<ResultQueue> result_queue_;
   };
 
   TENZIR_ASSERT(chunk);
-  auto state = std::make_shared<WriteState>();
-  auto& token = co_await folly::coro::co_current_cancellation_token;
-  auto callback = folly::CancellationCallback{token, [state]() noexcept {
-                                                state->baton.post();
-                                              }};
-  writer.write(folly::IOBuf::copyBuffer(chunk->data(), chunk->size()),
-               new WriteCallback{state});
-  co_await state->baton;
-  auto guard = std::lock_guard{state->mutex};
-  if (not state->completed and token.isCancellationRequested()) {
-    co_yield folly::coro::co_stopped_may_throw;
-  }
-  co_return std::move(state->error);
+  auto result_queue = std::make_shared<ResultQueue>(1);
+  auto write_callback = std::make_unique<WriteCallback>(result_queue);
+  auto buffer = folly::IOBuf::copyBuffer(chunk->data(), chunk->size());
+  writer.write(std::move(buffer), write_callback.get());
+  std::ignore = write_callback.release();
+  co_return co_await result_queue->dequeue();
 }
 
 class ToStdout final : public Operator<table_slice, void> {
@@ -144,28 +133,14 @@ public:
       done_ = true;
       co_return;
     }
-    auto orig_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
-    if (orig_flags < 0) {
-      diagnostic::error("failed to get stdout flags: {}",
-                        detail::describe_errno())
-        .primary(args_.self)
-        .emit(ctx);
+    if (auto error = stdout_nonblocking_.activate()) {
+      diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
       done_ = true;
       co_return;
     }
-    if (::fcntl(STDOUT_FILENO, F_SETFL, orig_flags | O_NONBLOCK) < 0) {
-      diagnostic::error("failed to enable non-blocking mode for stdout: {}",
-                        detail::describe_errno())
-        .primary(args_.self)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    stdout_flags_.activate(orig_flags);
-    evb_ = folly::getGlobalIOExecutor()->getEventBase();
-    TENZIR_ASSERT(evb_);
+    io_executor_ = ctx.io_executor();
     writer_ = folly::AsyncPipeWriter::newWriter(
-      evb_, folly::NetworkSocket::fromFd(STDOUT_FILENO));
+      io_executor_->getEventBase(), folly::NetworkSocket::fromFd(STDOUT_FILENO));
     // Avoid closing the process-global stdout when the writer shuts down.
     writer_->setCloseCallback([](folly::NetworkSocket) {});
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
@@ -207,9 +182,11 @@ public:
       co_return;
     }
     auto error = co_await folly::coro::co_withExecutor(
-      evb_, write_chunk(*writer_, std::move(chunk)));
+      io_executor_, write_chunk(*writer_, std::move(chunk)));
     if (error) {
       auto write_error = std::move(*error);
+      // Only the first write error matters; blocking here would let concurrent
+      // `process_sub()` calls stall behind an already queued error.
       std::ignore = queue_->try_enqueue(std::move(write_error));
     }
     co_return;
@@ -223,16 +200,18 @@ public:
     if (auto sub = ctx.get_sub(caf::none)) {
       auto& pipeline = as<SubHandle<table_slice>>(*sub);
       co_await pipeline.close();
+      // `continue_` keeps the executor alive until the subpipeline drains and
+      // reports `finish_sub()`.
       co_return FinalizeBehavior::continue_;
     }
     writer_.reset();
-    stdout_flags_.restore();
+    stdout_nonblocking_.restore();
     co_return FinalizeBehavior::done;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     writer_.reset();
-    stdout_flags_.restore();
+    stdout_nonblocking_.restore();
     done_ = true;
     co_return;
   }
@@ -241,8 +220,8 @@ private:
   using ErrorQueue = folly::coro::BoundedQueue<std::string>;
 
   ToStdoutArgs args_;
-  folly::EventBase* evb_ = nullptr;
-  StdoutFlagsGuard stdout_flags_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+  StdoutNonblockingGuard stdout_nonblocking_;
   folly::AsyncPipeWriter::UniquePtr writer_;
   // `process_sub()` reports the first stdout write error back to the main
   // loop, which owns the operator lifecycle state.
