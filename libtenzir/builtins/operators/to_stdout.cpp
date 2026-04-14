@@ -36,6 +36,41 @@ struct ToStdoutArgs {
   located<ir::pipeline> pipe;
 };
 
+class StdoutFlagsGuard {
+public:
+  StdoutFlagsGuard() = default;
+  StdoutFlagsGuard(StdoutFlagsGuard const&) = delete;
+  auto operator=(StdoutFlagsGuard const&) -> StdoutFlagsGuard& = delete;
+  StdoutFlagsGuard(StdoutFlagsGuard&& other) noexcept
+    : orig_flags_{std::exchange(other.orig_flags_, -1)} {
+  }
+  auto operator=(StdoutFlagsGuard&& other) noexcept -> StdoutFlagsGuard& {
+    if (this != &other) {
+      restore();
+      orig_flags_ = std::exchange(other.orig_flags_, -1);
+    }
+    return *this;
+  }
+  ~StdoutFlagsGuard() {
+    restore();
+  }
+
+  auto activate(int orig_flags) -> void {
+    TENZIR_ASSERT(orig_flags_ < 0);
+    orig_flags_ = orig_flags;
+  }
+
+  auto restore() -> void {
+    if (orig_flags_ >= 0) {
+      ::fcntl(STDOUT_FILENO, F_SETFL, orig_flags_);
+      orig_flags_ = -1;
+    }
+  }
+
+private:
+  int orig_flags_ = -1;
+};
+
 auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
   -> Task<Option<std::string>> {
   class WriteCallback final : public folly::AsyncWriter::WriteCallback {
@@ -101,7 +136,7 @@ public:
       done_ = true;
       co_return;
     }
-    orig_flags_ = orig_flags;
+    stdout_flags_.activate(orig_flags);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     writer_ = folly::AsyncPipeWriter::newWriter(
@@ -123,6 +158,7 @@ public:
       .primary(args_.self)
       .emit(ctx);
     done_ = true;
+    co_return;
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -131,11 +167,14 @@ public:
     }
     auto sub = ctx.get_sub(caf::none);
     if (not sub) {
+      done_ = true;
       co_return;
     }
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await pipeline.push(std::move(input));
-    std::ignore = push_result;
+    if (push_result.is_err()) {
+      done_ = true;
+    }
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
@@ -161,15 +200,14 @@ public:
       co_await pipeline.close();
       co_return FinalizeBehavior::continue_;
     }
+    writer_.reset();
+    stdout_flags_.restore();
     co_return FinalizeBehavior::done;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     writer_.reset();
-    if (orig_flags_) {
-      ::fcntl(STDOUT_FILENO, F_SETFL, *orig_flags_);
-      orig_flags_ = {};
-    }
+    stdout_flags_.restore();
     done_ = true;
     co_return;
   }
@@ -179,7 +217,7 @@ private:
 
   ToStdoutArgs args_;
   folly::EventBase* evb_ = nullptr;
-  Option<int> orig_flags_;
+  StdoutFlagsGuard stdout_flags_;
   folly::AsyncPipeWriter::UniquePtr writer_;
   // `process_sub()` reports the first stdout write error back to the main
   // loop, which owns the operator lifecycle state.
