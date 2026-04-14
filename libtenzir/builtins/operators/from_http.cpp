@@ -71,7 +71,6 @@ struct FromHttpArgs {
   Option<located<data>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
-  Option<ast::field_path> metadata_field;
   Option<ast::field_path> error_field;
   Option<ast::expression> paginate;
   Option<located<duration>> connection_timeout;
@@ -80,13 +79,12 @@ struct FromHttpArgs {
   Option<located<std::string>> encode;
   Option<located<std::string>> mode;
   located<ir::pipeline> parser;
+  let_id response;
 };
 
 // Messages from the fetch task to the operator.
 struct ResponseHeader {
   uint16_t status;
-  // Preserved in wire order so metadata_field output matches the server's
-  // header ordering.
   std::vector<std::pair<std::string, std::string>> headers;
 };
 struct ResponseBody {
@@ -676,6 +674,17 @@ struct ResponseState {
   }
 };
 
+auto make_response_context(ResponseState const& response) -> record {
+  auto headers = record{};
+  for (auto const& [key, value] : response.headers) {
+    headers[key] = value;
+  }
+  return record{
+    {"code", static_cast<uint64_t>(response.status)},
+    {"headers", std::move(headers)},
+  };
+}
+
 auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool {
   using code_t = proxygen::coro::HTTPErrorCode;
   return code == code_t::TRANSPORT_EOF or code == code_t::TRANSPORT_READ_ERROR
@@ -771,7 +780,13 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             reader
               .onHeadersAsync([mq, &emitted_response_messages](
                                 std::unique_ptr<proxygen::HTTPMessage> msg,
-                                bool, bool) mutable -> folly::coro::Task<bool> {
+                                bool is_final,
+                                bool) mutable -> folly::coro::Task<bool> {
+                if (not is_final) {
+                  // Ignore informational 1xx headers and wait for final
+                  // response headers.
+                  co_return proxygen::coro::HTTPSourceReader::Continue;
+                }
                 emitted_response_messages = true;
                 auto status = msg->getStatusCode();
                 auto hdrs = std::vector<std::pair<std::string, std::string>>{};
@@ -866,7 +881,7 @@ public:
     fetch_config_ = std::move(*fetch_config);
     // ensure system CA paths are registered
     ensure_http_default_ca_paths();
-    co_await spawn_parser(ctx, make_request_config(args_, resolved_headers_));
+    co_await start_fetch(ctx, make_request_config(args_, resolved_headers_));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -897,6 +912,10 @@ public:
           } else {
             response_->content_encoding = None{};
           }
+        }
+        co_await spawn_parser(ctx);
+        if (lifecycle_ == Lifecycle::done) {
+          co_return;
         }
         if (response_->is_success()) {
           if (is_link_pagination(paginate_)) {
@@ -975,12 +994,8 @@ public:
       });
   }
 
-  // Intercept parsed events to attach metadata before pushing downstream.
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
-    if (args_.metadata_field) {
-      slice = attach_metadata(slice, ctx.dh());
-    }
     if (not pagination_.next_url) {
       if (auto next = next_url_from_lambda(paginate_, slice,
                                            pagination_.current_url, ctx.dh())) {
@@ -997,8 +1012,8 @@ public:
       pagination_.current_url = std::move(*pagination_.next_url);
       pagination_.next_url = None{};
       pagination_.page_count += 1;
-      co_await spawn_parser(ctx,
-                            make_paginated_request_config(resolved_headers_));
+      co_await start_fetch(ctx,
+                           make_paginated_request_config(resolved_headers_));
     } else {
       lifecycle_ = Lifecycle::done;
     }
@@ -1012,38 +1027,31 @@ public:
 private:
   enum class Lifecycle { running, done };
 
-  // Builds a metadata series (code + headers) and assigns it to
-  // metadata_field in each row of the given slice.
-  auto attach_metadata(const table_slice& slice, diagnostic_handler& dh) const
-    -> table_slice {
-    TENZIR_ASSERT(args_.metadata_field);
-    TENZIR_ASSERT(response_);
-    auto sb = series_builder{};
-    for (auto i = uint64_t{}; i < slice.rows(); ++i) {
-      auto rb = sb.record();
-      rb.field("code", static_cast<uint64_t>(response_->status));
-      auto hb = rb.field("headers").record();
-      for (auto const& [k, v] : response_->headers) {
-        hb.field(k, v);
-      }
-    }
-    return assign(*args_.metadata_field, sb.finish_assert_one_array(), slice,
-                  dh);
+  // Starts the fetch task for the current page.
+  // Requires pagination_.current_url and pagination_.page_count to be set.
+  auto start_fetch(OpCtx& ctx, RequestConfig request) -> Task<void> {
+    response_ = None{};
+    ctx.spawn_task(fetch(evb_, proxygen::URL{pagination_.current_url},
+                         std::move(request), fetch_config_, message_queue_));
+    co_return;
   }
 
-  // Spawns the parser sub-pipeline and fetch task for the current page.
-  // Requires pagination_.current_url and pagination_.page_count to be set.
-  auto spawn_parser(OpCtx& ctx, RequestConfig request) -> Task<void> {
-    response_ = None{};
+  // Spawns the parser sub-pipeline for the current page.
+  // Requires response_, pagination_.current_url and pagination_.page_count to
+  // be set.
+  auto spawn_parser(OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(response_);
     auto pipeline = args_.parser.inner;
-    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+    auto env = substitute_ctx::env_t{};
+    env[args_.response] = make_response_context(*response_);
+    auto reg = global_registry();
+    auto b_ctx = base_ctx{ctx, *reg};
+    if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     co_await ctx.spawn_sub(pagination_.page_count, std::move(pipeline),
                            tag_v<chunk_ptr>);
-    ctx.spawn_task(fetch(evb_, proxygen::URL{pagination_.current_url},
-                         std::move(request), fetch_config_, message_queue_));
   }
 
   auto push_error_field(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
@@ -1053,9 +1061,6 @@ private:
     error_sb.data(std::move(response_->error_body));
     auto slice = assign(*args_.error_field, error_sb.finish_assert_one_array(),
                         record_sb.finish_assert_one_slice(), ctx.dh());
-    if (args_.metadata_field) {
-      slice = attach_metadata(slice, ctx.dh());
-    }
     co_await push(std::move(slice));
   }
 
@@ -1093,9 +1098,7 @@ public:
     auto tls_validator = tls_options{
       {.is_server = false}}.add_to_describer(d, &FromHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &FromHttpArgs::timeout);
-    auto metadata_field_arg
-      = d.named("metadata_field", &FromHttpArgs::metadata_field);
-    auto error_field_arg = d.named("error_field", &FromHttpArgs::error_field);
+    d.named("error_field", &FromHttpArgs::error_field);
     auto paginate_arg = d.named("paginate", &FromHttpArgs::paginate, "any");
     auto connection_timeout_arg
       = d.named("connection_timeout", &FromHttpArgs::connection_timeout);
@@ -1104,7 +1107,8 @@ public:
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
     auto mode_arg = d.named("mode", &FromHttpArgs::mode);
-    auto parser_arg = d.pipeline(&FromHttpArgs::parser);
+    auto parser_arg = d.pipeline(&FromHttpArgs::parser,
+                                 {{"response", &FromHttpArgs::response}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Validate TLS options.
       tls_validator(ctx);
@@ -1218,25 +1222,6 @@ public:
         if (not *output or (*output)->is_not<table_slice>()) {
           diagnostic::error("pipeline must return events")
             .primary(parser.source.subloc(0, 1))
-            .emit(ctx);
-        }
-      }
-      // Validate that error_field and metadata_field do not overlap.
-      auto ef = ctx.get(error_field_arg);
-      auto mf = ctx.get(metadata_field_arg);
-      if (ef and mf) {
-        auto ep = ef->path()
-                  | std::views::transform(&ast::field_path::segment::id)
-                  | std::views::transform(&ast::identifier::name);
-        auto mp = mf->path()
-                  | std::views::transform(&ast::field_path::segment::id)
-                  | std::views::transform(&ast::identifier::name);
-        auto [ei, mi] = std::ranges::mismatch(ep, mp);
-        if (ei == ep.end() or mi == mp.end()) {
-          diagnostic::error("`error_field` and `metadata_field` must not "
-                            "point to same or nested field")
-            .primary(ef->get_location())
-            .primary(mf->get_location())
             .emit(ctx);
         }
       }

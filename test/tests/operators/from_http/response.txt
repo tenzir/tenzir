@@ -1,6 +1,6 @@
 {
   method: "PUT",
-  meta: {
+  response: {
     code: 200,
     headers: {
       Server: "BaseHTTP/0.6 Python/*.*.*",

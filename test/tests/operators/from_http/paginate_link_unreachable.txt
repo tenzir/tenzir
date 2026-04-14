@@ -1,5 +1,5 @@
 error: HTTP request to `http://127.0.0.1:9/paginate/unreachable/next` failed: folly::AsyncSocketException: AsyncSocketException: connect failed, type = Socket not open, errno = (Connection refused)
- --> tests/operators/from_http/from_http_paginate_link_unreachable.tql:7:11
+ --> tests/operators/from_http/paginate_link_unreachable.tql:7:11
   |
 7 | from_http env("HTTP_FIXTURE_LINK_UNREACHABLE_URL"), paginate="link", connection_timeout=200ms, max_retry_count=0, retry_delay=0s, tls=false { read_json }
   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
