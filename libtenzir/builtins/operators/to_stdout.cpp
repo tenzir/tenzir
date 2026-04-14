@@ -157,16 +157,25 @@ public:
       co_await pipeline.close();
       co_return FinalizeBehavior::continue_;
     }
+    cleanup_stdout();
+    co_return FinalizeBehavior::done;
+  }
+
+  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
+    cleanup_stdout();
+    co_return;
+  }
+
+private:
+  using ErrorQueue = folly::coro::BoundedQueue<std::string>;
+
+  auto cleanup_stdout() -> void {
     writer_.reset();
     if (orig_flags_) {
       ::fcntl(STDOUT_FILENO, F_SETFL, *orig_flags_);
       orig_flags_ = {};
     }
-    co_return FinalizeBehavior::done;
   }
-
-private:
-  using ErrorQueue = folly::coro::BoundedQueue<std::string>;
 
   ToStdoutArgs args_;
   folly::EventBase* evb_ = nullptr;
