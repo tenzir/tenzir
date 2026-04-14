@@ -8,6 +8,7 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/atomic.hpp"
+#include "tenzir/async/mutex.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -485,7 +486,8 @@ public:
     // disconnected, but I guess this is fine.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      for (auto& it : active_requests_) {
+      auto active_requests = co_await active_requests_.lock();
+      for (auto& it : *active_requests) {
         it.second.finished->try_enqueue(200); // ok
       }
     });
@@ -531,52 +533,63 @@ public:
           decompressor = http::make_decompressor(msg.content_encoding, ctx);
         }
         auto request_id = msg.request_id;
-        active_requests_.emplace(
-          request_id, ActiveRequest{.metadata = std::move(msg.metadata),
-                                    .decompressor = std::move(decompressor),
-                                    .finished = msg.finished});
+        {
+          auto active_requests = co_await active_requests_.lock();
+          active_requests->emplace(
+            request_id, ActiveRequest{.metadata = std::move(msg.metadata),
+                                      .decompressor = std::move(decompressor),
+                                      .finished = msg.finished});
+        }
         co_await ctx.spawn_sub(request_id, std::move(pipeline),
                                tag_v<chunk_ptr>);
       },
       [&](RequestBody body) -> Task<void> {
-        auto it = active_requests_.find(body.request_id);
-        if (it == active_requests_.end()) {
-          // Request was dropped (e.g. pipeline substitution failed).
-          co_return;
-        }
-        auto& req = it->second;
-        if (req.drop_body) {
-          co_return;
-        }
         auto chunk = std::move(body.chunk);
-        if (req.decompressor) {
-          auto remaining = get_max_request_size() - req.output_bytes;
-          auto input_span = std::span<std::byte const>{
-            reinterpret_cast<std::byte const*>(chunk->data()), chunk->size()};
-          auto decompressed = http::decompress_chunk(
-            **req.decompressor, input_span, ctx.dh(), remaining);
-          if (not decompressed) {
-            req.drop_body = true;
+        {
+          auto active_requests = co_await active_requests_.lock();
+          auto it = active_requests->find(body.request_id);
+          if (it == active_requests->end()) {
+            // Request was dropped (e.g. pipeline substitution failed).
             co_return;
           }
-          chunk = chunk::make(std::move(*decompressed));
+          auto& req = it->second;
+          if (req.drop_body) {
+            co_return;
+          }
+          if (req.decompressor) {
+            auto remaining = get_max_request_size() - req.output_bytes;
+            auto input_span = std::span<std::byte const>{
+              reinterpret_cast<std::byte const*>(chunk->data()),
+              chunk->size()};
+            auto decompressed = http::decompress_chunk(
+              **req.decompressor, input_span, ctx.dh(), remaining);
+            if (not decompressed) {
+              req.drop_body = true;
+              co_return;
+            }
+            chunk = chunk::make(std::move(*decompressed));
+          }
+          if (req.output_bytes + chunk->size() > get_max_request_size()) {
+            diagnostic::warning("request body exceeds `max_request_size`")
+              .primary(args_.endpoint)
+              .note("request path: {}", req.metadata.path)
+              .note("rejecting request body")
+              .emit(ctx);
+            req.drop_body = true;
+            req.finished->try_enqueue(413); // payload too large
+            co_return;
+          }
+          req.output_bytes += chunk->size();
         }
-        if (req.output_bytes + chunk->size() > get_max_request_size()) {
-          diagnostic::warning("request body exceeds `max_request_size`")
-            .primary(args_.endpoint)
-            .note("request path: {}", req.metadata.path)
-            .note("rejecting request body")
-            .emit(ctx);
-          req.drop_body = true;
-          req.finished->try_enqueue(413); // payload too large
-          co_return;
-        }
-        req.output_bytes += chunk->size();
         if (auto sub = ctx.get_sub(body.request_id)) {
           auto& parser = as<SubHandle<chunk_ptr>>(*sub);
           auto push_result = co_await parser.push(std::move(chunk));
           if (push_result.is_err()) {
-            req.drop_body = true;
+            auto active_requests = co_await active_requests_.lock();
+            if (auto it = active_requests->find(body.request_id);
+                it != active_requests->end()) {
+              it->second.drop_body = true;
+            }
           }
         }
       },
@@ -587,7 +600,8 @@ public:
         }
       },
       [&](ServerStopped) -> Task<void> {
-        if (active_requests_.empty()) {
+        auto active_requests = co_await active_requests_.lock();
+        if (active_requests->empty()) {
           lifecycle_ = Lifecycle::done;
         } else {
           lifecycle_ = Lifecycle::draining;
@@ -600,7 +614,7 @@ public:
                    OpCtx& ctx) -> Task<void> override {
     if (args_.metadata_field) {
       auto request_id = as<uint64_t>(key);
-      slice = attach_metadata(request_id, slice, ctx.dh());
+      slice = co_await attach_metadata(request_id, std::move(slice), ctx.dh());
     }
     co_await push(std::move(slice));
   }
@@ -608,14 +622,20 @@ public:
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
     auto request_id = as<uint64_t>(key);
-    auto it = active_requests_.find(request_id);
-    if (it == active_requests_.end()) {
-      co_return;
+    auto should_finish = false;
+    {
+      auto active_requests = co_await active_requests_.lock();
+      auto it = active_requests->find(request_id);
+      if (it == active_requests->end()) {
+        co_return;
+      }
+      // notify the handler to respond
+      it->second.finished->try_enqueue(200);
+      active_requests->erase(request_id);
+      should_finish
+        = lifecycle_ == Lifecycle::draining and active_requests->empty();
     }
-    // notify the handler to respond
-    it->second.finished->try_enqueue(200);
-    active_requests_.erase(request_id);
-    if (lifecycle_ == Lifecycle::draining and active_requests_.empty()) {
+    if (should_finish) {
       server_ = None{};
       lifecycle_ = Lifecycle::done;
     }
@@ -657,31 +677,36 @@ private:
   };
 
   auto attach_metadata(uint64_t request_id, table_slice slice,
-                       diagnostic_handler& dh) -> table_slice {
+                       diagnostic_handler& dh) -> Task<table_slice> {
     TENZIR_ASSERT(args_.metadata_field);
-    auto it = active_requests_.find(request_id);
-    if (it == active_requests_.end()) {
-      return slice;
+    auto metadata = Option<RequestMetadata>{None{}};
+    {
+      auto active_requests = co_await active_requests_.lock();
+      auto it = active_requests->find(request_id);
+      if (it == active_requests->end()) {
+        co_return slice;
+      }
+      metadata = it->second.metadata;
     }
-    auto const& metadata = it->second.metadata;
+    TENZIR_ASSERT(metadata);
     auto sb = series_builder{};
     for (auto i = uint64_t{}; i < slice.rows(); ++i) {
       auto rb = sb.record();
       auto hb = rb.field("headers").record();
-      for (auto const& [k, v] : metadata.headers) {
+      for (auto const& [k, v] : metadata->headers) {
         hb.field(k, v);
       }
       auto qb = rb.field("query").record();
-      for (auto const& [k, v] : metadata.query) {
+      for (auto const& [k, v] : metadata->query) {
         qb.field(k, v);
       }
-      rb.field("path", metadata.path);
-      rb.field("fragment", metadata.fragment);
-      rb.field("method", metadata.method);
-      rb.field("version", metadata.version);
+      rb.field("path", metadata->path);
+      rb.field("fragment", metadata->fragment);
+      rb.field("method", metadata->method);
+      rb.field("version", metadata->version);
     }
-    return assign(*args_.metadata_field, sb.finish_assert_one_array(), slice,
-                  dh);
+    co_return assign(*args_.metadata_field, sb.finish_assert_one_array(),
+                     std::move(slice), dh);
   }
 
   auto request_stop() -> Task<void> {
@@ -689,7 +714,8 @@ private:
       co_return;
     }
     lifecycle_ = Lifecycle::draining;
-    if (active_requests_.empty()) {
+    auto active_requests = co_await active_requests_.lock();
+    if (active_requests->empty()) {
       server_ = None{};
       lifecycle_ = Lifecycle::done;
     }
@@ -763,7 +789,7 @@ private:
   // --- transient ---
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{256}};
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
-  std::unordered_map<uint64_t, ActiveRequest> active_requests_;
+  Mutex<std::unordered_map<uint64_t, ActiveRequest>> active_requests_{{}};
   // --- state ---
   Lifecycle lifecycle_ = Lifecycle::running;
 };
