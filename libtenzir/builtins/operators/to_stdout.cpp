@@ -8,10 +8,13 @@
 
 #include "tenzir/async.hpp"
 
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/substitute_ctx.hpp>
+#include <tenzir/tql2/parser.hpp>
 
 #include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
@@ -35,8 +38,15 @@ constexpr auto error_queue_capacity = uint32_t{1};
 
 struct ToStdoutArgs {
   location self;
-  located<ir::pipeline> pipe;
+  Option<located<ir::pipeline>> pipe;
 };
+
+auto make_default_printer(base_ctx ctx) -> failure_or<ir::pipeline> {
+  auto sessions = session_provider::make(static_cast<diagnostic_handler&>(ctx));
+  TRY(auto pipe, parse("write_tql", sessions.as_session()));
+  auto root = compile_ctx::make_root(ctx);
+  return std::move(pipe).compile(root);
+}
 
 class StdoutNonblockingGuard {
 public:
@@ -125,10 +135,20 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto pipe = std::move(args_.pipe.inner);
+    auto pipe = ir::pipeline{};
+    if (args_.pipe) {
+      pipe = std::move(args_.pipe->inner);
+    } else {
+      auto default_printer = make_default_printer(ctx);
+      if (not default_printer) {
+        done_ = true;
+        co_return;
+      }
+      pipe = std::move(*default_printer);
+    }
     if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       diagnostic::error("failed to substitute pipeline")
-        .primary(args_.pipe)
+        .primary(args_.pipe ? args_.pipe->source : args_.self)
         .emit(ctx);
       done_ = true;
       co_return;
@@ -240,14 +260,17 @@ public:
     d.operator_location(&ToStdoutArgs::self);
     auto pipe_arg = d.pipeline(&ToStdoutArgs::pipe);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      TRY(auto pipe, ctx.get(pipe_arg));
-      auto output = pipe.inner.infer_type(tag_v<table_slice>, ctx);
+      auto pipe = ctx.get(pipe_arg);
+      if (not pipe) {
+        return {};
+      }
+      auto output = pipe->inner.infer_type(tag_v<table_slice>, ctx);
       if (output.is_error()) {
         return {};
       }
       if (not *output or (*output)->is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes")
-          .primary(pipe.source.subloc(0, 1))
+          .primary(pipe->source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
