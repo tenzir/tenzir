@@ -13,8 +13,10 @@
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/substitute_ctx.hpp>
 
+#include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Error.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncPipe.h>
@@ -22,6 +24,8 @@
 #include <folly/net/NetworkSocket.h>
 
 #include <fcntl.h>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unistd.h>
 
@@ -73,36 +77,57 @@ private:
 
 auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
   -> Task<Option<std::string>> {
+  struct WriteState {
+    folly::coro::Baton baton;
+    std::mutex mutex;
+    Option<std::string> error;
+    bool completed = false;
+  };
+
   class WriteCallback final : public folly::AsyncWriter::WriteCallback {
   public:
-    WriteCallback(folly::coro::Baton& baton, Option<std::string>& error)
-      : baton_{baton}, error_{error} {
+    explicit WriteCallback(std::shared_ptr<WriteState> state)
+      : state_{std::move(state)} {
     }
 
     void writeSuccess() noexcept override {
-      baton_.post();
+      {
+        auto guard = std::lock_guard{state_->mutex};
+        state_->completed = true;
+      }
+      state_->baton.post();
       delete this;
     }
 
     void writeErr(size_t,
                   folly::AsyncSocketException const& ex) noexcept override {
-      error_ = ex.what();
-      baton_.post();
+      {
+        auto guard = std::lock_guard{state_->mutex};
+        state_->completed = true;
+        state_->error = ex.what();
+      }
+      state_->baton.post();
       delete this;
     }
 
   private:
-    folly::coro::Baton& baton_;
-    Option<std::string>& error_;
+    std::shared_ptr<WriteState> state_;
   };
 
   TENZIR_ASSERT(chunk);
-  auto baton = folly::coro::Baton{};
-  auto error = Option<std::string>{};
+  auto state = std::make_shared<WriteState>();
+  auto& token = co_await folly::coro::co_current_cancellation_token;
+  auto callback = folly::CancellationCallback{token, [state]() noexcept {
+                                                state->baton.post();
+                                              }};
   writer.write(folly::IOBuf::copyBuffer(chunk->data(), chunk->size()),
-               new WriteCallback{baton, error});
-  co_await baton;
-  co_return error;
+               new WriteCallback{state});
+  co_await state->baton;
+  auto guard = std::lock_guard{state->mutex};
+  if (not state->completed and token.isCancellationRequested()) {
+    co_yield folly::coro::co_stopped_may_throw;
+  }
+  co_return std::move(state->error);
 }
 
 class ToStdout final : public Operator<table_slice, void> {
