@@ -399,6 +399,12 @@ public:
     }
   }
 
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_counter", line_counter_);
+  }
+
 private:
   auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
     ++line_counter_;

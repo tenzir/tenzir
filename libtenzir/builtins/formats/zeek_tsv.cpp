@@ -495,6 +495,49 @@ struct zeek_document {
   type target_schema = {};
 };
 
+struct zeek_document_state {
+  char separator = '\t';
+  std::string set_separator = ",";
+  std::string empty_field = "(empty)";
+  std::string unset_field = "-";
+  std::string path = {};
+  std::vector<std::string> fields = {};
+  std::vector<std::string> types = {};
+
+  static auto from(zeek_document const& document) -> zeek_document_state {
+    return {
+      .separator = document.separator,
+      .set_separator = document.set_separator,
+      .empty_field = document.empty_field,
+      .unset_field = document.unset_field,
+      .path = document.path,
+      .fields = document.fields,
+      .types = document.types,
+    };
+  }
+
+  auto into_document() && -> zeek_document {
+    auto result = zeek_document{};
+    result.separator = separator;
+    result.set_separator = std::move(set_separator);
+    result.empty_field = std::move(empty_field);
+    result.unset_field = std::move(unset_field);
+    result.path = std::move(path);
+    result.fields = std::move(fields);
+    result.types = std::move(types);
+    return result;
+  }
+
+  friend auto inspect(auto& f, zeek_document_state& x) -> bool {
+    return f.object(x).fields(
+      f.field("separator", x.separator),
+      f.field("set_separator", x.set_separator),
+      f.field("empty_field", x.empty_field),
+      f.field("unset_field", x.unset_field), f.field("path", x.path),
+      f.field("fields", x.fields), f.field("types", x.types));
+  }
+};
+
 auto parser_impl(generator<std::optional<std::string_view>> lines,
                  operator_control_plane& ctrl) -> generator<table_slice> {
   auto document = zeek_document{};
@@ -838,6 +881,23 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&) -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    co_await emit_finished(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_nr", line_nr_);
+    serde("failed", failed_);
+    auto document_state = zeek_document_state::from(document_);
+    serde("document", document_state);
+    document_ = std::move(document_state).into_document();
+  }
+
 private:
   auto emit_finished(Push<table_slice>& push) -> Task<void> {
     if (not document_.builder or document_.builder->length() == 0) {
@@ -940,91 +1000,8 @@ private:
       }
       co_return;
     }
-    if (not document_.builder) {
-      if (document_.path.empty()) {
-        diagnostic::error("failed to parse Zeek document: missing #path")
-          .note("line {}", line_nr_)
-          .emit(dh);
-        failed_ = true;
-        co_return;
-      }
-      if (document_.fields.empty()) {
-        diagnostic::error("failed to parse Zeek document: missing #fields")
-          .note("line {}", line_nr_)
-          .emit(dh);
-        failed_ = true;
-        co_return;
-      }
-      if (document_.fields.size() != document_.types.size()) {
-        diagnostic::error("failed to parse Zeek document: mismatching number "
-                          "#fields and #types")
-          .note("found {} #fields", document_.fields.size())
-          .note("found {} #types", document_.types.size())
-          .note("line {}", line_nr_)
-          .emit(dh);
-        failed_ = true;
-        co_return;
-      }
-      document_.parsers.reserve(document_.fields.size());
-      auto record_fields = std::vector<record_type::field_view>{};
-      record_fields.reserve(document_.fields.size());
-      for (auto const& [field, zeek_type] :
-           std::views::zip(document_.fields, document_.types)) {
-        auto parsed_type = parse_type(zeek_type);
-        if (not parsed_type) {
-          diagnostic::warning("failed to parse Zeek type `{}`", zeek_type)
-            .note("line {}", line_nr_)
-            .note("falling back to `string`")
-            .emit(dh);
-          parsed_type = type{string_type{}};
-        }
-        auto const make_unset_parser = [&, field]() {
-          return ignore(parsers::str{document_.unset_field}
-                        >> &(parsers::chr{document_.separator} | parsers::eoi))
-            .then([&, field]() {
-              document_.event->field(field).null();
-              return true;
-            });
-        };
-        auto const make_empty_parser = [&, field]<concrete_type Type>(
-                                         Type const& type) {
-          return ignore(parsers::str{document_.empty_field}
-                        >> &(parsers::chr{document_.separator} | parsers::eoi))
-            .then([&, field]() {
-              if constexpr (std::same_as<Type, map_type>) {
-                TENZIR_UNREACHABLE();
-              } else {
-                document_.event->field(field, std::move(type.construct()));
-              }
-              return true;
-            });
-        };
-        auto make_field_parser = [&]<concrete_type Type>(
-                                   Type const& type)
-          -> rule<std::string_view::const_iterator, bool> {
-          return make_unset_parser() | make_empty_parser(type)
-                 | zeek_parser<Type>{}(type, document_.separator,
-                                       std::same_as<Type, list_type>
-                                         ? document_.set_separator
-                                         : std::string{})
-                     .then([&, field](type_to_data_t<Type> value) {
-                       if constexpr (std::same_as<Type, map_type>) {
-                         TENZIR_UNREACHABLE();
-                       } else {
-                         document_.event->field(field, std::move(value));
-                       }
-                       return true;
-                     });
-        };
-        document_.parsers.push_back(match(*parsed_type, make_field_parser));
-        record_fields.push_back({field, std::move(*parsed_type)});
-      }
-      auto const schema_name = fmt::format("zeek.{}", document_.path);
-      document_.builder = series_builder{type{schema_name,
-                                             record_type{record_fields}}};
-      auto target_schema = modules::get_schema(schema_name);
-      document_.target_schema
-        = target_schema ? std::move(*target_schema) : type{};
+    if (not ensure_document_builder(dh)) {
+      co_return;
     }
     auto f = line.begin();
     auto const l = line.end();
@@ -1073,6 +1050,95 @@ private:
     }
     document_.event = {};
     co_await maybe_emit_ready(push);
+  }
+
+  auto ensure_document_builder(diagnostic_handler& dh) -> bool {
+    if (document_.builder) {
+      return true;
+    }
+    if (document_.path.empty()) {
+      diagnostic::error("failed to parse Zeek document: missing #path")
+        .note("line {}", line_nr_)
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    if (document_.fields.empty()) {
+      diagnostic::error("failed to parse Zeek document: missing #fields")
+        .note("line {}", line_nr_)
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    if (document_.fields.size() != document_.types.size()) {
+      diagnostic::error("failed to parse Zeek document: mismatching number "
+                        "#fields and #types")
+        .note("found {} #fields", document_.fields.size())
+        .note("found {} #types", document_.types.size())
+        .note("line {}", line_nr_)
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    document_.parsers.clear();
+    document_.parsers.reserve(document_.fields.size());
+    auto record_fields = std::vector<record_type::field_view>{};
+    record_fields.reserve(document_.fields.size());
+    for (auto const& [field, zeek_type] :
+         std::views::zip(document_.fields, document_.types)) {
+      auto parsed_type = parse_type(zeek_type);
+      if (not parsed_type) {
+        diagnostic::warning("failed to parse Zeek type `{}`", zeek_type)
+          .note("line {}", line_nr_)
+          .note("falling back to `string`")
+          .emit(dh);
+        parsed_type = type{string_type{}};
+      }
+      auto const make_unset_parser = [&, field]() {
+        return ignore(parsers::str{document_.unset_field}
+                      >> &(parsers::chr{document_.separator} | parsers::eoi))
+          .then([&, field]() {
+            document_.event->field(field).null();
+            return true;
+          });
+      };
+      auto const make_empty_parser = [&, field]<concrete_type Type>(
+                                       Type const& type) {
+        return ignore(parsers::str{document_.empty_field}
+                      >> &(parsers::chr{document_.separator} | parsers::eoi))
+          .then([&, field]() {
+            if constexpr (std::same_as<Type, map_type>) {
+              TENZIR_UNREACHABLE();
+            } else {
+              document_.event->field(field, std::move(type.construct()));
+            }
+            return true;
+          });
+      };
+      auto make_field_parser = [&]<concrete_type Type>(Type const& type)
+        -> rule<std::string_view::const_iterator, bool> {
+        return make_unset_parser() | make_empty_parser(type)
+               | zeek_parser<Type>{}(type, document_.separator,
+                                     std::same_as<Type, list_type>
+                                       ? document_.set_separator
+                                       : std::string{})
+                   .then([&, field](type_to_data_t<Type> value) {
+                     if constexpr (std::same_as<Type, map_type>) {
+                       TENZIR_UNREACHABLE();
+                     } else {
+                       document_.event->field(field, std::move(value));
+                     }
+                     return true;
+                   });
+      };
+      document_.parsers.push_back(match(*parsed_type, make_field_parser));
+      record_fields.push_back({field, std::move(*parsed_type)});
+    }
+    auto const schema_name = fmt::format("zeek.{}", document_.path);
+    document_.builder = series_builder{type{schema_name, record_type{record_fields}}};
+    auto target_schema = modules::get_schema(schema_name);
+    document_.target_schema = target_schema ? std::move(*target_schema) : type{};
+    return true;
   }
 
   std::string buffer_;
