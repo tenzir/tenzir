@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <tenzir/async/result.hpp>
 #include <tenzir/blob.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/option.hpp>
@@ -98,6 +99,7 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
 auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       std::span<std::byte const> input, diagnostic_handler& dh,
                       size_t max_output_size
-                      = std::numeric_limits<size_t>::max()) -> Option<blob>;
+                      = std::numeric_limits<size_t>::max())
+  -> Result<blob, uint16_t>;
 
 } // namespace tenzir::http

@@ -946,10 +946,10 @@ public:
         if (response_->decompressor) {
           auto decompressed = http::decompress_chunk(*response_->decompressor,
                                                      payload, ctx.dh());
-          if (not decompressed) {
+          if (decompressed.is_err()) {
             co_return;
           }
-          payload = std::move(*decompressed);
+          payload = std::move(decompressed).unwrap();
         }
         if (payload.empty()) {
           co_return;

@@ -218,10 +218,10 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
 
 auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       std::span<std::byte const> input, diagnostic_handler& dh,
-                      size_t max_output_size) -> Option<blob> {
+                      size_t max_output_size) -> Result<blob, uint16_t> {
   if (max_output_size == 0) {
     diagnostic::warning("decompressed output exceeds limit").emit(dh);
-    return None{};
+    return Err{(uint16_t)413}; // payload too large
   }
   auto out = blob{};
   auto initial_size
@@ -240,19 +240,19 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
                           result.status().ToString())
         .note("emitting compressed body")
         .emit(dh);
-      return None{};
+      return Err{(uint16_t)400}; // bad request
     }
     auto const bytes_written = detail::narrow<size_t>(result->bytes_written);
     if (bytes_written > max_output_size - written) [[unlikely]] {
       diagnostic::warning("decompressed output exceeds limit").emit(dh);
-      return None{};
+      return Err{(uint16_t)413}; // payload too large
     }
     written += bytes_written;
     read += detail::narrow<size_t>(result->bytes_read);
     if (result->need_more_output) {
       if (out.size() >= max_output_size) [[unlikely]] {
         diagnostic::warning("decompressed output exceeds limit").emit(dh);
-        return None{};
+        return Err{(uint16_t)413}; // payload too large
       }
       auto next_size = std::min(out.size() * 2, max_output_size);
       out.resize(next_size);
@@ -265,7 +265,7 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
                             reset.ToString())
           .note("emitting compressed body")
           .emit(dh);
-        return None{};
+        return Err{(uint16_t)400}; // bad request
       }
     }
   }

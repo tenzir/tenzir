@@ -592,11 +592,12 @@ public:
               reinterpret_cast<std::byte const*>(chunk->data()), chunk->size()};
             auto decompressed = http::decompress_chunk(
               **req.decompressor, input_span, ctx.dh(), remaining);
-            if (not decompressed) {
+            if (decompressed.is_err()) {
               req.drop_body = true;
+              req.finished->send(std::move(decompressed).unwrap_err());
               co_return;
             }
-            chunk = chunk::make(std::move(*decompressed));
+            chunk = chunk::make(std::move(decompressed).unwrap());
           }
           if (req.output_bytes + chunk->size() > get_max_request_size()) {
             diagnostic::warning("request body exceeds `max_request_size`")
