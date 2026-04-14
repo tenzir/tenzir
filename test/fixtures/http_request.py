@@ -5,7 +5,7 @@ import ssl
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -28,7 +28,9 @@ class HttpRequestOptions:
     method: str = "POST"
     path: str = "/"
     body: str = '{"value":1}\n'
-    content_type: str = "application/json"
+    headers: dict[str, str] = field(
+        default_factory=lambda: {"Content-Type": "application/json"}
+    )
     tls: bool = False
     repeat: int = 1
     expected_status: int = 200
@@ -51,7 +53,7 @@ class _RequestSpec:
     method: str
     path: str
     body: str
-    content_type: str
+    headers: dict[str, str]
     tls: bool
     expected_status: int
     expected_body: str | None
@@ -68,7 +70,7 @@ def _to_request_specs(opts: HttpRequestOptions) -> list[_RequestSpec]:
             method=opts.method,
             path=opts.path,
             body=opts.body,
-            content_type=opts.content_type,
+            headers=dict(opts.headers),
             tls=opts.tls,
             expected_status=opts.expected_status,
             expected_body=opts.expected_body,
@@ -109,7 +111,7 @@ def http_request() -> FixtureHandle:
             proto = "https" if spec.tls else "http"
             target_url = urljoin(f"{proto}://{endpoint}/", spec.path.lstrip("/"))
             payload = spec.body.encode("utf-8")
-            headers = {"Content-Type": spec.content_type}
+            headers = dict(spec.headers)
             sent = False
             ssl_context: ssl.SSLContext | None = None
             if spec.tls and tls_dir and tls_ca is not None:
