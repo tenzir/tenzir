@@ -29,7 +29,9 @@ namespace tenzir::plugins::to_stdout {
 
 namespace {
 
-constexpr auto error_queue_capacity = uint32_t{1};
+constexpr auto chunk_queue_capacity = uint32_t{16};
+constexpr auto no_stdout_flags = -1;
+constexpr auto done_without_stdout_flags = -2;
 
 struct ToStdoutArgs {
   location self;
@@ -81,6 +83,7 @@ public:
       diagnostic::error("failed to substitute pipeline")
         .primary(args_.pipe)
         .emit(ctx);
+      orig_flags_ = done_without_stdout_flags;
       co_return;
     }
     auto orig_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
@@ -89,6 +92,7 @@ public:
                         detail::describe_errno())
         .primary(args_.self)
         .emit(ctx);
+      orig_flags_ = done_without_stdout_flags;
       co_return;
     }
     if (::fcntl(STDOUT_FILENO, F_SETFL, orig_flags | O_NONBLOCK) < 0) {
@@ -96,6 +100,7 @@ public:
                         detail::describe_errno())
         .primary(args_.self)
         .emit(ctx);
+      orig_flags_ = done_without_stdout_flags;
       co_return;
     }
     orig_flags_ = orig_flags;
@@ -111,19 +116,23 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await error_queue_->dequeue();
+    co_return co_await chunk_queue_->dequeue();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (not writer_) {
+    auto* chunk = result.try_as<chunk_ptr>();
+    TENZIR_ASSERT(chunk);
+    if (not *chunk or not writer_) {
       co_return;
     }
-    auto* error = result.try_as<std::string>();
-    TENZIR_ASSERT(error);
-    diagnostic::error("failed to write to stdout: {}", *error)
-      .primary(args_.self)
-      .emit(ctx);
-    writer_.reset();
+    auto error = co_await folly::coro::co_withExecutor(
+      evb_, write_chunk(*writer_, std::move(*chunk)));
+    if (error) {
+      diagnostic::error("failed to write to stdout: {}", *error)
+        .primary(args_.self)
+        .emit(ctx);
+      writer_.reset();
+    }
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -137,49 +146,46 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (not chunk or chunk->size() == 0 or not writer_) {
+    if (not chunk or chunk->size() == 0) {
       co_return;
     }
-    auto error = co_await folly::coro::co_withExecutor(
-      evb_, write_chunk(*writer_, std::move(chunk)));
-    if (error) {
-      auto write_error = std::move(*error);
-      std::ignore = error_queue_->try_enqueue(std::move(write_error));
-    }
+    co_await chunk_queue_->enqueue(std::move(chunk));
   }
 
   auto state() -> OperatorState override {
-    return orig_flags_ >= 0 and not writer_ ? OperatorState::done
-                                            : OperatorState::unspecified;
+    return orig_flags_ != no_stdout_flags and not writer_
+             ? OperatorState::done
+             : OperatorState::unspecified;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    auto sub = ctx.get_sub(caf::none);
-    TENZIR_ASSERT(sub);
-    auto& pipeline = as<SubHandle<table_slice>>(*sub);
-    co_await pipeline.close();
-    co_return FinalizeBehavior::continue_;
+    if (auto sub = ctx.get_sub(caf::none)) {
+      auto& pipeline = as<SubHandle<table_slice>>(*sub);
+      co_await pipeline.close();
+      co_return FinalizeBehavior::continue_;
+    }
+    co_return FinalizeBehavior::done;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     writer_.reset();
-    TENZIR_ASSERT(orig_flags_ >= 0);
-    ::fcntl(STDOUT_FILENO, F_SETFL, orig_flags_);
-    orig_flags_ = -1;
+    if (orig_flags_ >= 0) {
+      ::fcntl(STDOUT_FILENO, F_SETFL, orig_flags_);
+    }
+    orig_flags_ = done_without_stdout_flags;
     co_return;
   }
 
 private:
-  using ErrorQueue = folly::coro::BoundedQueue<std::string>;
+  using ChunkQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
   ToStdoutArgs args_;
   folly::EventBase* evb_ = nullptr;
-  int orig_flags_ = -1;
+  int orig_flags_ = no_stdout_flags;
   folly::AsyncPipeWriter::UniquePtr writer_;
-  // Graceful shutdown is initiated from the runner's main loop via `state()`.
-  // We therefore keep a tiny one-shot queue to hand the first write error back
-  // to `process_task()`.
-  mutable Box<ErrorQueue> error_queue_{std::in_place, error_queue_capacity};
+  // `process_sub()` may run concurrently, so it only forwards byte chunks to
+  // the main loop, which exclusively owns `writer_` and the shutdown state.
+  mutable Box<ChunkQueue> chunk_queue_{std::in_place, chunk_queue_capacity};
 };
 
 class ToStdoutPlugin final : public OperatorPlugin {
