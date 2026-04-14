@@ -35,20 +35,12 @@ public:
   };
 
   class const_iterator
-    : public iterator_adaptor<
-        const_iterator,
-        map_const_iterator,
-        std::tuple<Point, Point, Value>,
-        std::bidirectional_iterator_tag,
-        entry
-      > {
-    using super = iterator_adaptor<
-      const_iterator,
-      map_const_iterator,
-      std::tuple<Point, Point, Value>,
-      std::bidirectional_iterator_tag,
-      entry
-    >;
+    : public iterator_adaptor<const_iterator, map_const_iterator,
+                              std::tuple<Point, Point, Value>,
+                              std::bidirectional_iterator_tag, entry> {
+    using super = iterator_adaptor<const_iterator, map_const_iterator,
+                                   std::tuple<Point, Point, Value>,
+                                   std::bidirectional_iterator_tag, entry>;
 
   public:
     using super::super;
@@ -58,7 +50,7 @@ public:
 
     [[nodiscard]] entry dereference() const {
       return {this->base()->first, this->base()->second.first,
-                      this->base()->second.second};
+              this->base()->second.second};
     }
   };
 
@@ -83,8 +75,9 @@ public:
   bool insert(Point l, Point r, Value v) {
     TENZIR_ASSERT(l < r);
     auto lb = map_.lower_bound(l);
-    if (locate(l, lb) == map_.end() && (lb == map_.end() || r <= left(lb)))
+    if (locate(l, lb) == map_.end() and (lb == map_.end() or r <= left(lb))) {
       return map_.emplace(l, std::make_pair(r, std::move(v))).second;
+    }
     return false;
   }
 
@@ -98,26 +91,29 @@ public:
   /// @returns `true` on success.
   bool inject(Point l, Point r, Value v) {
     TENZIR_ASSERT(l < r);
-    if (map_.empty())
+    if (map_.empty()) {
       return emplace(l, r, std::move(v));
+    }
     auto i = map_.lower_bound(l);
     // Adjust position (i = this, p = prev, n = next).
-    if (i == map_.end() || (i != map_.begin() && l != left(i)))
+    if (i == map_.end() or (i != map_.begin() and l != left(i))) {
       --i;
+    }
     auto n = i;
     ++n;
     auto p = i;
-    if (i != map_.begin())
+    if (i != map_.begin()) {
       --p;
-    else
+    } else {
       p = map_.end();
+    }
     // Assess the fit.
-    auto fits_left = r <= left(i) && (p == map_.end() || l >= right(p));
-    auto fits_right = l >= right(i) && (n == map_.end() || r <= left(n));
+    auto fits_left = r <= left(i) and (p == map_.end() or l >= right(p));
+    auto fits_right = l >= right(i) and (n == map_.end() or r <= left(n));
     if (fits_left) {
-      auto right_merge = r == left(i) && v == value(i);
-      auto left_merge = p != map_.end() && l == right(p) && v == value(p);
-      if (left_merge && right_merge) {
+      auto right_merge = r == left(i) and v == value(i);
+      auto left_merge = p != map_.end() and l == right(p) and v == value(p);
+      if (left_merge and right_merge) {
         right(p) = right(i);
         map_.erase(i);
       } else if (left_merge) {
@@ -130,9 +126,9 @@ public:
       }
       return true;
     } else if (fits_right) {
-      auto right_merge = n != map_.end() && r == left(n) && v == value(n);
-      auto left_merge = l == right(i) && v == value(i);
-      if (left_merge && right_merge) {
+      auto right_merge = n != map_.end() and r == left(n) and v == value(n);
+      auto left_merge = l == right(i) and v == value(i);
+      if (left_merge and right_merge) {
         right(i) = right(n);
         map_.erase(n);
       } else if (left_merge) {
@@ -155,8 +151,9 @@ public:
   ///          to an existing value.
   bool erase(Point p) {
     auto i = locate(p, map_.lower_bound(p));
-    if (i == map_.end())
+    if (i == map_.end()) {
       return false;
+    }
     map_.erase(i);
     return true;
   }
@@ -166,32 +163,36 @@ public:
   /// @param l The left endpoint of the interval.
   /// @param r The right endpoint of the interval.
   void erase(Point l, Point r) {
-    if (l > r)
+    if (l > r) {
       return;
+    }
     auto next_left = l;
     for (;;) {
       auto lb = map_.lower_bound(next_left);
       auto i = locate(next_left, lb);
-      if (i == map_.end())
+      if (i == map_.end()) {
         i = lb;
-      if (i == map_.end() || left(i) >= r)
+      }
+      if (i == map_.end() or left(i) >= r) {
         break;
+      }
       next_left = right(i);
-      if (l <= left(i) && r >= right(i)) { // [l,r) overlaps [i) in its entirety
+      if (l <= left(i)
+          and r >= right(i)) { // [l,r) overlaps [i) in its entirety
         map_.erase(i);
       } else if (left(i) <= l
-                 && right(i) >= r) { // [i) overlaps [l,r) in its entirety
+                 and right(i) >= r) { // [i) overlaps [l,r) in its entirety
         Point orig_r = right(i);
         right(i) = l;
         inject(r, orig_r, value(i));
         break;
-      } else if (l <= left(i) && r > left(i)) { // [l,r) overlaps [i) partially
-                                                // and starts before
+      } else if (l <= left(i) and r > left(i)) { // [l,r) overlaps [i) partially
+                                                 // and starts before
         map_.emplace(r, std::make_pair(right(i), std::move(value(i))));
         map_.erase(i);
         break;
-      } else if (l < right(i) && r >= right(i)) { // [l,r) overlaps [i)
-                                                  // partially and starts after
+      } else if (l < right(i) and r >= right(i)) { // [l,r) overlaps [i)
+                                                   // partially and starts after
         right(i) = l;
       }
     }
@@ -201,10 +202,11 @@ public:
   void erase_value(const Value& x) {
     auto i = map_.begin();
     while (i != map_.end()) {
-      if (i->second.second == x)
+      if (i->second.second == x) {
         i = map_.erase(i);
-      else
+      } else {
         ++i;
+      }
     }
   }
 
@@ -227,10 +229,11 @@ public:
   [[nodiscard]] std::tuple<Point, Point, const Value*>
   find(const Point& p) const {
     auto i = locate(p, map_.lower_bound(p));
-    if (i == map_.end())
+    if (i == map_.end()) {
       return {0, 0, nullptr};
-    else
+    } else {
       return {left(i), right(i), &i->second.second};
+    }
   }
 
   /// Retrieves the size of the range map.
@@ -274,16 +277,18 @@ private:
   // Finds the interval of a point.
   [[nodiscard]] map_const_iterator
   locate(const Point& p, map_const_iterator lb) const {
-    if ((lb != map_.end() && p == left(lb))
-        || (lb != map_.begin() && p < right(--lb)))
+    if ((lb != map_.end() and p == left(lb))
+        or (lb != map_.begin() and p < right(--lb))) {
       return lb;
+    }
     return map_.end();
   }
 
   map_iterator locate(const Point& p, map_iterator lb) {
-    if ((lb != map_.end() && p == left(lb))
-        || (lb != map_.begin() && p < right(--lb)))
+    if ((lb != map_.end() and p == left(lb))
+        or (lb != map_.begin() and p < right(--lb))) {
       return lb;
+    }
     return map_.end();
   }
 

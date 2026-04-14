@@ -27,8 +27,9 @@ struct escape_printer : printer_base<escape_printer<Escaper>> {
   bool print(Iterator& out, std::string_view str) const {
     auto f = str.begin();
     auto l = str.end();
-    while (f != l)
+    while (f != l) {
       escaper(f, out);
+    }
     return true;
   }
 

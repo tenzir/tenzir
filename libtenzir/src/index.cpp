@@ -503,7 +503,7 @@ caf::error index_state::load_from_disk() {
       // this is only a problem for older ones that still have `fbs::Partition`
       // as root type.
       if (entry.file_size() >= FLATBUFFERS_MAX_BUFFER_SIZE
-          && test_file_identifier(entry, fbs::PartitionIdentifier())) {
+          and test_file_identifier(entry, fbs::PartitionIdentifier())) {
         auto store_path
           = dir / ".." / "archive" / fmt::format("{:u}.store", partition_uuid);
         if (std::filesystem::exists(store_path, err)) {
@@ -1024,7 +1024,7 @@ auto index_state::schedule_lookups() -> size_t {
       tenzir::type partition_type{};
       for (const auto& [type, active_partition] : active_partitions) {
         if (active_partition.actor != nullptr
-            && active_partition.id == partition_id) {
+            and active_partition.id == partition_id) {
           part = active_partition.actor;
           break;
         }
@@ -1445,7 +1445,7 @@ index(index_actor::stateful_pointer<index_state> self,
                     return;
                   }
                   if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
-                      && flatbuffers::BufferHasIdentifier(
+                      and flatbuffers::BufferHasIdentifier(
                         chunk->data(), fbs::PartitionIdentifier())) {
                     TENZIR_WARN("failed to load partition for deletion at {} "
                                 "because its size of {} exceeds the maximum "

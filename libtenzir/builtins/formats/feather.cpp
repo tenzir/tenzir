@@ -44,7 +44,7 @@ namespace {
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
-  if (not time_col || time_col->length() == 0) {
+  if (not time_col or time_col->length() == 0) {
     return time{};
   }
   auto const row = time_col->length() - 1;
@@ -105,7 +105,7 @@ auto decode_ipc_stream(chunk_ptr chunk)
   // arrow/ipc/metadata_internal.h.
   static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
   if (chunk->size() < arrow_magic_bytes.length()
-      || std::memcmp(chunk->data(), arrow_magic_bytes.data(),
+      or std::memcmp(chunk->data(), arrow_magic_bytes.data(),
                      arrow_magic_bytes.size())
            != 0) {
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
@@ -322,7 +322,7 @@ private:
       // If current slice is exactly target size and we have no pending slices,
       // keep it as-is.
       if (pending.empty()
-          && slice.rows() == defaults::import::table_slice_size) {
+          and slice.rows() == defaults::import::table_slice_size) {
         result.push_back(std::move(slice));
         continue;
       }

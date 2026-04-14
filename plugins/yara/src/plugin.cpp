@@ -655,7 +655,7 @@ public:
       diagnostic::error("no rules provided").emit(ctx);
       return failure::promise();
     }
-    if (args.compiled_rules && args.rules.size() > 1) {
+    if (args.compiled_rules and args.rules.size() > 1) {
       diagnostic::error("can't accept multiple rules in compiled form")
         .primary(rules)
         .hint("provide exactly one rule argument")
@@ -669,11 +669,11 @@ public:
     auto args = operator_args{};
     while (auto arg = p.accept_shell_arg()) {
       if (arg) {
-        if (arg->inner == "-C" || arg->inner == "--compiled-rules") {
+        if (arg->inner == "-C" or arg->inner == "--compiled-rules") {
           args.compiled_rules = true;
-        } else if (arg->inner == "-f" || arg->inner == "--fast-scan") {
+        } else if (arg->inner == "-f" or arg->inner == "--fast-scan") {
           args.fast_scan = true;
-        } else if (arg->inner == "-B" || arg->inner == "--blockwise") {
+        } else if (arg->inner == "-B" or arg->inner == "--blockwise") {
           args.blockwise = true;
         } else {
           args.rules.push_back(std::move(arg->inner));
@@ -683,7 +683,7 @@ public:
     if (args.rules.empty()) {
       diagnostic::error("no rules provided").throw_();
     }
-    if (args.compiled_rules && args.rules.size() != 1) {
+    if (args.compiled_rules and args.rules.size() != 1) {
       diagnostic::error("can't accept multiple rules in compiled form")
         .hint("provide exactly one rule argument")
         .throw_();

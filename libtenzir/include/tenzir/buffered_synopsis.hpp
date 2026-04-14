@@ -84,7 +84,7 @@ public:
     auto shrunk_synopsis
       = buffered_synopsis_traits<T>::template make<HashFunction>(
         type, std::move(params));
-    if (! shrunk_synopsis) {
+    if (not shrunk_synopsis) {
       return nullptr;
     }
     // Add all buffered series to the bloom filter synopsis

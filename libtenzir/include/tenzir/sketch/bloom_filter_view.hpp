@@ -33,8 +33,8 @@ namespace tenzir::sketch {
 /// never wastes hash entropy.
 template <class Word>
 struct bloom_filter_view {
-  static_assert(
-    std::is_same_v<Word, uint64_t> || std::is_same_v<Word, const uint64_t>);
+  static_assert(std::is_same_v<Word, uint64_t>
+                or std::is_same_v<Word, const uint64_t>);
 
   /// Default-constructs an invalid view.
   bloom_filter_view() {
@@ -63,8 +63,9 @@ struct bloom_filter_view {
   bool lookup(uint64_t digest) const noexcept {
     for (size_t i = 0; i < params_.k; ++i) {
       auto [upper, lower] = tenzir::detail::wide_mul(params_.m, digest);
-      if ((bits_[upper >> 6] & (uint64_t{1} << (upper & 63))) == 0)
+      if ((bits_[upper >> 6] & (uint64_t{1} << (upper & 63))) == 0) {
         return false;
+      }
       digest = lower;
     }
     return true;

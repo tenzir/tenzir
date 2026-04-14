@@ -55,7 +55,7 @@ public:
         auto outer_result = std::optional<bool>{false};
         for (auto x : **xs) {
           auto result = do_lookup(relational_operator::equal, x);
-          if (result && *result) {
+          if (result and *result) {
             // Partition definitely contains at least one element.
             return true;
           }
@@ -99,7 +99,7 @@ public:
   bool inspect_impl(supported_inspectors& inspector) override {
     return std::visit(
       [this](auto inspector) {
-        return inspector.get().apply(min_) && inspector.get().apply(max_);
+        return inspector.get().apply(min_) and inspector.get().apply(max_);
       },
       inspector);
   }

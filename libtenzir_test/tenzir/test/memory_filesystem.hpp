@@ -31,9 +31,10 @@ inline auto memory_filesystem() -> tenzir::filesystem_actor::behavior_type {
     [chunks](tenzir::atom::read, const std::filesystem::path& path)
       -> caf::result<tenzir::chunk_ptr> {
       auto chunk = chunks->find(path);
-      if (chunk == chunks->end())
+      if (chunk == chunks->end()) {
         return caf::make_error(tenzir::ec::no_such_file,
                                fmt::format("unknown file {}", path));
+      }
       return chunk->second;
     },
     [chunks](tenzir::atom::read, tenzir::atom::recursive,
@@ -46,9 +47,10 @@ inline auto memory_filesystem() -> tenzir::filesystem_actor::behavior_type {
       tenzir::atom::move, const std::filesystem::path& from,
       const std::filesystem::path& to) -> caf::result<tenzir::atom::done> {
       auto chunk = chunks->find(from);
-      if (chunk == chunks->end())
+      if (chunk == chunks->end()) {
         return caf::make_error(tenzir::ec::no_such_file,
                                fmt::format("unknown file {}", from));
+      }
       auto x = chunks->extract(from);
       x.key() = to;
       chunks->insert(std::move(x));
@@ -60,9 +62,10 @@ inline auto memory_filesystem() -> tenzir::filesystem_actor::behavior_type {
         files) -> caf::result<tenzir::atom::done> {
       for (auto const& [from, to] : files) {
         auto chunk = chunks->find(from);
-        if (chunk == chunks->end())
+        if (chunk == chunks->end()) {
           return caf::make_error(tenzir::ec::no_such_file,
                                  fmt::format("unknown file {}", from));
+        }
         auto x = chunks->extract(from);
         x.key() = to;
         chunks->insert(std::move(x));
@@ -72,9 +75,10 @@ inline auto memory_filesystem() -> tenzir::filesystem_actor::behavior_type {
     [chunks](tenzir::atom::mmap, const std::filesystem::path& path)
       -> caf::result<tenzir::chunk_ptr> {
       auto chunk = chunks->find(path);
-      if (chunk == chunks->end())
+      if (chunk == chunks->end()) {
         return caf::make_error(tenzir::ec::no_such_file,
                                fmt::format("unknown file {}", path));
+      }
       return chunk->second;
     },
     [chunks](tenzir::atom::erase, std::filesystem::path& path) {

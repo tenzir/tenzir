@@ -270,7 +270,7 @@ public:
     for (auto row = int64_t{1}; row < total_rows; ++row) {
       fill_key(row);
       find_or_create_group(key);
-      if (! group_by_key_equal{}(key, current_key)) {
+      if (not group_by_key_equal{}(key, current_key)) {
         update_group(groups_.find(current_key).value(), current_begin, row);
         current_key = materialize(key);
         current_begin = row;
@@ -693,7 +693,7 @@ auto evaluate_options(config& cfg, session ctx) -> failure_or<void> {
         .emit(ctx);
       return failure::promise();
     }
-    if (*str == "reset" || *str == "cumulative" || *str == "update") {
+    if (*str == "reset" or *str == "cumulative" or *str == "update") {
       cfg.mode = *str;
     } else {
       diagnostic::error("invalid mode `{}`", *str)
@@ -930,7 +930,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Summarize{std::move(cfg_)};
   }

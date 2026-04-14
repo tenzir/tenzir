@@ -21,11 +21,14 @@ namespace {} // namespace
 
 auto message::header(const std::string& name) -> struct header* {
   auto pred = [&](auto& x) -> bool {
-    if (x.name.size() != name.size())
+    if (x.name.size() != name.size()) {
       return false;
-    for (auto i = 0u; i < name.size(); ++i)
-      if (::toupper(x.name[i]) != ::toupper(name[i]))
+    }
+    for (auto i = 0u; i < name.size(); ++i) {
+      if (::toupper(x.name[i]) != ::toupper(name[i])) {
         return false;
+      }
+    }
     return true;
   };
   auto i = std::find_if(headers.begin(), headers.end(), pred);
@@ -49,26 +52,33 @@ auto request_item::parse(std::string_view str) -> std::optional<request_item> {
     return true;
   };
   auto xs = detail::split_escaped(str, ":=@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_data_json, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, ":=", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = data_json, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, ":", "\\", 1);
-  if (xs.size() == 2 and is_valid_header_name(xs[0]))
+  if (xs.size() == 2 and is_valid_header_name(xs[0])) {
     return request_item{.type = header, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "==", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = url_param, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "=@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_data, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_form, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "=", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = data, .key = xs[0], .value = xs[1]};
+  }
   return {};
 }
 
@@ -81,17 +91,20 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
         break;
       }
       case request_item::data: {
-        if (req.method.empty())
+        if (req.method.empty()) {
           req.method = "POST";
+        }
         body.emplace(std::move(item.key), std::move(item.value));
         break;
       }
       case request_item::data_json: {
-        if (req.method.empty())
+        if (req.method.empty()) {
           req.method = "POST";
+        }
         auto data = from_json(item.value);
-        if (not data)
+        if (not data) {
           return data.error();
+        }
         body.emplace(std::move(item.key), std::move(*data));
         break;
       }
@@ -139,8 +152,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     } else if (content_type.starts_with("application/json")) {
       if (not body.empty()) {
         req.body = json_encode(body);
-        if (accept)
+        if (accept) {
           accept->insert(accept->begin(), "application/json");
+        }
         TENZIR_DEBUG("JSON-encoded request body: {}", req.body);
       }
     } else {
@@ -153,8 +167,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     // Without a Content-Type, we assume JSON.
     req.body = json_encode(body);
     req.headers.emplace_back("Content-Type", "application/json");
-    if (accept)
+    if (accept) {
       accept->insert(accept->begin(), "application/json");
+    }
   }
   // Add an Accept header unless we have one already.
   if (accept) {

@@ -82,7 +82,7 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
   flatbuffers::FlatBufferBuilder builder{expected_size};
   auto view = immutable_bloom_filter_view{x.params_, x.bits_};
   auto bloom_filter_offset = pack(builder, view);
-  if (! bloom_filter_offset) {
+  if (not bloom_filter_offset) {
     return bloom_filter_offset.error();
   }
   builder.Finish(*bloom_filter_offset);

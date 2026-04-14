@@ -78,7 +78,7 @@ TEST("from_yaml - basic") {
 
 TEST("from_yaml - invalid yaml") {
   auto yaml = from_yaml("@!#$%^&*()_+");
-  REQUIRE(! yaml);
+  REQUIRE(not yaml);
   CHECK_EQUAL(yaml.error(), ec::parse_error);
 }
 

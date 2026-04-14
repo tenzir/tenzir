@@ -31,7 +31,7 @@ inline auto as_printer(std::string str) {
 }
 
 template <class T>
-  requires(std::is_arithmetic_v<T> && !std::same_as<T, bool>)
+  requires(std::is_arithmetic_v<T> and not std::same_as<T, bool>)
 auto as_printer(T x) -> literal_printer {
   return literal_printer{x};
 }
@@ -48,14 +48,14 @@ constexpr auto as_printer(T x) {
 template <class T>
 constexpr bool is_convertible_to_unary_printer_v =
   std::is_convertible_v<T, std::string>
-  || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
+  or (std::is_arithmetic_v<T> and not std::is_same_v<T, bool>);
 
 template <class T, class U>
 using is_convertible_to_binary_printer =
   std::bool_constant<
-    ( printer<T> && printer<U>)
-    || ( printer<T> && is_convertible_to_unary_printer_v<U>)
-    || (is_convertible_to_unary_printer_v<T> && printer<U>)
+    ( printer<T> and printer<U>)
+    or ( printer<T> and is_convertible_to_unary_printer_v<U>)
+    or (is_convertible_to_unary_printer_v<T> and printer<U>)
   >;
 
 template <class T, class U>
@@ -69,13 +69,13 @@ template <
 >
 using make_binary_printer =
   std::conditional_t<
-    printer<T> && printer<U>,
+    printer<T> and printer<U>,
     Binaryprinter<T, U>,
     std::conditional_t<
-       printer<T> && is_convertible_to_unary_printer_v<U>,
+       printer<T> and is_convertible_to_unary_printer_v<U>,
       Binaryprinter<T, decltype(as_printer(std::declval<U>()))>,
       std::conditional_t<
-        is_convertible_to_unary_printer_v<T> && printer<U>,
+        is_convertible_to_unary_printer_v<T> and printer<U>,
         Binaryprinter<decltype(as_printer(std::declval<T>())), U>,
         std::false_type
       >
@@ -91,7 +91,7 @@ constexpr auto as_printer(T&& x, U&& y) ->
     Binaryprinter,
     decltype(as_printer(std::declval<T&>())),
     decltype(as_printer(std::declval<U&>()))>
-requires(printer<T> ||  printer<U>)
+requires(printer<T> or  printer<U>)
 {
   return {as_printer(std::forward<T>(x)), as_printer(std::forward<U>(y))};
 }

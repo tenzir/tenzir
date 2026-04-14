@@ -32,8 +32,9 @@ public:
       parser_(f, l, unused);
     } else {
       inner_attribute attr;
-      if (parser_(f, l, attr))
+      if (parser_(f, l, attr)) {
         a = std::move(attr);
+      }
     }
     return true;
   }

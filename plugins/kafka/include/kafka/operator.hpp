@@ -113,7 +113,7 @@ public:
 
   kafka_loader(loader_args args, record config)
     : args_{std::move(args)}, config_{std::move(config)} {
-    if (! config_.contains("group.id")) {
+    if (not config_.contains("group.id")) {
       config_["group.id"] = "tenzir";
     }
   }
@@ -136,7 +136,7 @@ public:
     }
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
-    if (! cfg) {
+    if (not cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
         .primary(args_.operator_location)
         .emit(dh);
@@ -183,7 +183,7 @@ public:
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = consumer::make(*cfg);
-    if (! client) {
+    if (not client) {
       diagnostic::error("failed to create consumer: {}", client.error())
         .primary(args_.operator_location)
         .emit(dh);
@@ -399,7 +399,7 @@ public:
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = producer::make(*cfg);
-    if (! client) {
+    if (not client) {
       TENZIR_ERROR(client.error());
       diagnostic::error(client.error()).emit(dh);
     };

@@ -68,18 +68,18 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
-    if (! chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
     const auto* const end = begin + chunk->size();
-    if (ended_on_carriage_return && *begin == '\n') {
+    if (ended_on_carriage_return and *begin == '\n') {
       ++begin;
     };
     ended_on_carriage_return = false;
     for (const auto* current = begin; current != end; ++current) {
-      if (*current != '\n' && *current != '\r') {
+      if (*current != '\n' and *current != '\r') {
         continue;
       }
       const auto capacity = static_cast<size_t>(end - begin);
@@ -105,7 +105,7 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (! buffer.empty()) {
+  if (not buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
     co_yield simdjson::padded_string_view{buffer};
   }
@@ -114,7 +114,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
-    if (! chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
@@ -139,7 +139,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (! buffer.empty()) {
+  if (not buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
     co_yield simdjson::padded_string_view{buffer};
   }
@@ -1243,7 +1243,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    if (! draining_) {
+    if (not draining_) {
       return OperatorState::unspecified;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
@@ -1986,7 +1986,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    if (! draining_) {
+    if (not draining_) {
       return OperatorState::unspecified;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done

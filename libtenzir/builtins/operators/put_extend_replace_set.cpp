@@ -99,7 +99,7 @@ auto make_extend(const table_slice& slice, const configuration& config,
         operand.emplace(std::move(*field_as_operand));
       }
       auto [type, array] = resolve_operand(slice, *operand);
-      if (not type && not array) {
+      if (not type and not array) {
         diagnostic::error(
           "sorting across heterogeneous lists is not implemented")
           .note("from `{}`", operator_name(Mode))
@@ -123,7 +123,7 @@ auto make_replace(const table_slice& slice, const operand& op,
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
       auto [type, array] = resolve_operand(slice, op);
-      if (not type && not array) {
+      if (not type and not array) {
         diagnostic::error("lists must have a homogeneous element type")
           .note("from `{}`", operator_name(mode::replace))
           .emit(ctrl.diagnostics());
@@ -320,7 +320,7 @@ public:
       >> end_of_pipeline_operator;
     // clang-format on
     auto config = configuration{};
-    if (! p(f, l, config.extractor_to_operand)) {
+    if (not p(f, l, config.extractor_to_operand)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,

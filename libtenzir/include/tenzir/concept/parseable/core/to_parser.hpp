@@ -29,7 +29,7 @@ inline auto to_parser(std::string str) {
 
 template <class T>
 constexpr auto to_parser(T x)
-  requires(std::is_arithmetic_v<T> and !std::is_same_v<T, bool>)
+  requires(std::is_arithmetic_v<T> and not std::is_same_v<T, bool>)
 {
   return ignore(parsers::str{std::to_string(x)});
 }
@@ -44,13 +44,13 @@ constexpr auto to_parser(T x) -> T {
 template <class T>
 constexpr bool is_convertible_to_unary_parser_v
   = std::is_convertible_v<T, std::string>
-    || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
+    or (std::is_arithmetic_v<T> and not std::is_same_v<T, bool>);
 
 template <class T, class U>
 constexpr bool is_convertible_to_binary_parser_v
-  = (parser<T> && parser<U>)
-    || (parser<T> && is_convertible_to_unary_parser_v<U>)
-    || (is_convertible_to_unary_parser_v<T> && parser<U>);
+  = (parser<T> and parser<U>)
+    or (parser<T> and is_convertible_to_unary_parser_v<U>)
+    or (is_convertible_to_unary_parser_v<T> and parser<U>);
 
 // clang-format off
 template <
@@ -60,13 +60,13 @@ template <
 >
 using make_binary_parser =
   std::conditional_t<
-    parser<T> && parser<U>,
+    parser<T> and parser<U>,
     BinaryParser<T, U>,
     std::conditional_t<
-      parser<T> && is_convertible_to_unary_parser_v<U>,
+      parser<T> and is_convertible_to_unary_parser_v<U>,
       BinaryParser<T, decltype(to_parser(std::declval<U>()))>,
       std::conditional_t<
-        is_convertible_to_unary_parser_v<T> && parser<U>,
+        is_convertible_to_unary_parser_v<T> and parser<U>,
         BinaryParser<decltype(to_parser(std::declval<T>())), U>,
         std::false_type
       >

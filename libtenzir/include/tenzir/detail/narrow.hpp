@@ -43,7 +43,7 @@ auto narrow(U y, std::source_location location
                  = std::source_location::current()) -> T {
   T x = narrow_cast<T>(y);
   if (static_cast<U>(x) != y
-      && (is_same_signedness<T, U>::value || (x < T{}) != (y < U{}))) {
+      and (is_same_signedness<T, U>::value or (x < T{}) != (y < U{}))) {
     panic_at(location, "cannot narrow {} to {}", y, typeid(T).name());
   }
   return x;

@@ -307,7 +307,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     for (auto& v : msb.yield_ready_as_table_slice()) {
       co_yield std::move(v);
     }
-    if (! line) {
+    if (not line) {
       co_yield {};
       continue;
     }

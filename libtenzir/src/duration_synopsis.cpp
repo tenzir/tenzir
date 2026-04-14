@@ -24,10 +24,11 @@ synopsis_ptr duration_synopsis::clone() const {
 }
 
 bool duration_synopsis::equals(const synopsis& other) const noexcept {
-  if (typeid(other) != typeid(duration_synopsis))
+  if (typeid(other) != typeid(duration_synopsis)) {
     return false;
+  }
   auto& dref = static_cast<const duration_synopsis&>(other);
-  return type() == dref.type() && min() == dref.min() && max() == dref.max();
+  return type() == dref.type() and min() == dref.min() and max() == dref.max();
 }
 
 } // namespace tenzir

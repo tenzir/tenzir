@@ -55,7 +55,7 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
   // Fetch values from config.
   const auto& opts = content(self->system().config());
   auto node_endpoint = detail::get_node_endpoint(opts);
-  if (!node_endpoint) {
+  if (not node_endpoint) {
     return callback(std::move(node_endpoint.error()));
   }
   const auto timeout = detail::node_connection_timeout(opts);

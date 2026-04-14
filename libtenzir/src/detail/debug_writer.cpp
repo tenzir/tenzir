@@ -27,7 +27,7 @@ static constexpr const char class_name[] = "tenzir::debug_writer";
 
 constexpr bool can_morph(debug_writer::type from, debug_writer::type to) {
   return from == debug_writer::type::element
-         && to != debug_writer::type::member;
+         and to != debug_writer::type::member;
 }
 
 constexpr const char* json_type_names[]
@@ -120,7 +120,7 @@ bool debug_writer::begin_field(std::string_view name) {
 }
 
 bool debug_writer::begin_field(std::string_view name, bool is_present) {
-  if (skip_empty_fields_ && ! is_present) {
+  if (skip_empty_fields_ and not is_present) {
     auto t = top();
     switch (t) {
       case type::object:
@@ -139,7 +139,7 @@ bool debug_writer::begin_field(std::string_view name, bool is_present) {
     add(": ");
     pop();
     CAF_ASSERT(top() == type::element);
-    if (! is_present) {
+    if (not is_present) {
       add("null");
       pop();
     }
@@ -253,7 +253,7 @@ bool debug_writer::end_associative_array() {
     --indentation_level_;
     nl();
     add('}');
-    if (! stack_.empty()) {
+    if (not stack_.empty()) {
       stack_.back().filled = true;
     }
     return true;
@@ -415,7 +415,7 @@ void debug_writer::init() {
 }
 
 debug_writer::type debug_writer::top() {
-  if (! stack_.empty()) {
+  if (not stack_.empty()) {
     return stack_.back().t;
   } else {
     return type::null;
@@ -429,7 +429,7 @@ void debug_writer::push(type t) {
 
 // Backs up one level of nesting.
 bool debug_writer::pop() {
-  if (! stack_.empty()) {
+  if (not stack_.empty()) {
     stack_.pop_back();
     return true;
   } else {
@@ -440,7 +440,7 @@ bool debug_writer::pop() {
 }
 
 bool debug_writer::pop_if(type t) {
-  if (! stack_.empty() && stack_.back() == t) {
+  if (not stack_.empty() and stack_.back() == t) {
     stack_.pop_back();
     return true;
   } else {
@@ -459,8 +459,8 @@ bool debug_writer::pop_if(type t) {
 
 bool debug_writer::pop_if_next(type t) {
   if (stack_.size() > 1
-      && (stack_[stack_.size() - 2] == t
-          || can_morph(stack_[stack_.size() - 2].t, t))) {
+      and (stack_[stack_.size() - 2] == t
+           or can_morph(stack_[stack_.size() - 2].t, t))) {
     stack_.pop_back();
     return true;
   } else {
@@ -485,7 +485,7 @@ bool debug_writer::morph(type t) {
 }
 
 bool debug_writer::morph(type t, type& prev) {
-  if (! stack_.empty()) {
+  if (not stack_.empty()) {
     if (can_morph(stack_.back().t, t)) {
       prev = stack_.back().t;
       stack_.back().t = t;
@@ -533,8 +533,8 @@ void debug_writer::nl() {
 }
 
 void debug_writer::sep() {
-  CAF_ASSERT(top() == type::element || top() == type::object
-             || top() == type::array);
+  CAF_ASSERT(top() == type::element or top() == type::object
+             or top() == type::array);
   if (stack_.back().filled) {
     if (indentation_factor_ > 0) {
       add(",\n");

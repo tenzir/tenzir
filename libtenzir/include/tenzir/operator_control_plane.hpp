@@ -79,7 +79,7 @@ struct operator_control_plane {
   class secret_resolution_sentinel {
   public:
     template <concepts::one_of<std::monostate, chunk_ptr, table_slice> T>
-    explicit(false) operator T() && {
+    explicit(false) operator T() and {
       has_yielded_ = true;
       return T{};
     }

@@ -42,24 +42,16 @@ public:
   // LHS = T && RHS = unused       =>  LHS
   // LHS = unused && RHS = T       =>  RHS
   // LHS = T && RHS = U            =>  std:tuple<T, U>
-  using attribute =
+  using attribute = std::conditional_t<
+    std::is_same_v<lhs_attribute, unused_type>
+      and std::is_same_v<rhs_attribute, unused_type>,
+    unused_type,
     std::conditional_t<
-      std::is_same_v<lhs_attribute, unused_type>
-        && std::is_same_v<rhs_attribute, unused_type>,
-      unused_type,
-      std::conditional_t<
-        std::is_same_v<lhs_attribute, unused_type>,
-        rhs_attribute,
-        std::conditional_t<
-          std::is_same_v<rhs_attribute, unused_type>,
-          lhs_attribute,
-          detail::attr_fold<
-            decltype(std::tuple_cat(detail::tuple_wrap<lhs_attribute>{},
-                                    detail::tuple_wrap<rhs_attribute>{}))
-          >
-        >
-      >
-    >;
+      std::is_same_v<lhs_attribute, unused_type>, rhs_attribute,
+      std::conditional_t<std::is_same_v<rhs_attribute, unused_type>, lhs_attribute,
+                         detail::attr_fold<decltype(std::tuple_cat(
+                           detail::tuple_wrap<lhs_attribute>{},
+                           detail::tuple_wrap<rhs_attribute>{}))>>>>;
 
   constexpr sequence_printer(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
@@ -67,7 +59,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
-    return print_left(out, a) && print_right(out, a);
+    return print_left(out, a) and print_right(out, a);
   }
 
 private:

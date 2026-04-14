@@ -230,7 +230,7 @@ public:
     return {};
   }
 
-  auto sorted() && -> generator<table_slice> {
+  auto sorted() and -> generator<table_slice> {
     // If there is nothing to sort, then we can just return early.
     if (cache_.empty()) {
       co_return;
@@ -451,7 +451,7 @@ public:
       = std::vector<std::tuple<std::string /*key*/, bool /*descending*/,
                                bool /*nulls_first*/>>{};
     bool stable = false;
-    if (! p(f, l, stable, sort_args)) {
+    if (not p(f, l, stable, sort_args)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "

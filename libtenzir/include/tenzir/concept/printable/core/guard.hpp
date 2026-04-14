@@ -27,19 +27,19 @@ public:
 
   template <class Iterator>
   bool print(Iterator& out, unused_type) const {
-    return guard_() && printer_.print(out, unused);
+    return guard_() and printer_.print(out, unused);
   }
 
   template <class Iterator, class Attribute, class G = Guard>
     requires(detail::guard_traits<G>::no_args_returns_bool)
   auto print(Iterator& out, const Attribute& a) const -> bool {
-    return guard_() && printer_.print(out, a);
+    return guard_() and printer_.print(out, a);
   }
 
   template <class Iterator, class Attribute, class G = Guard>
     requires(detail::guard_traits<G>::one_arg_returns_bool)
   auto print(Iterator& out, const Attribute& a) const -> bool {
-    return guard_(a) && printer_.print(out, a);
+    return guard_(a) and printer_.print(out, a);
   }
 
 private:

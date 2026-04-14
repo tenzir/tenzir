@@ -54,18 +54,18 @@ struct parser_base {
     // we must have this overload and strip the NUL byte at the end.
     auto f = r;
     auto l = r + N - 1; // No NUL byte.
-    return derived().parse(f, l, a) && f == l;
+    return derived().parse(f, l, a) and f == l;
   }
 
   template <class... TAttributes>
-  auto operator()(std::ranges::range auto&& r,
-                  TAttributes&... attributes) const -> bool {
+  auto operator()(std::ranges::range auto&& r, TAttributes&... attributes) const
+    -> bool {
     auto f = std::begin(r);
     auto l = std::end(r);
     if constexpr (sizeof...(TAttributes) == 0) {
-      return derived().parse(f, l, unused) && f == l;
+      return derived().parse(f, l, unused) and f == l;
     } else if constexpr (sizeof...(TAttributes) == 1) {
-      return derived().parse(f, l, attributes...) && f == l;
+      return derived().parse(f, l, attributes...) and f == l;
     } else {
       auto t = std::tie(attributes...);
       return derived().parse(f, l, t);
@@ -89,10 +89,10 @@ struct parser_base {
   }
 
   template <class Iterator, class D = Derived>
-  auto apply(Iterator& f,
-             const Iterator& l) const -> std::optional<typename D::attribute> {
+  auto apply(Iterator& f, const Iterator& l) const
+    -> std::optional<typename D::attribute> {
     auto result = typename D::attribute{};
-    if (!(*this)(f, l, result)) {
+    if (not(*this)(f, l, result)) {
       return std::nullopt;
     }
     return result;

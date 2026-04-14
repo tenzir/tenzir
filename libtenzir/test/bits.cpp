@@ -32,50 +32,50 @@ TEST("bits construction") {
 
 TEST("access") {
   auto x = bits8{0b10110010};
-  CHECK(! x[0]);
+  CHECK(not x[0]);
   CHECK(x[1]);
-  CHECK(! x[2]);
-  CHECK(! x[3]);
+  CHECK(not x[2]);
+  CHECK(not x[3]);
   CHECK(x[4]);
   CHECK(x[5]);
-  CHECK(! x[6]);
+  CHECK(not x[6]);
   CHECK(x[7]);
   x = bits8{0b10110010, 5};
   CHECK(x[4]);
-  CHECK(! (x.data() & w8::mask(5)));
-  CHECK(! (x.data() & w8::mask(6)));
-  CHECK(! (x.data() & w8::mask(7)));
+  CHECK(not(x.data() & w8::mask(5)));
+  CHECK(not(x.data() & w8::mask(6)));
+  CHECK(not(x.data() & w8::mask(7)));
   x = bits8{w8::all, 1337};
   CHECK(x[0]);
   CHECK(x[1000]);
   CHECK(x[1336]);
   x = bits8{w8::none, 1337};
-  CHECK(! x[0]);
-  CHECK(! x[1000]);
-  CHECK(! x[1336]);
+  CHECK(not x[0]);
+  CHECK(not x[1000]);
+  CHECK(not x[1336]);
 }
 
 TEST("introspection") {
   auto x = bits8{};
   CHECK(x.is_partial_word());
-  CHECK(! x.is_complete_word());
-  CHECK(! x.is_run());
+  CHECK(not x.is_complete_word());
+  CHECK(not x.is_run());
   x = bits8{0b10110010, 3};
   CHECK(x.is_partial_word());
-  CHECK(! x.is_complete_word());
-  CHECK(! x.is_run());
+  CHECK(not x.is_complete_word());
+  CHECK(not x.is_run());
   x = bits8{0b10110010};
-  CHECK(! x.is_partial_word());
+  CHECK(not x.is_partial_word());
   CHECK(x.is_complete_word());
-  CHECK(! x.is_run());
+  CHECK(not x.is_run());
   x = bits8{w8::all, 42};
-  CHECK(! x.is_partial_word());
-  CHECK(! x.is_complete_word());
+  CHECK(not x.is_partial_word());
+  CHECK(not x.is_complete_word());
   CHECK(x.is_run());
 }
 
 TEST("homogeneity") {
-  CHECK(! bits8{0b10110000}.homogeneous());
+  CHECK(not bits8{0b10110000}.homogeneous());
   CHECK((bits8{0b10110000, 4}.homogeneous()));
   CHECK((bits8{0b10111111, 6}.homogeneous()));
   CHECK((bits8{w8::all}.homogeneous()));

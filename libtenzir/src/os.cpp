@@ -180,7 +180,7 @@ auto linux_os::fetch_processes(std::optional<int> pid_filter)
     auto tasks = state_->procfs.get_processes();
     result.reserve(tasks.size());
     for (const auto& task : tasks) {
-      if (pid_filter && task.id() != *pid_filter) {
+      if (pid_filter and task.id() != *pid_filter) {
         continue;
       }
       try {
@@ -365,13 +365,13 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
     if (pid <= 0) {
       continue;
     }
-    if (pid_filter && pid != *pid_filter) {
+    if (pid_filter and pid != *pid_filter) {
       continue;
     }
     errno = 0;
     proc_bsdinfo proc{};
     auto n = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &proc, sizeof(proc));
-    if (n < detail::narrow_cast<int>(sizeof(proc)) || errno != 0) {
+    if (n < detail::narrow_cast<int>(sizeof(proc)) or errno != 0) {
       if (errno == ESRCH) { // process is gone
         continue;
       }
@@ -414,7 +414,7 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
     // Count open file descriptors.
     errno = 0;
     n = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
-    if (n > 0 && errno == 0) {
+    if (n > 0 and errno == 0) {
       p.open_fds = n / sizeof(proc_fdinfo);
     }
     result.push_back(std::move(p));

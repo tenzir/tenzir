@@ -92,7 +92,7 @@ auto argument_parser2::parse(const ast::entity& self,
     auto& positional = *it;
     auto end_of_positional = arg == args.end() or is<ast::assignment>(*arg);
     if (end_of_positional) {
-      if (first_optional_ && positional_idx >= *first_optional_) {
+      if (first_optional_ and positional_idx >= *first_optional_) {
         break;
       }
       emit(diagnostic::error("expected additional positional argument `{}`",
@@ -407,8 +407,8 @@ auto argument_parser2::usage() const -> std::string {
       auto last = idx == positional_.size() - 1;
       auto is_pipeline
         = std::holds_alternative<pipeline_setter>(positional.set);
-      auto is_optional = first_optional_ && idx >= *first_optional_;
-      if (last && is_pipeline && kind_ == kind::op) {
+      auto is_optional = first_optional_ and idx >= *first_optional_;
+      if (last and is_pipeline and kind_ == kind::op) {
         // We want to print named arguments before, so we skip this for now.
         pipeline_last
           = is_optional ? pipeline_last_t::opt : pipeline_last_t::req;

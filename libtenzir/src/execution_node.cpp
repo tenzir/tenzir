@@ -92,7 +92,7 @@ struct exec_node_defaults<chunk_ptr> : exec_node_defaults<> {
 namespace {
 
 template <class... Duration>
-  requires(std::is_same_v<Duration, duration> && ...)
+  requires(std::is_same_v<Duration, duration> and ...)
 auto make_timer_guard(Duration&... elapsed) {
   return detail::scope_guard(
     [&, start_time = std::chrono::steady_clock::now()]() noexcept {

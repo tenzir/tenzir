@@ -77,13 +77,13 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   auto lhs_bits = lhs.empty() ? lhs_bits_type{} : *lhs_begin++;
   auto rhs_bits = rhs.empty() ? rhs_bits_type{} : *rhs_begin++;
   // Iterate.
-  while (! lhs_bits.empty() && ! rhs_bits.empty()) {
+  while (not lhs_bits.empty() and not rhs_bits.empty()) {
     auto data = op(lhs_bits.data(), rhs_bits.data());
-    if (lhs_bits.is_run() && ! rhs_bits.is_run()) {
+    if (lhs_bits.is_run() and not rhs_bits.is_run()) {
       result.append(result_bits_type{data, rhs_bits.size()});
       lhs_bits = drop(lhs_bits, rhs_bits.size());
       rhs_bits = {};
-    } else if (! lhs_bits.is_run() && rhs_bits.is_run()) {
+    } else if (not lhs_bits.is_run() and rhs_bits.is_run()) {
       result.append(result_bits_type{data, lhs_bits.size()});
       rhs_bits = drop(rhs_bits, lhs_bits.size());
       lhs_bits = {};
@@ -97,13 +97,13 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
     if (lhs_bits.empty()) {
       if (lhs_begin != lhs_end) {
         lhs_bits = *lhs_begin++;
-        TENZIR_ASSERT(! lhs_bits.empty());
+        TENZIR_ASSERT(not lhs_bits.empty());
       }
     }
     if (rhs_bits.empty()) {
       if (rhs_begin != rhs_end) {
         rhs_bits = *rhs_begin++;
-        TENZIR_ASSERT(! rhs_bits.empty());
+        TENZIR_ASSERT(not rhs_bits.empty());
       }
     }
   }
@@ -112,7 +112,7 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   // we woudn't fill up the bitmap, we would end up with a shorter bitmap that
   // doesn't reflect the true result size.
   if constexpr (FillLHS) {
-    if (! lhs_bits.empty()) {
+    if (not lhs_bits.empty()) {
       result.append(lhs_bits);
     }
     while (lhs_begin != lhs_end) {
@@ -120,7 +120,7 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
     }
   }
   if constexpr (FillRHS) {
-    if (! rhs_bits.empty()) {
+    if (not rhs_bits.empty()) {
       result.append(rhs_bits);
     }
     while (rhs_begin != rhs_end) {
@@ -165,7 +165,7 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
     queue.emplace(&*begin);
   }
   // Evaluate bitmaps.
-  while (! queue.empty()) {
+  while (not queue.empty()) {
     auto lhs = queue.top();
     queue.pop();
     if (queue.empty()) {
@@ -259,7 +259,7 @@ rank(const Bitmap& bm, typename Bitmap::size_type i) {
   auto result = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   for (auto b : bit_range(bm)) {
-    if (i >= n && i < n + b.size()) {
+    if (i >= n and i < n + b.size()) {
       return result + rank<Bit>(b, i - n);
     }
     result += Bit ? rank<1>(b) : b.size() - rank<1>(b);
@@ -332,21 +332,21 @@ public:
   /// @returns The current bit sequence.
   /// @pre `!done()`
   [[nodiscard]] const bits_type& bits() const {
-    TENZIR_ASSERT(! done());
+    TENZIR_ASSERT(not done());
     return rng_.get();
   }
 
   /// @returns The current position in the range.
   /// @pre `!done()`
   [[nodiscard]] id offset() const {
-    TENZIR_ASSERT(! done());
+    TENZIR_ASSERT(not done());
     return n_ + i_;
   }
 
   /// @returns The bit value at the current position.
   /// @pre `!done()`
   [[nodiscard]] bool value() const {
-    TENZIR_ASSERT(! done());
+    TENZIR_ASSERT(not done());
     return bits()[i_];
   }
 
@@ -355,18 +355,18 @@ public:
   /// Retrieves the current position in the range.
   /// @pre `!done()`
   [[nodiscard]] size_type get() const {
-    TENZIR_ASSERT(! done());
+    TENZIR_ASSERT(not done());
     return offset();
   }
 
   /// @returns `true` if the range is done.
   [[nodiscard]] bool done() const {
-    return rng_.done() && i_ == npos;
+    return rng_.done() and i_ == npos;
   }
 
   /// Advances to the next bit in the range.
   void next() {
-    TENZIR_ASSERT(! done());
+    TENZIR_ASSERT(not done());
     ++i_;
     if (i_ == bits().size()) {
       n_ += bits().size();
@@ -383,7 +383,7 @@ public:
   void next(size_type k) {
     TENZIR_ASSERT(k > 0);
     TENZIR_ASSERT(i_ != npos);
-    TENZIR_ASSERT(! bits().empty());
+    TENZIR_ASSERT(not bits().empty());
     auto remaining_bits = bits().size() - i_ - 1;
     if (k <= remaining_bits) {
       i_ += k - 1;
@@ -391,7 +391,7 @@ public:
       return;
     }
     for (k -= remaining_bits, i_ = npos, n_ += bits().size(), rng_.next();
-         ! rng_.done() && k > 0;
+         not rng_.done() and k > 0;
          k -= bits().size(), n_ += bits().size(), rng_.next()) {
       if (k <= bits().size()) {
         i_ = k - 1;
@@ -433,7 +433,7 @@ public:
       return;
     }
     for (k -= remaining, i_ = npos, n_ += bits().size(), rng_.next();
-         ! rng_.done(); n_ += bits().size(), rng_.next()) {
+         not rng_.done(); n_ += bits().size(), rng_.next()) {
       TENZIR_ASSERT(k > 0);
       if (k <= bits().size()) {
         i_ = select<Bit>(bits(), k);
@@ -450,7 +450,7 @@ public:
   /// @pre `!done() && x >= offset()`
   template <bool Bit = true>
   void select_from(id x) {
-    TENZIR_ASSERT(! done());
+    TENZIR_ASSERT(not done());
     TENZIR_ASSERT(x >= offset());
     if (x > offset()) {
       next(x - offset());
@@ -483,7 +483,7 @@ template <bool Bit, class BitRange>
 class select_range : public detail::range_facade<select_range<Bit, BitRange>> {
 public:
   select_range(BitRange rng) : rng_{std::move(rng)} {
-    if (! rng_.done() && rng_.bits()[0] != Bit) {
+    if (not rng_.done() and rng_.bits()[0] != Bit) {
       next();
     }
   }
@@ -536,7 +536,7 @@ auto select_runs(const Bitmap& bitmap) -> generator<id_range> {
       co_return;
     }
     auto first = rng.get();
-    rng.template select<! Bit>();
+    rng.template select<not Bit>();
     if (rng.done()) {
       co_yield {first, bitmap.size()};
       co_return;
@@ -567,25 +567,25 @@ select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
   auto lower_bound = [&](Iterator first, Iterator last, auto x) {
     return std::lower_bound(first, last, x, pred);
   };
-  for (auto rng = select(bm); rng && begin != end;
+  for (auto rng = select(bm); rng and begin != end;
        begin = lower_bound(begin, end, rng.get())) {
     // Get the current ID interval.
     auto [first, last] = f(*begin);
     // Make the ID range catch up if it's behind.
     if (rng.get() < first) {
       rng.next_from(first);
-      if (! rng) {
+      if (not rng) {
         break;
       }
     }
-    if (rng.get() >= first && rng.get() < last) {
+    if (rng.get() >= first and rng.get() < last) {
       // If the next ID falls in the current slice, we invoke the processing
       // function and move forward.
       if (auto error = g(*begin); error.valid()) {
         return error;
       }
       rng.next_from(last);
-      if (! rng) {
+      if (not rng) {
         break;
       }
     }
@@ -662,7 +662,7 @@ bool any(const Bitmap& bm) {
 /// @relates any
 template <bool Bit = true, class Bitmap>
 auto all(const Bitmap& bm) {
-  return ! any<! Bit>(bm);
+  return not any<not Bit>(bm);
 }
 
 /// Tests whether *xs* is a subset of *ys*.

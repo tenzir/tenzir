@@ -39,7 +39,7 @@ public:
           .positional("x", expr, "number|duration|time")
           .positional("unit", spec, "duration")
           .parse(inv, ctx));
-    if (spec && spec->inner.count() == 0) {
+    if (spec and spec->inner.count() == 0) {
       diagnostic::error("resolution must not be 0")
         .primary(spec.value())
         .emit(ctx);
@@ -87,7 +87,7 @@ public:
                     return std::round(arg.Value(row));
                   }
                 }();
-                if (not(val > min) || not(val < max)) {
+                if (not(val > min) or not(val < max)) {
                   check(b.AppendNull());
                   overflow = true;
                   continue;

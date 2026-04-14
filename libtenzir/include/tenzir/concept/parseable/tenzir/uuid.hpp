@@ -22,48 +22,58 @@ struct uuid_parser : parser_base<uuid_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     // TODO: convert to declarative parser.
-    if (f == l)
+    if (f == l) {
       return false;
+    }
     auto c = *f++;
     auto braced = false;
     if (c == '{') {
       braced = true;
-      if (f == l)
+      if (f == l) {
         return false;
+      }
       c = *f++;
     }
     auto with_dashes = false;
     for (size_t i = 0; i < uuid::num_bytes; ++i) {
       if (i != 0) {
-        if (f == l)
+        if (f == l) {
           return false;
+        }
         c = *f++;
       }
-      if (i == 4 && c == '-') {
-        if (f == l)
+      if (i == 4 and c == '-') {
+        if (f == l) {
           return false;
+        }
         with_dashes = true;
         c = *f++;
       }
-      if (with_dashes && (i == 6 || i == 8 || i == 10)) {
-        if (c != '-' || f == l)
+      if (with_dashes and (i == 6 or i == 8 or i == 10)) {
+        if (c != '-' or f == l) {
           return false;
+        }
         c = *f++;
       }
-      if constexpr (std::is_same_v<Attribute, uuid>)
+      if constexpr (std::is_same_v<Attribute, uuid>) {
         x[i] = lookup(c);
-      if (f == l)
+      }
+      if (f == l) {
         return false;
+      }
       c = *f++;
-      if constexpr (std::is_same_v<Attribute, uuid>)
+      if constexpr (std::is_same_v<Attribute, uuid>) {
         x[i] = (x[i] << 4) | lookup(c);
+      }
     }
     if (braced) {
-      if (f == l)
+      if (f == l) {
         return false;
+      }
       c = *f++;
-      if (c == '}')
+      if (c == '}') {
         return false;
+      }
     }
     return true;
   }

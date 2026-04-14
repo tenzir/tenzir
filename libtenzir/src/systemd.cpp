@@ -1,3 +1,11 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "tenzir/systemd.hpp"
 
 #include "tenzir/concept/parseable/numeric.hpp"
@@ -20,13 +28,13 @@ namespace tenzir::systemd {
 
 bool connected_to_journal() {
   auto journal_env = detail::getenv("JOURNAL_STREAM");
-  if (! journal_env) {
+  if (not journal_env) {
     return false;
   }
   size_t device_number = 0;
   size_t inode_number = 0;
   auto parser = parsers::u64 >> ':' >> parsers::u64;
-  if (! parser(*journal_env, device_number, inode_number)) {
+  if (not parser(*journal_env, device_number, inode_number)) {
     // Can't use TENZIR_WARN() here, because this is called as part
     // of the logger setup.
     std::cerr << "could not parse systemd environment variable "
@@ -45,7 +53,7 @@ bool connected_to_journal() {
   if (::fstat(stderrfd, &buf) == -1) {
     return false;
   }
-  return buf.st_dev == device_number && buf.st_ino == inode_number;
+  return buf.st_dev == device_number and buf.st_ino == inode_number;
 }
 
 // This function implements the `sd_notify()` protocol to signal readyness
@@ -60,7 +68,7 @@ caf::error notify_ready() {
     }
   });
   auto notify_socket_env = detail::getenv("NOTIFY_SOCKET");
-  if (! notify_socket_env) {
+  if (not notify_socket_env) {
     return caf::none;
   }
   TENZIR_VERBOSE("notifying systemd at {}", *notify_socket_env);

@@ -113,7 +113,7 @@ public:
   auto
   request(Handle receiver,
           std::source_location location
-          = std::source_location::current()) && -> folly::SemiFuture<Result> {
+          = std::source_location::current()) and -> folly::SemiFuture<Result> {
     auto [promise, future] = folly::makePromiseContract<Result>();
     std::apply(
       [&](auto&&... xs) mutable {

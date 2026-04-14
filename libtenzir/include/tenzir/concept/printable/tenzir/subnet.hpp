@@ -25,7 +25,7 @@ struct subnet_printer : printer_base<subnet_printer> {
     const auto length = sn.length();
     const auto network = sn.network();
     const auto is_v4 = network.is_v4();
-    if (is_v4 && length >= 96) {
+    if (is_v4 and length >= 96) {
       return (ip << chr<'/'> << u8)(out, sn.network(), sn.length() - 96);
     }
     return (ipv6 << chr<'/'> << u8)(out, sn.network(), sn.length());

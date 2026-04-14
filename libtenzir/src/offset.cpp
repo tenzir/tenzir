@@ -26,7 +26,7 @@ auto operator<=>(const offset& lhs, const offset& rhs) noexcept
     = std::mismatch(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
   const auto lhs_exhausted = lhs_mismatch == lhs.end();
   const auto rhs_exhausted = rhs_mismatch == rhs.end();
-  if (lhs_exhausted && rhs_exhausted) {
+  if (lhs_exhausted and rhs_exhausted) {
     return std::strong_ordering::equivalent;
   }
   if (lhs_exhausted) {

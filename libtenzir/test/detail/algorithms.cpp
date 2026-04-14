@@ -25,8 +25,8 @@ using ivec = std::vector<int>;
 TEST("contains") {
   CHECK(contains(iset({1, 2, 3, 4}), 2));
   CHECK(contains(ivec({1, 2, 3, 4}), 2));
-  CHECK(!contains(iset({1, 2, 3, 4}), 5));
-  CHECK(!contains(ivec({1, 2, 3, 4}), 5));
+  CHECK(not contains(iset({1, 2, 3, 4}), 5));
+  CHECK(not contains(ivec({1, 2, 3, 4}), 5));
 }
 
 TEST("empty collection values") {

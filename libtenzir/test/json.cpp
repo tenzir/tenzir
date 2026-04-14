@@ -34,6 +34,6 @@ TEST("from_json - nested") {
 
 TEST("from_json - invalid json") {
   auto json = from_json("@!#$%^&*()_+");
-  REQUIRE(! json);
+  REQUIRE(not json);
   CHECK_EQUAL(json.error(), ec::parse_error);
 }

@@ -65,7 +65,7 @@ public:
   // this function is intensively called and performance critical
   // call it only if you are sure no NAN exists in input data
   auto add(double value) -> void {
-    TENZIR_ASSERT(! std::isnan(value), "cannot add NAN");
+    TENZIR_ASSERT(not std::isnan(value), "cannot add NAN");
     if (input_.size() == input_.capacity()) [[unlikely]] {
       merge_input();
     }
@@ -75,7 +75,7 @@ public:
   // skip NAN on adding
   template <class T>
   auto nan_add(T value) -> std::enable_if_t<std::is_floating_point_v<T>> {
-    if (! std::isnan(value)) {
+    if (not std::isnan(value)) {
       add(value);
     }
   }

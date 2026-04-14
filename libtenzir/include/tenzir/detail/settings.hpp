@@ -67,7 +67,7 @@ template <class T>
 caf::expected<std::vector<T>>
 unpack_config_list_to_vector(const caf::config_value& cfg_value) {
   const auto* list = try_as<caf::config_value::list>(&cfg_value);
-  if (!list) {
+  if (not list) {
     return caf::make_error(ec::invalid_configuration, "failed to extract "
                                                       "config value as list");
   }
@@ -76,7 +76,7 @@ unpack_config_list_to_vector(const caf::config_value& cfg_value) {
   ret.reserve(list->size());
   for (const auto& e : *list) {
     const auto* val = try_as<T>(&e);
-    if (!val) {
+    if (not val) {
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("type mismatch while unpacking config "
                                          "list: expected {}, "
@@ -103,7 +103,7 @@ unpack_config_list_to_vector(const caf::actor_system_config& cfg,
                              std::string_view cfg_list_key) {
   const auto& content = caf::content(cfg);
   const auto* cfg_value = caf::get_if(&content, cfg_list_key);
-  if (!cfg_value) {
+  if (not cfg_value) {
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("failed to find key '{}' in configuration", cfg_list_key));

@@ -63,7 +63,7 @@ public:
     return operators_.end();
   }
 
-  auto unwrap() && -> std::vector<operator_ptr> {
+  auto unwrap() and -> std::vector<operator_ptr> {
     return std::move(operators_);
   }
 

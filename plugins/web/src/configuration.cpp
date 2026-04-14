@@ -33,7 +33,7 @@ to_server_mode(const std::string& str) {
 caf::expected<server_config> convert_and_validate(configuration config) {
   auto result = server_config{};
   auto mode = to_server_mode(config.mode);
-  if (! mode) {
+  if (not mode) {
     return mode.error();
   }
   switch (*mode) {
@@ -66,11 +66,11 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   result.certfile = config.certfile;
   result.keyfile = config.keyfile;
   auto ec = std::error_code{};
-  if (! config.web_root.empty()) {
+  if (not config.web_root.empty()) {
     result.webroot = config.web_root;
     // This doesn't help against TOCTOU errors, but at least it
     // catches obvious ones.
-    if (! is_directory(*result.webroot, ec)) {
+    if (not is_directory(*result.webroot, ec)) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("directory not found: {}",
                                          result.webroot));
@@ -78,24 +78,25 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   } else {
     result.webroot = std::nullopt;
   }
-  if (! result.certfile.empty() && ! exists(result.certfile)) {
+  if (not result.certfile.empty() and not exists(result.certfile)) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.certfile));
   }
-  if (! result.keyfile.empty() && ! exists(result.keyfile)) {
+  if (not result.keyfile.empty() and not exists(result.keyfile)) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.keyfile));
   }
   if (result.require_tls) {
-    if (result.keyfile.empty() || result.certfile.empty()) {
+    if (result.keyfile.empty() or result.certfile.empty()) {
       return caf::make_error(ec::invalid_argument, "either keyfile or certfile "
                                                    "argument is missing");
     }
   }
   result.bind_address = config.bind_address;
   if (result.require_localhost) {
-    if (result.bind_address != "localhost" && result.bind_address != "127.0.0.1"
-        && result.bind_address != "::1") {
+    if (result.bind_address != "localhost"
+        and result.bind_address != "127.0.0.1"
+        and result.bind_address != "::1") {
       return caf::make_error(
         ec::invalid_argument,
         fmt::format("can only bind to localhost in {} mode", config.mode));
@@ -107,13 +108,13 @@ caf::expected<server_config> convert_and_validate(configuration config) {
 
 caf::error convert(const tenzir::data& src, configuration& dst) {
   const auto* rec = try_as<tenzir::record>(&src);
-  if (! rec) {
+  if (not rec) {
     return caf::make_error(ec::convert_error,
                            "expected record for web::configuration conversion");
   }
   dst.bind_address = get_or(*rec, "bind", dst.bind_address);
   if (const auto* port = get_if<int64_t>(rec, "port")) {
-    if (*port < 0 || *port > 65535) {
+    if (*port < 0 or *port > 65535) {
       return caf::make_error(ec::convert_error,
                              "port must be in range 0-65535");
     }
