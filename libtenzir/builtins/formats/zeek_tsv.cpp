@@ -842,6 +842,7 @@ public:
       if (*current != '\n' and *current != '\r') {
         continue;
       }
+      co_await maybe_emit_ready(push);
       if (buffer_.empty()) {
         co_await process_line({begin, current}, push, ctx.dh());
       } else {
@@ -893,9 +894,12 @@ public:
     serde("ended_on_carriage_return", ended_on_carriage_return_);
     serde("line_nr", line_nr_);
     serde("failed", failed_);
+    serde("log_has_body", log_has_body_);
     auto log_state = zeek_log_state::from(log_);
     serde("log", log_state);
-    log_ = std::move(log_state).into_log();
+    if (not log_.builder) {
+      log_ = std::move(log_state).into_log();
+    }
   }
 
 private:
@@ -935,15 +939,17 @@ private:
             (void)close;
           });
       if (close_parser(header, unused)) {
-        if (log_.builder) {
+        if (log_has_body_) {
           co_await emit_finished(push);
           log_ = {};
+          log_has_body_ = false;
         }
         co_return;
       }
-      if (log_.builder) {
+      if (log_has_body_) {
         co_await emit_finished(push);
         log_ = {};
+        log_has_body_ = false;
       }
       // clang-format off
       auto const header_parser
@@ -1138,6 +1144,7 @@ private:
     log_.builder = series_builder{type{schema_name, record_type{record_fields}}};
     auto target_schema = modules::get_schema(schema_name);
     log_.target_schema = target_schema ? std::move(*target_schema) : type{};
+    log_has_body_ = true;
     return true;
   }
 
@@ -1147,6 +1154,7 @@ private:
   std::chrono::steady_clock::time_point last_finish_ = {};
   size_t line_nr_ = 0;
   bool failed_ = false;
+  bool log_has_body_ = false;
 };
 
 class WriteZeekTsv final : public Operator<table_slice, chunk_ptr> {
