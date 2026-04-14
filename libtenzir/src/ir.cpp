@@ -130,16 +130,16 @@ private:
   std::vector<ast::field_path> moved_fields_;
 };
 
-class set_ir final : public ir::Operator {
+class SetIr final : public ir::Operator {
 public:
-  set_ir() = default;
+  SetIr() = default;
 
-  explicit set_ir(std::vector<ast::assignment> assignments)
+  explicit SetIr(std::vector<ast::assignment> assignments)
     : assignments_(std::move(assignments)) {
   }
 
   auto name() const -> std::string override {
-    return "set_ir";
+    return "SetIr";
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -157,17 +157,22 @@ public:
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order order) and -> ir::optimize_result override {
-    // Remember the order for potential rebatches.
-    order_ = order;
+                event_order order) && -> ir::optimize_result override {
+    order = weaker_event_order(order_, order);
     auto ops = std::vector<Box<ir::Operator>>{};
     ops.reserve(1 + filter.size());
-    ops.emplace_back(set_ir{std::move(*this)});
+    // Remember the order for potential rebatches.
+    order_ = order;
+    ops.emplace_back(SetIr{std::move(*this)});
+    // Prevent the filter from being pushed upstream.
     for (auto& expr : filter) {
       ops.push_back(make_where_ir(expr));
     }
-    auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
-    return {{}, order_, std::move(replacement)};
+    return {
+      ir::optimize_filter{},
+      order,
+      ir::pipeline{{}, std::move(ops)},
+    };
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -179,20 +184,21 @@ public:
     return input;
   }
 
-  friend auto inspect(auto& f, set_ir& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_));
+  friend auto inspect(auto& f, SetIr& x) -> bool {
+    return f.object(x).fields(f.field("assignments", x.assignments_),
+                              f.field("order", x.order_));
   }
 
 private:
   std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
+  event_order order_ = event_order::unordered;
 };
 
 /// Create a `set` operator with the given assignment.
 auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.push_back(std::move(x));
-  return set_ir{std::move(assignments)};
+  return SetIr{std::move(assignments)};
 }
 
 struct IfArgs {
@@ -356,7 +362,7 @@ private:
 
 auto make_set_ir(std::vector<ast::assignment> assignments)
   -> Box<ir::Operator> {
-  return set_ir{std::move(assignments)};
+  return SetIr{std::move(assignments)};
 }
 
 class IfIr final : public ir::Operator {
@@ -449,7 +455,7 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
-    new inspection_plugin<ir::Operator, set_ir>{},
+    new inspection_plugin<ir::Operator, SetIr>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -673,15 +679,18 @@ auto ir::pipeline::optimize(optimize_filter filter,
 }
 
 auto ir::Operator::optimize(optimize_filter filter,
-                            event_order order) and -> optimize_result {
-  (void)order;
+                            event_order order) && -> optimize_result {
+  TENZIR_UNUSED(order);
   auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
   for (auto& expr : filter) {
-    replacement.push_back(make_where_ir(expr));
+    replacement.push_back(make_where_ir(std::move(expr)));
   }
-  return {optimize_filter{}, event_order::ordered,
-          pipeline{{}, std::move(replacement)}};
+  return {
+    optimize_filter{},
+    event_order::ordered,
+    pipeline{{}, std::move(replacement)},
+  };
 }
 
 auto ir::Operator::copy() const -> Box<Operator> {
