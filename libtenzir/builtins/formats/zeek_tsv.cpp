@@ -829,7 +829,11 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (failed_ or not input or input->size() == 0) {
+    if (failed_) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      co_await maybe_emit_ready(push);
       co_return;
     }
     auto const* begin = reinterpret_cast<char const*>(input->data());
