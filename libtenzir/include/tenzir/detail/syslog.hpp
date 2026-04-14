@@ -529,6 +529,536 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
   }
 };
 
+struct cisco_datetime {
+  uint16_t year = 0;
+  std::string month;
+  uint16_t day = 0;
+  uint16_t hour = 0;
+  uint16_t minute = 0;
+  uint16_t second = 0;
+  std::string timezone;
+};
+
+struct cisco_short_datetime {
+  std::string month;
+  uint16_t day = 0;
+  uint16_t hour = 0;
+  uint16_t minute = 0;
+  uint16_t second = 0;
+  std::string subsecond;
+  std::optional<std::string> timezone;
+};
+
+struct cisco_mmdd_datetime {
+  uint16_t month = 0;
+  uint16_t day = 0;
+  uint16_t hour = 0;
+  uint16_t minute = 0;
+  uint16_t second = 0;
+};
+
+struct cisco_uptime_short_datetime {
+  uint16_t hour = 0;
+  uint16_t minute = 0;
+  uint16_t second = 0;
+};
+
+struct cisco_uptime_long_datetime {
+  uint32_t day = 0;
+  uint16_t hour = 0;
+};
+
+/// Parser for Cisco date-time fields like:
+/// `2026 Apr 14 08:45:52 UTC`
+struct cisco_datetime_parser : parser_base<cisco_datetime_parser> {
+  using attribute = cisco_datetime;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, Iterator const& l, Attribute& x) const -> bool {
+    using namespace parser_literals;
+    const auto is_month = [](std::string const& mon) {
+      return mon == "Jan" or mon == "Feb" or mon == "Mar" or mon == "Apr"
+             or mon == "May" or mon == "Jun" or mon == "Jul" or mon == "Aug"
+             or mon == "Sep" or mon == "Oct" or mon == "Nov" or mon == "Dec";
+    };
+    const auto is_year = [](uint16_t y) {
+      return y >= 1900 and y <= 2100;
+    };
+    const auto ws = +parsers::space;
+    const auto word = +(parsers::printable - ' ' - ':');
+    // We intentionally do not use `std::chrono::parse` here:
+    // Cisco timezone tokens are free-form abbreviations (for example `UTC`,
+    // `PDT`, `IST`) that are not consistently validated across standard
+    // library implementations and tzdb configurations.
+    const auto year_parser = integral_parser<uint16_t, 4>{}.with(is_year);
+    const auto day_parser
+      = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t d) {
+          return d >= 1 and d <= 31;
+        });
+    const auto hour_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t h) {
+          return h <= 23;
+        });
+    const auto minsec_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t s) {
+          return s <= 59;
+        });
+    auto year = uint16_t{};
+    auto month = std::string{};
+    auto day = uint16_t{};
+    auto hour = uint16_t{};
+    auto minute = uint16_t{};
+    auto second = uint16_t{};
+    auto timezone = std::string{};
+    if (not year_parser(f, l, year)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not word.with(is_month)(f, l, month)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not day_parser(f, l, day)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not hour_parser(f, l, hour)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, minute)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, second)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not word(f, l, timezone)) {
+      return false;
+    }
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return true;
+    }
+    x = {};
+    x.year = year;
+    x.month = std::move(month);
+    x.day = day;
+    x.hour = hour;
+    x.minute = minute;
+    x.second = second;
+    x.timezone = std::move(timezone);
+    return true;
+  }
+};
+
+/// Parser for Cisco date-time fields like:
+/// `Apr 14 08:45:52.113 UTC`
+/// `Apr 14 08:45:52.113`
+struct cisco_short_datetime_parser
+  : parser_base<cisco_short_datetime_parser> {
+  using attribute = cisco_short_datetime;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, Iterator const& l, Attribute& x) const -> bool {
+    using namespace parser_literals;
+    const auto is_month = [](std::string const& mon) {
+      return mon == "Jan" or mon == "Feb" or mon == "Mar" or mon == "Apr"
+             or mon == "May" or mon == "Jun" or mon == "Jul" or mon == "Aug"
+             or mon == "Sep" or mon == "Oct" or mon == "Nov" or mon == "Dec";
+    };
+    const auto ws = +parsers::space;
+    const auto word = +(parsers::printable - ' ' - ':');
+    const auto day_parser
+      = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t d) {
+          return d >= 1 and d <= 31;
+        });
+    const auto hour_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t h) {
+          return h <= 23;
+        });
+    const auto minsec_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t s) {
+          return s <= 59;
+        });
+    auto month = std::string{};
+    auto day = uint16_t{};
+    auto hour = uint16_t{};
+    auto minute = uint16_t{};
+    auto second = uint16_t{};
+    auto subsecond = std::string{};
+    auto timezone = std::optional<std::string>{};
+    if (not word.with(is_month)(f, l, month)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not day_parser(f, l, day)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not hour_parser(f, l, hour)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, minute)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, second)) {
+      return false;
+    }
+    if (f != l and *f == '.') {
+      ++f;
+      auto const* const begin = f;
+      while (f != l and *f >= '0' and *f <= '9') {
+        ++f;
+      }
+      if (begin == f) {
+        return false;
+      }
+      subsecond.assign(begin, f);
+    }
+    {
+      auto it = f;
+      if (ws(it, l, unused)) {
+        auto tz = std::string{};
+        if (not word(it, l, tz)) {
+          return false;
+        }
+        timezone = std::move(tz);
+        f = it;
+      }
+    }
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return true;
+    }
+    x = {};
+    x.month = std::move(month);
+    x.day = day;
+    x.hour = hour;
+    x.minute = minute;
+    x.second = second;
+    x.subsecond = std::move(subsecond);
+    x.timezone = std::move(timezone);
+    return true;
+  }
+};
+
+/// Parser for Cisco date-time fields like:
+/// `3/1 18:47:02`
+struct cisco_mmdd_datetime_parser : parser_base<cisco_mmdd_datetime_parser> {
+  using attribute = cisco_mmdd_datetime;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, Iterator const& l, Attribute& x) const -> bool {
+    using namespace parser_literals;
+    const auto ws = +parsers::space;
+    const auto month_parser
+      = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t m) {
+          return m >= 1 and m <= 12;
+        });
+    const auto day_parser
+      = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t d) {
+          return d >= 1 and d <= 31;
+        });
+    const auto hour_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t h) {
+          return h <= 23;
+        });
+    const auto minsec_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t s) {
+          return s <= 59;
+        });
+    auto month = uint16_t{};
+    auto day = uint16_t{};
+    auto hour = uint16_t{};
+    auto minute = uint16_t{};
+    auto second = uint16_t{};
+    if (not month_parser(f, l, month)) {
+      return false;
+    }
+    if (not '/'_p(f, l, unused)) {
+      return false;
+    }
+    if (not day_parser(f, l, day)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not hour_parser(f, l, hour)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, minute)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, second)) {
+      return false;
+    }
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return true;
+    }
+    x = {};
+    x.month = month;
+    x.day = day;
+    x.hour = hour;
+    x.minute = minute;
+    x.second = second;
+    return true;
+  }
+};
+
+/// Parser for Cisco uptime fields like:
+/// `18:47:02`
+struct cisco_uptime_short_datetime_parser
+  : parser_base<cisco_uptime_short_datetime_parser> {
+  using attribute = cisco_uptime_short_datetime;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, Iterator const& l, Attribute& x) const -> bool {
+    using namespace parser_literals;
+    const auto hour_parser
+      = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t h) {
+          return h <= 23;
+        });
+    const auto minsec_parser
+      = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t s) {
+          return s <= 59;
+        });
+    auto hour = uint16_t{};
+    auto minute = uint16_t{};
+    auto second = uint16_t{};
+    if (not hour_parser(f, l, hour)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, minute)) {
+      return false;
+    }
+    if (not ':'_p(f, l, unused)) {
+      return false;
+    }
+    if (not minsec_parser(f, l, second)) {
+      return false;
+    }
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return true;
+    }
+    x = {};
+    x.hour = hour;
+    x.minute = minute;
+    x.second = second;
+    return true;
+  }
+};
+
+/// Parser for Cisco long uptime fields like:
+/// `2 18`
+struct cisco_uptime_long_datetime_parser
+  : parser_base<cisco_uptime_long_datetime_parser> {
+  using attribute = cisco_uptime_long_datetime;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, Iterator const& l, Attribute& x) const -> bool {
+    const auto ws = +parsers::space;
+    const auto day_parser = integral_parser<uint32_t, 10, 1>{};
+    const auto hour_parser
+      = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t h) {
+          return h <= 23;
+        });
+    auto day = uint32_t{};
+    auto hour = uint16_t{};
+    if (not day_parser(f, l, day)) {
+      return false;
+    }
+    if (not ws(f, l, unused)) {
+      return false;
+    }
+    if (not hour_parser(f, l, hour)) {
+      return false;
+    }
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return true;
+    }
+    x = {};
+    x.day = day;
+    x.hour = hour;
+    return true;
+  }
+};
+
+/// Parser for Cisco dialect lines like:
+/// `<189>: 2026 Apr 14 08:45:52 UTC: %FOO-5-BAR: message`
+/// `000199: *Apr 14 08:45:52.113 UTC: %SYS-5-CONFIG_I: message`
+struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
+  using attribute = legacy_message;
+
+  template <typename Iterator, typename Attribute>
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
+    using namespace parser_literals;
+    const auto is_prival = [](uint16_t in) {
+      return in <= 191;
+    };
+    const auto ws = +parsers::space;
+    const auto pri_parser
+      = '<' >> integral_parser<uint16_t, 3>{}.with(is_prival) >> '>' >> ':';
+    const auto seqnum_parser = integral_parser<uint32_t, 9, 1>{};
+    auto parsed_pri = std::optional<uint16_t>{};
+    auto it = f;
+    {
+      auto pri = uint16_t{};
+      if (pri_parser(it, l, pri)) {
+        if (not ws(it, l, unused)) {
+          return false;
+        }
+        parsed_pri = pri;
+      }
+    }
+    auto parse_timestamp = [&](auto& cursor, std::string& out) -> bool {
+      auto it2 = cursor;
+      if (it2 != l and *it2 == '*') {
+        ++it2;
+      }
+      {
+        auto ts = cisco_datetime{};
+        auto save = it2;
+        if (cisco_datetime_parser{}(it2, l, ts)) {
+          out = fmt::format("{} {} {} {:02}:{:02}:{:02} {}", ts.year, ts.month,
+                            ts.day, ts.hour, ts.minute, ts.second,
+                            ts.timezone);
+          cursor = it2;
+          return true;
+        }
+        it2 = save;
+      }
+      {
+        auto ts = cisco_short_datetime{};
+        auto save = it2;
+        if (cisco_short_datetime_parser{}(it2, l, ts)) {
+          auto const subsecond = ts.subsecond.empty()
+                                   ? std::string{}
+                                   : fmt::format(".{}", ts.subsecond);
+          auto const timezone = ts.timezone ? fmt::format(" {}", *ts.timezone)
+                                            : std::string{};
+          out = fmt::format("{} {} {:02}:{:02}:{:02}{}{}", ts.month, ts.day,
+                            ts.hour, ts.minute, ts.second, subsecond,
+                            timezone);
+          cursor = it2;
+          return true;
+        }
+        it2 = save;
+      }
+      {
+        auto ts = cisco_mmdd_datetime{};
+        auto save = it2;
+        if (cisco_mmdd_datetime_parser{}(it2, l, ts)) {
+          out = fmt::format("{}/{} {:02}:{:02}:{:02}", ts.month, ts.day,
+                            ts.hour, ts.minute, ts.second);
+          cursor = it2;
+          return true;
+        }
+        it2 = save;
+      }
+      {
+        auto ts = cisco_uptime_short_datetime{};
+        auto save = it2;
+        if (cisco_uptime_short_datetime_parser{}(it2, l, ts)) {
+          out = fmt::format("{:02}:{:02}:{:02}", ts.hour, ts.minute,
+                            ts.second);
+          cursor = it2;
+          return true;
+        }
+        it2 = save;
+      }
+      {
+        auto ts = cisco_uptime_long_datetime{};
+        auto save = it2;
+        if (cisco_uptime_long_datetime_parser{}(it2, l, ts)) {
+          out = fmt::format("{} {}", ts.day, ts.hour);
+          cursor = it2;
+          return true;
+        }
+        it2 = save;
+      }
+      return false;
+    };
+    auto timestamp = std::string{};
+    if (not parse_timestamp(it, timestamp)) {
+      auto it_with_seq = it;
+      auto seq = uint32_t{};
+      if (not seqnum_parser(it_with_seq, l, seq)) {
+        return false;
+      }
+      if (not ':'_p(it_with_seq, l, unused)) {
+        return false;
+      }
+      std::ignore = ignore(*parsers::space)(it_with_seq, l, unused);
+      if (not parse_timestamp(it_with_seq, timestamp)) {
+        return false;
+      }
+      it = it_with_seq;
+    }
+    if (not ':'_p(it, l, unused)) {
+      return false;
+    }
+    std::ignore = ignore(*parsers::space)(it, l, unused);
+    auto message = std::string_view{it, l};
+    auto cisco_tag = std::optional<std::string>{};
+    if (not message.empty() and message.front() == '%') {
+      auto tf = message.begin();
+      auto tag = std::string{};
+      const auto token = '%' >> +(parsers::printable - ':' - ' ') >> ':'
+                         >> ignore(*parsers::space);
+      if (token(tf, message.end(), tag)) {
+        cisco_tag = std::move(tag);
+        message.remove_prefix(static_cast<size_t>(tf - message.begin()));
+      }
+    }
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      f = l;
+      return true;
+    }
+    x = {};
+    if (parsed_pri) {
+      x.facility = *parsed_pri / 8;
+      x.severity = *parsed_pri % 8;
+    }
+    x.timestamp = std::move(timestamp);
+    x.tag = std::move(cisco_tag);
+    x.content = std::string{message};
+    f = l;
+    return true;
+  }
+};
+
 template <typename Message>
 struct syslog_row {
   syslog_row() = default;
