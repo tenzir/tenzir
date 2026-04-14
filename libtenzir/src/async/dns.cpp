@@ -68,6 +68,7 @@ ReverseDnsResolver::ReverseDnsResolver(ReverseDnsConfig config)
   : config_{std::move(config)},
     permits_{std::max(size_t{1}, config_.max_in_flight)},
     state_{State{}} {
+  config_.max_entries = std::max(size_t{1}, config_.max_entries);
 }
 
 auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
@@ -84,9 +85,21 @@ auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
   auto ttl = ttl_for(config_, result);
   if (ttl > std::chrono::steady_clock::duration::zero()) {
     auto state = co_await state_.lock();
-    state->cache.insert_or_assign(
-      address, CacheEntry{.result = result,
-                          .expires_at = std::chrono::steady_clock::now() + ttl});
+    auto expires_at = std::chrono::steady_clock::now() + ttl;
+    if (auto it = state->cache.find(address); it != state->cache.end()) {
+      it->second.result = result;
+      it->second.expires_at = expires_at;
+      touch(*state, it);
+    } else {
+      state->lru.push_back(address);
+      auto lru_position = std::prev(state->lru.end());
+      state->cache.emplace(address, CacheEntry{
+                                   .result = result,
+                                   .expires_at = expires_at,
+                                   .lru_position = lru_position,
+                                 });
+      evict(*state, config_.max_entries);
+    }
   }
   co_return result;
 }
@@ -100,10 +113,12 @@ auto ReverseDnsResolver::cached(ip address)
     co_return None{};
   }
   if (it->second.expires_at <= now) {
-    state->cache.erase(it);
+    erase(*state, it);
     co_return None{};
   }
-  co_return it->second.result;
+  auto result = it->second.result;
+  touch(*state, it);
+  co_return result;
 }
 
 auto ReverseDnsResolver::ttl_for(ReverseDnsConfig const& config,
@@ -117,6 +132,27 @@ auto ReverseDnsResolver::ttl_for(ReverseDnsConfig const& config,
       return config.negative_ttl;
   }
   TENZIR_UNREACHABLE();
+}
+
+auto ReverseDnsResolver::touch(
+  State& state, std::unordered_map<ip, CacheEntry>::iterator it) -> void {
+  state.lru.splice(state.lru.end(), state.lru, it->second.lru_position);
+}
+
+auto ReverseDnsResolver::erase(
+  State& state, std::unordered_map<ip, CacheEntry>::iterator it) -> void {
+  state.lru.erase(it->second.lru_position);
+  state.cache.erase(it);
+}
+
+auto ReverseDnsResolver::evict(State& state, size_t max_entries) -> void {
+  while (state.cache.size() > max_entries) {
+    TENZIR_ASSERT(not state.lru.empty());
+    auto oldest = state.lru.begin();
+    auto it = state.cache.find(*oldest);
+    TENZIR_ASSERT(it != state.cache.end());
+    erase(state, it);
+  }
 }
 
 } // namespace tenzir
