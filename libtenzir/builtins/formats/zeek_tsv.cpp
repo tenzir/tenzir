@@ -476,7 +476,7 @@ struct zeek_printer {
   bool disable_timestamp_tags{false};
 };
 
-struct zeek_document {
+struct zeek_log {
   /// Optional metadata.
   char separator = '\t';
   std::string set_separator = ",";
@@ -495,7 +495,7 @@ struct zeek_document {
   type target_schema = {};
 };
 
-struct zeek_document_state {
+struct zeek_log_state {
   char separator = '\t';
   std::string set_separator = ",";
   std::string empty_field = "(empty)";
@@ -504,20 +504,20 @@ struct zeek_document_state {
   std::vector<std::string> fields = {};
   std::vector<std::string> types = {};
 
-  static auto from(zeek_document const& document) -> zeek_document_state {
+  static auto from(zeek_log const& log) -> zeek_log_state {
     return {
-      .separator = document.separator,
-      .set_separator = document.set_separator,
-      .empty_field = document.empty_field,
-      .unset_field = document.unset_field,
-      .path = document.path,
-      .fields = document.fields,
-      .types = document.types,
+      .separator = log.separator,
+      .set_separator = log.set_separator,
+      .empty_field = log.empty_field,
+      .unset_field = log.unset_field,
+      .path = log.path,
+      .fields = log.fields,
+      .types = log.types,
     };
   }
 
-  auto into_document() && -> zeek_document {
-    auto result = zeek_document{};
+  auto into_log() && -> zeek_log {
+    auto result = zeek_log{};
     result.separator = separator;
     result.set_separator = std::move(set_separator);
     result.empty_field = std::move(empty_field);
@@ -528,7 +528,7 @@ struct zeek_document_state {
     return result;
   }
 
-  friend auto inspect(auto& f, zeek_document_state& x) -> bool {
+  friend auto inspect(auto& f, zeek_log_state& x) -> bool {
     return f.object(x).fields(
       f.field("separator", x.separator),
       f.field("set_separator", x.set_separator),
@@ -540,18 +540,18 @@ struct zeek_document_state {
 
 auto parser_impl(generator<std::optional<std::string_view>> lines,
                  operator_control_plane& ctrl) -> generator<table_slice> {
-  auto document = zeek_document{};
+  auto log = zeek_log{};
   auto last_finish = std::chrono::steady_clock::now();
   auto line_nr = size_t{0};
   // Helper for finishing and casting.
   auto finish = [&] {
-    return unflatten(document.builder->finish_assert_one_slice(), ".");
+    return unflatten(log.builder->finish_assert_one_slice(), ".");
   };
   for (auto&& line : lines) {
     const auto now = std::chrono::steady_clock::now();
     // Yield at chunk boundaries.
-    if (document.builder
-        and (document.builder->length() >= detail::narrow_cast<int64_t>(
+    if (log.builder
+        and (log.builder->length() >= detail::narrow_cast<int64_t>(
                defaults::import::table_slice_size)
              or last_finish + defaults::import::batch_timeout < now)) {
       last_finish = now;
@@ -569,10 +569,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
-    // Parse document lines.
+    // Parse log lines.
     if (line->starts_with('#')) {
       auto header = line->substr(1);
-      const auto separator = ignore(parsers::chr{document.separator});
+      const auto separator = ignore(parsers::chr{log.separator});
       const auto unescaped_str
         = (+(parsers::any - separator)).then([](std::string separator) {
             return detail::byte_unescape(separator);
@@ -586,10 +586,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
             (void)close;
           });
       if (close_parser(header, unused)) {
-        if (document.builder) {
+        if (log.builder) {
           last_finish = now;
           co_yield finish();
-          document = {};
+          log = {};
         }
         continue;
       }
@@ -597,10 +597,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // builder anymore. If that's the case then we have a bug in the data,
       // but we can just handle that gracefully and tell the user that they
       // were missing a closing tag.
-      if (document.builder) {
+      if (log.builder) {
         last_finish = now;
         co_yield finish();
-        document = {};
+        log = {};
       }
       // Now we can actually assemble the header.
       // clang-format off
@@ -610,23 +610,23 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
               return separator.length() == 1;
             })
             .then([&](std::string separator) {
-              document.separator = separator[0];
+              log.separator = separator[0];
             })
         | ("set_separator" >> separator >> unescaped_str)
             .then([&](std::string set_separator) {
-              document.set_separator = std::move(set_separator);
+              log.set_separator = std::move(set_separator);
             })
         | ("empty_field" >> separator >> unescaped_str)
             .then([&](std::string empty_field) {
-              document.empty_field = std::move(empty_field);
+              log.empty_field = std::move(empty_field);
             })
         | ("unset_field" >> separator >> unescaped_str)
             .then([&](std::string unset_field) {
-              document.unset_field = std::move(unset_field);
+              log.unset_field = std::move(unset_field);
             })
         | ("path" >> separator >> unescaped_str)
             .then([&](std::string path) {
-              document.path = std::move(path);
+              log.path = std::move(path);
             })
         | ("open" >> separator >> unescaped_str)
             .then([&](std::string open) {
@@ -636,11 +636,11 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
             })
         | ("fields" >> separator >> (unescaped_str % separator))
             .then([&](std::vector<std::string> fields) {
-              document.fields = std::move(fields);
+              log.fields = std::move(fields);
             })
         | ("types" >> separator >> (unescaped_str % separator))
             .then([&](std::vector<std::string> types) {
-              document.types = std::move(types);
+              log.types = std::move(types);
             });
       // clang-format on
       if (not header_parser(header, unused)) {
@@ -650,12 +650,12 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       }
       // Verify that the field names are unique
       {
-        auto sorted_fields = document.fields;
+        auto sorted_fields = log.fields;
         std::ranges::sort(sorted_fields);
         if (auto it = std::ranges::adjacent_find(sorted_fields);
             it != sorted_fields.end()) {
           diagnostic::error(
-            "failed to parse Zeek document: duplicate #field name `{}`", *it)
+            "failed to parse Zeek log: duplicate #field name `{}`", *it)
             .note("line {}", line_nr)
             .emit(ctrl.diagnostics());
           co_return;
@@ -664,37 +664,37 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       continue;
     }
     // If we don't have a builder yet, then we create one lazily.
-    if (not document.builder) {
+    if (not log.builder) {
       // We parse the header into three things:
       // 1. A schema that we create the builder with.
       // 2. A rule that parses lines according to the schema.
-      if (document.path.empty()) {
-        diagnostic::error("failed to parse Zeek document: missing #path")
+      if (log.path.empty()) {
+        diagnostic::error("failed to parse Zeek log: missing #path")
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
         co_return;
       }
-      if (document.fields.empty()) {
-        diagnostic::error("failed to parse Zeek document: missing #fields")
+      if (log.fields.empty()) {
+        diagnostic::error("failed to parse Zeek log: missing #fields")
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
         co_return;
       }
-      if (document.fields.size() != document.types.size()) {
-        diagnostic::error("failed to parse Zeek document: mismatching number "
+      if (log.fields.size() != log.types.size()) {
+        diagnostic::error("failed to parse Zeek log: mismatching number "
                           "#fields and #types")
-          .note("found {} #fields", document.fields.size())
-          .note("found {} #types", document.types.size())
+          .note("found {} #fields", log.fields.size())
+          .note("found {} #types", log.types.size())
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
         co_return;
       }
       // Now we create the schema and the parser rule.
-      document.parsers.reserve(document.fields.size());
+      log.parsers.reserve(log.fields.size());
       auto record_fields = std::vector<record_type::field_view>{};
-      record_fields.reserve(document.fields.size());
+      record_fields.reserve(log.fields.size());
       for (const auto& [field, zeek_type] :
-           std::views::zip(document.fields, document.types)) {
+           std::views::zip(log.fields, log.types)) {
         auto parsed_type = parse_type(zeek_type);
         if (not parsed_type) {
           diagnostic::warning("failed to parse Zeek type `{}`", zeek_type)
@@ -704,22 +704,22 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           parsed_type = type{string_type{}};
         }
         const auto make_unset_parser = [&, field]() {
-          return ignore(parsers::str{document.unset_field}
-                        >> &(parsers::chr{document.separator} | parsers::eoi))
+          return ignore(parsers::str{log.unset_field}
+                        >> &(parsers::chr{log.separator} | parsers::eoi))
             .then([&, field]() {
-              document.event->field(field).null();
+              log.event->field(field).null();
               return true;
             });
         };
         const auto make_empty_parser
           = [&, field]<concrete_type Type>(const Type& type) {
-              return ignore(parsers::str{document.empty_field} >> &(
-                              parsers::chr{document.separator} | parsers::eoi))
+              return ignore(parsers::str{log.empty_field} >> &(
+                              parsers::chr{log.separator} | parsers::eoi))
                 .then([&, field]() {
                   if constexpr (std::is_same_v<Type, map_type>) {
                     TENZIR_UNREACHABLE();
                   } else {
-                    document.event->field(field, std::move(type.construct()));
+                    log.event->field(field, std::move(type.construct()));
                   }
                   return true;
                 });
@@ -728,9 +728,9 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           [&]<concrete_type Type>(
             const Type& type) -> rule<std::string_view::const_iterator, bool> {
           return make_unset_parser() | make_empty_parser(type)
-                 | zeek_parser<Type>{}(type, document.separator,
+                 | zeek_parser<Type>{}(type, log.separator,
                                        std::is_same_v<Type, list_type>
-                                         ? document.set_separator
+                                         ? log.set_separator
                                          : std::string{})
                      .then([&, field](type_to_data_t<Type> value) {
                        // TODO: A zeek `string` is not necessarily valid UTF-8,
@@ -740,21 +740,21 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                        if constexpr (std::is_same_v<Type, map_type>) {
                          TENZIR_UNREACHABLE();
                        } else {
-                         document.event->field(field, std::move(value));
+                         log.event->field(field, std::move(value));
                        }
                        return true;
                      });
         };
-        document.parsers.push_back(match(*parsed_type, make_field_parser));
+        log.parsers.push_back(match(*parsed_type, make_field_parser));
         record_fields.push_back({field, std::move(*parsed_type)});
       }
-      const auto schema_name = fmt::format("zeek.{}", document.path);
+      const auto schema_name = fmt::format("zeek.{}", log.path);
       auto schema = type{schema_name, record_type{record_fields}};
-      document.builder = series_builder{std::move(schema)};
+      log.builder = series_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
       auto target_schema = modules::get_schema(schema_name);
-      document.target_schema
+      log.target_schema
         = target_schema ? std::move(*target_schema) : type{};
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
@@ -764,10 +764,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     auto f = line->begin();
     const auto l = line->end();
     auto add_ok = false;
-    const auto separator = ignore(parsers::chr{document.separator});
-    document.event = document.builder->record();
-    for (size_t i = 0; i < document.parsers.size() - 1; ++i) {
-      const auto parse_ok = document.parsers[i](f, l, add_ok);
+    const auto separator = ignore(parsers::chr{log.separator});
+    log.event = log.builder->record();
+    for (size_t i = 0; i < log.parsers.size() - 1; ++i) {
+      const auto parse_ok = log.parsers[i](f, l, add_ok);
       if (not parse_ok) [[unlikely]] {
         diagnostic::error("failed to parse Zeek value at index {} in `{}`", i,
                           *line)
@@ -785,10 +785,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         co_return;
       }
     }
-    const auto parse_ok = document.parsers.back()(f, l, add_ok);
+    const auto parse_ok = log.parsers.back()(f, l, add_ok);
     if (not parse_ok) [[unlikely]] {
       diagnostic::error("failed to parse Zeek value at index {} in `{}`",
-                        document.parsers.size() - 1, *line)
+                        log.parsers.size() - 1, *line)
         .note("line {}", line_nr)
         .emit(ctrl.diagnostics());
       co_return;
@@ -800,9 +800,9 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         .note("line {}", line_nr)
         .emit(ctrl.diagnostics());
     }
-    document.event = {};
+    log.event = {};
   }
-  if (document.builder and document.builder->length() > 0) {
+  if (log.builder and log.builder->length() > 0) {
     co_yield finish();
   }
 }
@@ -893,24 +893,24 @@ public:
     serde("ended_on_carriage_return", ended_on_carriage_return_);
     serde("line_nr", line_nr_);
     serde("failed", failed_);
-    auto document_state = zeek_document_state::from(document_);
-    serde("document", document_state);
-    document_ = std::move(document_state).into_document();
+    auto log_state = zeek_log_state::from(log_);
+    serde("log", log_state);
+    log_ = std::move(log_state).into_log();
   }
 
 private:
   auto emit_finished(Push<table_slice>& push) -> Task<void> {
-    if (not document_.builder or document_.builder->length() == 0) {
+    if (not log_.builder or log_.builder->length() == 0) {
       co_return;
     }
     last_finish_ = std::chrono::steady_clock::now();
-    co_await push(unflatten(document_.builder->finish_assert_one_slice(), "."));
+    co_await push(unflatten(log_.builder->finish_assert_one_slice(), "."));
   }
 
   auto maybe_emit_ready(Push<table_slice>& push) -> Task<void> {
     auto const now = std::chrono::steady_clock::now();
-    if (document_.builder
-        and (document_.builder->length() >= detail::narrow_cast<int64_t>(
+    if (log_.builder
+        and (log_.builder->length() >= detail::narrow_cast<int64_t>(
                defaults::import::table_slice_size)
              or last_finish_ + defaults::import::batch_timeout < now)) {
       co_await emit_finished(push);
@@ -925,7 +925,7 @@ private:
     }
     if (line.starts_with('#')) {
       auto header = line.substr(1);
-      auto const separator = ignore(parsers::chr{document_.separator});
+      auto const separator = ignore(parsers::chr{log_.separator});
       auto const unescaped_str
         = (+(parsers::any - separator)).then([](std::string separator) {
             return detail::byte_unescape(separator);
@@ -935,15 +935,15 @@ private:
             (void)close;
           });
       if (close_parser(header, unused)) {
-        if (document_.builder) {
+        if (log_.builder) {
           co_await emit_finished(push);
-          document_ = {};
+          log_ = {};
         }
         co_return;
       }
-      if (document_.builder) {
+      if (log_.builder) {
         co_await emit_finished(push);
-        document_ = {};
+        log_ = {};
       }
       // clang-format off
       auto const header_parser
@@ -952,23 +952,23 @@ private:
               return separator.length() == 1;
             })
             .then([&](std::string separator) {
-              document_.separator = separator[0];
+              log_.separator = separator[0];
             })
         | ("set_separator" >> separator >> unescaped_str)
             .then([&](std::string set_separator) {
-              document_.set_separator = std::move(set_separator);
+              log_.set_separator = std::move(set_separator);
             })
         | ("empty_field" >> separator >> unescaped_str)
             .then([&](std::string empty_field) {
-              document_.empty_field = std::move(empty_field);
+              log_.empty_field = std::move(empty_field);
             })
         | ("unset_field" >> separator >> unescaped_str)
             .then([&](std::string unset_field) {
-              document_.unset_field = std::move(unset_field);
+              log_.unset_field = std::move(unset_field);
             })
         | ("path" >> separator >> unescaped_str)
             .then([&](std::string path) {
-              document_.path = std::move(path);
+              log_.path = std::move(path);
             })
         | ("open" >> separator >> unescaped_str)
             .then([](std::string open) {
@@ -976,11 +976,11 @@ private:
             })
         | ("fields" >> separator >> (unescaped_str % separator))
             .then([&](std::vector<std::string> fields) {
-              document_.fields = std::move(fields);
+              log_.fields = std::move(fields);
             })
         | ("types" >> separator >> (unescaped_str % separator))
             .then([&](std::vector<std::string> types) {
-              document_.types = std::move(types);
+              log_.types = std::move(types);
             });
       // clang-format on
       if (not header_parser(header, unused)) {
@@ -988,35 +988,35 @@ private:
           .note("line {}", line_nr_)
           .emit(dh);
       }
-      auto sorted_fields = document_.fields;
+      auto sorted_fields = log_.fields;
       std::ranges::sort(sorted_fields);
       if (auto it = std::ranges::adjacent_find(sorted_fields);
           it != sorted_fields.end()) {
         diagnostic::error(
-          "failed to parse Zeek document: duplicate #field name `{}`", *it)
+          "failed to parse Zeek log: duplicate #field name `{}`", *it)
           .note("line {}", line_nr_)
           .emit(dh);
         failed_ = true;
       }
       co_return;
     }
-    if (not ensure_document_builder(dh)) {
+    if (not ensure_log_builder(dh)) {
       co_return;
     }
     auto f = line.begin();
     auto const l = line.end();
     auto add_ok = false;
-    auto const separator = ignore(parsers::chr{document_.separator});
-    document_.event = document_.builder->record();
-    for (auto i = size_t{0}; i < document_.parsers.size() - 1; ++i) {
-      auto const parse_ok = document_.parsers[i](f, l, add_ok);
+    auto const separator = ignore(parsers::chr{log_.separator});
+    log_.event = log_.builder->record();
+    for (auto i = size_t{0}; i < log_.parsers.size() - 1; ++i) {
+      auto const parse_ok = log_.parsers[i](f, l, add_ok);
       if (not parse_ok) [[unlikely]] {
         diagnostic::error("failed to parse Zeek value at index {} in `{}`", i,
                           line)
           .note("line {}", line_nr_)
           .emit(dh);
         failed_ = true;
-        document_.event = {};
+        log_.event = {};
         co_return;
       }
       TENZIR_ASSERT_EXPENSIVE(add_ok);
@@ -1027,18 +1027,18 @@ private:
           .note("line {}", line_nr_)
           .emit(dh);
         failed_ = true;
-        document_.event = {};
+        log_.event = {};
         co_return;
       }
     }
-    auto const parse_ok = document_.parsers.back()(f, l, add_ok);
+    auto const parse_ok = log_.parsers.back()(f, l, add_ok);
     if (not parse_ok) [[unlikely]] {
       diagnostic::error("failed to parse Zeek value at index {} in `{}`",
-                        document_.parsers.size() - 1, line)
+                        log_.parsers.size() - 1, line)
         .note("line {}", line_nr_)
         .emit(dh);
       failed_ = true;
-      document_.event = {};
+      log_.event = {};
       co_return;
     }
     auto const eoi_ok = parsers::eoi(f, l, unused);
@@ -1048,44 +1048,44 @@ private:
         .note("line {}", line_nr_)
         .emit(dh);
     }
-    document_.event = {};
+    log_.event = {};
     co_await maybe_emit_ready(push);
   }
 
-  auto ensure_document_builder(diagnostic_handler& dh) -> bool {
-    if (document_.builder) {
+  auto ensure_log_builder(diagnostic_handler& dh) -> bool {
+    if (log_.builder) {
       return true;
     }
-    if (document_.path.empty()) {
-      diagnostic::error("failed to parse Zeek document: missing #path")
+    if (log_.path.empty()) {
+      diagnostic::error("failed to parse Zeek log: missing #path")
         .note("line {}", line_nr_)
         .emit(dh);
       failed_ = true;
       return false;
     }
-    if (document_.fields.empty()) {
-      diagnostic::error("failed to parse Zeek document: missing #fields")
+    if (log_.fields.empty()) {
+      diagnostic::error("failed to parse Zeek log: missing #fields")
         .note("line {}", line_nr_)
         .emit(dh);
       failed_ = true;
       return false;
     }
-    if (document_.fields.size() != document_.types.size()) {
-      diagnostic::error("failed to parse Zeek document: mismatching number "
+    if (log_.fields.size() != log_.types.size()) {
+      diagnostic::error("failed to parse Zeek log: mismatching number "
                         "#fields and #types")
-        .note("found {} #fields", document_.fields.size())
-        .note("found {} #types", document_.types.size())
+        .note("found {} #fields", log_.fields.size())
+        .note("found {} #types", log_.types.size())
         .note("line {}", line_nr_)
         .emit(dh);
       failed_ = true;
       return false;
     }
-    document_.parsers.clear();
-    document_.parsers.reserve(document_.fields.size());
+    log_.parsers.clear();
+    log_.parsers.reserve(log_.fields.size());
     auto record_fields = std::vector<record_type::field_view>{};
-    record_fields.reserve(document_.fields.size());
+    record_fields.reserve(log_.fields.size());
     for (auto const& [field, zeek_type] :
-         std::views::zip(document_.fields, document_.types)) {
+         std::views::zip(log_.fields, log_.types)) {
       auto parsed_type = parse_type(zeek_type);
       if (not parsed_type) {
         diagnostic::warning("failed to parse Zeek type `{}`", zeek_type)
@@ -1095,22 +1095,22 @@ private:
         parsed_type = type{string_type{}};
       }
       auto const make_unset_parser = [&, field]() {
-        return ignore(parsers::str{document_.unset_field}
-                      >> &(parsers::chr{document_.separator} | parsers::eoi))
+        return ignore(parsers::str{log_.unset_field}
+                      >> &(parsers::chr{log_.separator} | parsers::eoi))
           .then([&, field]() {
-            document_.event->field(field).null();
+            log_.event->field(field).null();
             return true;
           });
       };
       auto const make_empty_parser = [&, field]<concrete_type Type>(
                                        Type const& type) {
-        return ignore(parsers::str{document_.empty_field}
-                      >> &(parsers::chr{document_.separator} | parsers::eoi))
+        return ignore(parsers::str{log_.empty_field}
+                      >> &(parsers::chr{log_.separator} | parsers::eoi))
           .then([&, field]() {
             if constexpr (std::same_as<Type, map_type>) {
               TENZIR_UNREACHABLE();
             } else {
-              document_.event->field(field, std::move(type.construct()));
+              log_.event->field(field, std::move(type.construct()));
             }
             return true;
           });
@@ -1118,32 +1118,32 @@ private:
       auto make_field_parser = [&]<concrete_type Type>(Type const& type)
         -> rule<std::string_view::const_iterator, bool> {
         return make_unset_parser() | make_empty_parser(type)
-               | zeek_parser<Type>{}(type, document_.separator,
+               | zeek_parser<Type>{}(type, log_.separator,
                                      std::same_as<Type, list_type>
-                                       ? document_.set_separator
+                                       ? log_.set_separator
                                        : std::string{})
                    .then([&, field](type_to_data_t<Type> value) {
                      if constexpr (std::same_as<Type, map_type>) {
                        TENZIR_UNREACHABLE();
                      } else {
-                       document_.event->field(field, std::move(value));
+                       log_.event->field(field, std::move(value));
                      }
                      return true;
                    });
       };
-      document_.parsers.push_back(match(*parsed_type, make_field_parser));
+      log_.parsers.push_back(match(*parsed_type, make_field_parser));
       record_fields.push_back({field, std::move(*parsed_type)});
     }
-    auto const schema_name = fmt::format("zeek.{}", document_.path);
-    document_.builder = series_builder{type{schema_name, record_type{record_fields}}};
+    auto const schema_name = fmt::format("zeek.{}", log_.path);
+    log_.builder = series_builder{type{schema_name, record_type{record_fields}}};
     auto target_schema = modules::get_schema(schema_name);
-    document_.target_schema = target_schema ? std::move(*target_schema) : type{};
+    log_.target_schema = target_schema ? std::move(*target_schema) : type{};
     return true;
   }
 
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
-  zeek_document document_;
+  zeek_log log_;
   std::chrono::steady_clock::time_point last_finish_ = {};
   size_t line_nr_ = 0;
   bool failed_ = false;
