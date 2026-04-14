@@ -20,10 +20,8 @@
 #include "tenzir/option.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/secret_resolution.hpp"
-#include "tenzir/series_builder.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tls_options.hpp"
-#include "tenzir/tql2/set.hpp"
 #include "tenzir/variant.hpp"
 
 #include <folly/ScopeGuard.h>
@@ -49,12 +47,12 @@ namespace {
 
 struct AcceptHttpArgs {
   located<secret> endpoint;
-  Option<ast::field_path> metadata_field;
   Option<located<data>> responses;
   Option<located<uint64_t>> max_request_size;
   Option<located<uint64_t>> max_connections;
   Option<located<data>> tls;
   located<ir::pipeline> parser;
+  let_id request;
 };
 
 struct ParsedEndpoint {
@@ -314,6 +312,22 @@ auto make_request_metadata(proxygen::HTTPMessage const& request)
   return result;
 }
 
+auto make_request_context(RequestMetadata const& metadata) -> record {
+  auto headers = record{};
+  for (auto const& [key, value] : metadata.headers) {
+    headers[key] = value;
+  }
+  auto query = record{};
+  for (auto const& [key, value] : metadata.query) {
+    query[key] = value;
+  }
+  return record{
+    {"headers", std::move(headers)}, {"query", std::move(query)},
+    {"path", metadata.path},         {"fragment", metadata.fragment},
+    {"method", metadata.method},     {"version", metadata.version},
+  };
+}
+
 auto get_response_for_path(AcceptHttpArgs const& args, std::string_view path)
   -> Response {
   auto res = Response{};
@@ -531,7 +545,11 @@ public:
         }
 
         auto pipeline = args_.parser.inner;
-        if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+        auto env = substitute_ctx::env_t{};
+        env[args_.request] = make_request_context(msg.metadata);
+        auto reg = global_registry();
+        auto b_ctx = base_ctx{ctx, *reg};
+        if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
           diagnostic::warning("failed to prepare parser pipeline for request")
             .primary(args_.endpoint)
             .note("request path: {}", msg.metadata.path)
@@ -617,10 +635,7 @@ public:
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
-    if (args_.metadata_field) {
-      auto request_id = as<uint64_t>(key);
-      slice = co_await attach_metadata(request_id, std::move(slice), ctx.dh());
-    }
+    TENZIR_UNUSED(key, ctx);
     co_await push(std::move(slice));
   }
 
@@ -680,39 +695,6 @@ private:
     bool drop_body = false;
     Arc<ResponseSignal> finished;
   };
-
-  auto attach_metadata(uint64_t request_id, table_slice slice,
-                       diagnostic_handler& dh) -> Task<table_slice> {
-    TENZIR_ASSERT(args_.metadata_field);
-    auto metadata = Option<RequestMetadata>{None{}};
-    {
-      auto active_requests = co_await active_requests_.lock();
-      auto it = active_requests->find(request_id);
-      if (it == active_requests->end()) {
-        co_return slice;
-      }
-      metadata = it->second.metadata;
-    }
-    TENZIR_ASSERT(metadata);
-    auto sb = series_builder{};
-    for (auto i = uint64_t{}; i < slice.rows(); ++i) {
-      auto rb = sb.record();
-      auto hb = rb.field("headers").record();
-      for (auto const& [k, v] : metadata->headers) {
-        hb.field(k, v);
-      }
-      auto qb = rb.field("query").record();
-      for (auto const& [k, v] : metadata->query) {
-        qb.field(k, v);
-      }
-      rb.field("path", metadata->path);
-      rb.field("fragment", metadata->fragment);
-      rb.field("method", metadata->method);
-      rb.field("version", metadata->version);
-    }
-    co_return assign(*args_.metadata_field, sb.finish_assert_one_array(), slice,
-                     dh);
-  }
 
   auto request_stop() -> Task<void> {
     if (lifecycle_ == Lifecycle::done) {
@@ -815,7 +797,6 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<AcceptHttpArgs, AcceptHttp>{};
     d.positional("endpoint", &AcceptHttpArgs::endpoint);
-    d.named("metadata_field", &AcceptHttpArgs::metadata_field);
     auto responses_arg
       = d.named("responses", &AcceptHttpArgs::responses, "record");
     auto max_request_size_arg
@@ -825,7 +806,8 @@ public:
     auto tls_validator
       = tls_options{{.tls_default = false, .is_server = true}}.add_to_describer(
         d, &AcceptHttpArgs::tls);
-    auto parser_arg = d.pipeline(&AcceptHttpArgs::parser);
+    auto parser_arg = d.pipeline(&AcceptHttpArgs::parser,
+                                 {{"request", &AcceptHttpArgs::request}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto responses = ctx.get(responses_arg)) {

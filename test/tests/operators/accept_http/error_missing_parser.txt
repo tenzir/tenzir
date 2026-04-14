@@ -4,5 +4,5 @@ error: required subpipeline was not provided
 5 | accept_http "127.0.0.1:8080"
   | ^^^^^^^^^^^ 
   |
-  = usage: accept_http endpoint:secret, [metadata_field=field, responses=record, max_request_size=int, max_connections=int, tls=record]
+  = usage: accept_http endpoint:secret, [responses=record, max_request_size=int, max_connections=int, tls=record]
   = docs: https://docs.tenzir.com/reference/operators/accept_http
