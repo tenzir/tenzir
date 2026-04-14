@@ -7,8 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arc.hpp"
-#include "tenzir/atomic.hpp"
 #include "tenzir/async/mutex.hpp"
+#include "tenzir/async/oneshot.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -265,13 +266,13 @@ struct Response {
   std::string body;
 };
 
-using FinishCallback = folly::coro::BoundedQueue<uint16_t>;
+using ResponseSignal = Oneshot<uint16_t>;
 
 struct RequestStarted {
   uint64_t request_id;
   RequestMetadata metadata;
   std::string content_encoding;
-  Arc<FinishCallback> finished;
+  Arc<ResponseSignal> response_signal;
 };
 
 struct RequestBody {
@@ -377,7 +378,7 @@ public:
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
     std::string path;
     auto bytes_received = size_t{};
-    Arc<FinishCallback> finish_callback{std::in_place, 1};
+    Arc<ResponseSignal> response_signal{std::in_place};
     auto started = false;
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
     reader
@@ -395,7 +396,7 @@ public:
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
         if (auto content_length = parse_number<size_t>(content_length_header);
             content_length and *content_length > max_request_size_) {
-          finish_callback->try_enqueue(413); // payload too large
+          response_signal->send(413); // payload too large
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
         auto encoding
@@ -404,12 +405,12 @@ public:
           RequestStarted{.request_id = request_id,
                          .metadata = std::move(metadata),
                          .content_encoding = std::move(encoding),
-                         .finished = finish_callback});
+                         .response_signal = response_signal});
         co_return proxygen::coro::HTTPSourceReader::Continue;
       })
       .onBodyAsync([&](quic::BufQueue queue, bool) -> folly::coro::Task<bool> {
         TENZIR_ASSERT(started);
-        if (not finish_callback->empty()) {
+        if (response_signal->has_sent()) {
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
 
@@ -417,7 +418,7 @@ public:
           auto iobuf = queue.move();
           iobuf->coalesce();
           if (bytes_received + iobuf->length() > max_request_size_) {
-            finish_callback->try_enqueue(413); // payload too large
+            response_signal->send(413); // payload too large
             co_return proxygen::coro::HTTPSourceReader::Cancel;
           }
           bytes_received += iobuf->length();
@@ -431,17 +432,16 @@ public:
       })
       .onError([&](proxygen::coro::HTTPSourceReader::ErrorContext,
                    const proxygen::coro::HTTPError&) {
-        finish_callback->try_enqueue(400);
-        return proxygen::coro::HTTPSourceReader::Cancel;
+        response_signal->send(400);
       });
     // read request
     co_await reader.read(detail::narrow<uint32_t>(max_request_size_));
     // notify request finished
     co_await queue_->enqueue(RequestFinished{request_id});
-    auto status = co_await finish_callback->dequeue();
     // send response
-    if (status != 200) {
-      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(status);
+    auto res_status = co_await response_signal->recv();
+    if (res_status != 200) {
+      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
     }
     auto response = get_response_for_path(args_, path);
     co_return make_fixed_response(response);
@@ -488,7 +488,7 @@ public:
       co_await catch_cancellation(wait_forever());
       auto active_requests = co_await active_requests_.lock();
       for (auto& it : *active_requests) {
-        it.second.finished->try_enqueue(200); // ok
+        it.second.finished->send(200); // ok
       }
     });
     lifecycle_ = Lifecycle::running;
@@ -514,7 +514,7 @@ public:
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
         if (lifecycle_ != Lifecycle::running) {
-          co_await msg.finished->enqueue(503); // service unavailable
+          msg.response_signal->send(503); // service unavailable
           co_return;
         }
 
@@ -524,7 +524,7 @@ public:
             .primary(args_.endpoint)
             .note("request path: {}", msg.metadata.path)
             .emit(ctx);
-          co_await msg.finished->enqueue(500); // internal server error
+          msg.response_signal->send(500); // internal server error
           co_return;
         }
         auto decompressor
@@ -538,7 +538,7 @@ public:
           active_requests->emplace(
             request_id, ActiveRequest{.metadata = std::move(msg.metadata),
                                       .decompressor = std::move(decompressor),
-                                      .finished = msg.finished});
+                                      .finished = msg.response_signal});
         }
         co_await ctx.spawn_sub(request_id, std::move(pipeline),
                                tag_v<chunk_ptr>);
@@ -559,8 +559,7 @@ public:
           if (req.decompressor) {
             auto remaining = get_max_request_size() - req.output_bytes;
             auto input_span = std::span<std::byte const>{
-              reinterpret_cast<std::byte const*>(chunk->data()),
-              chunk->size()};
+              reinterpret_cast<std::byte const*>(chunk->data()), chunk->size()};
             auto decompressed = http::decompress_chunk(
               **req.decompressor, input_span, ctx.dh(), remaining);
             if (not decompressed) {
@@ -576,7 +575,7 @@ public:
               .note("rejecting request body")
               .emit(ctx);
             req.drop_body = true;
-            req.finished->try_enqueue(413); // payload too large
+            req.finished->send(413); // payload too large
             co_return;
           }
           req.output_bytes += chunk->size();
@@ -630,7 +629,7 @@ public:
         co_return;
       }
       // notify the handler to respond
-      it->second.finished->try_enqueue(200);
+      it->second.finished->send(200);
       active_requests->erase(request_id);
       should_finish
         = lifecycle_ == Lifecycle::draining and active_requests->empty();
@@ -673,7 +672,7 @@ private:
     Option<std::shared_ptr<arrow::util::Decompressor>> decompressor;
     size_t output_bytes = 0;
     bool drop_body = false;
-    Arc<FinishCallback> finished;
+    Arc<ResponseSignal> finished;
   };
 
   auto attach_metadata(uint64_t request_id, table_slice slice,
@@ -705,8 +704,8 @@ private:
       rb.field("method", metadata->method);
       rb.field("version", metadata->version);
     }
-    co_return assign(*args_.metadata_field, sb.finish_assert_one_array(),
-                     std::move(slice), dh);
+    co_return assign(*args_.metadata_field, sb.finish_assert_one_array(), slice,
+                     dh);
   }
 
   auto request_stop() -> Task<void> {
@@ -714,6 +713,10 @@ private:
       co_return;
     }
     lifecycle_ = Lifecycle::draining;
+    if (server_) {
+      // stop listening for new connections
+      (*server_)->getServer().drain();
+    }
     auto active_requests = co_await active_requests_.lock();
     if (active_requests->empty()) {
       server_ = None{};
