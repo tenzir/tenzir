@@ -126,7 +126,7 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
+  event_order order_{};
   std::vector<ast::field_path> moved_fields_;
 };
 
@@ -191,7 +191,7 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::unordered;
+  event_order order_ = event_order::ordered;
 };
 
 /// Create a `set` operator with the given assignment.
