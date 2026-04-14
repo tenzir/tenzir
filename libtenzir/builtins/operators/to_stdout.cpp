@@ -14,6 +14,7 @@
 #include <tenzir/substitute_ctx.hpp>
 
 #include <folly/coro/Baton.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncPipe.h>
@@ -27,6 +28,8 @@
 namespace tenzir::plugins::to_stdout {
 
 namespace {
+
+constexpr auto error_queue_capacity = uint32_t{1};
 
 struct ToStdoutArgs {
   location self;
@@ -105,6 +108,22 @@ public:
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
   }
 
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await error_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    if (not writer_) {
+      co_return;
+    }
+    auto* error = result.try_as<std::string>();
+    TENZIR_ASSERT(error);
+    diagnostic::error("failed to write to stdout: {}", *error)
+      .primary(args_.self)
+      .emit(ctx);
+    writer_.reset();
+  }
+
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     auto sub = ctx.get_sub(caf::none);
     if (not sub) {
@@ -112,20 +131,24 @@ public:
     }
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await pipeline.push(std::move(input));
-    TENZIR_UNUSED(push_result);
+    std::ignore = push_result;
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx) -> Task<void> override {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
     if (not chunk or chunk->size() == 0 or not writer_) {
       co_return;
     }
     auto error = co_await folly::coro::co_withExecutor(
       evb_, write_chunk(*writer_, std::move(chunk)));
     if (error) {
-      diagnostic::error("failed to write to stdout: {}", *error)
-        .primary(args_.self)
-        .emit(ctx);
+      auto write_error = std::move(*error);
+      std::ignore = error_queue_->try_enqueue(std::move(write_error));
     }
+  }
+
+  auto state() -> OperatorState override {
+    return orig_flags_ and not writer_ ? OperatorState::done
+                                       : OperatorState::unspecified;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -143,10 +166,16 @@ public:
   }
 
 private:
+  using ErrorQueue = folly::coro::BoundedQueue<std::string>;
+
   ToStdoutArgs args_;
   folly::EventBase* evb_ = nullptr;
   Option<int> orig_flags_;
   folly::AsyncPipeWriter::UniquePtr writer_;
+  // Graceful shutdown is initiated from the runner's main loop via `state()`.
+  // We therefore keep a tiny one-shot queue to hand the first write error back
+  // to `process_task()`.
+  mutable Box<ErrorQueue> error_queue_{std::in_place, error_queue_capacity};
 };
 
 class ToStdoutPlugin final : public OperatorPlugin {
