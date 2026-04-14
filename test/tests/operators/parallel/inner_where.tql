@@ -1,0 +1,8 @@
+// filters pushed past the inner pipeline's first operator
+// must not be dropped by GenericIr::optimize.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+parallel {
+  where x > 2
+  y = x * 2
+}
+sort x

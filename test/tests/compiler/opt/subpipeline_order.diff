@@ -1,0 +1,78 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `from_stdin` @ 0..10
+         ],
+         ref: std::from_stdin/op
+       },
+       desc: "from_stdin",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               op: {
+                 path: [
+                   `read_ndjson` @ 15..26
+                 ],
+                 ref: std::read_ndjson/op
+               },
+               desc: "read_ndjson",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+-              order: "ordered",
++              order: "unordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 11..28,
+         let_ids: {
+           
+         }
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 29..36
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "unordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

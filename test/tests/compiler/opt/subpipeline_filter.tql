@@ -1,0 +1,6 @@
+export
+parallel {
+  where x > 2
+  y = x * 2
+}
+discard

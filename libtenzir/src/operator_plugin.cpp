@@ -611,6 +611,20 @@ public:
       filter_.append_range(filter | std::views::as_rvalue);
       filter = ir::optimize_filter{};
     }
+    if (pipeline_) {
+      auto opt = std::move(pipeline_->pipeline.inner)
+                   .optimize(ir::optimize_filter{}, order_);
+      // Filters that the inner pipeline pushed past its first operator cannot
+      // escape the subpipeline, so reinsert them as `where` at the front.
+      opt.replacement.operators.insert_range(
+        opt.replacement.operators.begin(),
+        opt.filter | std::views::transform(make_where_ir));
+      // TODO: `opt.order` is currently ignored. For operators whose inner
+      // subpipeline shares a data path with the outer flow, it should factor
+      // into `result_order`. No IR op uses `order` to change replacement
+      // today, so this is latent.
+      pipeline_->pipeline.inner = std::move(opt.replacement);
+    }
     auto replacement = std::vector<Box<Operator>>{};
     replacement.emplace_back(std::move(*this));
     for (auto& expr : filter) {

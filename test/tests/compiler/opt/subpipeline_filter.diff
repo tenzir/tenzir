@@ -1,0 +1,119 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `parallel` @ 7..15
+         ],
+         ref: std::parallel/op
+       },
+       desc: "tql2.parallel",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             where_ir {
+-              self: 20..25,
++              self: 0..0,
+               predicate: binary_expr {
+                 left: root_field {
+                   id: `x` @ 26..27,
+                   has_question_mark: false
+                 },
+                 op: "gt" @ 28..29,
+                 right: constant int64 2 @ 30..31
+               }
+             },
+             SetIr {
+               assignments: [
+                 {
+                   left: field_path {
+                     expr: root_field {
+                       id: `y` @ 34..35,
+                       has_question_mark: false
+                     },
+                     has_this: false,
+                     path: [
+                       {
+                         id: `y` @ 34..35,
+                         has_question_mark: false
+                       }
+                     ]
+                   },
+                   equals: 36..37,
+                   right: binary_expr {
+                     left: root_field {
+                       id: `x` @ 38..39,
+                       has_question_mark: false
+                     },
+                     op: "mul" @ 40..41,
+                     right: constant int64 2 @ 42..43
+                   }
+                 }
+               ],
+-              order: "ordered"
++              order: "unordered"
+             }
+           ]
+         } @ 16..45,
+         let_ids: {
+           
+         }
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 46..53
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "unordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }
