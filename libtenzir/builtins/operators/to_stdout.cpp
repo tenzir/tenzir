@@ -178,7 +178,7 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (done_ or not chunk or chunk->size() == 0 or not writer_) {
+    if (not chunk or chunk->size() == 0 or not writer_) {
       co_return;
     }
     auto error = co_await folly::coro::co_withExecutor(
