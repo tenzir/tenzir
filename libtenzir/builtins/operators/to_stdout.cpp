@@ -110,8 +110,8 @@ auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
       delete this;
     }
 
-    void writeErr(size_t,
-                  folly::AsyncSocketException const& ex) noexcept override {
+    void
+    writeErr(size_t, folly::AsyncSocketException const& ex) noexcept override {
       std::ignore = result_queue_->try_enqueue(Option<std::string>{ex.what()});
       delete this;
     }
@@ -160,7 +160,8 @@ public:
     }
     io_executor_ = ctx.io_executor();
     writer_ = folly::AsyncPipeWriter::newWriter(
-      io_executor_->getEventBase(), folly::NetworkSocket::fromFd(STDOUT_FILENO));
+      io_executor_->getEventBase(),
+      folly::NetworkSocket::fromFd(STDOUT_FILENO));
     // Avoid closing the process-global stdout when the writer shuts down.
     writer_->setCloseCallback([](folly::NetworkSocket) {});
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
