@@ -106,6 +106,8 @@ public:
     // Avoid closing the process-global stdout when the writer shuts down.
     writer_->setCloseCallback([](folly::NetworkSocket) {});
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
+    // `to_stdout` always owns exactly one subpipeline once startup succeeds.
+    TENZIR_ASSERT(ctx.get_sub(caf::none));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -147,39 +149,32 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return orig_flags_ and not writer_ ? OperatorState::done
-                                       : OperatorState::unspecified;
+    return orig_flags_ >= 0 and not writer_ ? OperatorState::done
+                                            : OperatorState::unspecified;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    if (auto sub = ctx.get_sub(caf::none)) {
-      auto& pipeline = as<SubHandle<table_slice>>(*sub);
-      co_await pipeline.close();
-      co_return FinalizeBehavior::continue_;
-    }
-    cleanup_stdout();
-    co_return FinalizeBehavior::done;
+    auto sub = ctx.get_sub(caf::none);
+    TENZIR_ASSERT(sub);
+    auto& pipeline = as<SubHandle<table_slice>>(*sub);
+    co_await pipeline.close();
+    co_return FinalizeBehavior::continue_;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    cleanup_stdout();
+    writer_.reset();
+    TENZIR_ASSERT(orig_flags_ >= 0);
+    ::fcntl(STDOUT_FILENO, F_SETFL, orig_flags_);
+    orig_flags_ = -1;
     co_return;
   }
 
 private:
   using ErrorQueue = folly::coro::BoundedQueue<std::string>;
 
-  auto cleanup_stdout() -> void {
-    writer_.reset();
-    if (orig_flags_) {
-      ::fcntl(STDOUT_FILENO, F_SETFL, *orig_flags_);
-      orig_flags_ = {};
-    }
-  }
-
   ToStdoutArgs args_;
   folly::EventBase* evb_ = nullptr;
-  Option<int> orig_flags_;
+  int orig_flags_ = -1;
   folly::AsyncPipeWriter::UniquePtr writer_;
   // Graceful shutdown is initiated from the runner's main loop via `state()`.
   // We therefore keep a tiny one-shot queue to hand the first write error back
