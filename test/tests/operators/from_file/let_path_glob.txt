@@ -1,0 +1,6 @@
+{
+  source_path: "<ROOT>/multi/data-001.json",
+}
+{
+  source_path: "<ROOT>/multi/data-002.json",
+}

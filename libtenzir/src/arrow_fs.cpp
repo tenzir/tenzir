@@ -15,6 +15,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/glob.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 
 #include <arrow/filesystem/filesystem.h>
@@ -98,7 +99,7 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
         }
         pending_.push_back(TrackedFile{
           .path = file.path(),
-          .mtime_ns = file.mtime().time_since_epoch().count(),
+          .mtime = to_option_time(file.mtime()),
           .file = nullptr,
         });
       }
@@ -134,7 +135,23 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
         co_return;
       }
       file_state.file = open.file.MoveValueUnsafe();
-      co_await ctx.spawn_sub<chunk_ptr>(open.job_id, base_args_.pipe.inner);
+      auto pipe = base_args_.pipe.inner;
+      auto env = substitute_ctx::env_t{
+        {
+          base_args_.file_info,
+          record{
+            {"path", file_state.path},
+            {"mtime", file_state.mtime},
+          },
+        },
+      };
+      auto sub_result = pipe.substitute({ctx, &env}, true);
+      if (not sub_result) {
+        processing_[*slot].reset();
+        start_job_in_slot(*slot, ctx);
+        co_return;
+      }
+      co_await ctx.spawn_sub<chunk_ptr>(open.job_id, std::move(pipe));
       // Queue the first read.
       enqueue_task(
         ctx,
@@ -326,20 +343,20 @@ auto ArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
       continue;
     }
     auto& file_info = info[0];
-    auto file_mtime_ns = file_info.mtime().time_since_epoch().count();
-    if (file_mtime_ns != state.mtime_ns) {
+    auto file_mtime = to_option_time(file_info.mtime());
+    if (file_mtime != state.mtime) {
       diagnostic::warning("file `{}` was modified since last checkpoint",
                           state.path)
         .primary(base_args_.url)
         .emit(ctx);
       if (state.offset < file_info.size()) {
         // Assume the file was appended to.
-        state.mtime_ns = file_mtime_ns;
+        state.mtime = file_mtime;
       } else {
         if (base_args_.watch) {
           pending_.push_back(TrackedFile{
             .path = state.path,
-            .mtime_ns = file_mtime_ns,
+            .mtime = file_mtime,
             .file = nullptr,
           });
         }
@@ -484,14 +501,13 @@ auto ArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
   processing_[slot] = std::move(pending_.front());
   processing_[slot]->job_id = ++next_job_id_;
   pending_.pop_front();
-  enqueue_task(
-    ctx,
-    [this, job_id = processing_[slot]->job_id,
-     path = processing_[slot]->path] mutable -> Task<AwaitResult> {
-      auto result
-        = co_await arrow_future_to_task(fs_->OpenInputFileAsync(path));
-      co_return FileOpen{job_id, std::move(result)};
-    });
+  enqueue_task(ctx,
+               [this, job_id = processing_[slot]->job_id,
+                path = processing_[slot]->path] mutable -> Task<AwaitResult> {
+                 auto result = co_await arrow_future_to_task(
+                   fs_->OpenInputFileAsync(path));
+                 co_return FileOpen{job_id, std::move(result)};
+               });
 }
 
 auto ArrowFsOperator::find_free_slot() const -> Option<size_t> {
@@ -503,7 +519,8 @@ auto ArrowFsOperator::find_free_slot() const -> Option<size_t> {
   return std::nullopt;
 }
 
-auto ArrowFsOperator::find_slot_by_job(uint64_t job_id) const -> Option<size_t> {
+auto ArrowFsOperator::find_slot_by_job(uint64_t job_id) const
+  -> Option<size_t> {
   for (auto i = size_t{0}; i < max_jobs; ++i) {
     if (processing_[i] and processing_[i]->job_id == job_id) {
       return i;

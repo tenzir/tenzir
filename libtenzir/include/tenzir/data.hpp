@@ -16,6 +16,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
@@ -138,6 +139,14 @@ public:
   /// @param x The optional data instance.
   template <class T>
   data(std::optional<T> x) : data{x ? std::move(*x) : data{}} {
+    // nop
+  }
+
+  /// Constructs data from an Option, mapping None to null.
+  template <class T>
+    requires(!std::is_reference_v<T>
+             && !std::same_as<to_data_type<T>, detail::invalid_data_type>)
+  data(Option<T> x) : data{x ? data{std::move(*x)} : data{}} {
     // nop
   }
 
