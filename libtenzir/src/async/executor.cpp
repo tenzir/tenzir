@@ -823,8 +823,9 @@ private:
 
   auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     if (not io_executor_) {
+      auto& op = base_op();
       io_executor_
-        = exec_ctx_.make_io_executor(id_, demangle_op_type(typeid(base_op())));
+        = exec_ctx_.make_io_executor(id_, demangle_op_type(typeid(op)));
     }
     return io_executor_;
   }

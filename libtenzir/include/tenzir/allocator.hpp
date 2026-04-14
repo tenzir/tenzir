@@ -457,14 +457,16 @@ public:
 
   auto note_reallocation(const detail::allocation_tag& tag,
                          std::int64_t old_size, std::int64_t new_size) -> void {
-    const auto success = try_note_impl(tag, &stats::note_reallocation, false,
-                                       old_size, new_size);
+    [[maybe_unused]] auto success
+      = try_note_impl(tag, &stats::note_reallocation, false, old_size,
+                      new_size);
     TENZIR_ALLOCATOR_ASSERT(success and "unexpected unknown reallocation");
   }
 
   auto note_deallocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
-    const auto success = try_note_impl(tag, &stats::note_deallocation, size);
+    [[maybe_unused]] auto success
+      = try_note_impl(tag, &stats::note_deallocation, size);
     TENZIR_ALLOCATOR_ASSERT(success and "unexpected unknown deallocation");
   }
 
