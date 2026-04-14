@@ -284,10 +284,10 @@ struct RequestFinished {
   uint64_t request_id;
 };
 
-struct ServerStopped {};
+// needed to make Message default-constructable
+struct Noop {};
 
-using Message
-  = variant<ServerStopped, RequestStarted, RequestBody, RequestFinished>;
+using Message = variant<Noop, RequestStarted, RequestBody, RequestFinished>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 auto make_request_metadata(proxygen::HTTPMessage const& request)
@@ -497,12 +497,6 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (lifecycle_ == Lifecycle::done) {
-      if (auto message = message_queue_->try_dequeue()) {
-        co_return std::move(*message);
-      }
-      co_return Message{ServerStopped{}};
-    }
     co_return co_await message_queue_->dequeue();
   }
 
@@ -598,13 +592,7 @@ public:
           co_await parser.close();
         }
       },
-      [&](ServerStopped) -> Task<void> {
-        auto active_requests = co_await active_requests_.lock();
-        if (active_requests->empty()) {
-          lifecycle_ = Lifecycle::done;
-        } else {
-          lifecycle_ = Lifecycle::draining;
-        }
+      [&](Noop) -> Task<void> {
         co_return;
       });
   }
@@ -713,8 +701,8 @@ private:
       co_return;
     }
     lifecycle_ = Lifecycle::draining;
+    // stop listening for new connections
     if (server_) {
-      // stop listening for new connections
       (*server_)->getServer().drain();
     }
     auto active_requests = co_await active_requests_.lock();
