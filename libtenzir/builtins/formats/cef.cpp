@@ -331,6 +331,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
 
 struct ReadCefArgs {
   multi_series_builder::options msb_options;
+  location operator_location = location::unknown;
 };
 
 class ReadCef final : public Operator<chunk_ptr, table_slice> {
@@ -344,7 +345,20 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     dh_ = std::make_unique<transforming_diagnostic_handler>(
       ctx.dh(), [this](diagnostic d) {
-        d.message = fmt::format("cef parser: {}", d.message);
+        if (args_.operator_location) {
+          auto replaced_unknown_location = false;
+          for (auto& annotation : d.annotations) {
+            if (annotation.source) {
+              continue;
+            }
+            annotation.source = args_.operator_location;
+            replaced_unknown_location = true;
+          }
+          if (not replaced_unknown_location and d.annotations.empty()) {
+            d.annotations.emplace(d.annotations.begin(), true, "",
+                                  args_.operator_location);
+          }
+        }
         d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
                         fmt::format("line {}", line_counter_));
         return d;
@@ -360,16 +374,15 @@ public:
 
   auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (not msb_) {
-      co_return;
-    }
+    TENZIR_ASSERT(msb_);
     co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not msb_ or not input or input->size() == 0) {
+    TENZIR_ASSERT(msb_);
+    if (not input or input->size() == 0) {
       co_return;
     }
     auto& dh = *dh_;
@@ -406,9 +419,7 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
-    if (not msb_) {
-      co_return FinalizeBehavior::done;
-    }
+    TENZIR_ASSERT(msb_);
     if (not buffer_.empty()) {
       process_line(buffer_, *dh_);
       buffer_.clear();
@@ -420,9 +431,7 @@ public:
   }
 
   auto prepare_snapshot(Push<table_slice>& push, OpCtx&) -> Task<void> override {
-    if (not msb_) {
-      co_return;
-    }
+    TENZIR_ASSERT(msb_);
     for (auto& slice : msb_->finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
@@ -522,6 +531,7 @@ public:
       .msb_options = {.settings = {.default_schema_name = "cef.event"}},
     }};
     d.validate(add_msb_to_describer(d, &ReadCefArgs::msb_options));
+    d.operator_location(&ReadCefArgs::operator_location);
     return d.without_optimize();
   }
 

@@ -1,2 +1,0 @@
-load_file f"{env("TENZIR_INPUTS")}/leef/leef2.log"
-read_leef
