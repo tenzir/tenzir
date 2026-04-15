@@ -20,7 +20,6 @@
 
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Task.h>
-#include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
@@ -37,8 +36,6 @@ namespace tenzir::plugins::nic {
 namespace {
 
 constexpr auto queue_capacity = uint32_t{16};
-constexpr auto dispatch_packet_limit = size_t{1024};
-constexpr auto dispatch_packet_budget = size_t{4096};
 
 using ChunkQueue = folly::coro::BoundedQueue<chunk_ptr>;
 using PcapHandle = std::unique_ptr<pcap_t, decltype(&pcap_close)>;
@@ -63,15 +60,10 @@ struct CaptureSetup {
   int linktype = 0;
   int selectable_fd = -1;
   std::chrono::milliseconds poll_interval = defaults::import::read_timeout;
-  bool async = false;
 };
 
 struct DispatchState {
-  explicit DispatchState(bool saw_packet = false) : saw_packet{saw_packet} {
-  }
-
   chunk_ptr ready_chunk;
-  bool saw_packet = false;
 };
 
 auto make_capture_file_header(int snaplen, int linktype) -> pcap::file_header {
@@ -285,16 +277,15 @@ auto make_capture_setup(std::string const& iface, uint32_t snaplen,
   result.linktype = pcap_datalink(result.pcap.get());
   TENZIR_ASSERT(result.linktype != PCAP_ERROR_NOT_ACTIVATED);
   auto nonblock_error = std::array<char, PCAP_ERRBUF_SIZE>{};
-  if (pcap_setnonblock(result.pcap.get(), 1, nonblock_error.data()) == 0) {
-    result.async = true;
-    result.selectable_fd = pcap_get_selectable_fd(result.pcap.get());
-    result.poll_interval = make_poll_interval(*result.pcap);
-  } else {
-    TENZIR_DEBUG("failed to enable non-blocking mode on {}: {}; falling back "
-                 "to blocking "
-                 "pcap dispatch",
-                 iface, std::string_view{nonblock_error.data()});
+  if (pcap_setnonblock(result.pcap.get(), 1, nonblock_error.data()) != 0) {
+    diagnostic::error("failed to enable non-blocking capture: {}",
+                      std::string_view{nonblock_error.data()})
+      .note("from `nic`")
+      .emit(dh);
+    return None{};
   }
+  result.selectable_fd = pcap_get_selectable_fd(result.pcap.get());
+  result.poll_interval = make_poll_interval(*result.pcap);
   return result;
 }
 
@@ -305,7 +296,6 @@ auto dispatch_packets(u_char* user, const pcap_pkthdr* pkt_hdr,
   TENZIR_ASSERT(pkt_data);
   auto& state
     = *reinterpret_cast<std::pair<CaptureChunkBuilder*, DispatchState*>*>(user);
-  state.second->saw_packet = true;
   auto chunk = state.first->append(*pkt_hdr, pkt_data);
   if (chunk) {
     TENZIR_ASSERT(not state.second->ready_chunk);
@@ -344,19 +334,12 @@ public:
       done_ = true;
       co_return;
     }
-    if (setup->async) {
-      auto io_executor = ctx.io_executor();
-      auto* evb = io_executor->getEventBase();
-      ctx.spawn_task(folly::coro::co_withExecutor(
-        io_executor,
-        capture_loop_async(chunk_queue_, args_.iface.inner, capture_snaplen,
-                           std::move(*setup), *evb, ctx.dh())));
-    } else {
-      ctx.spawn_task(folly::coro::co_withExecutor(
-        folly::getGlobalCPUExecutor(),
-        capture_loop_blocking(chunk_queue_, args_.iface.inner, capture_snaplen,
-                              std::move(*setup), ctx.dh())));
-    }
+    auto io_executor = ctx.io_executor();
+    auto* evb = io_executor->getEventBase();
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      io_executor,
+      capture_loop(chunk_queue_, args_.iface.inner, capture_snaplen,
+                   std::move(*setup), *evb, ctx.dh())));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -407,11 +390,10 @@ public:
   }
 
 private:
-  static auto capture_loop_async(std::shared_ptr<ChunkQueue> queue,
-                                 std::string iface, uint32_t snaplen,
-                                 CaptureSetup setup, folly::EventBase& evb,
-                                 diagnostic_handler& dh) -> Task<void> {
-    TENZIR_ASSERT(setup.async);
+  static auto capture_loop(std::shared_ptr<ChunkQueue> queue, std::string iface,
+                           uint32_t snaplen, CaptureSetup setup,
+                           folly::EventBase& evb, diagnostic_handler& dh)
+    -> Task<void> {
     TENZIR_DEBUG("capturing from {} with async pcap dispatch and snaplen of {}",
                  iface, snaplen);
     auto finish = [&](auto&& emit) -> Task<void> {
@@ -431,80 +413,11 @@ private:
           co_await queue->enqueue(std::move(chunk));
         }
       }
-      auto processed = size_t{0};
-      while (processed < dispatch_packet_budget) {
-        auto state = DispatchState{};
-        auto callback_state = std::pair{&builder, &state};
-        auto result = ::pcap_dispatch(
-          setup.pcap.get(), detail::narrow_cast<int>(dispatch_packet_limit),
-          &dispatch_packets, reinterpret_cast<u_char*>(&callback_state));
-        if (state.ready_chunk) {
-          co_await queue->enqueue(std::move(state.ready_chunk));
-        }
-        if (result == 0) {
-          break;
-        }
-        if (result == PCAP_ERROR_BREAK) {
-          if (auto chunk = builder.flush()) {
-            co_await queue->enqueue(std::move(chunk));
-          }
-          co_await queue->enqueue(chunk_ptr{});
-          co_return;
-        }
-        if (result == PCAP_ERROR) {
-          auto err = std::string_view{::pcap_geterr(setup.pcap.get())};
-          co_await finish([&] {
-            diagnostic::error("failed to dispatch packets: {}", err)
-              .note("from `nic`")
-              .emit(dh);
-          });
-          co_return;
-        }
-        TENZIR_ASSERT(result > 0);
-        if (builder.empty()) {
-          last_packet_at = None{};
-        } else {
-          last_packet_at = std::chrono::steady_clock::now();
-        }
-        processed += detail::narrow_cast<size_t>(result);
-        if (result < detail::narrow_cast<int>(dispatch_packet_limit)) {
-          break;
-        }
-      }
-      if (processed >= dispatch_packet_budget) {
-        wakeup.kick();
-        co_await folly::coro::co_reschedule_on_current_executor;
-      }
-      co_await folly::coro::co_safe_point;
-    }
-  }
-
-  static auto capture_loop_blocking(std::shared_ptr<ChunkQueue> queue,
-                                    std::string iface, uint32_t snaplen,
-                                    CaptureSetup setup, diagnostic_handler& dh)
-    -> Task<void> {
-    TENZIR_DEBUG("capturing from {} with blocking pcap dispatch and snaplen of "
-                 "{}",
-                 iface, snaplen);
-    auto finish = [&](auto&& emit) -> Task<void> {
-      emit();
-      co_await queue->enqueue(chunk_ptr{});
-    };
-    auto builder = CaptureChunkBuilder{snaplen, setup.linktype};
-    auto last_packet_at = Option<std::chrono::steady_clock::time_point>{};
-    while (true) {
-      auto now = std::chrono::steady_clock::now();
-      if (last_packet_at
-          and *last_packet_at + defaults::import::batch_timeout < now) {
-        if (auto chunk = builder.flush()) {
-          last_packet_at = None{};
-          co_await queue->enqueue(std::move(chunk));
-        }
-      }
       auto state = DispatchState{};
       auto callback_state = std::pair{&builder, &state};
       auto result = ::pcap_dispatch(
-        setup.pcap.get(), detail::narrow_cast<int>(dispatch_packet_limit),
+        setup.pcap.get(),
+        detail::narrow_cast<int>(defaults::import::table_slice_size),
         &dispatch_packets, reinterpret_cast<u_char*>(&callback_state));
       if (state.ready_chunk) {
         co_await queue->enqueue(std::move(state.ready_chunk));
@@ -514,7 +427,11 @@ private:
         continue;
       }
       if (result == PCAP_ERROR_BREAK) {
-        break;
+        if (auto chunk = builder.flush()) {
+          co_await queue->enqueue(std::move(chunk));
+        }
+        co_await queue->enqueue(chunk_ptr{});
+        co_return;
       }
       if (result == PCAP_ERROR) {
         auto err = std::string_view{::pcap_geterr(setup.pcap.get())};
@@ -531,11 +448,8 @@ private:
       } else {
         last_packet_at = std::chrono::steady_clock::now();
       }
+      co_await folly::coro::co_safe_point;
     }
-    if (auto chunk = builder.flush()) {
-      co_await queue->enqueue(std::move(chunk));
-    }
-    co_await queue->enqueue(chunk_ptr{});
   }
 
   FromNicArgs args_;
