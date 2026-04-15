@@ -13,6 +13,7 @@ Conservatively rewrite C++ logical operators to their alternative spellings:
 Rules:
 - Skip comments, strings, char literals, raw strings, and preprocessor lines.
 - Rewrite && only when surrounded by whitespace.
+- Do not rewrite && when it is an rvalue ref-qualifier for a member function.
 - Rewrite || only when surrounded by whitespace.
 - Rewrite ! when:
   - it is not followed by '='
@@ -38,6 +39,25 @@ type ChunkKind = Literal["code", "opaque"]
 type Chunk = tuple[ChunkKind, str]
 
 OPERATOR = "operator"
+CV_QUALIFIERS = frozenset({"const", "volatile"})
+CONTROL_KEYWORDS_BEFORE_PAREN = frozenset(
+    {
+        "catch",
+        "for",
+        "if",
+        "not",
+        "noexcept",
+        "requires",
+        "return",
+        "sizeof",
+        "switch",
+        "while",
+    }
+)
+REF_QUALIFIER_FOLLOWER_KEYWORDS = frozenset(
+    {"final", "noexcept", "override", "requires", "try"}
+)
+REF_QUALIFIER_FOLLOWER_CHARS = frozenset("{;=")
 
 
 def is_ws(ch: str) -> bool:
@@ -50,6 +70,56 @@ def is_expr_start(ch: str) -> bool:
 
 def is_ident(ch: str) -> bool:
     return ch.isalnum() or ch == "_"
+
+
+def skip_ws_forward(code: str, index: int) -> int:
+    while index < len(code) and code[index].isspace():
+        index += 1
+    return index
+
+
+def skip_ws_backward(code: str, index: int) -> int:
+    while index >= 0 and code[index].isspace():
+        index -= 1
+    return index
+
+
+def read_identifier_backward(code: str, end: int) -> tuple[str, int]:
+    start = end
+    while start >= 0 and is_ident(code[start]):
+        start -= 1
+    return code[start + 1 : end + 1], start
+
+
+def read_identifier_forward(code: str, start: int) -> tuple[str, int]:
+    end = start
+    while end < len(code) and is_ident(code[end]):
+        end += 1
+    return code[start:end], end
+
+
+def find_matching_open_paren(code: str, close_paren_index: int) -> int | None:
+    depth = 0
+    for index in range(close_paren_index, -1, -1):
+        if code[index] == ")":
+            depth += 1
+        elif code[index] == "(":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def skip_balanced_parens_forward(code: str, open_paren_index: int) -> int | None:
+    depth = 0
+    for index in range(open_paren_index, len(code)):
+        if code[index] == "(":
+            depth += 1
+        elif code[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return None
 
 
 def is_digit_separator_at(src: str, quote_index: int) -> bool:
@@ -80,6 +150,59 @@ def is_operator_symbol_at(code: str, symbol_index: int) -> bool:
 
     before = code[operator_start - 1] if operator_start > 0 else ""
     return not before or not is_ident(before)
+
+
+def is_ref_qualifier_follower_at(code: str, index: int) -> bool:
+    index = skip_ws_forward(code, index)
+    if index == len(code):
+        return True
+    if code.startswith("->", index) or code.startswith("[[", index):
+        return True
+    if code[index] in REF_QUALIFIER_FOLLOWER_CHARS:
+        return True
+    if not is_ident(code[index]):
+        return False
+
+    keyword, index = read_identifier_forward(code, index)
+    if keyword not in REF_QUALIFIER_FOLLOWER_KEYWORDS:
+        return False
+    if keyword != "noexcept":
+        return True
+
+    index = skip_ws_forward(code, index)
+    if index < len(code) and code[index] == "(":
+        index = skip_balanced_parens_forward(code, index)
+        if index is None:
+            return True
+    return is_ref_qualifier_follower_at(code, index)
+
+
+def is_ref_qualifier_at(code: str, symbol_index: int) -> bool:
+    index = skip_ws_backward(code, symbol_index - 1)
+    while index >= 0 and is_ident(code[index]):
+        keyword, next_index = read_identifier_backward(code, index)
+        if keyword not in CV_QUALIFIERS:
+            return False
+        index = skip_ws_backward(code, next_index)
+
+    if index < 0 or code[index] != ")":
+        return False
+
+    open_paren = find_matching_open_paren(code, index)
+    if open_paren is None:
+        return False
+
+    before_open = skip_ws_backward(code, open_paren - 1)
+    if before_open < 0:
+        return False
+    if is_ident(code[before_open]):
+        keyword, _ = read_identifier_backward(code, before_open)
+        if keyword in CONTROL_KEYWORDS_BEFORE_PAREN:
+            return False
+    elif code[before_open] not in ">])":
+        return False
+
+    return is_ref_qualifier_follower_at(code, symbol_index + 2)
 
 
 def split_code_and_opaque(src: str) -> Iterator[Chunk]:
@@ -205,31 +328,36 @@ def split_code_and_opaque(src: str) -> Iterator[Chunk]:
     yield from flush_code()
 
 
-def rewrite_code(code: str) -> str:
+def rewrite_code(code: str, lookahead: str = "") -> str:
     out: list[str] = []
+    analysis_code = code + lookahead
     i = 0
     n = len(code)
 
     while i < n:
-        if code.startswith("&&", i):
-            if is_operator_symbol_at(code, i):
+        if analysis_code.startswith("&&", i):
+            if is_operator_symbol_at(analysis_code, i):
+                out.append("&&")
+                i += 2
+                continue
+            if is_ref_qualifier_at(analysis_code, i):
                 out.append("&&")
                 i += 2
                 continue
             prev_ch = code[i - 1] if i > 0 else ""
-            next_ch = code[i + 2] if i + 2 < n else ""
+            next_ch = analysis_code[i + 2] if i + 2 < len(analysis_code) else ""
             if prev_ch and next_ch and is_ws(prev_ch) and is_ws(next_ch):
                 out.append("and")
                 i += 2
                 continue
 
-        if code.startswith("||", i):
-            if is_operator_symbol_at(code, i):
+        if analysis_code.startswith("||", i):
+            if is_operator_symbol_at(analysis_code, i):
                 out.append("||")
                 i += 2
                 continue
             prev_ch = code[i - 1] if i > 0 else ""
-            next_ch = code[i + 2] if i + 2 < n else ""
+            next_ch = analysis_code[i + 2] if i + 2 < len(analysis_code) else ""
             if prev_ch and next_ch and is_ws(prev_ch) and is_ws(next_ch):
                 out.append("or")
                 i += 2
@@ -272,14 +400,27 @@ def rewrite_code(code: str) -> str:
     return "".join(out)
 
 
+def lookahead_for(chunks: Sequence[Chunk], start: int) -> str:
+    parts: list[str] = []
+    for kind, text in chunks[start:]:
+        match kind:
+            case "opaque":
+                parts.append(" ")
+            case "code":
+                parts.append(text)
+                break
+    return "".join(parts)
+
+
 def rewrite_text(src: str) -> str:
     parts: list[str] = []
-    for kind, text in split_code_and_opaque(src):
+    chunks = list(split_code_and_opaque(src))
+    for index, (kind, text) in enumerate(chunks):
         match kind:
             case "opaque":
                 parts.append(text)
             case "code":
-                parts.append(rewrite_code(text))
+                parts.append(rewrite_code(text, lookahead_for(chunks, index + 1)))
     return "".join(parts)
 
 
@@ -422,6 +563,53 @@ def test_leaves_operator_overload_declarations_unchanged() -> None:
     )
 
     assert rewrite_text(source) == source
+
+
+def test_leaves_rvalue_ref_qualifiers_unchanged() -> None:
+    source = "\n".join(
+        [
+            "auto unwrap() && -> T;",
+            "auto unwrap() const && -> T;",
+            "auto unwrap() const volatile && -> T;",
+            "auto unwrap() && noexcept -> T;",
+            "auto unwrap() && noexcept(false) -> T;",
+            "auto unwrap() && noexcept(false);",
+            "auto unwrap() && requires movable<T>;",
+            "auto unwrap() && /* comment */ -> T;",
+            "void emit() &&;",
+            "void emit() && {}",
+            "void emit() && = delete;",
+            "void emit() && override;",
+            "void emit() && final;",
+            "",
+        ]
+    )
+
+    assert rewrite_text(source) == source
+
+
+def test_still_rewrites_logical_and_near_parentheses() -> None:
+    source = "\n".join(
+        [
+            "if ((foo) && bar) {}",
+            "if (foo() && noexcept(bar)) {}",
+            "if (foo() && /* comment */ noexcept(bar)) {}",
+            "if (requires { foo(); } && bar) {}",
+            "requires(is_relational(Op) && not(foo) && requires { bar; })",
+            "",
+        ]
+    )
+
+    assert rewrite_text(source) == "\n".join(
+        [
+            "if ((foo) and bar) {}",
+            "if (foo() and noexcept(bar)) {}",
+            "if (foo() and /* comment */ noexcept(bar)) {}",
+            "if (requires { foo(); } and bar) {}",
+            "requires(is_relational(Op) and not(foo) and requires { bar; })",
+            "",
+        ]
+    )
 
 
 def test_stdin_cannot_be_combined_with_in_place(capsys) -> None:
