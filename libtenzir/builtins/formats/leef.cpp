@@ -358,6 +358,7 @@ public:
     auto& dh = **dh_;
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
+    auto ready = series_builder::YieldReadyResult{};
     if (ended_on_carriage_return_ and *begin == '\n') {
       ++begin;
     }
@@ -373,6 +374,7 @@ public:
         process_line(buffer_, dh);
         buffer_.clear();
       }
+      ready.merge(msb_->yield_ready_as_table_slice());
       if (*current == '\r') {
         if (current + 1 == end) {
           ended_on_carriage_return_ = true;
@@ -383,7 +385,8 @@ public:
       begin = current + 1;
     }
     buffer_.append(begin, end);
-    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+    ready.merge(msb_->yield_ready_as_table_slice());
+    co_await pusher_.push(std::move(ready), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx&)
