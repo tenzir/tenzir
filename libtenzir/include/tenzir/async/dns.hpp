@@ -13,6 +13,8 @@
 #include "tenzir/box.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
+#include "tenzir/variant.hpp"
 
 #include <chrono>
 #include <string>
@@ -49,7 +51,7 @@ using ForwardDnsConfig = DnsResolverConfig;
 using ReverseDnsConfig = DnsResolverConfig;
 
 /// DNS lookup failed.
-struct DnsFailed {
+struct DnsError {
   std::string error;
 };
 
@@ -74,43 +76,17 @@ struct ReverseDnsResolved {
   std::string hostname;
 };
 
+template <class Resolved>
+using DnsLookup = variant<DnsNotFound, Resolved>;
+
+using ForwardDnsLookup = DnsLookup<ForwardDnsResolved>;
+using ReverseDnsLookup = DnsLookup<ReverseDnsResolved>;
+
 /// Result of a forward DNS lookup.
-struct ForwardDnsResult {
-  ForwardDnsResult() = default;
-  explicit(false) ForwardDnsResult(ForwardDnsResolved x)
-    : resolved{std::move(x)} {
-  }
-  explicit(false) ForwardDnsResult(DnsNotFound) {
-  }
-  explicit(false) ForwardDnsResult(DnsFailed x) : failed{std::move(x)} {
-  }
-
-  [[nodiscard]] auto is_not_found() const -> bool {
-    return not resolved and not failed;
-  }
-
-  Option<ForwardDnsResolved> resolved = None{};
-  Option<DnsFailed> failed = None{};
-};
+using ForwardDnsResult = Result<ForwardDnsLookup, DnsError>;
 
 /// Result of a reverse DNS lookup.
-struct ReverseDnsResult {
-  ReverseDnsResult() = default;
-  explicit(false) ReverseDnsResult(ReverseDnsResolved x)
-    : resolved{std::move(x)} {
-  }
-  explicit(false) ReverseDnsResult(DnsNotFound) {
-  }
-  explicit(false) ReverseDnsResult(DnsFailed x) : failed{std::move(x)} {
-  }
-
-  [[nodiscard]] auto is_not_found() const -> bool {
-    return not resolved and not failed;
-  }
-
-  Option<ReverseDnsResolved> resolved = None{};
-  Option<DnsFailed> failed = None{};
-};
+using ReverseDnsResult = Result<ReverseDnsLookup, DnsError>;
 
 /// Async hostname resolver backed by c-ares with caching and bounded
 /// concurrency.

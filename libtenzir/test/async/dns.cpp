@@ -32,19 +32,25 @@ TEST("forward dns resolves literal addresses without network access") {
     .literal_ttl = std::chrono::hours{1},
   }};
   auto result = folly::coro::blockingWait(resolver.resolve("127.0.0.1"));
-  require(static_cast<bool>(result->resolved));
-  check_eq(result->resolved->answers.size(), size_t{1});
-  check_eq(result->resolved->answers[0].address, loopback_ip(1));
-  check_eq(result->resolved->answers[0].type, std::string{"A"});
+  require(not result->is_err());
+  auto* resolved = try_as<ForwardDnsResolved>(&result->unwrap());
+  require(static_cast<bool>(resolved));
+  check_eq(resolved->answers.size(), size_t{1});
+  check_eq(resolved->answers[0].address, loopback_ip(1));
+  check_eq(resolved->answers[0].type, std::string{"A"});
   auto cached = folly::coro::blockingWait(resolver.cached("127.0.0.1"));
   check(static_cast<bool>(cached));
+  require(not cached->is_err());
+  check(static_cast<bool>(try_as<ForwardDnsResolved>(&cached->unwrap())));
 }
 
 TEST("reverse dns resolves loopback addresses without network access") {
   auto resolver = ReverseDnsResolver{};
   auto result = folly::coro::blockingWait(resolver.resolve(loopback_ip(1)));
-  require(static_cast<bool>(result->resolved));
-  check_eq(result->resolved->hostname, std::string{"localhost"});
+  require(not result->is_err());
+  auto* resolved = try_as<ReverseDnsResolved>(&result->unwrap());
+  require(static_cast<bool>(resolved));
+  check_eq(resolved->hostname, std::string{"localhost"});
 }
 
 TEST("reverse dns cache evicts least recently used entries") {

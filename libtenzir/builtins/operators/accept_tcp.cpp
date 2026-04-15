@@ -175,13 +175,17 @@ public:
       address_.setFromLocalPort(bind_port_);
     } else {
       auto resolved = co_await forward_dns_.resolve(bind_host_);
-      auto addresses = resolved->resolved;
+      auto* addresses = resolved->is_err()
+                        ? nullptr
+                        : try_as<ForwardDnsResolved>(&resolved->unwrap());
       if (not addresses or addresses->answers.empty()) {
         auto diag = diagnostic::error("failed to resolve listen address")
                       .primary(args_.endpoint.source)
                       .note("host: {}", bind_host_);
-        if (resolved->failed) {
-          std::move(diag).note("reason: {}", resolved->failed->error).emit(ctx);
+        if (resolved->is_err()) {
+          std::move(diag)
+            .note("reason: {}", resolved->unwrap_err().error)
+            .emit(ctx);
         } else {
           std::move(diag)
             .note("reason: no matching A or AAAA records")
@@ -242,13 +246,16 @@ public:
         };
         if (args_.resolve_hostnames) {
           auto hostname = Option<std::string>{};
-          if (accepted.peer_reverse_dns->resolved) {
-            hostname = accepted.peer_reverse_dns->resolved->hostname;
+          if (not accepted.peer_reverse_dns->is_err()) {
+            if (auto* resolved
+                = try_as<ReverseDnsResolved>(&accepted.peer_reverse_dns->unwrap())) {
+              hostname = resolved->hostname;
+            }
           }
           peer_record.emplace("hostname", std::move(hostname));
-          if (accepted.peer_reverse_dns->failed
+          if (accepted.peer_reverse_dns->is_err()
               and not peer_resolution_warning_emitted_) {
-            diagnostic::warning("{}", accepted.peer_reverse_dns->failed->error)
+            diagnostic::warning("{}", accepted.peer_reverse_dns->unwrap_err().error)
               .note("failed to resolve peer hostname for {}",
                     accepted.peer_ip)
               .note(
@@ -494,13 +501,12 @@ private:
       co_return;
     }
     auto peer_info = make_peer_info(peer);
-    auto peer_reverse_dns = Arc<ReverseDnsResult>{DnsNotFound{}};
+    auto peer_reverse_dns = Arc<ReverseDnsResult>{ReverseDnsLookup{DnsNotFound{}}};
     if (args_.resolve_hostnames) {
       try {
         peer_reverse_dns = co_await folly::coro::co_withCancellation(
           cancel_token,
-          folly::coro::detachOnCancel(resolve_peer_hostname(
-            reverse_dns_, peer_info.address)));
+          resolve_peer_hostname(reverse_dns_, peer_info.address));
       } catch (folly::OperationCancelled const&) {
         close_transport(std::move(transport));
         if (current_token.isCancellationRequested()

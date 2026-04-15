@@ -145,13 +145,17 @@ public:
       tls_context_ = std::move(*context);
     }
     auto resolved = co_await forward_dns_.resolve(host_);
-    auto addresses = resolved->resolved;
+    auto* addresses = resolved->is_err()
+                        ? nullptr
+                        : try_as<ForwardDnsResolved>(&resolved->unwrap());
     if (not addresses or addresses->answers.empty()) {
       auto diag = diagnostic::error("failed to resolve remote endpoint")
                     .primary(args_.endpoint.source)
                     .note("host: {}", host_);
-      if (resolved->failed) {
-        std::move(diag).note("reason: {}", resolved->failed->error).emit(ctx);
+      if (resolved->is_err()) {
+        std::move(diag)
+          .note("reason: {}", resolved->unwrap_err().error)
+          .emit(ctx);
       } else {
         std::move(diag)
           .note("reason: no matching A or AAAA records")
