@@ -24,6 +24,18 @@ namespace {
 
 namespace syslog = tenzir::plugins::syslog;
 
+auto make_dh(diagnostic_handler& dh, location operator_location)
+  -> transforming_diagnostic_handler {
+  return transforming_diagnostic_handler{
+    dh, [operator_location](diagnostic d) {
+      if (operator_location != location::unknown) {
+        d.annotations.emplace_back(false, "in `read_syslog` operator",
+                                   operator_location);
+      }
+      return d;
+    }};
+}
+
 struct ReadSyslogArgs {
   bool octet_counting = false;
   Option<ast::field_path> raw_message;
@@ -38,15 +50,16 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    auto& dh = make_dh(ctx.dh());
+    dh_.emplace(make_dh(ctx.dh(), args_.operator_location));
     auto raw = args_.raw_message;
-    new_builder_.emplace(syslog::infuse_new_schema(args_.msb_options), dh, raw);
-    legacy_builder_.emplace(syslog::infuse_legacy_schema(args_.msb_options), dh,
-                            raw);
+    new_builder_.emplace(syslog::infuse_new_schema(args_.msb_options), *dh_,
+                         raw);
+    legacy_builder_.emplace(syslog::infuse_legacy_schema(args_.msb_options),
+                            *dh_, raw);
     legacy_structured_builder_.emplace(
-      syslog::infuse_legacy_structured_schema(args_.msb_options), dh, raw,
+      syslog::infuse_legacy_structured_schema(args_.msb_options), *dh_, raw,
       true);
-    unknown_builder_.emplace(args_.msb_options, dh);
+    unknown_builder_.emplace(args_.msb_options, *dh_);
     ordered_ = args_.msb_options.settings.ordered;
   }
 
@@ -56,7 +69,8 @@ public:
       co_return;
     }
     if (args_.octet_counting) {
-      auto result = co_await process_octet(input, push, make_dh(ctx.dh()));
+      TENZIR_ASSERT(dh_);
+      auto result = co_await process_octet(input, push, *dh_);
       if (not result) {
         // malformed octet framing is terminal
         co_await finalize_builders(push);
@@ -88,8 +102,9 @@ public:
     return done_ ? OperatorState::done : OperatorState::unspecified;
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
+    TENZIR_ASSERT(dh_);
     if (args_.octet_counting) {
       if (remaining_message_length_ > 0) {
         auto const buffered_bytes = buffer_.size();
@@ -101,11 +116,11 @@ public:
           "unexpected end of input in octet-counted syslog message")
           .note("missing {} of {} bytes", missing_bytes,
                 remaining_message_length_)
-          .emit(make_dh(ctx.dh()));
+          .emit(*dh_);
       } else if (not buffer_.empty()) {
         diagnostic::error(
           "unexpected end of input in octet-counting length prefix")
-          .emit(make_dh(ctx.dh()));
+          .emit(*dh_);
       }
     } else if (not buffer_.empty()) {
       // Flush trailing bytes as a final line in delimiter-based mode.
@@ -146,24 +161,6 @@ public:
 
 private:
   struct PeriodicTick {};
-
-  // Returns a stable reference to the transforming diagnostic handler.
-  // The handler adds the operator invocation location to diagnostics.
-  // It is created lazily and reused across calls (the underlying `dh`
-  // reference is stable for the operator's lifetime).
-  auto make_dh(diagnostic_handler& dh) -> transforming_diagnostic_handler& {
-    if (not transforming_dh_) {
-      auto const op_loc = args_.operator_location;
-      transforming_dh_.emplace(dh, [op_loc](diagnostic d) {
-        if (op_loc != location::unknown) {
-          d.annotations.emplace_back(false, "in `read_syslog` operator",
-                                     op_loc);
-        }
-        return d;
-      });
-    }
-    return *transforming_dh_;
-  }
 
   // Returns slices that must be pushed immediately when switching schema
   // (ordered mode only).
@@ -412,7 +409,7 @@ private:
   Option<syslog::legacy_syslog_builder> legacy_builder_;
   Option<syslog::legacy_syslog_builder> legacy_structured_builder_;
   Option<syslog::unknown_syslog_builder> unknown_builder_;
-  Option<transforming_diagnostic_handler> transforming_dh_;
+  Option<transforming_diagnostic_handler> dh_;
   bool ordered_ = true;
   bool done_ = false;
   SeriesPusher pusher_;
