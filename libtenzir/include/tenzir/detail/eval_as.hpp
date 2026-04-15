@@ -17,7 +17,6 @@
 #include <optional>
 #include <string_view>
 #include <type_traits>
-#include <utility>
 
 namespace tenzir::detail {
 
@@ -33,7 +32,7 @@ auto eval_as(std::string_view name, ast::expression const& expr,
 template <typename T, class MakeDefault>
 auto eval_as(std::string_view name, ast::expression const& expr,
              table_slice const& slice, diagnostic_handler& dh,
-             MakeDefault&& make_default)
+             MakeDefault make_default)
   -> generator<std::optional<view3<type_to_data_t<T>>>> {
   auto ms = std::invoke([&] {
     if (expr.get_location()) {
