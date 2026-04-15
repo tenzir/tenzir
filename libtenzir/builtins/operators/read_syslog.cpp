@@ -15,6 +15,8 @@
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/ast.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <limits>
 #include <string_view>
 
@@ -362,6 +364,16 @@ private:
         // if no space is present yet we need more data.
         auto space_pos = buffer_.find(' ');
         if (space_pos == std::string::npos) {
+          // Reject malformed prefixes eagerly: if any byte before the delimiter
+          // is non-digit, this can never become a valid RFC 6587 length field.
+          if (std::ranges::any_of(buffer_, [](unsigned char c) {
+                return not std::isdigit(c);
+              })) {
+            diagnostic::error("failed to parse octet-counting length prefix")
+              .emit(dh);
+            buffer_.clear();
+            co_return failure::promise();
+          }
           // Guard against unbounded growth when the delimiter never arrives.
           // RFC 6587 uses u32 here, so anything beyond 10 digits is malformed.
           constexpr auto max_prefix_bytes
