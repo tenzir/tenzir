@@ -971,8 +971,11 @@ build_secret_requests(const Option<located<secret>>& url,
                               return {};
                             });
         },
-        [](const auto&) {
-          TENZIR_UNREACHABLE();
+        [&](const auto&) {
+          diagnostic::error(
+            "expected type `number`, `bool` or `string` for option")
+            .primary(loc)
+            .emit(dh);
         });
     }
   }
