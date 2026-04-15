@@ -27,6 +27,7 @@
 
 #include <fcntl.h>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unistd.h>
 
@@ -55,13 +56,13 @@ public:
   auto operator=(StdoutNonblockingGuard const&)
     -> StdoutNonblockingGuard& = delete;
   StdoutNonblockingGuard(StdoutNonblockingGuard&& other) noexcept
-    : orig_flags_{std::exchange(other.orig_flags_, -1)} {
+    : active_{std::exchange(other.active_, false)} {
   }
   auto operator=(StdoutNonblockingGuard&& other) noexcept
     -> StdoutNonblockingGuard& {
     if (this != &other) {
       restore();
-      orig_flags_ = std::exchange(other.orig_flags_, -1);
+      active_ = std::exchange(other.active_, false);
     }
     return *this;
   }
@@ -70,29 +71,57 @@ public:
   }
 
   auto activate() -> Option<std::string> {
-    TENZIR_ASSERT(orig_flags_ < 0);
-    auto orig_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
-    if (orig_flags < 0) {
-      return fmt::format("failed to get stdout flags: {}",
-                         detail::describe_errno());
+    TENZIR_ASSERT(not active_);
+    auto& state = shared_state();
+    auto guard = std::lock_guard{state.mutex};
+    if (state.refs == 0) {
+      auto orig_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
+      if (orig_flags < 0) {
+        return fmt::format("failed to get stdout flags: {}",
+                           detail::describe_errno());
+      }
+      if (::fcntl(STDOUT_FILENO, F_SETFL, orig_flags | O_NONBLOCK) < 0) {
+        return fmt::format("failed to enable non-blocking mode for stdout: {}",
+                           detail::describe_errno());
+      }
+      state.orig_flags = orig_flags;
     }
-    if (::fcntl(STDOUT_FILENO, F_SETFL, orig_flags | O_NONBLOCK) < 0) {
-      return fmt::format("failed to enable non-blocking mode for stdout: {}",
-                         detail::describe_errno());
-    }
-    orig_flags_ = orig_flags;
+    ++state.refs;
+    active_ = true;
     return {};
   }
 
   auto restore() -> void {
-    if (orig_flags_ >= 0) {
-      ::fcntl(STDOUT_FILENO, F_SETFL, orig_flags_);
-      orig_flags_ = -1;
+    if (not active_) {
+      return;
     }
+    auto& state = shared_state();
+    auto guard = std::lock_guard{state.mutex};
+    TENZIR_ASSERT(state.refs > 0);
+    --state.refs;
+    if (state.refs == 0) {
+      TENZIR_ASSERT(state.orig_flags >= 0);
+      ::fcntl(STDOUT_FILENO, F_SETFL, state.orig_flags);
+      state.orig_flags = -1;
+    }
+    active_ = false;
   }
 
 private:
-  int orig_flags_ = -1;
+  struct SharedState {
+    std::mutex mutex;
+    size_t refs = 0;
+    int orig_flags = -1;
+  };
+
+  static auto shared_state() -> SharedState& {
+    // Stdout flags are process-global, so overlapping `to_stdout` operators
+    // must share one ref-counted non-blocking lease.
+    static auto state = SharedState{};
+    return state;
+  }
+
+  bool active_ = false;
 };
 
 auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
