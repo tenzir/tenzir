@@ -9,8 +9,8 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
-#include <tenzir/detail/byteswap.hpp>
 #include <tenzir/async/pusher.hpp>
+#include <tenzir/detail/byteswap.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/make_byte_reader.hpp>
