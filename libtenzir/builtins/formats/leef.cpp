@@ -10,6 +10,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/pusher.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -313,8 +314,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     quoting_ = detail::quoting_escaping_policy{.unescape_operation = unescape};
-    dh_ = std::make_unique<transforming_diagnostic_handler>(
-      ctx.dh(), [this](diagnostic d) {
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
         if (args_.operator_location) {
           auto replaced_unknown_location = false;
           for (auto& annotation : d.annotations) {
@@ -355,7 +355,7 @@ public:
     if (not input or input->size() == 0) {
       co_return;
     }
-    auto& dh = *dh_;
+    auto& dh = **dh_;
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
     if (ended_on_carriage_return_ and *begin == '\n') {
@@ -390,7 +390,7 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_ASSERT(msb_);
     if (not buffer_.empty()) {
-      process_line(buffer_, *dh_);
+      process_line(buffer_, **dh_);
       buffer_.clear();
     }
     for (auto& slice : msb_->finalize_as_table_slice()) {
@@ -430,7 +430,7 @@ private:
   bool ended_on_carriage_return_ = false;
   size_t line_counter_ = 0;
   detail::quoting_escaping_policy quoting_;
-  std::unique_ptr<transforming_diagnostic_handler> dh_;
+  Option<Box<transforming_diagnostic_handler>> dh_;
   Option<multi_series_builder> msb_;
   SeriesPusher pusher_;
 };

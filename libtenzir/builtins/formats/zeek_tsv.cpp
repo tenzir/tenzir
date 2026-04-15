@@ -9,6 +9,7 @@
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/parseable/string/any.hpp"
 #include "tenzir/concept/parseable/tenzir/option_set.hpp"
@@ -796,8 +797,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    dh_ = std::make_unique<transforming_diagnostic_handler>(
-      ctx.dh(), [this](diagnostic d) {
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
         if (args_.operator_location) {
           auto replaced_unknown_location = false;
           for (auto& annotation : d.annotations) {
@@ -828,7 +828,7 @@ public:
       co_await maybe_emit_ready(push);
       co_return;
     }
-    auto& dh = *dh_;
+    auto& dh = **dh_;
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
     if (ended_on_carriage_return_ and *begin == '\n') {
@@ -869,7 +869,7 @@ public:
     }
     TENZIR_ASSERT(dh_);
     if (not buffer_.empty()) {
-      co_await process_line(buffer_, push, *dh_);
+      co_await process_line(buffer_, push, **dh_);
       buffer_.clear();
     }
     if (failed_) {
@@ -1145,7 +1145,7 @@ private:
   ReadZeekTsvArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
-  std::unique_ptr<transforming_diagnostic_handler> dh_;
+  Option<Box<transforming_diagnostic_handler>> dh_;
   zeek_log log_;
   std::chrono::steady_clock::time_point last_finish_ = {};
   size_t line_nr_ = 0;
