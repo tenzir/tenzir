@@ -1,0 +1,4 @@
+from {x: 1, msg: "alpha"}, {x: 2, msg: "beta"}
+write_parquet
+read_parquet
+summarize n=count(), total=sum(x)
