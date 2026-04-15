@@ -1,0 +1,7 @@
+{
+  client: 55.3.244.1,
+  method: "GET",
+  req: "/index.html",
+  bytes: 15824,
+  dur: 0.043,
+}

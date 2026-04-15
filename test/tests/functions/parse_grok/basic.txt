@@ -12,7 +12,7 @@
   output: null,
 }
 warning: grok parser: pattern could not be matched
- --> tests/functions/parse/parse_grok.tql:4:27
+ --> tests/functions/parse_grok/basic.tql:4:27
   |
 4 | output = input.parse_grok($pattern, pattern_definitions=$pattern_definitions)
   |                           ~~~~~~~~ 
