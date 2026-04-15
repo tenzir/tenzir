@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {foo: "needle"}
+sigma f"{env("TENZIR_INPUTS")}/sigma/basic-rule.yaml", refresh_interval=0s
