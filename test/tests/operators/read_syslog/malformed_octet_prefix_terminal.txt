@@ -1,1 +1,6 @@
-error: syslog parser: failed to parse octet-counting length prefix
+error: failed to parse octet-counting length prefix
+  --> tests/operators/read_syslog/malformed_octet_prefix_terminal.tql:14:1
+   |
+14 | read_syslog octet_counting=true
+   | ----------- 
+   |

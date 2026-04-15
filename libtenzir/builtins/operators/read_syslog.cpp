@@ -24,13 +24,12 @@ namespace {
 
 namespace syslog = tenzir::plugins::syslog;
 
-auto make_dh(diagnostic_handler& dh, location operator_location)
+auto make_dh(diagnostic_handler& dh, location operator_loc)
   -> transforming_diagnostic_handler {
   return transforming_diagnostic_handler{
-    dh, [operator_location](diagnostic d) {
-      if (operator_location != location::unknown) {
-        d.annotations.emplace_back(false, "in `read_syslog` operator",
-                                   operator_location);
+    dh, [operator_loc](diagnostic d) {
+      if (operator_loc != location::unknown) {
+        d.annotations.emplace_back(false, "", operator_loc);
       }
       return d;
     }};
