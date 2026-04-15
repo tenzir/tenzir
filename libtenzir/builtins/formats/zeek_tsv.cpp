@@ -1347,19 +1347,6 @@ public:
   }
 };
 
-class tql2_read_zeek_tsv final : public virtual OperatorPlugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.read_zeek_tsv";
-  }
-
-  auto describe() const -> Description override {
-    auto d = Describer<ReadZeekTsvArgs, ReadZeekTsv>{};
-    d.operator_location(&ReadZeekTsvArgs::operator_location);
-    return d.without_optimize();
-  }
-};
-
 class write_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_writer_adapter>,
     public virtual OperatorPlugin {
@@ -1432,5 +1419,4 @@ public:
 } // namespace tenzir::plugins::zeek_tsv
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::read_zeek_tsv)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::tql2_read_zeek_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::write_zeek_tsv)
