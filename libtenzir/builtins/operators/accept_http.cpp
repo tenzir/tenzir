@@ -632,6 +632,7 @@ public:
       [&](Noop) -> Task<void> {
         co_return;
       });
+    co_await maybe_finish_draining();
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
@@ -643,7 +644,6 @@ public:
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
     auto request_id = as<uint64_t>(key);
-    auto should_finish = false;
     {
       auto active_requests = co_await active_requests_.lock();
       auto it = active_requests->find(request_id);
@@ -653,13 +653,8 @@ public:
       // notify the handler to respond
       it->second.finished->send(200);
       active_requests->erase(request_id);
-      should_finish = lifecycle_ == Lifecycle::draining
-                      and active_requests->empty() and message_queue_->empty();
     }
-    if (should_finish) {
-      server_ = None{};
-      lifecycle_ = Lifecycle::done;
-    }
+    co_await maybe_finish_draining();
     co_return;
   }
 
@@ -706,8 +701,16 @@ private:
     if (server_) {
       (*server_)->getServer().drain();
     }
+    co_await maybe_finish_draining();
+    co_return;
+  }
+
+  auto maybe_finish_draining() -> Task<void> {
+    if (lifecycle_ != Lifecycle::draining) {
+      co_return;
+    }
     auto active_requests = co_await active_requests_.lock();
-    if (active_requests->empty()) {
+    if (active_requests->empty() and message_queue_->empty()) {
       server_ = None{};
       lifecycle_ = Lifecycle::done;
     }
