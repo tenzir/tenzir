@@ -1,0 +1,6 @@
+error: host is required
+ --> tests/operators/to_udp/validation/error_host_required.tql:5:8
+  |
+5 | to_udp ":31337", message="hello"
+  |        ^^^^^^^^ 
+  |

@@ -16,6 +16,7 @@ from . import platform_ws  # noqa: F401
 from . import http_paginate  # noqa: F401
 from . import http_server  # noqa: F401
 from . import tcp  # noqa: F401
+from . import udp  # noqa: F401
 
 __all__ = [
     "abs",
@@ -31,4 +32,5 @@ __all__ = [
     "platform_ws",
     "s3",
     "tcp",
+    "udp",
 ]
