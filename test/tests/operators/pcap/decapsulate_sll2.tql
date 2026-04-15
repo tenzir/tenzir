@@ -1,0 +1,6 @@
+// Decapsulate an SLL2 frame.
+from_file env("TENZIR_INPUTS") + "/pcap/sll2.pcap" {
+  read_pcap
+}
+this = decapsulate(this)
+write_ndjson
