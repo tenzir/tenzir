@@ -1,0 +1,11 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        body: "hello-�-�"
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_BODY_URL"), method="post", body=b"hello-\xff-\xfe", tls=false {
+  read_json
+}
