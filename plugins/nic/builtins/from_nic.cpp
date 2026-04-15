@@ -36,6 +36,10 @@ namespace tenzir::plugins::nic {
 namespace {
 
 constexpr auto queue_capacity = uint32_t{16};
+// Bound synchronous libpcap work per EventBase turn so one hot NIC does not
+// monopolize the shared IO executor. If a dispatch saturates this limit, we
+// reschedule ourselves immediately to continue draining.
+constexpr auto dispatch_packet_limit = size_t{1024};
 
 using ChunkQueue = folly::coro::BoundedQueue<chunk_ptr>;
 using PcapHandle = std::unique_ptr<pcap_t, decltype(&pcap_close)>;
@@ -138,6 +142,9 @@ public:
       buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
       header_written_ = true;
     }
+    if (not batch_started_at_) {
+      batch_started_at_ = std::chrono::steady_clock::now();
+    }
     auto header = pcap::packet_header{
       .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr.ts.tv_sec),
       .timestamp_fraction = detail::narrow_cast<uint32_t>(pkt_hdr.ts.tv_usec),
@@ -159,6 +166,17 @@ public:
     return chunk_ptr{};
   }
 
+  auto flush_if_ready(std::chrono::steady_clock::time_point now) -> chunk_ptr {
+    // Match series_builder::yield_ready() semantics: once we buffer the first
+    // packet of a batch, the timeout is measured from that oldest buffered
+    // packet rather than being reset by later arrivals.
+    if (not batch_started_at_
+        or *batch_started_at_ + defaults::import::batch_timeout > now) {
+      return chunk_ptr{};
+    }
+    return flush();
+  }
+
   auto flush() -> chunk_ptr {
     if (num_buffered_packets_ == 0) {
       return chunk_ptr{};
@@ -166,11 +184,8 @@ public:
     auto result = chunk::make(std::move(buffer_), metadata_);
     buffer_.clear();
     num_buffered_packets_ = 0;
+    batch_started_at_ = None{};
     return result;
-  }
-
-  auto empty() const -> bool {
-    return num_buffered_packets_ == 0;
   }
 
 private:
@@ -178,6 +193,7 @@ private:
   int linktype_ = 0;
   chunk_metadata metadata_;
   std::vector<std::byte> buffer_;
+  Option<std::chrono::steady_clock::time_point> batch_started_at_ = None{};
   size_t num_buffered_packets_ = 0;
   bool header_written_ = false;
 };
@@ -324,7 +340,6 @@ public:
       done_ = true;
       co_return;
     }
-    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
     auto snaplen
       = args_.snaplen ? args_.snaplen->inner : uint64_t{pcap::maximum_snaplen};
     auto capture_snaplen = detail::narrow_cast<uint32_t>(snaplen);
@@ -334,6 +349,7 @@ public:
       done_ = true;
       co_return;
     }
+    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();
     ctx.spawn_task(folly::coro::co_withExecutor(
@@ -402,22 +418,16 @@ private:
     };
     auto wakeup = PcapWakeup{evb, setup.poll_interval, setup.selectable_fd};
     auto builder = CaptureChunkBuilder{snaplen, setup.linktype};
-    auto last_packet_at = Option<std::chrono::steady_clock::time_point>{};
     while (true) {
       co_await wakeup.wait();
       auto now = std::chrono::steady_clock::now();
-      if (last_packet_at
-          and *last_packet_at + defaults::import::batch_timeout < now) {
-        if (auto chunk = builder.flush()) {
-          last_packet_at = None{};
-          co_await queue->enqueue(std::move(chunk));
-        }
+      if (auto chunk = builder.flush_if_ready(now)) {
+        co_await queue->enqueue(std::move(chunk));
       }
       auto state = DispatchState{};
       auto callback_state = std::pair{&builder, &state};
       auto result = ::pcap_dispatch(
-        setup.pcap.get(),
-        detail::narrow_cast<int>(defaults::import::table_slice_size),
+        setup.pcap.get(), detail::narrow_cast<int>(dispatch_packet_limit),
         &dispatch_packets, reinterpret_cast<u_char*>(&callback_state));
       if (state.ready_chunk) {
         co_await queue->enqueue(std::move(state.ready_chunk));
@@ -443,12 +453,12 @@ private:
         co_return;
       }
       TENZIR_ASSERT(result > 0);
-      if (builder.empty()) {
-        last_packet_at = None{};
+      if (result == detail::narrow_cast<int>(dispatch_packet_limit)) {
+        wakeup.kick();
+        co_await folly::coro::co_reschedule_on_current_executor;
       } else {
-        last_packet_at = std::chrono::steady_clock::now();
+        co_await folly::coro::co_safe_point;
       }
-      co_await folly::coro::co_safe_point;
     }
   }
 
