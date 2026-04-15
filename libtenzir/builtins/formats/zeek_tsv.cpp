@@ -839,6 +839,7 @@ public:
       if (*current != '\n' and *current != '\r') {
         continue;
       }
+      co_await maybe_emit_ready(push);
       if (buffer_.empty()) {
         co_await process_line({begin, current}, push, dh);
       } else {
@@ -1049,7 +1050,6 @@ private:
         .emit(dh);
     }
     log_.event = {};
-    co_await maybe_emit_ready(push);
   }
 
   auto ensure_log_builder(diagnostic_handler& dh) -> bool {
