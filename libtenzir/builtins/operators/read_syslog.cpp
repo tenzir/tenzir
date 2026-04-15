@@ -28,6 +28,7 @@ struct ReadSyslogArgs {
   bool octet_counting = false;
   Option<ast::field_path> raw_message;
   multi_series_builder::options msb_options;
+  location operator_location = location::unknown;
 };
 
 class ReadSyslog final : public Operator<chunk_ptr, table_slice> {
@@ -147,13 +148,17 @@ private:
   struct PeriodicTick {};
 
   // Returns a stable reference to the transforming diagnostic handler.
-  // The handler wraps `dh` with a "syslog parser: " prefix on every message.
+  // The handler adds the operator invocation location to diagnostics.
   // It is created lazily and reused across calls (the underlying `dh`
   // reference is stable for the operator's lifetime).
   auto make_dh(diagnostic_handler& dh) -> transforming_diagnostic_handler& {
     if (not transforming_dh_) {
-      transforming_dh_.emplace(dh, [](diagnostic d) {
-        d.message = fmt::format("syslog parser: {}", d.message);
+      auto const op_loc = args_.operator_location;
+      transforming_dh_.emplace(dh, [op_loc](diagnostic d) {
+        if (op_loc != location::unknown) {
+          d.annotations.emplace_back(false, "in `read_syslog` operator",
+                                     op_loc);
+        }
         return d;
       });
     }
@@ -430,6 +435,7 @@ public:
     auto d = Describer<ReadSyslogArgs, ReadSyslog>{};
     d.named("octet_counting", &ReadSyslogArgs::octet_counting);
     d.named("raw_message", &ReadSyslogArgs::raw_message);
+    d.operator_location(&ReadSyslogArgs::operator_location);
     d.validate(add_msb_to_describer(d, &ReadSyslogArgs::msb_options));
     return d.without_optimize();
   }
