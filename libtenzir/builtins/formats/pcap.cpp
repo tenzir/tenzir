@@ -740,17 +740,20 @@ public:
       TENZIR_DEBUG("got new PCAP file header");
       if (auto header = make_file_header(input)) {
         current_file_header_ = *header;
+        co_await push(chunk::copy(as_bytes(*current_file_header_), metadata_));
       } else {
         diagnostic::warning("failed to parse PCAP file header").emit(ctx.dh());
       }
       co_return;
     }
     auto buffer = std::vector<std::byte>{};
+    auto emit_file_header = false;
     auto process_packet_row = [&](auto row) -> bool {
       auto [pkt, linktype] = to_packet_record(row);
       if (not current_file_header_) {
         TENZIR_DEBUG("generating PCAP file header");
         current_file_header_ = make_file_header(linktype);
+        emit_file_header = true;
       } else if (linktype != current_file_header_->linktype) {
         diagnostic::error("packet linktype doesn't match file header")
           .emit(ctx.dh());
@@ -809,11 +812,10 @@ public:
     if (buffer.empty()) {
       co_return;
     }
-    if (not file_header_printed_) {
-      TENZIR_DEBUG("emitting PCAP file header");
+    if (emit_file_header) {
+      TENZIR_DEBUG("emitting generated PCAP file header");
       TENZIR_ASSERT(current_file_header_);
       co_await push(chunk::copy(as_bytes(*current_file_header_), metadata_));
-      file_header_printed_ = true;
     }
     co_await push(chunk::make(std::move(buffer), metadata_));
   }
@@ -821,7 +823,6 @@ public:
 private:
   chunk_metadata metadata_{.content_type = std::string{pcap::content_type}};
   std::optional<file_header> current_file_header_;
-  bool file_header_printed_ = false;
   bool failed_ = false;
 };
 

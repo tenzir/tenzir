@@ -1,0 +1,6 @@
+shell f"cat {env("TENZIR_INPUTS")}/pcap/vlan-*.pcap"
+read_pcap emit_file_headers=true
+write_pcap
+read_pcap emit_file_headers=true
+drop data?
+write_ndjson

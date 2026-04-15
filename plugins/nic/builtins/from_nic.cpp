@@ -240,6 +240,7 @@ private:
       pcap_pkthdr* pkt_hdr = nullptr;
       auto result = ::pcap_next_ex(pcap.get(), &pkt_hdr, &pkt_data);
       if (result == 0) {
+        co_await folly::coro::co_safe_point;
         continue;
       }
       if (result == -2) {
