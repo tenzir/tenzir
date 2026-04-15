@@ -907,11 +907,23 @@ private:
   }
 
   auto maybe_emit_ready(Push<table_slice>& push) -> Task<void> {
+    if (not log_.builder) {
+      co_return;
+    }
     auto const now = std::chrono::steady_clock::now();
-    if (log_.builder
-        and (log_.builder->length() >= detail::narrow_cast<int64_t>(
-               defaults::import::table_slice_size)
-             or last_finish_ + defaults::import::batch_timeout < now)) {
+    auto const rows = log_.builder->length();
+    auto const ready = rows >= detail::narrow_cast<int64_t>(
+                              defaults::import::table_slice_size);
+    auto const timed_out
+      = last_finish_ + defaults::import::batch_timeout < now;
+    if (not ready and not timed_out) {
+      co_return;
+    }
+    // Keep the batching deadline moving even if there is nothing to emit yet.
+    if (timed_out) {
+      last_finish_ = now;
+    }
+    if (rows > 0) {
       co_await emit_finished(push);
     }
   }
