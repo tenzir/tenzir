@@ -126,6 +126,11 @@ jobs:
           rm -rf ~/.cargo ~/go ~/.cache
           cd /opt
           find . -maxdepth 1 -mindepth 1 '!' -path ./containerd '!' -path ./actionarchivecache '!' -path ./runner '!' -path ./runner-cache -exec rm -rf '{}' ';'
+      - name: Configure Google DNS
+        run: |
+          # Work around intermittent DNS resolution failures in CI by
+          # prepending Google's public DNS servers to resolv.conf.
+          sudo sed -i '1s/^/nameserver 8.8.8.8\nnameserver 8.8.4.4\n/' /etc/resolv.conf
       - name: Build Docker Images
         id: build-images
         env:
@@ -148,6 +153,8 @@ jobs:
               --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
               --cache-from "${CACHE_REF}" \
               --cache-to "${CACHE_REF}" \
+              --dns 8.8.8.8 \
+              --dns 8.8.4.4 \
               --tag "img"
             image="${registry}/tenzir/${name}:${source_tag}-${{ inputs.arch }}"
             buildah push img "${image}"
