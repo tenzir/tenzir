@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <ranges>
 #include <span>
+#include <tuple>
 
 namespace caf {
 template <>
@@ -60,6 +61,15 @@ namespace {
 constexpr std::string_view builtin_patterns_strings[] =
 #include "./grok-patterns/patterns.inc"
   ;
+
+auto has_location(diagnostic const& diag) -> bool {
+  for (auto const& annotation : diag.annotations) {
+    if (annotation.source != location::unknown) {
+      return true;
+    }
+  }
+  return false;
+}
 
 enum class capture_type {
   // The three options below (string, int, float)
@@ -755,6 +765,7 @@ auto make_grok_parser(located<std::string> pattern,
 }
 
 struct ReadGrokArgs {
+  location operator_location = location::unknown;
   located<std::string> pattern;
   Option<located<data>> pattern_definitions;
   bool indexed_captures = false;
@@ -780,8 +791,10 @@ public:
     if (not parser) {
       co_return;
     }
-    dh_.emplace(ctx.dh(), [](diagnostic diag) {
-      diag.message = fmt::format("grok parser: {}", diag.message);
+    dh_.emplace(ctx.dh(), [loc = args_.operator_location](diagnostic diag) {
+      if (not has_location(diag)) {
+        diag.annotations.emplace_back(true, std::string{}, loc);
+      }
       return diag;
     });
     parser_.emplace(std::move(*parser));
@@ -795,9 +808,7 @@ public:
 
   auto process_task(Any, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (not builder_) {
-      co_return;
-    }
+    TENZIR_ASSERT(builder_);
     co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
@@ -817,7 +828,6 @@ public:
       if (*current != '\n' and *current != '\r') {
         continue;
       }
-      co_await pusher_.push(builder_->yield_ready_as_table_slice(now), push);
       if (buffer_.empty()) {
         process_line({begin, current});
       } else {
@@ -825,6 +835,7 @@ public:
         process_line(buffer_);
         buffer_.clear();
       }
+      co_await pusher_.push(builder_->yield_ready_as_table_slice(now), push);
       if (*current == '\r') {
         if (current + 1 == end) {
           ended_on_carriage_return_ = true;
@@ -855,9 +866,7 @@ public:
 
   auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (not builder_) {
-      co_return;
-    }
+    TENZIR_ASSERT(builder_);
     for (auto& slice : builder_->finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
@@ -899,6 +908,7 @@ public:
     auto defaults = ReadGrokArgs{};
     defaults.msb_options.settings.default_schema_name = "tenzir.grok";
     auto d = Describer<ReadGrokArgs, ReadGrok>{std::move(defaults)};
+    d.operator_location(&ReadGrokArgs::operator_location);
     auto pattern = d.positional("pattern", &ReadGrokArgs::pattern);
     auto pattern_definitions = d.named("pattern_definitions",
                                        &ReadGrokArgs::pattern_definitions,
@@ -916,15 +926,13 @@ public:
       }
       auto opts = multi_series_builder::options{};
       opts.settings.default_schema_name = "tenzir.grok";
-      if (auto result = make_grok_parser(
-            *grok_pattern,
-            ctx.get(pattern_definitions),
-            ctx.get(indexed_captures).value_or(false),
-            ctx.get(include_unnamed).value_or(false),
-            std::move(opts),
-            ctx);
-          not result) {
-      }
+      std::ignore = make_grok_parser(
+        *grok_pattern,
+        ctx.get(pattern_definitions),
+        ctx.get(indexed_captures).value_or(false),
+        ctx.get(include_unnamed).value_or(false),
+        std::move(opts),
+        ctx);
       return {};
     });
     return d.without_optimize();
