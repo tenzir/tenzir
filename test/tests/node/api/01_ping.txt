@@ -1,0 +1,3 @@
+{
+  has_version: true,
+}
