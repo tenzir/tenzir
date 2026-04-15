@@ -396,7 +396,6 @@ public:
       if (*current != '\n' and *current != '\r') {
         continue;
       }
-      co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
       if (buffer_.empty()) {
         process_line({begin, current}, dh);
       } else {
@@ -544,6 +543,13 @@ public:
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<cef_parser>>(
       cef_parser{std::move(opts)});
+  }
+
+  auto read_properties() const -> read_properties_t override {
+    return {
+      .extensions = {"cef"},
+      .mime_types = {"application/x-cef"},
+    };
   }
 };
 class parse_cef final : public virtual function_plugin {

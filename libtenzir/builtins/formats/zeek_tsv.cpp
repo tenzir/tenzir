@@ -34,6 +34,7 @@
 #include "tenzir/view.hpp"
 
 #include <arrow/record_batch.h>
+#include <arrow/util/utf8.h>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/none.hpp>
@@ -112,14 +113,17 @@ struct zeek_parser<string_type> {
   auto operator()(const string_type&, char separator,
                   const std::string& set_separator) const
     -> rule<std::string_view::const_iterator, std::string> {
+    auto decode = [](std::string x) {
+      auto unescaped = detail::byte_unescape(x);
+      if (arrow::util::ValidateUTF8(unescaped)) {
+        return unescaped;
+      }
+      return detail::byte_escape(x);
+    };
     if (set_separator.empty()) {
-      return (+(parsers::any - separator)).then([](std::string x) {
-        return detail::byte_unescape(x);
-      });
+      return (+(parsers::any - separator)).then(decode);
     }
-    return (+(parsers::any - separator - set_separator)).then([](std::string x) {
-      return detail::byte_unescape(x);
-    });
+    return (+(parsers::any - separator - set_separator)).then(decode);
   }
 };
 
@@ -476,7 +480,7 @@ struct zeek_printer {
   bool disable_timestamp_tags{false};
 };
 
-struct zeek_log {
+struct zeek_log_state {
   /// Optional metadata.
   char separator = '\t';
   std::string set_separator = ",";
@@ -488,46 +492,6 @@ struct zeek_log {
   std::vector<std::string> fields = {};
   std::vector<std::string> types = {};
 
-  /// A builder generated from the above metadata.
-  std::optional<series_builder> builder = {};
-  std::optional<record_ref> event = {};
-  std::vector<rule<std::string_view::const_iterator, bool>> parsers = {};
-  type target_schema = {};
-};
-
-struct zeek_log_state {
-  char separator = '\t';
-  std::string set_separator = ",";
-  std::string empty_field = "(empty)";
-  std::string unset_field = "-";
-  std::string path = {};
-  std::vector<std::string> fields = {};
-  std::vector<std::string> types = {};
-
-  static auto from(zeek_log const& log) -> zeek_log_state {
-    return {
-      .separator = log.separator,
-      .set_separator = log.set_separator,
-      .empty_field = log.empty_field,
-      .unset_field = log.unset_field,
-      .path = log.path,
-      .fields = log.fields,
-      .types = log.types,
-    };
-  }
-
-  auto into_log() && -> zeek_log {
-    auto result = zeek_log{};
-    result.separator = separator;
-    result.set_separator = std::move(set_separator);
-    result.empty_field = std::move(empty_field);
-    result.unset_field = std::move(unset_field);
-    result.path = std::move(path);
-    result.fields = std::move(fields);
-    result.types = std::move(types);
-    return result;
-  }
-
   friend auto inspect(auto& f, zeek_log_state& x) -> bool {
     return f.object(x).fields(
       f.field("separator", x.separator),
@@ -536,6 +500,14 @@ struct zeek_log_state {
       f.field("unset_field", x.unset_field), f.field("path", x.path),
       f.field("fields", x.fields), f.field("types", x.types));
   }
+};
+
+struct zeek_log : zeek_log_state {
+  /// A builder generated from the above metadata.
+  std::optional<series_builder> builder = {};
+  std::optional<record_ref> event = {};
+  std::vector<rule<std::string_view::const_iterator, bool>> parsers = {};
+  type target_schema = {};
 };
 
 auto parser_impl(generator<std::optional<std::string_view>> lines,
@@ -808,6 +780,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
 }
 
 struct ReadZeekTsvArgs {
+  location operator_location = location::unknown;
 };
 
 struct WriteZeekTsvArgs {
@@ -819,23 +792,43 @@ struct WriteZeekTsvArgs {
 
 class ReadZeekTsv final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadZeekTsv(ReadZeekTsvArgs) {
+  explicit ReadZeekTsv(ReadZeekTsvArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx&) -> Task<void> override {
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_ = std::make_unique<transforming_diagnostic_handler>(
+      ctx.dh(), [this](diagnostic d) {
+        if (args_.operator_location) {
+          auto replaced_unknown_location = false;
+          for (auto& annotation : d.annotations) {
+            if (annotation.source) {
+              continue;
+            }
+            annotation.source = args_.operator_location;
+            replaced_unknown_location = true;
+          }
+          if (not replaced_unknown_location and d.annotations.empty()) {
+            d.annotations.emplace(d.annotations.begin(), true, "",
+                                  args_.operator_location);
+          }
+        }
+        return d;
+      });
     last_finish_ = std::chrono::steady_clock::now();
     co_return;
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     if (failed_) {
       co_return;
     }
+    TENZIR_ASSERT(dh_);
     if (not input or input->size() == 0) {
       co_await maybe_emit_ready(push);
       co_return;
     }
+    auto& dh = *dh_;
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
     if (ended_on_carriage_return_ and *begin == '\n') {
@@ -846,12 +839,11 @@ public:
       if (*current != '\n' and *current != '\r') {
         continue;
       }
-      co_await maybe_emit_ready(push);
       if (buffer_.empty()) {
-        co_await process_line({begin, current}, push, ctx.dh());
+        co_await process_line({begin, current}, push, dh);
       } else {
         buffer_.append(begin, current);
-        co_await process_line(buffer_, push, ctx.dh());
+        co_await process_line(buffer_, push, dh);
         buffer_.clear();
       }
       if (failed_) {
@@ -870,13 +862,14 @@ public:
     co_await maybe_emit_ready(push);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
     if (failed_) {
       co_return FinalizeBehavior::done;
     }
+    TENZIR_ASSERT(dh_);
     if (not buffer_.empty()) {
-      co_await process_line(buffer_, push, ctx.dh());
+      co_await process_line(buffer_, push, *dh_);
       buffer_.clear();
     }
     if (failed_) {
@@ -899,11 +892,8 @@ public:
     serde("line_nr", line_nr_);
     serde("failed", failed_);
     serde("log_has_body", log_has_body_);
-    auto log_state = zeek_log_state::from(log_);
+    auto& log_state = static_cast<zeek_log_state&>(log_);
     serde("log", log_state);
-    if (not log_.builder) {
-      log_ = std::move(log_state).into_log();
-    }
   }
 
 private:
@@ -1152,8 +1142,10 @@ private:
     return true;
   }
 
+  ReadZeekTsvArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
+  std::unique_ptr<transforming_diagnostic_handler> dh_;
   zeek_log log_;
   std::chrono::steady_clock::time_point last_finish_ = {};
   size_t line_nr_ = 0;
@@ -1337,6 +1329,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReadZeekTsvArgs, ReadZeekTsv>{};
+    d.operator_location(&ReadZeekTsvArgs::operator_location);
     return d.without_optimize();
   }
 
@@ -1344,6 +1337,26 @@ public:
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<zeek_tsv_parser_adapter>();
+  }
+
+  auto read_properties() const -> read_properties_t override {
+    return {
+      .extensions = {"zeek"},
+      .mime_types = {"application/x-zeek"},
+    };
+  }
+};
+
+class tql2_read_zeek_tsv final : public virtual OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.read_zeek_tsv";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadZeekTsvArgs, ReadZeekTsv>{};
+    d.operator_location(&ReadZeekTsvArgs::operator_location);
+    return d.without_optimize();
   }
 };
 
@@ -1419,4 +1432,5 @@ public:
 } // namespace tenzir::plugins::zeek_tsv
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::read_zeek_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::tql2_read_zeek_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::write_zeek_tsv)
