@@ -22,7 +22,6 @@
 #include <folly/coro/Baton.h>
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cstring>
 #include <limits>
@@ -169,26 +168,6 @@ auto local_forward_result(std::string_view hostname,
   -> Option<ForwardDnsResult> {
   if (auto parsed = to<ip>(std::string{hostname})) {
     return make_forward_literal_result(*parsed, std::string{hostname}, config);
-  }
-  if (hostname == "localhost") {
-    auto result = ForwardDnsResult{
-      .status = ForwardDnsStatus::resolved,
-      .canonical_name = std::string{"localhost"},
-    };
-    auto loopback_v4 = std::array<uint8_t, 4>{127, 0, 0, 1};
-    result.answers.push_back(ForwardDnsAnswer{
-      .address = ip::v4(std::span{loopback_v4}),
-      .type = "A",
-      .ttl = config.literal_ttl,
-    });
-    auto loopback_v6 = std::array<uint8_t, 16>{};
-    loopback_v6.back() = 1;
-    result.answers.push_back(ForwardDnsAnswer{
-      .address = ip::v6(std::span{loopback_v6}),
-      .type = "AAAA",
-      .ttl = config.literal_ttl,
-    });
-    return result;
   }
   return None{};
 }

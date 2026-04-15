@@ -105,6 +105,11 @@ auto make_peer_info(folly::SocketAddress const& address) -> PeerInfo {
   };
 }
 
+auto resolve_peer_hostname(Arc<ReverseDnsResolver> resolver, ip address)
+  -> Task<ReverseDnsResult> {
+  co_return co_await resolver->resolve(address);
+}
+
 class AcceptTcpListener final : public Operator<void, table_slice> {
 public:
   using Connection = Arc<folly::coro::Transport>;
@@ -136,9 +141,11 @@ public:
     : args_{std::move(args)},
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
-      reverse_dns_{ReverseDnsConfig{
-        .max_in_flight = detail::narrow<size_t>(max_connections_),
-      }},
+      reverse_dns_{std::in_place,
+                   ReverseDnsConfig{
+                     .max_in_flight
+                     = detail::narrow<size_t>(max_connections_),
+                   }},
       connection_slots_{detail::narrow<size_t>(max_connections_)} {
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
@@ -487,7 +494,8 @@ private:
       try {
         peer_reverse_dns = co_await folly::coro::co_withCancellation(
           accept_cancel_->getToken(),
-          folly::coro::detachOnCancel(reverse_dns_.resolve(peer_info.address)));
+          folly::coro::detachOnCancel(resolve_peer_hostname(
+            reverse_dns_, peer_info.address)));
       } catch (folly::OperationCancelled const&) {
         close_transport(std::move(transport));
         co_return;
@@ -583,7 +591,7 @@ private:
   std::string bind_host_;
   uint16_t bind_port_ = 0;
   ForwardDnsResolver forward_dns_;
-  ReverseDnsResolver reverse_dns_;
+  Arc<ReverseDnsResolver> reverse_dns_;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Semaphore connection_slots_;
