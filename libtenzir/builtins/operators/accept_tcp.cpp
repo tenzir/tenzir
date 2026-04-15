@@ -451,6 +451,10 @@ private:
         co_return;
       }
     }
+    if (accept_cancel_->getToken().isCancellationRequested()) {
+      close_transport(std::move(transport));
+      co_return;
+    }
     auto peer_info = make_peer_info(peer);
     auto peer_reverse_dns = ReverseDnsResult{};
     if (args_.resolve_hostnames) {
