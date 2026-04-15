@@ -67,7 +67,7 @@ public:
   }
 
   auto to_string() const
-    requires detail::can_stringify<T> || fmt::is_formattable<T>::value
+    requires detail::can_stringify<T> or fmt::is_formattable<T>::value
   {
     if constexpr (detail::can_stringify<T>) {
       return detail::stringify(inner_);
@@ -109,7 +109,7 @@ struct fmt::formatter<T> {
         return ++it;
       } else if (*it == '#') {
         auto next = std::next(it);
-        if (next != ctx.end() && *next == '?') {
+        if (next != ctx.end() and *next == '?') {
           mode = pretty_debug;
           return ++next;
         }

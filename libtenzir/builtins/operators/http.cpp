@@ -80,7 +80,7 @@ auto ensure_host_header(std::unordered_map<std::string, std::string>& headers,
   }
   auto host = std::string{};
   auto* addr = std::get_if<caf::ip_address>(&uri.authority().host);
-  if (addr && ! addr->embeds_v4()) {
+  if (addr and not addr->embeds_v4()) {
     host += '[';
     host += to_string(*addr);
     host += ']';
@@ -995,7 +995,7 @@ struct from_http_args {
       return {};
     };
     const auto check_options = [&](bool is_server, const auto&... xs) {
-      return (check_option(is_server, xs).is_success() && ...);
+      return (check_option(is_server, xs).is_success() and ...);
     };
     if (server) {
       check_options(true, method, body, encode, headers, error_field, paginate,
@@ -1804,6 +1804,12 @@ struct from_http final : public virtual operator_factory_plugin {
     TRY(args.paginate, validate_paginate(std::move(args.paginate_expr), ctx));
     TRY(args.validate(ctx));
     warn_deprecated_payload(inv, ctx);
+    if (args.server) {
+      diagnostic::warning("`server` option is deprecated")
+        .primary(*args.server)
+        .hint("use `accept_http` instead of `from_http server=true`")
+        .emit(ctx);
+    }
     // Check if the subpipeline is a sink
     bool subpipeline_is_sink = false;
     if (args.parse) {
@@ -1838,6 +1844,62 @@ struct from_http final : public virtual operator_factory_plugin {
   auto load_properties() const -> load_properties_t override {
     return {
       .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("read_json"),
+      .accepts_pipeline = true,
+      .events = true,
+    };
+  }
+};
+
+struct accept_http final : public virtual operator_factory_plugin {
+  auto name() const -> std::string override {
+    return "tql2.accept_http";
+  }
+
+  auto make(operator_factory_invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = from_http_args{};
+    args.op = inv.self.get_location();
+    auto p = argument_parser2::operator_(name());
+    // Register only server-relevant arguments. The `server` flag itself is
+    // not exposed because `accept_http` implies server mode.
+    p.positional("url", args.url);
+    p.named("metadata_field", args.metadata_field);
+    p.named("responses", args.responses);
+    p.named("max_request_size", args.max_request_size);
+    p.named("max_connections", args.max_connections);
+    args.ssl.add_tls_options(p);
+    p.positional("{ … }", args.parse);
+    TRY(p.parse(inv, ctx));
+    // Force server mode.
+    args.server = inv.self.get_location();
+    TRY(args.validate(ctx));
+    // Check if the subpipeline is a sink
+    bool subpipeline_is_sink = false;
+    if (args.parse) {
+      auto ty = args.parse->inner.infer_type(tag_v<chunk_ptr>);
+      if (ty and ty->is<void>()) {
+        subpipeline_is_sink = true;
+      }
+    }
+    auto op = operator_ptr{};
+    op = std::make_unique<from_http_server_operator>(std::move(args));
+    if (subpipeline_is_sink) {
+      auto pipe = std::make_unique<pipeline>();
+      pipe->append(std::move(op));
+      const auto* discard_plugin
+        = plugins::find<operator_factory_plugin>("discard");
+      TENZIR_ASSERT(discard_plugin);
+      TRY(auto discard_op, discard_plugin->make({inv.self, {}}, ctx));
+      pipe->append(std::move(discard_op));
+      return pipe;
+    }
+    return op;
+  }
+
+  auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {},
       .default_format = plugins::find<operator_factory_plugin>("read_json"),
       .accepts_pipeline = true,
       .events = true,
@@ -2588,6 +2650,7 @@ using from_http_server = operator_inspection_plugin<from_http_server_operator>;
 } // namespace tenzir::plugins::http
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::accept_http)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_client)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_server)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::http_plugin)

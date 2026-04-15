@@ -32,7 +32,7 @@ signal_reflector_actor::behavior_type signal_reflector(
       auto sigset = termsigset();
       pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
       // If no actor registered itself we emulate the default behavior.
-      if (!self->state().handler) {
+      if (not self->state().handler) {
         if (raise(signum) != 0) {
           // We don't want a backtrace when we get here.
           std::signal(SIGABRT, SIG_DFL); // NOLINT

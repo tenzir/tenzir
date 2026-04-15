@@ -155,7 +155,7 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
 
 template <class T>
   requires(std::is_same_v<T, struct enumeration_type::field> //
-           || std::is_same_v<T, enumeration_type::field_view>)
+           or std::is_same_v<T, enumeration_type::field_view>)
 void construct_enumeration_type(stateful_type_base& self, const T* begin,
                                 const T* end) {
   TENZIR_ASSERT(begin != end, "An enumeration type must not have zero "
@@ -252,7 +252,7 @@ type enrich_type_with_arrow_metadata(class type type,
     auto doc = parser.parse(json);
     std::vector<std::pair<std::string, std::string>> attributes{};
     for (auto f : doc.get_object()) {
-      if (! f.value.is_string()) {
+      if (not f.value.is_string()) {
         TENZIR_WARN("ignoring non-string Arrow metadata: {}",
                     simdjson::to_string(f));
         continue;
@@ -341,7 +341,7 @@ type::type(flatbuffer<fbs::Type>&& fb) noexcept : type(std::move(fb).chunk()) {
 
 type::type(std::string_view name, const type& nested,
            std::vector<attribute_view>&& attributes) noexcept {
-  if (name.empty() && attributes.empty()) {
+  if (name.empty() and attributes.empty()) {
     // This special case fbs::type::Type::exists for easier conversion of legacy
     // types, which did not require an legacy alias type wrapping to have a name.
     *this = nested;
@@ -431,7 +431,7 @@ std::optional<type> type::infer(const data& value) noexcept {
     type first_inferred{};
     auto it = list.begin();
     for (; it != list.end(); ++it) {
-      if (auto inferred = infer(*it); ! inferred) {
+      if (auto inferred = infer(*it); not inferred) {
         return std::nullopt;
       } else if (*inferred) {
         first_inferred = std::move(*inferred);
@@ -442,9 +442,9 @@ std::optional<type> type::infer(const data& value) noexcept {
     // Then, compare the remaining elements to find if they are either null,
     // or the same as the first non-null element
     for (; it != list.end(); ++it) {
-      if (auto inferred = infer(*it); ! inferred) {
+      if (auto inferred = infer(*it); not inferred) {
         return std::nullopt;
-      } else if (*inferred && *inferred != first_inferred) {
+      } else if (*inferred and *inferred != first_inferred) {
         return std::nullopt;
       }
     }
@@ -496,7 +496,7 @@ std::optional<type> type::infer(const data& value) noexcept {
       return std::nullopt;
     },
     [&](const list& list) noexcept -> std::optional<type> {
-      if (auto elem_type = infer_list_element_type(list); ! elem_type) {
+      if (auto elem_type = infer_list_element_type(list); not elem_type) {
         return std::nullopt;
       } else {
         return type{list_type{*elem_type}};
@@ -505,7 +505,7 @@ std::optional<type> type::infer(const data& value) noexcept {
     [&](const map& map) noexcept -> std::optional<type> {
       auto key_type = infer_list_element_type(map | std::views::keys);
       auto value_type = infer_list_element_type(map | std::views::values);
-      if (! key_type || ! value_type) {
+      if (not key_type or not value_type) {
         return std::nullopt;
       }
       return type{map_type{*key_type, *value_type}};
@@ -518,7 +518,7 @@ std::optional<type> type::infer(const data& value) noexcept {
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
       for (const auto& field : record) {
-        if (auto inferred = infer(field.second); ! inferred) {
+        if (auto inferred = infer(field.second); not inferred) {
           return std::nullopt;
         } else {
           fields.push_back({field.first, *inferred});
@@ -678,7 +678,7 @@ legacy_type type::to_legacy_type() const noexcept {
       }
       return result;
     });
-  if (! name().empty()) {
+  if (not name().empty()) {
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
   }
   for (const auto& attribute : attributes()) {
@@ -728,10 +728,10 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
   // once that is implemented for all compilers we need to support. This does
   // the same thing essentially, just a lot less generic.
   if (lhs_bytes.data() == rhs_bytes.data()
-      && lhs_bytes.size() == rhs_bytes.size()) {
+      and lhs_bytes.size() == rhs_bytes.size()) {
     return std::strong_ordering::equal;
   }
-  while (! lhs_bytes.empty() && ! rhs_bytes.empty()) {
+  while (not lhs_bytes.empty() and not rhs_bytes.empty()) {
     if (lhs_bytes[0] < rhs_bytes[0]) {
       return std::strong_ordering::less;
     }
@@ -741,9 +741,9 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
     lhs_bytes = lhs_bytes.subspan(1);
     rhs_bytes = rhs_bytes.subspan(1);
   }
-  return ! lhs_bytes.empty()   ? std::strong_ordering::greater
-         : ! rhs_bytes.empty() ? std::strong_ordering::less
-                               : std::strong_ordering::equivalent;
+  return not lhs_bytes.empty()   ? std::strong_ordering::greater
+         : not rhs_bytes.empty() ? std::strong_ordering::less
+                                 : std::strong_ordering::equivalent;
 }
 
 uint8_t type::type_index() const noexcept {
@@ -1263,7 +1263,7 @@ type::attributes(type::recurse recurse) const& noexcept {
         if (const auto* attributes = enriched_type->attributes()) {
           for (const auto& attribute : *attributes) {
             if (attribute->value() != nullptr
-                && attribute->value()->begin() != attribute->value()->end()) {
+                and attribute->value()->begin() != attribute->value()->end()) {
               co_yield {attribute->key()->string_view(),
                         attribute->value()->string_view()};
             } else {
@@ -1345,14 +1345,14 @@ bool congruent(const type& x, const type& y) noexcept {
     },
     [](const map_type& x, const map_type& y) noexcept {
       return congruent(x.key_type(), y.key_type())
-             && congruent(x.value_type(), y.value_type());
+             and congruent(x.value_type(), y.value_type());
     },
     [](const record_type& x, const record_type& y) noexcept {
       if (x.num_fields() != y.num_fields()) {
         return false;
       }
       for (size_t i = 0; i < x.num_fields(); ++i) {
-        if (! congruent(x.field(i).type, y.field(i).type)) {
+        if (not congruent(x.field(i).type, y.field(i).type)) {
           return false;
         }
       }
@@ -1363,8 +1363,8 @@ bool congruent(const type& x, const type& y) noexcept {
                                                "complex type");
     },
     []<concrete_type T, concrete_type U>(const T&, const U&) noexcept {
-      return std::is_same_v<T, U> || std::is_same_v<T, null_type>
-             || std::is_same_v<U, null_type>;
+      return std::is_same_v<T, U> or std::is_same_v<T, null_type>
+             or std::is_same_v<U, null_type>;
     },
   }; // namespace tenzir
   return match(std::tie(x, y), f);
@@ -1419,7 +1419,7 @@ bool congruent(const type& x, const data& y) noexcept {
         return false;
       }
       for (size_t i = 0; i < x.num_fields(); ++i) {
-        if (! congruent(x.field(i).type, y[i])) {
+        if (not congruent(x.field(i).type, y[i])) {
           return false;
         }
       }
@@ -1431,7 +1431,7 @@ bool congruent(const type& x, const data& y) noexcept {
       }
       for (const auto& field : x.fields()) {
         if (auto it = y.find(field.name); it != y.end()) {
-          if (! congruent(field.type, it->second)) {
+          if (not congruent(field.type, it->second)) {
             return false;
           }
         } else {
@@ -1456,7 +1456,7 @@ bool compatible(const type& lhs, relational_operator op,
 bool compatible(const type& lhs, relational_operator op,
                 const data& rhs) noexcept {
   auto string_and_pattern = [](auto& x, auto& y) {
-    return is<string_type>(x) && is<pattern>(y);
+    return is<string_type>(x) and is<pattern>(y);
   };
   auto numeric = [](auto& x, auto& y) {
     return (is<int64_type>(x) or is<uint64_type>(x) or is<double_type>(x))
@@ -1465,8 +1465,8 @@ bool compatible(const type& lhs, relational_operator op,
   switch (op) {
     case relational_operator::equal:
     case relational_operator::not_equal:
-      return ! lhs || is<caf::none_t>(rhs) || numeric(lhs, rhs)
-             || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
+      return not lhs or is<caf::none_t>(rhs) or numeric(lhs, rhs)
+             or string_and_pattern(lhs, rhs) or congruent(lhs, rhs);
     case relational_operator::less:
     case relational_operator::less_equal:
     case relational_operator::greater:
@@ -1475,18 +1475,18 @@ bool compatible(const type& lhs, relational_operator op,
     case relational_operator::in:
     case relational_operator::not_in:
       if (is<string_type>(lhs)) {
-        return is<std::string>(rhs) || is_container(rhs);
-      } else if (is<ip_type>(lhs) || is<subnet_type>(lhs)) {
-        return is<subnet>(rhs) || is_container(rhs);
+        return is<std::string>(rhs) or is_container(rhs);
+      } else if (is<ip_type>(lhs) or is<subnet_type>(lhs)) {
+        return is<subnet>(rhs) or is_container(rhs);
       } else {
         return is_container(rhs);
       }
     case relational_operator::ni:
     case relational_operator::not_ni:
       if (is<std::string>(rhs)) {
-        return is<string_type>(lhs) || is_container(lhs);
-      } else if (is<ip>(rhs) || is<subnet>(rhs)) {
-        return is<subnet_type>(lhs) || is_container(lhs);
+        return is<string_type>(lhs) or is_container(lhs);
+      } else if (is<ip>(rhs) or is<subnet>(rhs)) {
+        return is<subnet_type>(lhs) or is_container(lhs);
       } else {
         return is_container(lhs);
       }
@@ -1504,7 +1504,7 @@ bool is_subset(const type& x, const type& y) noexcept {
   const auto* super = try_as<record_type>(y);
   // If either of the types is not a record type, check if they are
   // congruent instead.
-  if (! sub || ! super) {
+  if (not sub or not super) {
     return congruent(x, y);
   }
   // Check whether all fields of the subset exist in the superset.
@@ -1513,14 +1513,14 @@ bool is_subset(const type& x, const type& y) noexcept {
     for (const auto& super_field : super->fields()) {
       if (sub_field.name == super_field.name) {
         // Perform the check recursively to support nested record types.
-        if (! is_subset(sub_field.type, super_field.type)) {
+        if (not is_subset(sub_field.type, super_field.type)) {
           return false;
         }
         exists_in_superset = true;
       }
     }
     // Not all fields of the subset exist in the superset; exit early.
-    if (! exists_in_superset) {
+    if (not exists_in_superset) {
       return false;
     }
   }
@@ -1536,7 +1536,7 @@ bool type_check(const type& x, const data& y) noexcept {
       return true;
     },
     [&](const enumeration_type& t, const enumeration& u) {
-      return ! t.field(u).empty();
+      return not t.field(u).empty();
     },
     [&](const list_type& t, const list& u) {
       if (u.empty()) {
@@ -1565,7 +1565,7 @@ bool type_check(const type& x, const data& y) noexcept {
       const auto vt = t.value_type();
       auto it = u.begin();
       const auto check = [&](const auto& d) noexcept {
-        return type_check(kt, d.first) && type_check(vt, d.second);
+        return type_check(kt, d.first) and type_check(vt, d.second);
       };
       if (check(*it)) {
         // Technically maps can contain heterogeneous data,
@@ -1584,7 +1584,7 @@ bool type_check(const type& x, const data& y) noexcept {
       for (size_t i = 0; i < u.size(); ++i) {
         const auto field = t.field(i);
         const auto& [k, v] = as_vector(u)[i];
-        if (field.name != k || type_check(field.type, v)) {
+        if (field.name != k or type_check(field.type, v)) {
           return false;
         }
       }
@@ -1600,7 +1600,7 @@ bool type_check(const type& x, const data& y) noexcept {
     },
     [&]<complex_type T, class U>(const T&, const U&) {
       // We don't have a matching overload.
-      static_assert(! std::is_same_v<type_to_data_t<T>, U>, //
+      static_assert(not std::is_same_v<type_to_data_t<T>, U>, //
                     "missing type check overload");
       return false;
     },
@@ -1612,7 +1612,7 @@ caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const module& with) {
   for (auto* x : xs) {
     if (const auto* t = with.find(x->name())) {
-      if (! congruent(*x, *t)) {
+      if (not congruent(*x, *t)) {
         return caf::make_error(ec::type_clash,
                                fmt::format("incongruent type {}", x->name()));
       }
@@ -2014,7 +2014,7 @@ secret_type::arrow_type::Deserialize(
   if (serialized != name) {
     return arrow::Status::Invalid("type identifier does not match");
   }
-  if (! storage_type->Equals(storage_type_)) {
+  if (not storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
   }
   return std::make_shared<arrow_type>();
@@ -2092,7 +2092,7 @@ std::shared_ptr<arrow::DataType> ip_type::builder_type::type() const {
 arrow::Status
 ip_type::builder_type::FinishInternal(std::shared_ptr<arrow::ArrayData>* out) {
   if (auto status = arrow::FixedSizeBinaryBuilder::FinishInternal(out);
-      ! status.ok()) {
+      not status.ok()) {
     return status;
   }
   auto result = as<arrow_type>(*type()).MakeArray(*out);
@@ -2112,7 +2112,7 @@ std::string ip_type::arrow_type::extension_name() const {
 bool ip_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
   return other.extension_name() == name
-         || other.extension_name() == "vast.address";
+         or other.extension_name() == "vast.address";
 }
 
 std::shared_ptr<arrow::Array>
@@ -2123,10 +2123,10 @@ ip_type::arrow_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
 arrow::Result<std::shared_ptr<arrow::DataType>>
 ip_type::arrow_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
                                  const std::string& serialized) const {
-  if (serialized != name && serialized != "vast.address") {
+  if (serialized != name and serialized != "vast.address") {
     return arrow::Status::Invalid("type identifier does not match");
   }
-  if (! storage_type->Equals(storage_type_)) {
+  if (not storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
   }
   return std::make_shared<arrow_type>();
@@ -2227,7 +2227,7 @@ std::string subnet_type::arrow_type::extension_name() const {
 bool subnet_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
   return other.extension_name() == name
-         || other.extension_name() == "vast.subnet";
+         or other.extension_name() == "vast.subnet";
 }
 
 std::shared_ptr<arrow::Array> subnet_type::arrow_type::MakeArray(
@@ -2239,10 +2239,10 @@ arrow::Result<std::shared_ptr<arrow::DataType>>
 subnet_type::arrow_type::Deserialize(
   std::shared_ptr<arrow::DataType> storage_type,
   const std::string& serialized) const {
-  if (serialized != name && serialized != "vast.subnet") {
+  if (serialized != name and serialized != "vast.subnet") {
     return arrow::Status::Invalid("type identifier does not match");
   }
-  if (! storage_type->Equals(storage_type_)) {
+  if (not storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
   }
   return std::make_shared<arrow_type>();
@@ -2425,7 +2425,7 @@ arrow::Status enumeration_type::builder_type::Append(enumeration index) {
   // In builds with assertions, we additionally check that the index was already
   // in the prepopulated memo table.
   const auto canonical = type_->tenzir_type_.field(index);
-  TENZIR_ASSERT(! canonical.empty());
+  TENZIR_ASSERT(not canonical.empty());
   auto memo_index = int32_t{-1};
   const auto memo_table_status
     = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
@@ -2455,8 +2455,8 @@ std::string enumeration_type::arrow_type::extension_name() const {
 bool enumeration_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
   return (other.extension_name() == name
-          || other.extension_name() == "vast.enumeration")
-         && static_cast<const arrow_type&>(other).tenzir_type_ == tenzir_type_;
+          or other.extension_name() == "vast.enumeration")
+         and static_cast<const arrow_type&>(other).tenzir_type_ == tenzir_type_;
 }
 
 std::shared_ptr<arrow::Array> enumeration_type::arrow_type::MakeArray(
@@ -2468,7 +2468,7 @@ arrow::Result<std::shared_ptr<arrow::DataType>>
 enumeration_type::arrow_type::Deserialize(
   std::shared_ptr<arrow::DataType> storage_type,
   const std::string& serialized) const {
-  if (! storage_type->Equals(storage_type_)) {
+  if (not storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
   }
   // Parse the JSON-serialized enumeration_type content.
@@ -2479,7 +2479,7 @@ enumeration_type::arrow_type::Deserialize(
   // copy of the field name.
   auto fields = std::vector<struct enumeration_type::field>{};
   for (const auto& [key, value] : doc.get_object()) {
-    if (! value.is<uint64_t>()) {
+    if (not value.is<uint64_t>()) {
       return arrow::Status::SerializationError(value, " is not an uint64_t");
     }
     fields.push_back({
@@ -2758,7 +2758,7 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
     table().type_as_record_type()};
-  while (! index.empty()) {
+  while (not index.empty()) {
     const auto* record = history.back();
     TENZIR_ASSERT(record);
     const auto* fields = record->fields();
@@ -2768,7 +2768,7 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (! index.empty()) {
+      if (not index.empty()) {
         ++index.back();
       }
       continue;
@@ -2830,7 +2830,7 @@ size_t record_type::num_leaves() const noexcept {
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
     table().type_as_record_type()};
-  while (! index.empty()) {
+  while (not index.empty()) {
     const auto* record = history.back();
     TENZIR_ASSERT(record);
     const auto* fields = record->fields();
@@ -2840,7 +2840,7 @@ size_t record_type::num_leaves() const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (! index.empty()) {
+      if (not index.empty()) {
         ++index.back();
       }
       continue;
@@ -2889,7 +2889,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
     table().type_as_record_type()};
-  while (! index.empty()) {
+  while (not index.empty()) {
     const auto* record = history.back();
     TENZIR_ASSERT(record);
     const auto* fields = record->fields();
@@ -2899,7 +2899,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (! index.empty()) {
+      if (not index.empty()) {
         ++index.back();
       }
       continue;
@@ -2953,17 +2953,17 @@ generator<offset> record_type::resolve_key_or_concept(
     table().type_as_record_type(),
     key,
   }};
-  while (! index.empty()) {
+  while (not index.empty()) {
     const auto& [record, remaining_key] = history.back();
     TENZIR_ASSERT(record);
     const auto* fields = record->fields();
     TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
-    if (index.back() >= fields->size() || remaining_key.empty()) {
+    if (index.back() >= fields->size() or remaining_key.empty()) {
       history.pop_back();
       index.pop_back();
-      if (! index.empty()) {
+      if (not index.empty()) {
         ++index.back();
       }
       continue;
@@ -3004,13 +3004,13 @@ generator<offset> record_type::resolve_key_or_concept(
           = std::mismatch(remaining_key.begin(), remaining_key.end(),
                           field_name->begin(), field_name->end());
         if (field_name_mismatch == field_name->end()
-            && remaining_key_mismatch == remaining_key.end()) {
+            and remaining_key_mismatch == remaining_key.end()) {
           co_yield std::move(index);
           co_return;
         }
         if (field_name_mismatch == field_name->end()
-            && remaining_key_mismatch != remaining_key.end()
-            && *remaining_key_mismatch == '.') {
+            and remaining_key_mismatch != remaining_key.end()
+            and *remaining_key_mismatch == '.') {
           history.emplace_back(field_type->type_as_record_type(),
                                remaining_key.substr(1 + remaining_key_mismatch
                                                     - remaining_key.begin()));
@@ -3082,8 +3082,8 @@ record_type::resolve_key_suffix(std::string_view key,
   while (prefix_begin != prefix.end()) {
     const auto [prefix_mismatch, key_mismatch]
       = std::mismatch(prefix_begin, prefix.end(), key.begin(), key.end());
-    if (prefix_mismatch == prefix.end() && key_mismatch != key.end()
-        && *key_mismatch == '.') {
+    if (prefix_mismatch == prefix.end() and key_mismatch != key.end()
+        and *key_mismatch == '.') {
       history[0].second.push_back(key.substr(1 + key_mismatch - key.begin()));
     }
     prefix_begin = std::find(prefix_begin, prefix.end(), '.');
@@ -3092,7 +3092,7 @@ record_type::resolve_key_suffix(std::string_view key,
     }
     ++prefix_begin;
   }
-  while (! index.empty()) {
+  while (not index.empty()) {
     auto& [record, remaining_keys] = history.back();
     TENZIR_ASSERT(record);
     const auto* fields = record->fields();
@@ -3103,7 +3103,7 @@ record_type::resolve_key_suffix(std::string_view key,
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (! index.empty()) {
+      if (not index.empty()) {
         ++index.back();
       }
       continue;
@@ -3139,8 +3139,8 @@ record_type::resolve_key_suffix(std::string_view key,
             = std::mismatch(field_name->rbegin(), field_name->rend(),
                             remaining_key.rbegin(), remaining_key.rend());
           if (remaining_key_mismatch == remaining_key.rend()
-              && (field_name_mismatch == field_name->rend()
-                  || *field_name_mismatch == '.')) {
+              and (field_name_mismatch == field_name->rend()
+                   or *field_name_mismatch == '.')) {
             co_yield index;
             break;
           }
@@ -3159,8 +3159,8 @@ record_type::resolve_key_suffix(std::string_view key,
             = std::mismatch(remaining_key.begin(), remaining_key.end(),
                             field_name->begin(), field_name->end());
           if (field_name_mismatch == field_name->end()
-              && remaining_key_mismatch != remaining_key.end()
-              && *remaining_key_mismatch == '.') {
+              and remaining_key_mismatch != remaining_key.end()
+              and *remaining_key_mismatch == '.') {
             next.second.emplace_back(remaining_key.substr(
               1 + remaining_key_mismatch - remaining_key.begin()));
           }
@@ -3193,7 +3193,7 @@ generator<offset> record_type::resolve_type_extractor(
   auto history = std::vector{
     table().type_as_record_type(),
   };
-  while (! index.empty()) {
+  while (not index.empty()) {
     const auto* record = history.back();
     TENZIR_ASSERT(record);
     const auto* fields = record->fields();
@@ -3204,7 +3204,7 @@ generator<offset> record_type::resolve_type_extractor(
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (! index.empty()) {
+      if (not index.empty()) {
         ++index.back();
       }
       continue;
@@ -3336,7 +3336,7 @@ record_type::field_view record_type::field(size_t index) const noexcept {
 }
 
 record_type::field_view record_type::field(const offset& index) const noexcept {
-  TENZIR_ASSERT(! index.empty(), "offset must not be empty");
+  TENZIR_ASSERT(not index.empty(), "offset must not be empty");
   const auto* record = table().type_as_record_type();
   TENZIR_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
@@ -3361,7 +3361,7 @@ auto record_type::field(std::string_view name) const -> std::optional<type> {
 }
 
 size_t record_type::flat_index(const offset& index) const noexcept {
-  TENZIR_ASSERT(! index.empty(), "index must not be empty");
+  TENZIR_ASSERT(not index.empty(), "index must not be empty");
   auto flat_index = size_t{0};
   auto current_index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
@@ -3377,7 +3377,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
     if (current_index.back() >= fields->size()) {
       history.pop_back();
       current_index.pop_back();
-      TENZIR_ASSERT(! current_index.empty());
+      TENZIR_ASSERT(not current_index.empty());
       ++current_index.back();
       continue;
     }
@@ -3486,7 +3486,7 @@ std::optional<record_type> record_type::transform(
   const auto impl
     = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
          const auto sentinel) noexcept -> unpacked_layer {
-    TENZIR_ASSERT(! index.empty());
+    TENZIR_ASSERT(not index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer. For every entry in the current layer, we
     // need to do one of three things:
@@ -3506,7 +3506,7 @@ std::optional<record_type> record_type::transform(
                           current->index.end());
         const auto is_prefix_match = index_mismatch == index.end();
         const auto is_exact_match
-          = is_prefix_match && current_index_mismatch == current->index.end();
+          = is_prefix_match and current_index_mismatch == current->index.end();
         return {is_prefix_match, is_exact_match};
       }();
       if (is_exact_match) {
@@ -3532,7 +3532,7 @@ std::optional<record_type> record_type::transform(
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
-        if (! nested_layer.empty()) {
+        if (not nested_layer.empty()) {
           auto nested_schema = type{record_type{nested_layer}};
           nested_schema.assign_metadata(layer[index.back()].type);
           result.emplace_back(layer[index.back()].name, nested_schema);
@@ -3790,7 +3790,7 @@ auto variant_traits<arrow::DataType>::index(const arrow::DataType& x)
           result = Is;
           return true;
         })
-        || ...);
+        or ...);
     },
     std::make_index_sequence<detail::tl_size<concrete_types>::value>());
   TENZIR_ASSERT(found);

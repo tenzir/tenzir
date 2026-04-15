@@ -28,7 +28,7 @@ public:
     return value_;
   }
 
-  auto unwrap() && -> T {
+  auto unwrap() and -> T {
     return std::move(value_);
   }
 
@@ -54,7 +54,7 @@ public:
   explicit(false) Result(Err<Error> err) : value_{std::move(err)} {
   }
 
-  auto expect(std::string_view msg) && -> Value {
+  auto expect(std::string_view msg) and -> Value {
     if (auto value = try_as<VoidToUnit<Value>>(value_)) [[likely]] {
       return unit_to_void(std::move(*value));
     }
@@ -74,7 +74,7 @@ public:
   }
 
   template <class F>
-  auto map_err(F&& f) && -> Result<Value, std::invoke_result_t<F, Error>> {
+  auto map_err(F&& f) and -> Result<Value, std::invoke_result_t<F, Error>> {
     if (is_ok()) [[likely]] {
       return std::move(*this).unwrap_unchecked();
     } else {
@@ -91,15 +91,15 @@ public:
     return as<VoidToUnit<Value>>(value_);
   }
 
-  auto unwrap() && -> Value {
+  auto unwrap() and -> Value {
     return unit_to_void(as<VoidToUnit<Value>>(std::move(value_)));
   }
 
-  auto unwrap_unchecked() && -> Value {
+  auto unwrap_unchecked() and -> Value {
     return unit_to_void(std::move(*try_as<VoidToUnit<Value>>(value_)));
   }
 
-  auto unwrap_err_unchecked() && -> Error {
+  auto unwrap_err_unchecked() and -> Error {
     return unit_to_void(std::move(*try_as<Err<Error>>(value_)).unwrap());
   }
 
@@ -111,7 +111,7 @@ public:
     return as<Err<Error>>(value_).unwrap();
   }
 
-  auto unwrap_err() && -> Error {
+  auto unwrap_err() and -> Error {
     return as<Err<Error>>(std::move(value_)).unwrap();
   }
 

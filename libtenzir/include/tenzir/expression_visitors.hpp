@@ -132,16 +132,20 @@ struct type_resolver {
       return predicate{data_extractor{std::move(t), i}, op_, x};
     };
     for (size_t flat_index = 0; const auto& [field, _] : schema_.leaves()) {
-      if (f(field.type))
+      if (f(field.type)) {
         connective.emplace_back(make_predicate(field.type, flat_index));
+      }
       ++flat_index;
     }
-    if (connective.empty())
+    if (connective.empty()) {
       return expression{}; // did not resolve
-    if (connective.size() == 1)
+    }
+    if (connective.size() == 1) {
       return {std::move(connective[0])}; // hoist expression
-    if (is_negated(op_))
+    }
+    if (is_negated(op_)) {
       return {conjunction{std::move(connective)}};
+    }
     return {disjunction{std::move(connective)}};
   }
 
@@ -166,7 +170,7 @@ struct matcher {
   bool operator()(const data_extractor&, const data&);
 
   template <class T>
-    requires(!std::is_same_v<T, data>)
+    requires(not std::is_same_v<T, data>)
   bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }
@@ -202,7 +206,7 @@ public:
   void operator()(const T& xs) {
     static_assert(detail::is_any_v<T, conjunction, disjunction>);
     visit(xs);
-    if (!xs.empty()) {
+    if (not xs.empty()) {
       push();
       match(xs[0], *this);
       for (size_t i = 1; i < xs.size(); ++i) {
@@ -239,7 +243,7 @@ private:
   }
 
   void next() {
-    TENZIR_ASSERT(!offset_.empty());
+    TENZIR_ASSERT(not offset_.empty());
     ++offset_.back();
   }
 

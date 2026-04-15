@@ -123,8 +123,8 @@ TEST("bloom filter parameters : from string") {
   auto xs = tenzir::test::unbox(parse_parameters("bloomfilter(1000,0.01)"));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);
-  CHECK(! xs.m);
-  CHECK(! xs.k);
+  CHECK(not xs.m);
+  CHECK(not xs.k);
   auto ys = evaluate(xs);
   CHECK_EQUAL(*ys->m, 9586u);
   CHECK_EQUAL(*ys->n, 1000u);
@@ -214,8 +214,8 @@ TEST("bloom filter - duplicate tracking") {
   xs.p = 0.1;
   auto x = tenzir::test::unbox(
     make_bloom_filter<xxh64, double_hasher, policy::partitioning::no>(xs));
-  CHECK(! x.lookup(42));
+  CHECK(not x.lookup(42));
   CHECK(x.add(42));
   CHECK(x.lookup(42));
-  CHECK(! x.add(42));
+  CHECK(not x.add(42));
 }

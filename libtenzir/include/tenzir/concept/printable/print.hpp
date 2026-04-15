@@ -21,7 +21,7 @@ auto print(Iterator&& out, const T& x, Args&&... args) {
 }
 
 template <class Iterator, access_printer T, class... Args>
-  requires(!registered_printer<T>)
+  requires(not registered_printer<T>)
 auto print(Iterator&& out, const T& x, Args&&... args) {
   return access::printer<T>{std::forward<Args>(args)...}.print(out, x);
 }

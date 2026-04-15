@@ -187,8 +187,8 @@ struct fmt::formatter<tenzir::tql::extractor> {
     auto out = ctx.out();
     for (auto& proj : x.path) {
       if (std::exchange(first, false)) {
-        if (!std::holds_alternative<located<type>>(proj)
-            && !std::holds_alternative<identifier>(proj)) {
+        if (not std::holds_alternative<located<type>>(proj)
+            and not std::holds_alternative<identifier>(proj)) {
           out = fmt::format_to(out, ".");
         }
       }

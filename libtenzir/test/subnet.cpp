@@ -29,7 +29,7 @@ TEST("subnets") {
   CHECK(q.length() == 24 + 96);
   CHECK_EQUAL(to_string(q), "192.168.0.0/24");
   CHECK(q.contains(*to<ip>("192.168.0.73")));
-  CHECK(! q.contains(*to<ip>("192.168.244.73")));
+  CHECK(not q.contains(*to<ip>("192.168.244.73")));
 
   auto b = *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   subnet r{b, 64};
@@ -42,14 +42,14 @@ TEST("containment") {
   MESSAGE("v4");
   CHECK(to<subnet>("10.0.0.0/8")->contains(*to<ip>("10.0.0.1")));
   CHECK(to<subnet>("10.0.0.0/8")->contains(*to<subnet>("10.0.0.0/16")));
-  CHECK(! to<subnet>("10.0.0.0/17")->contains(*to<subnet>("10.0.0.0/16")));
+  CHECK(not to<subnet>("10.0.0.0/17")->contains(*to<subnet>("10.0.0.0/16")));
   CHECK(to<subnet>("218.89.0.0/16")->contains(*to<subnet>("218.89.167.0/24")));
   CHECK(to<subnet>("218.89.0.0/16")->contains(*to<subnet>("218.89.167.0/24")));
   CHECK(to<subnet>("218.88.0.0/14")->contains(*to<subnet>("218.89.0.0/16")));
   MESSAGE("v6");
   auto v4 = *to<subnet>("2001:db8:0000:0000:0202:b3ff:fe1e:8329/64");
   CHECK(v4.contains(*to<ip>("2001:db8::cafe:babe")));
-  CHECK(! v4.contains(*to<ip>("ff00::")));
+  CHECK(not v4.contains(*to<ip>("ff00::")));
 }
 
 TEST("subnet printable") {

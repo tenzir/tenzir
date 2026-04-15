@@ -90,8 +90,8 @@ public:
 
   std::shared_ptr<arrow::RecordBatch>
   decode(const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
-    TENZIR_ASSERT(! record_batch_);
-    if (auto status = decoder_.Consume(flat_record_batch); ! status.ok()) {
+    TENZIR_ASSERT(not record_batch_);
+    if (auto status = decoder_.Consume(flat_record_batch); not status.ok()) {
       TENZIR_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
                    status.ToString());
       return {};
@@ -136,7 +136,7 @@ auto legacy_value_at([[maybe_unused]] const Type& type,
   TENZIR_ASSERT_EXPENSIVE(row < arr.length(),
                           "{} is out of bounds for {}-array of length {}", row,
                           arr.length(), type_kind{tag_v<Type>});
-  TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
+  TENZIR_ASSERT_EXPENSIVE(not arr.IsNull(row));
   if constexpr (std::is_same_v<Type, null_type>) {
     return caf::none;
   } else if constexpr (detail::is_any_v<Type, bool_type, uint64_type,
@@ -232,7 +232,7 @@ auto legacy_value_at([[maybe_unused]] const Type& type,
         }
 
         value_type at(size_type i) const override {
-          TENZIR_ASSERT_EXPENSIVE(! key_array->IsNull(value_offset + i));
+          TENZIR_ASSERT_EXPENSIVE(not key_array->IsNull(value_offset + i));
           if (item_array->IsNull(value_offset + i)) {
             return {legacy_value_at(key_type, *key_array, value_offset + i),
                     {}};
@@ -298,7 +298,7 @@ template <concrete_type Type>
 auto legacy_value_at(const Type& type, const arrow::Array& arr, int64_t row)
   -> view<type_to_data_t<Type>> {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
-  TENZIR_ASSERT_EXPENSIVE(! arr.IsNull(row));
+  TENZIR_ASSERT_EXPENSIVE(not arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
     return legacy_value_at(
       type, *as<type_to_arrow_array_t<Type>>(arr).storage(), row);
@@ -530,7 +530,7 @@ transform_columns(type schema,
   };
   const auto impl = [](const auto& impl, unpacked_layer layer, offset index,
                        auto& current, const auto sentinel) -> unpacked_layer {
-    TENZIR_ASSERT(! index.empty());
+    TENZIR_ASSERT(not index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer. For every entry in the current layer, we
     // need to do one of three things:
@@ -550,7 +550,7 @@ transform_columns(type schema,
                           current->index.end());
         const auto is_prefix_match = index_mismatch == index.end();
         const auto is_exact_match
-          = is_prefix_match && current_index_mismatch == current->index.end();
+          = is_prefix_match and current_index_mismatch == current->index.end();
         return {is_prefix_match, is_exact_match};
       }();
       if (is_exact_match) {
@@ -637,7 +637,7 @@ transform_columns(type schema,
   auto new_struct_array = std::shared_ptr<arrow::StructArray>{};
   // TODO: Does it make sense to add `struct_array->offset()` here?
   if (layer.arrays.empty()
-      || struct_array->length() == layer.arrays[0]->length()) {
+      or struct_array->length() == layer.arrays[0]->length()) {
     new_struct_array = std::make_shared<arrow::StructArray>(
       std::make_shared<arrow::StructType>(arrow_fields), struct_array->length(),
       layer.arrays, struct_array->null_bitmap(), struct_array->null_count());
@@ -693,7 +693,7 @@ transform_columns(const table_slice& slice,
   auto input_struct_array = check(input_batch->ToStructArray());
   auto [output_schema, output_struct_array] = transform_columns(
     slice.schema(), input_struct_array, std::move(transformations));
-  if (! output_schema) {
+  if (not output_schema) {
     return {};
   }
   auto output_batch = record_batch_from_struct_array(
@@ -729,7 +729,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   };
   const auto impl = [](const auto& impl, unpacked_layer layer, offset index,
                        auto& current, const auto sentinel) -> unpacked_layer {
-    TENZIR_ASSERT(! index.empty());
+    TENZIR_ASSERT(not index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer, backwards. For every entry in the current
     // layer, we need to do one of two things:
@@ -746,7 +746,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
           index.begin(), index.end(), current->begin(), current->end());
         const auto is_prefix_match = index_mismatch == index.end();
         const auto is_exact_match
-          = is_prefix_match && current_index_mismatch == current->end();
+          = is_prefix_match and current_index_mismatch == current->end();
         return {is_prefix_match, is_exact_match};
       }();
       if (is_exact_match) {
@@ -824,7 +824,7 @@ table_slice
 select_columns(const table_slice& slice, std::vector<offset> indices) {
   auto [schema, batch] = select_columns(slice.schema(), to_record_batch(slice),
                                         std::move(indices));
-  if (! schema) {
+  if (not schema) {
     return {};
   }
   auto result = table_slice{batch, std::move(schema)};

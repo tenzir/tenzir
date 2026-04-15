@@ -96,7 +96,7 @@ namespace {
 
 template <class T>
 struct is_atom_type
-  : std::bool_constant<basic_type<T> || std::same_as<T, enumeration_type>> {};
+  : std::bool_constant<basic_type<T> or std::same_as<T, enumeration_type>> {};
 
 template <class T>
 concept atom_type = is_atom_type<T>::value;
@@ -565,8 +565,8 @@ private:
 };
 
 template <class T>
-  requires((basic_type<T> && not std::same_as<T, null_type>)
-           || std::same_as<T, enumeration_type>)
+  requires((basic_type<T> and not std::same_as<T, null_type>)
+           or std::same_as<T, enumeration_type>)
 class typed_builder<T> final : public detail::builder_base {
 public:
   explicit typed_builder(series_builder_impl* root)
@@ -1187,8 +1187,8 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
                                          type_kind::of<ToType>));
     } else if constexpr (std::same_as<ToType, duration_type>) {
       if constexpr (std::same_as<FromType, int64_type>
-                    || std::same_as<FromType, uint64_type>
-                    || std::same_as<FromType, double_type>) {
+                    or std::same_as<FromType, uint64_type>
+                    or std::same_as<FromType, double_type>) {
         auto full_ty = type();
         auto unit = full_ty.attribute("unit").value_or("s");
         return cast_value(FromType{}, value, as<ToType>(full_ty), unit);
@@ -1205,8 +1205,8 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
       }
     } else if constexpr (std::same_as<ToType, time_type>) {
       if constexpr (std::same_as<FromType, int64_type>
-                    || std::same_as<FromType, uint64_type>
-                    || std::same_as<FromType, double_type>) {
+                    or std::same_as<FromType, uint64_type>
+                    or std::same_as<FromType, double_type>) {
         auto full_ty = type();
         auto unit = full_ty.attribute("unit");
         if (unit) {

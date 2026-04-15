@@ -69,8 +69,8 @@ struct query_context {
   // -- misc -------------------------------------------------------------------
 
   friend bool operator==(const query_context& lhs, const query_context& rhs) {
-    return lhs.cmd == rhs.cmd && lhs.expr == rhs.expr
-           && lhs.priority == rhs.priority;
+    return lhs.cmd == rhs.cmd and lhs.expr == rhs.expr
+           and lhs.priority == rhs.priority;
   }
 
   template <class Inspector>

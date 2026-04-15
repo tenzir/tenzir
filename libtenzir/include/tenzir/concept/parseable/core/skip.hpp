@@ -22,8 +22,9 @@ public:
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    if (f + n_ >= l)
+    if (f + n_ >= l) {
       return false;
+    }
     f += n_;
     return true;
   }

@@ -35,14 +35,13 @@ public:
   // -- constructors, destructors, and assignment operators ------------------
 
   column_iterator(pointer ptr, difference_type columns)
-    : ptr_(ptr),
-      columns_(columns) {
-    //nop
+    : ptr_(ptr), columns_(columns) {
+    // nop
   }
 
   column_iterator(pointer ptr, size_t columns)
     : column_iterator(ptr, narrow_cast<difference_type>(columns)) {
-    //nop
+    // nop
   }
 
   column_iterator(const column_iterator&) = default;

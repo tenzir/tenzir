@@ -30,7 +30,7 @@ namespace tenzir::detail {
 /// @relates byte_to_hex hex_to_byte
 template <class T>
 constexpr auto byte_to_char(T b) -> char {
-  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
+  static_assert(std::is_integral_v<T> or sizeof(T) == 1);
   auto c = static_cast<char>(b);
   return c < 10 ? '0' + c : 'a' + c - 10;
 }
@@ -43,7 +43,7 @@ constexpr auto byte_to_char(T b) -> char {
 template <class T>
 constexpr auto byte_to_hex(T x, const char (&xs)[16 + 1])
   -> std::pair<char, char> {
-  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
+  static_assert(std::is_integral_v<T> or sizeof(T) == 1);
   auto hi = static_cast<size_t>((x >> 4) & T{0x0f});
   auto lo = static_cast<size_t>(x & T{0x0f});
   return {xs[hi], xs[lo]};
@@ -94,14 +94,14 @@ auto hexify(std::span<const std::byte> xs) -> std::string {
 /// @relates byte_to_hex byte_to_char
 template <class T>
 constexpr auto hex_to_byte(T hex) -> char {
-  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
-  if (hex >= '0' && hex <= '9') {
+  static_assert(std::is_integral_v<T> or sizeof(T) == 1);
+  if (hex >= '0' and hex <= '9') {
     return hex - '0';
   }
-  if (hex >= 'A' && hex <= 'F') {
+  if (hex >= 'A' and hex <= 'F') {
     return hex - 'A' + 10;
   }
-  if (hex >= 'a' && hex <= 'f') {
+  if (hex >= 'a' and hex <= 'f') {
     return hex - 'a' + 10;
   }
   return '\0';
@@ -113,7 +113,7 @@ constexpr auto hex_to_byte(T hex) -> char {
 /// @relates byte_to_hex byte_to_char
 template <class T>
 constexpr auto hex_to_byte(T hi, T lo) -> char {
-  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
+  static_assert(std::is_integral_v<T> or sizeof(T) == 1);
   return (hex_to_byte(hi) << 4) | hex_to_byte(lo);
 }
 

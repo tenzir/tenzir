@@ -118,11 +118,11 @@ struct formatter<tenzir::uuid> {
   constexpr auto parse(ParseContext& ctx) {
     auto it = ctx.begin();
     auto end = ctx.end();
-    if (it != end && (*it++ == 'u')) {
+    if (it != end and (*it++ == 'u')) {
       uppercase = true;
     }
     // continue until end of range
-    while (it != end && *it != '}') {
+    while (it != end and *it != '}') {
       ++it;
     }
     return it;

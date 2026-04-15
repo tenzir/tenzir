@@ -265,7 +265,7 @@ public:
   friend void hash_append(Hasher& h, container_view_handle xs) {
     // TODO: include the concrete view type in the hash digest so that it
     // guarantees the absense of collisions between view types.
-    if (! xs) {
+    if (not xs) {
       return hash_append(h, caf::none);
     }
     for (auto x : *xs) {
@@ -276,15 +276,15 @@ public:
 
   friend bool
   operator==(const container_view_handle& x, const container_view_handle& y) {
-    return x && y && *x == *y;
+    return x and y and *x == *y;
   }
 
   friend bool
   operator<(const container_view_handle& x, const container_view_handle& y) {
-    if (! x) {
+    if (not x) {
       return static_cast<bool>(y);
     }
-    if (! y) {
+    if (not y) {
       return false;
     }
     return *x < *y;
@@ -328,7 +328,7 @@ public:
   }
 
   [[nodiscard]] bool equals(container_view_iterator other) const {
-    return view_ == other.view_ && position_ == other.position_;
+    return view_ == other.view_ and position_ == other.position_;
   }
 
   [[nodiscard]] auto distance_to(container_view_iterator other) const {
@@ -518,7 +518,7 @@ data_view make_data_view(const T& x) {
 /// @relates view_trait
 template <class T>
 data_view make_data_view(const std::optional<T>& x) {
-  if (! x) {
+  if (not x) {
     return make_view(caf::none);
   }
   return make_view(*x);

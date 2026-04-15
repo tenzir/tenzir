@@ -61,7 +61,7 @@ split_at_regex(std::string_view separator, bool include_separator = false) {
       buffer = buffer.substr(current - first);
       co_yield std::nullopt;
     }
-    if (! buffer.empty()) {
+    if (not buffer.empty()) {
       auto current = buffer.cbegin();
       auto begin = current + (consumed ? 0 : 1);
       while (begin <= buffer.end()

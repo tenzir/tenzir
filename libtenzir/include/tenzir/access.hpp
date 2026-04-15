@@ -24,18 +24,12 @@ struct access {
 };
 
 template <class T>
-concept access_state = requires {
-  access::state<T>{};
-};
+concept access_state = requires { access::state<T>{}; };
 
 template <class T>
-concept access_parser = requires {
-  access::parser_base<T>{};
-};
+concept access_parser = requires { access::parser_base<T>{}; };
 
 template <class T>
-concept access_printer = requires {
-  access::printer<T>{};
-};
+concept access_printer = requires { access::printer<T>{}; };
 
 } // namespace tenzir

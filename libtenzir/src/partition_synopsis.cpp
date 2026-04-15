@@ -45,22 +45,22 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
 void partition_synopsis::shrink() {
   memusage_ = 0; // Invalidate cached size.
   for (auto& [field, synopsis] : field_synopses_) {
-    if (! synopsis) {
+    if (not synopsis) {
       continue;
     }
     auto shrinked_synopsis = synopsis->shrink();
-    if (! shrinked_synopsis) {
+    if (not shrinked_synopsis) {
       continue;
     }
     synopsis.swap(shrinked_synopsis);
   }
   // TODO: Make a utility function instead of copy/pasting
   for (auto& [field, synopsis] : type_synopses_) {
-    if (! synopsis) {
+    if (not synopsis) {
       continue;
     }
     auto shrinked_synopsis = synopsis->shrink();
-    if (! shrinked_synopsis) {
+    if (not shrinked_synopsis) {
       continue;
     }
     synopsis.swap(shrinked_synopsis);
@@ -74,8 +74,8 @@ std::optional<double> get_field_fprate(const index_config& config,
     for (const auto& name : targets) {
       if (name.size()
             == field.field_name().size() + field.schema_name().size() + 1
-          && name.starts_with(field.schema_name())
-          && name.ends_with(field.field_name())) {
+          and name.starts_with(field.schema_name())
+          and name.ends_with(field.field_name())) {
         return fprate;
       }
     }
@@ -93,9 +93,9 @@ std::optional<double> get_field_fprate(const index_config& config,
 double get_type_fprate(const index_config& config, const type& type) {
   for (const auto& [targets, fprate, _] : config.rules) {
     for (const auto& name : targets) {
-      if (name == ":string" && type == string_type{}) {
+      if (name == ":string" and type == string_type{}) {
         return fprate;
-      } else if (name == ":ip" && type == ip_type{}) {
+      } else if (name == ":ip" and type == ip_type{}) {
         return fprate;
       }
     }
@@ -114,7 +114,7 @@ void partition_synopsis::add(const table_slice& slice,
     }
     return factory<synopsis>::make(t, synopsis_options);
   };
-  if (! schema) {
+  if (not schema) {
     schema = slice.schema();
   }
   TENZIR_ASSERT_EXPENSIVE(schema == slice.schema());
@@ -227,7 +227,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   std::vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>> synopses;
   for (const auto& [fqf, synopsis] : x.field_synopses_) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (! maybe_synopsis) {
+    if (not maybe_synopsis) {
       return maybe_synopsis.error();
     }
     synopses.push_back(*maybe_synopsis);
@@ -235,7 +235,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   for (const auto& [type, synopsis] : x.type_synopses_) {
     auto fqf = qualified_record_field{"", "", type};
     auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (! maybe_synopsis) {
+    if (not maybe_synopsis) {
       return maybe_synopsis.error();
     }
     synopses.push_back(*maybe_synopsis);
@@ -265,7 +265,7 @@ caf::error unpack_(
     synopses,
   partition_synopsis& ps) {
   for (const auto* synopsis : synopses) {
-    if (! synopsis) {
+    if (not synopsis) {
       return caf::make_error(ec::format_error, "synopsis is null");
     }
     qualified_record_field qf;
@@ -292,7 +292,7 @@ caf::error unpack_(
 
 caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps) {
-  if (! x.id_range()) {
+  if (not x.id_range()) {
     return caf::make_error(ec::format_error, "missing id range");
   }
   if (x.id_range()->begin() != 0) {
@@ -312,7 +312,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
   if (const auto* schema = x.schema()) {
     ps.schema = type{chunk::copy(as_bytes(*schema))};
   }
-  if (! x.synopses()) {
+  if (not x.synopses()) {
     return caf::make_error(ec::format_error, "missing synopses");
   }
   return unpack_(*x.synopses(), ps);

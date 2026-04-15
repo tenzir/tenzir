@@ -63,7 +63,7 @@ caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
      const qualified_record_field& fqf) {
   auto column_name = fbs::serialize_bytes(builder, fqf);
-  if (!column_name) {
+  if (not column_name) {
     return column_name.error();
   }
   auto* ptr = synopsis.get();
@@ -85,7 +85,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     return synopsis_builder.Finish();
   } else {
     auto data = fbs::serialize_bytes(builder, synopsis);
-    if (!data) {
+    if (not data) {
       return data.error();
     }
     fbs::synopsis::LegacyOpaqueSynopsisBuilder opaque_builder(builder);

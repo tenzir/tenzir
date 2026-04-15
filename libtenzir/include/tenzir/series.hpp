@@ -118,7 +118,7 @@ struct basic_series {
   }
 
   template <type_or_concrete_type Other>
-    requires(std::same_as<Type, type> || std::same_as<Other, Type>)
+    requires(std::same_as<Type, type> or std::same_as<Other, Type>)
   static auto null(Other ty, int64_t length) -> basic_series<Type> {
     auto b = ty.make_arrow_builder(arrow_memory_pool());
     // TODO
@@ -187,7 +187,7 @@ struct basic_series {
 
   template <type_or_concrete_type Cast = tenzir::type>
     requires(std::same_as<Type, tenzir::type>
-             && std::same_as<Cast, tenzir::type>)
+             and std::same_as<Cast, tenzir::type>)
   auto values() const -> generator<data_view3> {
     return values3();
   }

@@ -92,7 +92,7 @@ public:
 
   template <class... Ts>
   result_type operator()(Ts&&... xs) noexcept {
-    return (apply(xs) && ...);
+    return (apply(xs) and ...);
   }
 
   template <class T>
@@ -116,7 +116,7 @@ public:
 
   template <class T>
     requires requires(legacy_deserializer& f, T& x) {
-      requires ! std::is_enum_v<T>;
+      requires not std::is_enum_v<T>;
       { inspect(f, x) } -> std::same_as<legacy_deserializer::result_type>;
     }
   result_type apply(T& x) {
@@ -128,7 +128,7 @@ public:
   result_type apply(T& x) {
     using underlying = typename std::underlying_type_t<T>;
     underlying tmp;
-    if (! apply(tmp)) {
+    if (not apply(tmp)) {
       return false;
     }
     x = static_cast<T>(tmp);
@@ -138,7 +138,7 @@ public:
   template <class F, class S>
   result_type apply(std::pair<F, S>& xs) {
     using t0 = typename std::remove_const_t<F>;
-    if (! apply(const_cast<t0&>(xs.first))) {
+    if (not apply(const_cast<t0&>(xs.first))) {
       return false;
     }
     return apply(xs.second);
@@ -146,7 +146,7 @@ public:
 
   result_type apply(caf::uri& x) {
     auto impl = caf::make_counted<caf::uri::impl_type>();
-    if (! apply(*impl)) {
+    if (not apply(*impl)) {
       return false;
     }
     x = caf::uri{std::move(impl)};
@@ -155,7 +155,7 @@ public:
 
   inline result_type apply(bool& x) {
     uint8_t tmp = 0;
-    if (! apply(tmp)) {
+    if (not apply(tmp)) {
       return false;
     }
     x = tmp != 0;
@@ -213,7 +213,7 @@ public:
     // The IEEE-754 conversion does not work for long double
     // => fall back to string serialization (even though it sucks).
     std::string tmp;
-    if (! apply(tmp)) {
+    if (not apply(tmp)) {
       return false;
     }
     std::istringstream iss{std::move(tmp)};
@@ -223,7 +223,7 @@ public:
 
   inline result_type apply(std::string& x) {
     size_t str_size = 0;
-    if (! begin_sequence(str_size)) {
+    if (not begin_sequence(str_size)) {
       return false;
     }
     if (str_size > bytes_.size()) {
@@ -244,7 +244,7 @@ public:
   result_type apply(std::chrono::duration<Rep, Period>& x) {
     using duration_type = std::chrono::duration<Rep, Period>;
     Rep tmp;
-    if (! apply(tmp)) {
+    if (not apply(tmp)) {
       return false;
     }
     x = duration_type{tmp};
@@ -257,7 +257,7 @@ public:
     using duration_type = std::chrono::duration<Rep, Period>;
     // always save/store floating point durations as doubles
     double tmp = NAN;
-    if (! apply(tmp)) {
+    if (not apply(tmp)) {
       return false;
     }
     x = duration_type{tmp};
@@ -266,7 +266,7 @@ public:
 
   template <class T>
     requires(caf::detail::iterable<T>
-             && ! caf::detail::has_inspect_overload<legacy_deserializer, T&>)
+             and not caf::detail::has_inspect_overload<legacy_deserializer, T&>)
   result_type apply(T& xs) {
     return apply_sequence(xs);
   }
@@ -274,7 +274,7 @@ public:
   template <class Clock, class Duration>
   result_type apply(std::chrono::time_point<Clock, Duration>& t) {
     Duration dur{};
-    if (! apply(dur)) {
+    if (not apply(dur)) {
       return false;
     }
     t = std::chrono::time_point<Clock, Duration>{dur};
@@ -284,7 +284,7 @@ public:
   template <class T, std::size_t N>
   result_type apply(std::array<T, N>& x) {
     for (T& v : x) {
-      if (! apply(v)) {
+      if (not apply(v)) {
         return false;
       }
     }
@@ -297,7 +297,7 @@ public:
   template <class... Ts>
   result_type apply(std::variant<Ts...>& x) {
     uint8_t type_tag = 0;
-    if (! apply(type_tag)) {
+    if (not apply(type_tag)) {
       return false;
     }
     return apply(type_tag, x);
@@ -355,7 +355,7 @@ public:
   template <class... Ts>
   result_type apply(tenzir::variant<Ts...>& x) {
     uint8_t type_tag = 0;
-    if (! apply(type_tag)) {
+    if (not apply(type_tag)) {
       return false;
     }
     return apply(type_tag, x);
@@ -413,16 +413,16 @@ public:
   template <class T>
   result_type apply(std::optional<T>& x) {
     bool is_set = false;
-    if (! apply(is_set)) {
+    if (not apply(is_set)) {
       x = {};
       return false;
     }
-    if (! is_set) {
+    if (not is_set) {
       x = {};
       return true;
     }
     T v;
-    if (! apply(v)) {
+    if (not apply(v)) {
       return false;
     }
     x = v;
@@ -431,7 +431,7 @@ public:
 
   result_type apply(caf::config_value& x) {
     uint8_t type_tag = 0;
-    if (! apply(type_tag)) {
+    if (not apply(type_tag)) {
       return false;
     }
     auto& variant = x.get_data();
@@ -443,7 +443,7 @@ public:
     switch (type_tag) {
       case 0: {
         caf::config_value::integer integer;
-        if (! apply(integer)) {
+        if (not apply(integer)) {
           return false;
         }
         x = integer;
@@ -451,7 +451,7 @@ public:
       }
       case 1: {
         caf::config_value::boolean boolean;
-        if (! apply(boolean)) {
+        if (not apply(boolean)) {
           return false;
         }
         x = boolean;
@@ -459,7 +459,7 @@ public:
       }
       case 2: {
         caf::config_value::real real;
-        if (! apply(real)) {
+        if (not apply(real)) {
           return false;
         }
         x = real;
@@ -473,14 +473,14 @@ private:
   template <class T>
   result_type apply_sequence(T& xs) {
     size_t size = 0;
-    if (! begin_sequence(size)) {
+    if (not begin_sequence(size)) {
       return false;
     }
     xs.clear();
     auto it = std::inserter(xs, xs.end());
     for (size_t i = 0; i < size; ++i) {
       typename T::value_type tmp;
-      if (! apply(tmp)) {
+      if (not apply(tmp)) {
         return false;
       }
       *it++ = std::move(tmp);
@@ -494,7 +494,7 @@ private:
     int n = 0;
     uint8_t low7 = 0;
     do {
-      if (! apply(low7)) {
+      if (not apply(low7)) {
         return false;
       }
       x |= static_cast<uint32_t>((low7 & 0x7F)) << (7 * n);
@@ -507,7 +507,7 @@ private:
   template <class T>
   result_type apply_float(T& x) {
     typename caf::detail::ieee_754_trait<T>::packed_type tmp;
-    if (! apply_int(tmp)) {
+    if (not apply_int(tmp)) {
       return false;
     }
     x = caf::detail::unpack754(tmp);
@@ -517,7 +517,7 @@ private:
   template <class T>
   result_type apply_int(T& x) {
     std::make_unsigned_t<T> tmp;
-    if (! apply_raw(sizeof(x), &tmp)) {
+    if (not apply_raw(sizeof(x), &tmp)) {
       return false;
     }
     x = static_cast<T>(to_host_order(tmp));
@@ -533,7 +533,7 @@ private:
 /// @returns The status of the operation.
 /// @relates detail::serialize
 template <concepts::byte_container Buffer, class... Ts>
-  requires(! std::is_rvalue_reference_v<Ts> && ...)
+  requires(not std::is_rvalue_reference_v<Ts> and ...)
 bool legacy_deserialize(const Buffer& buffer, Ts&... xs) {
   legacy_deserializer f{as_bytes(buffer)};
   return f(xs...);

@@ -22,9 +22,9 @@ TEST("is subset") {
 }
 
 TEST("is not subset") {
-  CHECK(!is_subset(make_ids({{9, 19}}), make_ids({{10, 20}})));
-  CHECK(!is_subset(make_ids({{11, 21}}), make_ids({{10, 20}})));
-  CHECK(!is_subset(make_ids({5, 15, 25}), make_ids({{10, 20}})));
+  CHECK(not is_subset(make_ids({{9, 19}}), make_ids({{10, 20}})));
+  CHECK(not is_subset(make_ids({{11, 21}}), make_ids({{10, 20}})));
+  CHECK(not is_subset(make_ids({5, 15, 25}), make_ids({{10, 20}})));
 }
 
 TEST("bitwise_range select") {

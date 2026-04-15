@@ -192,7 +192,7 @@ public:
       }
     });
     for (auto chunk : input) {
-      if (! chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }

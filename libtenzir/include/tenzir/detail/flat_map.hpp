@@ -33,7 +33,7 @@ struct flat_map_policy {
   static auto try_emplace(Ts& xs, Key_Like&& k, Args&&... args) {
     using value_type = typename Ts::value_type;
     auto it = std::ranges::lower_bound(xs, k, Compare{}, &value_type::first);
-    if (it == xs.end() || Compare{}(k, it->first)) {
+    if (it == xs.end() or Compare{}(k, it->first)) {
       return std::make_pair(
         xs.emplace(it, std::piecewise_construct,
                    std::forward_as_tuple(std::forward<Key_Like>(k)),
@@ -47,7 +47,7 @@ struct flat_map_policy {
   template <class Ts, class Pair>
   static auto add(Ts& xs, Pair&& x) {
     auto i = std::lower_bound(xs.begin(), xs.end(), x.first, pair_compare);
-    if (i == xs.end() || pair_compare(x, i->first)) {
+    if (i == xs.end() or pair_compare(x, i->first)) {
       return std::make_pair(xs.insert(i, std::forward<Pair>(x)), true);
     } else {
       return std::make_pair(i, false);
@@ -58,7 +58,7 @@ struct flat_map_policy {
   static auto lookup(Ts& xs, const Key_Like& k) {
     using value_type = typename Ts::value_type;
     auto it = std::ranges::lower_bound(xs, k, Compare{}, &value_type::first);
-    return it != xs.end() && !Compare{}(k, it->first) ? it : xs.end();
+    return it != xs.end() and not Compare{}(k, it->first) ? it : xs.end();
   }
 };
 

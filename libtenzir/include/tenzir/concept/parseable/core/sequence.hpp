@@ -42,24 +42,16 @@ public:
   // LHS = T && RHS = unused       =>  LHS
   // LHS = unused && RHS = T       =>  RHS
   // LHS = T && RHS = U            =>  std:tuple<T, U>
-  using attribute =
+  using attribute = std::conditional_t<
+    std::is_same_v<lhs_attribute, unused_type>
+      and std::is_same_v<rhs_attribute, unused_type>,
+    unused_type,
     std::conditional_t<
-      std::is_same_v<lhs_attribute, unused_type>
-        && std::is_same_v<rhs_attribute, unused_type>,
-      unused_type,
-      std::conditional_t<
-        std::is_same_v<lhs_attribute, unused_type>,
-        rhs_attribute,
-        std::conditional_t<
-          std::is_same_v<rhs_attribute, unused_type>,
-          lhs_attribute,
-          detail::attr_fold_t<
-            decltype(std::tuple_cat(detail::tuple_wrap<lhs_attribute>{},
-                                    detail::tuple_wrap<rhs_attribute>{}))
-          >
-        >
-      >
-    >;
+      std::is_same_v<lhs_attribute, unused_type>, rhs_attribute,
+      std::conditional_t<std::is_same_v<rhs_attribute, unused_type>, lhs_attribute,
+                         detail::attr_fold_t<decltype(std::tuple_cat(
+                           detail::tuple_wrap<lhs_attribute>{},
+                           detail::tuple_wrap<rhs_attribute>{}))>>>>;
 
   constexpr sequence_parser(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
@@ -68,8 +60,9 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto save = f;
-    if (parse_left(f, l, a) && parse_right(f, l, a))
+    if (parse_left(f, l, a) and parse_right(f, l, a)) {
       return true;
+    }
     f = save;
     return false;
   }

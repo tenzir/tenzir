@@ -21,10 +21,11 @@ struct stable_set_policy {
   template <class Ts, class T>
   static auto add(Ts& xs, T&& x) {
     auto i = lookup(xs, x);
-    if (i == xs.end())
+    if (i == xs.end()) {
       return std::make_pair(xs.insert(i, std::forward<T>(x)), true);
-    else
+    } else {
       return std::make_pair(i, false);
+    }
   }
 
   template <class Ts, class T>

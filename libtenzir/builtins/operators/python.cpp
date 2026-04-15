@@ -246,10 +246,10 @@ auto find_wheel(const std::filesystem::path& directory,
     }
     const auto filename = entry.path().filename().string();
     if (not boost::algorithm::starts_with(filename, prefix)
-        || not boost::algorithm::ends_with(filename, suffix)) {
+        or not boost::algorithm::ends_with(filename, suffix)) {
       continue;
     }
-    if (not best_path || filename > best_name) {
+    if (not best_path or filename > best_name) {
       best_name = filename;
       best_path = entry.path();
     }
@@ -476,10 +476,10 @@ public:
             }
             const auto filename = entry.path().filename().string();
             if (not boost::algorithm::starts_with(filename, prefix)
-                || ! boost::algorithm::ends_with(filename, suffix)) {
+                or not boost::algorithm::ends_with(filename, suffix)) {
               continue;
             }
-            if (not best_path || filename > best_name) {
+            if (not best_path or filename > best_name) {
               best_name = filename;
               best_path = entry.path();
             }
@@ -743,7 +743,7 @@ public:
             .emit(ctrl.diagnostics());
           co_return;
         }
-        if (auto status = writer->Close(); ! status.ok()) {
+        if (auto status = writer->Close(); not status.ok()) {
           diagnostic::error("{}", status.message())
             .note("failed to close writer in conversion from input batch to "
                   "Arrow format")
@@ -781,7 +781,7 @@ public:
         // The writer on the other side writes an invalid record batch as
         // end-of-stream marker; we have to read it now to remove it from
         // the pipe.
-        if (auto result = (*reader)->ReadNext(); ! result.ok()) {
+        if (auto result = (*reader)->ReadNext(); not result.ok()) {
           diagnostic::error("{}", result.status().message())
             .note("failed to read closing bytes")
             .emit(ctrl.diagnostics());
@@ -1236,7 +1236,7 @@ public:
                     .named("file", path)
                     .named("requirements", requirements);
     TRY(parser.parse(inv, ctx));
-    if (not path && not code) {
+    if (not path and not code) {
       diagnostic::error("must have either the `file` argument or inline code")
         .primary(inv.self)
         .usage(parser.usage())
@@ -1244,7 +1244,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    if (path && code) {
+    if (path and code) {
       diagnostic::error("cannot have `file` argument together with inline code")
         .primary(path->source)
         .primary(code->source)

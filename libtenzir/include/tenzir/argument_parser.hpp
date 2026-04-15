@@ -64,7 +64,7 @@ public:
 
   template <class T>
   void add(T& x, std::string meta) {
-    TENZIR_ASSERT(!first_optional_);
+    TENZIR_ASSERT(not first_optional_);
     positional_.push_back(positional_t{
       std::move(meta),
       false,
@@ -82,7 +82,7 @@ public:
 
   template <class T>
   void add(located<T>& x, std::string meta) {
-    TENZIR_ASSERT(!first_optional_);
+    TENZIR_ASSERT(not first_optional_);
     positional_.push_back(positional_t{
       std::move(meta),
       false,
@@ -100,7 +100,7 @@ public:
 
   template <class T>
   void add(std::optional<T>& x, std::string meta) {
-    if (!first_optional_) {
+    if (not first_optional_) {
       first_optional_ = positional_.size();
     }
     positional_.push_back(positional_t{
@@ -120,7 +120,7 @@ public:
 
   template <class T>
   void add(std::optional<located<T>>& x, std::string meta) {
-    if (!first_optional_) {
+    if (not first_optional_) {
       first_optional_ = positional_.size();
     }
     positional_.push_back(positional_t{
@@ -228,7 +228,7 @@ private:
       return {detail::to_strings(detail::split(x.inner, ",")), x.source};
     } else {
       auto result = tenzir::to<T>(std::move(x.inner));
-      if (!result) {
+      if (not result) {
         diagnostic::error("could not parse value").primary(x.source).throw_();
       }
       return located<T>{std::move(*result), x.source};

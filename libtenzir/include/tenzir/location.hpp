@@ -41,7 +41,7 @@ struct location {
   auto
   subloc(size_t pos, size_t count = std::numeric_limits<size_t>::max()) const
     -> location {
-    if (*this == unknown || pos > end) {
+    if (*this == unknown or pos > end) {
       return *this;
     }
     const auto first = begin + pos;
@@ -86,19 +86,20 @@ struct located {
 
   template <typename U>
     requires std::is_constructible_v<T, const U&>
-  explicit(!std::is_convertible_v<const U&, T>) located(const located<U>& other)
+  explicit(not std::is_convertible_v<const U&, T>)
+    located(const located<U>& other)
     : inner(other.inner), source(other.source) {
   }
 
   template <typename U>
     requires std::is_constructible_v<T, U&&>
-  explicit(!std::is_convertible_v<U&&, T>) located(located<U>&& other)
+  explicit(not std::is_convertible_v<U&&, T>) located(located<U>&& other)
     : inner(std::move(other.inner)), source(other.source) {
   }
 
   template <typename U>
     requires(std::is_constructible_v<T, const U&>
-             && std::is_assignable_v<T&, const U&>)
+             and std::is_assignable_v<T&, const U&>)
   auto operator=(const located<U>& other) -> located& {
     inner = other.inner;
     source = other.source;
@@ -106,7 +107,7 @@ struct located {
   }
 
   template <typename U>
-    requires(std::is_constructible_v<T, U> && std::is_assignable_v<T&, U>)
+    requires(std::is_constructible_v<T, U> and std::is_assignable_v<T&, U>)
   auto operator=(located<U&>& other) -> located& {
     inner = std::move(other.inner);
     source = other.source;
@@ -118,7 +119,7 @@ struct located {
   template <class Inspector>
   friend auto inspect(Inspector& f, located& x) {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->apply(x.inner) && dbg->append(" @ {:?}", x.source);
+      return dbg->apply(x.inner) and dbg->append(" @ {:?}", x.source);
     }
     return f.object(x).pretty_name("located").fields(
       f.field("inner", x.inner), f.field("source", x.source));

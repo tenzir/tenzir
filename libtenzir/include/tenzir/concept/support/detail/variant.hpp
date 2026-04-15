@@ -40,18 +40,13 @@ struct lazy_type_list {
 
 template <class T, class U>
 struct lazy_variant_concat {
-  using type = tl_concat_t<
-    tl_make_t<typename T::types>,
-    tl_make_t<typename U::types>
-  >;
+  using type
+    = tl_concat_t<tl_make_t<typename T::types>, tl_make_t<typename U::types>>;
 };
 
 template <class T, class U>
 struct lazy_variant_push_back {
-  using type = tl_push_back_t<
-    tl_make_t<typename T::types>,
-    U
-  >;
+  using type = tl_push_back_t<tl_make_t<typename T::types>, U>;
 };
 
 // clang-format off
@@ -59,7 +54,7 @@ template <class T, class U>
 using variant_type_concat =
   tl_distinct_t<
     typename std::conditional_t<
-      is_variant<T>{} && is_variant<U>{},
+      is_variant<T>{} and is_variant<U>{},
       lazy_variant_concat<T, U>,
       std::conditional_t<
         is_variant<T>{},

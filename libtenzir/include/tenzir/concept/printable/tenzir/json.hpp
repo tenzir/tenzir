@@ -268,19 +268,19 @@ struct json_printer : printer_base<json_printer> {
 
   private:
     auto should_skip(view3<data> x, bool in_list) -> bool {
-      if (in_list and options_.omit_nulls_in_lists && is<caf::none_t>(x)) {
+      if (in_list and options_.omit_nulls_in_lists and is<caf::none_t>(x)) {
         return true;
       }
-      if (options_.omit_null_fields && is<caf::none_t>(x)) {
+      if (options_.omit_null_fields and is<caf::none_t>(x)) {
         return true;
       }
-      if (options_.omit_empty_lists && is<view3<list>>(x)) {
+      if (options_.omit_empty_lists and is<view3<list>>(x)) {
         const auto& ys = as<view3<list>>(x);
         return std::all_of(ys.begin(), ys.end(), [this](view3<data> y) {
           return should_skip(y, true);
         });
       }
-      if (options_.omit_empty_records && is<view3<record>>(x)) {
+      if (options_.omit_empty_records and is<view3<record>>(x)) {
         const auto& ys = as<view3<record>>(x);
         return std::all_of(ys.begin(), ys.end(), [this](const auto& y) {
           return should_skip(y.second, false);

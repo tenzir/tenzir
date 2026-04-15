@@ -202,7 +202,7 @@ public:
         trivially_true_expression(), experimental_include_ranges.has_value());
     }
     auto normalized_and_validated = normalize_and_validate(expr->inner);
-    if (!normalized_and_validated) {
+    if (not normalized_and_validated) {
       diagnostic::error("invalid expression")
         .primary(expr->source)
         .docs("https://tenzir.com/language/expressions")

@@ -26,8 +26,8 @@ using namespace tenzir;
 
 TEST("legacy type default construction") {
   legacy_type t;
-  CHECK(! t);
-  CHECK(! is<legacy_bool_type>(t));
+  CHECK(not t);
+  CHECK(not is<legacy_bool_type>(t));
 }
 
 TEST("legacy type construction") {
@@ -46,8 +46,8 @@ TEST("assignment") {
   CHECK(t);
   CHECK(is<legacy_real_type>(t));
   t = {};
-  CHECK(! t);
-  CHECK(! is<legacy_real_type>(t));
+  CHECK(not t);
+  CHECK(not is<legacy_real_type>(t));
   auto u = legacy_type{legacy_none_type{}};
   CHECK(u);
   CHECK(is<legacy_none_type>(u));
@@ -91,8 +91,8 @@ TEST("equality comparison") {
 }
 
 TEST("less - than comparison") {
-  CHECK(! (legacy_type{} < legacy_type{}));
-  CHECK(! (legacy_real_type{} < legacy_real_type{}));
+  CHECK(not(legacy_type{} < legacy_type{}));
+  CHECK(not(legacy_real_type{} < legacy_real_type{}));
   CHECK(legacy_string_type{}.name("a") < legacy_string_type{}.name("b"));
   CHECK(legacy_record_type{}.name("a") < legacy_record_type{}.name("b"));
 }

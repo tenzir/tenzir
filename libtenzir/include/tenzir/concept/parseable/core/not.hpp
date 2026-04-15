@@ -23,7 +23,7 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute&) const {
     auto i = f; // Do not consume input.
-    return !parser_(i, l, unused);
+    return not parser_(i, l, unused);
   }
 
 private:

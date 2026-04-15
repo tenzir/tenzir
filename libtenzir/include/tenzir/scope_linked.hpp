@@ -37,8 +37,9 @@ public:
   scope_linked& operator=(const scope_linked&) = default;
 
   ~scope_linked() {
-    if (hdl_)
+    if (hdl_) {
       caf::anon_send_exit(hdl_, caf::exit_reason::user_shutdown);
+    }
   }
 
   // -- properties -------------------------------------------------------------

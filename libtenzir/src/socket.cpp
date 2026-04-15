@@ -59,7 +59,7 @@ auto socket_endpoint::parse(std::string_view url)
   auto v6 = std::ranges::find_if(*ips, [](const ip& addr) {
     return addr.is_v6();
   });
-  TENZIR_ASSERT(v4 != ips->end() || v6 != ips->end());
+  TENZIR_ASSERT(v4 != ips->end() or v6 != ips->end());
   if (v4 != ips->end()) {
     TENZIR_DEBUG("selecting first IPv4 address: {}", *v4);
     result.addr = *v4;

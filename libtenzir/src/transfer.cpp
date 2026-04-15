@@ -160,7 +160,7 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
   }
   auto on_read =
     [chunk = std::move(chunk)](std::span<std::byte> buffer) mutable -> size_t {
-    if (not chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       TENZIR_DEBUG("completing chunk reading");
       return 0;
     }

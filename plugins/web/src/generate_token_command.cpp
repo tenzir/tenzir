@@ -1,3 +1,11 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "web/generate_token_command.hpp"
 
 #include "web/authenticator.hpp"
@@ -21,7 +29,7 @@ auto generate_token_command(const tenzir::invocation& inv,
   // defined in the main tenzir namespace, so we have to work around manually.
   auto timeout = caf::infinite;
   auto authenticator = get_authenticator(self, node, timeout);
-  if (!authenticator) {
+  if (not authenticator) {
     return caf::make_message(authenticator.error());
   }
   auto result = caf::message{};

@@ -104,8 +104,8 @@ auto community_id_hash_append(HashAlgorithm& h, const flow& x) -> void {
     }
   }
   auto is_ordered
-    = is_one_way || x.src_addr < x.dst_addr
-      || (x.src_addr == x.dst_addr && src_port_num < dst_port_num);
+    = is_one_way or x.src_addr < x.dst_addr
+      or (x.src_addr == x.dst_addr and src_port_num < dst_port_num);
   // Adjust byte order - if needed.
   src_port_num = detail::to_network_order(src_port_num);
   dst_port_num = detail::to_network_order(dst_port_num);

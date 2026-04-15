@@ -205,8 +205,8 @@ void render_parse_error(const command& cmd, const invocation& inv,
 
 auto generate_default_value_for_argument_type(std::string_view type_name)
   -> std::string_view {
-  if (type_name.starts_with("uint") || type_name.starts_with("int")
-      || type_name.starts_with("long")) {
+  if (type_name.starts_with("uint") or type_name.starts_with("int")
+      or type_name.starts_with("long")) {
     return "0";
   } else if (type_name.find("timespan") != std::string_view::npos) {
     return "0s";
@@ -269,7 +269,7 @@ command::command(std::string_view name, std::string_view description,
 
 std::string command::full_name() const {
   std::string result{name};
-  for (auto ptr = parent; ptr != nullptr && ptr->parent != nullptr;
+  for (auto ptr = parent; ptr != nullptr and ptr->parent != nullptr;
        ptr = ptr->parent) {
     if (not ptr->name.empty()) {
       result.insert(result.begin(), ' ');
@@ -319,11 +319,11 @@ caf::error parse_impl(invocation& result, const command& cmd,
       has_subcommand = position != last;
       break;
   }
-  if (position != last && position->starts_with('-')) {
+  if (position != last and position->starts_with('-')) {
     return caf::make_error(ec::unrecognized_option, cmd.full_name(), *position);
   }
   // Check for help option.
-  if (has_subcommand && *position == "help") {
+  if (has_subcommand and *position == "help") {
     put(result.options, "help", true);
     return caf::none;
   }

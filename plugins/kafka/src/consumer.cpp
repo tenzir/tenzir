@@ -20,7 +20,7 @@ auto consumer::make(configuration config) -> caf::expected<consumer> {
   std::string error;
   result.consumer_.reset(
     RdKafka::KafkaConsumer::create(config.conf_.get(), error));
-  if (! result.consumer_) {
+  if (not result.consumer_) {
     return caf::make_error(ec::unspecified, error);
   }
   result.config_ = std::move(config);
@@ -66,7 +66,7 @@ auto consumer::get_assignment(const std::string& topic, diagnostic_handler& dh,
   }
   std::unordered_set<int32_t> result;
   for (auto* partition : partitions) {
-    if (partition && partition->topic() == topic) {
+    if (partition and partition->topic() == topic) {
       result.insert(partition->partition());
     }
   }

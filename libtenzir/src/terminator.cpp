@@ -31,7 +31,7 @@ void handle_down_msg(terminator_actor::stateful_pointer<terminator_state> self,
   remaining.erase(i);
   // Perform next action based on policy.
   if constexpr (std::is_same_v<Policy, policy::sequential>) {
-    if (!remaining.empty()) {
+    if (not remaining.empty()) {
       auto& next = remaining.back();
       TENZIR_DEBUG("{} terminates next actor {}", *self, next);
       self->monitor(next,
@@ -61,12 +61,12 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
   return {
     [self](atom::shutdown, const std::vector<caf::actor>& xs) {
       TENZIR_DEBUG("{} got request to terminate {} actors", *self, xs.size());
-      TENZIR_ASSERT(!self->state().promise.pending());
+      TENZIR_ASSERT(not self->state().promise.pending());
       self->state().promise = self->make_response_promise<atom::done>();
       auto& remaining = self->state().remaining_actors;
       remaining.reserve(xs.size());
       for (auto i = xs.rbegin(); i != xs.rend(); ++i) {
-        if (!*i) {
+        if (not *i) {
           TENZIR_DEBUG("{} skips termination of already exited actor at "
                        "position "
                        "{}",
@@ -106,7 +106,7 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
       } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
         // Terminate all actors.
         for (auto& x : xs) {
-          if (!x) {
+          if (not x) {
             continue;
           }
           self->monitor(x,

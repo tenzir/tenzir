@@ -34,7 +34,7 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
     } else {
       if (merge_lists == policy::merge_lists::yes) {
         if (is<caf::config_value::list>(value)
-            && is<caf::config_value::list>(dst[key])) {
+            and is<caf::config_value::list>(dst[key])) {
           const auto& src_list = as<caf::config_value::list>(value);
           auto& dst_list = dst[key].as_list();
           dst_list.insert(dst_list.end(), src_list.begin(), src_list.end());
@@ -69,9 +69,10 @@ get_bytesize(caf::settings opts, std::string_view key, uint64_t defval) {
     result = caf::get<caf::config_value::integer>(opts, key);
   } else if (caf::holds_alternative<std::string>(opts, key)) {
     auto result_str = caf::get<std::string>(opts, key);
-    if (!parsers::bytesize(result_str, result))
+    if (not parsers::bytesize(result_str, result)) {
       return caf::make_error(ec::parse_error, "could not parse '" + result_str
                                                 + "' as valid byte size");
+    }
   } else {
     return caf::make_error(ec::invalid_argument,
                            "invalid value for key '" + std::string{key} + "'");

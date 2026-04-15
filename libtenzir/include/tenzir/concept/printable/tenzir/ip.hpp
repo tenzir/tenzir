@@ -42,7 +42,7 @@ struct ip_printer : printer_base<ip_printer<Policy>> {
       }
       return inet_ntop(AF_INET6, bytes.data(), buf, INET6_ADDRSTRLEN);
     }();
-    return result != nullptr && printers::str.print(out, result);
+    return result != nullptr and printers::str.print(out, result);
   }
 };
 

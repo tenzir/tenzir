@@ -62,7 +62,8 @@
     return tenzir::detail::inspect_enum_str(                                   \
       f, x, {TENZIR_PP_FOR(TENZIR_ENUM_STR, __VA_ARGS__)});                    \
   }                                                                            \
-  [[maybe_unused]] inline void adl_tenzir_macro_enum(name) {}
+  [[maybe_unused]] inline void adl_tenzir_macro_enum(name) {                   \
+  }
 
 namespace tenzir {
 

@@ -52,23 +52,23 @@ TEST("IPv4") {
   ip x;
   ip y;
   CHECK(x == y);
-  CHECK(! x.is_v4());
+  CHECK(not x.is_v4());
   CHECK(x.is_v6());
 
   auto a = *to<ip>("172.16.7.1");
   CHECK(to_string(a) == "172.16.7.1");
   CHECK(a.is_v4());
-  CHECK(! a.is_v6());
-  CHECK(! a.is_loopback());
-  CHECK(! a.is_multicast());
-  CHECK(! a.is_broadcast());
+  CHECK(not a.is_v6());
+  CHECK(not a.is_loopback());
+  CHECK(not a.is_multicast());
+  CHECK(not a.is_broadcast());
 
   auto localhost = *to<ip>("127.0.0.1");
   CHECK(to_string(localhost) == "127.0.0.1");
   CHECK(localhost.is_v4());
   CHECK(localhost.is_loopback());
-  CHECK(! localhost.is_multicast());
-  CHECK(! localhost.is_broadcast());
+  CHECK(not localhost.is_multicast());
+  CHECK(not localhost.is_broadcast());
 
   // Lexicalgraphical comparison.
   CHECK(localhost < a);
@@ -102,9 +102,9 @@ TEST("IPv6") {
   auto a = *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   auto b = *to<ip>("2001:db8:0:0:202:b3ff:fe1e:8329");
   auto c = *to<ip>("2001:db8::202:b3ff:fe1e:8329");
-  CHECK(a.is_v6() && b.is_v6() && c.is_v6());
-  CHECK(! (a.is_v4() || b.is_v4() || c.is_v4()));
-  CHECK(a == b && b == c);
+  CHECK(a.is_v6() and b.is_v6() and c.is_v6());
+  CHECK(not(a.is_v4() or b.is_v4() or c.is_v4()));
+  CHECK(a == b and b == c);
 
   auto d = *to<ip>("ff01::1");
   CHECK(d.is_multicast());
@@ -126,7 +126,7 @@ TEST("IPv6") {
   CHECK(f == (a ^ d));
   CHECK(f == e);
 
-  CHECK(! a.mask(129));
+  CHECK(not a.mask(129));
   CHECK(a.mask(128)); // No modification
   CHECK(a == *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329"));
   CHECK(a.mask(112));

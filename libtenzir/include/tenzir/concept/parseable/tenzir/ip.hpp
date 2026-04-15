@@ -56,21 +56,18 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
 
   static auto make_v4() {
     using namespace parsers;
-    auto dec
-      = integral_parser<uint16_t, 3, 1>{}.with([](auto i) { return i < 256; });
-      ;
-    auto v4
-      = dec >> '.' >> dec >> '.' >> dec >> '.' >> dec
-      ;
+    auto dec = integral_parser<uint16_t, 3, 1>{}.with([](auto i) {
+      return i < 256;
+    });
+    ;
+    auto v4 = dec >> '.' >> dec >> '.' >> dec >> '.' >> dec;
     return v4;
   }
 
   static auto make_v6() {
     using namespace parsers;
     using namespace parser_literals;
-    auto h16
-      = rep<1, 4>(xdigit)
-      ;
+    auto h16 = rep<1, 4>(xdigit);
     // Matches a 1-4 hex digits followed by a *single* colon. If we did not have
     // this parser, the input "f00::" would not be detected correctly, since a
     // rule of the form
@@ -79,40 +76,36 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
     //
     // already consumes the input "f00:" after the first repitition parser, thus
     // erroneously leaving only ":" for next rule `>> h16` to consume.
-    auto h16_colon
-      = h16 >> ':' >> !':'_p
-      ;
-    auto ls32
-      = h16 >> ':' >> h16
-      | make_v4();
-      ;
+    auto h16_colon = h16 >> ':' >> ! ':'_p;
+    auto ls32 = h16 >> ':' >> h16 | make_v4();
+    ;
     auto v6
-      =                                             rep<6>(h16 >> ':') >> ls32
-      |                                     "::" >> rep<5>(h16 >> ':') >> ls32
-      |   -(                        h16) >> "::" >> rep<4>(h16 >> ':') >> ls32
-      |   -(rep<0, 1>(h16_colon) >> h16) >> "::" >> rep<3>(h16 >> ':') >> ls32
-      |   -(rep<0, 2>(h16_colon) >> h16) >> "::" >> rep<2>(h16 >> ':') >> ls32
-      |   -(rep<0, 3>(h16_colon) >> h16) >> "::" >>        h16 >> ':'  >> ls32
-      |   -(rep<0, 4>(h16_colon) >> h16) >> "::"                       >> ls32
-      |   -(rep<0, 5>(h16_colon) >> h16) >> "::"                       >> h16
-      |   -(rep<0, 6>(h16_colon) >> h16) >> "::"
-      ;
+      = rep<6>(h16 >> ':') >> ls32 | "::" >> rep<5>(h16 >> ':') >> ls32
+        | -(h16) >> "::" >> rep<4>(h16 >> ':') >> ls32
+        | -(rep<0, 1>(h16_colon) >> h16) >> "::" >> rep<3>(h16 >> ':') >> ls32
+        | -(rep<0, 2>(h16_colon) >> h16) >> "::" >> rep<2>(h16 >> ':') >> ls32
+        | -(rep<0, 3>(h16_colon) >> h16) >> "::" >> h16 >> ':' >> ls32
+        | -(rep<0, 4>(h16_colon) >> h16) >> "::" >> ls32
+        | -(rep<0, 5>(h16_colon) >> h16) >> "::" >> h16
+        | -(rep<0, 6>(h16_colon) >> h16) >> "::";
     return v6;
   }
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv4) {
+                  or Policy == ip_parser_policy::ipv4) {
       static auto v4 = make_v4();
-      if (v4(f, l, unused))
+      if (v4(f, l, unused)) {
         return true;
+      }
     }
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv6) {
+                  or Policy == ip_parser_policy::ipv6) {
       static auto v6 = make_v6();
-      if (v6(f, l, unused))
+      if (v6(f, l, unused)) {
         return true;
+      }
     }
     return false;
   }
@@ -122,7 +115,7 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
     std::array<uint8_t, 16> bytes = {};
     auto begin = f;
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv4) {
+                  or Policy == ip_parser_policy::ipv4) {
       static auto const v4 = make_v4();
       if (v4(f, l, bytes[12], bytes[13], bytes[14], bytes[15])) {
         a = ip::v4(std::span<const uint8_t, 4>{bytes.data() + 12, 4});
@@ -130,7 +123,7 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
       }
     }
     if constexpr (Policy == ip_parser_policy::any
-                  || Policy == ip_parser_policy::ipv6) {
+                  or Policy == ip_parser_policy::ipv6) {
       static auto const v6 = make_v6();
       if (v6(f, l, unused)) {
         // We still need to enhance the parseable concept with a few more tools
@@ -143,8 +136,9 @@ struct ip_parser : tenzir::parser_base<ip_parser<Policy>> {
         TENZIR_ASSERT(f - begin < INET6_ADDRSTRLEN);
         std::copy(begin, f, buf);
         auto okay = ::inet_pton(AF_INET6, buf, bytes.data()) == 1;
-        if (okay)
+        if (okay) {
           a = ip{bytes};
+        }
         return okay;
       }
     }

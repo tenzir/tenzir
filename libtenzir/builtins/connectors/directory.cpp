@@ -48,7 +48,7 @@ public:
   auto
   instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    if (!info) {
+    if (not info) {
       return caf::make_error(ec::syntax_error,
                              "cannot use directory saver outside of `to "
                              "directory write ...`");
@@ -66,15 +66,17 @@ public:
         / fmt::format("{}.{}.{}", info->input_schema.name(),
                       info->input_schema.make_fingerprint(), info->format);
     auto const* p = plugins::find<saver_parser_plugin>("file");
-    if (!p) {
+    if (not p) {
       return caf::make_error(ec::unspecified, "could not find `file` saver");
     }
     auto diag = null_diagnostic_handler{};
     auto file_pipeline = escape_operator_arg(file_path.string());
-    if (args_.append)
+    if (args_.append) {
       file_pipeline += " --append";
-    if (args_.real_time)
+    }
+    if (args_.real_time) {
       file_pipeline += " --real-time";
+    }
     // TODO: We should probably use a better mechanism here than escaping and
     // re-parsing.
     auto pi = tql::make_parser_interface(std::move(file_pipeline), diag);
@@ -85,8 +87,9 @@ public:
       return caf::make_error(ec::unspecified, fmt::format("{:?}", d));
     }
     auto file_saver = parsed->instantiate(ctrl, std::move(info));
-    if (not file_saver)
+    if (not file_saver) {
       return std::move(file_saver.error());
+    }
     auto guard = detail::scope_guard([=]() noexcept {
       // We also print this when the operator fails at runtime, but
       // then again this also means that we did create the file, so

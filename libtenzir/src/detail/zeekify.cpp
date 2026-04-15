@@ -19,7 +19,7 @@ namespace {
 
 // For fields that do not require substring search, use an optimized index.
 bool is_opaque_id(const auto& field) {
-  if (!is<string_type>(field.type)) {
+  if (not is<string_type>(field.type)) {
     return false;
   }
   auto has_name = [&](const auto& name) {
@@ -40,8 +40,8 @@ record_type zeekify(record_type schema) {
   transformations.reserve(schema.num_leaves());
   bool found_event_timestamp = false;
   for (const auto& [field, offset] : schema.leaves()) {
-    if (!found_event_timestamp && field.name == "ts"
-        && is<time_type>(field.type)) {
+    if (not found_event_timestamp and field.name == "ts"
+        and is<time_type>(field.type)) {
       // The first field is almost exclusively the event timestamp for standard
       // Zeek logs. Its has the field name `ts`. For streaming JSON, some other
       // fields, e.g., `_path`, precede it.

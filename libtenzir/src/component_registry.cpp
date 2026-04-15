@@ -18,7 +18,7 @@ namespace tenzir {
 bool component_registry::add(caf::actor comp, std::string type,
                              std::string label) {
   TENZIR_ASSERT(comp);
-  TENZIR_ASSERT(!type.empty());
+  TENZIR_ASSERT(not type.empty());
   if (label.empty()) {
     label = type;
   }

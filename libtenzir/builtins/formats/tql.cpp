@@ -60,7 +60,7 @@ auto append_constant_to_builder(const ast::constant& constant, Generator& gen)
   return constant.value.match([&](const auto& value) -> append_result {
     using value_type = std::remove_cvref_t<decltype(value)>;
     if constexpr (std::is_same_v<value_type, map>
-                  || std::is_same_v<value_type, secret>) {
+                  or std::is_same_v<value_type, secret>) {
       return append_result::unsupported_expression;
     } else {
       gen.data(value);
@@ -232,7 +232,7 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (done_ || not input || input->size() == 0) {
+    if (done_ or not input or input->size() == 0) {
       co_return;
     }
     // Append new data to buffer
@@ -316,7 +316,7 @@ private:
         break;
       }
       if (parsed->bytes_consumed == 0) {
-        if (is_final && not is_only_whitespace(view)) {
+        if (is_final and not is_only_whitespace(view)) {
           diagnostic::warning("incomplete record at end of input").emit(ctx);
         }
         break;

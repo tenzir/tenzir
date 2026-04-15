@@ -22,7 +22,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute&) const {
-    return !printer_.print(out, unused);
+    return not printer_.print(out, unused);
   }
 
 private:

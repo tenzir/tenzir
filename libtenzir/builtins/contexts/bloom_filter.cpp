@@ -244,7 +244,7 @@ public:
 
   auto reset() -> caf::expected<void> override {
     auto params = bloom_filter_.parameters();
-    TENZIR_ASSERT(params.n && params.p);
+    TENZIR_ASSERT(params.n and params.p);
     bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
     return {};
   }
@@ -318,7 +318,7 @@ class plugin : public virtual ContextFactoryPluginCrtp<"bloom-filter", plugin> {
     if (n == 0) {
       return caf::make_error(ec::invalid_argument, "--capacity must be > 0");
     }
-    if (p <= 0.0 || p >= 1.0) {
+    if (p <= 0.0 or p >= 1.0) {
       return caf::make_error(ec::invalid_argument,
                              "--fp-probability not in (0,1)");
     }

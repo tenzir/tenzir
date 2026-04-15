@@ -146,7 +146,7 @@ struct FusedSenderReceiver {
   FusedSender<T> sender;
   FusedReceiver<T> receiver;
 
-  auto into_push_pull() && -> PushPull<T> {
+  auto into_push_pull() and -> PushPull<T> {
     return {
       FusedPush<T>{std::move(sender)},
       FusedPull<T>{std::move(receiver)},
