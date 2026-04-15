@@ -1,0 +1,7 @@
+error: `server` is not supported by `from_http` anymore
+ --> tests/operators/from_http/error_server_arg.tql:5:41
+  |
+5 | from_http "http://127.0.0.1:0/", server=true {
+  |                                         ^^^^ 
+  |
+  = hint: use `accept_http` to listen for incoming HTTP requests

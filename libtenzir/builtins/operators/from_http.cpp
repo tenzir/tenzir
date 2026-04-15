@@ -77,7 +77,7 @@ struct FromHttpArgs {
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
   Option<located<std::string>> encode;
-  Option<located<std::string>> mode;
+  Option<location> server;
   located<ir::pipeline> parser;
   let_id response;
 };
@@ -1106,17 +1106,17 @@ public:
       = d.named("max_retry_count", &FromHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
-    auto mode_arg = d.named("mode", &FromHttpArgs::mode);
+    auto server_arg = d.named("server", &FromHttpArgs::server);
     auto parser_arg = d.pipeline(&FromHttpArgs::parser,
                                  {{"response", &FromHttpArgs::response}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Validate TLS options.
       tls_validator(ctx);
-      // `mode` is not supported; direct users to `accept_http`.
-      if (auto mode = ctx.get(mode_arg)) {
-        diagnostic::error("`mode` is not supported by `from_http` anymore")
+      // `server=true` is not supported; direct users to `accept_http`.
+      if (auto server = ctx.get_location(server_arg)) {
+        diagnostic::error("`server` is not supported by `from_http` anymore")
           .hint("use `accept_http` to listen for incoming HTTP requests")
-          .primary(mode->source)
+          .primary(*server)
           .emit(ctx);
       }
       // Validate encode: requires a body and must be "json" or "form".
