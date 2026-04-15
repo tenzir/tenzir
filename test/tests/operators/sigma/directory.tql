@@ -1,0 +1,3 @@
+from {foo: "needle"}
+sigma f"{env("TENZIR_INPUTS")}/sigma/directory"
+sort rule.title

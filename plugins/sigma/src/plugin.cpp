@@ -18,6 +18,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/io/read.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -139,7 +140,8 @@ auto make_sigma_slice(const table_slice& input, const data& yaml,
     },
   };
   auto batch
-    = arrow::RecordBatch::Make(result_schema.to_arrow_schema(), event->rows(),
+    = arrow::RecordBatch::Make(result_schema.to_arrow_schema(),
+                               detail::narrow<int64_t>(event->rows()),
                                {std::move(event_array), std::move(rule_array)});
   return table_slice{batch, result_schema};
 }
