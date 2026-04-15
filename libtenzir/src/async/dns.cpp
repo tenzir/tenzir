@@ -24,7 +24,7 @@
 #include <folly/coro/AsyncScope.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/WithCancellation.h>
-#include <folly/executors/GlobalExecutor.h>
+#include <folly/executors/CPUThreadPoolExecutor.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -499,7 +499,7 @@ template <class Impl, class Awaitable>
 auto spawn_lookup(Impl& impl, Awaitable awaitable) -> void {
   impl.scope_.add(
     folly::coro::co_withExecutor(
-      folly::getGlobalCPUExecutor(),
+      impl.executor_,
       folly::coro::co_invoke(
         [awaitable = std::move(awaitable)]() mutable -> Task<void> {
           std::ignore = co_await folly::coro::co_withCancellation(
@@ -576,6 +576,8 @@ struct ForwardDnsResolver::Impl {
       permits_{config_.max_in_flight},
       channel_{config_},
       state_{State{config_.max_entries}},
+      lookup_executor_{1},
+      executor_{folly::getKeepAliveToken(lookup_executor_)},
       query_{std::move(query)} {
     if (not query_) {
       query_ = [this](std::string hostname) -> Task<ForwardDnsResult> {
@@ -594,6 +596,8 @@ struct ForwardDnsResolver::Impl {
   AresChannel channel_;
   Mutex<State> state_;
   folly::coro::AsyncScope scope_;
+  folly::CPUThreadPoolExecutor lookup_executor_;
+  folly::Executor::KeepAlive<> executor_;
   std::function<Task<ForwardDnsResult>(std::string)> query_;
 };
 
@@ -667,6 +671,8 @@ struct ReverseDnsResolver::Impl {
       permits_{config_.max_in_flight},
       channel_{config_},
       state_{State{config_.max_entries}},
+      lookup_executor_{1},
+      executor_{folly::getKeepAliveToken(lookup_executor_)},
       query_{std::move(query)} {
     if (not query_) {
       query_ = [this](ip address) -> Task<ReverseDnsResult> {
@@ -685,6 +691,8 @@ struct ReverseDnsResolver::Impl {
   AresChannel channel_;
   Mutex<State> state_;
   folly::coro::AsyncScope scope_;
+  folly::CPUThreadPoolExecutor lookup_executor_;
+  folly::Executor::KeepAlive<> executor_;
   std::function<Task<ReverseDnsResult>(ip)> query_;
 };
 

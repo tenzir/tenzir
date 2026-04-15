@@ -16,7 +16,6 @@
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/WithCancellation.h>
-#include <folly/executors/GlobalExecutor.h>
 
 #include <array>
 #include <future>
@@ -135,9 +134,7 @@ TEST("cancelled forward dns lookups keep their permit until completion") {
   auto first = std::thread{[&]() {
     try {
       std::ignore = folly::coro::blockingWait(folly::coro::co_withCancellation(
-        cancel.getToken(),
-        folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                     resolver.resolve("one.example"))));
+        cancel.getToken(), resolver.resolve("one.example")));
     } catch (folly::OperationCancelled const&) {
       cancelled.store(true, std::memory_order_relaxed);
     }
@@ -148,8 +145,7 @@ TEST("cancelled forward dns lookups keep their permit until completion") {
   first.join();
   check(cancelled.load(std::memory_order_relaxed));
   auto second = std::thread{[&]() {
-    auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
-      folly::getGlobalCPUExecutor(), resolver.resolve("two.example")));
+    auto result = folly::coro::blockingWait(resolver.resolve("two.example"));
     second_ok.store(not result->is_err() and is<DnsNotFound>(result->unwrap()),
                     std::memory_order_relaxed);
   }};
