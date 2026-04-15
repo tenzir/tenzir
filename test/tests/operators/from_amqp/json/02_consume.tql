@@ -1,0 +1,7 @@
+// Consume the seeded message and parse it as JSON.
+load_amqp env("AMQP_URL"),
+          queue="from_amqp_string_test",
+          routing_key="from_amqp_string_test",
+          passive=true
+| read_json
+| head 1

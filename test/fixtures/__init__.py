@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # Import modules so their decorators register fixtures on import.
+from . import amqp  # noqa: F401
 from . import abs  # noqa: F401
 from . import clickhouse  # noqa: F401
 from . import gcs  # noqa: F401
@@ -18,6 +19,7 @@ from . import http_server  # noqa: F401
 from . import tcp  # noqa: F401
 
 __all__ = [
+    "amqp",
     "abs",
     "clickhouse",
     "gcs",

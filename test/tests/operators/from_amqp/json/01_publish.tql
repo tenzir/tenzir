@@ -1,0 +1,4 @@
+// Seed a JSON message into a queue for the subsequent consume test.
+from {x: 42}
+| write_json
+| save_amqp env("AMQP_URL"), routing_key="from_amqp_string_test"

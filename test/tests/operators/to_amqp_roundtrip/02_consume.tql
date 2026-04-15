@@ -1,0 +1,7 @@
+// Consume the message that was just published.
+load_amqp env("AMQP_URL"),
+          queue="tenzir_test_roundtrip",
+          routing_key="tenzir_test_roundtrip",
+          passive=true
+| read_json
+| head 1

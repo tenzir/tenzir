@@ -1,0 +1,8 @@
+suite: to-amqp-roundtrip
+fixtures:
+  - amqp:
+      queues:
+        - tenzir_test_roundtrip
+timeout: 120
+skip:
+  on: fixture-unavailable

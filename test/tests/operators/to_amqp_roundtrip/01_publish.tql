@@ -1,0 +1,4 @@
+// Publish a JSON message to a test queue via the default exchange.
+from {message: "hello-amqp"}
+| write_json
+| save_amqp env("AMQP_URL"), routing_key="tenzir_test_roundtrip"

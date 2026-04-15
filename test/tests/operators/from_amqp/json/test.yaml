@@ -1,0 +1,5 @@
+suite: from-amqp-json
+fixtures:
+  - amqp:
+      queues:
+        - from_amqp_string_test
