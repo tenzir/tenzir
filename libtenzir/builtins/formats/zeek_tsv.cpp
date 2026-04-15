@@ -9,6 +9,7 @@
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/pusher.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/parseable/string/any.hpp"
@@ -814,8 +815,20 @@ public:
         }
         return d;
       });
-    last_finish_ = std::chrono::steady_clock::now();
     co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    co_await maybe_emit_ready(push);
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
@@ -902,7 +915,6 @@ private:
     if (not log_.builder or log_.builder->length() == 0) {
       co_return;
     }
-    last_finish_ = std::chrono::steady_clock::now();
     co_await push(unflatten(log_.builder->finish_assert_one_slice(), "."));
   }
 
@@ -910,22 +922,11 @@ private:
     if (not log_.builder) {
       co_return;
     }
-    auto const now = std::chrono::steady_clock::now();
-    auto const rows = log_.builder->length();
-    auto const ready = rows >= detail::narrow_cast<int64_t>(
-                              defaults::import::table_slice_size);
-    auto const timed_out
-      = last_finish_ + defaults::import::batch_timeout < now;
-    if (not ready and not timed_out) {
-      co_return;
+    auto result = log_.builder->yield_ready();
+    for (auto& slice : result.slices) {
+      slice = unflatten(slice, ".");
     }
-    // Keep the batching deadline moving even if there is nothing to emit yet.
-    if (timed_out) {
-      last_finish_ = now;
-    }
-    if (rows > 0) {
-      co_await emit_finished(push);
-    }
+    co_await pusher_.push(std::move(result), push);
   }
 
   auto process_line(std::string_view line, Push<table_slice>& push,
@@ -1159,7 +1160,7 @@ private:
   bool ended_on_carriage_return_ = false;
   Option<Box<transforming_diagnostic_handler>> dh_;
   zeek_log log_;
-  std::chrono::steady_clock::time_point last_finish_ = {};
+  SeriesPusher pusher_;
   size_t line_nr_ = 0;
   bool failed_ = false;
   bool log_has_body_ = false;
