@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/dns.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -123,8 +124,8 @@ public:
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     TENZIR_ASSERT(not ep->host.empty());
-    address_.setFromHostPort(ep->host, ep->port->number());
     host_ = ep->host;
+    port_ = ep->port->number();
     if (args_.tls) {
       tls_ = tls_options{*args_.tls, {.is_server = false}};
     }
@@ -144,6 +145,24 @@ public:
       }
       tls_context_ = std::move(*context);
     }
+    auto resolved = co_await forward_dns_.resolve(host_);
+    if (resolved.status != ForwardDnsStatus::resolved
+        or resolved.answers.empty()) {
+      auto diag = diagnostic::error("failed to resolve remote endpoint")
+                    .primary(args_.endpoint.source)
+                    .note("host: {}", host_);
+      if (resolved.error) {
+        std::move(diag).note("reason: {}", *resolved.error).emit(ctx);
+      } else {
+        std::move(diag)
+          .note("reason: no matching A or AAAA records")
+          .emit(ctx);
+      }
+      co_yield folly::coro::co_error(
+        std::runtime_error{"failed to resolve remote endpoint"});
+    }
+    address_.setFromIpPort(fmt::to_string(resolved.answers.front().address),
+                           port_);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     co_return;
@@ -323,6 +342,8 @@ private:
   FromTcpArgs args_;
   folly::SocketAddress address_;
   std::string host_;
+  uint16_t port_ = 0;
+  ForwardDnsResolver forward_dns_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;

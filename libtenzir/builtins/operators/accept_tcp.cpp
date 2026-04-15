@@ -137,16 +137,11 @@ public:
         .max_in_flight = detail::narrow<size_t>(max_connections_),
       }},
       connection_slots_{detail::narrow<size_t>(max_connections_)} {
-    // Parse endpoint string to SocketAddress (validation already done in
-    // describe)
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
-    if (ep->host.empty()) {
-      address_.setFromLocalPort(ep->port->number());
-    } else {
-      address_.setFromHostPort(ep->host, ep->port->number());
-    }
+    bind_host_ = ep->host;
+    bind_port_ = ep->port->number();
     if (args_.tls) {
       tls_ = tls_options{*args_.tls, {.is_server = true}};
     }
@@ -165,6 +160,28 @@ public:
         co_return;
       }
       tls_context_ = std::move(*context);
+    }
+    if (bind_host_.empty()) {
+      address_.setFromLocalPort(bind_port_);
+    } else {
+      auto resolved = co_await forward_dns_.resolve(bind_host_);
+      if (resolved.status != ForwardDnsStatus::resolved
+          or resolved.answers.empty()) {
+        auto diag = diagnostic::error("failed to resolve listen address")
+                      .primary(args_.endpoint.source)
+                      .note("host: {}", bind_host_);
+        if (resolved.error) {
+          std::move(diag).note("reason: {}", *resolved.error).emit(ctx);
+        } else {
+          std::move(diag)
+            .note("reason: no matching A or AAAA records")
+            .emit(ctx);
+        }
+        request_abort();
+        co_return;
+      }
+      address_.setFromIpPort(fmt::to_string(resolved.answers.front().address),
+                             bind_port_);
     }
     TENZIR_DEBUG("starting listener on {}", address_.describe());
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
@@ -434,6 +451,11 @@ private:
     auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
       release_connection_slot();
     }};
+    if (lifecycle_ != Lifecycle::running
+        or accept_cancel_->getToken().isCancellationRequested()) {
+      close_transport(std::move(transport));
+      co_return;
+    }
     if (tls_context_) {
       try {
         transport = Box<folly::coro::Transport>{
@@ -451,7 +473,8 @@ private:
         co_return;
       }
     }
-    if (accept_cancel_->getToken().isCancellationRequested()) {
+    if (lifecycle_ != Lifecycle::running
+        or accept_cancel_->getToken().isCancellationRequested()) {
       close_transport(std::move(transport));
       co_return;
     }
@@ -542,6 +565,9 @@ private:
   folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
   uint64_t max_connections_ = 128;
+  std::string bind_host_;
+  uint16_t bind_port_ = 0;
+  ForwardDnsResolver forward_dns_;
   ReverseDnsResolver reverse_dns_;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
