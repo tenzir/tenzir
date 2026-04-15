@@ -48,6 +48,12 @@ namespace tenzir::plugins::amqp {
 
 namespace {
 
+/// Plugin-level defaults loaded from `plugins.amqp` during `initialize()`.
+auto global_defaults() -> record& {
+  static auto defaults = record{};
+  return defaults;
+}
+
 /// The default channel number.
 constexpr auto default_channel = amqp_channel_t{1};
 
@@ -1039,7 +1045,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto config = record{};
+    auto config = global_defaults();
     auto reqs
       = build_secret_requests(args_.url, args_.options, config, ctx.dh());
     if (auto res = co_await ctx.resolve_secrets(std::move(reqs)); not res) {
@@ -1193,7 +1199,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto config = record{};
+    auto config = global_defaults();
     auto reqs
       = build_secret_requests(args_.url, args_.options, config, ctx.dh());
     if (auto res = co_await ctx.resolve_secrets(std::move(reqs)); not res) {

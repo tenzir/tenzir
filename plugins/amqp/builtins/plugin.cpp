@@ -53,6 +53,7 @@ class plugin : public virtual operator_plugin2<Operator> {
     }
     if (*c) {
       config_ = **c;
+      global_defaults() = **c;
     }
     return caf::none;
   }
