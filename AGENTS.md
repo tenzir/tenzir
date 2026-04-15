@@ -168,7 +168,7 @@ when they model the same concept.
 ### Tooling
 
 - [external-files.md](.agents/references/external-files.md): Third-party code integration
-- [utilities.md](.agents/references/utilities.md): Helpers in tenzir::detail
+- [utilities.md](.agents/references/utilities.md): Helpers in tenzir::detail, including reusable cache utilities such as `detail::lru_cache`
 - [hashing.md](.agents/references/hashing.md): Hashing infrastructure
 - [parser-combinators.md](.agents/references/parser-combinators.md): Parser combinator framework
 - [common-types.md](.agents/references/common-types.md): Reusable types and abstractions

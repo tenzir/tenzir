@@ -13,7 +13,9 @@
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/lru_cache.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/panic.hpp"
 #include "tenzir/socket.hpp"
 
 #include <ares.h>
@@ -23,7 +25,6 @@
 #include <array>
 #include <chrono>
 #include <cstring>
-#include <list>
 #include <limits>
 #include <memory>
 #include <netdb.h>
@@ -363,87 +364,57 @@ struct PendingLookup {
   Option<Result> result = None{};
 };
 
-template <class Key, class Result>
-struct LookupState {
-  using lru_type = std::list<Key>;
-
-  struct CacheEntry {
-    Result result;
-    Clock::time_point expires_at;
-    typename lru_type::iterator lru_position;
-  };
-
-  using cache_map = std::unordered_map<Key, CacheEntry>;
-
-  lru_type lru;
-  cache_map cache;
-  std::unordered_map<Key, std::shared_ptr<PendingLookup<Key, Result>>> pending;
+template <class Result>
+struct CacheEntry {
+  Result result;
+  Clock::time_point expires_at;
 };
 
 template <class Key, class Result>
-auto touch(LookupState<Key, Result>& state,
-           typename LookupState<Key, Result>::cache_map::iterator it) -> void {
-  state.lru.splice(state.lru.end(), state.lru, it->second.lru_position);
-}
-
-template <class Key, class Result>
-auto erase(LookupState<Key, Result>& state,
-           typename LookupState<Key, Result>::cache_map::iterator it) -> void {
-  state.lru.erase(it->second.lru_position);
-  state.cache.erase(it);
-}
-
-template <class Key, class Result>
-auto evict(LookupState<Key, Result>& state, size_t max_entries) -> void {
-  while (state.cache.size() > max_entries) {
-    TENZIR_ASSERT(not state.lru.empty());
-    auto oldest = state.lru.begin();
-    auto it = state.cache.find(*oldest);
-    TENZIR_ASSERT(it != state.cache.end());
-    erase(state, it);
+struct CacheFactory {
+  auto operator()(Key const&) const -> CacheEntry<Result> {
+    panic("detail::lru_cache factory must not run for DNS lookups");
   }
-}
+};
+
+template <class Key, class Result>
+struct LookupState {
+  using cache_type
+    = detail::lru_cache<Key, CacheEntry<Result>, CacheFactory<Key, Result>>;
+
+  explicit LookupState(size_t max_entries)
+    : cache{max_entries, CacheFactory<Key, Result>{}} {
+  }
+
+  cache_type cache;
+  std::unordered_map<Key, std::shared_ptr<PendingLookup<Key, Result>>> pending;
+};
 
 template <class Key, class Result>
 auto lookup_cached(LookupState<Key, Result>& state, Key const& key)
   -> Option<Result> {
   auto now = Clock::now();
-  auto it = state.cache.find(key);
-  if (it == state.cache.end()) {
+  auto entry = state.cache.get(key);
+  if (not entry) {
     return None{};
   }
-  if (it->second.expires_at <= now) {
-    erase(state, it);
+  if (entry->expires_at <= now) {
+    state.cache.drop(key);
     return None{};
   }
-  auto result = it->second.result;
-  touch(state, it);
-  return result;
+  return entry->result;
 }
 
 template <class Key, class Result>
 auto insert_cached(LookupState<Key, Result>& state, Key const& key,
-                   Result const& result, DnsDuration ttl, size_t max_entries)
-  -> void {
+                   Result const& result, DnsDuration ttl) -> void {
   if (ttl <= DnsDuration::zero()) {
     return;
   }
-  auto expires_at = Clock::now() + ttl;
-  if (auto it = state.cache.find(key); it != state.cache.end()) {
-    it->second.result = result;
-    it->second.expires_at = expires_at;
-    touch(state, it);
-    return;
-  }
-  state.lru.push_back(key);
-  auto lru_position = std::prev(state.lru.end());
-  state.cache.emplace(*lru_position,
-                      typename LookupState<Key, Result>::CacheEntry{
+  state.cache.put(key, CacheEntry<Result>{
                         .result = result,
-                        .expires_at = expires_at,
-                        .lru_position = lru_position,
+                        .expires_at = Clock::now() + ttl,
                       });
-  evict(state, max_entries);
 }
 
 auto ttl_for(DnsResolverConfig const& config, ForwardDnsResult const& result)
@@ -479,10 +450,10 @@ auto ttl_for(DnsResolverConfig const& config, ReverseDnsResult const& result)
 
 template <class Key, class Result>
 auto finish_lookup(Mutex<LookupState<Key, Result>>& state_mutex, Key const& key,
-                   Result const& result, DnsDuration ttl, size_t max_entries)
+                   Result const& result, DnsDuration ttl)
   -> Task<std::shared_ptr<PendingLookup<Key, Result>>> {
   auto state = co_await state_mutex.lock();
-  insert_cached(*state, key, result, ttl, max_entries);
+  insert_cached(*state, key, result, ttl);
   auto it = state->pending.find(key);
   TENZIR_ASSERT(it != state->pending.end());
   auto pending = std::move(it->second);
@@ -500,7 +471,7 @@ struct ForwardDnsResolver::Impl {
     : config_{normalize_config(std::move(config))},
       permits_{config_.max_in_flight},
       channel_{config_},
-      state_{State{}} {
+      state_{State{config_.max_entries}} {
   }
 
   ForwardDnsConfig config_;
@@ -550,8 +521,7 @@ auto ForwardDnsResolver::resolve(std::string hostname)
     result = co_await forward_query(impl_->channel_, hostname);
   }
   auto ttl = ttl_for(impl_->config_, result);
-  pending = co_await finish_lookup(impl_->state_, hostname, result, ttl,
-                                   impl_->config_.max_entries);
+  pending = co_await finish_lookup(impl_->state_, hostname, result, ttl);
   pending->baton.post();
   co_return result;
 }
@@ -569,7 +539,7 @@ struct ReverseDnsResolver::Impl {
     : config_{normalize_config(std::move(config))},
       permits_{config_.max_in_flight},
       channel_{config_},
-      state_{State{}} {
+      state_{State{config_.max_entries}} {
   }
 
   ReverseDnsConfig config_;
@@ -619,8 +589,7 @@ auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
     result = co_await reverse_query(impl_->channel_, address);
     ttl = ttl_for(impl_->config_, result);
   }
-  pending = co_await finish_lookup(impl_->state_, address, result, ttl,
-                                   impl_->config_.max_entries);
+  pending = co_await finish_lookup(impl_->state_, address, result, ttl);
   pending->baton.post();
   co_return result;
 }
