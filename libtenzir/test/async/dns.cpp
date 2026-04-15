@@ -8,11 +8,19 @@
 
 #include "tenzir/async/dns.hpp"
 
+#include "tenzir/async/notify.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/coro/BlockingWait.h>
+#include <folly/coro/WithCancellation.h>
+#include <folly/executors/GlobalExecutor.h>
 
 #include <array>
+#include <future>
+#include <thread>
 
 namespace tenzir {
 
@@ -22,6 +30,21 @@ auto loopback_ip(uint8_t last_octet) -> ip {
   auto bytes = std::array<uint8_t, 4>{127, 0, 0, last_octet};
   return ip::v4(std::span{bytes});
 }
+
+struct DelayedForwardQueryState {
+  DelayedForwardQueryState()
+    : first_started{first_started_promise.get_future().share()},
+      second_started{second_started_promise.get_future().share()} {
+  }
+
+  Notify release_first;
+  Notify release_second;
+  std::promise<void> first_started_promise;
+  std::shared_future<void> first_started;
+  std::promise<void> second_started_promise;
+  std::shared_future<void> second_started;
+  Atomic<int> started = 0;
+};
 
 } // namespace
 
@@ -83,6 +106,62 @@ TEST("reverse dns cache evicts least recently used entries") {
   check(static_cast<bool>(folly::coro::blockingWait(resolver.cached(ip1))));
   check(not static_cast<bool>(folly::coro::blockingWait(resolver.cached(ip2))));
   check(static_cast<bool>(folly::coro::blockingWait(resolver.cached(ip3))));
+}
+
+TEST("cancelled forward dns lookups keep their permit until completion") {
+  auto state = Arc<DelayedForwardQueryState>{std::in_place};
+  auto resolver = detail::DnsResolverTestAccess::make_forward(
+    ForwardDnsConfig{
+      .max_in_flight = 1,
+      .positive_ttl = std::chrono::hours{1},
+      .negative_ttl = std::chrono::hours{1},
+      .literal_ttl = std::chrono::hours{1},
+    },
+    [state](std::string) mutable -> Task<ForwardDnsResult> {
+      auto index = state->started.fetch_add(1, std::memory_order_relaxed) + 1;
+      if (index == 1) {
+        state->first_started_promise.set_value();
+        co_await state->release_first.wait();
+      } else {
+        TENZIR_ASSERT(index == 2);
+        state->second_started_promise.set_value();
+        co_await state->release_second.wait();
+      }
+      co_return ForwardDnsLookup{DnsNotFound{}};
+    });
+  auto cancelled = Atomic<bool>{false};
+  auto second_ok = Atomic<bool>{false};
+  auto cancel = folly::CancellationSource{};
+  auto first = std::thread{[&]() {
+    try {
+      std::ignore = folly::coro::blockingWait(folly::coro::co_withCancellation(
+        cancel.getToken(),
+        folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
+                                     resolver.resolve("one.example"))));
+    } catch (folly::OperationCancelled const&) {
+      cancelled.store(true, std::memory_order_relaxed);
+    }
+  }};
+  check_eq(state->first_started.wait_for(std::chrono::seconds{1}),
+           std::future_status::ready);
+  cancel.requestCancellation();
+  first.join();
+  check(cancelled.load(std::memory_order_relaxed));
+  auto second = std::thread{[&]() {
+    auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
+      folly::getGlobalCPUExecutor(), resolver.resolve("two.example")));
+    second_ok.store(not result->is_err() and is<DnsNotFound>(result->unwrap()),
+                    std::memory_order_relaxed);
+  }};
+  check_eq(state->second_started.wait_for(std::chrono::milliseconds{100}),
+           std::future_status::timeout);
+  state->release_first.notify_one();
+  check_eq(state->second_started.wait_for(std::chrono::seconds{1}),
+           std::future_status::ready);
+  state->release_second.notify_one();
+  second.join();
+  check(second_ok.load(std::memory_order_relaxed));
+  check_eq(state->started.load(std::memory_order_relaxed), 2);
 }
 
 } // namespace tenzir

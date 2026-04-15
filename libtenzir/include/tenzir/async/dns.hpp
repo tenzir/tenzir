@@ -17,11 +17,15 @@
 #include "tenzir/variant.hpp"
 
 #include <chrono>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace tenzir {
+
+class ForwardDnsResolver;
+class ReverseDnsResolver;
 
 /// Shared configuration for async DNS resolvers.
 struct DnsResolverConfig {
@@ -88,6 +92,22 @@ using ForwardDnsResult = Result<ForwardDnsLookup, DnsError>;
 /// Result of a reverse DNS lookup.
 using ReverseDnsResult = Result<ReverseDnsLookup, DnsError>;
 
+namespace detail {
+
+/// Test-only access for injecting deterministic DNS query implementations.
+struct DnsResolverTestAccess {
+  static auto
+  make_forward(ForwardDnsConfig config,
+               std::function<Task<ForwardDnsResult>(std::string)> query)
+    -> ForwardDnsResolver;
+
+  static auto make_reverse(ReverseDnsConfig config,
+                           std::function<Task<ReverseDnsResult>(ip)> query)
+    -> ReverseDnsResolver;
+};
+
+} // namespace detail
+
 /// Async hostname resolver backed by c-ares with caching and bounded
 /// concurrency.
 class ForwardDnsResolver {
@@ -107,6 +127,11 @@ public:
   auto cached(std::string_view hostname) -> Task<Option<ForwardDnsResult>>;
 
 private:
+  friend struct detail::DnsResolverTestAccess;
+
+  ForwardDnsResolver(ForwardDnsConfig config,
+                     std::function<Task<ForwardDnsResult>(std::string)> query);
+
   struct Impl;
   Box<Impl> impl_;
 };
@@ -130,8 +155,26 @@ public:
   auto cached(ip address) -> Task<Option<ReverseDnsResult>>;
 
 private:
+  friend struct detail::DnsResolverTestAccess;
+
+  ReverseDnsResolver(ReverseDnsConfig config,
+                     std::function<Task<ReverseDnsResult>(ip)> query);
+
   struct Impl;
   Box<Impl> impl_;
 };
+
+inline auto detail::DnsResolverTestAccess::make_forward(
+  ForwardDnsConfig config,
+  std::function<Task<ForwardDnsResult>(std::string)> query)
+  -> ForwardDnsResolver {
+  return ForwardDnsResolver{std::move(config), std::move(query)};
+}
+
+inline auto detail::DnsResolverTestAccess::make_reverse(
+  ReverseDnsConfig config, std::function<Task<ReverseDnsResult>(ip)> query)
+  -> ReverseDnsResolver {
+  return ReverseDnsResolver{std::move(config), std::move(query)};
+}
 
 } // namespace tenzir
