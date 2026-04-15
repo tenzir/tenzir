@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/ip.hpp"
@@ -47,14 +48,13 @@ struct DnsResolverConfig {
 using ForwardDnsConfig = DnsResolverConfig;
 using ReverseDnsConfig = DnsResolverConfig;
 
-enum class DnsStatus {
-  resolved,
-  not_found,
-  failed,
+/// DNS lookup failed.
+struct DnsFailed {
+  std::string error;
 };
 
-using ForwardDnsStatus = DnsStatus;
-using ReverseDnsStatus = DnsStatus;
+/// DNS lookup completed successfully but no matching record exists.
+struct DnsNotFound {};
 
 /// A single forward DNS answer.
 struct ForwardDnsAnswer {
@@ -63,19 +63,53 @@ struct ForwardDnsAnswer {
   std::chrono::seconds ttl{};
 };
 
-/// Result of a forward DNS lookup.
-struct ForwardDnsResult {
-  ForwardDnsStatus status = ForwardDnsStatus::not_found;
+/// Successful forward DNS lookup.
+struct ForwardDnsResolved {
   std::vector<ForwardDnsAnswer> answers;
   Option<std::string> canonical_name = None{};
-  Option<std::string> error = None{};
+};
+
+/// Successful reverse DNS lookup.
+struct ReverseDnsResolved {
+  std::string hostname;
+};
+
+/// Result of a forward DNS lookup.
+struct ForwardDnsResult {
+  ForwardDnsResult() = default;
+  explicit(false) ForwardDnsResult(ForwardDnsResolved x)
+    : resolved{std::move(x)} {
+  }
+  explicit(false) ForwardDnsResult(DnsNotFound) {
+  }
+  explicit(false) ForwardDnsResult(DnsFailed x) : failed{std::move(x)} {
+  }
+
+  [[nodiscard]] auto is_not_found() const -> bool {
+    return not resolved and not failed;
+  }
+
+  Option<ForwardDnsResolved> resolved = None{};
+  Option<DnsFailed> failed = None{};
 };
 
 /// Result of a reverse DNS lookup.
 struct ReverseDnsResult {
-  ReverseDnsStatus status = ReverseDnsStatus::not_found;
-  Option<std::string> hostname = None{};
-  Option<std::string> error = None{};
+  ReverseDnsResult() = default;
+  explicit(false) ReverseDnsResult(ReverseDnsResolved x)
+    : resolved{std::move(x)} {
+  }
+  explicit(false) ReverseDnsResult(DnsNotFound) {
+  }
+  explicit(false) ReverseDnsResult(DnsFailed x) : failed{std::move(x)} {
+  }
+
+  [[nodiscard]] auto is_not_found() const -> bool {
+    return not resolved and not failed;
+  }
+
+  Option<ReverseDnsResolved> resolved = None{};
+  Option<DnsFailed> failed = None{};
 };
 
 /// Async hostname resolver backed by c-ares with caching and bounded
@@ -91,7 +125,7 @@ public:
   ~ForwardDnsResolver();
 
   /// Resolve all A and AAAA records for the given hostname.
-  auto resolve(std::string hostname) -> Task<ForwardDnsResult>;
+  auto resolve(std::string hostname) -> Task<Arc<ForwardDnsResult>>;
 
   /// Return a cached result if available and still fresh.
   auto cached(std::string_view hostname) -> Task<Option<ForwardDnsResult>>;
@@ -114,7 +148,7 @@ public:
   ~ReverseDnsResolver();
 
   /// Resolve the PTR record for the given address.
-  auto resolve(ip address) -> Task<ReverseDnsResult>;
+  auto resolve(ip address) -> Task<Arc<ReverseDnsResult>>;
 
   /// Return a cached result if available and still fresh.
   auto cached(ip address) -> Task<Option<ReverseDnsResult>>;

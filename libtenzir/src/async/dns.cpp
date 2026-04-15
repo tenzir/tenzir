@@ -139,40 +139,38 @@ auto is_not_found_status(int status) -> bool {
   }
 }
 
-auto make_forward_failure(int status) -> ForwardDnsResult {
+auto make_dns_failure(int status) -> DnsFailed {
   return {
-    .status = ForwardDnsStatus::failed,
     .error = std::string{ares_strerror(status)},
   };
+}
+
+auto make_dns_failure(std::string error) -> DnsFailed {
+  return {
+    .error = std::move(error),
+  };
+}
+
+auto make_forward_failure(int status) -> ForwardDnsResult {
+  return ForwardDnsResult{make_dns_failure(status)};
 }
 
 auto make_forward_failure(std::string error) -> ForwardDnsResult {
-  return {
-    .status = ForwardDnsStatus::failed,
-    .error = std::move(error),
-  };
+  return ForwardDnsResult{make_dns_failure(std::move(error))};
 }
 
 auto make_reverse_failure(int status) -> ReverseDnsResult {
-  return {
-    .status = ReverseDnsStatus::failed,
-    .error = std::string{ares_strerror(status)},
-  };
+  return ReverseDnsResult{make_dns_failure(status)};
 }
 
 auto make_reverse_failure(std::string error) -> ReverseDnsResult {
-  return {
-    .status = ReverseDnsStatus::failed,
-    .error = std::move(error),
-  };
+  return ReverseDnsResult{make_dns_failure(std::move(error))};
 }
 
 auto make_forward_literal_result(ip address, std::string canonical_name,
                                  DnsResolverConfig const& config)
-  -> ForwardDnsResult {
-  auto result = ForwardDnsResult{
-    .status = ForwardDnsStatus::resolved,
-  };
+  -> ForwardDnsResolved {
+  auto result = ForwardDnsResolved{};
   result.canonical_name = std::move(canonical_name);
   result.answers.push_back(ForwardDnsAnswer{
     .address = address,
@@ -186,7 +184,8 @@ auto local_forward_result(std::string_view hostname,
                           DnsResolverConfig const& config)
   -> Option<ForwardDnsResult> {
   if (auto parsed = to<ip>(std::string{hostname})) {
-    return make_forward_literal_result(*parsed, std::string{hostname}, config);
+    return ForwardDnsResult{make_forward_literal_result(
+      *parsed, std::string{hostname}, config)};
   }
   return None{};
 }
@@ -194,10 +193,9 @@ auto local_forward_result(std::string_view hostname,
 auto local_reverse_result(ip address, DnsResolverConfig const&)
   -> Option<ReverseDnsResult> {
   if (address.is_loopback()) {
-    return ReverseDnsResult{
-      .status = ReverseDnsStatus::resolved,
+    return ReverseDnsResult{ReverseDnsResolved{
       .hostname = std::string{"localhost"},
-    };
+    }};
   }
   return None{};
 }
@@ -245,13 +243,13 @@ auto make_sockaddr(ip address, sockaddr_storage& storage,
 
 struct ForwardQueryState {
   folly::coro::Baton baton;
-  ForwardDnsResult result;
+  ForwardDnsResult result = ForwardDnsResult{DnsNotFound{}};
   std::string hostname;
 };
 
 struct ReverseQueryState {
   folly::coro::Baton baton;
-  ReverseDnsResult result;
+  ReverseDnsResult result = ReverseDnsResult{DnsNotFound{}};
   sockaddr_storage storage{};
   ares_socklen_t length = 0;
 };
@@ -263,11 +261,9 @@ auto forward_query_callback(void* opaque, int status, int /*timeouts*/,
   };
   auto state = std::move(*holder);
   if (status != ARES_SUCCESS) {
-    if (is_not_found_status(status)) {
-      state->result.status = ForwardDnsStatus::not_found;
-    } else {
-      state->result = make_forward_failure(status);
-    }
+    state->result = is_not_found_status(status)
+                      ? ForwardDnsResult{DnsNotFound{}}
+                      : make_forward_failure(status);
     if (info) {
       ares_freeaddrinfo(info);
     }
@@ -275,26 +271,27 @@ auto forward_query_callback(void* opaque, int status, int /*timeouts*/,
     return;
   }
   TENZIR_ASSERT(info);
+  auto resolved = ForwardDnsResolved{};
   if (info->name) {
-    state->result.canonical_name = std::string{info->name};
+    resolved.canonical_name = std::string{info->name};
   } else if (info->cnames and info->cnames->name) {
-    state->result.canonical_name = std::string{info->cnames->name};
+    resolved.canonical_name = std::string{info->cnames->name};
   }
   for (auto* node = info->nodes; node != nullptr; node = node->ai_next) {
     auto address = sockaddr_to_ip(node->ai_addr);
     if (not address) {
       continue;
     }
-    state->result.answers.push_back(ForwardDnsAnswer{
+    resolved.answers.push_back(ForwardDnsAnswer{
       .address = std::move(*address),
       .type = node->ai_family == AF_INET ? "A" : "AAAA",
       .ttl = std::chrono::seconds{std::max(node->ai_ttl, 0)},
     });
   }
   ares_freeaddrinfo(info);
-  state->result.status = state->result.answers.empty()
-                           ? ForwardDnsStatus::not_found
-                           : ForwardDnsStatus::resolved;
+  state->result = resolved.answers.empty()
+                    ? ForwardDnsResult{DnsNotFound{}}
+                    : ForwardDnsResult{std::move(resolved)};
   state->baton.post();
 }
 
@@ -305,22 +302,14 @@ auto reverse_query_callback(void* opaque, int status, int /*timeouts*/,
   };
   auto state = std::move(*holder);
   if (status != ARES_SUCCESS) {
-    if (is_not_found_status(status)) {
-      state->result.status = ReverseDnsStatus::not_found;
-    } else {
-      state->result = make_reverse_failure(status);
-    }
+    state->result = is_not_found_status(status)
+                      ? ReverseDnsResult{DnsNotFound{}}
+                      : make_reverse_failure(status);
     state->baton.post();
     return;
   }
-  if (node) {
-    state->result = ReverseDnsResult{
-      .status = ReverseDnsStatus::resolved,
-      .hostname = std::string{node},
-    };
-  } else {
-    state->result.status = ReverseDnsStatus::not_found;
-  }
+  state->result = node ? ReverseDnsResult{ReverseDnsResolved{.hostname = node}}
+                       : ReverseDnsResult{DnsNotFound{}};
   state->baton.post();
 }
 
@@ -417,33 +406,24 @@ auto insert_cached(LookupState<Key, Result>& state, Key const& key,
 
 auto ttl_for(DnsResolverConfig const& config, ForwardDnsResult const& result)
   -> DnsDuration {
-  switch (result.status) {
-    case ForwardDnsStatus::resolved: {
-      auto ttl = std::chrono::seconds::max();
-      for (auto const& answer : result.answers) {
-        if (answer.ttl > std::chrono::seconds::zero()) {
-          ttl = std::min(ttl, answer.ttl);
-        }
+  if (result.resolved) {
+    auto ttl = std::chrono::seconds::max();
+    for (auto const& answer : result.resolved->answers) {
+      if (answer.ttl > std::chrono::seconds::zero()) {
+        ttl = std::min(ttl, answer.ttl);
       }
-      return ttl == std::chrono::seconds::max() ? config.positive_ttl : ttl;
     }
-    case ForwardDnsStatus::not_found:
-    case ForwardDnsStatus::failed:
-      return config.negative_ttl;
+    return ttl == std::chrono::seconds::max() ? config.positive_ttl : ttl;
   }
-  TENZIR_UNREACHABLE();
+  return config.negative_ttl;
 }
 
 auto ttl_for(DnsResolverConfig const& config, ReverseDnsResult const& result)
   -> DnsDuration {
-  switch (result.status) {
-    case ReverseDnsStatus::resolved:
-      return config.positive_ttl;
-    case ReverseDnsStatus::not_found:
-    case ReverseDnsStatus::failed:
-      return config.negative_ttl;
+  if (result.resolved) {
+    return config.positive_ttl;
   }
-  TENZIR_UNREACHABLE();
+  return config.negative_ttl;
 }
 
 template <class Key, class Result>
@@ -473,7 +453,7 @@ auto abort_lookup(Mutex<LookupState<Key, Result>>& state_mutex, Key const& key,
     if (it->second != pending) {
       co_return;
     }
-    pending->result = std::move(result);
+    pending->result = result;
   } else if (it->second) {
     co_return;
   }
@@ -513,14 +493,14 @@ auto ForwardDnsResolver::operator=(ForwardDnsResolver&&) noexcept
 ForwardDnsResolver::~ForwardDnsResolver() = default;
 
 auto ForwardDnsResolver::resolve(std::string hostname)
-  -> Task<ForwardDnsResult> {
+  -> Task<Arc<ForwardDnsResult>> {
   auto pending
     = std::shared_ptr<PendingLookup<std::string, ForwardDnsResult>>{};
   auto created = false;
   {
     auto state = co_await impl_->state_.lock();
     if (auto result = lookup_cached(*state, hostname)) {
-      co_return std::move(*result);
+      co_return Arc<ForwardDnsResult>{std::move(*result)};
     }
     auto [it, inserted] = state->pending.emplace(hostname, nullptr);
     if (inserted) {
@@ -533,15 +513,15 @@ auto ForwardDnsResolver::resolve(std::string hostname)
   if (not created) {
     co_await pending->baton;
     TENZIR_ASSERT(pending->result);
-    co_return *pending->result;
+    co_return Arc<ForwardDnsResult>{*pending->result};
   }
   auto cancelled = false;
   auto exception = std::exception_ptr{};
   auto cancelled_result = Option<ForwardDnsResult>{};
   try {
-    auto result = ForwardDnsResult{};
+    auto result = ForwardDnsResult{DnsNotFound{}};
     if (auto local = local_forward_result(hostname, impl_->config_)) {
-      result = std::move(*local);
+      result = *local;
     } else {
       auto permit = co_await impl_->permits_.acquire();
       result = co_await forward_query(impl_->channel_, hostname);
@@ -549,7 +529,7 @@ auto ForwardDnsResolver::resolve(std::string hostname)
     auto ttl = ttl_for(impl_->config_, result);
     pending = co_await finish_lookup(impl_->state_, hostname, result, ttl);
     pending->baton.post();
-    co_return result;
+    co_return Arc<ForwardDnsResult>{std::move(result)};
   } catch (folly::OperationCancelled const&) {
     cancelled = true;
     cancelled_result = make_forward_failure("DNS lookup cancelled");
@@ -601,13 +581,13 @@ auto ReverseDnsResolver::operator=(ReverseDnsResolver&&) noexcept
 
 ReverseDnsResolver::~ReverseDnsResolver() = default;
 
-auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
+auto ReverseDnsResolver::resolve(ip address) -> Task<Arc<ReverseDnsResult>> {
   auto pending = std::shared_ptr<PendingLookup<ip, ReverseDnsResult>>{};
   auto created = false;
   {
     auto state = co_await impl_->state_.lock();
     if (auto result = lookup_cached(*state, address)) {
-      co_return std::move(*result);
+      co_return Arc<ReverseDnsResult>{std::move(*result)};
     }
     auto [it, inserted] = state->pending.emplace(address, nullptr);
     if (inserted) {
@@ -619,16 +599,16 @@ auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
   if (not created) {
     co_await pending->baton;
     TENZIR_ASSERT(pending->result);
-    co_return *pending->result;
+    co_return Arc<ReverseDnsResult>{*pending->result};
   }
   auto cancelled = false;
   auto exception = std::exception_ptr{};
   auto cancelled_result = Option<ReverseDnsResult>{};
   try {
-    auto result = ReverseDnsResult{};
+    auto result = ReverseDnsResult{DnsNotFound{}};
     auto ttl = DnsDuration{};
     if (auto local = local_reverse_result(address, impl_->config_)) {
-      result = std::move(*local);
+      result = *local;
       ttl = impl_->config_.literal_ttl;
     } else {
       auto permit = co_await impl_->permits_.acquire();
@@ -637,7 +617,7 @@ auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
     }
     pending = co_await finish_lookup(impl_->state_, address, result, ttl);
     pending->baton.post();
-    co_return result;
+    co_return Arc<ReverseDnsResult>{std::move(result)};
   } catch (folly::OperationCancelled const&) {
     cancelled = true;
     cancelled_result = make_reverse_failure("DNS lookup cancelled");

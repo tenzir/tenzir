@@ -106,7 +106,7 @@ auto make_peer_info(folly::SocketAddress const& address) -> PeerInfo {
 }
 
 auto resolve_peer_hostname(Arc<ReverseDnsResolver> resolver, ip address)
-  -> Task<ReverseDnsResult> {
+  -> Task<Arc<ReverseDnsResult>> {
   co_return co_await resolver->resolve(address);
 }
 
@@ -115,10 +115,10 @@ public:
   using Connection = Arc<folly::coro::Transport>;
 
   struct Accepted {
-    Box<folly::coro::Transport> transport;
+    Connection transport;
     ip peer_ip;
     int64_t peer_port;
-    ReverseDnsResult peer_reverse_dns;
+    Arc<ReverseDnsResult> peer_reverse_dns;
   };
 
   struct Payload {
@@ -134,7 +134,7 @@ public:
   struct AcceptLoopFinished {};
 
   using Message
-    = variant<Accepted, Payload, ConnectionClosed, AcceptLoopFinished>;
+    = variant<AcceptLoopFinished, Accepted, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit AcceptTcpListener(AcceptTcpArgs args)
@@ -175,13 +175,13 @@ public:
       address_.setFromLocalPort(bind_port_);
     } else {
       auto resolved = co_await forward_dns_.resolve(bind_host_);
-      if (resolved.status != ForwardDnsStatus::resolved
-          or resolved.answers.empty()) {
+      auto addresses = resolved->resolved;
+      if (not addresses or addresses->answers.empty()) {
         auto diag = diagnostic::error("failed to resolve listen address")
                       .primary(args_.endpoint.source)
                       .note("host: {}", bind_host_);
-        if (resolved.error) {
-          std::move(diag).note("reason: {}", *resolved.error).emit(ctx);
+        if (resolved->failed) {
+          std::move(diag).note("reason: {}", resolved->failed->error).emit(ctx);
         } else {
           std::move(diag)
             .note("reason: no matching A or AAAA records")
@@ -190,7 +190,7 @@ public:
         request_abort();
         co_return;
       }
-      address_.setFromIpPort(fmt::to_string(resolved.answers.front().address),
+      address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
                              bind_port_);
     }
     TENZIR_DEBUG("starting listener on {}", address_.describe());
@@ -241,11 +241,14 @@ public:
           {"port", accepted.peer_port},
         };
         if (args_.resolve_hostnames) {
-          peer_record.emplace("hostname", accepted.peer_reverse_dns.hostname);
-          if (accepted.peer_reverse_dns.status == ReverseDnsStatus::failed
-              and accepted.peer_reverse_dns.error
+          auto hostname = Option<std::string>{};
+          if (accepted.peer_reverse_dns->resolved) {
+            hostname = accepted.peer_reverse_dns->resolved->hostname;
+          }
+          peer_record.emplace("hostname", std::move(hostname));
+          if (accepted.peer_reverse_dns->failed
               and not peer_resolution_warning_emitted_) {
-            diagnostic::warning("{}", *accepted.peer_reverse_dns.error)
+            diagnostic::warning("{}", accepted.peer_reverse_dns->failed->error)
               .note("failed to resolve peer hostname for {}",
                     accepted.peer_ip)
               .note(
@@ -276,9 +279,8 @@ public:
         auto key = sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy));
-        auto connection = Connection{std::move(*transport)};
         auto [_, inserted]
-          = connections_.emplace(conn_id, std::move(connection));
+          = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
@@ -461,8 +463,11 @@ private:
     auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
       release_connection_slot();
     }};
+    auto current_token = co_await folly::coro::co_current_cancellation_token;
+    auto cancel_token = folly::cancellation_token_merge(
+      current_token, accept_cancel_->getToken());
     if (lifecycle_ != Lifecycle::running
-        or accept_cancel_->getToken().isCancellationRequested()) {
+        or cancel_token.isCancellationRequested()) {
       close_transport(std::move(transport));
       co_return;
     }
@@ -484,31 +489,35 @@ private:
       }
     }
     if (lifecycle_ != Lifecycle::running
-        or accept_cancel_->getToken().isCancellationRequested()) {
+        or cancel_token.isCancellationRequested()) {
       close_transport(std::move(transport));
       co_return;
     }
     auto peer_info = make_peer_info(peer);
-    auto peer_reverse_dns = ReverseDnsResult{};
+    auto peer_reverse_dns = Arc<ReverseDnsResult>{DnsNotFound{}};
     if (args_.resolve_hostnames) {
       try {
         peer_reverse_dns = co_await folly::coro::co_withCancellation(
-          accept_cancel_->getToken(),
+          cancel_token,
           folly::coro::detachOnCancel(resolve_peer_hostname(
             reverse_dns_, peer_info.address)));
       } catch (folly::OperationCancelled const&) {
         close_transport(std::move(transport));
+        if (current_token.isCancellationRequested()
+            and not accept_cancel_->getToken().isCancellationRequested()) {
+          throw;
+        }
         co_return;
       }
     }
     if (lifecycle_ != Lifecycle::running
-        or accept_cancel_->getToken().isCancellationRequested()) {
+        or cancel_token.isCancellationRequested()) {
       close_transport(std::move(transport));
       co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
     co_await message_queue_->enqueue(Accepted{
-      .transport = std::move(transport),
+      .transport = Connection{std::move(*transport)},
       .peer_ip = peer_info.address,
       .peer_port = peer_info.port,
       .peer_reverse_dns = std::move(peer_reverse_dns),

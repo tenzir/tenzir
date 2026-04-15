@@ -37,7 +37,6 @@
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <stdexcept>
 
 namespace tenzir::plugins::from_tcp {
 
@@ -140,28 +139,28 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        co_yield folly::coro::co_error(
-          std::runtime_error{"failed to create TLS context"});
+        startup_failed_ = true;
+        co_return;
       }
       tls_context_ = std::move(*context);
     }
     auto resolved = co_await forward_dns_.resolve(host_);
-    if (resolved.status != ForwardDnsStatus::resolved
-        or resolved.answers.empty()) {
+    auto addresses = resolved->resolved;
+    if (not addresses or addresses->answers.empty()) {
       auto diag = diagnostic::error("failed to resolve remote endpoint")
                     .primary(args_.endpoint.source)
                     .note("host: {}", host_);
-      if (resolved.error) {
-        std::move(diag).note("reason: {}", *resolved.error).emit(ctx);
+      if (resolved->failed) {
+        std::move(diag).note("reason: {}", resolved->failed->error).emit(ctx);
       } else {
         std::move(diag)
           .note("reason: no matching A or AAAA records")
           .emit(ctx);
       }
-      co_yield folly::coro::co_error(
-        std::runtime_error{"failed to resolve remote endpoint"});
+      startup_failed_ = true;
+      co_return;
     }
-    address_.setFromIpPort(fmt::to_string(resolved.answers.front().address),
+    address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
                            port_);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
@@ -295,6 +294,11 @@ public:
     co_return;
   }
 
+  auto state() -> OperatorState override {
+    return startup_failed_ ? OperatorState::done
+                           : OperatorState::unspecified;
+  }
+
 private:
   static auto close_transport(Connection connection) -> void {
     auto* evb = connection->getEventBase();
@@ -352,6 +356,7 @@ private:
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
   uint64_t next_conn_id_{0};
+  bool startup_failed_ = false;
 };
 
 class from_tcp_plugin final : public virtual OperatorPlugin {
