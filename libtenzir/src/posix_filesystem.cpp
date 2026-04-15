@@ -50,7 +50,7 @@ auto read_recursive(const std::filesystem::path& root, size_t& total_size)
     auto name = entry.path().filename();
     if (entry.is_directory()) {
       auto recursive_result = read_recursive(entry.path(), total_size);
-      if (! recursive_result) {
+      if (not recursive_result) {
         return recursive_result.error();
       }
       result[name] = *recursive_result;
@@ -62,7 +62,7 @@ auto read_recursive(const std::filesystem::path& root, size_t& total_size)
           .to_error();
       }
       auto contents = io::read(entry.path());
-      if (! contents) {
+      if (not contents) {
         return diagnostic::error(contents.error())
           .note("while trying to read file {}", entry.path())
           .to_error();
@@ -120,13 +120,13 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         const auto full_path
           = path.is_absolute() ? path : self->state().root / path;
         auto err = std::error_code{};
-        if (! std::filesystem::exists(full_path, err)) {
+        if (not std::filesystem::exists(full_path, err)) {
           result.emplace_back(record{});
           continue;
         }
         auto total_size = size_t{0};
         auto contents = read_recursive(full_path, total_size);
-        if (! contents) {
+        if (not contents) {
           return diagnostic::error("failed to read directory")
             .note("trying to read {}", path)
             .note("encountered error {}", contents.error())
@@ -147,7 +147,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       std::error_code err;
       for (const auto& [from, to] : files) {
         auto result = self->state().rename_single_file(from, to);
-        if (! result) {
+        if (not result) {
           return result.error();
         }
       }

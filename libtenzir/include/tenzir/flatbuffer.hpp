@@ -232,8 +232,9 @@ public:
   }
 
   auto operator=(const flatbuffer& rhs) noexcept -> flatbuffer& {
-    if (&rhs == this)
+    if (&rhs == this) {
       return *this;
+    }
     chunk_ = rhs.chunk_;
     table_ = rhs.table_;
     return *this;
@@ -309,7 +310,7 @@ public:
   /// Accesses the underlying chunk.
   /// @note The returned chunk may contain more than just the FlatBuffers table
   /// if it is not a root table.
-  [[nodiscard]] auto chunk() && noexcept -> chunk_ptr {
+  [[nodiscard]] auto chunk() and noexcept -> chunk_ptr {
     return std::move(chunk_);
   }
 
@@ -328,9 +329,10 @@ public:
                                      - x.chunk_->data()
                                  : 0;
     auto load_callback = [&]() noexcept {
-      if (x.chunk_)
+      if (x.chunk_) {
         x.table_
           = reinterpret_cast<const Table*>(x.chunk_->data() + table_offset);
+      }
       return true;
     };
     const auto name = qualified_name();

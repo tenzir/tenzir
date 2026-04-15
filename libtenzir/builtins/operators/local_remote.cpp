@@ -57,8 +57,8 @@ public:
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
     -> caf::expected<operator_output> override {
     if (not ctrl.no_location_overrides()
-        || op_->location() == operator_location::anywhere
-        || op_->location() == location_) {
+        or op_->location() == operator_location::anywhere
+        or op_->location() == location_) {
       return op_->instantiate(std::move(input), ctrl);
     }
     return caf::make_error(ec::invalid_configuration,

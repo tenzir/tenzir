@@ -68,7 +68,7 @@ auto is_empty(const table_slice& x) -> bool {
 }
 
 auto is_empty(const chunk_ptr& x) -> bool {
-  return not x || x->size() == 0;
+  return not x or x->size() == 0;
 }
 
 auto is_empty(std::monostate) -> bool {
@@ -320,7 +320,7 @@ public:
         auto it = row == rows ? groups.end() : find_or_create_group(row);
         TENZIR_TRACE("row {} lands at {}", row,
                      it == groups.end() ? nullptr : fmt::ptr(&it->second));
-        if (it != groups.end() && &it->second == current_group) {
+        if (it != groups.end() and &it->second == current_group) {
           continue;
         }
         TENZIR_ASSERT(current_group);
@@ -447,7 +447,7 @@ public:
       }
       by.push_back(std::move(*sel));
     }
-    if (timeout && timeout->inner <= duration::zero()) {
+    if (timeout and timeout->inner <= duration::zero()) {
       diagnostic::error("timeout must be positive").primary(*timeout).emit(ctx);
       return failure::promise();
     }
@@ -504,7 +504,7 @@ public:
     auto test_uri = extend_url_path(
       *url_view, fmt::format("/__partitions__/0.{}", format.inner));
     TRY(make_saver({test_uri, uri.source}, ctx));
-    if (format.inner == "parquet" && max_size) {
+    if (format.inner == "parquet" and max_size) {
       // TODO: This is not great.
       diagnostic::error(
         "`max_size` is not yet supported by the `parquet` format")

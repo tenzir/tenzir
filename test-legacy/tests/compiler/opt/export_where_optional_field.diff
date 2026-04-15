@@ -24,6 +24,7 @@
 +          right: constant int64 42 @ 92..94
 +        }
 +      ],
++      order: "ordered",
 +      named_args: [
 +        
 +      ]
@@ -42,6 +43,7 @@
 +      filter: [
          
        ],
+       order: "ordered",
        named_args: [
          
        ]
@@ -70,6 +72,7 @@
 +      filter: [
 +        
 +      ],
++      order: "ordered",
 +      named_args: [
 +        
 +      ]

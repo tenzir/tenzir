@@ -80,7 +80,7 @@ auto ensure_host_header(std::unordered_map<std::string, std::string>& headers,
   }
   auto host = std::string{};
   auto* addr = std::get_if<caf::ip_address>(&uri.authority().host);
-  if (addr && ! addr->embeds_v4()) {
+  if (addr and not addr->embeds_v4()) {
     host += '[';
     host += to_string(*addr);
     host += ']';
@@ -995,7 +995,7 @@ struct from_http_args {
       return {};
     };
     const auto check_options = [&](bool is_server, const auto&... xs) {
-      return (check_option(is_server, xs).is_success() && ...);
+      return (check_option(is_server, xs).is_success() and ...);
     };
     if (server) {
       check_options(true, method, body, encode, headers, error_field, paginate,

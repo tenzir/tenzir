@@ -93,7 +93,7 @@ auto rebase_list_array_buffers(const arrow::ListArray& list)
   const auto n = list.length();
   const auto base = list.value_offset(0);
   // Fast path: buffer is already zero-based.
-  if (base == 0 && list.offset() == 0) {
+  if (base == 0 and list.offset() == 0) {
     return {list.value_offsets(), list.null_bitmap()};
   }
   // General case: build normalized offsets and (optionally) null bitmap.

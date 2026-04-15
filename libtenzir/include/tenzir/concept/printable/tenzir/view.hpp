@@ -77,8 +77,9 @@ struct list_view_printer : printer_base<list_view_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& xs) const {
-    if (!xs || xs->empty())
+    if (not xs or xs->empty()) {
       return printers::str.print(out, "[]");
+    }
     auto p = '[' << ~(data_view_printer{} % ", ") << ']';
     return p.print(out, xs);
   }
@@ -89,8 +90,9 @@ struct map_view_printer : printer_base<map_view_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& xs) const {
-    if (!xs || xs->empty())
+    if (not xs or xs->empty()) {
       return printers::str.print(out, "{}");
+    }
     auto kvp = data_view_printer{} << " -> " << data_view_printer{};
     auto p = '{' << (kvp % ", ") << '}';
     return p.print(out, xs);
@@ -102,8 +104,9 @@ struct record_view_printer : printer_base<record_view_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& xs) const {
-    if (!xs || xs->empty())
+    if (not xs or xs->empty()) {
       return printers::str.print(out, "<>");
+    }
     auto kvp = string_view_printer{} << ": " << data_view_printer{};
     auto p = '<' << (kvp % ", ") << '>';
     return p.print(out, xs);

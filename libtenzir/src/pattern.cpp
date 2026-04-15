@@ -28,12 +28,12 @@ struct regex_impl : re2::RE2 {
 auto pattern::make(std::string str, pattern_options options) noexcept
   -> caf::expected<pattern> {
   auto opts = re2::RE2::Options(re2::RE2::CannedOptions::Quiet);
-  opts.set_case_sensitive(!options.case_insensitive);
+  opts.set_case_sensitive(not options.case_insensitive);
   auto result = pattern{};
   result.str_ = std::move(str);
   result.options_ = options;
   result.regex_ = std::make_shared<regex_impl>(result.str_, opts);
-  if (!result.regex_->ok()) {
+  if (not result.regex_->ok()) {
     return diagnostic::error("failed to create regex from `{}`", result.str_)
       .to_error();
   }
@@ -41,14 +41,14 @@ auto pattern::make(std::string str, pattern_options options) noexcept
 }
 
 bool pattern::match(std::string_view str) const {
-  if (!regex_) {
+  if (not regex_) {
     return false;
   }
   return re2::RE2::FullMatch({str.data(), str.size()}, *regex_);
 }
 
 bool pattern::search(std::string_view str) const {
-  if (!regex_) {
+  if (not regex_) {
     return false;
   }
   return re2::RE2::PartialMatch({str.data(), str.size()}, *regex_);

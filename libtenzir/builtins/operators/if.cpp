@@ -704,7 +704,7 @@ public:
     // 1. The predicate.
     // 2. The pipeline-expression for the if-branch.
     // 3. The pipeline-expression for the else-branch, iff the branch exists.
-    TENZIR_ASSERT(inv.args.size() == 2 || inv.args.size() == 3);
+    TENZIR_ASSERT(inv.args.size() == 2 or inv.args.size() == 3);
     auto pred_expr = std::move(inv.args[0]);
     auto then_expr = as<ast::pipeline_expr>(std::move(*inv.args[1].kind));
     auto else_expr

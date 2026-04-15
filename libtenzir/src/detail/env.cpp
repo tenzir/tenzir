@@ -33,16 +33,18 @@ auto env_mutex = std::mutex{};
 std::optional<std::string> getenv(std::string_view var) {
   auto lock = std::scoped_lock{env_mutex};
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
-  if (const char* result = ::getenv(var.data()))
+  if (const char* result = ::getenv(var.data())) {
     return std::string{result};
+  }
   return {};
 }
 
 caf::error setenv(std::string_view key, std::string_view value, int overwrite) {
   auto lock = std::scoped_lock{env_mutex};
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
-  if (::setenv(key.data(), value.data(), overwrite) == 0)
+  if (::setenv(key.data(), value.data(), overwrite) == 0) {
     return {};
+  }
   return caf::make_error( //
     ec::system_error,
     fmt::format("failed in setenv(3): {}", detail::describe_errno()));
@@ -51,8 +53,9 @@ caf::error setenv(std::string_view key, std::string_view value, int overwrite) {
 caf::error unsetenv(std::string_view var) {
   auto lock = std::scoped_lock{env_mutex};
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
-  if (::unsetenv(var.data()) == 0)
+  if (::unsetenv(var.data()) == 0) {
     return {};
+  }
   return caf::make_error( //
     ec::system_error,
     fmt::format("failed in unsetenv(3): {}", detail::describe_errno()));

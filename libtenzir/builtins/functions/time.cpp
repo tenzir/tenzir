@@ -102,40 +102,40 @@ public:
     TRY(argument_parser2::function(name())
           .positional("x", expr, "time")
           .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
-        auto b = duration_type::make_arrow_builder(arrow_memory_pool());
-        check(b->Reserve(eval.length()));
-        for (auto& arg : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::NullArray& arg) {
-              check(b->AppendNulls(arg.length()));
-            },
-            [&](const arrow::TimestampArray& arg) {
-              auto& ty = as<arrow::TimestampType>(*arg.type());
-              TENZIR_ASSERT(ty.timezone().empty());
-              for (auto i = 0; i < arg.length(); ++i) {
-                if (arg.IsNull(i)) {
-                  check(b->AppendNull());
-                  continue;
-                }
-                check(append_builder(
-                  duration_type{}, *b,
-                  view_at<time_type>(arg, i)->time_since_epoch()));
+    return function_use::make([expr = std::move(expr),
+                               this](evaluator eval, session ctx) -> series {
+      auto b = duration_type::make_arrow_builder(arrow_memory_pool());
+      check(b->Reserve(eval.length()));
+      for (auto& arg : eval(expr)) {
+        auto f = detail::overload{
+          [&](const arrow::NullArray& arg) {
+            check(b->AppendNulls(arg.length()));
+          },
+          [&](const arrow::TimestampArray& arg) {
+            auto& ty = as<arrow::TimestampType>(*arg.type());
+            TENZIR_ASSERT(ty.timezone().empty());
+            for (auto i = 0; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                check(b->AppendNull());
+                continue;
               }
-            },
-            [&](const auto&) {
-              diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
-                                  arg.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b->AppendNulls(arg.length()));
-            },
-          };
-          match(*arg.array, f);
-        }
-        return series{duration_type{}, finish(*b)};
-      });
+              check(
+                append_builder(duration_type{}, *b,
+                               view_at<time_type>(arg, i)->time_since_epoch()));
+            }
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                arg.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            check(b->AppendNulls(arg.length()));
+          },
+        };
+        match(*arg.array, f);
+      }
+      return series{duration_type{}, finish(*b)};
+    });
   }
 };
 

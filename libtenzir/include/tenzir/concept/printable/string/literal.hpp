@@ -23,7 +23,7 @@ public:
   }
 
   template <class T>
-    requires(std::is_arithmetic_v<T> && !std::is_floating_point_v<T>)
+    requires(std::is_arithmetic_v<T> and not std::is_floating_point_v<T>)
   explicit literal_printer(T x) : str_{std::to_string(x)} {
   }
 

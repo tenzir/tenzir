@@ -22,12 +22,12 @@ struct option_set_parser : parser_base<option_set_parser> {
   using attribute = std::unordered_map<std::string, data>;
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    while (!parsers::eoi(f, l, unused)) {
-      auto success = parse_short_form(f, l, x) && parse_long_form(f, l, x);
-      if (!success) {
+    while (not parsers::eoi(f, l, unused)) {
+      auto success = parse_short_form(f, l, x) and parse_long_form(f, l, x);
+      if (not success) {
         return false;
       }
-      if (!consume_space(f, l)) {
+      if (not consume_space(f, l)) {
         break;
       }
     }
@@ -51,7 +51,7 @@ private:
     if (short_form_key_parser(f_previous, l, short_form_opt)) {
       tenzir::data data_out;
       auto short_form_data_parser = ignore(+whitespace) >> parsers::data;
-      if (!short_form_data_parser(f_previous, l, data_out)) {
+      if (not short_form_data_parser(f_previous, l, data_out)) {
         return false;
       }
       auto found
@@ -60,7 +60,7 @@ private:
                          return short_form_opt == pair.second;
                        });
       if (found != defined_options_.end()) {
-        if constexpr (!std::is_same_v<Attribute, unused_type>) {
+        if constexpr (not std::is_same_v<Attribute, unused_type>) {
           x[std::move(found->first)] = std::move(data_out);
         }
         f = f_previous;
@@ -79,7 +79,7 @@ private:
       tenzir::data data_out;
       auto long_form_data_parser
         = ignore(*whitespace) >> '=' >> ignore(*whitespace) >> parsers::data;
-      if (!long_form_data_parser(f_previous, l, data_out)) {
+      if (not long_form_data_parser(f_previous, l, data_out)) {
         return false;
       }
       auto found
@@ -88,7 +88,7 @@ private:
                          return long_form_opt_key == pair.first;
                        });
       if (found != defined_options_.end()) {
-        if constexpr (!std::is_same_v<Attribute, unused_type>) {
+        if constexpr (not std::is_same_v<Attribute, unused_type>) {
           x[std::move(found->first)] = std::move(data_out);
         }
         f = f_previous;

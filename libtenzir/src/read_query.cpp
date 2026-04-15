@@ -40,11 +40,12 @@ namespace {
 
 caf::expected<std::string>
 read_query(const std::vector<std::string>& args, size_t offset) {
-  if (args.size() > offset + 1)
+  if (args.size() > offset + 1) {
     return caf::make_error(ec::invalid_argument, "spreading a query over "
                                                  "multiple arguments is not "
                                                  "allowed; please pass it as a "
                                                  "single string instead.");
+  }
   return args[offset];
 }
 
@@ -57,9 +58,10 @@ caf::expected<std::string> read_query(std::istream& in) {
 
 caf::expected<std::string> read_query(const std::string& path) {
   std::ifstream f{path};
-  if (!f)
+  if (not f) {
     return caf::make_error(ec::no_such_file,
                            fmt::format("unable to read from '{}'", path));
+  }
   return read_query(f);
 }
 
@@ -93,25 +95,29 @@ read_query(const invocation& inv, std::string_view file_option,
   const bool has_query_cli = inv.arguments.size() > argument_offset;
   bool has_query_stdin = [] {
     struct stat stats = {};
-    if (::fstat(::fileno(stdin), &stats) != 0)
+    if (::fstat(::fileno(stdin), &stats) != 0) {
       return false;
-    return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
+    }
+    return S_ISFIFO(stats.st_mode) or S_ISREG(stats.st_mode);
   }();
   if (fname) {
-    if (has_query_cli)
+    if (has_query_cli) {
       return caf::make_error(
         ec::invalid_argument,
         fmt::format("got query '{}' on the command line and query file"
                     " '{}' specified via '--read' option",
                     read_query(inv.arguments, argument_offset), *fname));
-    if (*fname == "-")
+    }
+    if (*fname == "-") {
       return read_query(std::cin);
-    if (has_query_stdin)
+    }
+    if (has_query_stdin) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("stdin is connected to a pipe or "
                                          "regular file and query file '{}'",
                                          " specified via '--read' option",
                                          *fname));
+    }
     return read_query(*fname);
   }
   // As a special case we ignore stdin unless we get an actual query
@@ -121,24 +127,29 @@ read_query(const invocation& inv, std::string_view file_option,
   std::string cin_query;
   if (has_query_stdin) {
     auto query = read_query(std::cin);
-    if (!query || query->empty())
+    if (not query or query->empty()) {
       has_query_stdin = false;
-    else
+    } else {
       cin_query = *query;
+    }
   }
-  if (has_query_stdin && has_query_cli)
+  if (has_query_stdin and has_query_cli) {
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("got query '{}' on the command line and '{}' via stdin",
                   read_query(inv.arguments, argument_offset), cin_query));
-  if (has_query_cli)
+  }
+  if (has_query_cli) {
     return read_query(inv.arguments, argument_offset);
-  if (has_query_stdin)
+  }
+  if (has_query_stdin) {
     return cin_query;
-  if (must_provide_query == must_provide_query::yes)
+  }
+  if (must_provide_query == must_provide_query::yes) {
     return caf::make_error(ec::invalid_argument, "no query provided, but "
                                                  "command requires a query "
                                                  "argument");
+  }
   // No query provided, make a query that finds everything.
   return make_all_query();
 }

@@ -216,7 +216,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
     case frame_type::ethernet: {
       // Parse Ethernet frame.
       auto frame = ethernet_frame::make(bytes);
-      if (! frame) {
+      if (not frame) {
         TENZIR_TRACE("failed to parse layer-2 frame");
         return std::nullopt;
       }
@@ -250,7 +250,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   }
   // Parse layer 3.
   auto packet = packet::make(frame_payload, frame_type);
-  if (! packet) {
+  if (not packet) {
     TENZIR_TRACE("failed to parse layer-3 packet");
     return std::nullopt;
   }
@@ -260,7 +260,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   ip.field("type").data(static_cast<uint64_t>(packet->type));
   // Parse layer 4.
   auto segment = segment::make(packet->payload, packet->type);
-  if (! segment) {
+  if (not segment) {
     TENZIR_TRACE("failed to parse layer-4 segment");
     return std::nullopt;
   }
@@ -307,7 +307,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
   }
   const auto& layout = as<record_type>(s.type);
   const auto linktype_index = layout.resolve_key("linktype");
-  if (! linktype_index) {
+  if (not linktype_index) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("schema 'pcap.packet' must have a 'linktype' field")
       .emit(dh);
@@ -316,14 +316,14 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
   const auto linktype_array
     = linktype_index->get(as<arrow::StructArray>(*s.array));
   const auto linktype_values = try_as<arrow::UInt64Array>(&*linktype_array);
-  if (! linktype_values) {
+  if (not linktype_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'linktype' not of type uint64")
       .emit(dh);
     return std::nullopt;
   }
   const auto data_index = layout.resolve_key("data");
-  if (! data_index) {
+  if (not data_index) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("schema 'pcap.packet' must have a 'data' field")
       .emit(dh);
@@ -331,7 +331,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
   }
   const auto data_array = data_index->get(as<arrow::StructArray>(*s.array));
   const auto data_values = try_as<arrow::BinaryArray>(&*data_array);
-  if (! data_values) {
+  if (not data_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'data' not of type blob")
       .emit(dh);
@@ -341,7 +341,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
   for (auto i = 0u; i < s.length(); ++i) {
     const auto linktype = (*linktype_values)[i];
     const auto data = (*data_values)[i];
-    if (! data) {
+    if (not data) {
       continue;
     }
     auto inferred_type = static_cast<frame_type>(linktype ? *linktype : 0);

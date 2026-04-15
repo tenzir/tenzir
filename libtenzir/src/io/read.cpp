@@ -22,11 +22,11 @@ namespace tenzir::io {
 caf::error
 read(const std::filesystem::path& filename, std::span<std::byte> xs) {
   file f{filename};
-  if (! f.open(file::read_only)) {
+  if (not f.open(file::read_only)) {
     return caf::make_error(ec::filesystem_error, "failed open file");
   }
   auto bytes_read = f.read(xs.data(), xs.size());
-  if (! bytes_read) {
+  if (not bytes_read) {
     return bytes_read.error();
   }
   if (*bytes_read != xs.size()) {

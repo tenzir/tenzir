@@ -64,7 +64,7 @@ using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
 using deleter_type = detail::unique_function<void() noexcept>;
 
 auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
-  if (! std::filesystem::exists(path)) {
+  if (not std::filesystem::exists(path)) {
     return diagnostic::error("")
       .note("failed to find path `{}`", path)
       .to_error();
@@ -134,7 +134,7 @@ public:
         auto size = entry_data_list->entry_data.data_size;
         auto sub_r = record{};
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
             *status = MMDB_INVALID_DATA_ERROR;
             return entry_data_list;
@@ -156,7 +156,7 @@ public:
         auto sub_l = list{};
         auto size = entry_data_list->entry_data.data_size;
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           entry_data_list
             = entry_data_list_to_list(entry_data_list, status, sub_l);
           if (*status != MMDB_SUCCESS) {
@@ -231,7 +231,7 @@ public:
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
             *status = MMDB_INVALID_DATA_ERROR;
             return entry_data_list;
@@ -261,7 +261,7 @@ public:
         auto size = entry_data_list->entry_data.data_size;
         auto sub_r = record{};
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           entry_data_list = entry_data_list_to_list(entry_data_list, status, l);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
@@ -329,7 +329,7 @@ public:
   /// Emits context information for every event in `slice` in order.
   auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
-    if (! mmdb_) {
+    if (not mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
                                          "this context"));
@@ -663,7 +663,7 @@ struct v2_loader : public context_loader {
     std::string temp_file_name
       = dir_identifier + fmt::to_string(uuid::random());
     auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
-    if (! temp_file) {
+    if (not temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to open temp file on "
                                          "data load: {}",
@@ -672,7 +672,7 @@ struct v2_loader : public context_loader {
     temp_file.write(reinterpret_cast<const char*>(serialized->data()),
                     static_cast<std::streamsize>(serialized->size()));
     temp_file.flush();
-    if (! temp_file) {
+    if (not temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed write the temp file "
                                          "on data load: {}",
@@ -684,7 +684,7 @@ struct v2_loader : public context_loader {
     }
     auto mapped_mmdb = chunk::mmap(temp_file_name);
     temp_file.close();
-    if (! temp_file) {
+    if (not temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed close the temp file: {}",
                                          detail::describe_errno()));
@@ -728,7 +728,7 @@ class plugin : public virtual ContextFactoryPluginCrtp<"geoip", plugin> {
     }
     auto mmdb = make_mmdb(db_path);
     auto mapped_mmdb = chunk::mmap(db_path);
-    if (! mapped_mmdb) {
+    if (not mapped_mmdb) {
       return diagnostic::error("unable to retrieve file contents into memory")
         .to_error();
     }

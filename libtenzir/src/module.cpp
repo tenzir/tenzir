@@ -36,7 +36,7 @@ caf::expected<module> module::merge(const module& s1, const module& s2) {
   auto result = s2;
   for (const auto& t : s1) {
     if (const auto* u = s2.find(t.name())) {
-      if (t != *u && t.name() == u->name()) {
+      if (t != *u and t.name() == u->name()) {
         // Type clash: cannot accommodate two types with same name.
         return caf::make_error(ec::format_error,
                                fmt::format("type clash: cannot accommodate two "
@@ -125,7 +125,7 @@ get_module_dirs(const caf::actor_system_config& cfg) {
       result.insert(std::move(dir));
     }
   }
-  if (! bare_mode) {
+  if (not bare_mode) {
     result.insert(detail::install_configdir() / "schema");
     if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME")) {
       result.insert(std::filesystem::path{*xdg_config_home} / "tenzir"
@@ -152,11 +152,11 @@ load_symbols(const std::filesystem::path& module_file, symbol_map& local) {
     return caf::make_error(ec::filesystem_error, "empty path");
   }
   auto str = detail::load_contents(module_file);
-  if (! str) {
+  if (not str) {
     return str.error();
   }
   auto p = symbol_map_parser{};
-  if (! p(*str, local)) {
+  if (not p(*str, local)) {
     return caf::make_error(ec::parse_error, "failed to load symbols from",
                            module_file.string());
   }
@@ -173,7 +173,7 @@ load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
   for (const auto& dir : module_dirs) {
     TENZIR_VERBOSE("loading schemas from {}", dir);
     std::error_code err{};
-    if (! std::filesystem::exists(dir, err)) {
+    if (not std::filesystem::exists(dir, err)) {
       TENZIR_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
@@ -182,7 +182,7 @@ load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
     };
     auto module_files
       = detail::filter_dir(dir, std::move(filter), max_recursion);
-    if (! module_files) {
+    if (not module_files) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to filter schema dir at {}: "
                                          "{}",
@@ -197,7 +197,7 @@ load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
     }
     auto r = symbol_resolver{global_symbols, local_symbols, true};
     auto directory_module = r.resolve();
-    if (! directory_module) {
+    if (not directory_module) {
       return caf::make_error(ec::format_error, "failed to resolve types in",
                              dir.string(), directory_module.error().context());
     }
@@ -224,11 +224,11 @@ auto load_taxonomies(const caf::actor_system_config& cfg)
     if (err) {
       TENZIR_WARN("failed to open directory {}: {}", dir, err.message());
     }
-    if (! dir_exists) {
+    if (not dir_exists) {
       continue;
     }
     auto yamls = load_yaml_dir(dir);
-    if (! yamls) {
+    if (not yamls) {
       return yamls.error();
     }
     for (auto& [file, yaml] : *yamls) {

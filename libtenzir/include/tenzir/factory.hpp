@@ -92,10 +92,11 @@ struct factory {
   template <class Key>
   static bool add(Key&& key, signature factory) {
     TENZIR_ASSERT(factory != nullptr);
-    if constexpr (std::is_convertible_v<std::decay_t<Key>, key_type>)
+    if constexpr (std::is_convertible_v<std::decay_t<Key>, key_type>) {
       return factories().emplace(std::forward<Key>(key), factory).second;
-    else
+    } else {
       return add(traits::key(std::forward<Key>(key)), factory);
+    }
   }
 
   /// Registers a (key, factory) pair.
@@ -160,8 +161,9 @@ struct factory {
   /// @returns An instance of `result_type` or `nullptr` on failure.
   template <class Key, class... Args>
   static result_type make(Key&& key, Args&&... args) {
-    if (auto f = get(std::forward<Key>(key)))
+    if (auto f = get(std::forward<Key>(key))) {
       return invoke(f, std::forward<Key>(key), std::forward<Args>(args)...);
+    }
     return nullptr;
   }
 
@@ -177,20 +179,21 @@ private:
 
   template <class T>
   static decltype(auto) make_key(T&& x) {
-    if constexpr (std::experimental::is_detected_v<has_key_function, traits, T>)
+    if constexpr (std::experimental::is_detected_v<has_key_function, traits, T>) {
       return traits::key(std::forward<T>(x)); // always try to normalize keys
-    else
+    } else {
       return std::forward<T>(x);
+    }
   }
-
 
   template <class Key, class... Args>
   static auto invoke(signature factory, Key&& key, Args&&... args) {
     // Only forward the key if the factory signature has it as first argument.
-    if constexpr (std::is_invocable_v<signature, Key, Args...>)
+    if constexpr (std::is_invocable_v<signature, Key, Args...>) {
       return factory(std::forward<Key>(key), std::forward<Args>(args)...);
-    else if constexpr (std::is_invocable_v<signature, Args...>)
+    } else if constexpr (std::is_invocable_v<signature, Args...>) {
       return factory(std::forward<Args>(args)...);
+    }
   }
 
   static auto& factories() {

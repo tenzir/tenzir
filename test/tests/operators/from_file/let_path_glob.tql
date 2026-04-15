@@ -1,0 +1,7 @@
+from_file env("FILE_ROOT") + "/multi/*.json" {
+  read_json
+  source_path = $file.path
+}
+select source_path
+source_path = source_path.replace(env("FILE_ROOT"), "<ROOT>")
+sort source_path

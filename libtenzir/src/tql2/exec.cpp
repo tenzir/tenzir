@@ -188,7 +188,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
     }
     auto normalized = package_module_name(pkg.id);
     auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
-    if (not inserted && norm_it->second != pkg.id) {
+    if (not inserted and norm_it->second != pkg.id) {
       diagnostic::error("package '{}' conflicts with '{}' after "
                         "normalization "
                         "to '{}'",
@@ -214,8 +214,8 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
   auto next = base->clone();
   for (auto& module : modules) {
     for (auto& [name, set] : module->defs) {
-      if (! set.mod) {
-        TENZIR_ASSERT(! set.fn && ! set.op);
+      if (not set.mod) {
+        TENZIR_ASSERT(not set.fn and not set.op);
         continue;
       }
       next->replace_module(std::string{"packages"}, name, std::move(set.mod));

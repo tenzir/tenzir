@@ -272,7 +272,7 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  Derived name(const std::string& x) && {
+  Derived name(const std::string& x) and {
     this->name_ = x;
     return std::move(derived());
   }
@@ -287,7 +287,7 @@ public:
     return derived();
   }
 
-  Derived attributes(std::vector<legacy_attribute> xs) && {
+  Derived attributes(std::vector<legacy_attribute> xs) and {
     this->attributes_ = std::move(xs);
     return std::move(derived());
   }
@@ -298,24 +298,26 @@ public:
       auto i = std::find_if(attrs.begin(), attrs.end(), [&](auto& attr) {
         return attr.key == x.key;
       });
-      if (i == attrs.end())
+      if (i == attrs.end()) {
         attrs.push_back(std::move(x));
-      else
+      } else {
         i->value = std::move(x).value;
+      }
     }
     return derived();
   }
 
-  Derived update_attributes(std::vector<legacy_attribute> xs) && {
+  Derived update_attributes(std::vector<legacy_attribute> xs) and {
     auto& attrs = this->attributes_;
     for (auto& x : xs) {
       auto i = std::find_if(attrs.begin(), attrs.end(), [&](auto& attr) {
         return attr.key == x.key;
       });
-      if (i == attrs.end())
+      if (i == attrs.end()) {
         attrs.push_back(std::move(x));
-      else
+      } else {
         i->value = std::move(x).value;
+      }
     }
     return std::move(derived());
   }
@@ -371,7 +373,7 @@ public:
       static_assert(detail::always_false_v<Derived>, "cannot inspect non-leaf "
                                                      "type");
     }
-    TENZIR_ASSERT(!name.empty());
+    TENZIR_ASSERT(not name.empty());
     auto tid = type_id<Derived>();
     return f.object(x).pretty_name(name).fields(
       f.field("type-id", tid), f.field("name", x.name_),
@@ -463,12 +465,12 @@ struct legacy_nested_type : legacy_recursive_type<Derived> {
 
   [[nodiscard]] bool equals(const legacy_abstract_type& other) const final {
     return super::equals(other)
-           && value_type == super::downcast(other).value_type;
+           and value_type == super::downcast(other).value_type;
   }
 
   [[nodiscard]] bool less_than(const legacy_abstract_type& other) const final {
     return super::less_than(other)
-           && value_type < super::downcast(other).value_type;
+           and value_type < super::downcast(other).value_type;
   }
 };
 
@@ -541,11 +543,11 @@ struct legacy_enumeration_type final
   }
 
   bool equals(const legacy_abstract_type& other) const final {
-    return super::equals(other) && fields == downcast(other).fields;
+    return super::equals(other) and fields == downcast(other).fields;
   }
 
   bool less_than(const legacy_abstract_type& other) const final {
-    return super::less_than(other) && fields < downcast(other).fields;
+    return super::less_than(other) and fields < downcast(other).fields;
   }
 };
 
@@ -583,14 +585,14 @@ struct legacy_map_type final : legacy_recursive_type<legacy_map_type> {
   }
 
   bool equals(const legacy_abstract_type& other) const final {
-    return super::equals(other) && key_type == downcast(other).key_type
-           && value_type == downcast(other).value_type;
+    return super::equals(other) and key_type == downcast(other).key_type
+           and value_type == downcast(other).value_type;
   }
 
   bool less_than(const legacy_abstract_type& other) const final {
     return super::less_than(other)
-           && std::tie(key_type, downcast(other).key_type)
-                < std::tie(value_type, downcast(other).value_type);
+           and std::tie(key_type, downcast(other).key_type)
+                 < std::tie(value_type, downcast(other).value_type);
   }
 };
 
@@ -613,7 +615,7 @@ struct record_field : detail::totally_ordered<record_field> {
     // nop
   }
 
-  std::string name;       ///< The name of the field.
+  std::string name;         ///< The name of the field.
   tenzir::legacy_type type; ///< The type of the field.
 
   friend bool operator==(const record_field& x, const record_field& y);
@@ -751,19 +753,20 @@ auto make_inspect_fun() {
 template <class Inspector, class... Ts>
 auto make_inspect(detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
-    if constexpr (!Inspector::is_loading) {
+    if constexpr (not Inspector::is_loading) {
       if (x.type_tag != invalid_type_id) {
         return match(x.x, [&f](auto& v) -> bool {
-            return f.apply(v);
-          });
+          return f.apply(v);
+        });
       }
       return true;
     } else {
       using reference = legacy_type&;
       using fun = bool (*)(Inspector&, reference);
       static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
-      if (x.type_tag != invalid_type_id)
+      if (x.type_tag != invalid_type_id) {
         return tbl[x.type_tag](f, x.x);
+      }
       x.x = legacy_type{};
       return true;
     }

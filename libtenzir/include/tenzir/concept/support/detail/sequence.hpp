@@ -32,25 +32,27 @@ inline constexpr bool has_rhs_type_v
   = std::experimental::is_detected_v<has_rhs_type_t, T>;
 
 template <typename T>
-inline constexpr bool is_sequencer_v = has_lhs_type_v<T> && has_rhs_type_v<T>;
+inline constexpr bool is_sequencer_v = has_lhs_type_v<T> and has_rhs_type_v<T>;
 
 template <class T>
 constexpr size_t compute_right_tuple_index() {
-  if constexpr (!is_sequencer_v<T>)
+  if constexpr (not is_sequencer_v<T>) {
     return 0;
-  else if constexpr (is_unused_type_v<typename T::lhs_attribute>
-                     || is_unused_type_v<typename T::rhs_attribute>)
+  } else if constexpr (is_unused_type_v<typename T::lhs_attribute>
+                       or is_unused_type_v<typename T::rhs_attribute>) {
     return compute_right_tuple_index<typename T::lhs_type>();
-  else
+  } else {
     return 1 + compute_right_tuple_index<typename T::lhs_type>();
+  }
 }
 
 template <class Sequencer, class Tuple>
 constexpr decltype(auto) access_left(Tuple&& x) {
-  if constexpr (is_sequencer_v<typename Sequencer::lhs_type>)
+  if constexpr (is_sequencer_v<typename Sequencer::lhs_type>) {
     return std::forward<Tuple>(x);
-  else 
+  } else {
     return std::get<0>(std::forward<Tuple>(x));
+  }
 }
 
 template <class Sequencer, class Tuple>

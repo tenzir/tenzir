@@ -40,7 +40,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
   if (is<caf::none_t>(data)) {
     return caf::none;
   }
-  if (! type) {
+  if (not type) {
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("expected type for non-null value at {}",
                                        prefix));
@@ -51,7 +51,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
       [&]<tenzir::basic_type T>(const T& type) -> caf::error {
         // TODO: Introduce special cases for accepting counts as integers and
         // vice versa if the number is in the valid range.
-        if (! type_check(tenzir::type{type}, data)) {
+        if (not type_check(tenzir::type{type}, data)) {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected value of type {} at "
                                              "{}",
@@ -63,12 +63,12 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         // The data is assumed to come from a configuration file, so any
         // enumeration value would be entered as a string.
         const auto* str = try_as<std::string>(&data);
-        if (! str) {
+        if (not str) {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected enum value at {}",
                                              prefix));
         }
-        if (! u.resolve(*str).has_value()) {
+        if (not u.resolve(*str).has_value()) {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("invalid enum value '{}' at {}",
                                              *str, prefix));
@@ -77,7 +77,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
       },
       [&](const tenzir::list_type& list_type) {
         const auto* list = try_as<tenzir::list>(&data);
-        if (! list) {
+        if (not list) {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected list at {}", prefix));
         }
@@ -94,7 +94,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
       },
       [&](const tenzir::map_type& map_type) {
         const auto* map = try_as<tenzir::map>(&data);
-        if (! map) {
+        if (not map) {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected map at {}", prefix));
         }
@@ -116,7 +116,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
       },
       [&](const tenzir::record_type& record_type) {
         const auto* record = try_as<tenzir::record>(&data);
-        if (! record) {
+        if (not record) {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected record at {}", prefix));
         }
@@ -124,7 +124,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         // Go through the data and check that every field has the expected type.
         for (const auto& [k, v] : *record) {
           auto field_offset = record_type.resolve_key(k);
-          if (! field_offset) {
+          if (not field_offset) {
             // In 'permissive' mode we ignore unknown fields.
             if (mode != validate::permissive) {
               return caf::make_error(tenzir::ec::invalid_configuration,
@@ -160,8 +160,8 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         // Verify that all required fields exist in the data.
         for (const auto& field : record_type.fields()) {
           bool required
-            = field.type.attribute("required") || mode == validate::exhaustive;
-          if (! required) {
+            = field.type.attribute("required") or mode == validate::exhaustive;
+          if (not required) {
             continue;
           }
           auto nested_prefix = fmt::format("{}.{}", prefix, field.name);

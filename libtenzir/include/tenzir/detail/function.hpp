@@ -33,15 +33,15 @@
 #  define FU2_HAS_DISABLED_EXCEPTIONS
 #else // FU2_WITH_DISABLED_EXCEPTIONS
 #  if defined(_MSC_VER)
-#    if !defined(_HAS_EXCEPTIONS) || (_HAS_EXCEPTIONS == 0)
+#    if ! defined(_HAS_EXCEPTIONS) || (_HAS_EXCEPTIONS == 0)
 #      define FU2_HAS_DISABLED_EXCEPTIONS
 #    endif
 #  elif defined(__clang__)
-#    if !(__EXCEPTIONS && __has_feature(cxx_exceptions))
+#    if ! (__EXCEPTIONS && __has_feature(cxx_exceptions))
 #      define FU2_HAS_DISABLED_EXCEPTIONS
 #    endif
 #  elif defined(__GNUC__)
-#    if !__EXCEPTIONS
+#    if ! __EXCEPTIONS
 #      define FU2_HAS_DISABLED_EXCEPTIONS
 #    endif
 #  endif
@@ -79,7 +79,7 @@
 #  define FU2_HAS_NO_EMPTY_PROPAGATION
 #endif // FU2_WITH_NO_EMPTY_PROPAGATION
 
-#if !defined(FU2_HAS_DISABLED_EXCEPTIONS)
+#if ! defined(FU2_HAS_DISABLED_EXCEPTIONS)
 #  include <exception>
 #endif
 
@@ -130,7 +130,7 @@
 #endif
 #ifndef FU2_DETAIL_TRAP
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#  define FU2_DETAIL_TRAP() *(volatile int*) 0x11 = 0
+#  define FU2_DETAIL_TRAP() *(volatile int*)0x11 = 0
 #endif
 
 #ifndef NDEBUG
@@ -225,14 +225,14 @@ constexpr auto invoke(Callable&& callable, Args&&... args) noexcept(
 }
 /// Invokes the given member function pointer by reference
 template <typename T, typename Type, typename Self, typename... Args>
-constexpr auto invoke(Type T::*member, Self&& self, Args&&... args) noexcept(
+constexpr auto invoke(Type T::* member, Self&& self, Args&&... args) noexcept(
   noexcept((std::forward<Self>(self).*member)(std::forward<Args>(args)...)))
   -> decltype((std::forward<Self>(self).*member)(std::forward<Args>(args)...)) {
   return (std::forward<Self>(self).*member)(std::forward<Args>(args)...);
 }
 /// Invokes the given member function pointer by pointer
 template <typename T, typename Type, typename Self, typename... Args>
-constexpr auto invoke(Type T::*member, Self&& self, Args&&... args) noexcept(
+constexpr auto invoke(Type T::* member, Self&& self, Args&&... args) noexcept(
   noexcept((std::forward<Self>(self)->*member)(std::forward<Args>(args)...)))
   -> decltype((std::forward<Self>(self)->*member)(std::forward<Args>(args)...)) {
   return (std::forward<Self>(self)->*member)(std::forward<Args>(args)...);
@@ -240,7 +240,7 @@ constexpr auto invoke(Type T::*member, Self&& self, Args&&... args) noexcept(
 /// Invokes the given pointer to a scalar member by reference
 template <typename T, typename Type, typename Self>
 constexpr auto
-invoke(Type T::*member,
+invoke(Type T::* member,
        Self&& self) noexcept(noexcept(std::forward<Self>(self).*member))
   -> decltype(std::forward<Self>(self).*member) {
   return (std::forward<Self>(self).*member);
@@ -248,7 +248,7 @@ invoke(Type T::*member,
 /// Invokes the given pointer to a scalar member by pointer
 template <typename T, typename Type, typename Self>
 constexpr auto
-invoke(Type T::*member,
+invoke(Type T::* member,
        Self&& self) noexcept(noexcept(std::forward<Self>(self)->*member))
   -> decltype(std::forward<Self>(self)->*member) {
   return std::forward<Self>(self)->*member;
@@ -262,31 +262,31 @@ template <typename T, typename Args, typename = void>
 struct can_invoke : std::false_type {};
 template <typename T, typename... Args>
 struct can_invoke<T, identity<Args...>,
-                  decltype((void) std::declval<T>()(std::declval<Args>()...))>
+                  decltype((void)std::declval<T>()(std::declval<Args>()...))>
   : std::true_type {};
 template <typename Pointer, typename T, typename... Args>
 struct can_invoke<Pointer, identity<T&, Args...>,
-                  decltype((void) ((std::declval<T&>().*std::declval<Pointer>())(
+                  decltype((void)((std::declval<T&>().*std::declval<Pointer>())(
                     std::declval<Args>()...)))> : std::true_type {};
 template <typename Pointer, typename T, typename... Args>
 struct can_invoke<Pointer, identity<T&&, Args...>,
-                  decltype((void) ((std::declval<T&&>().*std::declval<Pointer>())(
+                  decltype((void)((std::declval<T&&>().*std::declval<Pointer>())(
                     std::declval<Args>()...)))> : std::true_type {};
 template <typename Pointer, typename T, typename... Args>
 struct can_invoke<Pointer, identity<T*, Args...>,
-                  decltype((void) ((std::declval<T*>()->*std::declval<Pointer>())(
+                  decltype((void)((std::declval<T*>()->*std::declval<Pointer>())(
                     std::declval<Args>()...)))> : std::true_type {};
 template <typename Pointer, typename T>
 struct can_invoke<Pointer, identity<T&>,
-                  decltype((void) (std::declval<T&>().*std::declval<Pointer>()))>
+                  decltype((void)(std::declval<T&>().*std::declval<Pointer>()))>
   : std::true_type {};
 template <typename Pointer, typename T>
 struct can_invoke<Pointer, identity<T&&>,
-                  decltype((void) (std::declval<T&&>().*std::declval<Pointer>()))>
+                  decltype((void)(std::declval<T&&>().*std::declval<Pointer>()))>
   : std::true_type {};
 template <typename Pointer, typename T>
 struct can_invoke<Pointer, identity<T*>,
-                  decltype((void) (std::declval<T*>()->*std::declval<Pointer>()))>
+                  decltype((void)(std::declval<T*>()->*std::declval<Pointer>()))>
   : std::true_type {};
 
 template <bool RequiresNoexcept, typename T, typename Args>
@@ -469,7 +469,7 @@ constexpr auto retrieve(std::false_type /*is_inplace*/, Accessor from,
 }
 
 namespace invocation_table {
-#if !defined(FU2_HAS_DISABLED_EXCEPTIONS)
+#if ! defined(FU2_HAS_DISABLED_EXCEPTIONS)
 #  if defined(FU2_HAS_NO_FUNCTIONAL_HEADER)
 struct bad_function_call : std::exception {
   bad_function_call() noexcept {
@@ -660,10 +660,11 @@ struct invoke_table<First, Second, Args...> {
     constexpr invocation_vtable() noexcept
       : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
                    function_pointer_of<Args>...>(std::make_tuple(
-        &function_trait<First>::template internal_invoker<T, IsInplace>::invoke,
-        &function_trait<Second>::template internal_invoker<T, IsInplace>::invoke,
-        &function_trait<Args>::template internal_invoker<
-          T, IsInplace>::invoke...)) {
+          &function_trait<First>::template internal_invoker<T, IsInplace>::invoke,
+          &function_trait<Second>::template internal_invoker<T,
+                                                             IsInplace>::invoke,
+          &function_trait<Args>::template internal_invoker<
+            T, IsInplace>::invoke...)) {
     }
   };
 
@@ -682,9 +683,9 @@ struct invoke_table<First, Second, Args...> {
     constexpr invocation_view_vtable() noexcept
       : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
                    function_pointer_of<Args>...>(std::make_tuple(
-        &function_trait<First>::template view_invoker<T>::invoke,
-        &function_trait<Second>::template view_invoker<T>::invoke,
-        &function_trait<Args>::template view_invoker<T>::invoke...)) {
+          &function_trait<First>::template view_invoker<T>::invoke,
+          &function_trait<Second>::template view_invoker<T>::invoke,
+          &function_trait<Args>::template view_invoker<T>::invoke...)) {
     }
   };
 
@@ -703,9 +704,9 @@ struct invoke_table<First, Second, Args...> {
     constexpr empty_vtable() noexcept
       : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
                    function_pointer_of<Args>...>(std::make_tuple(
-        &function_trait<First>::template empty_invoker<IsThrowing>::invoke,
-        &function_trait<Second>::template empty_invoker<IsThrowing>::invoke,
-        &function_trait<Args>::template empty_invoker<IsThrowing>::invoke...)) {
+          &function_trait<First>::template empty_invoker<IsThrowing>::invoke,
+          &function_trait<Second>::template empty_invoker<IsThrowing>::invoke,
+          &function_trait<Args>::template empty_invoker<IsThrowing>::invoke...)) {
     }
   };
 
@@ -755,7 +756,7 @@ class operator_impl;
             typename Ret, typename... Args>                                    \
   class operator_impl<Index, function<Config, Property>,                       \
                       Ret(Args...) CONST VOLATILE OVL_REF NOEXCEPT>            \
-    : copyable<!Config::is_owning || Config::is_copyable> {                    \
+    : copyable<! Config::is_owning || Config::is_copyable> {                   \
     template <std::size_t, typename, typename...>                              \
     friend class operator_impl;                                                \
                                                                                \
@@ -828,9 +829,9 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
           /// Retrieve the pointer to the object
           auto box = static_cast<T*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
-          TENZIR_ASSERT(box && "The object must not be over aligned or null!");
+          TENZIR_ASSERT(box and "The object must not be over aligned or null!");
 
-          if (!IsInplace) {
+          if (not IsInplace) {
             // Just swap both pointers if we allocated on the heap
             to->ptr_ = from->ptr_;
 
@@ -855,10 +856,10 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         case opcode::op_copy: {
           auto box = static_cast<T const*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
-          TENZIR_ASSERT(box && "The object must not be over aligned or null!");
+          TENZIR_ASSERT(box and "The object must not be over aligned or null!");
 
           TENZIR_ASSERT(std::is_copy_constructible<T>::value
-                        && "The box is required to be copyable here!");
+                        and "The box is required to be copyable here!");
 
           // Try to allocate the object inplace
           construct(std::is_copy_constructible<T>{}, *box, to_table, to,
@@ -867,7 +868,7 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         }
         case opcode::op_destroy:
         case opcode::op_weak_destroy: {
-          TENZIR_ASSERT(!to && !to_capacity && "Arg overflow!");
+          TENZIR_ASSERT(not to and not to_capacity and "Arg overflow!");
           auto box = static_cast<T*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
 
@@ -1252,14 +1253,14 @@ public:
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure() noexcept
     : invoke_table_(
-      invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
+        invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
       view_(nullptr) {
   }
 
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure(std::nullptr_t) noexcept
     : invoke_table_(
-      invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
+        invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
       view_(nullptr) {
   }
 
@@ -1280,7 +1281,7 @@ public:
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure(std::false_type /*use_bool_op*/, T&& object)
     : invoke_table_(
-      invoke_table_t::template get_invocation_view_table_of<std::decay_t<T>>()),
+        invoke_table_t::template get_invocation_view_table_of<std::decay_t<T>>()),
       view_(address_taker<std::decay_t<T>>::take(std::forward<T>(object))) {
   }
   template <typename T>
@@ -1362,8 +1363,9 @@ struct accepts_one
 template <typename T, typename Signatures, typename = void>
 struct accepts_all : std::false_type {};
 template <typename T, typename... Signatures>
-struct accepts_all<T, identity<Signatures...>,
-                   std::void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
+struct accepts_all<
+  T, identity<Signatures...>,
+  std::void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
   : std::true_type {};
 
 #if defined(FU2_HAS_NO_EMPTY_PROPAGATION)
@@ -1396,8 +1398,8 @@ template <typename T>
 struct has_bool_op<T, std::void_t<decltype(bool(std::declval<T>()))>>
   : std::true_type {
 #  ifndef NDEBUG
-  static_assert(!std::is_pointer<T>::value, "Missing deduction for function "
-                                            "pointer!");
+  static_assert(not std::is_pointer<T>::value, "Missing deduction for function "
+                                               "pointer!");
 #  endif
 };
 
@@ -1427,8 +1429,8 @@ struct use_bool_op<Ret(Args...) noexcept> : std::false_type {};
 
 template <typename Config, typename T>
 struct assert_wrong_copy_assign {
-  static_assert(!Config::is_owning || !Config::is_copyable
-                  || std::is_copy_constructible<std::decay_t<T>>::value,
+  static_assert(not Config::is_owning or not Config::is_copyable
+                  or std::is_copy_constructible<std::decay_t<T>>::value,
                 "Can't wrap a non copyable object into a unique function!");
 
   using type = void;
@@ -1436,9 +1438,9 @@ struct assert_wrong_copy_assign {
 
 template <bool IsStrongExceptGuaranteed, typename T>
 struct assert_no_strong_except_guarantee {
-  static_assert(!IsStrongExceptGuaranteed
-                  || (std::is_nothrow_move_constructible<T>::value
-                      && std::is_nothrow_destructible<T>::value),
+  static_assert(not IsStrongExceptGuaranteed
+                  or (std::is_nothrow_move_constructible<T>::value
+                      and std::is_nothrow_destructible<T>::value),
                 "Can't wrap a object an object that has no strong exception "
                 "guarantees "
                 "if this is required by the wrapper!");
@@ -1449,7 +1451,7 @@ struct assert_no_strong_except_guarantee {
 /// SFINAES out if the given callable is not copyable correct to the left one.
 template <typename LeftConfig, typename RightConfig>
 using enable_if_copyable_correct_t
-  = std::enable_if_t<(!LeftConfig::is_copyable || RightConfig::is_copyable)>;
+  = std::enable_if_t<(not LeftConfig::is_copyable or RightConfig::is_copyable)>;
 
 template <typename LeftConfig, typename RightConfig>
 using is_owning_correct
@@ -1487,16 +1489,16 @@ class function<Config, property<IsThrowing, HasStrongExceptGuarantee, Args...>>
   struct is_convertible_to_this<
     function<RightConfig, property_t>,
     std::void_t<enable_if_copyable_correct_t<Config, RightConfig>,
-           enable_if_owning_correct_t<Config, RightConfig>>> : std::true_type {
-  };
+                enable_if_owning_correct_t<Config, RightConfig>>>
+    : std::true_type {};
 
   template <typename T>
   using enable_if_not_convertible_to_this
-    = std::enable_if_t<!is_convertible_to_this<std::decay_t<T>>::value>;
+    = std::enable_if_t<not is_convertible_to_this<std::decay_t<T>>::value>;
 
   template <typename T>
   using enable_if_owning_t
-    = std::enable_if_t<std::is_same<T, T>::value && Config::is_owning>;
+    = std::enable_if_t<std::is_same<T, T>::value and Config::is_owning>;
 
   template <typename T>
   using assert_wrong_copy_assign_t =
@@ -1606,7 +1608,7 @@ public:
 
   /// Returns true when the function isn't empty
   explicit operator bool() const noexcept {
-    return !empty();
+    return not empty();
   }
 
   /// Assigns a new target with an optional allocator
@@ -1644,7 +1646,7 @@ public:
 
 template <typename Config, typename Property>
 bool operator==(function<Config, Property> const& f, std::nullptr_t) {
-  return !bool(f);
+  return not bool(f);
 }
 
 template <typename Config, typename Property>
@@ -1654,7 +1656,7 @@ bool operator!=(function<Config, Property> const& f, std::nullptr_t) {
 
 template <typename Config, typename Property>
 bool operator==(std::nullptr_t, function<Config, Property> const& f) {
-  return !bool(f);
+  return not bool(f);
 }
 
 template <typename Config, typename Property>
@@ -1749,7 +1751,7 @@ template <typename... Signatures>
 using function_view = function_base<false, true, capacity_default, //
                                     true, false, Signatures...>;
 
-#if !defined(FU2_HAS_DISABLED_EXCEPTIONS)
+#if ! defined(FU2_HAS_DISABLED_EXCEPTIONS)
 /// Exception type that is thrown when invoking empty function objects
 /// and exception support isn't disabled.
 ///

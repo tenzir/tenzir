@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -105,10 +105,10 @@ TEST("view3 view_at non-null branches") {
 
 TEST("view3 view_at null semantics") {
   auto null_array = make_null_array(null_type{});
-  CHECK(! view_at(*null_array, 0));
+  CHECK(not view_at(*null_array, 0));
 
   auto bool_array = make_null_array(bool_type{});
-  CHECK(! view_at(*bool_array, 0));
+  CHECK(not view_at(*bool_array, 0));
   auto erased = view_at(static_cast<const arrow::Array&>(*bool_array), 0);
   CHECK(is<caf::none_t>(erased));
 }

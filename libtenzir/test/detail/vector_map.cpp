@@ -32,7 +32,7 @@ struct fixture {
 
 WITH_FIXTURE(fixture) {
   TEST("stable_map membership") {
-    CHECK(! xs.contains("qux"));
+    CHECK(not xs.contains("qux"));
     CHECK(xs.find("foo") != xs.end());
     CHECK_EQUAL(xs.count("baz"), 1u);
   }
@@ -76,7 +76,7 @@ WITH_FIXTURE(fixture) {
 
   TEST("stable_map duplicates") {
     auto i = xs.insert({"foo", 666});
-    CHECK(! i.second);
+    CHECK(not i.second);
     CHECK_EQUAL(i.first->second, 42);
     CHECK_EQUAL(xs.size(), 3u);
   }

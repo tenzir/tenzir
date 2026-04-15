@@ -361,7 +361,7 @@ public:
     auto final_url = std::string{};
     {
       const auto url_utf8_result = url.utf8_view("url", args_.url.source, dh);
-      if (! url_utf8_result) {
+      if (not url_utf8_result) {
         co_return;
       }
       const auto parsed_url

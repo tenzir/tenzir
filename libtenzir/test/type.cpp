@@ -46,7 +46,7 @@ TEST("null_type") {
 TEST("bool_type") {
   static_assert(concrete_type<bool_type>);
   static_assert(basic_type<bool_type>);
-  static_assert(!complex_type<bool_type>);
+  static_assert(not complex_type<bool_type>);
   const auto t = type{};
   const auto bt = type{bool_type{}};
   CHECK(bt);
@@ -56,7 +56,7 @@ TEST("bool_type") {
   CHECK(t <= bt);
   CHECK_EQUAL(fmt::format("{}", bt), "bool");
   CHECK_EQUAL(fmt::format("{}", bool_type{}), "bool");
-  CHECK(!is<bool_type>(t));
+  CHECK(not is<bool_type>(t));
   CHECK(is<bool_type>(bt));
   const auto lbt = type::from_legacy_type(legacy_bool_type{});
   CHECK(is<bool_type>(lbt));
@@ -65,7 +65,7 @@ TEST("bool_type") {
 TEST("int64_type") {
   static_assert(concrete_type<int64_type>);
   static_assert(basic_type<int64_type>);
-  static_assert(!complex_type<int64_type>);
+  static_assert(not complex_type<int64_type>);
   const auto t = type{};
   const auto it = type{int64_type{}};
   CHECK(it);
@@ -75,7 +75,7 @@ TEST("int64_type") {
   CHECK(t <= it);
   CHECK_EQUAL(fmt::format("{}", it), "int64");
   CHECK_EQUAL(fmt::format("{}", int64_type{}), "int64");
-  CHECK(!is<int64_type>(t));
+  CHECK(not is<int64_type>(t));
   CHECK(is<int64_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
   CHECK(is<int64_type>(lit));
@@ -84,7 +84,7 @@ TEST("int64_type") {
 TEST("uint64_type") {
   static_assert(concrete_type<uint64_type>);
   static_assert(basic_type<uint64_type>);
-  static_assert(!complex_type<uint64_type>);
+  static_assert(not complex_type<uint64_type>);
   const auto t = type{};
   const auto ct = type{uint64_type{}};
   CHECK(ct);
@@ -94,7 +94,7 @@ TEST("uint64_type") {
   CHECK(t <= ct);
   CHECK_EQUAL(fmt::format("{}", ct), "uint64");
   CHECK_EQUAL(fmt::format("{}", uint64_type{}), "uint64");
-  CHECK(!is<uint64_type>(t));
+  CHECK(not is<uint64_type>(t));
   CHECK(is<uint64_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
   CHECK(is<uint64_type>(lct));
@@ -103,7 +103,7 @@ TEST("uint64_type") {
 TEST("double_type") {
   static_assert(concrete_type<double_type>);
   static_assert(basic_type<double_type>);
-  static_assert(!complex_type<double_type>);
+  static_assert(not complex_type<double_type>);
   const auto t = type{};
   const auto rt = type{double_type{}};
   CHECK(rt);
@@ -113,7 +113,7 @@ TEST("double_type") {
   CHECK(t <= rt);
   CHECK_EQUAL(fmt::format("{}", rt), "double");
   CHECK_EQUAL(fmt::format("{}", double_type{}), "double");
-  CHECK(!is<double_type>(t));
+  CHECK(not is<double_type>(t));
   CHECK(is<double_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
   CHECK(is<double_type>(lrt));
@@ -122,7 +122,7 @@ TEST("double_type") {
 TEST("duration_type") {
   static_assert(concrete_type<duration_type>);
   static_assert(basic_type<duration_type>);
-  static_assert(!complex_type<duration_type>);
+  static_assert(not complex_type<duration_type>);
   const auto t = type{};
   const auto dt = type{duration_type{}};
   CHECK(dt);
@@ -132,7 +132,7 @@ TEST("duration_type") {
   CHECK(t <= dt);
   CHECK_EQUAL(fmt::format("{}", dt), "duration");
   CHECK_EQUAL(fmt::format("{}", duration_type{}), "duration");
-  CHECK(!is<duration_type>(t));
+  CHECK(not is<duration_type>(t));
   CHECK(is<duration_type>(dt));
   const auto ldt = type::from_legacy_type(legacy_duration_type{});
   CHECK(is<duration_type>(ldt));
@@ -141,7 +141,7 @@ TEST("duration_type") {
 TEST("time_type") {
   static_assert(concrete_type<time_type>);
   static_assert(basic_type<time_type>);
-  static_assert(!complex_type<time_type>);
+  static_assert(not complex_type<time_type>);
   const auto t = type{};
   const auto tt = type{time_type{}};
   CHECK(tt);
@@ -151,7 +151,7 @@ TEST("time_type") {
   CHECK(t <= tt);
   CHECK_EQUAL(fmt::format("{}", tt), "time");
   CHECK_EQUAL(fmt::format("{}", time_type{}), "time");
-  CHECK(!is<time_type>(t));
+  CHECK(not is<time_type>(t));
   CHECK(is<time_type>(tt));
   const auto ltt = type::from_legacy_type(legacy_time_type{});
   CHECK(is<time_type>(ltt));
@@ -160,7 +160,7 @@ TEST("time_type") {
 TEST("string_type") {
   static_assert(concrete_type<string_type>);
   static_assert(basic_type<string_type>);
-  static_assert(!complex_type<string_type>);
+  static_assert(not complex_type<string_type>);
   const auto t = type{};
   const auto st = type{string_type{}};
   CHECK(st);
@@ -170,7 +170,7 @@ TEST("string_type") {
   CHECK(t <= st);
   CHECK_EQUAL(fmt::format("{}", st), "string");
   CHECK_EQUAL(fmt::format("{}", string_type{}), "string");
-  CHECK(!is<string_type>(t));
+  CHECK(not is<string_type>(t));
   CHECK(is<string_type>(st));
   const auto lst = type::from_legacy_type(legacy_string_type{});
   CHECK(is<string_type>(lst));
@@ -179,7 +179,7 @@ TEST("string_type") {
 TEST("ip_type") {
   static_assert(concrete_type<ip_type>);
   static_assert(basic_type<ip_type>);
-  static_assert(!complex_type<ip_type>);
+  static_assert(not complex_type<ip_type>);
   const auto t = type{};
   const auto at = type{ip_type{}};
   CHECK(at);
@@ -189,7 +189,7 @@ TEST("ip_type") {
   CHECK(t <= at);
   CHECK_EQUAL(fmt::format("{}", at), "ip");
   CHECK_EQUAL(fmt::format("{}", ip_type{}), "ip");
-  CHECK(!is<ip_type>(t));
+  CHECK(not is<ip_type>(t));
   CHECK(is<ip_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
   CHECK(is<ip_type>(lat));
@@ -198,7 +198,7 @@ TEST("ip_type") {
 TEST("subnet_type") {
   static_assert(concrete_type<subnet_type>);
   static_assert(basic_type<subnet_type>);
-  static_assert(!complex_type<subnet_type>);
+  static_assert(not complex_type<subnet_type>);
   const auto t = type{};
   const auto st = type{subnet_type{}};
   CHECK(st);
@@ -208,7 +208,7 @@ TEST("subnet_type") {
   CHECK(t <= st);
   CHECK_EQUAL(fmt::format("{}", st), "subnet");
   CHECK_EQUAL(fmt::format("{}", subnet_type{}), "subnet");
-  CHECK(!is<subnet_type>(t));
+  CHECK(not is<subnet_type>(t));
   CHECK(is<subnet_type>(st));
   const auto lst = type::from_legacy_type(legacy_subnet_type{});
   CHECK(is<subnet_type>(lst));
@@ -216,7 +216,7 @@ TEST("subnet_type") {
 
 TEST("enumeration_type") {
   static_assert(concrete_type<enumeration_type>);
-  static_assert(!basic_type<enumeration_type>);
+  static_assert(not basic_type<enumeration_type>);
   static_assert(complex_type<enumeration_type>);
   const auto t = type{};
   const auto et = type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}};
@@ -225,7 +225,7 @@ TEST("enumeration_type") {
   CHECK(t < et);
   CHECK(t <= et);
   CHECK_EQUAL(fmt::format("{}", et), "enum {first: 0, third: 2, fourth: 3}");
-  CHECK(!is<enumeration_type>(t));
+  CHECK(not is<enumeration_type>(t));
   CHECK(is<enumeration_type>(et));
   CHECK_EQUAL(as<enumeration_type>(et).field(0), "first");
   CHECK_EQUAL(as<enumeration_type>(et).field(1), "");
@@ -246,7 +246,7 @@ TEST("enumeration_type") {
 
 TEST("list_type") {
   static_assert(concrete_type<list_type>);
-  static_assert(!basic_type<list_type>);
+  static_assert(not basic_type<list_type>);
   static_assert(complex_type<list_type>);
   const auto t = type{};
   const auto tlit = type{list_type{int64_type{}}};
@@ -258,7 +258,7 @@ TEST("list_type") {
   CHECK(t <= tlit);
   CHECK_EQUAL(fmt::format("{}", tlit), "list<int64>");
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<null>");
-  CHECK(!is<list_type>(t));
+  CHECK(not is<list_type>(t));
   CHECK(is<list_type>(tlit));
   CHECK_EQUAL(as<list_type>(tlit).value_type(), type{int64_type{}});
   const auto llbt
@@ -269,7 +269,7 @@ TEST("list_type") {
 
 TEST("map_type") {
   static_assert(concrete_type<map_type>);
-  static_assert(!basic_type<map_type>);
+  static_assert(not basic_type<map_type>);
   static_assert(complex_type<map_type>);
   const auto t = type{};
   const auto tmsit = type{map_type{string_type{}, int64_type{}}};
@@ -281,7 +281,7 @@ TEST("map_type") {
   CHECK(t <= tmsit);
   CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int64>");
   CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<null, null>");
-  CHECK(!is<map_type>(t));
+  CHECK(not is<map_type>(t));
   CHECK(is<map_type>(tmsit));
   CHECK_EQUAL(as<map_type>(tmsit).key_type(), type{string_type{}});
   CHECK_EQUAL(as<map_type>(tmsit).value_type(), type{int64_type{}});
@@ -294,7 +294,7 @@ TEST("map_type") {
 
 TEST("record_type") {
   static_assert(concrete_type<record_type>);
-  static_assert(!basic_type<record_type>);
+  static_assert(not basic_type<record_type>);
   static_assert(complex_type<record_type>);
   const auto t = type{};
   const auto rt = type{record_type{
@@ -628,7 +628,7 @@ TEST("record_type merging") {
   REQUIRE(result_prefer_left);
   CHECK_EQUAL(fmt::format("{}", *result_prefer_left),
               fmt::format("{}", expected_result_prefer_left));
-  REQUIRE(!result_fail);
+  REQUIRE(not result_fail);
   CHECK_EQUAL(result_fail.error(), expected_result_fail);
 }
 
@@ -856,7 +856,7 @@ TEST("sum type") {
   // the types resulting in the visitation.
   auto is_type = []<concrete_type... T>(const T&...) {
     return []<concrete_type... U>(const U&...) {
-      return (std::is_same_v<T, U> && ...);
+      return (std::is_same_v<T, U> and ...);
     };
   };
   CHECK(match(type{ip_type{}}, is_type(ip_type{})));
@@ -913,14 +913,14 @@ TEST("congruence") {
   auto c = type{"c", uint64_type{}};
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
-  CHECK(!congruent(i, c));
+  CHECK(not congruent(i, c));
   auto l0 = type{list_type{i}};
   auto l1 = type{list_type{j}};
   auto l2 = type{list_type{c}};
   CHECK(l0 != l1);
   CHECK(l0 != l2);
   CHECK(congruent(l0, l1));
-  CHECK(!congruent(l1, l2));
+  CHECK(not congruent(l1, l2));
   auto r0 = type{record_type{
     {"a", ip_type{}},
     {"b", bool_type{}},
@@ -960,7 +960,7 @@ TEST("subset") {
   auto c = type{"c", uint64_type{}};
   CHECK(is_subset(i, i));
   CHECK(is_subset(i, j));
-  CHECK(!is_subset(i, c));
+  CHECK(not is_subset(i, c));
   auto r0 = type{record_type{
     {"a", ip_type{}},
     {"b", bool_type{}},
@@ -991,10 +991,10 @@ TEST("subset") {
     {"c", uint64_type{}},
   }};
   CHECK(is_subset(r0, r0));
-  CHECK(!is_subset(r0, r1));
+  CHECK(not is_subset(r0, r1));
   CHECK(is_subset(r0, r2));
-  CHECK(!is_subset(r0, r3));
-  CHECK(!is_subset(r0, r4));
+  CHECK(not is_subset(r0, r3));
+  CHECK(not is_subset(r0, r4));
 }
 
 } // namespace tenzir

@@ -30,18 +30,18 @@ inline auto make_pattern(std::string_view str, pattern_options options = {}) {
 TEST("functionality") {
   std::string str = "1";
   CHECK(make_pattern("[0-9]").match(str));
-  CHECK(! make_pattern("[^1]").match(str));
+  CHECK(not make_pattern("[^1]").match(str));
   str = "foobarbaz";
   CHECK(make_pattern("bar").search(str));
-  CHECK(! make_pattern("bar").search("FOOBARBAZ"));
-  CHECK(! make_pattern("^bar$").search(str));
+  CHECK(not make_pattern("bar").search("FOOBARBAZ"));
+  CHECK(not make_pattern("^bar$").search(str));
   CHECK(make_pattern("^\\w{3}\\w{3}\\w{3}$").match(str));
   str = "Holla die Waldfee!";
   auto p = make_pattern("\\w+ die Waldfe{2}.");
   CHECK(p.match(str));
   CHECK(p.search(str));
   p = make_pattern("(\\w+ )");
-  CHECK(! p.match(str));
+  CHECK(not p.match(str));
   CHECK(p.search(str));
 }
 
@@ -112,14 +112,14 @@ TEST("pattern parseable") {
   CHECK(f != l);
   CHECK_EQUAL(to_string(pat), "/foobar/");
   CHECK(pat.match("foobar"));
-  CHECK(! pat.match("FOOBAR"));
+  CHECK(not pat.match("FOOBAR"));
 }
 
 TEST("to pattern") {
   auto p1 = to<pattern>("/test/");
   CHECK(p1);
   CHECK_EQUAL(p1->string(), "test");
-  CHECK(! p1->options().case_insensitive);
+  CHECK(not p1->options().case_insensitive);
   auto p2 = to<pattern>("/test/i");
   CHECK(p2);
   CHECK_EQUAL(p2->string(), "test");

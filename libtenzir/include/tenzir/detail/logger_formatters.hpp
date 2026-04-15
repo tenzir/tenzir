@@ -133,7 +133,7 @@ struct formatter<T> {
       { value.name() } -> std::convertible_to<std::string_view>;
     };
     static_assert(has_name_member_function
-                  || tenzir::detail::always_false_v<T>);
+                  or tenzir::detail::always_false_v<T>);
     return fmt::format_to(ctx.out(), "{}", value.name());
   }
 };
@@ -176,8 +176,9 @@ struct formatter<caf::intrusive_ptr<T>> {
 
   template <class FormatContext>
   auto format(const caf::intrusive_ptr<T>& value, FormatContext& ctx) const {
-    if (!value)
+    if (not value) {
       return fmt::format_to(ctx.out(), "*{}", "nullptr");
+    }
     return fmt::format_to(ctx.out(), "*{}", ptr(value.get()));
   }
 };
@@ -192,8 +193,9 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
   template <class FormatContext>
   auto
   format(const caf::intrusive_cow_ptr<T>& value, FormatContext& ctx) const {
-    if (!value)
+    if (not value) {
       return fmt::format_to(ctx.out(), "*{}", "nullptr");
+    }
     return fmt::format_to(ctx.out(), "*{}", ptr(value.get()));
   }
 };
@@ -207,8 +209,9 @@ struct formatter<caf::expected<T>> {
 
   template <class FormatContext>
   auto format(const caf::expected<T>& value, FormatContext& ctx) const {
-    if (!value)
+    if (not value) {
       return fmt::format_to(ctx.out(), "{}", value.error());
+    }
     return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
@@ -263,7 +266,7 @@ struct formatter<std::span<std::byte>> {
   }
 };
 
-#if !__has_include(<fmt/std.h>)
+#if ! __has_include(<fmt/std.h>)
 
 template <>
 struct formatter<std::filesystem::path> : formatter<std::string> {};

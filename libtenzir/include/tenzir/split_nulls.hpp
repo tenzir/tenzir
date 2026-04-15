@@ -22,7 +22,7 @@ inline auto split_nulls(generator<chunk_ptr> input)
   -> generator<std::optional<std::string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
-    if (!chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
@@ -44,7 +44,7 @@ inline auto split_nulls(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (!buffer.empty()) {
+  if (not buffer.empty()) {
     co_yield buffer;
   }
 }

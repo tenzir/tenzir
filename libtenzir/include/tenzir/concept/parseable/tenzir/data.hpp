@@ -36,8 +36,8 @@ struct null_parser : parser_base<null_parser> {
 
 namespace parsers {
 
-constexpr inline auto number = (parsers::count >> &!chr{'.'})
-                               | (parsers::integer >> &!chr{'.'})
+constexpr inline auto number = (parsers::count >> &not chr{'.'})
+                               | (parsers::integer >> &not chr{'.'})
                                | parsers::real;
 
 constexpr inline auto null = null_parser{};

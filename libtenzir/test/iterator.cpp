@@ -19,7 +19,7 @@ struct iterator
 public:
   iterator() = default;
 
-  iterator(T(&array)[N]) : array_{array}, i_{0} {
+  iterator(T (&array)[N]) : array_{array}, i_{0} {
   }
 
 private:
@@ -60,8 +60,9 @@ TEST("basic_custom_iterator") {
   iterator<int, 5> begin{a}, end;
 
   int i = 0;
-  while (begin != end)
+  while (begin != end) {
     CHECK(*begin++ == ++i);
+  }
 
   begin -= 3;
   CHECK(*begin == 3);
@@ -72,10 +73,10 @@ TEST("basic_custom_iterator") {
   CHECK((end - begin) == 4);
   CHECK((begin + 4) == end);
 
-  CHECK(!(begin == end));
+  CHECK(not(begin == end));
   CHECK(begin != end);
   CHECK(begin < end);
-  CHECK(!(end < begin));
+  CHECK(not(end < begin));
   CHECK(begin <= end);
 }
 
@@ -84,6 +85,7 @@ TEST("basic_custom_const_iterator") {
   iterator<const int, 5> begin{a}, end;
 
   int i = 0;
-  while (begin != end)
+  while (begin != end) {
     CHECK(*begin++ == ++i);
+  }
 }

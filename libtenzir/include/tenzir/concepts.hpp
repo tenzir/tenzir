@@ -115,7 +115,7 @@ concept semigroup = requires(const T& x, const T& y) {
 /// For all members x of T:
 /// mappend(x, T{}) == mappend(T{}, x) == x
 template <class T>
-concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
+concept monoid = semigroup<T> and std::is_default_constructible_v<T>;
 
 template <class T, class... Ts>
 concept one_of = (std::same_as<T, Ts> or ...);

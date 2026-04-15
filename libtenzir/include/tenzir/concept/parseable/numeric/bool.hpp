@@ -60,14 +60,16 @@ struct bool_parser : parser_base<bool_parser<Policy>> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (f == l)
+    if (f == l) {
       return false;
-    if (Policy::parse_true(f, l))
+    }
+    if (Policy::parse_true(f, l)) {
       a = true;
-    else if (Policy::parse_false(f, l))
+    } else if (Policy::parse_false(f, l)) {
       a = false;
-    else
+    } else {
       return false;
+    }
     return true;
   }
 };

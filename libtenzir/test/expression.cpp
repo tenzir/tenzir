@@ -224,10 +224,10 @@ WITH_FIXTURE(fixture) {
     CHECK(tenzir::match(*expr, validator{}));
     expr = to<expression>("#schema == 42");
     REQUIRE(expr);
-    CHECK(! tenzir::match(*expr, validator{}));
+    CHECK(not tenzir::match(*expr, validator{}));
     expr = to<expression>("#schema == zeek.conn");
     REQUIRE(expr);
-    CHECK(! tenzir::match(*expr, validator{}));
+    CHECK(not tenzir::match(*expr, validator{}));
   }
 
   TEST("validation - type extractor") {
@@ -239,7 +239,7 @@ WITH_FIXTURE(fixture) {
     CHECK(tenzir::match(*expr, validator{}));
     expr = to<expression>(":bool > -42");
     REQUIRE(expr);
-    CHECK(! tenzir::match(*expr, validator{}));
+    CHECK(not tenzir::match(*expr, validator{}));
     expr = to<expression>(":timestamp < now");
     REQUIRE(expr);
     CHECK(tenzir::match(*expr, validator{}));
@@ -266,9 +266,9 @@ WITH_FIXTURE(fixture) {
     MESSAGE("field extractors");
     CHECK(match("x < 4.2 || (y == true && z in 10.0.0.0/8)", r));
     CHECK(match("x < 4.2 && (y == false || :bool == false)", r));
-    CHECK(! match("x < 4.2 && a == true", r));
+    CHECK(not match("x < 4.2 && a == true", r));
     MESSAGE("attribute extractors");
-    CHECK(! match("#schema == \"foo\"", r));
+    CHECK(not match("#schema == \"foo\"", r));
     r = type{"foo", r};
     CHECK(match("#schema == \"foo\"", r));
     CHECK(match("#schema != \"bar\"", r));

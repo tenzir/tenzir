@@ -30,7 +30,7 @@ TEST("bloom filter api") {
   auto filter = unbox(bloom_filter::make(cfg));
   filter.add(hash("foo"));
   CHECK(filter.lookup(hash("foo")));
-  CHECK(! filter.lookup(hash("bar")));
+  CHECK(not filter.lookup(hash("bar")));
 }
 
 TEST("bloom filter odd m") {

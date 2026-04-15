@@ -163,7 +163,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               query_params.error());
           }
         } else if (content_type == "application/json") {
-          auto const& json_body = ! body.empty() ? body : "{}";
+          auto const& json_body = not body.empty() ? body : "{}";
           auto json_params = http_parameter_map::from_json(json_body);
           if (not json_params) {
             return response->abort(400, fmt::format("invalid JSON body\n"),
@@ -349,7 +349,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     auto handler = rest_plugin->handler(system, node);
     handlers.push_back(handler);
     for (auto const& endpoint : rest_plugin->rest_endpoints()) {
-      if (endpoint.path.empty() || endpoint.path[0] != '/') {
+      if (endpoint.path.empty() or endpoint.path[0] != '/') {
         TENZIR_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
@@ -388,8 +388,8 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         auto http_path = req->header().path();
         // Catch the common mistake of sending a GET request to a POST endpoint.
         if (http_path.starts_with("/api")
-            && std::find(api_routes.begin(), api_routes.end(), http_path)
-                 != api_routes.end()) {
+            and std::find(api_routes.begin(), api_routes.end(), http_path)
+                  != api_routes.end()) {
           return req->create_response(restinio::status_not_found())
             .set_body("invalid request method\n")
             .done();
@@ -405,7 +405,8 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
           return restinio::request_rejected();
         }
         // Map e.g. /status -> /status.html on disk.
-        if (not exists(normalized_path) && ! normalized_path.has_extension()) {
+        if (not exists(normalized_path)
+            and not normalized_path.has_extension()) {
           normalized_path.replace_extension("html");
         }
         if (not exists(normalized_path)) {
@@ -479,7 +480,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       [&](atom::signal, int signal) {
         TENZIR_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
                      ::strsignal(signal));
-        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_ASSERT(signal == SIGINT or signal == SIGTERM);
         stop = true;
       },
       [&](atom::stop, diagnostic diag) {

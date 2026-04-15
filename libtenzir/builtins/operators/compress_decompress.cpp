@@ -467,7 +467,7 @@ public:
     using T = decltype(args.level->inner);
     if (level) {
       if (std::numeric_limits<T>::lowest() <= level->inner
-          && level->inner <= std::numeric_limits<T>::max()) {
+          and level->inner <= std::numeric_limits<T>::max()) {
         args.level->inner = detail::narrow<T>(level->inner);
       } else {
         diagnostic::error("invalid compression level: `{}`", level->inner)

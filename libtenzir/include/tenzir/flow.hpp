@@ -32,8 +32,8 @@ struct flow {
 template <>
 struct is_uniquely_represented<flow>
   : std::bool_constant<
-      is_uniquely_represented<ip>::value && is_uniquely_represented<port>::value
-      && sizeof(flow) == ((2 * sizeof(ip)) + (2 * sizeof(port)))> {};
+      is_uniquely_represented<ip>::value and is_uniquely_represented<port>::value
+      and sizeof(flow) == ((2 * sizeof(ip)) + (2 * sizeof(port)))> {};
 
 /// Factory function to construct a flow.
 /// @param src_addr The IP address of the flow source.
@@ -96,7 +96,7 @@ bool operator==(const flow& x, const flow& y);
 
 /// @relates flow
 inline bool operator!=(const flow& x, const flow& y) {
-  return !(x == y);
+  return not(x == y);
 }
 
 /// @relates flow

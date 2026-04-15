@@ -31,12 +31,12 @@ constexpr auto checked_add(X x, Y y)
   -> std::optional<std::common_type_t<X, Y>> {
   static_assert(sizeof(x) == sizeof(y));
   using R = std::common_type_t<X, Y>;
-  if constexpr (std::is_signed_v<X> && std::is_signed_v<Y>) {
+  if constexpr (std::is_signed_v<X> and std::is_signed_v<Y>) {
     static_assert(std::is_signed_v<R>);
-    if (x > 0 && y > 0) {
+    if (x > 0 and y > 0) {
       // -> x + y <= max<R>
       TENZIR_CHECKED_MATH_CHECK(x <= max<R> - y);
-    } else if (x < 0 && y < 0) {
+    } else if (x < 0 and y < 0) {
       // -> min<R> <= x + y
       TENZIR_CHECKED_MATH_CHECK(min<R> - y <= x);
     } else {
@@ -103,10 +103,10 @@ template <std::integral X, std::integral Y>
 constexpr auto checked_mul(X x, Y y)
   -> std::optional<std::conditional_t<std::is_signed_v<X>, X, Y>> {
   static_assert(sizeof(x) == sizeof(y));
-  if (x == 0 || y == 0) {
+  if (x == 0 or y == 0) {
     return 0;
   }
-  if constexpr (std::is_unsigned_v<X> && std::is_signed_v<Y>) {
+  if constexpr (std::is_unsigned_v<X> and std::is_signed_v<Y>) {
     // Make signed the first argument if possible.
     return checked_mul(y, x);
   } else if constexpr (std::is_unsigned_v<X>) {
@@ -115,7 +115,7 @@ constexpr auto checked_mul(X x, Y y)
     TENZIR_CHECKED_MATH_CHECK(x <= max<X> / y);
     return x * y;
   } else if constexpr (std::is_unsigned_v<Y>) {
-    if (x == -1 && y == Y(max<X>) + 1) {
+    if (x == -1 and y == Y(max<X>) + 1) {
       return min<X>;
     }
     TENZIR_CHECKED_MATH_CHECK(y <= Y(max<X>));

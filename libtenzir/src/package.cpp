@@ -421,7 +421,7 @@ auto parse_operator_parameter_list(std::string_view field_name,
 }
 
 auto is_field_path_type(const package_operator_parameter& param) -> bool {
-  return param.type && detail::ascii_icase_equal(*param.type, "field");
+  return param.type and detail::ascii_icase_equal(*param.type, "field");
 }
 
 auto normalize_basic_type_name(std::string_view name) -> std::string {
@@ -440,7 +440,7 @@ auto normalize_basic_type_name(std::string_view name) -> std::string {
 auto parse_parameter_value_type(const package_operator_parameter& param,
                                 std::string_view op_id, diagnostic_handler& dh)
   -> failure_or<std::optional<type>> {
-  if (not param.type || is_field_path_type(param)) {
+  if (not param.type or is_field_path_type(param)) {
     return std::optional<type>{};
   }
   if (*param.type == "secret") {
@@ -454,7 +454,7 @@ auto parse_parameter_value_type(const package_operator_parameter& param,
   auto legacy = legacy_type{};
   auto f = normalized.begin();
   auto l = normalized.end();
-  if (not parsers::legacy_type(f, l, legacy) || f != l) {
+  if (not parsers::legacy_type(f, l, legacy) or f != l) {
     diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
                       *param.type, param.name, op_id)
       .emit(dh);
@@ -551,7 +551,7 @@ auto package_operator::parse(const view<record>& data,
             if (auto assigned
                 = assign_parameters("args.positional", subvalue,
                                     result.args.positional, positional_source);
-                ! assigned) {
+                not assigned) {
               return assigned.error();
             }
             continue;
@@ -559,7 +559,7 @@ auto package_operator::parse(const view<record>& data,
           if (subkey == "named") {
             if (auto assigned = assign_parameters(
                   "args.named", subvalue, result.args.named, named_source);
-                ! assigned) {
+                not assigned) {
               return assigned.error();
             }
             continue;
@@ -573,7 +573,7 @@ auto package_operator::parse(const view<record>& data,
       if (try_as<view<list>>(&value)) {
         if (auto assigned = assign_parameters(
               "args", value, result.args.positional, positional_source);
-            ! assigned) {
+            not assigned) {
           return assigned.error();
         }
         continue;
@@ -1221,7 +1221,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
                          TENZIR_UNREACHABLE();
                        },
                        []<class T>(T&& x) -> ast::constant::kind
-                         requires(! std::same_as<std::decay_t<T>, pattern>)
+                         requires(not std::same_as<std::decay_t<T>, pattern>)
                        {
                          return std::forward<T>(x);
                        }});
@@ -1242,7 +1242,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
         .emit(dh);
       return failure::promise();
     }
-    if (is_field_path_type(param) && not is<caf::none_t>(*yaml_data)) {
+    if (is_field_path_type(param) and not is<caf::none_t>(*yaml_data)) {
       diagnostic::error("default value for field parameter `{}` must be `null`",
                         param.name)
         .emit(dh);

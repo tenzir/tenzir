@@ -61,7 +61,7 @@ auto read_heap_base_from_proc() -> std::optional<std::uintptr_t> {
     return value;
   };
   std::ifstream maps{"/proc/self/maps"};
-  if (! maps) {
+  if (not maps) {
     return std::nullopt;
   }
   std::string line;
@@ -83,7 +83,7 @@ auto read_heap_base_from_proc() -> std::optional<std::uintptr_t> {
     const auto end_sv = rest.substr(0, space);
     auto start = parse_hex(start_sv);
     auto end = parse_hex(end_sv);
-    if (! start || ! end || *start >= *end) {
+    if (not start or not end or *start >= *end) {
       continue;
     }
     return start;
@@ -223,17 +223,17 @@ auto make_malloc_metrics() -> record {
        }) {
     result.try_emplace(key, caf::none);
   }
-#if defined(__GLIBC__)
+#  if defined(__GLIBC__)
   auto set_field = [&result](std::string_view key, uint64_t value) {
     if (auto it = result.find(std::string{key}); it != result.end()) {
       it->second = value;
     }
   };
-#  if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
+#    if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
   const auto info = ::mallinfo2();
-#  else
+#    else
   const auto info = ::mallinfo();
-#  endif
+#    endif
   set_field("arena_bytes", static_cast<uint64_t>(info.arena));
   set_field("uordblks_bytes", static_cast<uint64_t>(info.uordblks));
   set_field("fordblks_bytes", static_cast<uint64_t>(info.fordblks));
@@ -241,7 +241,7 @@ auto make_malloc_metrics() -> record {
   set_field("hblkhd_bytes", static_cast<uint64_t>(info.hblkhd));
   set_field("ordblks_count", static_cast<uint64_t>(info.ordblks));
   set_field("smblks_count", static_cast<uint64_t>(info.smblks));
-#endif
+#  endif
   return result;
 }
 #endif
@@ -249,16 +249,16 @@ auto make_malloc_metrics() -> record {
 #if TENZIR_LINUX
 auto parse_proc_kb_value(std::string_view line, std::string_view key)
   -> std::optional<uint64_t> {
-  if (! line.starts_with(key)) {
+  if (not line.starts_with(key)) {
     return std::nullopt;
   }
   const auto key_length = key.size();
-  if (line.size() <= key_length || line[key_length] != ':') {
+  if (line.size() <= key_length or line[key_length] != ':') {
     return std::nullopt;
   }
   auto rest = line.substr(key_length + 1);
-  while (! rest.empty()
-         && std::isspace(static_cast<unsigned char>(rest.front()))) {
+  while (not rest.empty()
+         and std::isspace(static_cast<unsigned char>(rest.front()))) {
     rest.remove_prefix(1);
   }
   const auto delimiter = rest.find_first_of(" \t");
@@ -275,11 +275,11 @@ auto parse_proc_kb_value(std::string_view line, std::string_view key)
   }
   if (delimiter != std::string_view::npos) {
     auto unit = rest.substr(delimiter);
-    while (! unit.empty()
-           && std::isspace(static_cast<unsigned char>(unit.front()))) {
+    while (not unit.empty()
+           and std::isspace(static_cast<unsigned char>(unit.front()))) {
       unit.remove_prefix(1);
     }
-    if (unit.starts_with("kB") || unit.starts_with("KB")) {
+    if (unit.starts_with("kB") or unit.starts_with("KB")) {
       value *= 1024;
     }
   }
@@ -407,7 +407,7 @@ auto make_procfs_metrics() -> record {
   if (private_hugetlb) {
     add_value(hugetlb_bytes, *private_hugetlb);
   }
-  if (! hugetlb_bytes && hugetlb_total) {
+  if (not hugetlb_bytes and hugetlb_total) {
     assign_value(hugetlb_bytes, *hugetlb_total);
   }
   if (hugetlb_bytes) {
@@ -440,7 +440,7 @@ auto make_procfs_metrics() -> record {
   }
   if (vm_rss) {
     set_record_field(status, "vm_rss_bytes", *vm_rss);
-    if (! rss) {
+    if (not rss) {
       set_record_field(smaps, "rss_bytes", *vm_rss);
     }
   }
@@ -449,13 +449,13 @@ auto make_procfs_metrics() -> record {
   }
   if (vm_swap) {
     set_record_field(status, "vm_swap_bytes", *vm_swap);
-    if (! swap) {
+    if (not swap) {
       set_record_field(smaps, "swap_bytes", *vm_swap);
     }
   }
   if (rss_anon) {
     set_record_field(status, "rss_anon_bytes", *rss_anon);
-    if (! anonymous_bytes) {
+    if (not anonymous_bytes) {
       set_record_field(smaps, "anonymous_rss_bytes", *rss_anon);
     }
   }
@@ -466,9 +466,9 @@ auto make_procfs_metrics() -> record {
     set_record_field(status, "rss_shmem_bytes", *rss_shmem);
   }
   if (auto* program_break = ::sbrk(0);
-      program_break && program_break != reinterpret_cast<void*>(-1)) {
+      program_break and program_break != reinterpret_cast<void*>(-1)) {
     const auto current_break = reinterpret_cast<std::uintptr_t>(program_break);
-    if (program_break_base && current_break >= *program_break_base) {
+    if (program_break_base and current_break >= *program_break_base) {
       set_record_field(
         heap, "break_bytes",
         static_cast<uint64_t>(current_break - *program_break_base));

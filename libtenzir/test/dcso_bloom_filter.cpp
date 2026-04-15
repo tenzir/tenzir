@@ -106,7 +106,7 @@ auto generate_example_filter(uint64_t capacity, double p, size_t num_samples)
 TEST("dcso bloom checking") {
   auto [filter, values] = generate_example_filter(100'000, 0.001, 100'000);
   for (const auto& value : values) {
-    if (! filter.lookup(value)) {
+    if (not filter.lookup(value)) {
       FAIL("expected value not present in filter:{}", value);
     }
   }

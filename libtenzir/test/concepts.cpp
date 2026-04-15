@@ -20,13 +20,13 @@ TEST("transparent") {
   };
   struct without {};
   static_assert(tenzir::concepts::transparent<with>);
-  static_assert(!tenzir::concepts::transparent<without>);
+  static_assert(not tenzir::concepts::transparent<without>);
 }
 
 TEST("container") {
   static_assert(tenzir::concepts::container<std::array<int, 1>>);
   struct empty {};
-  static_assert(!tenzir::concepts::container<empty>);
+  static_assert(not tenzir::concepts::container<empty>);
   struct user_defined_type {
     auto data() const {
       return nullptr;
@@ -42,9 +42,9 @@ TEST("byte_container") {
   using byte_array = std::array<std::uint8_t, 2>;
   static_assert(tenzir::concepts::byte_container<byte_array>);
   using u32_array = std::array<std::uint32_t, 2>;
-  static_assert(!tenzir::concepts::byte_container<u32_array>);
+  static_assert(not tenzir::concepts::byte_container<u32_array>);
   struct not_byte_container {};
-  static_assert(!tenzir::concepts::byte_container<not_byte_container>);
+  static_assert(not tenzir::concepts::byte_container<not_byte_container>);
 }
 
 // -- inspectable --------------------------------------------------------------
@@ -69,7 +69,7 @@ auto inspect(I& i, inspect_free& x) {
 TEST("inspectable") {
   static_assert(tenzir::concepts::inspectable<inspect_friend>);
   static_assert(tenzir::concepts::inspectable<inspect_free>);
-  static_assert(!tenzir::concepts::inspectable<std::array<bool, 2>>);
+  static_assert(not tenzir::concepts::inspectable<std::array<bool, 2>>);
 }
 
 // -- monoid -------------------------------------------------------------------
@@ -78,7 +78,7 @@ struct monoid_friend {
   bool value;
   friend monoid_friend
   mappend(const monoid_friend& lhs, const monoid_friend& rhs) {
-    return {lhs.value || rhs.value};
+    return {lhs.value or rhs.value};
   }
 };
 
@@ -87,7 +87,7 @@ struct monoid_free {
 };
 
 monoid_free mappend(const monoid_free& lhs, const monoid_free& rhs) {
-  return {lhs.value || rhs.value};
+  return {lhs.value or rhs.value};
 }
 
 struct monoid_bad {
@@ -100,7 +100,7 @@ struct monoid_bad {
 TEST("monoid") {
   static_assert(tenzir::concepts::monoid<monoid_friend>);
   static_assert(tenzir::concepts::monoid<monoid_free>);
-  static_assert(!tenzir::concepts::monoid<monoid_bad>);
+  static_assert(not tenzir::concepts::monoid<monoid_bad>);
 }
 
 TEST("sameish") {
@@ -111,5 +111,5 @@ TEST("sameish") {
   static_assert(tenzir::concepts::sameish<int, const int&>);
   static_assert(tenzir::concepts::sameish<const int&, int>);
   static_assert(tenzir::concepts::sameish<const int&, int&>);
-  static_assert(!tenzir::concepts::sameish<int, bool>);
+  static_assert(not tenzir::concepts::sameish<int, bool>);
 }

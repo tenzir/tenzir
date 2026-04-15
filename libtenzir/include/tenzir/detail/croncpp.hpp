@@ -234,13 +234,13 @@ class cronexpr {
 };
 
 inline bool operator==(cronexpr const& e1, cronexpr const& e2) {
-  return e1.seconds == e2.seconds && e1.minutes == e2.minutes
-         && e1.hours == e2.hours && e1.days_of_week == e2.days_of_week
-         && e1.days_of_month == e2.days_of_month && e1.months == e2.months;
+  return e1.seconds == e2.seconds and e1.minutes == e2.minutes
+         and e1.hours == e2.hours and e1.days_of_week == e2.days_of_week
+         and e1.days_of_month == e2.days_of_month and e1.months == e2.months;
 }
 
 inline bool operator!=(cronexpr const& e1, cronexpr const& e2) {
-  return !(e1 == e2);
+  return not(e1 == e2);
 }
 
 inline std::string to_string(cronexpr const& cex) {
@@ -369,10 +369,10 @@ make_range(CRONCPP_STRING_VIEW field, cron_int const minval,
            cron_int const maxval) {
   cron_int first = 0;
   cron_int last = 0;
-  if (field.size() == 1 && field[0] == '*') {
+  if (field.size() == 1 and field[0] == '*') {
     first = minval;
     last = maxval;
-  } else if (!utils::contains(field, '-')) {
+  } else if (not utils::contains(field, '-')) {
     first = to_cron_int(field);
     last = first;
   } else {
@@ -385,10 +385,10 @@ make_range(CRONCPP_STRING_VIEW field, cron_int const minval,
     last = to_cron_int(parts[1]);
   }
 
-  if (first > maxval || last > maxval) {
+  if (first > maxval or last > maxval) {
     throw bad_cronexpr("Specified range exceeds maximum");
   }
-  if (first < minval || last < minval) {
+  if (first < minval or last < minval) {
     throw bad_cronexpr("Specified range is less than minimum");
   }
   if (first > last) {
@@ -401,7 +401,7 @@ make_range(CRONCPP_STRING_VIEW field, cron_int const minval,
 template <size_t N>
 static void set_cron_field(CRONCPP_STRING_VIEW value, std::bitset<N>& target,
                            cron_int const minval, cron_int const maxval) {
-  if (value.length() > 0 && value[value.length() - 1] == ',') {
+  if (value.length() > 0 and value[value.length() - 1] == ',') {
     throw bad_cronexpr("Value cannot end with comma");
   }
 
@@ -411,7 +411,7 @@ static void set_cron_field(CRONCPP_STRING_VIEW value, std::bitset<N>& target,
   }
 
   for (auto const& field : fields) {
-    if (!utils::contains(field, '/')) {
+    if (not utils::contains(field, '/')) {
 #ifdef CRONCPP_IS_CPP17
       auto [first, last] = detail::make_range(field, minval, maxval);
 #else
@@ -436,7 +436,7 @@ static void set_cron_field(CRONCPP_STRING_VIEW value, std::bitset<N>& target,
       auto last = range.second;
 #endif
 
-      if (!utils::contains(parts[0], '-')) {
+      if (not utils::contains(parts[0], '-')) {
         last = maxval;
       }
 
@@ -463,7 +463,7 @@ static void set_cron_days_of_week(std::string value, std::bitset<7>& target) {
 #endif
   );
 
-  if (days_replaced.size() == 1 && days_replaced[0] == '?') {
+  if (days_replaced.size() == 1 and days_replaced[0] == '?') {
     days_replaced[0] = '*';
   }
 
@@ -473,7 +473,7 @@ static void set_cron_days_of_week(std::string value, std::bitset<7>& target) {
 
 template <typename Traits>
 static void set_cron_days_of_month(std::string value, std::bitset<31>& target) {
-  if (value.size() == 1 && value[0] == '?') {
+  if (value.size() == 1 and value[0] == '?') {
     value[0] = '*';
   }
 
@@ -612,7 +612,7 @@ reset_all_fields(std::tm& date, std::bitset<7> const& marked_fields) {
 }
 
 inline void mark_field(std::bitset<7>& orders, cron_field const field) {
-  if (!orders.test(static_cast<size_t>(field))) {
+  if (not orders.test(static_cast<size_t>(field))) {
     orders.set(static_cast<size_t>(field));
   }
 }
@@ -630,7 +630,7 @@ find_next(std::bitset<N> const& target, std::tm& date,
     next_value = next_set_bit(target, minimum, maximum, 0);
   }
 
-  if (INVALID_INDEX == next_value || next_value != value) {
+  if (INVALID_INDEX == next_value or next_value != value) {
     set_field(date, field, static_cast<int>(next_value));
     reset_all_fields(date, marked_fields);
   }
@@ -645,9 +645,9 @@ find_next_day(std::tm& date, std::bitset<31> const& days_of_month,
               size_t day_of_week, std::bitset<7> const& marked_fields) {
   unsigned int count = 0;
   unsigned int maximum = 366;
-  while ((!days_of_month.test(day_of_month - Traits::CRON_MIN_DAYS_OF_MONTH)
-          || !days_of_week.test(day_of_week - Traits::CRON_MIN_DAYS_OF_WEEK))
-         && count++ < maximum) {
+  while ((not days_of_month.test(day_of_month - Traits::CRON_MIN_DAYS_OF_MONTH)
+          or not days_of_week.test(day_of_week - Traits::CRON_MIN_DAYS_OF_WEEK))
+         and count++ < maximum) {
     add_to_field(date, cron_field::day_of_month, 1);
 
     day_of_month = date.tm_mday;
@@ -685,7 +685,7 @@ static bool find_next(cronexpr const& cex, std::tm& date, size_t const dot) {
     mark_field(marked_fields, cron_field::minute);
   } else {
     res = find_next<Traits>(cex, date, dot);
-    if (!res) {
+    if (not res) {
       return res;
     }
   }
@@ -699,7 +699,7 @@ static bool find_next(cronexpr const& cex, std::tm& date, size_t const dot) {
     mark_field(marked_fields, cron_field::hour_of_day);
   } else {
     res = find_next<Traits>(cex, date, dot);
-    if (!res) {
+    if (not res) {
       return res;
     }
   }
@@ -713,7 +713,7 @@ static bool find_next(cronexpr const& cex, std::tm& date, size_t const dot) {
     mark_field(marked_fields, cron_field::day_of_month);
   } else {
     res = find_next<Traits>(cex, date, dot);
-    if (!res) {
+    if (not res) {
       return res;
     }
   }
@@ -729,7 +729,7 @@ static bool find_next(cronexpr const& cex, std::tm& date, size_t const dot) {
     }
 
     res = find_next<Traits>(cex, date, dot);
-    if (!res) {
+    if (not res) {
       return res;
     }
   }
@@ -781,7 +781,7 @@ static std::tm cron_next(cronexpr const& cex, std::tm date) {
     return {};
   }
 
-  if (!detail::find_next<Traits>(cex, date, date.tm_year)) {
+  if (not detail::find_next<Traits>(cex, date, date.tm_year)) {
     return {};
   }
 
@@ -792,7 +792,7 @@ static std::tm cron_next(cronexpr const& cex, std::tm date) {
 
   if (calculated == original) {
     add_to_field(date, detail::cron_field::second, 1);
-    if (!detail::find_next<Traits>(cex, date, date.tm_year)) {
+    if (not detail::find_next<Traits>(cex, date, date.tm_year)) {
       return {};
     }
   }
@@ -813,7 +813,7 @@ static std::time_t cron_next(cronexpr const& cex, std::time_t const& date) {
     return INVALID_TIME;
   }
 
-  if (!detail::find_next<Traits>(cex, *dt, dt->tm_year)) {
+  if (not detail::find_next<Traits>(cex, *dt, dt->tm_year)) {
     return INVALID_TIME;
   }
 
@@ -824,7 +824,7 @@ static std::time_t cron_next(cronexpr const& cex, std::time_t const& date) {
 
   if (calculated == original) {
     add_to_field(*dt, detail::cron_field::second, 1);
-    if (!detail::find_next<Traits>(cex, *dt, dt->tm_year)) {
+    if (not detail::find_next<Traits>(cex, *dt, dt->tm_year)) {
       return INVALID_TIME;
     }
   }

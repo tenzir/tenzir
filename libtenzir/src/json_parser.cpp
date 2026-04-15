@@ -29,10 +29,10 @@ auto count_trailing_partial_utf8(std::string_view view) -> size_t {
   if (buf[len - 1] >= 0xC0) {
     return 1;
   }
-  if (len >= 2 && buf[len - 2] >= 0xE0) {
+  if (len >= 2 and buf[len - 2] >= 0xE0) {
     return 2;
   }
-  if (len >= 3 && buf[len - 3] >= 0xF0) {
+  if (len >= 3 and buf[len - 3] >= 0xF0) {
     return 3;
   }
   return 0;

@@ -665,7 +665,7 @@ public:
         // We add an artificial `false` at index `length` to flush.
         auto results = std::vector<table_slice>{};
         for (auto i = int64_t{1}; i < len + 1; ++i) {
-          const auto next = i != len && array->IsValid(i) && array->Value(i);
+          const auto next = i != len and array->IsValid(i) and array->Value(i);
           if (curr == next) {
             continue;
           }

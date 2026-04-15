@@ -447,7 +447,7 @@ public:
         .emit(ctrl.diagnostics());
     }
     for (auto chunk : input) {
-      if (not chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }

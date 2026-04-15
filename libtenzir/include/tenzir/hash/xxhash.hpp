@@ -40,7 +40,7 @@ public:
 
   static result_type
   make(std::span<const std::byte> bytes, seed_type seed = 0) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     return XXH64(bytes.data(), bytes.size(), seed);
   }
 
@@ -53,7 +53,7 @@ public:
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     // Silence a false positive in the `CI` build configuration.
     TENZIR_DIAGNOSTIC_PUSH
     _Pragma("GCC diagnostic ignored \"-Warray-bounds\"")
@@ -83,13 +83,13 @@ public:
   using seed_type = XXH64_hash_t;
 
   static result_type make(std::span<const std::byte> bytes) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     return XXH3_64bits(bytes.data(), bytes.size());
   }
 
   static result_type
   make(std::span<const std::byte> bytes, seed_type seed) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     return XXH3_64bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
@@ -108,7 +108,7 @@ public:
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     XXH3_64bits_update(&state_, bytes.data(), bytes.size());
   }
 
@@ -134,13 +134,13 @@ public:
   using seed_type = XXH64_hash_t;
 
   static result_type make(std::span<const std::byte> bytes) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     return XXH3_128bits(bytes.data(), bytes.size());
   }
 
   static result_type
   make(std::span<const std::byte> bytes, seed_type seed) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     return XXH3_128bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
@@ -159,7 +159,7 @@ public:
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
-    TENZIR_ASSERT(bytes.data() != nullptr || bytes.empty());
+    TENZIR_ASSERT(bytes.data() != nullptr or bytes.empty());
     XXH3_128bits_update(&state_, bytes.data(), bytes.size());
   }
 

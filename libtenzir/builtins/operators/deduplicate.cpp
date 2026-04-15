@@ -35,7 +35,7 @@ constexpr auto min_cleanup_duration = duration{std::chrono::seconds{10}};
 
 auto make_keys_expression(std::vector<ast::expression> exprs)
   -> ast::expression {
-  TENZIR_ASSERT(! exprs.empty());
+  TENZIR_ASSERT(not exprs.empty());
   if (exprs.size() == 1) {
     return std::move(exprs.front());
   }
@@ -305,7 +305,7 @@ auto configuration::parse(operator_factory_invocation inv, session ctx)
     }
     auto selector = ast::field_path::try_from(arg);
     if (selector) {
-      if (selector->has_this() || selector->path().empty()) {
+      if (selector->has_this() or selector->path().empty()) {
         diagnostic::error("cannot deduplicate `this` explicitly")
           .primary(*selector)
           .emit(ctx);
@@ -324,7 +324,7 @@ auto configuration::parse(operator_factory_invocation inv, session ctx)
       diagnostic::error("expected selector").primary(arg).emit(ctx);
       return failure::promise();
     }
-    if (! expressions.empty()) {
+    if (not expressions.empty()) {
       diagnostic::error("cannot mix field selectors with general expressions")
         .primary(arg)
         .emit(ctx);
