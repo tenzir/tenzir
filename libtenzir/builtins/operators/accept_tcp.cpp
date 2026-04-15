@@ -31,9 +31,12 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/DetachOnCancel.h>
 #include <folly/coro/Retry.h>
+#include <folly/coro/WithCancellation.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
@@ -481,7 +484,19 @@ private:
     auto peer_info = make_peer_info(peer);
     auto peer_reverse_dns = ReverseDnsResult{};
     if (args_.resolve_hostnames) {
-      peer_reverse_dns = co_await reverse_dns_.resolve(peer_info.address);
+      try {
+        peer_reverse_dns = co_await folly::coro::co_withCancellation(
+          accept_cancel_->getToken(),
+          folly::coro::detachOnCancel(reverse_dns_.resolve(peer_info.address)));
+      } catch (folly::OperationCancelled const&) {
+        close_transport(std::move(transport));
+        co_return;
+      }
+    }
+    if (lifecycle_ != Lifecycle::running
+        or accept_cancel_->getToken().isCancellationRequested()) {
+      close_transport(std::move(transport));
+      co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
     co_await message_queue_->enqueue(Accepted{
