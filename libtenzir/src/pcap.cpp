@@ -59,14 +59,14 @@ auto is_file_header(const packet_header& header) -> bool {
   //     └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
   //
   auto is_reserved
-    = header.captured_packet_length == 0 && header.original_packet_length == 0;
+    = header.captured_packet_length == 0 and header.original_packet_length == 0;
   if (not is_reserved) {
     return false;
   }
   // In theory, checking for zeroed out reserved fields should be sufficient.
   // But we don't all PCAP generating tools, so do a few extra checks.
   auto is_magic = header.timestamp == pcap::magic_number_1
-                  || header.timestamp == pcap::magic_number_2;
+                  or header.timestamp == pcap::magic_number_2;
   if (not is_magic) {
     return false;
   }
@@ -84,7 +84,7 @@ auto is_file_header(const packet_header& header) -> bool {
     major_version = detail::byteswap(major_version);
     minor_version = detail::byteswap(minor_version);
   }
-  return major_version == 4 && minor_version == 2;
+  return major_version == 4 and minor_version == 2;
 }
 
 auto byteswap(file_header hdr) -> file_header {
@@ -110,10 +110,10 @@ auto byteswap(packet_header hdr) -> packet_header {
 
 auto need_byte_swap(uint32_t magic) -> std::optional<bool> {
   auto swapped = detail::byteswap(magic);
-  if (magic == magic_number_1 || magic == magic_number_2) {
+  if (magic == magic_number_1 or magic == magic_number_2) {
     return false;
   }
-  if (swapped == magic_number_1 || swapped == magic_number_2) {
+  if (swapped == magic_number_1 or swapped == magic_number_2) {
     return true;
   }
   return std::nullopt;

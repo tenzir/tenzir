@@ -509,7 +509,7 @@ flatten(const data& x, const type& t, size_t max_recursion) {
   }
   const auto* xs = try_as<record>(&x);
   const auto* rt = try_as<record_type>(&t);
-  if (xs && rt) {
+  if (xs and rt) {
     return flatten(*xs, *rt, max_recursion - 1);
   }
   return caf::none;
@@ -547,7 +547,7 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
         dst_rec = try_as<record>(&dst[k]);
       }
       merge(*src_rec, *dst_rec, merge_lists, max_recursion - 1);
-    } else if (merge_lists == policy::merge_lists::yes && is<list>(v)) {
+    } else if (merge_lists == policy::merge_lists::yes and is<list>(v)) {
       const auto& src_list = as<list>(v);
       if (auto* dst_list = try_as<list>(&dst[k])) {
         dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
@@ -902,7 +902,7 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
   std::vector<std::pair<std::filesystem::path, data>> result;
   auto filter = [](const std::filesystem::path& f) {
     const auto& extension = f.extension();
-    return extension == ".yaml" || extension == ".yml";
+    return extension == ".yaml" or extension == ".yml";
   };
   auto yaml_files = detail::filter_dir(dir, std::move(filter), max_recursion);
   if (not yaml_files) {

@@ -48,7 +48,8 @@ auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
 }
 
 template <class To, class From, class... Opts>
-  requires(std::same_as<To, std::string> && convertible<std::decay_t<From>, To>)
+  requires(std::same_as<To, std::string>
+           and convertible<std::decay_t<From>, To>)
 auto to_string(From&& from, Opts&&... opts) -> To {
   std::string str;
   if (convert(from, str, std::forward<Opts>(opts)...)) {

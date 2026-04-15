@@ -21,7 +21,7 @@ namespace detail {
 template <class Iterator>
 bool parse_sign(Iterator& i) {
   auto minus = *i == '-';
-  if (minus || *i == '+') {
+  if (minus or *i == '+') {
     ++i;
     return minus;
   }
@@ -63,7 +63,7 @@ struct integral_parser
       return false;
     }
     constexpr static bool is_signed = std::is_signed_v<attribute>;
-    const auto first_is_sign = *f == '-' or * f == '+';
+    const auto first_is_sign = *f == '-' or *f == '+';
     if (first_is_sign and not is_signed) {
       return false;
     }

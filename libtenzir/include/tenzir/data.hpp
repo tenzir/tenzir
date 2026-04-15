@@ -16,12 +16,12 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
-#include "tenzir/option.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/merge_lists.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pattern.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/subnet.hpp"
@@ -144,8 +144,8 @@ public:
 
   /// Constructs data from an Option, mapping None to null.
   template <class T>
-    requires(!std::is_reference_v<T>
-             && !std::same_as<to_data_type<T>, detail::invalid_data_type>)
+    requires(not std::is_reference_v<T>
+             and not std::same_as<to_data_type<T>, detail::invalid_data_type>)
   data(Option<T> x) : data{x ? data{std::move(*x)} : data{}} {
     // nop
   }
@@ -160,7 +160,7 @@ public:
   /// Constructs data.
   /// @param x The instance to construct data from.
   template <class T>
-    requires(!std::same_as<to_data_type<T>, detail::invalid_data_type>)
+    requires(not std::same_as<to_data_type<T>, detail::invalid_data_type>)
   data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
     // nop
   }
@@ -184,12 +184,12 @@ public:
 
   template <class... Ts>
   friend bool operator!=(const data& lhs, const tenzir::variant<Ts...>& rhs) {
-    return !is_equal(lhs, rhs);
+    return not is_equal(lhs, rhs);
   }
 
   template <class... Ts>
   friend bool operator!=(const tenzir::variant<Ts...>& lhs, const data& rhs) {
-    return !is_equal(lhs, rhs);
+    return not is_equal(lhs, rhs);
   }
 
   friend flatbuffers::Offset<fbs::Data>
@@ -292,9 +292,9 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 /// @pre `!path.empty()`
 inline auto descend(const record* r, std::string_view path)
   -> caf::expected<const data*> {
-  TENZIR_ASSERT(!path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto names = detail::split(path, ".");
-  TENZIR_ASSERT(!names.empty());
+  TENZIR_ASSERT(not names.empty());
   auto current = r;
   for (auto& name : names) {
     auto last = &name == &names.back();
@@ -309,7 +309,7 @@ inline auto descend(const record* r, std::string_view path)
       return &field;
     }
     current = try_as<record>(&field);
-    if (!current) {
+    if (not current) {
       // This is not a record, but path continues.
       return caf::make_error(
         ec::lookup_error,
@@ -327,11 +327,11 @@ template <class T>
 auto try_get(const record& r, std::string_view path)
   -> caf::expected<std::optional<T>> {
   auto result = descend(&r, path);
-  if (!result) {
+  if (not result) {
     // Error.
     return std::move(result.error());
   }
-  if (!*result) {
+  if (not *result) {
     // Entry not found.
     return std::nullopt;
   }
@@ -358,10 +358,10 @@ template <class T>
 auto try_get_only(const record& r, std::string_view path)
   -> caf::expected<T const*> {
   auto result = descend(&r, path);
-  if (!result) {
+  if (not result) {
     return std::move(result.error());
   }
-  if (!*result) {
+  if (not *result) {
     return nullptr;
   }
   return match(**result, [&](auto& x) -> caf::expected<T const*> {
@@ -380,10 +380,10 @@ template <class T>
 auto try_get_or(const record& r, std::string_view path, const T& fallback)
   -> caf::expected<T> {
   auto result = try_get<T>(r, path);
-  if (!result.has_value()) {
+  if (not result.has_value()) {
     return std::move(result.error());
   }
-  if (!result->has_value()) {
+  if (not result->has_value()) {
     return fallback;
   }
   return std::move(**result);
@@ -397,7 +397,7 @@ template <typename T>
   requires detail::tl_contains<data::types, T>::value
 auto get_if(const record* r, std::string_view path) -> const T* {
   auto result = descend(r, path);
-  if (not result || not*result) {
+  if (not result or not *result) {
     return nullptr;
   }
   if (auto ptr = try_as<T>(*result)) {
@@ -416,10 +416,10 @@ auto get_if(record* r, std::string_view path) -> T* {
 /// value.
 /// @pre `!path.empty()`
 template <class T>
-  requires(!std::convertible_to<T, std::string_view>)
+  requires(not std::convertible_to<T, std::string_view>)
 auto get_or(const record& r, std::string_view path, T const& fallback)
   -> T const& {
-  TENZIR_ASSERT(!path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto result = get_if<T>(&r, path);
   if (result) {
     return *result;
@@ -428,7 +428,7 @@ auto get_or(const record& r, std::string_view path, T const& fallback)
 }
 
 template <class T>
-  requires(!std::is_reference_v<T>)
+  requires(not std::is_reference_v<T>)
 auto get_or(const record& r, std::string_view path, T&& fallback)
   -> T const& = delete;
 

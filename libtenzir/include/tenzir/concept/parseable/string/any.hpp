@@ -18,8 +18,9 @@ struct any_parser : public parser_base<any_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    if (f == l)
+    if (f == l) {
       return false;
+    }
     detail::absorb(x, *f);
     ++f;
     return true;

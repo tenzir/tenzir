@@ -41,15 +41,17 @@ void ewah_bitmap::append_bit(bool bit) {
     integrate_last_block();
     blocks_.push_back(word_type::none);
   }
-  if (bit)
+  if (bit) {
     blocks_.back() |= word_type::lsb1 << partial;
+  }
   ++num_bits_;
   return;
 }
 
 void ewah_bitmap::append_bits(bool bit, size_type n) {
-  if (n == 0)
+  if (n == 0) {
     return;
+  }
   if (blocks_.empty()) {
     blocks_.push_back(0); // Always begin with an empty marker.
   } else {
@@ -57,12 +59,14 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
     if (partial > 0) {
       // Finish the current dirty block.
       auto fill = std::min(n, word_type::width - partial);
-      if (bit)
+      if (bit) {
         blocks_.back() |= word_type::lsb_mask(fill) << partial;
+      }
       num_bits_ += fill;
       n -= fill;
-      if (n == 0)
+      if (n == 0) {
         return;
+      }
     }
     // We've filled the last dirty block and are now at a block boundary. At
     // that point we check if we can consolidate the last block.
@@ -91,8 +95,8 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
   // type, we reuse it. We also reuse the very first marker if it's still
   // empty.
   if ((last_marker_ == blocks_.size() - 1
-       && word_type::marker_type(marker) == bit)
-      || (last_marker_ == 0 && marker == 0)) {
+       and word_type::marker_type(marker) == bit)
+      or (last_marker_ == 0 and marker == 0)) {
     auto marker_clean_length = word_type::marker_num_clean(marker);
     auto available = word_type::marker_clean_max - marker_clean_length;
     auto new_blocks = std::min(available, clean_blocks);
@@ -105,15 +109,17 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
   if (clean_blocks > 0) {
     // If we add new markers and the last block is not dirty, the current
     // marker must not have a dirty count.
-    if (last_marker_ == blocks_.size() - 1)
+    if (last_marker_ == blocks_.size() - 1) {
       marker = word_type::marker_num_dirty(marker, 0);
+    }
     auto markers = clean_blocks / word_type::marker_clean_max;
     auto last = clean_blocks % word_type::marker_clean_max;
     blocks_.resize(blocks_.size() + markers,
                    word_type::marker_type(word_type::marker_clean_mask, bit));
-    if (last > 0)
+    if (last > 0) {
       blocks_.push_back(
         word_type::marker_type(word_type::marker_num_clean(0, last), bit));
+    }
     last_marker_ = blocks_.size() - 1;
   }
   // Add remaining stray bits.
@@ -126,10 +132,11 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
 void ewah_bitmap::append_block(block_type value, size_type bits) {
   TENZIR_ASSERT(bits > 0);
   TENZIR_ASSERT(bits <= word_type::width);
-  if (blocks_.empty())
+  if (blocks_.empty()) {
     blocks_.push_back(0); // Always begin with an empty marker.
-  else if (num_bits_ % word_type::width == 0)
+  } else if (num_bits_ % word_type::width == 0) {
     integrate_last_block();
+  }
   auto partial = num_bits_ % word_type::width;
   if (partial == 0) {
     blocks_.push_back(value & word_type::lsb_fill(bits));
@@ -152,15 +159,17 @@ void ewah_bitmap::append_block(block_type value, size_type bits) {
 }
 
 void ewah_bitmap::flip() {
-  if (blocks_.empty())
+  if (blocks_.empty()) {
     return;
+  }
   TENZIR_ASSERT(blocks_.size() >= 2);
   auto next_marker = size_type{0};
   for (auto i = 0u; i < blocks_.size() - 1; ++i) {
     auto& block = blocks_[i];
     if (i == next_marker) {
-      if (word_type::marker_num_clean(block) > 0)
+      if (word_type::marker_num_clean(block) > 0) {
         block ^= word_type::msb1;
+      }
       next_marker += word_type::marker_num_dirty(block) + 1;
     } else {
       block = ~block;
@@ -171,8 +180,9 @@ void ewah_bitmap::flip() {
   blocks_.back() = ~blocks_.back();
   // Make sure we didn't flip unused bits in the last block.
   auto partial = num_bits_ % word_type::width;
-  if (partial > 0)
+  if (partial > 0) {
     blocks_.back() &= word_type::lsb_mask(partial);
+  }
 }
 
 void ewah_bitmap::integrate_last_block() {
@@ -193,15 +203,15 @@ void ewah_bitmap::integrate_last_block() {
     // Current dirty block turns out to be clean. (1)
     auto& marker = blocks_[last_marker_];
     auto clean_length = word_type::marker_num_clean(marker);
-    auto last_block_type = !!last_block;
-    if (blocks_after_marker == 1 && clean_length == 0) {
+    auto last_block_type = ! ! last_block;
+    if (blocks_after_marker == 1 and clean_length == 0) {
       // Adjust the type and counter of the existing marker.
       marker = word_type::marker_type(marker, last_block_type);
       marker = word_type::marker_num_clean(marker, 1);
       blocks_.pop_back();
     } else if (blocks_after_marker == 1
-               && last_block_type == word_type::marker_type(marker)
-               && clean_length != word_type::marker_clean_max) {
+               and last_block_type == word_type::marker_type(marker)
+               and clean_length != word_type::marker_clean_max) {
       // Just update the counter of the existing marker.
       marker = word_type::marker_num_clean(marker, clean_length + 1);
       blocks_.pop_back();
@@ -241,7 +251,7 @@ void ewah_bitmap::bump_dirty_count() {
 bool operator==(const ewah_bitmap& x, const ewah_bitmap& y) {
   // If the block vector and the number of bits are equal, so must be the
   // marker by construction.
-  return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
+  return x.blocks_ == y.blocks_ and x.num_bits_ == y.num_bits_;
 }
 
 auto pack(flatbuffers::FlatBufferBuilder& builder, const ewah_bitmap& from)
@@ -262,8 +272,9 @@ auto unpack(const fbs::bitmap::EWAHBitmap& from, ewah_bitmap& to)
 }
 
 ewah_bitmap_range::ewah_bitmap_range(const ewah_bitmap& bm) : bm_{&bm} {
-  if (!bm_->empty())
+  if (not bm_->empty()) {
     scan();
+  }
 }
 
 bool ewah_bitmap_range::done() const {
@@ -271,9 +282,10 @@ bool ewah_bitmap_range::done() const {
 }
 
 void ewah_bitmap_range::next() {
-  TENZIR_ASSERT(!done());
-  if (++next_ != bm_->blocks().size())
+  TENZIR_ASSERT(not done());
+  if (++next_ != bm_->blocks().size()) {
     scan();
+  }
 }
 
 void ewah_bitmap_range::scan() {
@@ -303,11 +315,12 @@ void ewah_bitmap_range::scan() {
       // If no dirty blocks follow this marker and we have not reached the
       // final dirty block yet, we know that the next block must be a marker as
       // well and check whether we can incorporate it into this sequence.
-      while (num_dirty_ == 0 && next_ + 2 < bm_->blocks().size()) {
+      while (num_dirty_ == 0 and next_ + 2 < bm_->blocks().size()) {
         auto next_marker = bm_->blocks()[next_ + 1];
         auto next_type = word_type::marker_type(next_marker);
-        if ((next_type && !data) || (!next_type && data))
+        if ((next_type and not data) or (not next_type and data)) {
           break; // not compatible with current run
+        }
         length += word_type::marker_num_clean(next_marker) * word_type::width;
         num_dirty_ = word_type::marker_num_dirty(next_marker);
         ++next_;

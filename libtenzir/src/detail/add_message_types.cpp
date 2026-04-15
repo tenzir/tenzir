@@ -72,7 +72,7 @@ void add_message_types() {
        plugins::get_static_type_id_blocks()) {
     for (const auto& old_block : old_blocks) {
       TENZIR_ASSERT(new_block.begin >= old_block.end
-                      || old_block.begin >= new_block.end,
+                      or old_block.begin >= new_block.end,
                     "cannot assign overlapping plugin type ID blocks");
     }
     old_blocks.push_back(new_block);

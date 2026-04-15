@@ -151,7 +151,7 @@ TEST("parseable - expression") {
   CHECK_EQUAL(expr, expected);
   MESSAGE("stray dot regression");
   // This should fail to parse because of the stray dot.
-  CHECK(!parsers::expr(
+  CHECK(not parsers::expr(
     "#schema == \"suricata.http\" && .community_id == \"1:Y3MTSbNCzFAT3I5+i6xzSgrL59k=\""s,
     expr));
 }

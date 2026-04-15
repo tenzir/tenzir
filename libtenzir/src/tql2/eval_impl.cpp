@@ -679,7 +679,7 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
           if (target < 0) {
             target = length + target;
           }
-          if (target < 0 || target >= length) {
+          if (target < 0 or target >= length) {
             if (active_slice.is_active(i)) {
               out_of_bounds = true;
             }

@@ -27,8 +27,9 @@ ids make_ids(std::initializer_list<id_range> ranges, size_t min_size,
       result |= tmp;
     }
   }
-  if (result.size() < min_size)
+  if (result.size() < min_size) {
     result.append_bits(default_bit, min_size - result.size());
+  }
   return result;
 }
 

@@ -131,11 +131,13 @@ private:
 struct BatchArgs {
   uint64_t limit = defaults::import::table_slice_size;
   duration timeout = std::chrono::minutes{1};
+  event_order order = event_order::ordered;
 };
 
 class Batch final : public Operator<table_slice, table_slice> {
 public:
-  explicit Batch(BatchArgs args) : limit_{args.limit}, timeout_{args.timeout} {
+  explicit Batch(BatchArgs args)
+    : limit_{args.limit}, timeout_{args.timeout}, order_{args.order} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -209,11 +211,11 @@ private:
     next_timeout_ = None{};
     for (const auto& [_, entry] : buffers_) {
       auto deadline = entry.start_time + timeout_;
-      if (not next_timeout_ || deadline < *next_timeout_) {
+      if (not next_timeout_ or deadline < *next_timeout_) {
         next_timeout_ = deadline;
       }
     }
-    if (was_null && next_timeout_) {
+    if (was_null and next_timeout_) {
       buffer_ready_->notify_one();
     }
   }
@@ -321,6 +323,7 @@ public:
     auto d = Describer<BatchArgs, Batch>{};
     auto limit = d.optional_positional("limit", &BatchArgs::limit);
     auto timeout = d.named_optional("timeout", &BatchArgs::timeout);
+    d.optimization_order(&BatchArgs::order);
     d.validate([limit, timeout](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(limit)) {
         if (*value == 0) {

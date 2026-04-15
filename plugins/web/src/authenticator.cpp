@@ -24,7 +24,7 @@ caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   // can just assert there presence below.
   auto fb = flatbuffer<fbs::ServerState, fbs::ServerStateIdentifier>::make(
     std::move(chunk));
-  if (! fb) {
+  if (not fb) {
     return fb.error();
   }
   if ((*fb)->server_state_type() != fbs::server_state::ServerState::v0) {
@@ -110,7 +110,7 @@ bool authenticator_state::authenticate(token_t x) const {
   return std::find_if(tokens_.begin(), tokens_.end(),
                       [&](const token_description& description) {
                         return description.token == x
-                               && now < description.expires_at;
+                               and now < description.expires_at;
                       })
          != tokens_.end();
 }
@@ -138,7 +138,7 @@ get_authenticator(caf::scoped_actor& self, node_actor node,
       [&](caf::error& err) {
         maybe_authenticator = std::move(err);
       });
-  if (! maybe_authenticator) {
+  if (not maybe_authenticator) {
     return maybe_authenticator.error();
   }
   auto authenticator

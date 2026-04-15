@@ -59,7 +59,7 @@ public:
           [&](const arrow::StringArray& subject,
               const arrow::StringArray& arg) {
             for (auto i = int64_t{0}; i < subject.length(); ++i) {
-              if (subject.IsNull(i) || arg.IsNull(i)) {
+              if (subject.IsNull(i) or arg.IsNull(i)) {
                 check(b.AppendNull());
                 continue;
               }
@@ -272,7 +272,7 @@ public:
                 const concepts::one_of<arrow::Int64Array,
                                        arrow::UInt64Array> auto& length_array) {
               for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
-                if (subject_array.IsNull(i) || length_array.IsNull(i)) {
+                if (subject_array.IsNull(i) or length_array.IsNull(i)) {
                   check(b.AppendNull());
                   continue;
                 }

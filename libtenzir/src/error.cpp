@@ -99,7 +99,7 @@ auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
   std::ostringstream oss;
   auto category = err.category();
   if (category == caf::type_id_v<tenzir::ec>
-      && tenzir::ec{err.code()} == ec::report) {
+      and tenzir::ec{err.code()} == ec::report) {
     auto& rep = err.context().get_as<report>(0);
     auto result = render(rep.error, true);
     auto first = true;
@@ -114,9 +114,9 @@ auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
     return result;
   }
   if (category == caf::type_id_v<tenzir::ec>
-      && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
+      and static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
     const auto color = (isatty(STDERR_FILENO) == 1
-                        && detail::getenv("NO_COLOR").value_or("").empty())
+                        and detail::getenv("NO_COLOR").value_or("").empty())
                          ? color_diagnostics::yes
                          : color_diagnostics::no;
     auto printer = make_diagnostic_printer(std::nullopt, color, oss);

@@ -26,14 +26,16 @@ recursive_size(const std::filesystem::path& root_dir) {
   size_t total_size = 0;
   std::error_code err{};
   auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
-  if (err)
+  if (err) {
     return caf::make_error(ec::filesystem_error, err.message());
+  }
   for (const auto& f : dir) {
     if (f.is_regular_file()) {
       const auto size = f.file_size(err);
       if (err) {
-        if (err == std::errc::no_such_file_or_directory)
+        if (err == std::errc::no_such_file_or_directory) {
           continue;
+        }
         return caf::make_error(ec::filesystem_error, err.message());
       }
       TENZIR_TRACE("{} += {}", f.path().string(), size);

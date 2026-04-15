@@ -60,12 +60,12 @@ struct has_extension_type
 /// @pre `!prefix.empty()`
 auto to_config_key(std::string_view key, std::string_view prefix)
   -> std::optional<std::string> {
-  TENZIR_ASSERT(! prefix.empty());
+  TENZIR_ASSERT(not prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size()) {
     return std::nullopt;
   }
-  if (! key.starts_with(prefix) || key[prefix.size()] != '_') {
+  if (not key.starts_with(prefix) or key[prefix.size()] != '_') {
     return std::nullopt;
   }
   auto suffix = key.substr(prefix.size() + 1);
@@ -266,17 +266,17 @@ auto load_config_files(std::vector<config_file> config_files)
 /// Merges Tenzir environment variables into a configuration.
 auto merge_environment(record& config) -> caf::error {
   for (const auto& [key, value] : detail::environment()) {
-    if (! value.empty()) {
+    if (not value.empty()) {
       if (auto config_key = to_config_key(key, "TENZIR")) {
-        if (! config_key->starts_with("caf.")
-            && ! config_key->starts_with("plugins.")) {
+        if (not config_key->starts_with("caf.")
+            and not config_key->starts_with("plugins.")) {
           config_key->insert(0, "tenzir.");
         }
         // These environment variables have been manually checked already.
         // Inserting them into the config would ignore higher-precedence values
         // from the command line.
         if (*config_key == "tenzir.bare-mode"
-            || *config_key == "tenzir.config") {
+            or *config_key == "tenzir.config") {
           continue;
         }
         // Try first as tenzir::data, which is richer.
@@ -416,7 +416,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   // Remove CAF options from the command line; we'll parse them at the very
   // end.
   auto is_tenzir_opt = [](const auto& x) {
-    return ! x.starts_with("--caf.");
+    return not x.starts_with("--caf.");
   };
   auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
                                        is_tenzir_opt);
@@ -448,7 +448,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
     return configs.error();
   }
   auto config = load_config_files(config_files);
-  if (! config) {
+  if (not config) {
     return config.error();
   }
   *config = flatten(*config);
@@ -458,32 +458,32 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   // Fallback handling for system default paths that may be provided by the
   // runtime system and should win over the build-time defaults but loose if set
   // via any other method.
-  if (! config->contains("tenzir.state-directory")) {
+  if (not config->contains("tenzir.state-directory")) {
     // Provided by systemd when StateDirectory= is set in the unit.
     if (auto state_directory = detail::getenv("STATE_DIRECTORY")) {
       (*config)["tenzir.state-directory"] = std::string{*state_directory};
     }
   }
-  if (! config->contains("tenzir.log-directory")) {
+  if (not config->contains("tenzir.log-directory")) {
     // Provided by systemd when LogsDirectory= is set in the unit.
     if (auto log_directory = detail::getenv("LOGS_DIRECTORY")) {
       (*config)["tenzir.log-file"]
         = fmt::format("{}/server.log", *log_directory);
     }
   }
-  if (! config->contains("tenzir.cache-directory")) {
+  if (not config->contains("tenzir.cache-directory")) {
     // Provided by systemd when CacheDirectory= is set in the unit.
     if (auto cache_directory = detail::getenv("CACHE_DIRECTORY")) {
       (*config)["tenzir.cache-directory"] = std::string{*cache_directory};
     }
   }
   // Set some defaults that can only be derived at runtime.
-  if (! config->contains("tenzir.cache-directory")) {
+  if (not config->contains("tenzir.cache-directory")) {
     auto env_path_writable
       = [&](std::string_view key,
             auto... suffix) -> std::optional<std::filesystem::path> {
       auto x = detail::getenv(key);
-      if (! x) {
+      if (not x) {
         return std::nullopt;
       }
       auto path = (std::filesystem::path{*x} / ... / suffix);
@@ -500,7 +500,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       // Try to create.
       ec = {};
       std::filesystem::create_directory(path, ec);
-      if (! ec) {
+      if (not ec) {
         return path;
       }
       return std::nullopt;
@@ -536,7 +536,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   }
   auto cacert_path_env_name = X509_get_default_cert_file_env();
   auto cacert_path_env = detail::getenv(cacert_path_env_name);
-  if (! config->contains("tenzir.cacert")) {
+  if (not config->contains("tenzir.cacert")) {
     if (cacert_path_env) {
       // Always respect the environment variable, don't bother checking if the
       // file exists.
@@ -573,7 +573,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
-  if (! settings) {
+  if (not settings) {
     return settings.error();
   }
   if (auto err = embed_config(*settings); err.valid()) {
@@ -583,11 +583,11 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
   auto is_not_plugin_opt = [](auto& x) {
-    return ! x.starts_with("--plugins=")
-           && ! x.starts_with("--disable-plugins=")
-           && ! x.starts_with("--plugin-dirs=")
-           && ! x.starts_with("--schema-dirs=")
-           && ! x.starts_with("--package-dirs=");
+    return not x.starts_with("--plugins=")
+           and not x.starts_with("--disable-plugins=")
+           and not x.starts_with("--plugin-dirs=")
+           and not x.starts_with("--schema-dirs=")
+           and not x.starts_with("--package-dirs=");
   };
   auto plugin_opt = std::stable_partition(
     command_line.begin(), command_line.end(), is_not_plugin_opt);
@@ -654,10 +654,10 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   // Load OpenSSL last because it uses the parsed configuration.
   const auto use_encryption
     = caf::holds_alternative<std::string>(content, "caf.openssl.certificate")
-      || caf::holds_alternative<std::string>(content, "caf.openssl.key")
-      || caf::holds_alternative<std::string>(content, "caf.openssl.passphrase")
-      || caf::holds_alternative<std::string>(content, "caf.openssl.capath")
-      || caf::holds_alternative<std::string>(content, "caf.openssl.cafile");
+      or caf::holds_alternative<std::string>(content, "caf.openssl.key")
+      or caf::holds_alternative<std::string>(content, "caf.openssl.passphrase")
+      or caf::holds_alternative<std::string>(content, "caf.openssl.capath")
+      or caf::holds_alternative<std::string>(content, "caf.openssl.cafile");
   if (use_encryption) {
     load<caf::openssl::manager>();
   }
@@ -668,7 +668,7 @@ auto configuration::embed_config(const caf::settings& settings) -> caf::error {
   for (const auto& [key, value] : settings) {
     // The configuration must have been fully flattened because we cannot
     // mangle dictionaries in here.
-    TENZIR_ASSERT(! is<caf::config_value::dictionary>(value));
+    TENZIR_ASSERT(not is<caf::config_value::dictionary>(value));
     // The member custom_options_ (a config_option_set) is the only place that
     // contains the valid type information, as defined by the command
     // hierarchy. The passed in config (file and environment) must abide to it.

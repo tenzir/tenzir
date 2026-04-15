@@ -412,7 +412,7 @@ struct EvalBinOp<Op, L, R> {
       }
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
-      if (ln && rn) {
+      if (ln and rn) {
         constexpr auto res = result_if_both_null(Op);
         if constexpr (res) {
           check(b->Append(*res));
@@ -421,7 +421,7 @@ struct EvalBinOp<Op, L, R> {
         }
         continue;
       }
-      if (ln || rn) {
+      if (ln or rn) {
         if constexpr (Op == ast::binary_op::eq) {
           check(b->Append(false));
         } else if constexpr (Op == ast::binary_op::neq) {
@@ -536,7 +536,7 @@ struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
 };
 
 template <ast::binary_op Op, concrete_type L>
-  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+  requires(Op == ast::binary_op::eq or Op == ast::binary_op::neq)
 struct EvalBinOp<Op, L, null_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r,
                    auto&&, ActiveRows const& active)
@@ -556,8 +556,8 @@ struct EvalBinOp<Op, L, null_type> {
 };
 
 template <ast::binary_op Op, concrete_type R>
-  requires((Op == ast::binary_op::eq || Op == ast::binary_op::neq)
-           && not std::same_as<R, null_type>)
+  requires((Op == ast::binary_op::eq or Op == ast::binary_op::neq)
+           and not std::same_as<R, null_type>)
 struct EvalBinOp<Op, null_type, R> {
   static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
                    auto&& warn, ActiveRows const& active)
@@ -567,7 +567,7 @@ struct EvalBinOp<Op, null_type, R> {
 };
 
 template <ast::binary_op Op>
-  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+  requires(Op == ast::binary_op::eq or Op == ast::binary_op::neq)
 struct EvalBinOp<Op, ip_type, ip_type> {
   static auto eval(const ip_type::array_type& l, const ip_type::array_type& r,
                    auto&&, ActiveRows const& active)
@@ -586,7 +586,7 @@ struct EvalBinOp<Op, ip_type, ip_type> {
       auto equal = bool{};
       if (ln != rn) {
         equal = false;
-      } else if (ln && rn) {
+      } else if (ln and rn) {
         equal = true;
       } else {
         equal = *view_at<ip_type>(l, i) == *view_at<ip_type>(r, i);
@@ -598,7 +598,7 @@ struct EvalBinOp<Op, ip_type, ip_type> {
 };
 
 template <ast::binary_op Op>
-  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+  requires(Op == ast::binary_op::eq or Op == ast::binary_op::neq)
 struct EvalBinOp<Op, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
                    auto&&, ActiveRows const& active)
@@ -617,7 +617,7 @@ struct EvalBinOp<Op, string_type, string_type> {
       auto equal = bool{};
       if (ln != rn) {
         equal = false;
-      } else if (ln && rn) {
+      } else if (ln and rn) {
         equal = true;
       } else {
         equal = l.GetView(i) == r.GetView(i);

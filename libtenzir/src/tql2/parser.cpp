@@ -130,7 +130,7 @@ public:
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
     while (true) {
-      while (accept(tk::newline) || accept(tk::pipe)) {
+      while (accept(tk::newline) or accept(tk::pipe)) {
       }
       if (at_pipeline_end()) {
         break;
@@ -496,7 +496,7 @@ public:
       // parse it as an operator if there is whitespace after `foo`.
       // Alternatively, we could see whether we can determine what this has to
       // be from the surrounding context, but that seems a bit brittle.
-      if (not trivia_before_next() && peek(tk::lbracket)) {
+      if (not trivia_before_next() and peek(tk::lbracket)) {
         auto lbracket = expect(tk::lbracket);
         if (auto rbracket = accept(tk::rbracket)) {
           expr = ast::unpack{
@@ -708,9 +708,9 @@ public:
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
     auto is_record
-      = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
-        || silent_peek(tk::string_begin) || silent_peek(tk::raw_string_begin)
-        || (silent_peek(tk::identifier) && silent_peek_n(tk::colon, 1));
+      = silent_peek(tk::rbrace) or silent_peek(tk::dot_dot_dot)
+        or silent_peek(tk::string_begin) or silent_peek(tk::raw_string_begin)
+        or (silent_peek(tk::identifier) and silent_peek_n(tk::colon, 1));
     if (is_record) {
       return parse_record(begin.location);
     }
@@ -1006,11 +1006,11 @@ public:
       return x;
     }
     if (static_cast<double>(min<int64_t>) <= integral
-        && integral <= static_cast<double>(max<int64_t>)) {
+        and integral <= static_cast<double>(max<int64_t>)) {
       return static_cast<int64_t>(x);
     }
     if (static_cast<double>(min<uint64_t>) <= integral
-        && integral <= static_cast<double>(max<uint64_t>)) {
+        and integral <= static_cast<double>(max<uint64_t>)) {
       return static_cast<uint64_t>(x);
     }
     return x;
@@ -1217,16 +1217,16 @@ public:
   }
 
   auto at_pipeline_end() -> bool {
-    return eoi() || silent_peek(tk::rbrace);
+    return eoi() or silent_peek(tk::rbrace);
   }
 
   auto at_statement_end() -> bool {
-    return eoi() || peek(tk::newline) || peek(tk::pipe)
-           || silent_peek(tk::rbrace);
+    return eoi() or peek(tk::newline) or peek(tk::pipe)
+           or silent_peek(tk::rbrace);
   }
 
   auto accept_stmt_sep() -> bool {
-    return accept(tk::newline) || accept(tk::pipe);
+    return accept(tk::newline) or accept(tk::pipe);
   }
 
   auto token_location(size_t idx) const -> location {
@@ -1277,7 +1277,7 @@ public:
   }
 
   auto silent_peek(token_kind kind) -> bool {
-    return next_ < tokens_.size() && tokens_[next_].kind == kind;
+    return next_ < tokens_.size() and tokens_[next_].kind == kind;
   }
 
   auto peek(token_kind kind) -> bool {
@@ -1381,7 +1381,7 @@ public:
 
   void consume_trivia_with_newlines() {
     consume_while([&](token_kind k) {
-      return is_trivia(k) || k == token_kind::newline;
+      return is_trivia(k) or k == token_kind::newline;
     });
   }
 

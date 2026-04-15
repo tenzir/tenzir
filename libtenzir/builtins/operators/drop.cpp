@@ -144,7 +144,7 @@ public:
     const auto p = required_ws_or_comment >> extractor_list
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto config = configuration{};
-    if (! p(f, l, config.fields)) {
+    if (not p(f, l, config.fields)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse drop "

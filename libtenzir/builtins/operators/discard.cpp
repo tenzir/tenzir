@@ -96,7 +96,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     return input.match([]<class T>(tag<T>) -> AnyOperator {
       if constexpr (std::is_void_v<T>) {
         TENZIR_UNREACHABLE();

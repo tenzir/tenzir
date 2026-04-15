@@ -214,7 +214,7 @@ TEST("plus") {
   CHECK_EQUAL(str, "bar");
   xs.clear();
   str.clear();
-  CHECK(! p(str, xs)); // 0 elements are *not* allowed!
+  CHECK(not p(str, xs)); // 0 elements are *not* allowed!
 }
 
 TEST("printable list") {
@@ -285,12 +285,12 @@ TEST("guard") {
   auto always_false = printers::eps.with([] {
     return false;
   });
-  CHECK(! always_false(str, 0));
+  CHECK(not always_false(str, 0));
   auto even = printers::integral<int>.with([](int i) {
     return i % 2 == 0;
   });
   CHECK(str.empty());
-  CHECK(! even(str, 41));
+  CHECK(not even(str, 41));
   CHECK(str.empty());
   CHECK(even(str, 42));
   CHECK_EQUAL(str, "42");
@@ -306,17 +306,17 @@ TEST("and") {
   CHECK_EQUAL(str, "yoda");
   flag = false;
   str.clear();
-  CHECK(! p(str, "chewie"));
+  CHECK(not p(str, "chewie"));
   CHECK(str.empty());
 }
 
 TEST("not ") {
   std::string str;
   auto flag = true;
-  auto p = ! printers::eps.with([&] {
+  auto p = not printers::eps.with([&] {
     return flag;
   }) << printers::str;
-  CHECK(! p(str, "yoda"));
+  CHECK(not p(str, "yoda"));
   CHECK(str.empty());
   flag = false;
   CHECK(p(str, "chewie"));
@@ -381,7 +381,7 @@ void check_to_json(Printer& p, const T& value, const char* expected) {
   };
   CHECK_EQUAL(to_json(value), expected);
   CHECK_EQUAL(to_json(make_view(value)), expected);
-  if constexpr (! std::is_same_v<T, data>) {
+  if constexpr (not std::is_same_v<T, data>) {
     data dx{value};
     CHECK_EQUAL(to_json(dx), expected);
     CHECK_EQUAL(to_json(make_view(dx)), expected);

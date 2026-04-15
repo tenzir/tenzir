@@ -286,9 +286,9 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
     },
     [](const ast::function_call& x) -> std::optional<operand> {
       // TODO: Make this better.
-      if (x.fn.path.size() == 1 && x.fn.path[0].name == "type_id"
-          && x.args.size() == 1
-          && std::holds_alternative<ast::this_>(*x.args[0].kind)) {
+      if (x.fn.path.size() == 1 and x.fn.path[0].name == "type_id"
+          and x.args.size() == 1
+          and std::holds_alternative<ast::this_>(*x.args[0].kind)) {
         return meta_extractor{meta_extractor::kind::schema_id};
       }
       return std::nullopt;
@@ -440,7 +440,7 @@ auto split_legacy_expression(const ast::expression& x)
         }
         auto left = to_operand(y.left);
         auto right = to_operand(y.right);
-        if (not left || not right) {
+        if (not left or not right) {
           return std::pair{trivially_true_expression(), x};
         }
         auto result
@@ -481,7 +481,7 @@ auto split_legacy_expression(const ast::expression& x)
         // We have `(lo and ln) or (ro and rn)`, but we cannot easily split this
         // into an expression of the form `O and N`. But if `ln` and `rn` are
         // `true`, then this is just `lo or ro <=> (lo or ro) and true`.
-        if (is_true_literal(ln) && is_true_literal(rn)) {
+        if (is_true_literal(ln) and is_true_literal(rn)) {
           return std::pair{expression{disjunction{lo, ro}}, std::move(ln)};
         }
       }

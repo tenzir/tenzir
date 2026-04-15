@@ -254,8 +254,9 @@ struct tl_filter_type;
 
 template <class Type, class... T>
 struct tl_filter_type<type_list<T...>, Type> {
-  using type = typename tl_filter_impl<type_list<T...>,
-                                       !std::is_same<T, Type>::value...>::type;
+  using type =
+    typename tl_filter_impl<type_list<T...>,
+                            not std::is_same<T, Type>::value...>::type;
 };
 
 template <class List, class T>
@@ -270,7 +271,7 @@ template <class Type, class... T>
 struct tl_filter_not_type<type_list<T...>, Type> {
   using type =
     typename tl_filter_impl<type_list<T...>,
-                            (!std::is_same<T, Type>::value)...>::type;
+                            (not std::is_same<T, Type>::value)...>::type;
 };
 
 template <class List, class T>

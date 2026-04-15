@@ -20,7 +20,7 @@ namespace tenzir {
 /// Calls `inspect(f, x)`, checks the result and potentially prints the error.
 void inspect_or_error(auto& f, auto& x) {
   auto result = f.apply(x);
-  if (!result) {
+  if (not result) {
     MESSAGE("error: " << f.get_error());
   }
   CHECK(result);

@@ -637,7 +637,7 @@ struct connection_manager_state {
           return;
         }
       }
-      if (! args.connect) {
+      if (not args.connect) {
         // Server mode: check if client certificate authentication is enabled
         if (args.ssl.get_tls_require_client_cert(nullptr).inner) {
           // mTLS: Require client certificates
@@ -679,7 +679,7 @@ struct connection_manager_state {
           }
         }
       } else if (args.connect
-                 && args.ssl.get_skip_peer_verification(nullptr).inner) {
+                 and args.ssl.get_skip_peer_verification(nullptr).inner) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
           TENZIR_DEBUG("failed to disable peer certificate verification on "

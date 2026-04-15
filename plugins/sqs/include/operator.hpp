@@ -37,7 +37,7 @@ namespace {
 
 /// The default poll time.
 constexpr auto default_poll_time = 3s;
-static_assert(default_poll_time >= 1s && default_poll_time <= 20s);
+static_assert(default_poll_time >= 1s and default_poll_time <= 20s);
 
 auto to_aws_string(chunk_ptr chunk) -> Aws::String {
   const auto* ptr = reinterpret_cast<Aws::String::const_pointer>(chunk->data());
@@ -295,7 +295,7 @@ public:
       dh.emit(std::move(d));
     }
     for (auto chunk : input) {
-      if (not chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }

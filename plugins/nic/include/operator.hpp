@@ -77,7 +77,7 @@ public:
     // We yield here, because otherwise the error is terminal to a node on
     // startup.
     co_yield {};
-    TENZIR_ASSERT(! args_.iface.inner.empty());
+    TENZIR_ASSERT(not args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
     TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
                  snaplen);
@@ -95,7 +95,7 @@ public:
                                detail::narrow_cast<int>(snaplen),
                                put_iface_in_promiscuous_mode,
                                packet_buffer_timeout_ms, error.data());
-    if (! ptr) {
+    if (not ptr) {
       diagnostic::error("failed to open interface: {}",
                         std::string_view{error.data()})
         .note("from `nic`")

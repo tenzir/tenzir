@@ -70,7 +70,7 @@ public:
         }
         return;
       }
-      if (path.extension() != ".yml" && path.extension() != ".yaml") {
+      if (path.extension() != ".yml" and path.extension() != ".yaml") {
         // We silently ignore non-yaml files.
         return;
       }

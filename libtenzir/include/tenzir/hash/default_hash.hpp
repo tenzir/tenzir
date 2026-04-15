@@ -18,6 +18,6 @@ using default_hash = xxh3_64;
 
 // To avoid performance regression, the default hash algorithm in Tenzir must
 // support both incremental and oneshot hashing.
-static_assert(oneshot_hash<default_hash> && incremental_hash<default_hash>);
+static_assert(oneshot_hash<default_hash> and incremental_hash<default_hash>);
 
 } // namespace tenzir

@@ -86,7 +86,7 @@ auto display_names(const Named& named) -> std::string {
 }
 
 auto primary_name(const Named& named) -> std::string_view {
-  TENZIR_ASSERT(! named.names.empty());
+  TENZIR_ASSERT(not named.names.empty());
   return named.names.front();
 }
 
@@ -321,6 +321,7 @@ public:
       return failure::promise();
     }
     result.desc_ = std::move(desc);
+    result.order_ = result.desc_->initial_order;
     return result;
   }
 
@@ -362,7 +363,7 @@ public:
     return failure::promise();
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     // The spawner must be retrieved before filling args, because we move them
     // out and thus the passed `DescribeCtx` would be incomplete.
     auto spawner = std::optional<AnySpawn>{};
@@ -421,6 +422,9 @@ public:
     }
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
+    }
+    if (desc_->set_order) {
+      (*desc_->set_order)(args, order_);
     }
     if (spawner) {
       return match(*spawner, [&](auto& spawner) -> AnyOperator {
@@ -596,14 +600,22 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
+    order_ = std::max(order_, order);
+    // Only forward downstream order when the operator opted in via
+    // `order_invariant()` or `unordered()`. Otherwise keep the safe
+    // `ordered` barrier.
+    auto result_order = desc_->propagate_order ? order_ : event_order::ordered;
     if (desc_->set_filter) {
       filter_.append_range(filter | std::views::as_rvalue);
-      auto replacement = std::vector<Box<Operator>>{};
-      replacement.emplace_back(std::move(*this));
-      return {ir::optimize_filter{}, event_order::ordered,
-              ir::pipeline{{}, std::move(replacement)}};
+      filter = ir::optimize_filter{};
     }
-    return std::move(*this).Operator::optimize(std::move(filter), order);
+    auto replacement = std::vector<Box<Operator>>{};
+    replacement.emplace_back(std::move(*this));
+    for (auto& expr : filter) {
+      replacement.push_back(make_where_ir(expr));
+    }
+    return {ir::optimize_filter{}, result_order,
+            ir::pipeline{{}, std::move(replacement)}};
   }
 
   auto main_location() const -> location override {
@@ -612,11 +624,10 @@ public:
 
 private:
   friend auto inspect(auto& f, GenericIr& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
-                              f.field("args", x.args_),
-                              f.field("filter", x.filter_),
-                              f.field("named_args", x.named_args_),
-                              f.field("pipeline", x.pipeline_));
+    return f.object(x).fields(
+      f.field("op", x.op_), f.field("desc", x.desc_), f.field("args", x.args_),
+      f.field("filter", x.filter_), f.field("order", x.order_),
+      f.field("named_args", x.named_args_), f.field("pipeline", x.pipeline_));
   }
 
   /// The entity that this operator was created for.
@@ -633,6 +644,10 @@ private:
 
   /// The filter passed to `optimize` (only if the operator wants to consume it).
   ir::optimize_filter filter_;
+
+  /// The weakest ordering guarantee seen across all `optimize()` calls.
+  /// Initialized to `ordered` (strongest); each call takes the max.
+  event_order order_ = event_order::ordered;
 
   /// The object describing the available parameters.
   SharedDescription desc_;

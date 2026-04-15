@@ -27,7 +27,7 @@ bool parse_repeat(Parser& p, Iterator& f, const Iterator& l, Attribute& a,
   auto save = f;
   auto i = 0;
   while (i < max) {
-    if (!container_t<typename Parser::attribute>::parse(p, f, l, a)) {
+    if (not container_t<typename Parser::attribute>::parse(p, f, l, a)) {
       break;
     }
     ++i;

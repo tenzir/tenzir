@@ -331,7 +331,7 @@ auto decrypt_string(std::string_view base58_ciphertext,
   auto str = std::string_view{reinterpret_cast<const char*>(blob.data()),
                               reinterpret_cast<const char*>(blob.data())
                                 + blob.size()};
-  if (! simdjson::validate_utf8(str.begin(), str.size())) {
+  if (not simdjson::validate_utf8(str.begin(), str.size())) {
     return diagnostic::error("invalid string").to_error();
   }
   return cleansing_string{str};

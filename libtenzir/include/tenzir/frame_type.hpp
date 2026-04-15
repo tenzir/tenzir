@@ -14,9 +14,9 @@ namespace tenzir {
 
 /// The type of a layer-2 frame.
 enum class frame_type : uint16_t {
-  invalid = 0, // DLT_NULL
+  invalid = 0,  // DLT_NULL
   ethernet = 1, // DLT_EN10MB
-  sll2 = 276, // DLT_LINUX_SLL2
+  sll2 = 276,   // DLT_LINUX_SLL2
 };
 
 } // namespace tenzir

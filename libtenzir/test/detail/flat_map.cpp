@@ -56,7 +56,7 @@ WITH_FIXTURE(fixture) {
 
   TEST("duplicates") {
     auto i = xs.emplace(42, 4.2);
-    CHECK(! i.second);
+    CHECK(not i.second);
     CHECK_EQUAL(i.first->second, 4.2);
     CHECK_EQUAL(xs.size(), 3u);
   }

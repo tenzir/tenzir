@@ -143,7 +143,7 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
     TENZIR_ASSERT(received_bytes
                   < detail::narrow_cast<ssize_t>(buffer.size()) - 1);
     // Append a newline unless we have one already.
-    if (args.insert_newlines && buffer[received_bytes - 1] != '\n') {
+    if (args.insert_newlines and buffer[received_bytes - 1] != '\n') {
       buffer[received_bytes++] = '\n';
     }
     co_yield chunk::copy(as_bytes(buffer).subspan(0, received_bytes));
@@ -222,7 +222,7 @@ public:
         .emit(ctrl.diagnostics());
     }
     for (auto chunk : input) {
-      if (not chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }

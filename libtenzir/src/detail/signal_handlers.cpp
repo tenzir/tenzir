@@ -51,7 +51,7 @@ void safe_write(const char* str, size_t len) {
 // or nullptr if demangling fails or the symbol is not mangled.
 // The caller must free() the returned pointer.
 char* try_demangle(const char* mangled) {
-  if (not mangled || mangled[0] != '_' || mangled[1] != 'Z') {
+  if (not mangled or mangled[0] != '_' or mangled[1] != 'Z') {
     return nullptr;
   }
   int status = 0;
@@ -78,7 +78,7 @@ void print_frame(uintptr_t pc, const char* filename, int lineno,
   // Try to demangle the function name.
   char* demangled = try_demangle(function);
   const char* func_name = demangled ? demangled : function;
-  if (filename && func_name) {
+  if (filename and func_name) {
     n = snprintf(buf, sizeof(buf), "  %s:%d %s\n", filename, lineno, func_name);
   } else if (func_name) {
     n = snprintf(buf, sizeof(buf), "  0x%lx %s\n",
@@ -118,7 +118,7 @@ int bt_full_callback(void* /*data*/, uintptr_t pc, const char* filename,
 }
 
 void resolve_and_print_pc(uintptr_t pc, bool only_first_frame) {
-  if (bt_state && pc != 0) {
+  if (bt_state and pc != 0) {
     if (only_first_frame) {
       bool printed = false;
       backtrace_pcinfo(bt_state, pc, bt_crash_callback, bt_error_callback,
@@ -149,7 +149,7 @@ void resolve_and_print_pc(uintptr_t pc, bool /*only_first_frame*/) {
   char buf[1024];
   int n;
   Dl_info info;
-  if (dladdr(reinterpret_cast<void*>(pc), &info) && info.dli_sname) {
+  if (dladdr(reinterpret_cast<void*>(pc), &info) and info.dli_sname) {
     // Try to demangle the function name.
     char* demangled = try_demangle(info.dli_sname);
     const char* func_name = demangled ? demangled : info.dli_sname;
@@ -185,11 +185,11 @@ auto get_async_stack_trace(uintptr_t* addresses, size_t max_addresses)
   -> size_t {
   size_t count = 0;
   auto* root = folly::tryGetCurrentAsyncStackRoot();
-  if (! root) {
+  if (not root) {
     return 0;
   }
   auto* frame = root->getTopFrame();
-  while (frame && count < max_addresses) {
+  while (frame and count < max_addresses) {
     auto addr = reinterpret_cast<uintptr_t>(frame->getReturnAddress());
     if (addr == 0) {
       break;
@@ -265,7 +265,7 @@ extern "C" void fatal_signal_handler(int sig, siginfo_t* si, void* vctx) {
   if (bp != nullptr) {
     safe_write("\nBacktrace:\n");
     constexpr int max_frames = 64;
-    for (int i = 0; i < max_frames && bp != nullptr; ++i) {
+    for (int i = 0; i < max_frames and bp != nullptr; ++i) {
       // Frame layout (x86_64 and aarch64 with frame pointers):
       // bp[0] = previous frame pointer
       // bp[1] = return address

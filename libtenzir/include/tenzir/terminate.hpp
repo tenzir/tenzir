@@ -42,7 +42,7 @@ public:
 
   template <class ResponseHandler, class ErrorHandler>
   decltype(auto)
-  then(ResponseHandler responseHandler, ErrorHandler errorHandler) && {
+  then(ResponseHandler responseHandler, ErrorHandler errorHandler) and {
     return std::move(response_).then(
       [f = std::move(responseHandler), t = terminator_](atom::done) mutable {
         std::move(f)(atom::done_v);
@@ -55,7 +55,7 @@ public:
 
   template <class ResponseHandler, class ErrorHandler>
   decltype(auto)
-  receive(ResponseHandler responseHandler, ErrorHandler errorHandler) && {
+  receive(ResponseHandler responseHandler, ErrorHandler errorHandler) and {
     return std::move(response_).receive(
       [f = std::move(responseHandler), t = terminator_](atom::done) mutable {
         f(atom::done_v);

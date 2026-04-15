@@ -276,7 +276,7 @@ public:
     co_yield {};
     if (writer_.allows_joining()) {
       auto p = writer_.instantiate(type{}, ctrl);
-      if (! p) {
+      if (not p) {
         diagnostic::error(p.error())
           .note("failed to instantiate `{}`", name())
           .emit(ctrl.diagnostics());
@@ -301,9 +301,9 @@ public:
           co_yield {};
           continue;
         }
-        if (! state) {
+        if (not state) {
           auto p = writer_.instantiate(slice.schema(), ctrl);
-          if (! p) {
+          if (not p) {
             diagnostic::error(p.error())
               .note("failed to initialize `{}`", name())
               .emit(ctrl.diagnostics());

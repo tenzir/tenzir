@@ -150,6 +150,9 @@ struct Description {
   std::optional<Validator> validator;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
+  std::optional<Setter<event_order>> set_order;
+  bool propagate_order = false;
+  event_order initial_order = event_order::ordered;
   // FIXME: Document.
   std::optional<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -900,7 +903,6 @@ public:
   auto optimize(F&& f) -> Description;
 
   auto without_optimize() -> Description {
-    // TODO
     return std::move(desc_);
   }
 
@@ -915,8 +917,21 @@ public:
     desc_.set_operator_location = make_setter(ptr);
   }
 
+  /// Registers a member of `Args` to be populated with the optimization
+  /// order, i.e., the weakest ordering guarantee from downstream.
+  auto optimization_order(event_order Args::* ptr) {
+    TENZIR_ASSERT(not desc_.set_order);
+    desc_.set_order = make_setter(ptr);
+  }
+
   auto order_invariant() -> Description {
-    // TODO
+    desc_.propagate_order = true;
+    return std::move(desc_);
+  }
+
+  auto unordered() -> Description {
+    desc_.propagate_order = true;
+    desc_.initial_order = event_order::unordered;
     return std::move(desc_);
   }
 

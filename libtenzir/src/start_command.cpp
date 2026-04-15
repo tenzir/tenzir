@@ -51,7 +51,7 @@ auto command_runner(command_runner_actor::pointer self)
     [self](atom::run, tenzir::invocation& invocation) -> caf::result<void> {
       auto [root, root_factory] = make_application("tenzir-ctl");
       auto result = run(invocation, self->home_system(), root_factory);
-      if (! result) {
+      if (not result) {
         TENZIR_ERROR("failed to run start command {}: {}", invocation,
                      result.error());
       }
@@ -215,7 +215,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
       },
       [&](atom::signal, int signal) {
         TENZIR_DEBUG("{} got {}", *self, ::strsignal(signal));
-        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_ASSERT(signal == SIGINT or signal == SIGTERM);
         self->send_exit(node, caf::exit_reason::user_shutdown);
       })
     .until([&] {

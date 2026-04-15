@@ -59,8 +59,9 @@ void restinio_response::abort(uint16_t error_code, std::string message,
                               caf::error detail) {
   response_.header().status_code(restinio::http_status_code_t{error_code});
   std::string body;
-  if (enable_detailed_errors_)
+  if (enable_detailed_errors_) {
     message = fmt::format("{}{}", message, detail);
+  }
   body = fmt::format(R"_({{"error": {}}})_", detail::json_escape(message));
   body_size_ = body.size();
   response_.set_body(std::move(body));

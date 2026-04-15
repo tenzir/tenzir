@@ -130,7 +130,7 @@ TEST("parseable action") {
 
 TEST("end of input") {
   auto input = "foo"s;
-  CHECK(! parsers::eoi(input));
+  CHECK(not parsers::eoi(input));
   input.clear();
   CHECK(parsers::eoi(input));
 }
@@ -151,7 +151,7 @@ TEST("char") {
   MESSAGE("inequality");
   character = 'x';
   f = &character;
-  CHECK(! chr{'y'}(f, l, c));
+  CHECK(not chr{'y'}(f, l, c));
   CHECK(f != l);
 }
 
@@ -175,7 +175,7 @@ TEST("char class") {
   CHECK(p(f, l, attr));
   CHECK(attr == "dead");
   CHECK(f == str.begin() + 4);
-  CHECK(! p(f, l, attr));
+  CHECK(not p(f, l, attr));
   ++f;
   CHECK(p(f, l, attr));
   CHECK(f == l);
@@ -220,13 +220,13 @@ TEST("quoted string - escaped char at end") {
 
 TEST("quoted string - missing trailing quote") {
   std::string attr;
-  CHECK(! parsers::qstr("'foobar", attr));
+  CHECK(not parsers::qstr("'foobar", attr));
   CHECK_EQUAL(attr, "foobar");
 }
 
 TEST("quoted string - missing trailing quote after escaped quote") {
   std::string attr;
-  CHECK(! parsers::qstr("'foobar\\'", attr));
+  CHECK(not parsers::qstr("'foobar\\'", attr));
   CHECK_EQUAL(attr, "foobar'");
 }
 
@@ -246,7 +246,7 @@ TEST("symbol table") {
   CHECK(sym("foobar", i));
   CHECK(i == 1337);
   i = 0;
-  CHECK(! sym("baz", i));
+  CHECK(not sym("baz", i));
   CHECK(i == 0);
 }
 
@@ -441,25 +441,25 @@ TEST("bool") {
   CHECK(b);
   CHECK(i == f + 1);
   // Wrong parser
-  CHECK(! p0(i, l, b));
+  CHECK(not p0(i, l, b));
   CHECK(i == f + 1);
   // Correct parser
   CHECK(p1(i, l, b));
-  CHECK(! b);
+  CHECK(not b);
   CHECK(i == f + 2);
   CHECK(p2(i, l, b));
   CHECK(b);
   CHECK(i == f + 6);
   // Wrong parser
-  CHECK(! p2(i, l, b));
+  CHECK(not p2(i, l, b));
   CHECK(i == f + 6);
   // Correct parser
   CHECK(p0(i, l, b));
-  CHECK(! b);
+  CHECK(not b);
   CHECK(i == f + 7);
   b = true;
   CHECK(p2(i, l, b));
-  CHECK(! b);
+  CHECK(not b);
   CHECK(i == f + 12);
   CHECK(p1(i, l, b));
   CHECK(b);
@@ -488,7 +488,7 @@ TEST("unsigned integral") {
   using namespace parsers;
   auto p = integral_parser<unsigned>{};
   unsigned x;
-  CHECK(! p("-1024"));
+  CHECK(not p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
   CHECK(skip_to_eoi(p)("12.34", x));
@@ -499,7 +499,7 @@ TEST("unsigned int16") {
   using namespace parsers;
   auto p = integral_parser<uint16_t>{};
   unsigned x;
-  CHECK(! p("-1024"));
+  CHECK(not p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
   CHECK(p("10000", x));
@@ -534,7 +534,7 @@ TEST("signed integral with digit constraints") {
   auto p = integral_parser<int, max, min>{};
   int x;
   MESSAGE("not enough digits");
-  CHECK(! p("1"));
+  CHECK(not p("1"));
   MESSAGE("within range");
   CHECK(p("12", x));
   CHECK_EQUAL(x, 12);
@@ -543,7 +543,7 @@ TEST("signed integral with digit constraints") {
   CHECK(p("1234", x));
   CHECK_EQUAL(x, 1234);
   MESSAGE("sign doesn't count as digit");
-  CHECK(! p("-1"));
+  CHECK(not p("-1"));
   CHECK(p("-1234", x));
   CHECK_EQUAL(x, -1234);
   MESSAGE("partial match with additional digit");
@@ -822,7 +822,7 @@ TEST("dynamic bytes") {
   MESSAGE("input too large");
   foo.clear();
   auto seven = 7;
-  CHECK(! skip_to_eoi(nbytes<char>(seven))("foobar"s, foo));
+  CHECK(not skip_to_eoi(nbytes<char>(seven))("foobar"s, foo));
   CHECK_EQUAL(foo, "foobar"s);
 }
 
@@ -859,7 +859,7 @@ T to_si(std::string_view str) {
     }
   };
   T x;
-  if (! parse_si(str, x)) {
+  if (not parse_si(str, x)) {
     FAIL("could not parse {} as SI literal", str);
   }
   return x;
@@ -1011,7 +1011,7 @@ TEST("option set - invalid long form option syntax") {
   const auto* const l = pipeline_options_view.end();
   auto parsed_options = std::unordered_map<std::string, data>{};
   auto success = options(f, l, parsed_options);
-  REQUIRE(! success);
+  REQUIRE(not success);
   REQUIRE(parsed_options.empty());
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }
@@ -1024,7 +1024,7 @@ TEST("option set - invalid short form option syntax") {
   const auto* const l = pipeline_options_view.end();
   auto parsed_options = std::unordered_map<std::string, data>{};
   auto success = options(f, l, parsed_options);
-  REQUIRE(! success);
+  REQUIRE(not success);
   REQUIRE(parsed_options.empty());
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }
@@ -1051,7 +1051,7 @@ TEST("option set - missing option value") {
   const auto* const l = pipeline_options_view.end();
   auto parsed_options = std::unordered_map<std::string, data>{};
   auto success = options(f, l, parsed_options);
-  REQUIRE(! success);
+  REQUIRE(not success);
   REQUIRE(parsed_options.empty());
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }

@@ -23,8 +23,8 @@ namespace tenzir {
 
 qualified_record_field::qualified_record_field(const class type& schema,
                                                const offset& index) noexcept {
-  TENZIR_ASSERT(!schema.name().empty());
-  TENZIR_ASSERT(!index.empty());
+  TENZIR_ASSERT(not schema.name().empty());
+  TENZIR_ASSERT(not index.empty());
   const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
   schema_name_ = schema.name();
@@ -69,10 +69,12 @@ std::string_view qualified_record_field::field_name() const noexcept {
 }
 
 std::string qualified_record_field::name() const noexcept {
-  if (schema_name_.empty())
+  if (schema_name_.empty()) {
     return std::string{field_.name};
-  if (field_.name.empty())
+  }
+  if (field_.name.empty()) {
     return std::string{schema_name_};
+  }
   return fmt::format("{}.{}", schema_name_, field_.name);
 }
 
@@ -114,9 +116,10 @@ bool inspect(caf::deserializer& f, qualified_record_field& x) {
   std::string field_name = {};
   legacy_type field_type = {};
   auto result = detail::apply_all(f, schema_name, field_name, field_type);
-  if (result)
+  if (result) {
     x = qualified_record_field{schema_name, field_name,
                                type::from_legacy_type(field_type)};
+  }
   return result;
 }
 
@@ -125,9 +128,10 @@ bool inspect(detail::legacy_deserializer& f, qualified_record_field& x) {
   std::string field_name = {};
   legacy_type field_type = {};
   auto result = f(schema_name, field_name, field_type);
-  if (result)
+  if (result) {
     x = qualified_record_field{schema_name, field_name,
                                type::from_legacy_type(field_type)};
+  }
   return result;
 }
 

@@ -334,8 +334,8 @@ public:
     co_return {};
   }
 
-  auto process_task(Any, Push<table_slice>& push,
-                    OpCtx& ctx) -> Task<void> override {
+  auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
     // Drain all available messages from the queue.
     auto messages = std::vector<MessageData>{};
     while (auto msg = shared_->queue.try_dequeue()) {

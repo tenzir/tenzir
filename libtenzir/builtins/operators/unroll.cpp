@@ -336,6 +336,7 @@ private:
 
 struct UnrollArgs {
   ast::field_path field;
+  event_order order = event_order::ordered;
 };
 
 class Unroll final : public Operator<table_slice, table_slice> {
@@ -392,7 +393,8 @@ public:
     if (not off) {
       co_return;
     }
-    for (auto unrolled : unroll(input, *off, /*unordered=*/false)) {
+    for (auto unrolled :
+         unroll(input, *off, args_.order == event_order::unordered)) {
       co_await push(std::move(unrolled));
     }
   }
@@ -430,7 +432,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<UnrollArgs, Unroll>{};
     d.positional("field", &UnrollArgs::field);
-    // TODO: when we do sorting optimizations, pass `unroll(unordered)`
+    d.optimization_order(&UnrollArgs::order);
     return d.without_optimize();
   }
 };

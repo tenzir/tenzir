@@ -78,8 +78,9 @@ public:
 
 protected:
   virtual auto current_pid() -> int = 0;
-  virtual auto fetch_processes(std::optional<int> pid_filter
-                               = std::nullopt) -> std::vector<process> = 0;
+  virtual auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
+    -> std::vector<process>
+    = 0;
   virtual auto fetch_sockets() -> std::vector<net_socket> = 0;
 };
 
@@ -93,8 +94,8 @@ public:
   ~linux_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filterstd
-                       = std::nullopt) -> std::vector<process> final;
+  auto fetch_processes(std::optional<int> pid_filterstd = std::nullopt)
+    -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<net_socket> final;
 
 private:
@@ -114,8 +115,8 @@ public:
   ~darwin_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filter
-                       = std::nullopt) -> std::vector<process> final;
+  auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
+    -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<net_socket> final;
 
 private:
