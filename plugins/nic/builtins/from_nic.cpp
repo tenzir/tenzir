@@ -412,12 +412,15 @@ private:
     -> Task<void> {
     TENZIR_DEBUG("capturing from {} with async pcap dispatch and snaplen of {}",
                  iface, snaplen);
+    auto wakeup = PcapWakeup{evb, setup.poll_interval, setup.selectable_fd};
+    auto builder = CaptureChunkBuilder{snaplen, setup.linktype};
     auto finish = [&](auto&& emit) -> Task<void> {
+      if (auto chunk = builder.flush()) {
+        co_await queue->enqueue(std::move(chunk));
+      }
       emit();
       co_await queue->enqueue(chunk_ptr{});
     };
-    auto wakeup = PcapWakeup{evb, setup.poll_interval, setup.selectable_fd};
-    auto builder = CaptureChunkBuilder{snaplen, setup.linktype};
     while (true) {
       co_await wakeup.wait();
       auto now = std::chrono::steady_clock::now();
