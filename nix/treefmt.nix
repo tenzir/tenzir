@@ -11,24 +11,7 @@
   ];
 
   # C++
-  settings.formatter.alt-operators = {
-    command = pkgs.lib.getExe pkgs.python3;
-    options = [
-      "${../scripts/rewrite_alt_operators.py}"
-      "--in-place"
-    ];
-    includes = [
-      "*.cpp"
-      "*.hpp"
-      "*.cc"
-      "*.hh"
-      "*.cxx"
-      "*.hxx"
-    ];
-  };
   programs.clang-format.enable = true;
-  # alt-operators should run first.
-  programs.clang-format.priority = 1;
 
   # CMake
   programs.cmake-format.enable = true;
