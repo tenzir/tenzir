@@ -27,13 +27,16 @@ if (NOT tsl-robin-map_FOUND)
     EXPORT tsl-robin-mapTargets
     FILE tsl-robin-mapTargets.cmake
     NAMESPACE tsl::)
-  add_custom_target(
-    tsl-robin-map-targets-link
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
     COMMAND
       ${CMAKE_COMMAND} -E create_symlink
       "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
       "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
     COMMENT "Linking tsl-robin-map targets")
+  add_custom_target(tsl-robin-map-targets-link
+                    DEPENDS "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake")
   install(
     EXPORT tsl-robin-mapTargets
     DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
@@ -447,14 +450,21 @@ if (NOT simdjson_FOUND)
       ON
       CACHE BOOL "")
   add_subdirectory(aux/simdjson)
+  export(
+    EXPORT simdjsonTargets
+    FILE simdjsonTargets.cmake
+    NAMESPACE simdjson::)
   set(_tenzir_bundled_simdjson "simdjson")
-  add_custom_target(
-    simdjson-targets-link
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
     COMMAND
       "${CMAKE_COMMAND}" -E create_symlink
       "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
       "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
     COMMENT "Linking simdjson targets")
+  add_custom_target(simdjson-targets-link
+                    DEPENDS "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake")
   TenzirSystemizeTarget(simdjson)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
@@ -729,14 +739,17 @@ file(
 
 unset(set_tenzir_version_build_metadata)
 
-# We generate config.cpp as a byproduct of a custom target so we can re-generate
-# the version string and build tree hash on every build. Note that this must not
-# be added to the ALL target. The dependency is inferred from the byproduct
-# automatically.
+# Re-run the version generation script on every build so git-derived build
+# metadata, including the dirty suffix, stays current. The configure_file() in
+# update-config.cmake only updates config.cpp when the contents actually change.
 add_custom_target(
   libtenzir_update_config
   BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
-  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
+  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+          "${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in"
+          "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TenzirVersion.cmake"
+          "${CMAKE_CURRENT_SOURCE_DIR}/../version.json")
 
 target_sources(
   libtenzir
@@ -744,6 +757,7 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
+add_dependencies(libtenzir libtenzir_update_config)
 
 tenzirconfigurepchreuse(
   libtenzir

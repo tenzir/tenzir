@@ -480,6 +480,14 @@ function (TenzirExportCompileCommands)
       ON
       PARENT_SCOPE)
 
+  if (NOT "${CMAKE_GENERATOR}" MATCHES "(Ninja|Makefiles)")
+    message(
+      STATUS
+        "Skipping compilation database export for ${ARGV0}: generator ${CMAKE_GENERATOR} does not support CMAKE_EXPORT_COMPILE_COMMANDS"
+    )
+    return()
+  endif ()
+
   # Link once when configuring the build to make the compilation database
   # immediately available.
   execute_process(
@@ -488,9 +496,12 @@ function (TenzirExportCompileCommands)
       "${CMAKE_BINARY_DIR}/compile_commands.json"
       "${CMAKE_SOURCE_DIR}/compile_commands.json")
 
-  # Link again when building the specified target. This ensures the file is
-  # available even after the user ran `git-clean` or similar and triggered
-  # another build.
+  # Link again when building the specified target. Keep this as a custom target
+  # instead of an output-based command so each build directory can relink the
+  # shared source-tree symlink even when another build directory updated it.
+  # Do not depend on the build-tree compilation database directly: after a
+  # `git clean -fdx` or similar, the symlink recreation should still succeed
+  # without forcing an explicit reconfigure first.
   add_custom_target(
     compilation-database
     BYPRODUCTS "${CMAKE_SOURCE_DIR}/compile_commands.json"
