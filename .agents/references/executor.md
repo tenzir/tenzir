@@ -215,10 +215,28 @@ auto state() -> OperatorState override {
 ## Cross-Executor I/O (folly EventBase)
 
 Socket operations via folly's `AsyncSocket` / `Transport` must run on the
-owning `EventBase` thread. Use `co_withExecutor` to schedule each call there:
+owning `EventBase` thread. Prefer `ctx.io_executor()` inside operators over
+reaching for `folly::getGlobalIOExecutor()` directly.
+
+### KeepAlive pattern
+
+`ctx.io_executor()` returns a
+`folly::Executor::KeepAlive<folly::IOExecutor>`. If an operator keeps using the
+executor after `start()`, store that `KeepAlive` handle as a member. Use
+`io_executor_->getEventBase()` only for APIs that require a raw `EventBase*`.
+Do not keep only a raw `EventBase*`.
 
 ```cpp
-auto n = co_await co_withExecutor(evb_, transport_->read(buf, timeout));
+io_executor_ = ctx.io_executor();
+writer_ = folly::AsyncPipeWriter::newWriter(
+  io_executor_->getEventBase(), folly::NetworkSocket::fromFd(fd));
+co_await folly::coro::co_withExecutor(io_executor_, do_io());
+```
+
+Use `co_withExecutor` to schedule each call there:
+
+```cpp
+auto n = co_await co_withExecutor(io_executor_, transport_->read(buf, timeout));
 ```
 
 Do not use `co_viaIfAsync` — it only controls where the caller resumes, not
@@ -227,7 +245,7 @@ where the task executes. Do not use the deprecated `.scheduleOn()` method.
 For multi-statement blocks, wrap with `co_invoke`:
 
 ```cpp
-co_await co_withExecutor(evb_,
+co_await co_withExecutor(io_executor_,
   folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
     ssl_ptr->sslConn(&cb);
     co_await cb.wait();
