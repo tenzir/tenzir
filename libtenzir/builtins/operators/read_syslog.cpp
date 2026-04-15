@@ -55,7 +55,8 @@ public:
       co_return;
     }
     if (args_.octet_counting) {
-      if (co_await process_octet(input, push, make_dh(ctx.dh()))) {
+      auto result = co_await process_octet(input, push, make_dh(ctx.dh()));
+      if (not result) {
         // malformed octet framing is terminal
         co_await finalize_builders(push);
         done_ = true;
@@ -91,9 +92,10 @@ public:
     if (args_.octet_counting) {
       if (remaining_message_length_ > 0) {
         auto const buffered_bytes = buffer_.size();
-        auto const missing_bytes = remaining_message_length_ > buffered_bytes
-                                   ? remaining_message_length_ - buffered_bytes
-                                   : size_t{0};
+        auto const missing_bytes
+          = remaining_message_length_ > buffered_bytes
+              ? remaining_message_length_ - buffered_bytes
+              : size_t{0};
         diagnostic::error(
           "unexpected end of input in octet-counted syslog message")
           .note("missing {} of {} bytes", missing_bytes,
@@ -342,7 +344,7 @@ private:
   // Splitting into 1-byte chunks is handled correctly because both the prefix
   // and the message are buffered across chunk boundaries.
   auto process_octet(chunk_ptr const& input, Push<table_slice>& push,
-                     diagnostic_handler& dh) -> Task<bool> {
+                     diagnostic_handler& dh) -> Task<failure_or<void>> {
     buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
     while (not buffer_.empty()) {
       if (remaining_message_length_ > 0) {
@@ -369,7 +371,7 @@ private:
                               max_prefix_bytes)
               .emit(dh);
             buffer_.clear();
-            co_return true;
+            co_return failure::promise();
           }
           break;
         }
@@ -380,7 +382,7 @@ private:
           diagnostic::error("failed to parse octet-counting length prefix")
             .emit(dh);
           buffer_.clear();
-          co_return true;
+          co_return failure::promise();
         }
         if (remaining_message_length_ > syslog::max_syslog_message_size) {
           diagnostic::error(
@@ -389,13 +391,13 @@ private:
             .emit(dh);
           remaining_message_length_ = 0;
           buffer_.clear();
-          co_return true;
+          co_return failure::promise();
         }
         // Remove the parsed prefix bytes ("N ") from the buffer.
         buffer_.erase(0, static_cast<size_t>(it - buffer_.cbegin()));
       }
     }
-    co_return false;
+    co_return {};
   }
 
   ReadSyslogArgs args_;
