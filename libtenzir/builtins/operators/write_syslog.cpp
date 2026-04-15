@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/eval_as.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 
 #include <chrono>
-#include <functional>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -54,7 +54,7 @@ public:
       co_return;
     }
     auto& dh = ctx.dh();
-    auto facility = eval_as<uint64_type>(
+    auto facility = detail::eval_as<uint64_type>(
       "facility", args_.facility, slice, dh, [&, warned = false] mutable {
         if (not warned) {
           warned = true;
@@ -65,7 +65,7 @@ public:
         }
         return 1;
       });
-    auto severity = eval_as<uint64_type>(
+    auto severity = detail::eval_as<uint64_type>(
       "severity", args_.severity, slice, dh, [&, warned = false] mutable {
         if (not warned) {
           warned = true;
@@ -77,16 +77,19 @@ public:
         return 6;
       });
     auto timestamp
-      = eval_as<time_type>("timestamp", args_.timestamp, slice, dh);
-    auto hostname = eval_as<string_type>("hostname", args_.hostname, slice, dh);
-    auto app_name = eval_as<string_type>("app_name", args_.app_name, slice, dh);
+      = detail::eval_as<time_type>("timestamp", args_.timestamp, slice, dh);
+    auto hostname
+      = detail::eval_as<string_type>("hostname", args_.hostname, slice, dh);
+    auto app_name
+      = detail::eval_as<string_type>("app_name", args_.app_name, slice, dh);
     auto process_id
-      = eval_as<string_type>("process_id", args_.process_id, slice, dh);
+      = detail::eval_as<string_type>("process_id", args_.process_id, slice, dh);
     auto message_id
-      = eval_as<string_type>("message_id", args_.message_id, slice, dh);
-    auto structured_data = eval_as<record_type>(
+      = detail::eval_as<string_type>("message_id", args_.message_id, slice, dh);
+    auto structured_data = detail::eval_as<record_type>(
       "structured_data", args_.structured_data, slice, dh);
-    auto message = eval_as<string_type>("message", args_.message, slice, dh);
+    auto message
+      = detail::eval_as<string_type>("message", args_.message, slice, dh);
 
     auto buffer = std::vector<char>{};
     for (auto i = size_t{}; i < slice.rows(); ++i) {
@@ -215,79 +218,6 @@ private:
       [&](const auto& x) {
         format_val(it, k, fmt::format("{}", x), dh);
       });
-  }
-
-  template <typename T>
-  auto eval_as(std::string_view name, const ast::expression& expr,
-               const table_slice& slice, diagnostic_handler& dh,
-               auto make_default) const
-    -> generator<std::optional<view3<type_to_data_t<T>>>> {
-    auto ms = std::invoke([&] {
-      if (expr.get_location()) {
-        return eval(expr, slice, dh);
-      }
-      auto ndh = null_diagnostic_handler{};
-      return eval(expr, slice, ndh);
-    });
-    for (const auto& s : ms.parts()) {
-      if (s.type.kind().template is<null_type>()) {
-        for (auto i = int64_t{}; i < s.length(); ++i) {
-          co_yield make_default();
-        }
-        continue;
-      }
-      if (s.type.kind().template is<T>()) {
-        for (auto val : s.template values<T>()) {
-          if (val) {
-            co_yield std::move(*val);
-          } else {
-            co_yield make_default();
-          }
-        }
-        continue;
-      }
-      if constexpr (concepts::one_of<T, int64_type, uint64_type>) {
-        using alt_type = std::conditional_t<std::same_as<T, int64_type>,
-                                            uint64_type, int64_type>;
-        if (s.type.kind().template is<alt_type>()) {
-          auto overflow_warned = false;
-          for (auto val : s.template values<alt_type>()) {
-            if (not val) {
-              co_yield make_default();
-              continue;
-            }
-            if (not std::in_range<decltype(T::construct())>(*val)) {
-              if (not overflow_warned) {
-                overflow_warned = true;
-                diagnostic::warning("overflow in `{}`, got `{}`", name, *val)
-                  .primary(expr)
-                  .emit(dh);
-              }
-              co_yield make_default();
-              continue;
-            }
-            co_yield *val;
-          }
-          continue;
-        }
-      }
-      diagnostic::warning("`{}` must be `{}`, got `{}`", name, T{},
-                          s.type.kind())
-        .primary(expr)
-        .emit(dh);
-      for (auto i = int64_t{}; i < s.length(); ++i) {
-        co_yield make_default();
-      }
-    }
-  }
-
-  template <typename T>
-  auto eval_as(std::string_view name, const ast::expression& expr,
-               const table_slice& slice, diagnostic_handler& dh) const
-    -> generator<std::optional<view3<type_to_data_t<T>>>> {
-    return eval_as<T>(name, expr, slice, dh, [] {
-      return std::nullopt;
-    });
   }
 
   WriteSyslogArgs args_;
