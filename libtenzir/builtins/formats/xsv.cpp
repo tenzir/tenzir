@@ -1090,6 +1090,7 @@ public:
       ++begin;
     }
     ended_on_carriage_return_ = false;
+    auto now = multi_series_builder::clock::now();
     for (const auto* current = begin; current != end; ++current) {
       if (*current != '\n' and *current != '\r') {
         continue;
@@ -1101,7 +1102,7 @@ public:
         process_line(buffer_, dh);
         buffer_.clear();
       }
-      co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+      co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
       if (*current == '\r') {
         if (current + 1 == end) {
           ended_on_carriage_return_ = true;
@@ -1112,7 +1113,7 @@ public:
       begin = current + 1;
     }
     buffer_.append(begin, end);
-    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx&)
