@@ -21,13 +21,13 @@ pkgs.writeShellScriptBin "format" ''
 
     for arg in "$@"; do
       case "$arg" in
-        "$submodule_root")
+        "$submodule_root"|"$submodule_root"/)
           submodule_args+=(.)
           ;;
         "$submodule_root"/*)
           submodule_args+=("''${arg#"$submodule_root"/}")
           ;;
-        "$submodule_prefix")
+        "$submodule_prefix"|"$submodule_prefix"/)
           submodule_args+=(.)
           ;;
         "$submodule_prefix"/*)
