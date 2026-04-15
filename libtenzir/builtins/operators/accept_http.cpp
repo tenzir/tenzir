@@ -72,20 +72,13 @@ auto tls_enabled_from_args(AcceptHttpArgs const& args) -> bool {
 
 auto parse_folly_tls_version(std::string_view input)
   -> Option<folly::SSLContext::SSLVersion> {
-  if (input == "" or input == "any") {
+  if (input == "" or input == "any" or input == "1.0") {
     return folly::SSLContext::SSLVersion::TLSv1;
   }
-  if (input == "tls1" or input == "tls1.0" or input == "tlsv1"
-      or input == "tlsv1.0") {
-    return folly::SSLContext::SSLVersion::TLSv1;
-  }
-  if (input == "tls1.1" or input == "tlsv1.1") {
-    return None{};
-  }
-  if (input == "tls1.2" or input == "tlsv1.2") {
+  if (input == "1.2") {
     return folly::SSLContext::SSLVersion::TLSv1_2;
   }
-  if (input == "tls1.3" or input == "tlsv1.3") {
+  if (input == "1.3") {
     return folly::SSLContext::SSLVersion::TLSv1_3;
   }
   return None{};
@@ -114,7 +107,7 @@ auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
       } else {
         diagnostic::error("invalid TLS minimum version: `{}`", min->inner)
           .primary(*min)
-          .hint("supported values are `tls1`, `tls1.2`, and `tls1.3`")
+          .hint("supported values are `1.0`, `1.2`, and `1.3`")
           .emit(dh);
         return failure::promise();
       }

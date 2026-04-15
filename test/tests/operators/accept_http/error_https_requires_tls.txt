@@ -4,3 +4,20 @@ error: `https://` endpoint requires `tls=true`
 5 | accept_http "https://127.0.0.1:8080" {
   |             ^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
+
+error: unexpected internal error: assertion `ready_for_shutdown == operators_.size()` failed
+  = note: this is a bug, we would appreciate a report - thank you!
+          => https://github.com/orgs/tenzir/discussions/new?category=bug-reports
+          
+          version: v5.30.1-rc.1+gab3fc38238-dirty
+          source: libtenzir/src/async/executor.cpp:1599
+          
+          tenzir::ChainRunner::run_until_shutdown() [clone .resume] @ 0x7f9d19d00f7f
+          folly::resumeCoroutineWithNewAsyncStackRoot(std::__n4861::coroutine_handle<...>, folly::AsyncStackFrame&) @ 0x7f9d14752451
+          void folly::detail::function::call_<...>::Awaiter::await_suspend<...>(std::__n4861::coroutine_handle<...>)::{lambda()#1}, true, false, void>(, folly::detail::function::Data&) @ 0x7f9d19d4bf2c
+          folly::ThreadPoolExecutor::runTask(std::shared_ptr<...> const&, folly::ThreadPoolExecutor::Task&&) @ 0x7f9d14545f32
+          folly::CPUThreadPoolExecutor::threadRun(std::shared_ptr<...>) @ 0x7f9d144f8161
+          void folly::detail::function::call_<...>))(std::shared_ptr<...>)>, true, false, void>(, folly::detail::function::Data&) @ 0x7f9d1454bd6c
+          execute_native_thread_routine @ 0x7f9d13ef2fa4
+          start_thread @ 0x7f9d13a9dd53
+          __clone3 @ 0x7f9d13b2563c

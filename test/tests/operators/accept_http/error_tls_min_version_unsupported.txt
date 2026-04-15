@@ -1,7 +1,7 @@
-error: invalid TLS minimum version: `tls1.1`
+error: invalid TLS minimum version: `1.1`
  --> tests/operators/accept_http/error_tls_min_version_unsupported.tql:9:32
   |
 9 | accept_http "127.0.0.1:0", tls={
-  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
-  = hint: supported values are `tls1`, `tls1.2`, and `tls1.3`
+  = hint: supported values are `1.0`, `1.2`, and `1.3`
