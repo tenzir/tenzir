@@ -1,0 +1,8 @@
+// Re-produce an identical copy of the input by taking the input PCAP file
+// header as blueprint for the output trace. The MD5 of the original input
+// is bead1d02a0c44484e51b00b00c3fc869.
+from_file env("TENZIR_INPUTS") + "/pcap/big-endian-single-packet.pcap" {
+  read_pcap emit_file_headers=true
+}
+write_pcap
+shell "md5sum | cut -f 1 -d ' '"

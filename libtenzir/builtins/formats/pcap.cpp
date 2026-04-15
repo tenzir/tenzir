@@ -31,7 +31,44 @@ namespace {
 
 using namespace tenzir::pcap;
 
-auto make_file_header_table_slice(const file_header& header) -> table_slice {
+auto normalized_magic_number(uint32_t raw_magic) -> std::optional<uint32_t> {
+  auto need_swap = tenzir::pcap::need_byte_swap(raw_magic);
+  if (not need_swap) {
+    return std::nullopt;
+  }
+  return *need_swap ? detail::byteswap(raw_magic) : raw_magic;
+}
+
+auto uses_microsecond_precision(uint32_t raw_magic) -> bool {
+  auto normalized = normalized_magic_number(raw_magic);
+  TENZIR_ASSERT(normalized);
+  return *normalized == magic_number_1;
+}
+
+auto serialize_file_header(file_header header) -> file_header {
+  auto need_swap = tenzir::pcap::need_byte_swap(header.magic_number);
+  TENZIR_ASSERT(need_swap);
+  if (not *need_swap) {
+    return header;
+  }
+  header.major_version = detail::byteswap(header.major_version);
+  header.minor_version = detail::byteswap(header.minor_version);
+  header.reserved1 = detail::byteswap(header.reserved1);
+  header.reserved2 = detail::byteswap(header.reserved2);
+  header.snaplen = detail::byteswap(header.snaplen);
+  header.linktype = detail::byteswap(header.linktype);
+  return header;
+}
+
+auto serialize_packet_header(packet_header header, uint32_t raw_magic)
+  -> packet_header {
+  auto need_swap = tenzir::pcap::need_byte_swap(raw_magic);
+  TENZIR_ASSERT(need_swap);
+  return *need_swap ? byteswap(header) : header;
+}
+
+auto make_file_header_table_slice(const file_header& header, uint32_t raw_magic)
+  -> table_slice {
   auto builder = series_builder{type{
     "pcap.file_header",
     record_type{
@@ -45,7 +82,7 @@ auto make_file_header_table_slice(const file_header& header) -> table_slice {
     },
   }};
   auto event = builder.record();
-  event.field("magic_number", uint64_t{header.magic_number});
+  event.field("magic_number", uint64_t{raw_magic});
   event.field("major_version", uint64_t{header.major_version});
   event.field("minor_version", uint64_t{header.minor_version});
   event.field("reserved1", uint64_t{header.reserved1});
@@ -110,10 +147,11 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
-      auto need_swap = need_byte_swap(input_file_header.magic_number);
+      auto raw_magic = input_file_header.magic_number;
+      auto need_swap = need_byte_swap(raw_magic);
       if (not need_swap) {
         diagnostic::error("invalid PCAP magic number: {0:x}",
-                          uint32_t{input_file_header.magic_number})
+                          uint32_t{raw_magic})
           .note("from `pcap`")
           .emit(ctrl.diagnostics());
         co_return;
@@ -125,7 +163,7 @@ public:
         TENZIR_DEBUG("detected identical byte order in file and host");
       }
       if (emit_file_headers) {
-        co_yield make_file_header_table_slice(input_file_header);
+        co_yield make_file_header_table_slice(input_file_header, raw_magic);
       }
       // After the header, the remainder of the file are typically Packet
       // Records, consisting of a 16-byte header and variable-length payload.
@@ -206,7 +244,8 @@ public:
               std::copy(bytes->begin(), bytes->end(), remainder.begin());
               break;
             }
-            need_swap = need_byte_swap(input_file_header.magic_number);
+            raw_magic = input_file_header.magic_number;
+            need_swap = need_byte_swap(raw_magic);
             TENZIR_ASSERT(need_swap); // checked in is_file_header
             if (*need_swap) {
               TENZIR_DEBUG("detected different byte order in file and host");
@@ -221,7 +260,8 @@ public:
               co_yield builder.finish_assert_one_slice();
             }
             if (emit_file_headers) {
-              co_yield make_file_header_table_slice(input_file_header);
+              co_yield make_file_header_table_slice(input_file_header,
+                                                    raw_magic);
             }
             //  Jump back to the while loop that reads pairs of packet header
             //  and packet data.
@@ -467,16 +507,17 @@ private:
       failed_ = true;
       return std::nullopt;
     }
-    auto need_swap = tenzir::pcap::need_byte_swap(header.magic_number);
+    auto raw_magic = header.magic_number;
+    auto need_swap = tenzir::pcap::need_byte_swap(raw_magic);
     if (not need_swap) {
-      diagnostic::error("invalid PCAP magic number: {0:x}",
-                        uint32_t{header.magic_number})
+      diagnostic::error("invalid PCAP magic number: {0:x}", uint32_t{raw_magic})
         .note("from `pcap`")
         .emit(dh);
       failed_ = true;
       return std::nullopt;
     }
     need_swap_ = *need_swap;
+    current_file_header_raw_magic_ = raw_magic;
     if (*need_swap) {
       TENZIR_DEBUG("detected different byte order in file and host");
       header = byteswap(header);
@@ -492,7 +533,8 @@ private:
       co_await flush_packets(push);
     }
     if (args_.emit_file_headers) {
-      co_await push(make_file_header_table_slice(header));
+      co_await push(
+        make_file_header_table_slice(header, current_file_header_raw_magic_));
     }
   }
 
@@ -500,12 +542,10 @@ private:
                      std::span<const std::byte> data) -> void {
     auto seconds = std::chrono::seconds(header.timestamp);
     auto timestamp = time{std::chrono::duration_cast<duration>(seconds)};
-    if (current_file_header_.magic_number == magic_number_1) {
+    if (uses_microsecond_precision(current_file_header_raw_magic_)) {
       timestamp += std::chrono::microseconds(header.timestamp_fraction);
-    } else if (current_file_header_.magic_number == magic_number_2) {
-      timestamp += std::chrono::nanoseconds(header.timestamp_fraction);
     } else {
-      TENZIR_UNREACHABLE();
+      timestamp += std::chrono::nanoseconds(header.timestamp_fraction);
     }
     auto event = builder_.record();
     event.field("timestamp", timestamp);
@@ -593,6 +633,7 @@ private:
   bool failed_ = false;
   bool have_file_header_ = false;
   bool need_swap_ = false;
+  uint32_t current_file_header_raw_magic_ = magic_number_2;
   file_header current_file_header_{};
   std::optional<packet_header> pending_packet_header_;
   series_builder builder_;
@@ -747,8 +788,15 @@ public:
     if (input.schema().name() == "pcap.file_header") {
       TENZIR_DEBUG("got new PCAP file header");
       if (auto header = make_file_header(input)) {
+        if (not normalized_magic_number(header->magic_number)) {
+          diagnostic::warning("failed to parse PCAP file header")
+            .note("invalid magic number")
+            .emit(ctx.dh());
+          co_return;
+        }
         current_file_header_ = *header;
-        co_await push(chunk::copy(as_bytes(*current_file_header_), metadata_));
+        auto serialized_header = serialize_file_header(*current_file_header_);
+        co_await push(chunk::copy(as_bytes(serialized_header), metadata_));
       } else {
         diagnostic::warning("failed to parse PCAP file header").emit(ctx.dh());
       }
@@ -767,10 +815,13 @@ public:
           .emit(ctx.dh());
         failed_ = true;
         return false;
-      } else if (current_file_header_->magic_number == magic_number_1) {
+      } else if (uses_microsecond_precision(
+                   current_file_header_->magic_number)) {
         pkt.header.timestamp_fraction /= 1'000;
       }
-      auto header = as_bytes(pkt.header);
+      auto serialized_packet_header = serialize_packet_header(
+        pkt.header, current_file_header_->magic_number);
+      auto header = as_bytes(serialized_packet_header);
       buffer.reserve(buffer.size() + sizeof(packet_header) + pkt.data.size());
       buffer.insert(buffer.end(), header.begin(), header.end());
       buffer.insert(buffer.end(), pkt.data.begin(), pkt.data.end());
@@ -823,7 +874,8 @@ public:
     if (emit_file_header) {
       TENZIR_DEBUG("emitting generated PCAP file header");
       TENZIR_ASSERT(current_file_header_);
-      co_await push(chunk::copy(as_bytes(*current_file_header_), metadata_));
+      auto serialized_header = serialize_file_header(*current_file_header_);
+      co_await push(chunk::copy(as_bytes(serialized_header), metadata_));
     }
     co_await push(chunk::make(std::move(buffer), metadata_));
   }
@@ -867,6 +919,13 @@ public:
         if (slice.schema().name() == "pcap.file_header") {
           TENZIR_DEBUG("got new PCAP file header");
           if (auto header = make_file_header(slice)) {
+            if (not normalized_magic_number(header->magic_number)) {
+              diagnostic::warning("failed to parse PCAP file header")
+                .note("invalid magic number")
+                .emit(ctrl.diagnostics());
+              co_yield {};
+              co_return;
+            }
             current_file_header = *header;
           } else {
             diagnostic::warning("failed to parse PCAP file header")
@@ -887,10 +946,13 @@ public:
             return diagnostic::error(
                      "packet linktype doesn't match file header")
               .done();
-          } else if (current_file_header->magic_number == magic_number_1) {
+          } else if (uses_microsecond_precision(
+                       current_file_header->magic_number)) {
             pkt.header.timestamp_fraction /= 1'000;
           }
-          auto bytes = as_bytes(pkt.header);
+          auto serialized_packet_header = serialize_packet_header(
+            pkt.header, current_file_header->magic_number);
+          auto bytes = as_bytes(serialized_packet_header);
           buffer.reserve(sizeof(packet_header) + pkt.data.size());
           buffer.insert(buffer.end(), bytes.begin(), bytes.end());
           buffer.insert(buffer.end(), pkt.data.begin(), pkt.data.end());
@@ -946,7 +1008,8 @@ public:
         if (not file_header_printed) {
           TENZIR_DEBUG("emitting PCAP file header");
           TENZIR_ASSERT(current_file_header);
-          co_yield chunk::copy(as_bytes(*current_file_header), meta);
+          auto serialized_header = serialize_file_header(*current_file_header);
+          co_yield chunk::copy(as_bytes(serialized_header), meta);
           file_header_printed = true;
         }
         co_yield chunk::copy(buffer, meta);
