@@ -523,6 +523,13 @@ private:
     }
   }
 
+  auto flush_packets_if_full(Push<table_slice>& push) -> Task<void> {
+    if (builder_.length()
+        >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)) {
+      co_await flush_packets(push);
+    }
+  }
+
   auto parse_available(Push<table_slice>& push, diagnostic_handler& dh)
     -> Task<void> {
     while (not failed_) {
@@ -549,6 +556,7 @@ private:
         append_packet(*pending_packet_header_, *bytes);
         pending_packet_header_ = std::nullopt;
         consume(bytes->size());
+        co_await flush_packets_if_full(push);
         continue;
       }
       auto bytes = view(sizeof(packet_header));
