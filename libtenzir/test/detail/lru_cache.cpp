@@ -117,3 +117,17 @@ TEST("string keys remain reachable after put") {
   CHECK_EQUAL(*alpha, 1);
   CHECK_EQUAL(*beta, 2);
 }
+
+TEST("zero-sized caches behave as no-store caches") {
+  tenzir::detail::lru_cache<int, int, int_factory> cache(0, int_factory{});
+  auto& loaded = cache.get_or_load(42);
+  CHECK_EQUAL(loaded, 42);
+  CHECK_EQUAL(cache.size(), size_t{0});
+  CHECK(not cache.contains(42));
+  CHECK_EQUAL(cache.peek(42), nullptr);
+  auto& inserted = cache.put(7, 11);
+  CHECK_EQUAL(inserted, 11);
+  CHECK_EQUAL(cache.size(), size_t{0});
+  CHECK(not cache.contains(7));
+  CHECK_EQUAL(cache.peek(7), nullptr);
+}

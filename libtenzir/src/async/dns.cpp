@@ -417,9 +417,7 @@ auto ttl_for(DnsResolverConfig const& config, ForwardDnsResult const& result)
   if (auto* resolved = try_as<ForwardDnsResolved>(&result.unwrap())) {
     auto ttl = std::chrono::seconds::max();
     for (auto const& answer : resolved->answers) {
-      if (answer.ttl > std::chrono::seconds::zero()) {
-        ttl = std::min(ttl, answer.ttl);
-      }
+      ttl = std::min(ttl, answer.ttl);
     }
     return ttl == std::chrono::seconds::max() ? config.positive_ttl : ttl;
   }

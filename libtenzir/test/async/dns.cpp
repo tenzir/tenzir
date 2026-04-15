@@ -44,6 +44,15 @@ TEST("forward dns resolves literal addresses without network access") {
   check(static_cast<bool>(try_as<ForwardDnsResolved>(&cached->unwrap())));
 }
 
+TEST("forward dns zero ttl answers are not cached") {
+  auto resolver = ForwardDnsResolver{ForwardDnsConfig{
+    .literal_ttl = std::chrono::seconds{0},
+  }};
+  auto result = folly::coro::blockingWait(resolver.resolve("127.0.0.1"));
+  require(not result->is_err());
+  check(folly::coro::blockingWait(resolver.cached("127.0.0.1")) == None{});
+}
+
 TEST("reverse dns resolves loopback addresses without network access") {
   auto resolver = ReverseDnsResolver{};
   auto result = folly::coro::blockingWait(resolver.resolve(loopback_ip(1)));

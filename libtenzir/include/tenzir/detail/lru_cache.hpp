@@ -47,6 +47,7 @@ public:
   auto clear() -> void {
     cache_items_map_.clear();
     cache_items_list_.clear();
+    uncached_value_.reset();
   }
 
   auto resize(size_t max_size) -> void {
@@ -56,6 +57,7 @@ public:
       cache_items_list_.erase(last);
     }
     max_size_ = max_size;
+    uncached_value_.reset();
   }
 
   auto begin() -> list_iterator {
@@ -75,7 +77,10 @@ public:
   }
 
   auto put(Key key, Value value) -> Value& {
-    TENZIR_ASSERT(max_size_ > 0);
+    if (max_size_ == 0) {
+      uncached_value_ = std::make_unique<Value>(std::move(value));
+      return *uncached_value_;
+    }
     if (auto it = cache_items_map_.find(key); it != cache_items_map_.end()) {
       cache_items_list_.erase(it->second);
       cache_items_map_.erase(it);
@@ -105,6 +110,10 @@ public:
   auto get_or_load(Key const& key) -> Value& {
     if (auto value = get(key)) {
       return *value;
+    }
+    if (max_size_ == 0) {
+      uncached_value_ = std::make_unique<Value>(factory_(key));
+      return *uncached_value_;
     }
     return put(key, factory_(key));
   }
@@ -163,6 +172,7 @@ private:
   std::unordered_map<Key, list_iterator> cache_items_map_;
   size_t max_size_;
   Factory factory_;
+  std::unique_ptr<Value> uncached_value_;
 };
 
 } // namespace tenzir::detail
