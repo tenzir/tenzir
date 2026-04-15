@@ -77,6 +77,10 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 - Use `tenzir::Mutex<T>` only for small shared helper state that must be
   touched from multiple tasks.
 
+Use `SeriesPusher` from `tenzir/async/pusher.hpp` when an operator uses
+`series_builder::yield_ready()` together with `await_task()` /
+`process_task()` to drive timeout-based flushes.
+
 ### Structured concurrency with `async_scope`
 
 Use `async_scope()` for fan-out within a task. If a task spawns child tasks and

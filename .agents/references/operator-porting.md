@@ -144,6 +144,13 @@ first buffer is created; `await_task()` sleeps on that `Notify` when idle and
 otherwise sleeps until the earliest deadline; `process_task()` flushes all
 expired buffers.
 
+When the operator batches rows in a `series_builder`, use `SeriesPusher` from
+`tenzir/async/pusher.hpp` together with `series_builder::yield_ready()`. Call
+`yield_ready()` from `process()` after appending rows and again from
+`process_task()` for timeout-driven flushes. Keep explicit flushes for
+semantic boundaries such as header transitions, document-close markers,
+snapshots, and finalization.
+
 **Duration overflow**: never compute `start + duration::max()`. Guard sentinel
 values before arithmetic:
 
