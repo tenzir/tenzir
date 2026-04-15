@@ -118,7 +118,7 @@ struct basic_series {
   }
 
   template <type_or_concrete_type Other>
-    requires(std::same_as<Type, type> || std::same_as<Other, Type>)
+    requires(std::same_as<Type, type> or std::same_as<Other, Type>)
   static auto null(Other ty, int64_t length) -> basic_series<Type> {
     auto b = ty.make_arrow_builder(arrow_memory_pool());
     // TODO
@@ -187,7 +187,7 @@ struct basic_series {
 
   template <type_or_concrete_type Cast = tenzir::type>
     requires(std::same_as<Type, tenzir::type>
-             && std::same_as<Cast, tenzir::type>)
+             and std::same_as<Cast, tenzir::type>)
   auto values() const -> generator<data_view3> {
     return values3();
   }
@@ -241,10 +241,10 @@ public:
     // Directly using `typeid(*x.array)` leads to a warning.
     TENZIR_ASSERT(x.array);
     auto& deref = *x.array;
-    TENZIR_ASSERT(
-      typeid(type_to_arrow_array_t<Type>) == typeid(deref), "`{}` != `{}`",
-      caf::detail::pretty_type_name(typeid(type_to_arrow_array_t<Type>)),
-      caf::detail::pretty_type_name(typeid(deref)));
+    TENZIR_ASSERT(typeid(type_to_arrow_array_t<Type>) == typeid(deref),
+                  "`{}` != `{}`",
+                  detail::pretty_type_name(typeid(type_to_arrow_array_t<Type>)),
+                  detail::pretty_type_name(typeid(deref)));
     auto array = std::static_pointer_cast<type_to_arrow_array_t<Type>>(x.array);
     return basic_series<Type>{std::move(ty), std::move(array)};
   }

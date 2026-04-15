@@ -22,7 +22,7 @@ public:
   static auto make(diagnostic_handler& dh) -> session_provider;
 
   auto as_session() & -> session;
-  auto as_session() && -> session = delete;
+  auto as_session() and -> session = delete;
 
 private:
   friend class session;

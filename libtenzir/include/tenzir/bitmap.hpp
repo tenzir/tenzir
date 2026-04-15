@@ -136,7 +136,7 @@ namespace fmt {
 
 template <class Bitmap>
   requires(tenzir::detail::tl_contains<tenzir::bitmap::types, Bitmap>::value
-           || std::is_same_v<Bitmap, tenzir::bitmap>)
+           or std::is_same_v<Bitmap, tenzir::bitmap>)
 struct formatter<Bitmap> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {

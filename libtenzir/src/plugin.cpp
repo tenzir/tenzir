@@ -135,7 +135,7 @@ auto remove_builtins(std::vector<std::string> paths_or_names)
     return std::any_of(plugins::get().begin(), plugins::get().end(),
                        [&](const auto& plugin) {
                          return plugin->name() == path_or_name
-                                && plugin.type() == plugin_ptr::type::builtin;
+                                and plugin.type() == plugin_ptr::type::builtin;
                        });
   });
   return paths_or_names;
@@ -157,7 +157,7 @@ auto expand_special_identifiers(
     for (const auto& dir : plugin_dirs) {
       auto ec = std::error_code{};
       for (const auto& file : std::filesystem::directory_iterator{dir, ec}) {
-        if (ec || not file.is_regular_file()) {
+        if (ec or not file.is_regular_file()) {
           break;
         }
         if (file.path().filename().string().starts_with("libtenzir-plugin-")) {
@@ -271,7 +271,7 @@ auto load(const std::vector<std::string>& bundled_plugins,
   // Get the necessary options.
   auto paths_or_names
     = caf::get_or(cfg, "tenzir.plugins", std::vector<std::string>{"all"});
-  if (paths_or_names.empty() && bundled_plugins.empty()) {
+  if (paths_or_names.empty() and bundled_plugins.empty()) {
     return loaded_plugin_paths;
   }
   const auto plugin_dirs = get_plugin_dirs(cfg);
@@ -622,7 +622,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       continue;
     }
     // TODO: Requiring exact schema equality will often produce tiny batches.
-    if (not output.empty() && output.back().schema() == slice.schema()) {
+    if (not output.empty() and output.back().schema() == slice.schema()) {
       output.back() = concatenate({std::move(output.back()), std::move(slice)});
     } else {
       output.push_back(std::move(slice));
@@ -724,7 +724,7 @@ auto plugin_ptr::make_dynamic(const char* filename) noexcept
     });
     auto new_block = plugin_type_id_block();
     for (const auto& old_block : old_blocks) {
-      if (new_block.begin < old_block.end && old_block.begin < new_block.end) {
+      if (new_block.begin < old_block.end and old_block.begin < new_block.end) {
         return caf::make_error(ec::system_error,
                                "encountered type ID block clash in", filename);
       }
@@ -812,7 +812,7 @@ auto operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept
   if (&lhs == &rhs) {
     return std::strong_ordering::equal;
   }
-  if (not lhs && not rhs) {
+  if (not lhs and not rhs) {
     return std::strong_ordering::equal;
   }
   if (not lhs) {
@@ -828,7 +828,7 @@ auto operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept -> bool {
   if (&lhs == &rhs) {
     return true;
   }
-  if (not lhs && not rhs) {
+  if (not lhs and not rhs) {
     return true;
   }
   return lhs == rhs->name();
@@ -843,7 +843,7 @@ auto operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept
   // TODO: Replace implementation with `std::lexicographical_compare_three_way`
   // once that is implemented for all compilers we need to support. This does
   // the same thing essentially, just a lot less generic.
-  while (not lhs_name.empty() && not rhs.empty()) {
+  while (not lhs_name.empty() and not rhs.empty()) {
     const auto lhs_normalized
       = std::tolower(static_cast<unsigned char>(lhs_name[0]));
     const auto rhs_normalized

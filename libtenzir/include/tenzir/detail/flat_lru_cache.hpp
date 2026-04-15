@@ -26,9 +26,7 @@ public:
 
   flat_lru_cache(size_t size, Predicate pred = Predicate{},
                  Factory fac = Factory{})
-    : size_(size),
-      pred_(std::move(pred)),
-      make_(std::move(fac)) {
+    : size_(size), pred_(std::move(pred)), make_(std::move(fac)) {
     elements_.reserve(size_);
   }
 
@@ -54,8 +52,9 @@ public:
     auto last = elements_.end();
     if (auto i = std::find_if(first, last, pred_(key)); i != last) {
       // Move to the back unless we already access the newest element.
-      if (i != last - 1)
+      if (i != last - 1) {
         std::rotate(i, i + 1, last);
+      }
       return elements_.back();
     }
     return add(make_(key));
@@ -64,8 +63,9 @@ public:
   /// @pre The new value's key does not collide with any existing element.
   T& add(T value) {
     // Fill cache if we didn't reach capacity yet.
-    if (elements_.size() < size_)
+    if (elements_.size() < size_) {
       return elements_.emplace_back(std::move(value));
+    }
     // Evict oldest element by overriding it.
     auto first = elements_.begin();
     auto last = elements_.end();

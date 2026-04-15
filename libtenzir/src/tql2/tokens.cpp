@@ -163,10 +163,10 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | ignore((
         lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
         | "fn" | "super" | "for" | "while" | "mod" | "module"
-      ) >> !continue_ident) ->* [] { return tk::reserved_keyword; }
+      ) >> not continue_ident) ->* [] { return tk::reserved_keyword; }
     | ignore('$' >> identifier)
       ->* [] { return tk::dollar_ident; }
-    | ignore('_' >> !continue_ident)
+    | ignore('_' >> not continue_ident)
       ->* [] { return tk::underscore; }
     | ignore(identifier)
       ->* [] { return tk::identifier; }
@@ -178,7 +178,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return tk::whitespace; };
   auto common_content
     // Quotes are allowed in strings with a '#' prefix.
-    = lit{"\""} >> !function_repeat_parser{ch<'#'>, string_hashes}
+    = lit{"\""} >> not function_repeat_parser{ch<'#'>, string_hashes}
     // They are also allowed in non-raw strings if preceded by backslash.
     | lit{"\\\""}.when(is_non_raw_string)
     // We also need to handle double backslashes to consume both at once.
@@ -255,7 +255,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       // a special `error` token and go to the next character.
       ++current;
       auto end = current - content.begin();
-      if (result.empty() || result.back().kind != tk::error) {
+      if (result.empty() or result.back().kind != tk::error) {
         result.emplace_back(tk::error, end);
       } else {
         // If the last token is already an error, we just expand it instead.

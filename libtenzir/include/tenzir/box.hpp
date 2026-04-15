@@ -66,7 +66,7 @@ public:
   // TODO: Cleanup.
   Box(const Box& other) {
     if constexpr (std::is_copy_constructible_v<T>
-                  && not std::is_polymorphic_v<T>) {
+                  and not std::is_polymorphic_v<T>) {
       ptr_ = std::make_unique<T>(*other);
     } else {
       static_assert(has_box_copy<T>);
@@ -77,7 +77,7 @@ public:
   auto operator=(const Box& other) -> Box& {
     if (this != &other) {
       if constexpr (std::is_copy_constructible_v<T>
-                    && not std::is_polymorphic_v<T>) {
+                    and not std::is_polymorphic_v<T>) {
         ptr_ = std::make_unique<T>(*other);
       } else {
         static_assert(has_box_copy<T>);
@@ -108,7 +108,7 @@ public:
   explicit(false) operator T const&() const {
     return deref();
   }
-  explicit(false) operator T&&() && {
+  explicit(false) operator T&&() and {
     return std::move(*this).deref();
   }
 

@@ -24,7 +24,7 @@ enum class fnv_variant { v1, v1a };
 /// @tparam Variant The FNV variant that selects the concrete implementation.
 template <size_t Bits, fnv_variant Variant>
 class fnv {
-  static_assert(Bits == 32 || Bits == 64);
+  static_assert(Bits == 32 or Bits == 64);
 
   static constexpr auto make_result_type() {
     if constexpr (Bits == 64) {

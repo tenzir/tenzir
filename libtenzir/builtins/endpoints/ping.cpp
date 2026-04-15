@@ -68,8 +68,9 @@ class plugin final : public virtual rest_endpoint_plugin {
 
   [[nodiscard]] auto openapi_endpoints(api_version version) const
     -> record override {
-    if (version != api_version::v0)
+    if (version != api_version::v0) {
       return tenzir::record{};
+    }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result);
     TENZIR_ASSERT(is<record>(*result));

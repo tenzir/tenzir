@@ -42,30 +42,39 @@ namespace tenzir {
 caf::expected<detail::scope_guard<void (*)() noexcept>>
 create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file) {
-  if (!tenzir::detail::setup_spdlog(is_server, cmd_invocation, cfg_file))
+  if (not tenzir::detail::setup_spdlog(is_server, cmd_invocation, cfg_file)) {
     return caf::make_error(tenzir::ec::unspecified);
+  }
   return {detail::scope_guard(tenzir::detail::shutdown_spdlog)};
 }
 
 /// Convert a log level to an int.
 /// @note x is passed by value because it is modified.
 int loglevel_to_int(std::string x, int default_value) {
-  for (auto& ch : x)
+  for (auto& ch : x) {
     ch = std::tolower(ch);
-  if (x == "quiet")
+  }
+  if (x == "quiet") {
     return TENZIR_LOG_LEVEL_QUIET;
-  if (x == "error")
+  }
+  if (x == "error") {
     return TENZIR_LOG_LEVEL_ERROR;
-  if (x == "warning")
+  }
+  if (x == "warning") {
     return TENZIR_LOG_LEVEL_WARNING;
-  if (x == "info")
+  }
+  if (x == "info") {
     return TENZIR_LOG_LEVEL_INFO;
-  if (x == "verbose")
+  }
+  if (x == "verbose") {
     return TENZIR_LOG_LEVEL_VERBOSE;
-  if (x == "debug")
+  }
+  if (x == "debug") {
     return TENZIR_LOG_LEVEL_DEBUG;
-  if (x == "trace")
+  }
+  if (x == "trace") {
     return TENZIR_LOG_LEVEL_TRACE;
+  }
   return default_value;
 }
 
@@ -147,28 +156,31 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
   // Helper to set the color mode
   spdlog::color_mode log_color = [&]() -> spdlog::color_mode {
     auto config_value = caf::get_or(cfg_file, "tenzir.console", "automatic");
-    if (config_value == "automatic")
+    if (config_value == "automatic") {
       return spdlog::color_mode::automatic;
-    if (config_value == "always")
+    }
+    if (config_value == "always") {
       return spdlog::color_mode::always;
+    }
 
     return spdlog::color_mode::never;
   }();
   auto log_file = caf::get_or(cfg_file, "tenzir.log-file",
                               std::string{defaults::logger::log_file});
   auto cmdline_log_file = caf::get_if<std::string>(&cfg_cmd, "tenzir.log-file");
-  if (cmdline_log_file)
+  if (cmdline_log_file) {
     log_file = *cmdline_log_file;
+  }
   if (is_server) {
     if (log_file == defaults::logger::log_file
-        && tenzir_file_verbosity != TENZIR_LOG_LEVEL_QUIET) {
+        and tenzir_file_verbosity != TENZIR_LOG_LEVEL_QUIET) {
       std::filesystem::path log_dir = caf::get_or(
         cfg_file, "tenzir.state-directory", defaults::state_directory.data());
       std::error_code err{};
-      if (!std::filesystem::exists(log_dir, err)) {
+      if (not std::filesystem::exists(log_dir, err)) {
         const auto created_log_dir
           = std::filesystem::create_directory(log_dir, err);
-        if (!created_log_dir) {
+        if (not created_log_dir) {
           fmt::print(stderr,
                      "failed to start logger; unable to create directory {}: "
                      "{}\n",
@@ -182,13 +194,15 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     // Please note, client file does not go to state_directory!
     auto client_log_file
       = caf::get_if<std::string>(&cfg_cmd, "tenzir.client-log-file");
-    if (!client_log_file)
+    if (not client_log_file) {
       client_log_file
         = caf::get_if<std::string>(&cfg_file, "tenzir.client-log-file");
-    if (client_log_file)
+    }
+    if (client_log_file) {
       log_file = *client_log_file;
-    else // If there is no client log file, turn off file logging
+    } else { // If there is no client log file, turn off file logging
       tenzir_file_verbosity = TENZIR_LOG_LEVEL_QUIET;
+    }
   }
   auto default_queue_size = is_server ? defaults::logger::server_queue_size
                                       : defaults::logger::client_queue_size;
@@ -198,7 +212,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
   std::string default_sink_type
-    = TENZIR_ENABLE_JOURNALD_LOGGING && systemd::connected_to_journal()
+    = TENZIR_ENABLE_JOURNALD_LOGGING and systemd::connected_to_journal()
         ? "journald"
         : "stderr";
   auto sink_type
@@ -209,7 +223,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
         = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
       return stderr_sink;
     } else if (sink_type == "journald") {
-#if !TENZIR_ENABLE_JOURNALD_LOGGING
+#if ! TENZIR_ENABLE_JOURNALD_LOGGING
       fmt::print(stderr,
                  "failed to start logger; tenzir.console-sink 'journald' "
                  "required Tenzir built with systemd support\n");
@@ -230,8 +244,9 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     }
     return nullptr;
   }();
-  if (!console_sink)
+  if (not console_sink) {
     return false;
+  }
   auto console_format
     = caf::get_or(cfg_file, "tenzir.console-format",
                   std::string{defaults::logger::console_format});
@@ -243,11 +258,11 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     bool disable_rotation = caf::get_or(cfg_file, "tenzir.disable-log-rotation",
                                         defaults::logger::disable_log_rotation);
     spdlog::sink_ptr file_sink = nullptr;
-    if (!disable_rotation) {
+    if (not disable_rotation) {
       auto threshold_str
         = detail::get_bytesize(cfg_file, "tenzir.log-rotation-threshold",
                                defaults::logger::rotate_threshold);
-      if (!threshold_str) {
+      if (not threshold_str) {
         fmt::print(stderr,
                    "failed to start logger; tenzir.log-rotation-threshold is "
                    "invalid: {}\n",
@@ -267,7 +282,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
   }
   auto overflow_policy = caf::get_or(cfg_file, "tenzir.log-overflow-policy",
                                      defaults::logger::overflow_policy);
-  if (overflow_policy != "block" && overflow_policy != "overrun_oldest") {
+  if (overflow_policy != "block" and overflow_policy != "overrun_oldest") {
     fmt::print(stderr, "failed to start logger; invalid value for "
                        "tenzir.log-overflow-policy");
     return false;

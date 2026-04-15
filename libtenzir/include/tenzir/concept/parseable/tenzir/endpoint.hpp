@@ -27,7 +27,9 @@ struct endpoint_parser : parser_base<endpoint_parser> {
     using namespace parsers;
     using namespace parser_literals;
     auto hostname = +(alnum | chr{'-'} | chr{'_'} | chr{'.'});
-    auto host = hostname->*[&](std::string x) { e.host = std::move(x); };
+    auto host = hostname->*[&](std::string x) {
+      e.host = std::move(x);
+    };
     auto port = (parsers::port->*
                  [&](tenzir::port x) {
                    e.port = x;

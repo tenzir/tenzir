@@ -25,7 +25,7 @@ TEST("universal") {
   CHECK(m0.universal());
   auto ys = std::array<uint8_t, 6>{0x01, 0x23, 0b0000101, 0x67, 0x89, 0xAB};
   auto m1 = mac{as_bytes(ys)};
-  CHECK(!m1.universal());
+  CHECK(not m1.universal());
 }
 
 TEST("unicast") {
@@ -34,5 +34,5 @@ TEST("unicast") {
   CHECK(m0.unicast());
   auto ys = std::array<uint8_t, 6>{0x01, 0x23, 0b0000110, 0x67, 0x89, 0xAB};
   auto m1 = mac{as_bytes(ys)};
-  CHECK(!m1.unicast());
+  CHECK(not m1.unicast());
 }

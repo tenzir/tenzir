@@ -49,6 +49,9 @@ CLAUDE.local.md
 CLAUDE-TODOS.md
 .docs/
 
+# The VSCode codex extension really wants to create this empty file for reasons
+.codex
+
 # SBOM artifacts
 /tenzir.spdx.json
 .reviews/

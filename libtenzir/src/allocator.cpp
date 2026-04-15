@@ -56,7 +56,7 @@ namespace tenzir::memory {
 auto stats::update_max_bytes(std::int64_t new_usage) noexcept -> void {
   auto old_max = bytes_peak.load();
   while (old_max < new_usage
-         && ! bytes_peak.compare_exchange_weak(old_max, new_usage)) {
+         and not bytes_peak.compare_exchange_weak(old_max, new_usage)) {
   }
 }
 
@@ -68,7 +68,7 @@ auto stats::note_allocation(std::int64_t add) noexcept -> void {
     = allocations_current.fetch_add(1, std::memory_order_relaxed) + 1;
   auto old_max = allocations_peak.load();
   while (old_max < new_count
-         && ! allocations_peak.compare_exchange_weak(old_max, new_count)) {
+         and not allocations_peak.compare_exchange_weak(old_max, new_count)) {
   }
   const auto previous_current_usage
     = bytes_current.fetch_add(add, std::memory_order_relaxed);
@@ -115,7 +115,7 @@ multiply_overflows(std::size_t lhs, std::size_t rhs,
   return __builtin_mul_overflow(lhs, rhs, &result);
 #  endif
 #endif
-  if (lhs == 0 || rhs == 0) {
+  if (lhs == 0 or rhs == 0) {
     result = 0;
     return false;
   }
@@ -486,7 +486,10 @@ auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
     native_malloc_usable_size_fn
       = lookup_symbol<malloc_usable_size_function_type>("malloc_usable_size");
   }
-  TENZIR_ALLOCATOR_ASSERT(native_malloc_usable_size_fn != nullptr);
+  if (native_malloc_usable_size_fn == nullptr) [[unlikely]] {
+    write_error("failed to lookup symbol malloc_usable_size\n");
+    std::_Exit(EXIT_FAILURE);
+  }
   return native_malloc_usable_size_fn(ptr);
 #  elif TENZIR_MACOS
   static auto native_malloc_usable_size_fn
@@ -606,6 +609,15 @@ auto trim_interval() noexcept -> tenzir::duration {
                 var_name, sv, res);
   }
   return res;
+}
+
+__attribute__((destructor(65535))) auto
+destroy_allocator_actor_stats_on_shutdown() noexcept -> void {
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
+  static_cast<polymorphic_allocator&>(arrow_allocator()).destroy_actor_stats();
+  static_cast<polymorphic_allocator&>(cpp_allocator()).destroy_actor_stats();
+  static_cast<polymorphic_allocator&>(c_allocator()).destroy_actor_stats();
+#endif
 }
 
 } // namespace tenzir::memory

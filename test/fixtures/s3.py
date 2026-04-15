@@ -249,7 +249,9 @@ def s3() -> FixtureHandle:
                 nested_fixtures = raw_config_assertions.get("fixtures", {})
                 raw_suite_assertions = raw_config_assertions.get(
                     "s3",
-                    nested_fixtures.get("s3", {}) if isinstance(nested_fixtures, dict) else {},
+                    nested_fixtures.get("s3", {})
+                    if isinstance(nested_fixtures, dict)
+                    else {},
                 )
     suite_assertions = extract_assertions(raw_suite_assertions)
 

@@ -43,7 +43,9 @@ def _generate_self_signed_cert(temp_dir: Path) -> tuple[Path, Path, Path]:
         "-subj",
         f"/CN={_COMMON_NAME}",
     ]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
     shutil.copy(cert_path, ca_path)
     return cert_path, key_path, ca_path
 
@@ -106,9 +108,10 @@ def tcp_sink() -> Iterator[dict[str, str]]:
     os.close(fd)
 
     def _serve() -> None:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server, open(
-            path, "wb"
-        ) as fh:
+        with (
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server,
+            open(path, "wb") as fh,
+        ):
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server.bind((_HOST, port))
             server.listen(1)

@@ -73,6 +73,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         from urllib.parse import urlsplit
+
         path = urlsplit(self.path).path
         # Chain pagination: /paginate/chain/<n>
         if path.startswith(_CHAIN_PREFIX):

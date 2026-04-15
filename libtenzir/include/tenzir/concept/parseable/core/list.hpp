@@ -28,11 +28,13 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (!container::parse(lhs_, f, l, a))
+    if (not container::parse(lhs_, f, l, a)) {
       return false;
+    }
     auto save = f;
-    while (rhs_(f, l, unused) && container::parse(lhs_, f, l, a))
+    while (rhs_(f, l, unused) and container::parse(lhs_, f, l, a)) {
       save = f;
+    }
     f = save;
     return true;
   }

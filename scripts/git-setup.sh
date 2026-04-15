@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2016
 
 # This script creates 4 local git aliases and installs a pre-commit hook that
 # assists with working in the Tenzir repository:
@@ -14,7 +15,7 @@
 # and prevents the commit if it finds any.
 
 usage() {
-  echo "usage: $(basename $0) [options] [<format-show|format|pre-commit>]"
+  echo "usage: $(basename "$0") [options] [<format-show|format|pre-commit>]"
   echo
   echo 'available options:'
   echo "    -f              force installation (overwrite existing)"
@@ -23,8 +24,7 @@ usage() {
 }
 
 install_format_show_branch() {
-  git config --local --get alias.format-show-branch >/dev/null
-  if [ $? -ne 0 ] || [ "$force" = TRUE ]; then
+  if ! git config --local --get alias.format-show-branch >/dev/null || [ "$force" = TRUE ]; then
     echo 'Adding alias for `git format-show-branch`'
     git config --local alias.format-show-branch "!f() { git diff -U0 --no-color \$@ \$(git merge-base origin/main HEAD) -- \"*.cpp\" \"*.cpp.in\" \"*.hpp\" \"*.hpp.in\" | ${format_call} -p1; }; f"
   else
@@ -33,8 +33,7 @@ install_format_show_branch() {
 }
 
 install_format_show() {
-  git config --local --get alias.format-show >/dev/null
-  if [ $? -ne 0 ] || [ "$force" = TRUE ]; then
+  if ! git config --local --get alias.format-show >/dev/null || [ "$force" = TRUE ]; then
     echo 'Adding alias for `git format-show`'
     git config --local alias.format-show "!f() { git diff -U0 --no-color \$@ -- \"*.cpp\" \"*.hpp\" | ${format_call} -p1; }; f"
   else
@@ -43,8 +42,7 @@ install_format_show() {
 }
 
 install_format_branch() {
-  git config --local --get alias.format-branch >/dev/null
-  if [ $? -ne 0 ] || [ "$force" = TRUE ]; then
+  if ! git config --local --get alias.format-branch >/dev/null || [ "$force" = TRUE ]; then
     echo 'adding alias for `git format-branch`'
     git config --local alias.format-branch "!f() { git diff -U0 --no-color \$@ \$(git merge-base origin/main HEAD) -- \"*.cpp\" \"*.hpp\" | ${format_call} -i -p1; }; f"
   else
@@ -53,8 +51,7 @@ install_format_branch() {
 }
 
 install_format() {
-  git config --local --get alias.format >/dev/null
-  if [ $? -ne 0 ] || [ "$force" = TRUE ]; then
+  if ! git config --local --get alias.format >/dev/null || [ "$force" = TRUE ]; then
     echo 'adding alias for `git format`'
     git config --local alias.format "!f() { git diff -U0 --no-color \$@ -- \"*.cpp\" \"*.hpp\" | ${format_call} -i -p1; }; f"
   else
@@ -63,23 +60,23 @@ install_format() {
 }
 
 install_pre_commit() {
-  GIT_DIR=$(git rev-parse --git-common-dir)
-  PRE_COMMIT=${GIT_DIR}/hooks/pre-commit
-  if [ ! -f ${PRE_COMMIT} ] || [ "$force" = TRUE ]; then
+  GIT_DIR="$(git rev-parse --git-common-dir)"
+  PRE_COMMIT="${GIT_DIR}/hooks/pre-commit"
+  if [ ! -f "${PRE_COMMIT}" ] || [ "$force" = TRUE ]; then
     echo 'adding pre-commit hook for format checking'
-    printf "#!/bin/sh\ngit format-show --cached" >${PRE_COMMIT}
-    chmod +x ${PRE_COMMIT}
+    printf "#!/bin/sh\ngit format-show --cached" >"${PRE_COMMIT}"
+    chmod +x "${PRE_COMMIT}"
   else
     echo 'git pre-commit hook already exists, skipping'
   fi
 }
 
-dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-current_git_tl=$(git rev-parse --show-toplevel)
-script_git_tl=$(git -C ${dir} rev-parse --show-toplevel)
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+current_git_tl="$(git rev-parse --show-toplevel)"
+script_git_tl="$(git -C "${dir}" rev-parse --show-toplevel)"
 force=FALSE
 fixed_path=FALSE
-clang_format_diff=${dir}/clang-format-diff.py
+clang_format_diff="${dir}/clang-format-diff.py"
 format_call='$(git rev-parse --show-toplevel)/scripts/clang-format-diff.py'
 while getopts "fp:h?" opt; do
   case "$opt" in
@@ -96,7 +93,7 @@ while getopts "fp:h?" opt; do
       ;;
   esac
 done
-shift $(expr $OPTIND - 1)
+shift "$(("$OPTIND" - 1))"
 
 if [ ! "${script_git_tl}" = "${current_git_tl}" ]; then
   fixed_path=TRUE
@@ -106,7 +103,7 @@ if [ "${fixed_path}" = TRUE ]; then
   format_call="${clang_format_diff}"
 fi
 
-if [ -z "$@" ]; then
+if [ -z "$*" ]; then
   # Add all if no arguments.
   install_format_show
   install_format

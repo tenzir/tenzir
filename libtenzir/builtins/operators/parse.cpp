@@ -146,10 +146,11 @@ public:
     // TODO: This could be easier, but `plugin_inspect` does not seem to play
     // well with the `.object()` DSL.
     return f.begin_object(caf::invalid_type_id, "parse_operator")
-           && f.begin_field("input") && f.apply(x.input_) && f.end_field()
-           && f.begin_field("parser_name") && f.apply(x.parser_name_)
-           && f.end_field() && f.begin_field("parser")
-           && plugin_inspect(f, x.parser_) && f.end_field() && f.end_object();
+           and f.begin_field("input") and f.apply(x.input_) and f.end_field()
+           and f.begin_field("parser_name") and f.apply(x.parser_name_)
+           and f.end_field() and f.begin_field("parser")
+           and plugin_inspect(f, x.parser_) and f.end_field()
+           and f.end_object();
   }
 
 private:

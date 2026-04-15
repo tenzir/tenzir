@@ -21,7 +21,7 @@ auto chunked_buffer_output_stream::Close() -> arrow::Status {
 }
 
 auto chunked_buffer_output_stream::closed() const -> bool {
-  return !is_open_;
+  return not is_open_;
 }
 
 auto chunked_buffer_output_stream::Tell() const -> arrow::Result<int64_t> {

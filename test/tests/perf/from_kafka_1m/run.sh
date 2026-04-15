@@ -27,7 +27,7 @@ KAFKA_BOOTSTRAP_SERVERS=""
 KAFKA_TOPIC=""
 
 cleanup() {
-  if [[ -n "$fixture_pid" ]] && kill -0 "$fixture_pid" 2>/dev/null; then
+  if [[ -n $fixture_pid ]] && kill -0 "$fixture_pid" 2>/dev/null; then
     kill -INT "$fixture_pid" 2>/dev/null || true
     wait "$fixture_pid" || true
   fi
@@ -38,7 +38,7 @@ trap cleanup EXIT INT TERM
 cd "$ROOT_DIR"
 
 fixture_options="kafka: {topic: $TOPIC, partitions: $PARTITIONS, messages: $MESSAGES, compression: \"$COMPRESSION\"}"
-if [[ -n "$PAYLOAD_FILE" ]]; then
+if [[ -n $PAYLOAD_FILE ]]; then
   fixture_options="kafka: {topic: $TOPIC, partitions: $PARTITIONS, messages: $MESSAGES, compression: \"$COMPRESSION\", payload_file: \"$PAYLOAD_FILE\"}"
 fi
 

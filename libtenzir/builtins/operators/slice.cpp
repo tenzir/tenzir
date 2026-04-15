@@ -352,8 +352,8 @@ public:
       end_{std::move(args.end)},
       stride_{std::move(args.stride)} {
     // Buffering is required when any index is negative or stride is negative
-    needs_buffering_ = (stride_ && *stride_ < 0) || (begin_ && *begin_ < 0)
-                       || (end_ && *end_ < 0);
+    needs_buffering_ = (stride_ and *stride_ < 0) or (begin_ and *begin_ < 0)
+                       or (end_ and *end_ < 0);
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -403,7 +403,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    if (not needs_buffering_ && done_) {
+    if (not needs_buffering_ and done_) {
       return OperatorState::done;
     }
     return OperatorState::unspecified;
@@ -611,7 +611,11 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SliceArgs, Slice>{SliceArgs{.stride = -1}};
+    auto d = Describer<SliceArgs, Slice>{SliceArgs{
+      .begin = None{},
+      .end = None{},
+      .stride = int64_t{-1},
+    }};
     return d.without_optimize();
   }
 };

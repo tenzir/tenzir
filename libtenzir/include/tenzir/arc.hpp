@@ -62,9 +62,9 @@ public:
   /// Constructs an arc by converting `U` into `T`. This is not selected for
   /// types that are pointer-convertible to prevent slicing.
   template <class U>
-    requires(not std::convertible_to<std::shared_ptr<U>, std::shared_ptr<T>>)
+    requires(not detail::is_arc_v<std::remove_cvref_t<U>>)
+            and (not std::convertible_to<std::shared_ptr<U>, std::shared_ptr<T>>)
             and std::constructible_from<T, U>
-            and (not detail::is_arc_v<std::remove_cvref_t<U>>)
   explicit(false) Arc(U x) : ptr_{std::make_shared<T>(std::move(x))} {
   }
 
@@ -95,7 +95,7 @@ public:
   explicit(false) operator T const&() const {
     return deref();
   }
-  explicit(false) operator T&&() && {
+  explicit(false) operator T&&() and {
     return std::move(*this).deref();
   }
 

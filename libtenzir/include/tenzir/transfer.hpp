@@ -40,8 +40,7 @@ struct transfer_options {
               f.field("poll_timeout", x.poll_timeout),
               f.field("username", x.username), f.field("password", x.password),
               f.field("authzid", x.authzid),
-              f.field("authorization", x.authorization),
-              f.field("ssl", x.ssl));
+              f.field("authorization", x.authorization), f.field("ssl", x.ssl));
   }
 };
 

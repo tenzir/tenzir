@@ -64,7 +64,7 @@ public:
             return {};
           }
         }
-        if (! is<view<T>>(rhs)) {
+        if (not is<view<T>>(rhs)) {
           return false;
         }
         return bloom_filter_.lookup(as<view<T>>(rhs));
@@ -74,7 +74,7 @@ public:
             if (is<view<caf::none_t>>(x)) {
               return {};
             }
-            if (! is<view<T>>(x)) {
+            if (not is<view<T>>(x)) {
               continue;
             }
             if (bloom_filter_.lookup(as<view<T>>(x))) {
@@ -93,7 +93,7 @@ public:
       return false;
     }
     auto& rhs = static_cast<const bloom_filter_synopsis&>(other);
-    return this->type() == rhs.type() && bloom_filter_ == rhs.bloom_filter_;
+    return this->type() == rhs.type() and bloom_filter_ == rhs.bloom_filter_;
   }
 
   [[nodiscard]] size_t memusage() const override {

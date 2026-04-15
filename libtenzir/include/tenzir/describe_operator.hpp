@@ -1,3 +1,11 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 // TODO: Delete me.
 
 #include "tenzir/compile_Ctx.hpp"
@@ -16,12 +24,13 @@ struct operator_description {
 template <class T>
 struct operator_description_builder {
   auto positional(std::string name,
-                  std::string T::*) && -> operator_description_builder<T>;
-
-  auto named(std::string name, bool T::*) && -> operator_description_builder<T>;
+                  std::string T::*) and -> operator_description_builder<T>;
 
   auto
-  named(std::string name, duration T::*) && -> operator_description_builder<T>;
+  named(std::string name, bool T::*) and -> operator_description_builder<T>;
+
+  auto
+  named(std::string name, duration T::*) and -> operator_description_builder<T>;
 
   operator operator_description() const;
 };
@@ -44,15 +53,15 @@ private:
   public:
     auto map(std::function<
              auto(located<duration>, diagnostic_handler&)->located<duration>>
-               f) && -> arg<Args>;
+               f) and -> arg<Args>;
 
     auto
     validate(std::function<
              auto(located<duration>, diagnostic_handler& dh)->failure_or<void>>
-               f) && -> arg<Args>;
+               f) and -> arg<Args>;
 
     template <class T>
-    auto excludes(T Args::*) && -> arg<Args>;
+    auto excludes(T Args::*) and -> arg<Args>;
   };
 
 public:
@@ -80,7 +89,7 @@ public:
     -> failure_or<void> override {
   }
 
-  auto instantiate(prepare_ctx ctx) && -> failure_or<ir::executable> override {
+  auto instantiate(prepare_ctx ctx) and -> failure_or<ir::executable> override {
   }
 
   template <class Inspector>

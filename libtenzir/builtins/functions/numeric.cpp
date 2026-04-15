@@ -391,7 +391,7 @@ public:
     // TODO: This is too much manual labor.
     auto quantile = 0.5;
     if (quantile_opt) {
-      if (quantile_opt->inner < 0.0 || quantile_opt->inner > 1.0) {
+      if (quantile_opt->inner < 0.0 or quantile_opt->inner > 1.0) {
         diagnostic::error("expected quantile to be in [0.0, 1.0]")
           .primary(*quantile_opt)
           .emit(ctx);
@@ -400,7 +400,7 @@ public:
     }
     // TODO: This function probably already exists. If not, it should.
     auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
-      if (0 <= x && x <= std::numeric_limits<uint32_t>::max()) {
+      if (0 <= x and x <= std::numeric_limits<uint32_t>::max()) {
         return static_cast<uint32_t>(x);
       }
       return std::nullopt;
@@ -454,7 +454,7 @@ public:
           .parse(inv, ctx));
     // TODO: This function probably already exists. If not, it should.
     auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
-      if (0 <= x && x <= std::numeric_limits<uint32_t>::max()) {
+      if (0 <= x and x <= std::numeric_limits<uint32_t>::max()) {
         return static_cast<uint32_t>(x);
       }
       return std::nullopt;

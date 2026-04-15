@@ -28,8 +28,8 @@ struct stack_container {
 
 /// A std::vector operating with short_alloc as allocator.
 template <class T, size_t N>
-using short_vector =
-  std::vector<T, std::scoped_allocator_adaptor<short_alloc<T, N>>>;
+using short_vector
+  = std::vector<T, std::scoped_allocator_adaptor<short_alloc<T, N>>>;
 
 /// A stack-based vector.
 /// @tparam T The element type of the vector.
@@ -57,12 +57,11 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
     : vector_type(first, last, this->arena_) {
   }
 
-  stack_vector(const stack_vector& other)
-    : vector_type(other, this->arena_) {
+  stack_vector(const stack_vector& other) : vector_type(other, this->arena_) {
   }
 
-  stack_vector(stack_vector&& other)
-  noexcept(std::is_nothrow_move_constructible_v<vector_type>)
+  stack_vector(stack_vector&& other) noexcept(
+    std::is_nothrow_move_constructible_v<vector_type>)
     : vector_type(std::move(other), this->arena_) {
   }
 
@@ -71,8 +70,8 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
     return *this;
   }
 
-  stack_vector& operator=(stack_vector&& other)
-  noexcept(std::is_nothrow_move_assignable_v<vector_type>) {
+  stack_vector& operator=(stack_vector&& other) noexcept(
+    std::is_nothrow_move_assignable_v<vector_type>) {
     static_cast<vector_type&>(*this) = std::move(other);
     return *this;
   }

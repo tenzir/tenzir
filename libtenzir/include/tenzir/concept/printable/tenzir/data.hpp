@@ -72,8 +72,9 @@ struct map_printer : printer_base<map_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const map& xs) const {
-    if (xs.empty())
+    if (xs.empty()) {
       return printers::str.print(out, "{}");
+    }
     auto kvp = printers::data << " -> " << printers::data;
     auto p = '{' << (kvp % ", ") << '}';
     return p.print(out, xs);

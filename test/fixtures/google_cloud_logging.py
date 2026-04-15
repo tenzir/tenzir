@@ -43,6 +43,7 @@ _EXPECTED_SCOPE = "https://www.googleapis.com/auth/logging.write"
 # fixture startup we compile them into a temp directory and import the generated
 # stubs dynamically.
 
+
 def _compile_protos(output_dir: str) -> None:
     """Compile the bundled logging protos into Python gRPC stubs."""
     proto_dir = str(Path(__file__).parent / "protos")
@@ -50,6 +51,7 @@ def _compile_protos(output_dir: str) -> None:
     # googleapis-common-protos. We find that include path so the compiler
     # can resolve imports like google/api/annotations.proto.
     import grpc_tools
+
     grpc_tools_include = str(Path(grpc_tools.__file__).parent / "_proto")
     args = [
         "grpc_tools.protoc",
@@ -91,6 +93,7 @@ def _import_logging_stubs(stub_dir: str):  # type: ignore[no-untyped-def]
 
     # Extend the existing google namespace to include our stubs.
     import google
+
     stub_google = os.path.join(stub_dir, "google")
     if stub_google not in list(google.__path__):
         google.__path__ = [stub_google] + list(google.__path__)
@@ -107,6 +110,7 @@ def _import_logging_stubs(stub_dir: str):  # type: ignore[no-untyped-def]
 # ==============================================================================
 # TLS Certificate Generation
 # ==============================================================================
+
 
 def _generate_tls_material(temp_dir: Path) -> dict[str, Path]:
     """Generate a CA and server cert for localhost using trustme."""
@@ -128,6 +132,7 @@ def _generate_tls_material(temp_dir: Path) -> dict[str, Path]:
 # ==============================================================================
 # RSA Keypair and Service Account JSON
 # ==============================================================================
+
 
 def _generate_rsa_keypair() -> tuple[str, bytes]:
     """Generate an RSA key pair. Returns (private_key_pem, public_key_der)."""
@@ -156,23 +161,26 @@ def _build_service_account_json(
     token_uri: str,
 ) -> str:
     """Build a fake service account JSON with a custom token_uri."""
-    return json.dumps({
-        "type": "service_account",
-        "project_id": "test-project",
-        "private_key_id": "test-key-id",
-        "private_key": private_key_pem,
-        "client_email": client_email,
-        "client_id": "123456789",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": token_uri,
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email}",
-    })
+    return json.dumps(
+        {
+            "type": "service_account",
+            "project_id": "test-project",
+            "private_key_id": "test-key-id",
+            "private_key": private_key_pem,
+            "client_email": client_email,
+            "client_id": "123456789",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": token_uri,
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email}",
+        }
+    )
 
 
 # ==============================================================================
 # Mock OAuth HTTP Server
 # ==============================================================================
+
 
 def _b64url_decode(data: str) -> bytes:
     """Decode base64url without padding."""
@@ -195,10 +203,15 @@ def _verify_rs256(public_der: bytes, message: bytes, signature: bytes) -> bool:
             sig_file.flush()
             result = subprocess.run(
                 [
-                    "openssl", "dgst", "-sha256",
-                    "-verify", pub_file.name,
-                    "-keyform", "DER",
-                    "-signature", sig_file.name,
+                    "openssl",
+                    "dgst",
+                    "-sha256",
+                    "-verify",
+                    pub_file.name,
+                    "-keyform",
+                    "DER",
+                    "-signature",
+                    sig_file.name,
                 ],
                 input=message,
                 capture_output=True,
@@ -254,6 +267,7 @@ def _make_oauth_handler(
                 self._error(400, f"iss mismatch: {claims['iss']}")
                 return
             import time
+
             iat = claims.get("iat")
             exp = claims.get("exp")
             if not isinstance(iat, (int, float)) or not isinstance(exp, (int, float)):
@@ -278,9 +292,7 @@ def _make_oauth_handler(
             if claims["scope"] != _EXPECTED_SCOPE:
                 self._error(400, f"scope mismatch: {claims['scope']}")
                 return
-            expected_aud = (
-                f"http://{_HOST}:{self.server.server_port}/token"
-            )
+            expected_aud = f"http://{_HOST}:{self.server.server_port}/token"
             if claims["aud"] != expected_aud:
                 self._error(400, f"aud mismatch: {claims['aud']}")
                 return
@@ -288,11 +300,14 @@ def _make_oauth_handler(
             if not _verify_rs256(public_der, message, sig):
                 self._error(400, "invalid JWT signature")
                 return
-            self._json_response(200, {
-                "access_token": _EXPECTED_TOKEN,
-                "token_type": "Bearer",
-                "expires_in": 3600,
-            })
+            self._json_response(
+                200,
+                {
+                    "access_token": _EXPECTED_TOKEN,
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+            )
 
         def _error(self, code: int, msg: str) -> None:
             self._json_response(code, {"error": msg})
@@ -312,7 +327,10 @@ def _make_oauth_handler(
 # Mock gRPC Server
 # ==============================================================================
 
-def _make_grpc_servicer(capture_path: str, public_der: bytes, logging_pb2, logging_pb2_grpc):  # type: ignore[no-untyped-def]
+
+def _make_grpc_servicer(
+    capture_path: str, public_der: bytes, logging_pb2, logging_pb2_grpc
+):  # type: ignore[no-untyped-def]
     """Create a LoggingServiceV2 servicer that captures WriteLogEntries requests."""
     from google.protobuf import json_format
 
@@ -330,7 +348,7 @@ def _make_grpc_servicer(capture_path: str, public_der: bytes, logging_pb2, loggi
             if not auth.startswith("Bearer "):
                 context.abort(grpc.StatusCode.UNAUTHENTICATED, "missing bearer token")
                 return logging_pb2.WriteLogEntriesResponse()
-            token = auth[len("Bearer "):]
+            token = auth[len("Bearer ") :]
             parts = token.split(".")
             if len(parts) != 3:
                 context.abort(grpc.StatusCode.UNAUTHENTICATED, "malformed JWT")
@@ -381,6 +399,7 @@ def _start_grpc_server(
 # ==============================================================================
 # Fixture Entry Point
 # ==============================================================================
+
 
 @fixture()
 def google_cloud_logging() -> Iterator[dict[str, str]]:
@@ -437,16 +456,14 @@ def google_cloud_logging() -> Iterator[dict[str, str]]:
         with open(sa_path, "w") as f:
             f.write(sa_json)
 
-        oauth_thread = threading.Thread(
-            target=oauth_server.serve_forever, daemon=True
-        )
+        oauth_thread = threading.Thread(target=oauth_server.serve_forever, daemon=True)
         oauth_thread.start()
 
         # --- gRPC server ---
-        servicer = _make_grpc_servicer(capture_path, public_der, logging_pb2, logging_pb2_grpc)
-        grpc_server, grpc_port = _start_grpc_server(
-            servicer, logging_pb2_grpc, tls
+        servicer = _make_grpc_servicer(
+            capture_path, public_der, logging_pb2, logging_pb2_grpc
         )
+        grpc_server, grpc_port = _start_grpc_server(servicer, logging_pb2_grpc, tls)
 
         env = {
             "GOOGLE_CLOUD_CPP_LOGGING_SERVICE_V2_ENDPOINT": f"localhost:{grpc_port}",

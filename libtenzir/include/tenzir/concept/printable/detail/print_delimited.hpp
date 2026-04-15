@@ -15,23 +15,22 @@ namespace tenzir {
 namespace detail {
 
 /// Prints a delimited Iterator range.
-template <
-  class T,
-  class Delimiter,
-  class InputIterator,
-  class OutputIterator
->
+template <class T, class Delimiter, class InputIterator, class OutputIterator>
 bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out) {
   static auto const printer = make_printer<T>{};
   static auto const delim = Delimiter{};
-  if (begin == end)
+  if (begin == end) {
     return true;
-  if (!printer.print(out, *begin))
+  }
+  if (not printer.print(out, *begin)) {
     return false;
-  while (++begin != end)
-    if (!(delim.print(out, unused) && printer.print(out, *begin)))
+  }
+  while (++begin != end) {
+    if (not(delim.print(out, unused) and printer.print(out, *begin))) {
       return false;
+    }
+  }
   return true;
 }
 
@@ -39,13 +38,17 @@ bool print_delimited(InputIterator begin, InputIterator end,
 template <class InputIterator, class OutputIterator, class Delimiter>
 bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out, const Delimiter& delim) {
-  if (begin == end)
+  if (begin == end) {
     return true;
-  if (!print(out, *begin))
+  }
+  if (not print(out, *begin)) {
     return false;
-  while (++begin != end)
-    if (!(print(out, delim) && print(out, *begin)))
+  }
+  while (++begin != end) {
+    if (not(print(out, delim) and print(out, *begin))) {
       return false;
+    }
+  }
   return true;
 }
 

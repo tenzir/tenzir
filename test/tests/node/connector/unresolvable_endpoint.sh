@@ -1,5 +1,7 @@
 # runner: shell
 # timeout: 15
+
+# shellcheck shell=sh
 exit_code=0
 # tenzir must not segfault when the configured
 # endpoint hostname cannot be resolved.

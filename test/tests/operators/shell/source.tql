@@ -1,0 +1,3 @@
+shell "printf '{\"value\":1}\n{\"value\":3}\n{\"value\":5}\n'"
+read_ndjson
+write_ndjson

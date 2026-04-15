@@ -42,18 +42,12 @@ struct http_response_printer : printer_base<http::response> {
   bool print(Iterator& out, const http::response& res) const {
     using namespace printers;
     auto version = real_printer<double, 1>{};
-    auto p 
-      =   str     // proto
-      << '/' 
-      << version 
-      << ' ' 
-      << u32      // status code
-      << ' ' 
-      << str      // status text
-      << "\r\n"
-      << ~(http_header_printer{} % "\r\n")
-      << "\r\n\r\n"
-      << str      // body
+    auto p = str                             // proto
+             << '/' << version << ' ' << u32 // status code
+             << ' ' << str                   // status text
+             << "\r\n"
+             << ~(http_header_printer{} % "\r\n") << "\r\n\r\n"
+             << str // body
       ;
     return p(out, res.protocol, res.version, res.status_code, res.status_text,
              res.headers, res.body);

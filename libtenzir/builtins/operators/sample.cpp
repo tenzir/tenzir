@@ -68,7 +68,7 @@ public:
     const auto min_events = args_.min_events.unwrap_or(default_min_events);
     if (auto now = std::chrono::steady_clock::now();
         now - last_ > args_.period) {
-      if (count_ > 1 && count_ > min_events) {
+      if (count_ > 1 and count_ > min_events) {
         const auto rate
           = detail::narrow_cast<uint64_t>(std::ceil(compute_rate()));
         stride_ = std::max(args_.max_rate.unwrap_or(rate), rate);
@@ -80,7 +80,7 @@ public:
       count_ = 0;
     }
     if (input.rows() == 0
-        || (args_.max_samples && *args_.max_samples <= count_)) {
+        or (args_.max_samples and *args_.max_samples <= count_)) {
       co_return;
     }
     count_ += input.rows();

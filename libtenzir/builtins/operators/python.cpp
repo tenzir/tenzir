@@ -9,6 +9,9 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/subprocess.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -23,6 +26,8 @@
 #include <tenzir/error.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
@@ -98,11 +103,7 @@ public:
   }
 
   auto Close() -> ::arrow::Status override {
-    int result = ::close(fd_);
     fd_ = -1;
-    if (result != 0) {
-      return ::arrow::Status::IOError("close(2): ", detail::describe_errno());
-    }
     return ::arrow::Status::OK();
   }
 
@@ -165,21 +166,23 @@ struct config {
   }
 };
 
-auto drain_pipe(bp::ipstream& pipe) -> std::string {
-  auto result = std::string{};
-  if (pipe.peek() == bp::ipstream::traits_type::eof()) {
-    return result;
-  }
-  auto line = std::string{};
-  while (std::getline(pipe, line)) {
-    if (not result.empty()) {
-      result += '\n';
-    }
-    result += line;
-  }
-  boost::trim(result);
-  return result;
-}
+constexpr auto code_pipe_child_fd = 3;
+constexpr auto error_pipe_child_fd = 4;
+
+struct python_runtime {
+  std::filesystem::path python_executable;
+  bp::environment env = boost::this_process::environment();
+  std::optional<std::filesystem::path> venv;
+  std::optional<std::string> virtual_env;
+  std::optional<std::string> uv_cache_dir;
+  std::optional<std::string> uv_python;
+};
+
+struct PythonArgs {
+  located<secret> code = located{secret{}, location::unknown};
+  Option<located<std::string>> file;
+  Option<located<std::string>> requirements;
+};
 
 auto process_path_env() -> std::vector<bp::filesystem::path> {
   auto result = std::vector<bp::filesystem::path>{};
@@ -204,6 +207,231 @@ auto process_path_env() -> std::vector<bp::filesystem::path> {
 }
 
 using code_or_path_t = located<std::variant<std::filesystem::path, secret>>;
+
+auto drain_pipe(bp::ipstream& pipe) -> std::string {
+  auto result = std::string{};
+  if (pipe.peek() == bp::ipstream::traits_type::eof()) {
+    return result;
+  }
+  auto line = std::string{};
+  while (std::getline(pipe, line)) {
+    if (not result.empty()) {
+      result += '\n';
+    }
+    result += line;
+  }
+  boost::trim(result);
+  return result;
+}
+
+auto find_wheel(const std::filesystem::path& directory,
+                std::string_view project)
+  -> std::optional<std::filesystem::path> {
+  auto normalized = std::string{project};
+  std::replace(normalized.begin(), normalized.end(), '-', '_');
+  const auto prefix = fmt::format("{}-", normalized);
+  const auto suffix = std::string{".whl"};
+  auto best_path = std::optional<std::filesystem::path>{};
+  auto best_name = std::string{};
+  std::error_code ec;
+  if (not std::filesystem::exists(directory, ec)) {
+    return std::nullopt;
+  }
+  for (const auto& entry : std::filesystem::directory_iterator{directory, ec}) {
+    if (ec) {
+      break;
+    }
+    if (not entry.is_regular_file()) {
+      continue;
+    }
+    const auto filename = entry.path().filename().string();
+    if (not boost::algorithm::starts_with(filename, prefix)
+        or not boost::algorithm::ends_with(filename, suffix)) {
+      continue;
+    }
+    if (not best_path or filename > best_name) {
+      best_name = filename;
+      best_path = entry.path();
+    }
+  }
+  return best_path;
+}
+
+auto make_subprocess_env(const python_runtime& runtime)
+  -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto [key, value] : detail::environment()) {
+    auto entry = fmt::format("{}={}", key, value);
+    if (runtime.virtual_env and key == "VIRTUAL_ENV") {
+      entry = fmt::format("VIRTUAL_ENV={}", *runtime.virtual_env);
+    } else if (runtime.uv_cache_dir and key == "UV_CACHE_DIR") {
+      entry = fmt::format("UV_CACHE_DIR={}", *runtime.uv_cache_dir);
+    } else if (runtime.uv_python and key == "UV_PYTHON") {
+      entry = fmt::format("UV_PYTHON={}", *runtime.uv_python);
+    }
+    result.push_back(std::move(entry));
+  }
+  auto append_missing
+    = [&](std::string_view key, const std::optional<std::string>& value) {
+        if (not value) {
+          return;
+        }
+        auto prefix = fmt::format("{}=", key);
+        auto exists = std::ranges::any_of(result, [&](const auto& entry) {
+          return entry.starts_with(prefix);
+        });
+        if (not exists) {
+          result.push_back(fmt::format("{}={}", key, *value));
+        }
+      };
+  append_missing("VIRTUAL_ENV", runtime.virtual_env);
+  append_missing("UV_CACHE_DIR", runtime.uv_cache_dir);
+  append_missing("UV_PYTHON", runtime.uv_python);
+  return result;
+}
+
+auto prepare_runtime(const config& config, std::string_view requirements,
+                     diagnostic_handler& dh, const caf::settings& system_config)
+  -> failure_or<python_runtime> {
+  auto implicit_requirements = std::string{};
+  auto bundled_wheels = std::vector<std::string>{};
+  const auto python_dir = detail::install_datadir() / "python";
+  if (config.implicit_requirements) {
+    implicit_requirements = *config.implicit_requirements;
+  } else if (find_wheel(python_dir, "tenzir-operator")) {
+    std::error_code ec;
+    for (const auto& entry :
+         std::filesystem::directory_iterator{python_dir, ec}) {
+      if (ec) {
+        break;
+      }
+      if (not entry.is_regular_file()) {
+        continue;
+      }
+      if (entry.path().extension() != ".whl") {
+        continue;
+      }
+      bundled_wheels.push_back(entry.path().string());
+    }
+  } else {
+    implicit_requirements = "tenzir-operator";
+  }
+  auto runtime = python_runtime{};
+  auto process_path = process_path_env();
+  runtime.python_executable
+    = std::filesystem::path{bp::search_path("python3", process_path).string()};
+  if (runtime.python_executable.empty()) {
+    diagnostic::error("Failed to find python3").emit(dh);
+    return failure::promise();
+  }
+  if (not config.create_venvs) {
+    return runtime;
+  }
+  auto venv_base_dir = std::filesystem::path{};
+  if (const auto* cache_dir
+      = get_if<std::string>(&system_config, "tenzir.cache-directory")) {
+    venv_base_dir = std::filesystem::path{*cache_dir} / "python" / "venvs";
+  } else {
+    venv_base_dir
+      = std::filesystem::temp_directory_path() / "tenzir" / "python" / "venvs";
+  }
+  auto ec = std::error_code{};
+  std::filesystem::create_directories(venv_base_dir, ec);
+  auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir.string());
+  if (mkdtemp(venv.data()) == nullptr) {
+    diagnostic::error("{}", detail::describe_errno())
+      .note("failed to create a unique directory for the python virtual "
+            "environment in {}",
+            venv_base_dir)
+      .emit(dh);
+    return failure::promise();
+  }
+  runtime.venv = std::filesystem::path{venv};
+  auto cleanup_venv
+    = detail::scope_guard{[venv_path = *runtime.venv]() noexcept {
+        auto ignored = std::error_code{};
+        std::filesystem::remove_all(venv_path, ignored);
+      }};
+  runtime.env["VIRTUAL_ENV"] = venv;
+  runtime.virtual_env = venv;
+  runtime.uv_cache_dir
+    = (venv_base_dir.parent_path() / "cache" / "uv").string();
+  runtime.env["UV_CACHE_DIR"] = *runtime.uv_cache_dir;
+#if TENZIR_ENABLE_BUNDLED_UV
+  auto uv_executable = detail::install_libexecdir() / "uv";
+#else
+  auto uv_executable = bp::search_path("uv");
+#endif
+  if (uv_executable.empty()) {
+    diagnostic::error("Failed to find uv").emit(dh);
+    return failure::promise();
+  }
+  auto venv_invocation = std::vector<std::string>{
+    uv_executable.string(),
+    "venv",
+    runtime.venv->string(),
+  };
+  TENZIR_VERBOSE("creating a python venv with: '{}'",
+                 fmt::join(venv_invocation, "' '"));
+  auto venv_err = bp::ipstream{};
+  if (bp::system(venv_invocation, runtime.env, bp::std_err > venv_err,
+                 detail::preserved_fds{{STDERR_FILENO}},
+                 bp::detail::limit_handles_{})
+      != 0) {
+    diagnostic::error("{}", drain_pipe(venv_err))
+      .note("failed to create virtualenv")
+      .emit(dh);
+    return failure::promise();
+  }
+  const auto venv_python = *runtime.venv / "bin" / "python3";
+  runtime.uv_python = venv_python.string();
+  runtime.env["UV_PYTHON"] = *runtime.uv_python;
+  auto run_install
+    = [&](auto args, std::string_view error_note) -> failure_or<void> {
+    using std::begin;
+    using std::end;
+    auto first = begin(args);
+    auto last = end(args);
+    if (first == last) {
+      return {};
+    }
+    auto invocation = std::vector<std::string>{
+      uv_executable.string(), "pip", "install", "--python",
+      venv_python.string(),
+    };
+    invocation.insert(invocation.end(), std::make_move_iterator(first),
+                      std::make_move_iterator(last));
+    auto install_err = bp::ipstream{};
+    TENZIR_VERBOSE("installing python modules with: '{}'",
+                   fmt::join(invocation, "' '"));
+    if (bp::system(invocation, runtime.env, bp::std_err > install_err,
+                   detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                   bp::detail::limit_handles_{})
+        != 0) {
+      diagnostic::error("{}", drain_pipe(install_err))
+        .note("{}", error_note)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  if (not implicit_requirements.empty()) {
+    auto implicit_vec = detail::split_escaped(implicit_requirements, " ", "\\");
+    TRY(run_install(std::move(implicit_vec),
+                    "failed to install implicit requirements"));
+  } else if (not bundled_wheels.empty()) {
+    TRY(run_install(std::move(bundled_wheels),
+                    "failed to install bundled Python wheels"));
+  }
+  if (not requirements.empty()) {
+    auto requirements_vec = detail::split(requirements, " ");
+    TRY(run_install(to_strings(std::move(requirements_vec)),
+                    "failed to install additional requirements"));
+  }
+  runtime.python_executable = venv_python;
+  cleanup_venv.disable();
+  return runtime;
+}
 
 class python_operator final : public crtp_operator<python_operator> {
 public:
@@ -248,10 +476,10 @@ public:
             }
             const auto filename = entry.path().filename().string();
             if (not boost::algorithm::starts_with(filename, prefix)
-                || ! boost::algorithm::ends_with(filename, suffix)) {
+                or not boost::algorithm::ends_with(filename, suffix)) {
               continue;
             }
-            if (not best_path || filename > best_name) {
+            if (not best_path or filename > best_name) {
               best_name = filename;
               best_path = entry.path();
             }
@@ -515,7 +743,7 @@ public:
             .emit(ctrl.diagnostics());
           co_return;
         }
-        if (auto status = writer->Close(); ! status.ok()) {
+        if (auto status = writer->Close(); not status.ok()) {
           diagnostic::error("{}", status.message())
             .note("failed to close writer in conversion from input batch to "
                   "Arrow format")
@@ -553,7 +781,7 @@ public:
         // The writer on the other side writes an invalid record batch as
         // end-of-stream marker; we have to read it now to remove it from
         // the pipe.
-        if (auto result = (*reader)->ReadNext(); ! result.ok()) {
+        if (auto result = (*reader)->ReadNext(); not result.ok()) {
           diagnostic::error("{}", result.status().message())
             .note("failed to read closing bytes")
             .emit(ctrl.diagnostics());
@@ -610,7 +838,376 @@ private:
   code_or_path_t code_;
 };
 
-class plugin final : public virtual operator_plugin2<python_operator> {
+class Python final : public Operator<table_slice, table_slice> {
+public:
+  enum class Lifecycle {
+    starting,
+    running,
+    done,
+  };
+
+  Python(config config, PythonArgs args)
+    : config_{std::move(config)}, args_{std::move(args)} {
+  }
+
+  Python(Python&&) noexcept = default;
+  auto operator=(Python&&) noexcept -> Python& = default;
+  Python(const Python&) = delete;
+  auto operator=(const Python&) -> Python& = delete;
+
+  ~Python() override {
+    cleanup_venv();
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto startup_failure = Option<std::string>{};
+    try {
+      auto code = co_await resolve_code(ctx);
+      if (not code) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      auto requirements
+        = args_.requirements ? args_.requirements->inner : std::string{};
+      auto config = config_;
+      auto system_config = caf::content(ctx.actor_system().config());
+      auto runtime = co_await spawn_blocking(
+        [config = std::move(config), requirements = std::move(requirements),
+         dh = diagnostic_handler_ref{ctx.dh()},
+         system_config = std::move(system_config)]() mutable {
+          return prepare_runtime(config, requirements, dh, system_config);
+        });
+      if (not runtime) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      venv_ = runtime->venv;
+      auto spec = SubprocessSpec{
+        .argv
+        = {
+          runtime->python_executable.string(),
+          "-c",
+          PYTHON_SCAFFOLD,
+          fmt::to_string(code_pipe_child_fd),
+          fmt::to_string(error_pipe_child_fd),
+        },
+        .env = make_subprocess_env(*runtime),
+        .stdin_mode = PipeMode::pipe,
+        .stdout_mode = PipeMode::pipe,
+        .stderr_mode = PipeMode::inherit,
+        .pipe_input_fds = {code_pipe_child_fd},
+        .pipe_output_fds = {error_pipe_child_fd},
+        .use_path = false,
+      };
+      subprocess_ = co_await Subprocess::spawn(std::move(spec));
+      auto code_pipe = subprocess_->input_pipe(code_pipe_child_fd);
+      TENZIR_ASSERT(code_pipe.is_some());
+      // Keep `input` non-empty so the scaffold always receives a code payload,
+      // even when `code` resolves to the empty string.
+      auto input = code->empty() ? std::string{" "} : *code;
+      auto bytes = std::span{
+        reinterpret_cast<const std::byte*>(input.data()),
+        input.size(),
+      };
+      co_await (*code_pipe).write(bytes);
+      co_await (*code_pipe).close();
+      lifecycle_ = Lifecycle::running;
+    } catch (const folly::OperationCancelled&) {
+      lifecycle_ = Lifecycle::done;
+      cleanup_venv();
+      throw;
+    } catch (const std::exception& ex) {
+      startup_failure = std::string{ex.what()};
+    }
+    if (startup_failure.is_some()) {
+      auto error = std::string{};
+      if (subprocess_) {
+        try {
+          error = co_await drain_error_pipe();
+        } catch (const std::exception&) {
+          error.clear();
+        }
+      }
+      if (error.empty()) {
+        diagnostic::error("{}", *startup_failure).emit(ctx.dh());
+      } else {
+        diagnostic::error("{}", error)
+          .note("{}", *startup_failure)
+          .emit(ctx.dh());
+      }
+      lifecycle_ = Lifecycle::done;
+      cleanup_venv();
+    }
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (lifecycle_ != Lifecycle::running) {
+      co_return;
+    }
+    if (input.rows() == 0) {
+      co_return;
+    }
+    auto failure = Option<std::string>{};
+    try {
+      if (not co_await ensure_child_running()) {
+        co_await emit_subprocess_failure(ctx.dh(),
+                                         "python process exited with error");
+        co_return;
+      }
+      auto serialized = serialize_input(input, ctx.dh());
+      if (not serialized) {
+        lifecycle_ = Lifecycle::done;
+        cleanup_venv();
+        co_return;
+      }
+      auto stdin_pipe = subprocess_->stdin_pipe();
+      TENZIR_ASSERT(stdin_pipe.is_some());
+      co_await (*stdin_pipe).write(*serialized);
+      auto stdout_pipe = subprocess_->stdout_pipe();
+      TENZIR_ASSERT(stdout_pipe.is_some());
+      auto result_batch = co_await read_output_batch(*stdout_pipe);
+      if (not result_batch) {
+        co_await emit_subprocess_failure(ctx.dh(),
+                                         "python process exited with error");
+        co_return;
+      }
+      auto original_schema_name = input.schema().name();
+      auto output = table_slice{*result_batch};
+      auto new_type = type{original_schema_name, output.schema()};
+      auto actual_result
+        = arrow::RecordBatch::Make(new_type.to_arrow_schema(),
+                                   static_cast<int64_t>(output.rows()),
+                                   (*result_batch)->columns());
+      co_await push(table_slice{actual_result, new_type});
+    } catch (const std::exception& ex) {
+      failure = ex.what();
+    }
+    if (failure.is_some()) {
+      co_await emit_subprocess_failure(ctx.dh(), *failure);
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    if (lifecycle_ == Lifecycle::done) {
+      cleanup_venv();
+      co_return FinalizeBehavior::done;
+    }
+    try {
+      if (subprocess_) {
+        if (auto stdin_pipe = subprocess_->stdin_pipe();
+            stdin_pipe.is_some() and not(*stdin_pipe).is_closed()) {
+          co_await (*stdin_pipe).close();
+        }
+        auto return_code = co_await subprocess_->wait();
+        auto process_failed
+          = not return_code.exited() or return_code.exitStatus() != 0;
+        if (process_failed) {
+          auto error = co_await drain_error_pipe();
+          if (error.empty()) {
+            error = fmt::format("python process {}", return_code.str());
+          }
+          if (not return_code.exited()) {
+            diagnostic::error("{}", error)
+              .note("python process {}", return_code.str())
+              .emit(ctx.dh());
+          } else {
+            diagnostic::error("{}", error).emit(ctx.dh());
+          }
+        }
+      }
+    } catch (const std::exception& ex) {
+      diagnostic::error("{}", ex.what()).emit(ctx.dh());
+    }
+    lifecycle_ = Lifecycle::done;
+    cleanup_venv();
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    TENZIR_UNUSED(serde);
+    // This operator owns a live subprocess session whose transport state is
+    // inherently local to the current process and machine.
+    //
+    // FIXME: To support snapshot/restore, extend the protocol between the host
+    // operator and the Python subprocess so the child can export and import
+    // logical execution state into a fresh subprocess after restart.
+  }
+
+private:
+  auto resolve_code(OpCtx& ctx) -> Task<Option<std::string>> {
+    if (args_.file) {
+      auto code_chunk = chunk::make_empty();
+      if (auto err = read(args_.file->inner, code_chunk); err.valid()) {
+        diagnostic::error(err)
+          .note("failed to read code from file")
+          .emit(ctx.dh());
+        co_return None{};
+      }
+      co_return detail::strip_leading_indentation(std::string{
+        reinterpret_cast<const char*>(code_chunk->data()), code_chunk->size()});
+    }
+    auto code = std::string{};
+    auto requests = std::vector<secret_request>{
+      make_secret_request("code", args_.code, code, ctx.dh())};
+    auto result = co_await ctx.resolve_secrets(std::move(requests));
+    if (not result) {
+      co_return None{};
+    }
+    co_return detail::strip_leading_indentation(std::move(code));
+  }
+
+  auto ensure_child_running() -> Task<bool> {
+    TENZIR_ASSERT(subprocess_);
+    // `ensure_child_running` polls with `wait_timeout(0ms)` and never blocks.
+    auto result
+      = co_await subprocess_->wait_timeout(std::chrono::milliseconds{0});
+    co_return result.running();
+  }
+
+  auto emit_subprocess_failure(diagnostic_handler& dh,
+                               std::string_view fallback) -> Task<void> {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    lifecycle_ = Lifecycle::done;
+    auto error = std::string{};
+    try {
+      if (subprocess_) {
+        auto result
+          = co_await subprocess_->wait_timeout(std::chrono::milliseconds{0});
+        if (result.running()) {
+          static_cast<void>(
+            co_await subprocess_->terminate_or_kill(std::chrono::seconds{1}));
+        }
+      }
+      error = co_await drain_error_pipe();
+    } catch (const std::exception&) {
+      error.clear();
+    }
+    if (error.empty()) {
+      error = std::string{fallback};
+    }
+    diagnostic::error("{}", error).emit(dh);
+    cleanup_venv();
+  }
+
+  auto drain_error_pipe() -> Task<std::string> {
+    if (not subprocess_) {
+      co_return std::string{};
+    }
+    auto pipe = subprocess_->output_pipe(error_pipe_child_fd);
+    if (pipe.is_none()) {
+      co_return std::string{};
+    }
+    auto result = std::string{};
+    while (true) {
+      auto chunk = co_await (*pipe).read_chunk();
+      if (chunk.is_none()) {
+        break;
+      }
+      auto view = std::string_view{
+        reinterpret_cast<const char*>((*chunk)->data()),
+        (*chunk)->size(),
+      };
+      result.append(view);
+    }
+    boost::trim(result);
+    co_return result;
+  }
+
+  auto read_output_batch(ReadPipe& pipe)
+    -> Task<Option<std::shared_ptr<arrow::RecordBatch>>> {
+    auto fd = pipe.native_fd();
+    auto batch = co_await spawn_blocking(
+      [fd]() -> Option<std::shared_ptr<arrow::RecordBatch>> {
+        auto file = arrow_fd_wrapper{fd};
+        auto reader = arrow::ipc::RecordBatchStreamReader::Open(
+          &file, arrow_ipc_read_options());
+        if (not reader.ok()) {
+          return None{};
+        }
+        auto result_batch = (*reader)->ReadNext();
+        if (not result_batch.ok() or not result_batch->batch) {
+          return None{};
+        }
+        auto closing = (*reader)->ReadNext();
+        if (not closing.ok()) {
+          return None{};
+        }
+        static_cast<void>((*reader)->Close());
+        return result_batch->batch;
+      });
+    co_return batch;
+  }
+
+  auto serialize_input(table_slice input, diagnostic_handler& dh)
+    -> failure_or<chunk_ptr> {
+    auto batch = to_record_batch(input);
+    auto stream = check(
+      arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
+    auto ipc_write_opts = arrow::ipc::IpcWriteOptions::Defaults();
+    ipc_write_opts.memory_pool = tenzir::arrow_memory_pool();
+    auto writer = check(arrow::ipc::MakeStreamWriter(
+      stream, input.schema().to_arrow_schema(), ipc_write_opts));
+    if (not writer->WriteRecordBatch(*batch).ok()) {
+      diagnostic::error("failed to convert input batch to Arrow format")
+        .note("failed to write in conversion from input batch to Arrow format")
+        .emit(dh);
+      return failure::promise();
+    }
+    if (auto status = writer->Close(); not status.ok()) {
+      diagnostic::error("{}", status.message())
+        .note("failed to close writer in conversion from input batch to Arrow "
+              "format")
+        .emit(dh);
+      return failure::promise();
+    }
+    auto result = stream->Finish();
+    if (not result.status().ok()) {
+      diagnostic::error("{}", result.status().message())
+        .note("failed to flush in conversion from input batch to Arrow format")
+        .emit(dh);
+      return failure::promise();
+    }
+    auto bytes = std::span{
+      reinterpret_cast<const std::byte*>((*result)->data()),
+      detail::narrow<size_t>((*result)->size()),
+    };
+    return chunk::copy(bytes);
+  }
+
+  auto cleanup_venv() -> void {
+    if (not venv_) {
+      return;
+    }
+    auto ec = std::error_code{};
+    if (std::filesystem::exists(*venv_, ec)) {
+      std::filesystem::remove_all(*venv_, ec);
+      if (ec) {
+        TENZIR_WARN("python operator failed to remove venv at {}: {}", *venv_,
+                    ec);
+      }
+    }
+    venv_ = None{};
+  }
+
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  config config_;
+  PythonArgs args_;
+  Option<Subprocess> subprocess_ = None{};
+  Option<std::filesystem::path> venv_ = None{};
+};
+
+class plugin final : public virtual operator_plugin2<python_operator>,
+                     public virtual OperatorPlugin {
 public:
   struct config config = {};
 
@@ -639,7 +1236,7 @@ public:
                     .named("file", path)
                     .named("requirements", requirements);
     TRY(parser.parse(inv, ctx));
-    if (not path && not code) {
+    if (not path and not code) {
       diagnostic::error("must have either the `file` argument or inline code")
         .primary(inv.self)
         .usage(parser.usage())
@@ -647,7 +1244,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    if (path && code) {
+    if (path and code) {
       diagnostic::error("cannot have `file` argument together with inline code")
         .primary(path->source)
         .primary(code->source)
@@ -669,6 +1266,60 @@ public:
     }
     return std::make_unique<python_operator>(config, std::move(*requirements),
                                              std::move(code_or_path));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<PythonArgs>{};
+    auto code = d.optional_positional("code", &PythonArgs::code);
+    auto file = d.named("file", &PythonArgs::file);
+    d.named("requirements", &PythonArgs::requirements);
+    d.spawner([config = this->config, code, file]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<PythonArgs, Input>>> {
+      auto validate = [&](DescribeCtx& ctx) -> failure_or<void> {
+        auto has_code = ctx.get(code).has_value();
+        auto has_file = ctx.get(file).has_value();
+        if (has_code and has_file) {
+          if (auto code_loc = ctx.get_location(code)) {
+            auto diag = diagnostic::error("cannot have `file` argument "
+                                          "together with inline code")
+                          .primary(*code_loc, "");
+            if (auto file_loc = ctx.get_location(file)) {
+              std::move(diag).primary(*file_loc, "").emit(ctx);
+            } else {
+              std::move(diag).emit(ctx);
+            }
+          } else if (auto file_loc = ctx.get_location(file)) {
+            diagnostic::error(
+              "cannot have `file` argument together with inline code")
+              .primary(*file_loc, "")
+              .emit(ctx);
+          } else {
+            diagnostic::error(
+              "cannot have `file` argument together with inline code")
+              .emit(ctx);
+          }
+          return failure::promise();
+        }
+        if (not has_code and not has_file) {
+          diagnostic::error(
+            "must have either the `file` argument or inline code")
+            .emit(ctx);
+          return failure::promise();
+        }
+        return {};
+      };
+      TRY(validate(ctx));
+      if constexpr (not std::same_as<Input, table_slice>) {
+        return None{};
+      } else {
+        return SpawnWith<PythonArgs, table_slice>{
+          [config](PythonArgs args) -> Box<Operator<table_slice, table_slice>> {
+            return Box<Operator<table_slice, table_slice>>{
+              Python{config, std::move(args)}};
+          }};
+      }
+    });
+    return d.without_optimize();
   }
 };
 

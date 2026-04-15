@@ -20,7 +20,7 @@
 namespace tenzir {
 
 void argument_parser::add(tenzir::expression& x, std::string meta) {
-  TENZIR_ASSERT(! first_optional_);
+  TENZIR_ASSERT(not first_optional_);
   positional_.push_back(positional_t{
     std::move(meta),
     true,
@@ -31,7 +31,7 @@ void argument_parser::add(tenzir::expression& x, std::string meta) {
 }
 
 void argument_parser::add(located<tenzir::expression>& x, std::string meta) {
-  TENZIR_ASSERT(! first_optional_);
+  TENZIR_ASSERT(not first_optional_);
   positional_.push_back(positional_t{
     std::move(meta),
     true,
@@ -43,7 +43,7 @@ void argument_parser::add(located<tenzir::expression>& x, std::string meta) {
 
 void argument_parser::add(std::optional<tenzir::expression>& x,
                           std::string meta) {
-  if (! first_optional_) {
+  if (not first_optional_) {
     first_optional_ = positional_.size();
   }
   positional_.push_back(positional_t{
@@ -57,7 +57,7 @@ void argument_parser::add(std::optional<tenzir::expression>& x,
 
 void argument_parser::add(std::optional<located<tenzir::expression>>& x,
                           std::string meta) {
-  if (! first_optional_) {
+  if (not first_optional_) {
     first_optional_ = positional_.size();
   }
   positional_.push_back(positional_t{
@@ -70,7 +70,7 @@ void argument_parser::add(std::optional<located<tenzir::expression>>& x,
 }
 
 void argument_parser::add(tql::expression& x, std::string meta) {
-  TENZIR_ASSERT(! first_optional_);
+  TENZIR_ASSERT(not first_optional_);
   positional_.push_back(positional_t{
     std::move(meta),
     true,
@@ -81,7 +81,7 @@ void argument_parser::add(tql::expression& x, std::string meta) {
 }
 
 void argument_parser::add(located<tql::expression>& x, std::string meta) {
-  TENZIR_ASSERT(! first_optional_);
+  TENZIR_ASSERT(not first_optional_);
   positional_.push_back(positional_t{
     std::move(meta),
     true,
@@ -93,7 +93,7 @@ void argument_parser::add(located<tql::expression>& x, std::string meta) {
 }
 
 void argument_parser::add(std::optional<tql::expression>& x, std::string meta) {
-  if (! first_optional_) {
+  if (not first_optional_) {
     first_optional_ = positional_.size();
   }
   positional_.push_back(positional_t{
@@ -107,7 +107,7 @@ void argument_parser::add(std::optional<tql::expression>& x, std::string meta) {
 
 void argument_parser::add(std::optional<located<tql::expression>>& x,
                           std::string meta) {
-  if (! first_optional_) {
+  if (not first_optional_) {
     first_optional_ = positional_.size();
   }
   positional_.push_back(positional_t{
@@ -126,7 +126,7 @@ void argument_parser::parse(parser_interface& p) {
     parse_impl(p);
   } catch (diagnostic& d) {
     d.notes.push_back(diagnostic_note{diagnostic_note_kind::usage, usage()});
-    if (!docs_.empty()) {
+    if (not docs_.empty()) {
       d.notes.push_back(diagnostic_note{diagnostic_note_kind::docs, docs_});
     }
     throw std::move(d);
@@ -148,16 +148,16 @@ void argument_parser::parse_impl(parser_interface& p) const {
     }
   }
   auto positional = size_t{0};
-  while (!p.at_end()) {
+  while (not p.at_end()) {
     auto arg = p.peek_shell_arg();
-    if (!arg) {
+    if (not arg) {
       diagnostic::error("expected shell-like argument")
         .primary(p.current_span())
         .throw_();
     }
-    auto is_option = (arg->inner.size() > 2 && arg->inner.starts_with("--"))
-                     || (arg->inner.size() > 1 && arg->inner.starts_with("-")
-                         && !has_positional_expression);
+    auto is_option = (arg->inner.size() > 2 and arg->inner.starts_with("--"))
+                     or (arg->inner.size() > 1 and arg->inner.starts_with("-")
+                         and not has_positional_expression);
     if (is_option) {
       TENZIR_DIAG_ASSERT(arg == p.accept_shell_arg());
       auto split = detail::split(arg->inner, "=", 1);
@@ -235,14 +235,14 @@ void argument_parser::parse_impl(parser_interface& p) const {
 }
 
 auto argument_parser::usage() const -> std::string {
-  if (positional_.empty() && named_.empty()) {
+  if (positional_.empty() and named_.empty()) {
     return fmt::format("{} (takes no arguments)", name_);
   }
   auto result = std::string{name_};
   auto out = std::back_inserter(result);
   for (const auto& p : positional_) {
     auto index = detail::narrow<size_t>(&p - positional_.data());
-    if (!first_optional_ || index < *first_optional_) {
+    if (not first_optional_ or index < *first_optional_) {
       fmt::format_to(out, " {}", p.meta);
     } else {
       fmt::format_to(out, " [{}]", p.meta);

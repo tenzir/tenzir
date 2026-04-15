@@ -23,7 +23,7 @@ struct fixture {
 
   void test() {
     MESSAGE("find");
-    CHECK(!xs.contains(0));
+    CHECK(not xs.contains(0));
     CHECK(xs.contains(1));
     CHECK(xs.find(2) != xs.end());
     CHECK(xs.find(4) == xs.end());
@@ -38,7 +38,7 @@ struct fixture {
     CHECK_EQUAL(xs.size(), 3u);
     MESSAGE("insert duplicate");
     auto i = xs.insert(7);
-    CHECK(!i.second);
+    CHECK(not i.second);
     CHECK_EQUAL(*i.first, 7);
     MESSAGE("insert new");
     i = xs.insert(0);

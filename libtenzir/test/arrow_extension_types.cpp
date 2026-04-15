@@ -27,9 +27,9 @@ TEST("enum extension type equality") {
   enumeration_type::arrow_type t5{
     enumeration_type{{"some"}, {"other"}, {"vals"}}};
   CHECK(t1.ExtensionEquals(t2));
-  CHECK(! t1.ExtensionEquals(t3));
-  CHECK(! t1.ExtensionEquals(t4));
-  CHECK(! t1.ExtensionEquals(t5));
+  CHECK(not t1.ExtensionEquals(t3));
+  CHECK(not t1.ExtensionEquals(t4));
+  CHECK(not t1.ExtensionEquals(t5));
 }
 
 namespace {
@@ -40,16 +40,16 @@ void serde_roundtrip(const Type& type,
                      = nullptr) {
   const auto& arrow_type = type.to_arrow_type();
   const auto serialized = arrow_type->Serialize();
-  if (! stub) {
+  if (not stub) {
     stub = type.to_arrow_type();
   }
   const auto& deserialized
     = stub->Deserialize(arrow_type->storage_type(), serialized);
-  if (! deserialized.status().ok()) {
+  if (not deserialized.status().ok()) {
     FAIL("{}", deserialized.status().ToString());
   }
   CHECK(arrow_type->Equals(*deserialized.ValueUnsafe(), true));
-  CHECK(! stub->Deserialize(arrow::fixed_size_binary(23), serialized).ok());
+  CHECK(not stub->Deserialize(arrow::fixed_size_binary(23), serialized).ok());
 }
 
 template <class Builder, class T = typename Builder::value_type>
@@ -71,7 +71,7 @@ std::shared_ptr<arrow::Array> make_ip_array() {
 template <class... T>
 auto is_type() {
   return []<class... U>(const U&...) {
-    return (std::is_same_v<T, U> && ...);
+    return (std::is_same_v<T, U> and ...);
   };
 }
 
@@ -111,7 +111,7 @@ TEST("arrow::DataType sum type") {
     std::make_shared<enumeration_type::arrow_type>(
       enumeration_type{{"A"}, {"B"}, {"C"}}));
   CHECK(try_as<enumeration_type::arrow_type>(et.get()));
-  CHECK(! try_as<subnet_type::arrow_type>(et.get()));
+  CHECK(not try_as<subnet_type::arrow_type>(et.get()));
 }
 
 TEST("arrow::Array sum type") {
@@ -121,10 +121,10 @@ TEST("arrow::Array sum type") {
   auto int_arr = make_arrow_array<arrow::Int64Builder>({3, 2, 1});
   auto addr_arr = make_ip_array();
   CHECK(try_as<arrow::StringArray>(&*str_arr));
-  CHECK(! try_as<arrow::UInt64Array>(&*str_arr));
-  CHECK(! try_as<arrow::StringArray>(&*uint_arr));
+  CHECK(not try_as<arrow::UInt64Array>(&*str_arr));
+  CHECK(not try_as<arrow::StringArray>(&*uint_arr));
   CHECK(try_as<arrow::UInt64Array>(&*uint_arr));
-  CHECK(! try_as<ip_type::array_type>(&*uint_arr));
+  CHECK(not try_as<ip_type::array_type>(&*uint_arr));
   CHECK(try_as<ip_type::array_type>(&*addr_arr));
   match(*str_arr, is_type<arrow::StringArray>());
   auto f = detail::overload{

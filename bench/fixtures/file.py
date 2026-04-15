@@ -7,7 +7,12 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from tenzir_bench.fixtures import FixtureHandle, current_context, current_options, fixture
+from tenzir_bench.fixtures import (
+    FixtureHandle,
+    current_context,
+    current_options,
+    fixture,
+)
 
 _LOG = logging.getLogger(__name__)
 

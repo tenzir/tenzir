@@ -58,7 +58,7 @@ concept argument_parser_bare_type
 
 template <class T>
 concept argument_parser_type
-  = argument_parser_full_type<T> || argument_parser_bare_type<T>;
+  = argument_parser_full_type<T> or argument_parser_bare_type<T>;
 
 class argument_parser2 {
 public:

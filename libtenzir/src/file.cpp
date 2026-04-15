@@ -38,7 +38,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   if (is_open_) {
     return caf::make_error(ec::filesystem_error, "file already open");
   }
-  if (mode == read_only && append) {
+  if (mode == read_only and append) {
     return caf::make_error(ec::filesystem_error, "cannot open file in read and "
                                                  "append mode simultaneously");
   }
@@ -76,10 +76,10 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   if (path_.has_parent_path()) {
     const auto parent = path_.parent_path();
     const auto file_exists = std::filesystem::exists(parent, err);
-    if (mode != read_only && ! file_exists) {
+    if (mode != read_only and not file_exists) {
       const auto created_directory
         = std::filesystem::create_directories(parent, err);
-      if (! created_directory) {
+      if (not created_directory) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("failed to create parent directory "
                                            "{}: {}",
@@ -100,7 +100,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
 }
 
 bool file::close() {
-  if (! is_open_) {
+  if (not is_open_) {
     return false;
   }
   if (detail::close(handle_).valid()) {
@@ -115,7 +115,7 @@ bool file::is_open() const {
 }
 
 caf::expected<size_t> file::read(void* sink, size_t bytes) {
-  if (! is_open_) {
+  if (not is_open_) {
     return caf::make_error(ec::filesystem_error, "file is not open",
                            path_.string());
   }
@@ -123,12 +123,12 @@ caf::expected<size_t> file::read(void* sink, size_t bytes) {
 }
 
 caf::error file::write(const void* source, size_t bytes) {
-  if (! is_open_) {
+  if (not is_open_) {
     return caf::make_error(ec::filesystem_error, "file is not open",
                            path_.string());
   }
   auto count = detail::write(handle_, source, bytes);
-  if (! count) {
+  if (not count) {
     return count.error();
   }
   if (*count != bytes) {
@@ -139,7 +139,7 @@ caf::error file::write(const void* source, size_t bytes) {
 }
 
 bool file::seek(size_t bytes) {
-  if (! is_open_ || seek_failed_) {
+  if (not is_open_ or seek_failed_) {
     return false;
   }
   if (detail::seek(handle_, bytes).valid()) {
@@ -158,10 +158,10 @@ file::native_type file::handle() const {
 }
 
 auto expand_home(std::string path) -> std::string {
-  if (path.empty() || path[0] != '~') {
+  if (path.empty() or path[0] != '~') {
     return path;
   }
-  if (path.size() == 1 || path[1] == '/') {
+  if (path.size() == 1 or path[1] == '/') {
     auto home = detail::getenv("HOME");
     if (home) {
       path.replace(0, 1, *home);

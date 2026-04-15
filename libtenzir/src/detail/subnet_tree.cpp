@@ -227,7 +227,7 @@ auto comp_with_mask(void* addr, void* dest, u_int mask) -> int {
   if (/* mask/8 == 0 || */ memcmp(addr, dest, mask / 8) == 0) {
     int n = mask / 8;
     int m = -(1 << (8 - (mask % 8)));
-    if (mask % 8 == 0 || (((u_char*)addr)[n] & m) == (((u_char*)dest)[n] & m)) {
+    if (mask % 8 == 0 or (((u_char*)addr)[n] & m) == (((u_char*)dest)[n] & m)) {
       return (1);
     }
   }
@@ -330,7 +330,7 @@ void Clear_Patricia(patricia_tree_t* patricia, data_fn_t func) {
       patricia_node_t* r = Xrn->r;
       if (Xrn->prefix) {
         Deref_Prefix(Xrn->prefix);
-        if (Xrn->data && func) {
+        if (Xrn->data and func) {
           func(Xrn->data);
         }
       } else {
@@ -386,7 +386,7 @@ auto patricia_search_exact(patricia_tree_t* patricia, prefix_t* prefix)
       return (nullptr);
     }
   }
-  if (node->bit > bitlen || node->prefix == nullptr) {
+  if (node->bit > bitlen or node->prefix == nullptr) {
     return (nullptr);
   }
   assert(node->bit == bitlen);
@@ -431,7 +431,7 @@ auto patricia_search_all(patricia_tree_t* patricia, prefix_t* prefix,
       break;
     }
   }
-  if (node && node->prefix) {
+  if (node and node->prefix) {
     stack[cnt++] = node;
   }
   if (cnt <= 0) {
@@ -486,7 +486,7 @@ auto patricia_search_best2(patricia_tree_t* patricia, prefix_t* prefix,
       break;
     }
   }
-  if (inclusive && node && node->prefix) {
+  if (inclusive and node and node->prefix) {
     stack[cnt++] = node;
   }
   if (cnt <= 0) {
@@ -496,7 +496,7 @@ auto patricia_search_best2(patricia_tree_t* patricia, prefix_t* prefix,
     node = stack[cnt];
     if (comp_with_mask(prefix_tochar(node->prefix), prefix_tochar(prefix),
                        node->prefix->bitlen)
-        && node->prefix->bitlen <= bitlen) {
+        and node->prefix->bitlen <= bitlen) {
       return (node);
     }
   }
@@ -534,9 +534,9 @@ auto patricia_lookup(patricia_tree_t* patricia, prefix_t* prefix)
   addr = prefix_touchar(prefix);
   bitlen = prefix->bitlen;
   node = patricia->head;
-  while (node->bit < bitlen || node->prefix == nullptr) {
+  while (node->bit < bitlen or node->prefix == nullptr) {
     if (node->bit < patricia->maxbits
-        && BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07))) {
+        and BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07))) {
       if (node->r == nullptr) {
         break;
       }
@@ -574,11 +574,11 @@ auto patricia_lookup(patricia_tree_t* patricia, prefix_t* prefix)
     differ_bit = check_bit;
   }
   parent = node->parent;
-  while (parent && parent->bit >= differ_bit) {
+  while (parent and parent->bit >= differ_bit) {
     node = parent;
     parent = node->parent;
   }
-  if (differ_bit == bitlen && node->bit == bitlen) {
+  if (differ_bit == bitlen and node->bit == bitlen) {
     if (node->prefix) {
       return (node);
     }
@@ -599,7 +599,7 @@ auto patricia_lookup(patricia_tree_t* patricia, prefix_t* prefix)
   if (node->bit == differ_bit) {
     new_node->parent = node;
     if (node->bit < patricia->maxbits
-        && BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07))) {
+        and BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07))) {
       assert(node->r == nullptr);
       node->r = new_node;
     } else {
@@ -610,7 +610,7 @@ auto patricia_lookup(patricia_tree_t* patricia, prefix_t* prefix)
   }
   if (bitlen == differ_bit) {
     if (bitlen < patricia->maxbits
-        && BIT_TEST(test_addr[bitlen >> 3], 0x80 >> (bitlen & 0x07))) {
+        and BIT_TEST(test_addr[bitlen >> 3], 0x80 >> (bitlen & 0x07))) {
       new_node->r = node;
     } else {
       new_node->l = node;
@@ -636,7 +636,7 @@ auto patricia_lookup(patricia_tree_t* patricia, prefix_t* prefix)
     glue->data = nullptr;
     patricia->num_active_node++;
     if (differ_bit < patricia->maxbits
-        && BIT_TEST(addr[differ_bit >> 3], 0x80 >> (differ_bit & 0x07))) {
+        and BIT_TEST(addr[differ_bit >> 3], 0x80 >> (differ_bit & 0x07))) {
       glue->r = new_node;
       glue->l = node;
     } else {
@@ -661,7 +661,7 @@ auto patricia_remove(patricia_tree_t* patricia, patricia_node_t* node) -> void {
   patricia_node_t *parent, *child;
   assert(patricia);
   assert(node);
-  if (node->r && node->l) {
+  if (node->r and node->l) {
     /* this might be a placeholder node -- have to check and make sure
      * there is a prefix aossciated with it ! */
     if (node->prefix != nullptr) {
@@ -672,7 +672,7 @@ auto patricia_remove(patricia_tree_t* patricia, patricia_node_t* node) -> void {
     node->data = nullptr;
     return;
   }
-  if (node->r == nullptr && node->l == nullptr) {
+  if (node->r == nullptr and node->l == nullptr) {
     parent = node->parent;
     Deref_Prefix(node->prefix);
     Delete(node);

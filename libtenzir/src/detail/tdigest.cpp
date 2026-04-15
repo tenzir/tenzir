@@ -139,7 +139,7 @@ public:
     for (size_t i = 0; i < tdigest.size(); ++i) {
       auto q = q_prev + tdigest[i].weight / total_weight;
       auto k_val = this->k(q);
-      if (tdigest[i].weight != 1 && (k_val - k_prev) > 1.001) {
+      if (tdigest[i].weight != 1 and (k_val - k_prev) > 1.001) {
         return std::unexpected(
           fmt::format("oversized centroid: {}", k_val - k_prev));
       }
@@ -182,7 +182,7 @@ public:
     auto total_weight = 0.0;
     auto prev_mean = std::numeric_limits<double>::lowest();
     for (const auto& c : tdigests_[current_]) {
-      if (std::isnan(c.mean) || std::isnan(c.weight)) {
+      if (std::isnan(c.mean) or std::isnan(c.weight)) {
         return std::unexpected("NAN found in tdigest");
       }
       if (c.mean < prev_mean) {
@@ -198,7 +198,7 @@ public:
       return std::unexpected("tdigest total weight mismatch");
     }
     // check if buffer expanded
-    if (tdigests_[0].capacity() > delta_ || tdigests_[1].capacity() > delta_) {
+    if (tdigests_[0].capacity() > delta_ or tdigests_[1].capacity() > delta_) {
       return std::unexpected("oversized tdigest buffer");
     }
     // check k-size
@@ -257,7 +257,7 @@ public:
       }
     }
     // merge last buffer
-    if (! queue.empty()) {
+    if (not queue.empty()) {
       std::tie(current_iter, end_iter) = queue.top();
       while (current_iter != end_iter) {
         merger_.add(*current_iter++);
@@ -278,7 +278,7 @@ public:
     const auto& td = tdigests_[current_];
     auto tdigest_index = uint32_t{0};
     auto input_index = uint32_t{0};
-    while (tdigest_index < td.size() && input_index < input.size()) {
+    while (tdigest_index < td.size() and input_index < input.size()) {
       if (td[tdigest_index].mean < input[input_index]) {
         merger_.add(td[tdigest_index++]);
       } else {
@@ -298,7 +298,7 @@ public:
 
   auto quantile(double q) const -> double {
     const auto& td = tdigests_[current_];
-    if (q < 0 || q > 1 || td.size() == 0) {
+    if (q < 0 or q > 1 or td.size() == 0) {
       return NAN;
     }
 
@@ -322,7 +322,7 @@ public:
     // deviation of index from the centroid center
     auto diff = index + td[ci].weight / 2 - weight_sum;
     // index happen to be in a unit weight centroid
-    if (td[ci].weight == 1 && std::abs(diff) < 0.5) {
+    if (td[ci].weight == 1 and std::abs(diff) < 0.5) {
       return td[ci].mean;
     }
     // find adjacent centroids for interpolation
@@ -430,7 +430,7 @@ auto tdigest::mean() const -> double {
 }
 
 auto tdigest::is_empty() const -> bool {
-  return input_.size() == 0 && impl_->total_weight() == 0;
+  return input_.size() == 0 and impl_->total_weight() == 0;
 }
 
 auto tdigest::merge_input() const -> void {

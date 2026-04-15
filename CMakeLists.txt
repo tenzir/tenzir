@@ -279,11 +279,7 @@ target_compile_options(
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libtenzir_internal
                          INTERFACE -Wno-unknown-warning-option)
-  target_compile_options(libtenzir_internal
-                         INTERFACE -Wno-unknown-warning-option)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 22)
-    add_compile_options(-Wno-c2y-extensions)
-  endif ()
+  target_compile_options(libtenzir_internal INTERFACE -Wno-c2y-extensions)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning)
 endif ()

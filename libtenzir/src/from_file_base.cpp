@@ -92,7 +92,7 @@ constexpr auto extract_root_path(const glob& glob_, const std::string& expanded)
       if (glob_.size() == 1) {
         auto result = *prefix;
         // Preserve trailing slash semantics if present in original path
-        if (expanded.ends_with('/') && not result.ends_with('/')) {
+        if (expanded.ends_with('/') and not result.ends_with('/')) {
           result += '/';
         }
         return result;
@@ -168,14 +168,12 @@ auto delete_file_azure(arrow::fs::AzureFileSystem* fs, const std::string& path)
   if (not service_client_result.ok()) {
     return service_client_result.status();
   }
-  auto service_client = std::move(*service_client_result);
-  auto container_client = service_client->GetBlobContainerClient(container);
-  auto blob_client = container_client.GetBlobClient(blob_path);
   try {
+    auto service_client = std::move(*service_client_result);
+    auto container_client = service_client->GetBlobContainerClient(container);
+    auto blob_client = container_client.GetBlobClient(blob_path);
     blob_client.Delete();
-  } catch (const Azure::Storage::StorageException& e) {
-    return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
-  } catch (const Azure::Core::Http::TransportException& e) {
+  } catch (const Azure::Core::RequestFailedException& e) {
     return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
   }
   return arrow::Status::OK();
@@ -442,7 +440,7 @@ auto from_file_state::query_files() -> void {
 auto from_file_state::process_file(arrow::fs::FileInfo file) -> void {
   // Clean up directory markers (S3/Azure only) when remove=true.
   // Directory markers are 0-sized objects with keys ending in '/'.
-  if (args_.remove.inner && file.type() == arrow::fs::FileType::Directory) {
+  if (args_.remove.inner and file.type() == arrow::fs::FileType::Directory) {
     auto marker_path = file.path() + '/';
 #ifdef ARROW_S3
     if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
@@ -622,7 +620,7 @@ auto from_file_state::start_stream(
         [&](const std::string& new_path) {
           std::string final_path = new_path;
           // If new_path has a trailing slash, append the original file name
-          if (not new_path.empty() && new_path.back() == '/') {
+          if (not new_path.empty() and new_path.back() == '/') {
             auto path_obj = std::filesystem::path(path);
             auto filename = path_obj.filename();
             final_path = (std::filesystem::path(new_path) / filename).string();
@@ -631,7 +629,7 @@ auto from_file_state::start_stream(
           // final_path
           auto final_path_obj = std::filesystem::path(final_path);
           auto parent_path = final_path_obj.parent_path();
-          if (not parent_path.empty() && parent_path != ".") {
+          if (not parent_path.empty() and parent_path != ".") {
             auto create_status
               = fs_->CreateDir(parent_path.string(), /*recursive=*/true);
             if (not create_status.ok()) {

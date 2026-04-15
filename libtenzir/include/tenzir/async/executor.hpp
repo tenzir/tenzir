@@ -88,7 +88,7 @@ public:
     return operators_[index];
   }
 
-  auto unwrap() && -> std::vector<AnyOperator> {
+  auto unwrap() and -> std::vector<AnyOperator> {
     return std::move(operators_);
   }
 
@@ -232,7 +232,7 @@ public:
     = 0;
 
   /// Returns a per-operator IO executor.
-  virtual auto make_io_executor(OpId id)
+  virtual auto make_io_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<folly::IOExecutor>
     = 0;
 
@@ -246,6 +246,9 @@ public:
 
   /// Returns whether the pipeline is hidden.
   virtual auto is_hidden() const -> bool = 0;
+
+  /// Returns whether the operator has access to an interactive terminal.
+  virtual auto has_terminal() const -> bool = 0;
 
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;

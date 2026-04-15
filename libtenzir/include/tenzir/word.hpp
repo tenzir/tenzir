@@ -303,7 +303,7 @@ static constexpr auto find_first(T x) {
 }
 
 template <bool Bit, std::unsigned_integral T>
-  requires(!Bit)
+  requires(not Bit)
 static constexpr auto find_first(T x) {
   return find_first<1>(static_cast<T>(~x));
 }
@@ -316,7 +316,7 @@ static constexpr auto find_last(T x) {
 }
 
 template <bool Bit, std::unsigned_integral T>
-  requires(!Bit)
+  requires(not Bit)
 static constexpr auto find_last(T x) {
   return find_last<1>(static_cast<T>(~x));
 }
@@ -361,7 +361,7 @@ static constexpr detail::word_size_type select(T x, detail::word_size_type i) {
     if constexpr (Bit) {
       return word<T>::test(args...);
     } else {
-      return !word<T>::test(args...);
+      return not word<T>::test(args...);
     }
   };
   auto cum = 0u;

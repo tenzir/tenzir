@@ -60,7 +60,7 @@ public:
 
   template <typename... Us>
   auto is_any() const -> bool {
-    return (std::holds_alternative<tag<Us>>(*this) || ...);
+    return (std::holds_alternative<tag<Us>>(*this) or ...);
   }
 
   template <typename... Us>

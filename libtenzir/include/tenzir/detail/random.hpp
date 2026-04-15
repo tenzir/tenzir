@@ -38,7 +38,7 @@ public:
     }
 
     friend bool operator==(const param_type& lhs, const param_type& rhs) {
-      return lhs.shape_ == rhs.shape_ && lhs.scale_ == rhs.scale_;
+      return lhs.shape_ == rhs.shape_ and lhs.scale_ == rhs.scale_;
     }
 
   private:
@@ -75,8 +75,8 @@ public:
     return params_.scale();
   }
 
-  friend bool operator==(const pareto_distribution& lhs,
-                         const pareto_distribution& rhs) {
+  friend bool
+  operator==(const pareto_distribution& lhs, const pareto_distribution& rhs) {
     return lhs.params_ == rhs.params_;
   }
 
@@ -88,8 +88,9 @@ template <class R>
 R pdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
-  if (x < scale)
+  if (x < scale) {
     return 0.0;
+  }
   return shape * std::pow(scale, shape) / std::pow(x, shape + 1);
 }
 
@@ -97,8 +98,9 @@ template <class R>
 R cdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
-  if (x <= scale)
+  if (x <= scale) {
     return 0;
+  }
   return R{1} - std::pow(scale / x, shape);
 }
 
@@ -106,10 +108,12 @@ template <class R>
 R quantile(const pareto_distribution<R>& dist, R p) {
   auto shape = dist.shape();
   auto scale = dist.scale();
-  if (p == 0)
+  if (p == 0) {
     return scale;
-  if (p == 1)
+  }
+  if (p == 1) {
     return std::numeric_limits<R>::max();
+  }
   return scale / std::pow(1 - p, 1 / shape);
 }
 

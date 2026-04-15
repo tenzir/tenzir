@@ -24,19 +24,22 @@ convert_to_caf_compatible_list_arg(const std::string& comma_separated_list_arg) 
   const auto separation_index
     = comma_separated_list_arg.find_first_of(arg_value_seperator);
   const auto begin = comma_separated_list_arg.begin();
-  if (separation_index == std::string::npos)
+  if (separation_index == std::string::npos) {
     return {};
+  }
   const auto arg_start_it
     = begin + separation_index + arg_value_seperator.length();
-  if (arg_start_it == comma_separated_list_arg.end())
+  if (arg_start_it == comma_separated_list_arg.end()) {
     return comma_separated_list_arg + "[]";
+  }
   const auto arg_name = std::string_view{begin, begin + separation_index};
   const auto arg
     = std::string_view(arg_start_it, comma_separated_list_arg.end());
   const auto split_args = detail::split_escaped(arg, ",", "\\");
-  if (arg.starts_with('"') && arg.ends_with('"'))
+  if (arg.starts_with('"') and arg.ends_with('"')) {
     return fmt::format("{}{}[{}]", arg_name, arg_value_seperator,
                        fmt::join(split_args, "\",\""));
+  }
   return fmt::format("{}{}[\"{}\"]", arg_name, arg_value_seperator,
                      fmt::join(split_args, "\",\""));
 }
@@ -60,8 +63,9 @@ config_options::parse(caf::settings& config,
       const auto option_name
         = arg.substr(0, arg.find_first_of(arg_value_seperator))
             .substr(option_prefix.length());
-      if (list_options_.contains(option_name))
+      if (list_options_.contains(option_name)) {
         arg = convert_to_caf_compatible_list_arg(arg);
+      }
     }
   }
   const auto result = data_.parse(config, args_copy);

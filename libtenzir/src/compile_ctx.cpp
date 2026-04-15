@@ -49,8 +49,7 @@ auto compile_ctx::scope::let(std::string name) & -> let_id {
   TENZIR_ASSERT(env_);
   root_.last_let_id_ += 1;
   auto id = let_id{root_.last_let_id_};
-  auto inserted = env_->try_emplace(std::move(name), id).second;
-  TENZIR_ASSERT(inserted);
+  env_->insert_or_assign(std::move(name), id);
   return id;
 }
 

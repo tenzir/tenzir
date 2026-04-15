@@ -158,7 +158,7 @@ public:
 
 class Version final : public Operator<void, table_slice> {
 public:
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
     if (count_ == total) {
@@ -171,7 +171,7 @@ public:
     co_return {};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(count_ < total);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
@@ -211,7 +211,7 @@ public:
     TENZIR_UNUSED(ctx, instantiate);
     return {};
   }
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
     return Version{};
   }

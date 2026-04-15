@@ -79,7 +79,7 @@ let
       ...
     }:
     let
-      inherit (stdenv.hostPlatform) isMusl isStatic;
+      inherit (stdenv.hostPlatform) isStatic;
 
       version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
 
@@ -371,7 +371,7 @@ let
           ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure = (
+          preConfigure =
             if isReleaseBuild then
               ''
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
@@ -380,8 +380,7 @@ let
               ''
                 version_build_metadata=$(basename $out | cut -d'-' -f 1)
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              ''
-          );
+              '';
 
           hardeningDisable = lib.optionals isStatic [
             "fortify"

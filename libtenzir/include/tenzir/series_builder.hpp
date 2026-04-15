@@ -211,7 +211,7 @@ public:
       }
     }
 
-    operator std::vector<table_slice>&&() && {
+    operator std::vector<table_slice>&&() and {
       return std::move(slices);
     }
   };

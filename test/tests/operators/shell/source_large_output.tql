@@ -1,0 +1,3 @@
+shell "seq 1 20000 | awk '{ printf(\"{\\\"value\\\":%s}\\n\", $1) }'"
+read_ndjson
+summarize rows=count(), min=min(value), max=max(value)

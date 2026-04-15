@@ -20,7 +20,7 @@ namespace tenzir::plugins::kafka {
 
 producer::~producer() {
   using namespace std::chrono_literals;
-  if (! producer_) {
+  if (not producer_) {
     return;
   }
   TENZIR_DEBUG("flushing pending Kafka messages");
@@ -36,7 +36,7 @@ auto producer::make(configuration config) -> caf::expected<producer> {
   producer result;
   std::string error;
   result.producer_.reset(RdKafka::Producer::create(config.conf_.get(), error));
-  if (! result.producer_) {
+  if (not result.producer_) {
     return caf::make_error(ec::unspecified,
                            fmt::format("failed to create producer: {}", error));
   }

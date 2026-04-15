@@ -48,7 +48,7 @@ struct formatter<std::optional<T>> {
 
   template <class FormatContext>
   auto format(const std::optional<T>& value, FormatContext& ctx) const {
-    if (!value) {
+    if (not value) {
       return fmt::format_to(ctx.out(), "nullopt");
     }
     return fmt::format_to(ctx.out(), "{}", *value);

@@ -108,7 +108,9 @@ def _verify_post_test(root: Path, assertions: LocalFilesAssertions) -> None:
 @fixture(assertions=LocalFilesAssertions)
 def local_files() -> FixtureHandle:
     """Create temporary test files and return fixture handle with assertions."""
-    root = Path(tempfile.mkdtemp(prefix="tenzir-test-local-files-"))
+    # Resolve symlinks so that FILE_ROOT matches the canonical paths returned
+    # by the Arrow filesystem. On macOS, /tmp is a symlink to /private/tmp.
+    root = Path(tempfile.mkdtemp(prefix="tenzir-test-local-files-")).resolve()
 
     try:
         _setup_files(root)

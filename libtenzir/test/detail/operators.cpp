@@ -14,8 +14,7 @@ using namespace tenzir::detail;
 
 namespace {
 
-struct foo : addable<foo>,
-             addable<foo, int> {
+struct foo : addable<foo>, addable<foo, int> {
   explicit foo(int x) : value{x} {
     // nop
   }

@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
                 == caf::none);
   std::string tenzir_loglevel = "quiet";
   auto test_args = get_test_args(argc, argv);
-  if (! test_args.empty()) {
+  if (not test_args.empty()) {
     auto options = caf::config_option_set{}
                      .add(tenzir_loglevel, "tenzir-verbosity",
                           "console verbosity for libtenzir")

@@ -63,7 +63,7 @@ public:
           .emit(ctx);
       }
       auto length = array->length();
-      auto current_value = array->IsValid(0) && array->Value(0);
+      auto current_value = array->IsValid(0) and array->Value(0);
       auto current_begin = int64_t{0};
       auto results = std::vector<table_slice>{};
       const auto p = json_printer{json_printer_options{
@@ -89,7 +89,7 @@ public:
         }
       };
       for (auto i = int64_t{1}; i < length + 1; ++i) {
-        const auto next = i != length && array->IsValid(i) && array->Value(i);
+        const auto next = i != length and array->IsValid(i) and array->Value(i);
         if (current_value == next) {
           continue;
         }

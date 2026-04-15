@@ -8,7 +8,7 @@ import traceback
 from collections import defaultdict
 from collections.abc import Generator, Iterable
 from contextlib import suppress
-from types import CodeType, MethodType, ModuleType
+from types import CodeType, MethodType, ModuleType, TracebackType
 from typing import (
     Any,
     Dict,
@@ -52,6 +52,59 @@ def add_note(e: Optional[BaseException], msg: str) -> None:
     args = e.args
     arg0 = f"{args[0]}\n{msg}" if args else msg
     e.args = (arg0,) + args[1:]
+
+
+def _normalize_traceback_filename(filename: str) -> tuple[str, bool]:
+    suffix = os.path.join("tenzir_operator", "executor.py")
+    if filename.endswith(suffix):
+        return "tenzir_operator/executor.py", True
+    return filename, False
+
+
+def print_stable_exception(
+    exc_type: Optional[type[BaseException]],
+    exc: Optional[BaseException],
+    tb: Optional[TracebackType],
+    file,
+) -> None:
+    if exc_type is None or exc is None:
+        return
+    tb_exception = traceback.TracebackException(
+        exc_type,
+        exc,
+        tb,
+        capture_locals=False,
+    )
+
+    def _print(tb_exc: traceback.TracebackException) -> None:
+        if tb_exc.__cause__ is not None:
+            _print(tb_exc.__cause__)
+            print(
+                "\nThe above exception was the direct cause of the following exception:\n",
+                file=file,
+            )
+        elif tb_exc.__context__ is not None and not tb_exc.__suppress_context__:
+            _print(tb_exc.__context__)
+            print(
+                "\nDuring handling of the above exception, another exception occurred:\n",
+                file=file,
+            )
+        print("Traceback (most recent call last):", file=file)
+        for frame in tb_exc.stack:
+            filename, is_executor_frame = _normalize_traceback_filename(frame.filename)
+            if is_executor_frame:
+                print(f'  File "{filename}", in {frame.name}', file=file)
+            else:
+                print(
+                    f'  File "{filename}", line {frame.lineno}, in {frame.name}',
+                    file=file,
+                )
+            if frame.line:
+                print(f"    {frame.line}", file=file)
+        for line in tb_exc.format_exception_only():
+            print(line, end="", file=file)
+
+    _print(tb_exception)
 
 
 T = TypeVar("T")
@@ -433,9 +486,10 @@ def main() -> int:
             t = inner.__class__ if inner else None
             tb = inner.__traceback__ if inner else None
             tb = tb.tb_next if tb else tb
-            traceback.print_exception(t, inner, tb, file=errpipe)
+            print_stable_exception(t, inner, tb, errpipe)
             return 1
         except BaseException:
-            traceback.print_exc(file=errpipe)
+            exc_type, exc, tb = sys.exc_info()
+            print_stable_exception(exc_type, exc, tb, errpipe)
             return 1
     return 0

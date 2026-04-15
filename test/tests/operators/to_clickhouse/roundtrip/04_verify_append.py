@@ -13,10 +13,17 @@ def main() -> None:
     container = os.environ["CLICKHOUSE_CONTAINER_ID"]
     password = os.environ["CLICKHOUSE_PASSWORD"]
     result = subprocess.run(
-        [runtime, "exec", container, "clickhouse-client",
-         f"--password={password}",
-         "--query=SELECT count() FROM test_basic"],
-        capture_output=True, text=True, check=True,
+        [
+            runtime,
+            "exec",
+            container,
+            "clickhouse-client",
+            f"--password={password}",
+            "--query=SELECT count() FROM test_basic",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     print(result.stdout, end="")
 

@@ -46,15 +46,15 @@ struct double_detect_separator_parser
     Attribute val_comma{};
     auto f_comma = f;
     const auto r_comma = double_parser<','>{}(f_comma, l, val_comma);
-    if (not r_dot && not r_comma) {
+    if (not r_dot and not r_comma) {
       return false;
     }
-    if (r_dot && f_dot >= f_comma) {
+    if (r_dot and f_dot >= f_comma) {
       val = val_dot;
       f = f_dot;
       return true;
     }
-    TENZIR_ASSERT(r_comma && f_comma >= f_dot);
+    TENZIR_ASSERT(r_comma and f_comma >= f_dot);
     val = val_comma;
     f = f_comma;
     return true;

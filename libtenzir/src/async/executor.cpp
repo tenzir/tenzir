@@ -33,6 +33,12 @@ namespace tenzir {
 // Forward declaration to avoid including registry.hpp.
 auto global_registry() -> std::shared_ptr<const registry>;
 
+namespace {
+
+auto demangle_op_type(std::type_info const& type) -> std::string;
+
+} // namespace
+
 /// Transforms a `Push<OperatorMsg<T>>` into a `Push<T>`.
 template <class T>
 class OpPushWrapper final : public Push<T> {
@@ -223,9 +229,9 @@ public:
     return inner_.make_executor(std::move(id), std::move(name));
   }
 
-  auto make_io_executor(OpId id)
+  auto make_io_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
-    return inner_.make_io_executor(std::move(id));
+    return inner_.make_io_executor(std::move(id), std::move(name));
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
@@ -239,6 +245,10 @@ public:
 
   auto is_hidden() const -> bool override {
     return inner_.is_hidden();
+  }
+
+  auto has_terminal() const -> bool override {
+    return inner_.has_terminal();
   }
 
 protected:
@@ -415,7 +425,7 @@ public:
   Runner& operator=(const Runner&) = delete;
   ~Runner() override = default;
 
-  auto run_to_completion() && -> Task<void> {
+  auto run_to_completion() and -> Task<void> {
     auto cancellation_token
       = co_await folly::coro::co_current_cancellation_token;
     auto guard = detail::scope_guard{[&] noexcept {
@@ -490,6 +500,10 @@ private:
 
   auto is_hidden() const -> bool override {
     return exec_ctx_.is_hidden();
+  }
+
+  auto has_terminal() const -> bool override {
+    return exec_ctx_.has_terminal();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)
@@ -809,7 +823,9 @@ private:
 
   auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     if (not io_executor_) {
-      io_executor_ = exec_ctx_.make_io_executor(id_);
+      auto& op = base_op();
+      io_executor_
+        = exec_ctx_.make_io_executor(id_, demangle_op_type(typeid(op)));
     }
     return io_executor_;
   }
@@ -820,7 +836,7 @@ private:
   }
 
   auto ensure_await_task() -> void {
-    if (await_task_pending_) {
+    if (await_task_pending_ or base_op().state() == OperatorState::done) {
       return;
     }
     await_task_pending_ = true;
@@ -1004,7 +1020,7 @@ private:
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
       co_await main_loop();
-    } catch (folly::OperationCancelled) {
+    } catch (folly::OperationCancelled const&) {
       // Sanity check: We should only propagate this if we actually got cancelled.
       auto cancelled = cancellation_token.isCancellationRequested();
       LOGV("shutting down operator after cancellation: {}", cancelled);
@@ -1424,7 +1440,7 @@ public:
     // TODO: Validate types, just to make sure.
   }
 
-  auto run_to_completion() && -> Task<void> {
+  auto run_to_completion() and -> Task<void> {
     auto guard = detail::scope_guard{[&] noexcept {
       LOGI("returning from chain runner {}", id_);
     }};
@@ -1806,6 +1822,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   LOGI("end of data is leaving pipeline");
                 },
                 [&](Checkpoint checkpoint) {
+                  TENZIR_UNUSED(checkpoint);
                   LOGI("checkpoint {} is leaving pipeline", checkpoint.id);
                 });
             });
