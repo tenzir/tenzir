@@ -38,6 +38,7 @@ using ChunkQueue = folly::coro::BoundedQueue<chunk_ptr>;
 struct FromNicArgs {
   located<std::string> iface;
   Option<located<uint64_t>> snaplen;
+  Option<located<std::string>> filter;
   Option<located<ir::pipeline>> parser;
 };
 
@@ -63,6 +64,16 @@ auto make_default_parser_pipeline(diagnostic_handler& dh)
   TRY(auto ast, parse("read_pcap", session));
   auto ctx = compile_ctx::make_root(base_ctx{session.dh(), session.reg()});
   return std::move(ast).compile(ctx);
+}
+
+auto lookup_capture_netmask(std::string const& iface) -> bpf_u_int32 {
+  auto error = std::array<char, PCAP_ERRBUF_SIZE>{};
+  auto network = bpf_u_int32{};
+  auto netmask = bpf_u_int32{PCAP_NETMASK_UNKNOWN};
+  if (pcap_lookupnet(iface.c_str(), &network, &netmask, error.data()) == -1) {
+    return PCAP_NETMASK_UNKNOWN;
+  }
+  return netmask;
 }
 
 class FromNic final : public Operator<void, table_slice> {
@@ -92,7 +103,8 @@ public:
     ctx.spawn_task(folly::coro::co_withExecutor(
       folly::getGlobalCPUExecutor(),
       capture_loop(chunk_queue_, args_.iface.inner,
-                   detail::narrow_cast<uint32_t>(snaplen), ctx.dh())));
+                   detail::narrow_cast<uint32_t>(snaplen), args_.filter,
+                   ctx.dh())));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -143,9 +155,10 @@ public:
   }
 
 private:
-  static auto capture_loop(std::shared_ptr<ChunkQueue> queue, std::string iface,
-                           uint32_t snaplen, diagnostic_handler& dh)
-    -> Task<void> {
+  static auto
+  capture_loop(std::shared_ptr<ChunkQueue> queue, std::string iface,
+               uint32_t snaplen, Option<located<std::string>> filter,
+               diagnostic_handler& dh) -> Task<void> {
     auto finish = [&](auto&& emit) -> Task<void> {
       emit();
       co_await queue->enqueue(chunk_ptr{});
@@ -169,6 +182,36 @@ private:
     }
     auto pcap
       = std::unique_ptr<pcap_t, decltype(&pcap_close)>{raw, &pcap_close};
+    if (filter) {
+      TENZIR_DEBUG("applying capture filter `{}` on {}", filter->inner, iface);
+      auto program = bpf_program{};
+      auto netmask = lookup_capture_netmask(iface);
+      if (pcap_compile(pcap.get(), &program, filter->inner.c_str(), 1, netmask)
+          < 0) {
+        auto err = std::string_view{::pcap_geterr(pcap.get())};
+        co_await finish([&] {
+          diagnostic::error("failed to compile capture filter: {}", err)
+            .primary(filter->source)
+            .note("capture filter: {}", filter->inner)
+            .note("from `nic`")
+            .emit(dh);
+        });
+        co_return;
+      }
+      auto set_filter_result = pcap_setfilter(pcap.get(), &program);
+      pcap_freecode(&program);
+      if (set_filter_result < 0) {
+        auto err = std::string_view{::pcap_geterr(pcap.get())};
+        co_await finish([&] {
+          diagnostic::error("failed to install capture filter: {}", err)
+            .primary(filter->source)
+            .note("capture filter: {}", filter->inner)
+            .note("from `nic`")
+            .emit(dh);
+        });
+        co_return;
+      }
+    }
     auto linktype = pcap_datalink(pcap.get());
     TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
     auto metadata = chunk_metadata{
@@ -262,6 +305,7 @@ public:
     auto d = Describer<FromNicArgs, FromNic>{};
     auto iface = d.positional("iface", &FromNicArgs::iface);
     auto snaplen = d.named("snaplen", &FromNicArgs::snaplen);
+    auto filter = d.named("filter", &FromNicArgs::filter);
     auto parser = d.pipeline(&FromNicArgs::parser);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto iface_value, ctx.get(iface));
@@ -278,6 +322,13 @@ public:
         } else if (snaplen_value->inner > pcap::maximum_snaplen) {
           diagnostic::error("`snaplen` must be <= {}", pcap::maximum_snaplen)
             .primary(snaplen_value->source)
+            .emit(ctx);
+        }
+      }
+      if (auto filter_value = ctx.get(filter)) {
+        if (filter_value->inner.empty()) {
+          diagnostic::error("`filter` must not be empty")
+            .primary(filter_value->source)
             .emit(ctx);
         }
       }
