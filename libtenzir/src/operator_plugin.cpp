@@ -86,7 +86,7 @@ auto display_names(const Named& named) -> std::string {
 }
 
 auto primary_name(const Named& named) -> std::string_view {
-  TENZIR_ASSERT(! named.names.empty());
+  TENZIR_ASSERT(not named.names.empty());
   return named.names.front();
 }
 
@@ -362,7 +362,7 @@ public:
     return failure::promise();
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) and -> AnyOperator override {
     // The spawner must be retrieved before filling args, because we move them
     // out and thus the passed `DescribeCtx` would be incomplete.
     auto spawner = std::optional<AnySpawn>{};
@@ -595,7 +595,7 @@ public:
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
+                event_order order) and -> ir::optimize_result override {
     if (desc_->set_filter) {
       filter_.append_range(filter | std::views::as_rvalue);
       auto replacement = std::vector<Box<Operator>>{};

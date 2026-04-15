@@ -457,15 +457,17 @@ public:
 
   auto note_reallocation(const detail::allocation_tag& tag,
                          std::int64_t old_size, std::int64_t new_size) -> void {
-    const auto success = try_note_impl(tag, &stats::note_reallocation, false,
-                                       old_size, new_size);
-    TENZIR_ALLOCATOR_ASSERT(success && "unexpected unknown reallocation");
+    [[maybe_unused]] auto success
+      = try_note_impl(tag, &stats::note_reallocation, false, old_size,
+                      new_size);
+    TENZIR_ALLOCATOR_ASSERT(success and "unexpected unknown reallocation");
   }
 
   auto note_deallocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
-    const auto success = try_note_impl(tag, &stats::note_deallocation, size);
-    TENZIR_ALLOCATOR_ASSERT(success && "unexpected unknown deallocation");
+    [[maybe_unused]] auto success
+      = try_note_impl(tag, &stats::note_deallocation, size);
+    TENZIR_ALLOCATOR_ASSERT(success and "unexpected unknown deallocation");
   }
 
   /// Obtains the internal data as a copy
@@ -584,7 +586,7 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ or actor_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
@@ -617,7 +619,7 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ or actor_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
@@ -647,7 +649,7 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ or actor_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
@@ -681,7 +683,7 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ or actor_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
