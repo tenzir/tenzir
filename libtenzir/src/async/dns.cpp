@@ -18,19 +18,23 @@
 #include "tenzir/panic.hpp"
 #include "tenzir/socket.hpp"
 
-#include <ares.h>
+#include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/coro/Baton.h>
+#include <folly/coro/WithCancellation.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #include <algorithm>
+#include <ares.h>
 #include <chrono>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <netdb.h>
 #include <string>
 #include <string_view>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <unordered_map>
 #include <utility>
 
@@ -50,7 +54,8 @@ auto normalize_config(DnsResolverConfig config) -> DnsResolverConfig {
     = std::max(config.positive_ttl, std::chrono::seconds::zero());
   config.negative_ttl
     = std::max(config.negative_ttl, std::chrono::seconds::zero());
-  config.literal_ttl = std::max(config.literal_ttl, std::chrono::seconds::zero());
+  config.literal_ttl
+    = std::max(config.literal_ttl, std::chrono::seconds::zero());
   return config;
 }
 
@@ -83,11 +88,11 @@ public:
     auto options = ares_options{};
     options.timeout = detail::narrow<int>(std::min<int64_t>(
       config.timeout.count(), std::numeric_limits<int>::max()));
-    options.tries = detail::narrow<int>(std::min<size_t>(
-      config.tries, size_t{std::numeric_limits<int>::max()}));
+    options.tries = detail::narrow<int>(
+      std::min<size_t>(config.tries, size_t{std::numeric_limits<int>::max()}));
     options.evsys = ARES_EVSYS_DEFAULT;
-    auto optmask = int{ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES
-                       | ARES_OPT_EVENT_THREAD};
+    auto optmask
+      = int{ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES | ARES_OPT_EVENT_THREAD};
     status_ = static_cast<ares_status_t>(
       ares_init_options(&channel_, &options, optmask));
     if (status_ != ARES_SUCCESS) {
@@ -141,10 +146,24 @@ auto make_forward_failure(int status) -> ForwardDnsResult {
   };
 }
 
+auto make_forward_failure(std::string error) -> ForwardDnsResult {
+  return {
+    .status = ForwardDnsStatus::failed,
+    .error = std::move(error),
+  };
+}
+
 auto make_reverse_failure(int status) -> ReverseDnsResult {
   return {
     .status = ReverseDnsStatus::failed,
     .error = std::string{ares_strerror(status)},
+  };
+}
+
+auto make_reverse_failure(std::string error) -> ReverseDnsResult {
+  return {
+    .status = ReverseDnsStatus::failed,
+    .error = std::move(error),
   };
 }
 
@@ -207,8 +226,8 @@ auto sockaddr_to_ip(sockaddr const* address) -> Option<ip> {
   }
 }
 
-auto make_sockaddr(ip address, sockaddr_storage& storage, ares_socklen_t& length)
-  -> void {
+auto make_sockaddr(ip address, sockaddr_storage& storage,
+                   ares_socklen_t& length) -> void {
   if (address.is_v4()) {
     auto sockaddr = sockaddr_in{};
     auto err = convert(address, sockaddr);
@@ -391,9 +410,9 @@ auto insert_cached(LookupState<Key, Result>& state, Key const& key,
     return;
   }
   state.cache.put(key, CacheEntry<Result>{
-                        .result = result,
-                        .expires_at = Clock::now() + ttl,
-                      });
+                         .result = result,
+                         .expires_at = Clock::now() + ttl,
+                       });
 }
 
 auto ttl_for(DnsResolverConfig const& config, ForwardDnsResult const& result)
@@ -441,6 +460,29 @@ auto finish_lookup(Mutex<LookupState<Key, Result>>& state_mutex, Key const& key,
   co_return pending;
 }
 
+template <class Key, class Result>
+auto abort_lookup(Mutex<LookupState<Key, Result>>& state_mutex, Key const& key,
+                  std::shared_ptr<PendingLookup<Key, Result>> const& pending,
+                  Result result) -> Task<void> {
+  auto state = co_await state_mutex.lock();
+  auto it = state->pending.find(key);
+  if (it == state->pending.end()) {
+    co_return;
+  }
+  if (pending) {
+    if (it->second != pending) {
+      co_return;
+    }
+    pending->result = std::move(result);
+  } else if (it->second) {
+    co_return;
+  }
+  state->pending.erase(it);
+  if (pending) {
+    pending->baton.post();
+  }
+}
+
 } // namespace
 
 struct ForwardDnsResolver::Impl {
@@ -472,7 +514,8 @@ ForwardDnsResolver::~ForwardDnsResolver() = default;
 
 auto ForwardDnsResolver::resolve(std::string hostname)
   -> Task<ForwardDnsResult> {
-  auto pending = std::shared_ptr<PendingLookup<std::string, ForwardDnsResult>>{};
+  auto pending
+    = std::shared_ptr<PendingLookup<std::string, ForwardDnsResult>>{};
   auto created = false;
   {
     auto state = co_await impl_->state_.lock();
@@ -492,17 +535,37 @@ auto ForwardDnsResolver::resolve(std::string hostname)
     TENZIR_ASSERT(pending->result);
     co_return *pending->result;
   }
-  auto result = ForwardDnsResult{};
-  if (auto local = local_forward_result(hostname, impl_->config_)) {
-    result = std::move(*local);
-  } else {
-    auto permit = co_await impl_->permits_.acquire();
-    result = co_await forward_query(impl_->channel_, hostname);
+  auto cancelled = false;
+  auto exception = std::exception_ptr{};
+  auto cancelled_result = Option<ForwardDnsResult>{};
+  try {
+    auto result = ForwardDnsResult{};
+    if (auto local = local_forward_result(hostname, impl_->config_)) {
+      result = std::move(*local);
+    } else {
+      auto permit = co_await impl_->permits_.acquire();
+      result = co_await forward_query(impl_->channel_, hostname);
+    }
+    auto ttl = ttl_for(impl_->config_, result);
+    pending = co_await finish_lookup(impl_->state_, hostname, result, ttl);
+    pending->baton.post();
+    co_return result;
+  } catch (folly::OperationCancelled const&) {
+    cancelled = true;
+    cancelled_result = make_forward_failure("DNS lookup cancelled");
+  } catch (...) {
+    exception = std::current_exception();
+    cancelled_result = make_forward_failure("DNS lookup aborted");
   }
-  auto ttl = ttl_for(impl_->config_, result);
-  pending = co_await finish_lookup(impl_->state_, hostname, result, ttl);
-  pending->baton.post();
-  co_return result;
+  TENZIR_ASSERT(cancelled or exception);
+  TENZIR_ASSERT(cancelled_result);
+  co_await folly::coro::co_withCancellation(
+    folly::CancellationToken{},
+    abort_lookup(impl_->state_, hostname, pending, *cancelled_result));
+  if (cancelled) {
+    throw folly::OperationCancelled{};
+  }
+  std::rethrow_exception(exception);
 }
 
 auto ForwardDnsResolver::cached(std::string_view hostname)
@@ -558,23 +621,42 @@ auto ReverseDnsResolver::resolve(ip address) -> Task<ReverseDnsResult> {
     TENZIR_ASSERT(pending->result);
     co_return *pending->result;
   }
-  auto result = ReverseDnsResult{};
-  auto ttl = DnsDuration{};
-  if (auto local = local_reverse_result(address, impl_->config_)) {
-    result = std::move(*local);
-    ttl = impl_->config_.literal_ttl;
-  } else {
-    auto permit = co_await impl_->permits_.acquire();
-    result = co_await reverse_query(impl_->channel_, address);
-    ttl = ttl_for(impl_->config_, result);
+  auto cancelled = false;
+  auto exception = std::exception_ptr{};
+  auto cancelled_result = Option<ReverseDnsResult>{};
+  try {
+    auto result = ReverseDnsResult{};
+    auto ttl = DnsDuration{};
+    if (auto local = local_reverse_result(address, impl_->config_)) {
+      result = std::move(*local);
+      ttl = impl_->config_.literal_ttl;
+    } else {
+      auto permit = co_await impl_->permits_.acquire();
+      result = co_await reverse_query(impl_->channel_, address);
+      ttl = ttl_for(impl_->config_, result);
+    }
+    pending = co_await finish_lookup(impl_->state_, address, result, ttl);
+    pending->baton.post();
+    co_return result;
+  } catch (folly::OperationCancelled const&) {
+    cancelled = true;
+    cancelled_result = make_reverse_failure("DNS lookup cancelled");
+  } catch (...) {
+    exception = std::current_exception();
+    cancelled_result = make_reverse_failure("DNS lookup aborted");
   }
-  pending = co_await finish_lookup(impl_->state_, address, result, ttl);
-  pending->baton.post();
-  co_return result;
+  TENZIR_ASSERT(cancelled or exception);
+  TENZIR_ASSERT(cancelled_result);
+  co_await folly::coro::co_withCancellation(
+    folly::CancellationToken{},
+    abort_lookup(impl_->state_, address, pending, *cancelled_result));
+  if (cancelled) {
+    throw folly::OperationCancelled{};
+  }
+  std::rethrow_exception(exception);
 }
 
-auto ReverseDnsResolver::cached(ip address)
-  -> Task<Option<ReverseDnsResult>> {
+auto ReverseDnsResolver::cached(ip address) -> Task<Option<ReverseDnsResult>> {
   auto state = co_await impl_->state_.lock();
   co_return lookup_cached(*state, address);
 }
