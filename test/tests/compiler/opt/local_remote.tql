@@ -1,0 +1,7 @@
+export
+local {
+  where foo == 42
+}
+remote {
+  where bar == 7
+}

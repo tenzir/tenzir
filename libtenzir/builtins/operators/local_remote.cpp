@@ -6,14 +6,18 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
@@ -114,9 +118,64 @@ private:
   operator_location location_;
 };
 
+auto location_name(operator_location location) -> std::string_view {
+  switch (location) {
+    case operator_location::local:
+      return "local";
+    case operator_location::remote:
+      return "remote";
+    case operator_location::anywhere:
+      break;
+  }
+  TENZIR_UNREACHABLE();
+}
+
+class LocalRemoteIR final : public ir::Operator {
+public:
+  LocalRemoteIR() = default;
+
+  LocalRemoteIR(operator_location location, ir::pipeline inner)
+    : location_{location}, inner_{std::move(inner)} {
+  }
+
+  auto name() const -> std::string override {
+    return "local_remote_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return inner_.substitute(ctx, instantiate);
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    return inner_.infer_type(input, dh);
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    return std::move(inner_).optimize(std::move(filter), order);
+  }
+
+  auto spawn(element_type_tag input) and -> AnyOperator override {
+    TENZIR_UNUSED(input);
+    TENZIR_UNREACHABLE();
+  }
+
+  friend auto inspect(auto& f, LocalRemoteIR& x) -> bool {
+    return f.object(x).fields(f.field("location", x.location_),
+                              f.field("inner", x.inner_));
+  }
+
+private:
+  operator_location location_ = operator_location::anywhere;
+  ir::pipeline inner_;
+};
+
 template <detail::string_literal Name, operator_location Location>
 class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual operator_compiler_plugin {
 public:
   auto initialize([[maybe_unused]] const record& plugin_config,
                   const record& global_config) -> caf::error override {
@@ -173,11 +232,39 @@ public:
     }
     return std::make_unique<pipeline>(std::move(ops));
   }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<Box<ir::Operator>> override {
+    auto loc = inv.op.get_location();
+    if (inv.args.size() != 1) {
+      diagnostic::error("`{}` expects a single pipeline argument",
+                        location_name(Location))
+        .primary(loc)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto* pipe_expr = try_as<ast::pipeline_expr>(inv.args[0]);
+    if (not pipe_expr) {
+      diagnostic::error("`{}` expects a pipeline argument `{{ … }}`",
+                        location_name(Location))
+        .primary(inv.args[0])
+        .emit(ctx);
+      return failure::promise();
+    }
+    diagnostic::warning("`{}` has no effect in the new executor",
+                        location_name(Location))
+      .primary(loc)
+      .emit(ctx);
+    TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+    return LocalRemoteIR{Location, std::move(pipe_ir)};
+  }
 };
 
 using local_plugin = plugin<"local", operator_location::local>;
 using remote_plugin = plugin<"remote", operator_location::remote>;
-using serialization_plugin = operator_inspection_plugin<local_remote_operator>;
+using legacy_serialization_plugin
+  = operator_inspection_plugin<local_remote_operator>;
+using ir_serialization_plugin = inspection_plugin<ir::Operator, LocalRemoteIR>;
 
 } // namespace
 
@@ -185,4 +272,6 @@ using serialization_plugin = operator_inspection_plugin<local_remote_operator>;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::local_remote::local_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::local_remote::remote_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::local_remote::serialization_plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::local_remote::legacy_serialization_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::local_remote::ir_serialization_plugin)
