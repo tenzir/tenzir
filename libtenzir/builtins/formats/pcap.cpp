@@ -397,9 +397,10 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (pending_packet_header_) {
+      const auto captured_packet_length
+        = pending_packet_header_->captured_packet_length;
       diagnostic::error("truncated last packet; expected {} but got {}",
-                        pending_packet_header_->captured_packet_length,
-                        available())
+                        captured_packet_length, available())
         .note("from `pcap`")
         .emit(ctx.dh());
       co_return FinalizeBehavior::done;
@@ -436,8 +437,9 @@ public:
     if (need_swap_) {
       header = byteswap(header);
     }
+    const auto captured_packet_length = header.captured_packet_length;
     diagnostic::error("truncated last packet; expected {} but got {}",
-                      header.captured_packet_length,
+                      captured_packet_length,
                       available() - sizeof(packet_header))
       .note("from `pcap`")
       .emit(ctx.dh());
