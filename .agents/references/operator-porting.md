@@ -69,6 +69,9 @@ struct MyArgs {
 
 - `located<T>` — use when you need `.source` to point errors at the right token.
 - `Option<located<T>>` — maps to an optional named argument in `Describer`.
+- Put stable defaults directly in the args struct. Prefer a member initializer
+  over a `normalize_*_args()` helper when the default does not depend on
+  runtime context.
 
 ---
 
@@ -170,6 +173,11 @@ Sources use `await_task()` to produce data and `process_task()` to push it.
 They use `start()` to initialize a parser state, `process()` to parse chunks,
 and `finalize()` to flush the last partial record.
 
+When `process()` scans a chunk incrementally, accumulate a local
+`series_builder::YieldReadyResult`, merge `yield_ready_as_table_slice(...)`
+into it as records become ready, and push once after the loop. Reference
+implementations: `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
 ---
 
 ## Step 5 — Member types
@@ -239,6 +247,23 @@ emitting this data before yielding and allowing `snapshot()` to run.
 ---
 
 ## Step 7 — Plugin registration
+
+### `DescribeCtx::get()` and defaulted named arguments
+
+Inside `d.validate(...)`, `DescribeCtx::get()` returns `std::nullopt` when the
+caller omitted an argument. This also applies to `named_optional(...)`
+arguments whose target member in `Args` has a default initializer.
+
+Do not assume that `ctx.get(arg)` is engaged just because `Args` carries a
+member default. Apply the args-struct defaults explicitly:
+
+```cpp
+auto defaults = MyArgs{};
+auto timeout = ctx.get(timeout_arg);
+auto effective_timeout = timeout ? *timeout : defaults.timeout;
+```
+
+Use `.value()` only when the argument is truly required.
 
 ### Adding to an existing plugin
 

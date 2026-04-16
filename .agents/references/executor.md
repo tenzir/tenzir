@@ -81,6 +81,16 @@ Use `SeriesPusher` from `tenzir/async/pusher.hpp` when an operator uses
 `series_builder::yield_ready()` together with `await_task()` /
 `process_task()` to drive timeout-based flushes.
 
+### Per-chunk parser flushes
+
+If a `chunk_ptr -> table_slice` parser scans an input chunk incrementally,
+accumulate a `series_builder::YieldReadyResult` for the whole chunk, merge
+`yield_ready_as_table_slice(...)` into it as records become ready, and push
+once after the loop.
+
+This keeps parsing state changes local to `process()` and matches the existing
+parser patterns in `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
 ### Structured concurrency with `async_scope`
 
 Use `async_scope()` for fan-out within a task. If a task spawns child tasks and
