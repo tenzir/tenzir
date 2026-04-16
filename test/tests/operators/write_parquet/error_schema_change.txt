@@ -1,0 +1,4 @@
+error: input schema changed while writing parquet
+ = note: all input slices to `write_parquet` must have the same schema
+ = note: first schema shape: `record {x: int64}`
+ = note: current schema shape: `record {y: int64}`

@@ -21,28 +21,6 @@ namespace tenzir::plugins::read_all {
 
 namespace {
 
-auto join_chunks(const std::vector<tenzir::chunk_ptr>& chunks)
-  -> tenzir::chunk_ptr {
-  size_t total = 0;
-  for (const auto& c : chunks) {
-    if (c) {
-      total += c->size();
-    }
-  }
-  if (total == 0) {
-    return tenzir::chunk::make_empty();
-  }
-
-  std::vector<std::byte> bytes;
-  bytes.reserve(total);
-  for (const auto& c : chunks) {
-    if (c) {
-      bytes.insert(bytes.end(), c->begin(), c->end());
-    }
-  }
-  return tenzir::chunk::make(std::move(bytes));
-}
-
 struct ReadAllArgs {
   bool binary = false;
   location operator_location;

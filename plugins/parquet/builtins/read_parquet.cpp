@@ -8,6 +8,7 @@
 
 #include "parquet/operator.hpp"
 
+#include <tenzir/chunk.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -17,36 +18,62 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 
-auto join_chunks(std::vector<chunk_ptr>& chunks) -> chunk_ptr {
-  auto total_size = size_t{0};
-  for (const auto& chunk : chunks) {
-    if (chunk) {
-      total_size += chunk->size();
+auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto needs_name = true;
+  auto needs_stripping = false;
+  auto metadata = batch->schema()->metadata();
+  auto keys = metadata ? metadata->keys() : std::vector<std::string>{};
+  auto values = metadata ? metadata->values() : std::vector<std::string>{};
+  for (const auto& key : keys) {
+    if (key == "TENZIR:name:0") {
+      needs_name = false;
+      continue;
+    }
+    if (not key.starts_with("TENZIR:")) {
+      needs_stripping = true;
     }
   }
-  if (total_size == 0) {
-    return chunk::make_empty();
+  if (not needs_name and not needs_stripping) {
+    return batch;
   }
-  auto bytes = std::vector<std::byte>{};
-  bytes.reserve(total_size);
-  for (auto& chunk : chunks) {
-    if (chunk) {
-      bytes.insert(bytes.end(), chunk->begin(), chunk->end());
+  if (needs_stripping) {
+    auto kit = keys.begin();
+    auto vit = values.begin();
+    while (kit != keys.end()) {
+      if (not kit->starts_with("TENZIR:")) {
+        vit = values.erase(vit);
+        kit = keys.erase(kit);
+        continue;
+      }
+      ++kit;
+      ++vit;
     }
   }
-  chunks.clear();
-  return chunk::make(std::move(bytes));
+  if (needs_name) {
+    keys.emplace_back("TENZIR:name:0");
+    values.emplace_back("tenzir.parquet");
+  }
+  TENZIR_ASSERT(keys.size() == values.size());
+  return batch->ReplaceSchemaMetadata(
+    arrow::key_value_metadata(std::move(keys), std::move(values)));
 }
 
 struct ReadParquetArgs {};
 
 class ReadParquet final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadParquet(ReadParquetArgs args) : args_{std::move(args)} {
+  explicit ReadParquet(ReadParquetArgs args) {
+    TENZIR_UNUSED(args);
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
+    // NOTE: The parquet format stores key decoding metadata in the file
+    // footer. With plain streaming bytes, we cannot decode row groups before
+    // seeing the footer, so we buffer and parse in `finalize()`. This also
+    // means checkpointing is currently unsupported: restoring would require
+    // persisting potentially huge buffered input and parser progress.
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -55,8 +82,7 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(args_);
-    auto parquet_chunk = join_chunks(chunks_);
+    auto parquet_chunk = join_chunks(std::move(chunks_));
     if (parquet_chunk->size() == 0) {
       co_return FinalizeBehavior::done;
     }
@@ -103,42 +129,7 @@ public:
       /// We need to perform some cleanup, in case the parquet files were not
       /// written by us. Specifically we need to ensure that the slice has a
       /// name and that only metadata that are tenzir attributes exist.
-      auto needs_name = true;
-      auto needs_stripping = false;
-      auto metadata = batch->schema()->metadata();
-      auto keys = metadata ? metadata->keys() : std::vector<std::string>{};
-      auto values = metadata ? metadata->values() : std::vector<std::string>{};
-      for (const auto& key : keys) {
-        if (key == "TENZIR:name:0") {
-          needs_name = false;
-          continue;
-        }
-        if (not key.starts_with("TENZIR:")) {
-          needs_stripping = true;
-        }
-      }
-      if (needs_name or needs_stripping) {
-        if (needs_stripping) {
-          auto kit = keys.begin();
-          auto vit = values.begin();
-          while (kit != keys.end()) {
-            if (not kit->starts_with("TENZIR:")) {
-              vit = values.erase(vit);
-              kit = keys.erase(kit);
-              continue;
-            }
-            ++kit;
-            ++vit;
-          }
-        }
-        if (needs_name) {
-          keys.emplace_back("TENZIR:name:0");
-          values.emplace_back("tenzir.parquet");
-        }
-        TENZIR_ASSERT(keys.size() == values.size());
-        batch = batch->ReplaceSchemaMetadata(
-          arrow::key_value_metadata(std::move(keys), std::move(values)));
-      }
+      batch = inject_tenzir_metadata(std::move(batch));
       auto maybe_slice = table_slice::try_from(batch);
       if (not maybe_slice) {
         diagnostic::error("parquet file contains unsupported types")
@@ -151,12 +142,14 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    serde("chunks", chunks_);
+  auto snapshot(Serde&) -> void override {
+    // Checkpointing this operator would require persisting the buffered parquet
+    // bytes until the footer arrives, which can be arbitrarily large. Until we
+    // have a seekable parquet path, we fail checkpoints explicitly.
+    diagnostic::error("read_parquet does not support checkpoints yet").throw_();
   }
 
 private:
-  ReadParquetArgs args_;
   std::vector<chunk_ptr> chunks_;
 };
 

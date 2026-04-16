@@ -7,11 +7,16 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/operator.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <limits>
+#include <memory>
 
 namespace tenzir::plugins::parquet {
 
@@ -23,9 +28,52 @@ struct WriteParquetArgs {
   Option<location> times_in_milliseconds;
 };
 
+auto build_writer_props(WriteParquetArgs& args)
+  -> std::shared_ptr<::parquet::WriterProperties> {
+  auto parquet_writer_props_builder = ::parquet::WriterProperties::Builder();
+  if (args.compression_type) {
+    auto compression_type
+      = arrow::util::Codec::GetCompressionType(args.compression_type->inner);
+    // This should already be caught by validate_compression_arguments.
+    TENZIR_ASSERT(compression_type.ok());
+    parquet_writer_props_builder.compression(
+      compression_type.MoveValueUnsafe());
+    if (args.compression_level and args.compression_type->inner != "snappy") {
+      parquet_writer_props_builder.compression_level(
+        static_cast<int>(args.compression_level->inner));
+    }
+  }
+  parquet_writer_props_builder.version(
+    ::parquet::ParquetVersion::PARQUET_2_LATEST);
+  return parquet_writer_props_builder.build();
+}
+
 class WriteParquet final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteParquet(WriteParquetArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    parquet_writer_props_ = build_writer_props(args_);
+    co_return;
+  }
+
+  /// Serializes mutable operator state for checkpointing.
+  ///
+  /// `out_buffer_` is guaranteed empty between `process()` calls because we
+  /// call `purge()` at the end of every `process()` invocation, which drains
+  /// all bytes Arrow's `WriteRecordBatch` flushed synchronously to the stream.
+  /// `writer_` and `parquet_writer_props_` are not serialized: `writer_` is
+  /// re-created lazily on the first `process()` after restore (using the
+  /// deserialized `input_schema_`), and `parquet_writer_props_` is rebuilt
+  /// from `args_` in `start()`.
+  auto snapshot(Serde& serde) -> void override {
+    serde("failed", failed_);
+    serde("input_schema", input_schema_);
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : OperatorState::unspecified;
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
@@ -33,8 +81,24 @@ public:
     if (failed_) {
       co_return;
     }
+    auto input_schema = input.schema();
+    if (input_schema_) {
+      if (*input_schema_ != input_schema) {
+        diagnostic::error("input schema changed while writing parquet")
+          .note("all input slices to `write_parquet` must have the same schema")
+          .note("first schema shape: `{}`", as<record_type>(*input_schema_))
+          .note("current schema shape: `{}`", as<record_type>(input_schema))
+          .emit(ctx);
+        failed_ = true;
+        co_return;
+      }
+    } else {
+      input_schema_ = std::move(input_schema);
+    }
+    TENZIR_ASSERT(input_schema_);
+    TENZIR_ASSERT(parquet_writer_props_);
     if (not writer_) {
-      if (not init_writer(input, ctx)) {
+      if (not init_writer(ctx)) {
         failed_ = true;
         co_return;
       }
@@ -76,85 +140,91 @@ public:
   }
 
 private:
-  auto init_writer(const table_slice& input, OpCtx& ctx) -> bool {
+  auto init_writer(OpCtx& ctx) -> failure_or<void> {
     auto arrow_writer_props
       = ::parquet::ArrowWriterProperties::Builder().store_schema()->build();
-    auto parquet_writer_props_builder = ::parquet::WriterProperties::Builder();
-    if (args_.compression_type) {
-      auto result_compression_type = arrow::util::Codec::GetCompressionType(
-        args_.compression_type->inner);
-      if (not result_compression_type.ok()) {
-        diagnostic::error(
-          "{}", result_compression_type.status().ToStringWithoutContextLines())
-          .note("failed to parse compression type")
-          .note("must be `brotli`, `gzip`, `snappy`, or `zstd`")
-          .primary(args_.compression_type->source)
-          .emit(ctx);
-        return false;
-      }
-      parquet_writer_props_builder.compression(
-        result_compression_type.MoveValueUnsafe());
-      if (args_.compression_level) {
-        if (args_.compression_type->inner == "brotli"
-            and (args_.compression_level->inner < 1
-                 or args_.compression_level->inner > 11)) {
-          diagnostic::error("invalid compression level")
-            .note("must be a value between 1 and 11")
-            .primary(args_.compression_level->source)
-            .emit(ctx);
-          return false;
-        }
-        if (args_.compression_type->inner == "gzip"
-            and (args_.compression_level->inner < 1
-                 or args_.compression_level->inner > 9)) {
-          diagnostic::error("invalid compression level")
-            .note("must be a value between 1 and 9")
-            .primary(args_.compression_level->source)
-            .emit(ctx);
-          return false;
-        }
-        if (args_.compression_type->inner != "snappy") {
-          parquet_writer_props_builder.compression_level(
-            args_.compression_level->inner);
-        } else {
-          diagnostic::warning("ignoring compression level option")
-            .note("snappy does not accept `compression level`")
-            .primary(args_.compression_level->source)
-            .primary(args_.compression_type->source)
-            .emit(ctx);
-        }
-      }
-    } else if (args_.compression_level) {
-      diagnostic::warning("ignoring compression level option")
-        .note("has no effect without `compression type`")
-        .primary(args_.compression_level->source)
-        .emit(ctx);
-    }
-    parquet_writer_props_builder.version(
-      ::parquet::ParquetVersion::PARQUET_2_LATEST);
-    auto parquet_writer_props = parquet_writer_props_builder.build();
     out_buffer_ = std::make_shared<chunked_buffer_output_stream>();
-    const auto schema = remove_empty_records(
-      input.schema().to_arrow_schema(),
-      static_cast<bool>(args_.times_in_milliseconds), ctx.dh());
-    auto file_result = ::parquet::arrow::FileWriter::Open(
-      *schema, arrow_memory_pool(), out_buffer_, std::move(parquet_writer_props),
-      std::move(arrow_writer_props));
+    const auto schema
+      = remove_empty_records(input_schema_->to_arrow_schema(),
+                             static_cast<bool>(args_.times_in_milliseconds),
+                             ctx.dh());
+    auto file_result
+      = ::parquet::arrow::FileWriter::Open(*schema, arrow_memory_pool(),
+                                           out_buffer_, parquet_writer_props_,
+                                           std::move(arrow_writer_props));
     if (not file_result.ok()) {
       diagnostic::error("failed to create parquet writer: {}",
                         file_result.status().ToStringWithoutContextLines())
         .emit(ctx);
-      return false;
+      return failure::promise();
     }
     writer_ = file_result.MoveValueUnsafe();
-    return true;
+    return {};
   }
 
+  // --- args ---
   WriteParquetArgs args_;
+  // --- transient ---
+  // Note: Arc/Box cannot be used here. The parquet API boundary forces
+  // std::shared_ptr and std::unique_ptr.
+  std::shared_ptr<::parquet::WriterProperties> parquet_writer_props_;
   std::shared_ptr<chunked_buffer_output_stream> out_buffer_;
   std::unique_ptr<::parquet::arrow::FileWriter> writer_;
+  // --- state ---
+  Option<type> input_schema_;
   bool failed_ = false;
 };
+
+auto validate_compression_arguments(const Option<located<std::string>>& type,
+                                    const Option<located<int64_t>>& level,
+                                    DescribeCtx& ctx) {
+  if (type) {
+    auto result_compression_type
+      = arrow::util::Codec::GetCompressionType(type->inner);
+    if (not result_compression_type.ok()) {
+      diagnostic::error(
+        "{}", result_compression_type.status().ToStringWithoutContextLines())
+        .note("failed to parse compression type")
+        .note("must be `brotli`, `gzip`, `snappy`, or `zstd`")
+        .primary(type->source)
+        .emit(ctx);
+    }
+    if (level) {
+      if (type->inner == "brotli" and (level->inner < 1 or level->inner > 11)) {
+        diagnostic::error("invalid compression level")
+          .note("must be a value between 1 and 11")
+          .primary(level->source)
+          .emit(ctx);
+      }
+      if (type->inner == "gzip" and (level->inner < 1 or level->inner > 9)) {
+        diagnostic::error("invalid compression level")
+          .note("must be a value between 1 and 9")
+          .primary(level->source)
+          .emit(ctx);
+      }
+      if (type->inner != "snappy") {
+        if (level->inner < std::numeric_limits<int>::min()
+            or level->inner > std::numeric_limits<int>::max()) {
+          diagnostic::error("invalid compression level")
+            .note("must fit into a 32-bit signed integer")
+            .primary(level->source)
+            .emit(ctx);
+        }
+      } else {
+        diagnostic::warning("ignoring compression level option")
+          .note("snappy does not accept `compression level`")
+          .primary(level->source)
+          .primary(type->source)
+          .emit(ctx);
+      }
+    }
+  } else if (level) {
+    diagnostic::warning("ignoring compression level option")
+      .note("has no effect without `compression type`")
+      .primary(level->source)
+      .emit(ctx);
+  }
+}
 
 class Plugin final : public virtual OperatorPlugin {
 public:
@@ -164,9 +234,17 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WriteParquetArgs, WriteParquet>{};
-    d.named("compression_level", &WriteParquetArgs::compression_level);
-    d.named("compression_type", &WriteParquetArgs::compression_type);
+    auto compression_level
+      = d.named("compression_level", &WriteParquetArgs::compression_level);
+    auto compression_type
+      = d.named("compression_type", &WriteParquetArgs::compression_type);
     d.named("_times_in_milliseconds", &WriteParquetArgs::times_in_milliseconds);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      auto level = ctx.get(compression_level);
+      auto type = ctx.get(compression_type);
+      validate_compression_arguments(type, level, ctx);
+      return {};
+    });
     return d.without_optimize();
   }
 };
