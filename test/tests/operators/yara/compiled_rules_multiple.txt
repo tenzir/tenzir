@@ -1,0 +1,14 @@
+error: can't accept multiple rules in compiled form
+ --> tests/operators/yara/compiled_rules_multiple.tql:6:8
+  |
+6 |   yara ["a", "b"], compiled_rules=true
+  |        ^^^^^^^^^^ 
+  |
+  = hint: provide exactly one rule argument
+
+error: failed to substitute pipeline
+ --> tests/operators/yara/compiled_rules_multiple.tql:5:12
+  |
+5 | from_stdin {
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

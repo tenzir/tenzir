@@ -9,10 +9,14 @@
 #include "tenzir/detail/assert.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/as_bytes.hpp>
+#include <tenzir/chunk.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try.hpp>
 #include <tenzir/view.hpp>
 
 #include <yara/libyara.h>
@@ -614,9 +618,198 @@ private:
   operator_args args_ = {};
 };
 
+struct YaraArgs {
+  located<list> rules = {};
+  bool blockwise = false;
+  bool compiled_rules = false;
+  bool fast_scan = false;
+};
+
+class Yara final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit Yara(YaraArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    failed_ = not initialize(ctx.dh());
+    co_return;
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_ or not scanner_ or not input or input->size() == 0) {
+      co_return;
+    }
+    if (args_.blockwise) {
+      auto slices = scanner_->scan(as_bytes(input));
+      if (not slices) {
+        diagnostic::warning("failed to scan block with YARA rules")
+          .hint("{}", slices.error())
+          .emit(ctx);
+        co_return;
+      }
+      for (auto& slice : *slices) {
+        co_await push(std::move(slice));
+      }
+      co_return;
+    }
+    buffered_chunks_.push_back(std::move(input));
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (failed_ or not scanner_ or args_.blockwise) {
+      co_return FinalizeBehavior::done;
+    }
+    auto joined = join_chunks(buffered_chunks_);
+    buffered_chunks_.clear();
+    if (not joined) {
+      co_return FinalizeBehavior::done;
+    }
+    auto slices = scanner_->scan(as_bytes(joined));
+    if (not slices) {
+      diagnostic::error("failed to scan blocks with YARA rules")
+        .hint("{}", slices.error())
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+    for (auto& slice : *slices) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // We intentionally serialize buffered input because the operator must see
+    // the entire byte stream before emitting matches in non-blockwise mode.
+    serde("failed", failed_);
+    serde("buffered_chunks", buffered_chunks_);
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  static auto join_chunks(std::vector<chunk_ptr> const& chunks) -> chunk_ptr {
+    // YARA matches may span chunk boundaries, so non-blockwise mode must scan
+    // a contiguous byte sequence. Keep the single-chunk fast path to avoid an
+    // unnecessary copy.
+    auto first = chunk_ptr{};
+    auto buffer = std::vector<std::byte>{};
+    for (auto const& chunk : chunks) {
+      if (not chunk or chunk->size() == 0) {
+        continue;
+      }
+      if (not buffer.empty()) {
+        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      } else if (not first) {
+        first = chunk;
+      } else {
+        buffer.reserve(first->size() + chunk->size());
+        buffer.insert(buffer.end(), first->begin(), first->end());
+        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      }
+    }
+    if (buffer.empty()) {
+      return first;
+    }
+    return chunk::make(std::move(buffer));
+  }
+
+  auto materialize_rules(diagnostic_handler& dh) const
+    -> Option<std::vector<std::string>> {
+    auto result = std::vector<std::string>{};
+    result.reserve(args_.rules.inner.size());
+    for (auto const& rule : args_.rules.inner) {
+      if (not is<std::string>(rule)) {
+        diagnostic::error("expected type string for rule")
+          .primary(args_.rules)
+          .emit(dh);
+        return {};
+      }
+      result.push_back(as<std::string>(rule));
+    }
+    if (result.empty()) {
+      diagnostic::error("no rules provided").emit(dh);
+      return {};
+    }
+    if (args_.compiled_rules and result.size() > 1) {
+      diagnostic::error("can't accept multiple rules in compiled form")
+        .primary(args_.rules)
+        .hint("provide exactly one rule argument")
+        .emit(dh);
+      return {};
+    }
+    return result;
+  }
+
+  auto initialize(diagnostic_handler& dh) -> bool {
+    auto rule_strings = materialize_rules(dh);
+    if (not rule_strings) {
+      return false;
+    }
+    auto compiler = compiler::make();
+    if (not compiler) {
+      diagnostic::error("insufficient memory to create YARA compiler").emit(dh);
+      return false;
+    }
+    if (args_.compiled_rules) {
+      TENZIR_ASSERT(rule_strings->size() == 1);
+      auto loaded = rules::load((*rule_strings)[0]);
+      if (not loaded) {
+        diagnostic::error("failed to load compiled YARA rules")
+          .note("{}", loaded.error())
+          .emit(dh);
+        return false;
+      }
+      rules_ = std::move(*loaded);
+    } else {
+      for (auto const& rule : *rule_strings) {
+        if (auto err = compiler->add(std::filesystem::path{rule});
+            err.valid()) {
+          diagnostic::error("failed to add YARA rule to compiler")
+            .note("rule: {}", rule)
+            .note("error: {}", err)
+            .emit(dh);
+          return false;
+        }
+      }
+      auto compiled = compiler->compile();
+      if (not compiled) {
+        diagnostic::error("failed to compile YARA rules")
+          .note("error: {}", compiled.error())
+          .emit(dh);
+        return false;
+      }
+      rules_ = std::move(*compiled);
+    }
+    auto opts = scan_options{
+      .fast_scan = args_.fast_scan,
+    };
+    auto scanner_instance = scanner::make(*rules_, opts);
+    if (not scanner_instance) {
+      diagnostic::warning("failed to construct YARA scanner").emit(dh);
+      return false;
+    }
+    scanner_ = std::move(*scanner_instance);
+    return true;
+  }
+
+  YaraArgs args_;
+  bool failed_ = false;
+  std::vector<chunk_ptr> buffered_chunks_;
+  Option<rules> rules_;
+  Option<scanner> scanner_;
+};
+
 /// The `yara` plugin.
 class plugin final : public virtual operator_plugin<yara_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   plugin() {
     const auto ok = yr_initialize();
@@ -629,6 +822,39 @@ public:
 
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<YaraArgs, Yara>{};
+    auto rules = d.positional("rules", &YaraArgs::rules, "list<string>");
+    auto compiled_rules = d.named("compiled_rules", &YaraArgs::compiled_rules);
+    d.named("fast_scan", &YaraArgs::fast_scan);
+    d.named("blockwise", &YaraArgs::blockwise);
+    d.validate([rules, compiled_rules](DescribeCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(rules));
+      auto count = size_t{0};
+      for (auto const& rule : value.inner) {
+        if (not is<std::string>(rule)) {
+          diagnostic::error("expected type string for rule")
+            .primary(value)
+            .emit(ctx);
+          return {};
+        }
+        ++count;
+      }
+      if (count == 0) {
+        diagnostic::error("no rules provided").emit(ctx);
+        return {};
+      }
+      if (ctx.get(compiled_rules).value_or(false) and count > 1) {
+        diagnostic::error("can't accept multiple rules in compiled form")
+          .primary(value)
+          .hint("provide exactly one rule argument")
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
