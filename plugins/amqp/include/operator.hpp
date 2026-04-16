@@ -145,8 +145,8 @@ inline auto to_error(const amqp_rpc_reply_t& reply) -> caf::error {
   return {};
 }
 
-inline auto parse_url(const record& config_,
-                      std::string_view str) -> std::optional<record> {
+inline auto parse_url(const record& config_, std::string_view str)
+  -> std::optional<record> {
   auto info = amqp_connection_info{};
   auto copy = std::string{str};
   if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK) {
@@ -421,8 +421,8 @@ public:
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume(std::optional<std::chrono::microseconds> timeout
-               = {}) -> caf::expected<chunk_ptr> {
+  auto consume(std::optional<std::chrono::microseconds> timeout = {})
+    -> caf::expected<chunk_ptr> {
     TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
@@ -746,8 +746,8 @@ public:
     return operator_location::local;
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -774,8 +774,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     co_yield {};
     auto& dh = ctrl.diagnostics();
     auto config = config_;
@@ -894,8 +894,8 @@ public:
     return true;
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -946,10 +946,10 @@ struct to_amqp_args {
 
 /// Resolve secrets from the args and build an amqp_engine config record.
 /// This is shared between FromAmqp and ToAmqp.
-inline auto
-build_secret_requests(const Option<located<secret>>& url,
-                      const Option<located<record>>& options, record& config,
-                      diagnostic_handler& dh) -> std::vector<secret_request> {
+inline auto build_secret_requests(const Option<located<secret>>& url,
+                                  const Option<located<record>>& options,
+                                  record& config, diagnostic_handler& dh)
+  -> std::vector<secret_request> {
   auto reqs = std::vector<secret_request>{};
   if (options) {
     const auto& loc = options->source;
@@ -1157,8 +1157,8 @@ public:
     co_return {};
   }
 
-  auto
-  process_task(Any, Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
+  auto process_task(Any, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
     auto messages = std::vector<chunk_ptr>{};
     {
       auto guard = std::scoped_lock{shared_->mutex};

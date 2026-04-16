@@ -58,8 +58,8 @@ class plugin : public virtual operator_plugin2<Operator> {
     return caf::none;
   }
 
-  auto make(operator_factory_invocation inv,
-            session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = Args{};
     args.op = inv.self.get_location();
     auto channel = std::optional<located<uint64_t>>{};
