@@ -3,4 +3,3 @@ read_pcap emit_file_headers=true
 write_pcap
 read_pcap emit_file_headers=true
 drop data?
-write_tql

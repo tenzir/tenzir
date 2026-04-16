@@ -3,4 +3,3 @@ from_file f"{env("TENZIR_INPUTS")}/pcap/sll2.pcap" {
   read_pcap
 }
 this = decapsulate(this)
-write_tql
