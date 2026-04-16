@@ -33,6 +33,15 @@ namespace {
 
 constexpr auto docs = "https://docs.tenzir.com/formats/kv";
 
+auto has_location(diagnostic const& diag) -> bool {
+  for (auto const& annotation : diag.annotations) {
+    if (annotation.source != location::unknown) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class splitter {
 public:
   splitter() = default;
@@ -492,7 +501,8 @@ private:
 };
 
 struct ReadKvArgs {
-  multi_series_builder::options msb_options = {};
+  multi_series_builder::options msb_options
+    = {.settings = {.default_schema_name = "tenzir.kv"}};
   located<std::string> field_split = {"\\s", location::unknown};
   located<std::string> value_split = {"=", location::unknown};
   located<std::string> quotes
@@ -500,17 +510,10 @@ struct ReadKvArgs {
   location operator_location = location::unknown;
 };
 
-auto normalize_read_kv_args(ReadKvArgs args) -> ReadKvArgs {
-  if (args.msb_options.settings.default_schema_name.empty()) {
-    args.msb_options.settings.default_schema_name = "tenzir.kv";
-  }
-  return args;
-}
-
 class ReadKv final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadKv(ReadKvArgs args)
-    : args_{normalize_read_kv_args(std::move(args))},
+    : args_{std::move(args)},
       quoting_{.quotes = args_.quotes.inner},
       field_split_{located<std::string_view>{args_.field_split.inner,
                                              args_.field_split.source}},
@@ -520,20 +523,9 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
-      d.message = fmt::format("read_kv: {}", d.message);
-      if (args_.operator_location) {
-        auto replaced_unknown_location = false;
-        for (auto& annotation : d.annotations) {
-          if (annotation.source) {
-            continue;
-          }
-          annotation.source = args_.operator_location;
-          replaced_unknown_location = true;
-        }
-        if (not replaced_unknown_location and d.annotations.empty()) {
-          d.annotations.emplace(d.annotations.begin(), true, "",
-                                args_.operator_location);
-        }
+      if (args_.operator_location and not has_location(d)) {
+        d.annotations.emplace_back(true, std::string{},
+                                   args_.operator_location);
       }
       d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
                       fmt::format("line {}", line_counter_));
@@ -562,6 +554,10 @@ public:
     }
     auto const* begin = reinterpret_cast<const char*>(input->data());
     auto const* const end = begin + input->size();
+    // Accumulate ready slices for the whole chunk and hand them to the
+    // executor once at the end, matching the read_cef/read_leef/read_xsv
+    // parser pattern.
+    auto ready = series_builder::YieldReadyResult{};
     if (ended_on_carriage_return_ and *begin == '\n') {
       ++begin;
     }
@@ -578,7 +574,7 @@ public:
         process_line(buffer_);
         buffer_.clear();
       }
-      co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+      ready.merge(msb_->yield_ready_as_table_slice(now));
       if (*current == '\r') {
         if (current + 1 == end) {
           ended_on_carriage_return_ = true;
@@ -589,7 +585,8 @@ public:
       begin = current + 1;
     }
     buffer_.append(begin, end);
-    co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+    ready.merge(msb_->yield_ready_as_table_slice(now));
+    co_await pusher_.push(std::move(ready), push);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx&)
@@ -889,9 +886,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadKvArgs, ReadKv>{ReadKvArgs{
-      .msb_options = {.settings = {.default_schema_name = "tenzir.kv"}},
-    }};
+    auto d = Describer<ReadKvArgs, ReadKv>{};
+    auto defaults = ReadKvArgs{};
     auto field_split
       = d.named_optional("field_split", &ReadKvArgs::field_split);
     auto value_split
@@ -900,10 +896,12 @@ public:
     auto msb = add_msb_to_describer(d, &ReadKvArgs::msb_options);
     d.operator_location(&ReadKvArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      auto fs = ctx.get(field_split).value_or(ReadKvArgs{}.field_split);
-      auto vs = ctx.get(value_split).value_or(ReadKvArgs{}.value_split);
-      (void)validate_splitter(fs, ctx);
-      (void)validate_splitter(vs, ctx);
+      // `DescribeCtx::get()` returns `nullopt` for omitted named arguments,
+      // even when `ReadKvArgs` carries member defaults.
+      auto fs = ctx.get(field_split);
+      auto vs = ctx.get(value_split);
+      (void)validate_splitter(fs ? *fs : defaults.field_split, ctx);
+      (void)validate_splitter(vs ? *vs : defaults.value_split, ctx);
       msb(ctx);
       return {};
     });
