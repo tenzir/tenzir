@@ -548,7 +548,16 @@ public:
     if (failed_ or not scanner_ or not input or input->size() == 0) {
       co_return;
     }
-    buffered_chunks_.push_back(std::move(input));
+    if (not buffer_.empty()) {
+      buffer_.insert(buffer_.end(), input->begin(), input->end());
+    } else if (not first_chunk_) {
+      first_chunk_ = std::move(input);
+    } else {
+      buffer_.reserve(first_chunk_->size() + input->size());
+      buffer_.insert(buffer_.end(), first_chunk_->begin(), first_chunk_->end());
+      buffer_.insert(buffer_.end(), input->begin(), input->end());
+      first_chunk_ = {};
+    }
     co_return;
   }
 
@@ -557,10 +566,11 @@ public:
     if (failed_ or not scanner_) {
       co_return FinalizeBehavior::done;
     }
-    auto joined = join_chunks(buffered_chunks_);
-    buffered_chunks_.clear();
-    auto bytes
-      = joined ? as_bytes(joined) : std::span<const std::byte>{};
+    auto first_chunk = std::exchange(first_chunk_, {});
+    auto buffer = std::exchange(buffer_, std::vector<std::byte>{});
+    auto bytes = not buffer.empty()   ? as_bytes(buffer)
+                 : first_chunk        ? as_bytes(first_chunk)
+                                      : std::span<const std::byte>{};
     auto slices = scanner_->scan(bytes);
     if (not slices) {
       diagnostic::error("failed to scan input with YARA rules")
@@ -578,7 +588,8 @@ public:
     // We intentionally serialize buffered input because the operator must see
     // the entire byte stream before emitting matches.
     serde("failed", failed_);
-    serde("buffered_chunks", buffered_chunks_);
+    serde("first_chunk", first_chunk_);
+    serde("buffer", buffer_);
   }
 
   auto state() -> OperatorState override {
@@ -586,32 +597,6 @@ public:
   }
 
 private:
-  static auto join_chunks(std::vector<chunk_ptr> const& chunks) -> chunk_ptr {
-    // YARA matches may span chunk boundaries, so the operator scans a
-    // contiguous byte sequence. Keep the single-chunk fast path to avoid an
-    // unnecessary copy.
-    auto first = chunk_ptr{};
-    auto buffer = std::vector<std::byte>{};
-    for (auto const& chunk : chunks) {
-      if (not chunk or chunk->size() == 0) {
-        continue;
-      }
-      if (not buffer.empty()) {
-        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-      } else if (not first) {
-        first = chunk;
-      } else {
-        buffer.reserve(first->size() + chunk->size());
-        buffer.insert(buffer.end(), first->begin(), first->end());
-        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-      }
-    }
-    if (buffer.empty()) {
-      return first;
-    }
-    return chunk::make(std::move(buffer));
-  }
-
   auto materialize_rules(diagnostic_handler& dh) const
     -> Option<std::vector<std::string>> {
     return extract_rules(args_.rules, args_.compiled_rules, dh);
@@ -671,7 +656,8 @@ private:
 
   YaraArgs args_;
   bool failed_ = false;
-  std::vector<chunk_ptr> buffered_chunks_;
+  chunk_ptr first_chunk_;
+  std::vector<std::byte> buffer_;
   Option<rules> rules_;
   Option<scanner> scanner_;
 };
