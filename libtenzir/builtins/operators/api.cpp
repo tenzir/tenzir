@@ -137,6 +137,9 @@ public:
     }
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
+      diagnostic::error("failed to connect to node")
+        .primary(args_.endpoint.source)
+        .emit(ctx);
       done_ = true;
       co_return;
     }
