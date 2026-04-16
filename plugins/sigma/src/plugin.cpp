@@ -238,16 +238,12 @@ public:
     }
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    TENZIR_UNUSED(serde);
-    // Rules are reloaded from disk in `start()`, and `steady_clock`
-    // timestamps are not portable across restarts.
-  }
-
 private:
   SigmaArgs args_;
   std::filesystem::path path_;
   RuleMap rules_;
+  // Rules are reloaded from disk in `start()`, and `last_update_` uses
+  // `steady_clock`, so the default no-op snapshot behavior is sufficient.
   std::chrono::steady_clock::time_point last_update_ = {};
 };
 
