@@ -757,7 +757,8 @@ auto make_grok_parser(located<std::string> pattern,
       extract_pattern_definitions(std::move(pattern_definitions), dh));
   try {
     return grok_parser{std::move(pattern_defs), std::move(pattern),
-                       indexed_captures, include_unnamed, std::move(opts), dh};
+                       indexed_captures,        include_unnamed,
+                       std::move(opts),         dh};
   } catch (diagnostic& diag) {
     std::move(diag).modify().emit(dh);
     return failure::promise();
@@ -780,14 +781,13 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto noop_dh = null_diagnostic_handler{};
-    auto parser = make_grok_parser(
-      args_.pattern,
-      args_.pattern_definitions ? std::optional{*args_.pattern_definitions}
-                                : std::nullopt,
-      args_.indexed_captures,
-      args_.include_unnamed,
-      args_.msb_options,
-      noop_dh);
+    auto parser
+      = make_grok_parser(args_.pattern,
+                         args_.pattern_definitions
+                           ? std::optional{*args_.pattern_definitions}
+                           : std::nullopt,
+                         args_.indexed_captures, args_.include_unnamed,
+                         args_.msb_options, noop_dh);
     if (not parser) {
       co_return;
     }
@@ -910,9 +910,9 @@ public:
     auto d = Describer<ReadGrokArgs, ReadGrok>{std::move(defaults)};
     d.operator_location(&ReadGrokArgs::operator_location);
     auto pattern = d.positional("pattern", &ReadGrokArgs::pattern);
-    auto pattern_definitions = d.named("pattern_definitions",
-                                       &ReadGrokArgs::pattern_definitions,
-                                       "record|string");
+    auto pattern_definitions
+      = d.named("pattern_definitions", &ReadGrokArgs::pattern_definitions,
+                "record|string");
     auto indexed_captures
       = d.named("indexed_captures", &ReadGrokArgs::indexed_captures);
     auto include_unnamed
@@ -926,13 +926,11 @@ public:
       }
       auto opts = multi_series_builder::options{};
       opts.settings.default_schema_name = "tenzir.grok";
-      std::ignore = make_grok_parser(
-        *grok_pattern,
-        ctx.get(pattern_definitions),
-        ctx.get(indexed_captures).value_or(false),
-        ctx.get(include_unnamed).value_or(false),
-        std::move(opts),
-        ctx);
+      std::ignore
+        = make_grok_parser(*grok_pattern, ctx.get(pattern_definitions),
+                           ctx.get(indexed_captures).value_or(false),
+                           ctx.get(include_unnamed).value_or(false),
+                           std::move(opts), ctx);
       return {};
     });
     return d.without_optimize();

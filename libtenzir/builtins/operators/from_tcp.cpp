@@ -157,9 +157,7 @@ public:
           .note("reason: {}", resolved->unwrap_err().error)
           .emit(ctx);
       } else {
-        std::move(diag)
-          .note("reason: no matching A or AAAA records")
-          .emit(ctx);
+        std::move(diag).note("reason: no matching A or AAAA records").emit(ctx);
       }
       startup_failed_ = true;
       co_return;
@@ -226,9 +224,8 @@ public:
           {"port", int64_t{peer_addr.getPort()}},
         };
         auto bytes_read_counter = ctx.make_counter(
-          MetricsLabel{"peer_ip",
-                       MetricsLabel::FixedString::truncate(
-                         fmt::to_string(peer_ip))},
+          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                    fmt::to_string(peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;
@@ -299,8 +296,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return startup_failed_ ? OperatorState::done
-                           : OperatorState::unspecified;
+    return startup_failed_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
