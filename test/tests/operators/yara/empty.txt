@@ -1,0 +1,10 @@
+{
+  rule: {
+    identifier: "empty_file",
+    namespace: "default",
+    tags: [],
+    meta: {},
+    strings: {},
+  },
+  matches: {},
+}
