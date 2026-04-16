@@ -1,4 +1,4 @@
 from_stdin {
   split_bytes 4
-  yara ["inputs/yara/basic.yar"]
+  yara "inputs/yara/basic.yar"
 }

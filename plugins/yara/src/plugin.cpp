@@ -83,6 +83,49 @@ auto to_error(int status) -> caf::error {
   return {};
 }
 
+template <class DiagnosticHandler>
+auto extract_rules(located<data> const& input, bool compiled_rules,
+                   DiagnosticHandler& dh) -> Option<std::vector<std::string>> {
+  auto result = std::vector<std::string>{};
+  auto add_list = [&](list const& values) -> bool {
+    result.reserve(values.size());
+    for (auto const& rule : values) {
+      if (not is<std::string>(rule)) {
+        diagnostic::error("expected type string for rule")
+          .primary(input)
+          .emit(dh);
+        return false;
+      }
+      result.push_back(as<std::string>(rule));
+    }
+    return true;
+  };
+  if (is<std::string>(input.inner)) {
+    result.push_back(as<std::string>(input.inner));
+  } else if (is<list>(input.inner)) {
+    if (not add_list(as<list>(input.inner))) {
+      return {};
+    }
+  } else {
+    diagnostic::error("expected type `string|list<string>` for rules")
+      .primary(input)
+      .emit(dh);
+    return {};
+  }
+  if (result.empty()) {
+    diagnostic::error("no rules provided").emit(dh);
+    return {};
+  }
+  if (compiled_rules and result.size() > 1) {
+    diagnostic::error("can't accept multiple rules in compiled form")
+      .primary(input)
+      .hint("provide exactly one rule argument")
+      .emit(dh);
+    return {};
+  }
+  return result;
+}
+
 /// A set of YARA rules.
 class rules {
   friend class compiler;
@@ -481,7 +524,7 @@ private:
 };
 
 struct YaraArgs {
-  located<list> rules = {};
+  located<data> rules = {};
   bool compiled_rules = false;
   bool fast_scan = false;
 };
@@ -572,29 +615,7 @@ private:
 
   auto materialize_rules(diagnostic_handler& dh) const
     -> Option<std::vector<std::string>> {
-    auto result = std::vector<std::string>{};
-    result.reserve(args_.rules.inner.size());
-    for (auto const& rule : args_.rules.inner) {
-      if (not is<std::string>(rule)) {
-        diagnostic::error("expected type string for rule")
-          .primary(args_.rules)
-          .emit(dh);
-        return {};
-      }
-      result.push_back(as<std::string>(rule));
-    }
-    if (result.empty()) {
-      diagnostic::error("no rules provided").emit(dh);
-      return {};
-    }
-    if (args_.compiled_rules and result.size() > 1) {
-      diagnostic::error("can't accept multiple rules in compiled form")
-        .primary(args_.rules)
-        .hint("provide exactly one rule argument")
-        .emit(dh);
-      return {};
-    }
-    return result;
+    return extract_rules(args_.rules, args_.compiled_rules, dh);
   }
 
   auto initialize(diagnostic_handler& dh) -> bool {
@@ -676,30 +697,15 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<YaraArgs, Yara>{};
-    auto rules = d.positional("rules", &YaraArgs::rules, "list<string>");
+    auto rules = d.positional("rules", &YaraArgs::rules, "string|list<string>");
     auto compiled_rules = d.named("compiled_rules", &YaraArgs::compiled_rules);
     d.named("fast_scan", &YaraArgs::fast_scan);
     d.validate([rules, compiled_rules](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(rules));
-      auto count = size_t{0};
-      for (auto const& rule : value.inner) {
-        if (not is<std::string>(rule)) {
-          diagnostic::error("expected type string for rule")
-            .primary(value)
-            .emit(ctx);
-          return {};
-        }
-        ++count;
-      }
-      if (count == 0) {
-        diagnostic::error("no rules provided").emit(ctx);
+      auto rule_strings
+        = extract_rules(value, ctx.get(compiled_rules).value_or(false), ctx);
+      if (not rule_strings) {
         return {};
-      }
-      if (ctx.get(compiled_rules).value_or(false) and count > 1) {
-        diagnostic::error("can't accept multiple rules in compiled form")
-          .primary(value)
-          .hint("provide exactly one rule argument")
-          .emit(ctx);
       }
       return {};
     });
@@ -709,33 +715,18 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
-    auto rules = located<list>{};
+    auto rules = located<data>{};
     argument_parser2::operator_("yara")
-      .positional("rules", rules, "list<string>")
+      .positional("rules", rules, "string|list<string>")
       .named("compiled_rules", args.compiled_rules)
       .named("fast_scan", args.fast_scan)
       .parse(inv, ctx)
       .ignore();
-    for (const auto& rule : rules.inner) {
-      if (not is<std::string>(rule)) {
-        diagnostic::error("expected type string for rule")
-          .primary(rules)
-          .emit(ctx);
-        return failure::promise();
-      }
-      args.rules.push_back(std::move(as<std::string>(rule)));
-    }
-    if (args.rules.empty()) {
-      diagnostic::error("no rules provided").emit(ctx);
+    auto rule_strings = extract_rules(rules, args.compiled_rules, ctx);
+    if (not rule_strings) {
       return failure::promise();
     }
-    if (args.compiled_rules and args.rules.size() > 1) {
-      diagnostic::error("can't accept multiple rules in compiled form")
-        .primary(rules)
-        .hint("provide exactly one rule argument")
-        .emit(ctx);
-      return failure::promise();
-    }
+    args.rules = std::move(*rule_strings);
     return std::make_unique<yara_operator>(std::move(args));
   }
 
