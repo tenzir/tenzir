@@ -13,8 +13,9 @@ The `hash_*` functions now hash `blob` values by their raw bytes. This makes che
 For example:
 
 ```tql
-load_file "trace.pcap"
-read_all binary=true
+from_file "trace.pcap" {
+  read_all binary=true
+}
 md5 = data.hash_md5()
 ```
 
