@@ -1,3 +1,0 @@
-from_stdin {
-  yara ["inputs/yara/basic.yar"], blockwise=true
-}
