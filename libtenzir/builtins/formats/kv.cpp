@@ -9,12 +9,15 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/pusher.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/view3.hpp>
@@ -342,8 +345,8 @@ struct kv_writer {
                                  {"list_separator", list_sep},
                                  {"null_value", null}}));
     TRY(check_non_empty("field_separator", field_sep, dh));
-    TRY(check_non_empty("value_separator", field_sep, dh));
-    TRY(check_non_empty("list_separator", field_sep, dh));
+    TRY(check_non_empty("value_separator", value_sep, dh));
+    TRY(check_non_empty("list_separator", list_sep, dh));
     return {};
   }
 
@@ -488,6 +491,327 @@ private:
   kv_writer writer_;
 };
 
+struct ReadKvArgs {
+  multi_series_builder::options msb_options = {};
+  located<std::string> field_split = {"\\s", location::unknown};
+  located<std::string> value_split = {"=", location::unknown};
+  located<std::string> quotes
+    = {detail::quoting_escaping_policy{}.quotes, location::unknown};
+  location operator_location = location::unknown;
+};
+
+auto normalize_read_kv_args(ReadKvArgs args) -> ReadKvArgs {
+  if (args.msb_options.settings.default_schema_name.empty()) {
+    args.msb_options.settings.default_schema_name = "tenzir.kv";
+  }
+  return args;
+}
+
+class ReadKv final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadKv(ReadKvArgs args)
+    : args_{normalize_read_kv_args(std::move(args))},
+      quoting_{.quotes = args_.quotes.inner},
+      field_split_{located<std::string_view>{args_.field_split.inner,
+                                             args_.field_split.source}},
+      value_split_{located<std::string_view>{args_.value_split.inner,
+                                             args_.value_split.source}} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
+      d.message = fmt::format("read_kv: {}", d.message);
+      if (args_.operator_location) {
+        auto replaced_unknown_location = false;
+        for (auto& annotation : d.annotations) {
+          if (annotation.source) {
+            continue;
+          }
+          annotation.source = args_.operator_location;
+          replaced_unknown_location = true;
+        }
+        if (not replaced_unknown_location and d.annotations.empty()) {
+          d.annotations.emplace(d.annotations.begin(), true, "",
+                                args_.operator_location);
+        }
+      }
+      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                      fmt::format("line {}", line_counter_));
+      return d;
+    });
+    msb_ = multi_series_builder{args_.msb_options, *dh_};
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<const char*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    auto now = multi_series_builder::clock::now();
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current});
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_ASSERT(msb_);
+    if (not buffer_.empty()) {
+      process_line(buffer_);
+      buffer_.clear();
+    }
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_counter", line_counter_);
+  }
+
+private:
+  auto process_line(std::string_view line) -> void {
+    TENZIR_ASSERT(msb_);
+    TENZIR_ASSERT(dh_);
+    ++line_counter_;
+    auto event = msb_->record();
+    struct previous_t {
+      std::string_view key;
+      std::string_view value;
+    };
+    auto previous = std::optional<previous_t>{};
+    const auto commit = [this, &event, &previous]() {
+      if (not previous) {
+        return;
+      }
+      auto key = quoting_.unquote_unescape(previous->key);
+      if (previous->value.empty()) {
+        event.unflattened_field(key).null();
+        return;
+      }
+      auto value = quoting_.unquote_unescape(previous->value);
+      event.unflattened_field(key).data_unparsed(std::move(value));
+    };
+    while (not line.empty()) {
+      const auto [head, tail, field_sep] = field_split_.split(line, quoting_);
+      const auto [key_view, value_view, value_sep]
+        = value_split_.split(head, quoting_);
+      if (value_sep.found()) {
+        commit();
+        previous.emplace(key_view, value_view);
+      } else if (previous) {
+        if (previous->value.empty()) {
+          previous->value = value_view;
+        } else {
+          previous->value = std::string_view{
+            previous->value.data(),
+            previous->value.size() + field_sep.length() + key_view.length(),
+          };
+        }
+      } else {
+        previous.emplace(key_view, value_view);
+      }
+      if (line == tail) {
+        diagnostic::error("`kv` parsing did not make progress")
+          .note("make sure `field_split` is a regular expression")
+          .emit(**dh_);
+        return;
+      }
+      line = tail;
+    }
+    commit();
+  }
+
+  ReadKvArgs args_;
+  detail::quoting_escaping_policy quoting_ = {};
+  splitter field_split_;
+  splitter value_split_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  size_t line_counter_ = 0;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<multi_series_builder> msb_;
+  SeriesPusher pusher_;
+};
+
+struct WriteKvArgs {
+  located<std::string> field_separator = {" ", location::unknown};
+  located<std::string> value_separator = {"=", location::unknown};
+  located<std::string> list_separator = {",", location::unknown};
+  located<std::string> flatten_separator = {".", location::unknown};
+  located<std::string> null_value = {"", location::unknown};
+};
+
+class WriteKv final : public Operator<table_slice, chunk_ptr> {
+public:
+  explicit WriteKv(WriteKvArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx&)
+    -> Task<void> override {
+    auto resolved_slice
+      = flatten(resolve_enumerations(input), args_.flatten_separator.inner)
+          .slice;
+    auto out = std::vector<char>{};
+    auto out_iter = std::back_inserter(out);
+    for (auto&& row : values3(resolved_slice)) {
+      out_iter = print(out_iter, row);
+      *out_iter++ = '\n';
+    }
+    co_await push(chunk::make(std::move(out)));
+  }
+
+private:
+  template <class It>
+  auto print(It out, view3<record> record) const -> It {
+    auto it = record.begin();
+    if (it == record.end()) {
+      return out;
+    }
+    {
+      const auto& [key, value] = *it;
+      out = print(out, key);
+      out = fmt::format_to(out, "{}", args_.value_separator.inner);
+      out = print(out, value);
+      ++it;
+    }
+    for (; it != record.end(); ++it) {
+      const auto& [key, value] = *it;
+      out = fmt::format_to(out, "{}", args_.field_separator.inner);
+      out = print(out, key);
+      out = fmt::format_to(out, "{}", args_.value_separator.inner);
+      out = print(out, value);
+    }
+    return out;
+  }
+
+  template <class It>
+  auto print(It out, view3<list> list) const -> It {
+    auto it = list.begin();
+    if (it == list.end()) {
+      return out;
+    }
+    out = print(out, *it);
+    ++it;
+    for (; it != list.end(); ++it) {
+      out = fmt::format_to(out, "{}", args_.list_separator.inner);
+      out = print(out, *it);
+    }
+    return out;
+  }
+
+  template <class It>
+  auto print(It out, data_view3 value) const -> It {
+    return match(
+      value,
+      [&](const caf::none_t&) -> It {
+        return fmt::format_to(out, "{}", args_.null_value.inner);
+      },
+      [&](const auto& scalar) -> It {
+        auto formatted = fmt::format("{}", scalar);
+        auto needs_quoting
+          = formatted.find(args_.field_separator.inner) != formatted.npos
+            or formatted.find(args_.value_separator.inner) != formatted.npos
+            or formatted.find(args_.list_separator.inner) != formatted.npos
+            or (not args_.null_value.inner.empty()
+                and formatted.find(args_.null_value.inner) != formatted.npos);
+        constexpr static auto escaper = [](auto& f, auto out) {
+          switch (*f) {
+            default:
+              *out++ = *f++;
+              return;
+            case '\\':
+              *out++ = '\\';
+              *out++ = '\\';
+              break;
+            case '"':
+              *out++ = '\\';
+              *out++ = '"';
+              break;
+            case '\n':
+              *out++ = '\\';
+              *out++ = 'n';
+              break;
+            case '\r':
+              *out++ = '\\';
+              *out++ = 'r';
+              break;
+          }
+          ++f;
+          return;
+        };
+        constexpr static auto p = printers::escape(escaper);
+        if (needs_quoting) {
+          *out++ = '"';
+        }
+        TENZIR_ASSERT(p.print(out, formatted));
+        if (needs_quoting) {
+          *out++ = '"';
+        }
+        return out;
+      },
+      [&](const view3<list>& list) -> It {
+        return print(out, list);
+      },
+      [&](const view3<record>&) -> It {
+        TENZIR_UNREACHABLE();
+        return out;
+      });
+  }
+
+  WriteKvArgs args_;
+};
+
 class kv_plugin final : public virtual parser_plugin<kv_parser> {
 public:
   auto parse_parser(parser_interface& p) const
@@ -543,10 +867,47 @@ auto validate_split_expression(const located<std::string>& split,
   return {};
 }
 
-class read_kv : public operator_plugin2<parser_adapter<kv_parser>> {
+auto validate_splitter(const located<std::string>& split,
+                       diagnostic_handler& dh) -> failure_or<void> {
+  TRY(validate_split_expression(split, dh));
+  try {
+    auto validated
+      = splitter{located<std::string_view>{split.inner, split.source}};
+    TENZIR_UNUSED(validated);
+  } catch (diagnostic d) {
+    dh.emit(std::move(d));
+    return failure::promise();
+  }
+  return {};
+}
+
+class read_kv : public operator_plugin2<parser_adapter<kv_parser>>,
+                public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_kv";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadKvArgs, ReadKv>{ReadKvArgs{
+      .msb_options = {.settings = {.default_schema_name = "tenzir.kv"}},
+    }};
+    auto field_split
+      = d.named_optional("field_split", &ReadKvArgs::field_split);
+    auto value_split
+      = d.named_optional("value_split", &ReadKvArgs::value_split);
+    d.named_optional("quotes", &ReadKvArgs::quotes);
+    auto msb = add_msb_to_describer(d, &ReadKvArgs::msb_options);
+    d.operator_location(&ReadKvArgs::operator_location);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      auto fs = ctx.get(field_split).value_or(ReadKvArgs{}.field_split);
+      auto vs = ctx.get(value_split).value_or(ReadKvArgs{}.value_split);
+      (void)validate_splitter(fs, ctx);
+      (void)validate_splitter(vs, ctx);
+      msb(ctx);
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -582,10 +943,42 @@ public:
   }
 };
 
-class write_kv : public operator_plugin2<write_kv_operator> {
+class write_kv : public operator_plugin2<write_kv_operator>,
+                 public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "write_kv";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<WriteKvArgs, WriteKv>{};
+    auto field_sep
+      = d.named_optional("field_separator", &WriteKvArgs::field_separator);
+    auto value_sep
+      = d.named_optional("value_separator", &WriteKvArgs::value_separator);
+    auto list_sep
+      = d.named_optional("list_separator", &WriteKvArgs::list_separator);
+    auto flatten_sep
+      = d.named_optional("flatten_separator", &WriteKvArgs::flatten_separator);
+    auto null_value = d.named_optional("null_value", &WriteKvArgs::null_value);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      auto fs = ctx.get(field_sep).value_or(WriteKvArgs{}.field_separator);
+      auto vs = ctx.get(value_sep).value_or(WriteKvArgs{}.value_separator);
+      auto ls = ctx.get(list_sep).value_or(WriteKvArgs{}.list_separator);
+      auto fl = ctx.get(flatten_sep).value_or(WriteKvArgs{}.flatten_separator);
+      auto nv = ctx.get(null_value).value_or(WriteKvArgs{}.null_value);
+      auto& dh = ctx;
+      (void)check_no_substrings(dh, {{"flatten_separator", fl},
+                                     {"field_separator", fs},
+                                     {"value_separator", vs},
+                                     {"list_separator", ls},
+                                     {"null_value", nv}});
+      (void)check_non_empty("field_separator", fs, dh);
+      (void)check_non_empty("value_separator", vs, dh);
+      (void)check_non_empty("list_separator", ls, dh);
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
