@@ -9,4 +9,4 @@ write_pcap
 read_all binary=true
 hash = data.hash_md5()
 drop data
-write_tql compact=true
+write_tql

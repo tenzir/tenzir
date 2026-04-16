@@ -1,7 +1,6 @@
 // Concatenate PCAPs and process them. The test ensures that we have the
 // right sequencing of file header and packet header events.
-from_file f"{env("TENZIR_INPUTS")}/pcap/vlan-*.pcap" {
-  read_pcap emit_file_headers=true
-}
+shell f"cat {env("TENZIR_INPUTS")}/pcap/vlan-*.pcap"
+read_pcap emit_file_headers=true
 drop data?
-write_tql compact=true
+write_tql
