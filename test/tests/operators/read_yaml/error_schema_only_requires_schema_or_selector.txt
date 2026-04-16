@@ -1,0 +1,6 @@
+error: `schema_only` requires a `schema` or `selector`
+ --> tests/operators/read_yaml/error_schema_only_requires_schema_or_selector.tql:6:25
+  |
+6 |   read_yaml schema_only=true
+  |                         ^^^^ 
+  |
