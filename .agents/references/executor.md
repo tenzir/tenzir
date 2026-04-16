@@ -124,9 +124,23 @@ when the operator needs a separate shutdown path to behave correctly. For
 example, a HTTP operator that must stop accepting connections should stop the
 `accept` loop with a custom `folly::CancellationSource`.
 
+When you pass a custom token to `co_withCancellation`, merge it with the
+ambient token from `co_current_cancellation_token`. Otherwise, the custom token
+replaces outer pipeline or executor cancellation for that await.
+
 ```cpp
-ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop()));
+ctx.spawn_task([this]() -> Task<void> {
+  auto token = folly::cancellation_token_merge(
+    co_await folly::coro::co_current_cancellation_token,
+    cancel_.getToken());
+  co_await folly::coro::co_withCancellation(token, accept_loop());
+});
 ```
+
+Pass a bare custom token only when you intentionally want to shield the await
+from outer cancellation. If local shutdown and outer cancellation need
+different behavior, keep both tokens available so you can tell which one fired
+and propagate only the outer cancellation.
 
 Do not add a second `stop_` flag—cancellation tokens already express this.
 

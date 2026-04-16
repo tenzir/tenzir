@@ -20,6 +20,14 @@ public:
   explicit Err(T value) : value_{std::move(value)} {
   }
 
+  auto unwrap() & -> T& {
+    return value_;
+  }
+
+  auto unwrap() const& -> T const& {
+    return value_;
+  }
+
   auto unwrap() and -> T {
     return std::move(value_);
   }
@@ -32,6 +40,9 @@ template <class Value, class Error>
 class [[nodiscard]] Result {
 public:
   using ValueRef = std::add_lvalue_reference_t<Value>;
+  using ConstValueRef = std::add_lvalue_reference_t<std::add_const_t<Value>>;
+  using ErrorRef = std::add_lvalue_reference_t<Error>;
+  using ConstErrorRef = std::add_lvalue_reference_t<std::add_const_t<Error>>;
 
   Result() = default;
 
@@ -76,6 +87,10 @@ public:
     return as<VoidToUnit<Value>>(value_);
   }
 
+  auto unwrap() const& -> ConstValueRef {
+    return as<VoidToUnit<Value>>(value_);
+  }
+
   auto unwrap() and -> Value {
     return unit_to_void(as<VoidToUnit<Value>>(std::move(value_)));
   }
@@ -86,6 +101,14 @@ public:
 
   auto unwrap_err_unchecked() and -> Error {
     return unit_to_void(std::move(*try_as<Err<Error>>(value_)).unwrap());
+  }
+
+  auto unwrap_err() & -> ErrorRef {
+    return as<Err<Error>>(value_).unwrap();
+  }
+
+  auto unwrap_err() const& -> ConstErrorRef {
+    return as<Err<Error>>(value_).unwrap();
   }
 
   auto unwrap_err() and -> Error {

@@ -16,103 +16,125 @@
 // - Created:    June 20, 2013, 5:09 PM
 // - License:    BSD 3-Clause
 //
-// The following extensive changes have been applied to the original source:
-//  * Cosmetic refactoring to fit the Tenzir code style
-//  * Use of exceptions has been removed
-//  * A `factory` member was added to create new entries if a key is
-//    missing from the cache.
-//  * Iteration support
-//  * Member function `exists()` was renamed to `contains()`
-//  * Added member function `resize()`
-//  * Added member function `clear()`
-//  * Added member function `eject()`
+// The implementation below is adapted for Tenzir's coding style and APIs.
+// See the git history for detailed changes.
 
 #pragma once
 
+#include "tenzir/detail/assert.hpp"
+
 #include <cstddef>
 #include <list>
-#include <stdexcept>
+#include <memory>
 #include <unordered_map>
 #include <utility>
 
 namespace tenzir::detail {
 
-template <typename Key, typename Value, typename Factory>
+template <class Key, class Value, class Factory>
 class lru_cache {
 public:
   using key_value_pair = std::pair<Key, Value>;
-  using list_iterator = typename std::list<key_value_pair>::iterator;
-  using const_list_iterator =
-    typename std::list<key_value_pair>::const_iterator;
+  using list_type = std::list<key_value_pair>;
+  using list_iterator = typename list_type::iterator;
+  using const_list_iterator = typename list_type::const_iterator;
 
   lru_cache(size_t max_size, Factory factory)
-    : max_size_(max_size), factory_(std::move(factory)) {
+    : max_size_{max_size},
+      factory_{std::move(factory)} {
   }
 
-  void clear() {
+  auto clear() -> void {
     cache_items_map_.clear();
     cache_items_list_.clear();
+    uncached_value_.reset();
   }
 
-  void resize(size_t max_size) {
-    // FIXME: write unit test for this
-    if (cache_items_list_.size() > max_size) {
-      auto new_end = std::next(cache_items_list_.begin(), max_size);
-      while (new_end != cache_items_list_.end()) {
-        cache_items_map_.erase(new_end->first);
-        auto position = new_end++;
-        cache_items_list_.erase(position);
-      }
+  auto resize(size_t max_size) -> void {
+    while (cache_items_list_.size() > max_size) {
+      auto last = std::prev(cache_items_list_.end());
+      cache_items_map_.erase(last->first);
+      cache_items_list_.erase(last);
     }
     max_size_ = max_size;
+    uncached_value_.reset();
   }
 
-  list_iterator begin() {
+  auto begin() -> list_iterator {
     return cache_items_list_.begin();
   }
 
-  const_list_iterator begin() const {
+  auto begin() const -> const_list_iterator {
     return cache_items_list_.begin();
   }
 
-  list_iterator end() {
+  auto end() -> list_iterator {
     return cache_items_list_.end();
   }
 
-  const_list_iterator end() const {
+  auto end() const -> const_list_iterator {
     return cache_items_list_.end();
   }
 
-  const Value& put(Key key, Value value) {
-    auto it = cache_items_map_.find(key);
-    cache_items_list_.push_front(
-      key_value_pair(std::move(key), std::move(value)));
-    if (it != cache_items_map_.end()) {
+  auto put(Key key, Value value) -> Value& {
+    if (max_size_ == 0) {
+      uncached_value_ = std::make_unique<Value>(std::move(value));
+      return *uncached_value_;
+    }
+    if (auto it = cache_items_map_.find(key); it != cache_items_map_.end()) {
       cache_items_list_.erase(it->second);
       cache_items_map_.erase(it);
     }
-    auto& result = cache_items_list_.begin()->second;
-    cache_items_map_[key] = cache_items_list_.begin();
+    cache_items_list_.emplace_front(std::move(key), std::move(value));
+    auto list_it = cache_items_list_.begin();
+    auto inserted = cache_items_map_.emplace(list_it->first, list_it).second;
+    TENZIR_ASSERT(inserted);
     if (cache_items_map_.size() > max_size_) {
-      auto last = cache_items_list_.end();
-      last--;
+      auto last = std::prev(cache_items_list_.end());
       cache_items_map_.erase(last->first);
       cache_items_list_.pop_back();
     }
-    return result;
+    return list_it->second;
   }
 
-  const Value& get_or_load(const Key& key) {
+  auto get(Key const& key) -> Value* {
     auto it = cache_items_map_.find(key);
-    if (it != cache_items_map_.end()) {
-      cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_,
-                               it->second);
-      return it->second->second;
+    if (it == cache_items_map_.end()) {
+      return nullptr;
+    }
+    cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_,
+                             it->second);
+    return std::addressof(it->second->second);
+  }
+
+  auto get_or_load(Key const& key) -> Value& {
+    if (auto value = get(key)) {
+      return *value;
+    }
+    if (max_size_ == 0) {
+      uncached_value_ = std::make_unique<Value>(factory_(key));
+      return *uncached_value_;
     }
     return put(key, factory_(key));
   }
 
-  void drop(const Key& key) {
+  auto peek(Key const& key) -> Value* {
+    auto it = cache_items_map_.find(key);
+    if (it == cache_items_map_.end()) {
+      return nullptr;
+    }
+    return std::addressof(it->second->second);
+  }
+
+  auto peek(Key const& key) const -> Value const* {
+    auto it = cache_items_map_.find(key);
+    if (it == cache_items_map_.end()) {
+      return nullptr;
+    }
+    return std::addressof(it->second->second);
+  }
+
+  auto drop(Key const& key) -> void {
     auto it = cache_items_map_.find(key);
     if (it != cache_items_map_.end()) {
       cache_items_list_.erase(it->second);
@@ -120,37 +142,37 @@ public:
     }
   }
 
-  // Remove an item from the cache and return it; constructing
-  // it if it didn't exist before.
-  Value eject(const Key& key) {
+  /// Remove an item from the cache and return it; constructing it if it did
+  /// not exist before.
+  auto eject(Key const& key) -> Value {
     auto it = cache_items_map_.find(key);
     if (it != cache_items_map_.end()) {
-      std::list<key_value_pair> tmp;
-      tmp.splice(tmp.end(), cache_items_list_, it->second);
+      auto result = std::move(it->second->second);
+      cache_items_list_.erase(it->second);
       cache_items_map_.erase(it);
-      return std::move(tmp.front().second);
-    } else {
-      return factory_(key);
+      return result;
     }
+    return factory_(key);
   }
 
-  bool contains(const Key& key) const {
+  [[nodiscard]] auto contains(Key const& key) const -> bool {
     return cache_items_map_.find(key) != cache_items_map_.end();
   }
 
-  [[nodiscard]] size_t size() const {
+  [[nodiscard]] auto size() const -> size_t {
     return cache_items_map_.size();
   }
 
-  Factory& factory() {
+  auto factory() -> Factory& {
     return factory_;
   }
 
 private:
-  std::list<key_value_pair> cache_items_list_;
+  list_type cache_items_list_;
   std::unordered_map<Key, list_iterator> cache_items_map_;
   size_t max_size_;
   Factory factory_;
+  std::unique_ptr<Value> uncached_value_;
 };
 
 } // namespace tenzir::detail

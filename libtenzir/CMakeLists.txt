@@ -332,7 +332,9 @@ else ()
   dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 endif ()
 
-# Link against c-ares.
+# Link against c-ares. The core async DNS utilities live in libtenzir, while
+# the legacy dns_lookup builtin still uses c-ares directly.
+target_link_libraries(libtenzir PRIVATE c-ares::cares)
 target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
