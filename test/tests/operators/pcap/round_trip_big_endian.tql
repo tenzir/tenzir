@@ -5,4 +5,7 @@ from_file f"{env("TENZIR_INPUTS")}/pcap/big-endian-single-packet.pcap" {
   read_pcap emit_file_headers=true
 }
 write_pcap
-shell "md5sum | cut -f 1 -d ' '"
+read_all binary=true
+hash = data.hash_md5()
+drop data
+write_tql compact=true

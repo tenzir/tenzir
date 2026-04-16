@@ -248,6 +248,9 @@ class fun : public virtual function_plugin {
             [&](std::string_view str) {
               hasher.add(as_bytes(str));
             },
+            [&](blob_view blob) {
+              hasher.add(blob);
+            },
           };
           match(x, f);
           return hasher.finish();
