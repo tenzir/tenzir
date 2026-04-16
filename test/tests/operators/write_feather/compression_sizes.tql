@@ -1,0 +1,9 @@
+from_file f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
+slice end=100
+batch
+write_feather compression_type="uncompressed"
+read_feather
+summarize total=count()
