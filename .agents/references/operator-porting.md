@@ -152,7 +152,11 @@ When the operator batches rows in a `series_builder`, use `SeriesPusher` from
 `yield_ready()` from `process()` after appending rows and again from
 `process_task()` for timeout-driven flushes. Keep explicit flushes for
 semantic boundaries such as header transitions, document-close markers,
-snapshots, and finalization.
+snapshots, and finalization. The same applies to operators that use
+`multi_series_builder`.
+
+Do not perform timeout checks while processing some input. Only do one timeout
+check after processing input.
 
 **Duration overflow**: never compute `start + duration::max()`. Guard sentinel
 values before arithmetic:
@@ -177,6 +181,18 @@ When `process()` scans a chunk incrementally, accumulate a local
 `series_builder::YieldReadyResult`, merge `yield_ready_as_table_slice(...)`
 into it as records become ready, and push once after the loop. Reference
 implementations: `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
+### Diagnostics
+
+Some diagnostics in the old executor do not add a location via `primary`. Some
+operators also make use of a transforming diagnostic handler that modifies diagnostics.
+
+If a diagnostic does not contain a location, use the operators location. Capture
+this location in the `Describer` via `describer.operator_location(&MyArgs::operator_location)`.
+
+If a transforming diagnostic handler is used to modify the diagnostic to hint at
+the operator, such as prepending a hint at the operator to the diagnostic, instead
+add the operators location to these diagnostics.
 
 ---
 
@@ -338,6 +354,8 @@ d.spawner([]<class Input>(DescribeCtx& ctx)
 ```
 
 Use `Describer<MyArgs>{}` (no Impl template args) when providing a full spawner.
+
+Only use a `spawner` if the intended behaviour cannot be modeled via a `Describer` alone.
 
 ### Validating a sub-pipeline's output type
 
