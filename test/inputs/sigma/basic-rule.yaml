@@ -1,0 +1,5 @@
+title: basic sigma rule
+detection:
+  selection:
+    foo: needle
+  condition: selection
