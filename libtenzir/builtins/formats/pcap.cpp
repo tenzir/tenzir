@@ -949,7 +949,8 @@ public:
               continue;
             }
             current_file_header = header;
-            auto serialized_header = serialize_file_header(*current_file_header);
+            auto serialized_header
+              = serialize_file_header(*current_file_header);
             auto bytes = as_bytes(serialized_header);
             header_buffer.insert(header_buffer.end(), bytes.begin(),
                                  bytes.end());

@@ -234,9 +234,9 @@ class fun : public virtual function_plugin {
         const auto& s = eval(expr_);
         HashAlgorithm hasher{};
         auto hash = [&](const auto& x) {
-          // We only hash the bytes and the length. Users expect that the
-          // resulting digest is the same as in other tools, which hash the
-          // sequence of bytes. This includes hashing the seed.
+          // For strings and blobs, users expect the same digest as in other
+          // tools, i.e., hashing only the byte sequence. This includes hashing
+          // the seed bytes. Other types continue to use `hash_append(...)`.
           hasher.reset();
           if (seed_) {
             hasher.add(as_bytes(*seed_));
