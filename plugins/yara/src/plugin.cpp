@@ -559,10 +559,9 @@ public:
     }
     auto joined = join_chunks(buffered_chunks_);
     buffered_chunks_.clear();
-    if (not joined) {
-      co_return FinalizeBehavior::done;
-    }
-    auto slices = scanner_->scan(as_bytes(joined));
+    auto bytes
+      = joined ? as_bytes(joined) : std::span<const std::byte>{};
+    auto slices = scanner_->scan(bytes);
     if (not slices) {
       diagnostic::error("failed to scan input with YARA rules")
         .hint("{}", slices.error())
