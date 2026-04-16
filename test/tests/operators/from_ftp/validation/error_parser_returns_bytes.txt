@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/from_ftp/validation/error_parser_returns_bytes.tql:5:47
+  |
+5 | from_ftp "ftp://127.0.0.1:21/download.ndjson" {
+  |                                               ^ 
+  |

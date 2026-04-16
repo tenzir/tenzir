@@ -1,0 +1,15 @@
+---
+fixtures: [ftp]
+assertions:
+  fixtures:
+    ftp:
+      uploaded_contains: '{"message":"hello-from-to_ftp"}'
+timeout: 60
+---
+
+from {
+  message: "hello-from-to_ftp"
+}
+to_ftp env("FTP_UPLOAD_URL") {
+  write_ndjson
+}

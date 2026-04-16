@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/to_ftp/validation/error_pipeline_not_bytes.tql:5:43
+  |
+5 | to_ftp "ftp://127.0.0.1:21/upload.ndjson" {
+  |                                           ^ 
+  |

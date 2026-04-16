@@ -6,6 +6,7 @@ from __future__ import annotations
 from . import abs  # noqa: F401
 from . import clickhouse  # noqa: F401
 from . import files_permission_tree  # noqa: F401
+from . import ftp  # noqa: F401
 from . import gcs  # noqa: F401
 from . import google_cloud_logging  # noqa: F401
 from . import google_secops  # noqa: F401
@@ -26,6 +27,7 @@ __all__ = [
     "abs",
     "clickhouse",
     "files_permission_tree",
+    "ftp",
     "gcs",
     "google_cloud_logging",
     "google_secops",
