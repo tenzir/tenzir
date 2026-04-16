@@ -1,0 +1,6 @@
+from {
+  // Loopback IP resolved without network access
+  ip: 127.0.0.1,
+  name: "test"
+}
+dns_lookup ip

@@ -377,6 +377,7 @@ struct PendingLookup {
 template <class Result>
 struct CacheEntry {
   Result result;
+  Clock::time_point inserted_at;
   Clock::time_point expires_at;
 };
 
@@ -405,6 +406,30 @@ auto same_arc(Arc<T> const& lhs, Arc<T> const& rhs) -> bool {
   return std::addressof(*lhs) == std::addressof(*rhs);
 }
 
+template <class Result>
+auto adjust_cached_result(CacheEntry<Result> const& entry,
+                          Clock::time_point /*now*/) -> Result {
+  return entry.result;
+}
+
+auto adjust_cached_result(CacheEntry<ForwardDnsResult> const& entry,
+                          Clock::time_point now) -> ForwardDnsResult {
+  auto result = entry.result;
+  if (result.is_err()) {
+    return result;
+  }
+  auto* resolved = try_as<ForwardDnsResolved>(&result.unwrap());
+  if (not resolved) {
+    return result;
+  }
+  auto age
+    = std::chrono::duration_cast<std::chrono::seconds>(now - entry.inserted_at);
+  for (auto& answer : resolved->answers) {
+    answer.ttl = std::max(answer.ttl - age, std::chrono::seconds{0});
+  }
+  return result;
+}
+
 template <class Key, class Result>
 auto lookup_cached(LookupState<Key, Result>& state, Key const& key)
   -> Option<Result> {
@@ -417,7 +442,7 @@ auto lookup_cached(LookupState<Key, Result>& state, Key const& key)
     state.cache.drop(key);
     return None{};
   }
-  return entry->result;
+  return adjust_cached_result(*entry, now);
 }
 
 template <class Key, class Result>
@@ -426,9 +451,11 @@ auto insert_cached(LookupState<Key, Result>& state, Key const& key,
   if (ttl <= DnsDuration::zero()) {
     return;
   }
+  auto now = Clock::now();
   state.cache.put(key, CacheEntry<Result>{
                          .result = result,
-                         .expires_at = Clock::now() + ttl,
+                         .inserted_at = now,
+                         .expires_at = now + ttl,
                        });
 }
 
@@ -662,6 +689,13 @@ auto ForwardDnsResolver::cached(std::string_view hostname)
   co_return lookup_cached(*state, std::string{hostname});
 }
 
+auto ForwardDnsResolver::startup_error() const -> Option<DnsError> {
+  if (impl_->channel_.valid()) {
+    return None{};
+  }
+  return make_dns_error(impl_->channel_.status());
+}
+
 struct ReverseDnsResolver::Impl {
   using State = LookupState<ip, ReverseDnsResult>;
 
@@ -753,6 +787,13 @@ auto ReverseDnsResolver::resolve(ip address) -> Task<Arc<ReverseDnsResult>> {
 auto ReverseDnsResolver::cached(ip address) -> Task<Option<ReverseDnsResult>> {
   auto state = co_await impl_->state_.lock();
   co_return lookup_cached(*state, address);
+}
+
+auto ReverseDnsResolver::startup_error() const -> Option<DnsError> {
+  if (impl_->channel_.valid()) {
+    return None{};
+  }
+  return make_dns_error(impl_->channel_.status());
 }
 
 } // namespace tenzir

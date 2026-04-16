@@ -14,8 +14,6 @@ rec {
       ])
       (
         lib.fileset.unions [
-          # DNS lookup does not work in the nix sandbox.
-          ../test-legacy/tests/operators/dns_lookup
           # to_sentinelone_data_lake is not supported in the nix build.
           ../test-legacy/tests/operators/to_sentinelone_data_lake
         ]

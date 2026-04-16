@@ -1,0 +1,6 @@
+{
+  ip: ::1,
+  dns_lookup: {
+    hostname: "localhost",
+  },
+}
