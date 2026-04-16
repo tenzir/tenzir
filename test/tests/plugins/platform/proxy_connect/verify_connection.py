@@ -1,5 +1,5 @@
 # runner: python
-"""Verify the platform plugin can authenticate with a client certificate."""
+"""Verify the platform plugin can connect through an HTTP CONNECT proxy."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from pathlib import Path
 
 
 def _resolve_node_binary() -> tuple[str, ...]:
-    """Resolve the tenzir-node binary, respecting TENZIR_NODE_BINARY."""
     env_val = os.environ.get("TENZIR_NODE_BINARY")
     if env_val:
         return tuple(shlex.split(env_val))
@@ -42,9 +41,9 @@ def wait_for_result(
 
 def main() -> None:
     node_cmd = _resolve_node_binary()
-
     result_file = Path(os.environ["PLATFORM_WS_RESULT_FILE"])
-    with tempfile.TemporaryDirectory(prefix="platform-client-cert-") as tmpdir:
+    proxy_result_file = Path(os.environ["PLATFORM_WS_PROXY_RESULT_FILE"])
+    with tempfile.TemporaryDirectory(prefix="platform-proxy-connect-") as tmpdir:
         log_file = Path(tmpdir) / "output.log"
         env = os.environ.copy()
         env.pop("TENZIR_NODE_BINARY", None)
@@ -61,11 +60,11 @@ def main() -> None:
                     "PLATFORM_WS_CERTFILE"
                 ],
                 "TENZIR_PLUGINS__PLATFORM__KEYFILE": os.environ["PLATFORM_WS_KEYFILE"],
-                # Use isolated directories so parallel tests don't conflict.
+                "HTTPS_PROXY": os.environ["PLATFORM_WS_PROXY"],
+                "NO_PROXY": "",
+                "no_proxy": "",
                 "TENZIR_STATE_DIRECTORY": tmpdir,
                 "TENZIR_CACHE_DIRECTORY": tmpdir,
-                # Redirect the tenzir log into stderr so it ends up in our
-                # captured output rather than the default log file.
                 "TENZIR_LOG_FILE": "/dev/stderr",
             }
         )
@@ -78,15 +77,20 @@ def main() -> None:
             )
             try:
                 status = wait_for_result(result_file, proc, timeout=30.0)
-                if status != "client-cert-authenticated":
+                proxy_status = wait_for_result(proxy_result_file, proc, timeout=1.0)
+                if (
+                    status != "client-cert-authenticated"
+                    or proxy_status != "connect-seen"
+                ):
                     time.sleep(0.2)
                     proc.poll()
                     log.seek(0)
                     logs = log.read().decode("utf-8", errors="replace")
                     raise RuntimeError(
-                        f"expected client-cert-authenticated, got {status}\n{logs}"
+                        "expected client-cert-authenticated via proxy, "
+                        f"got platform={status} proxy={proxy_status}\n{logs}"
                     )
-                print("client-cert-authenticated")
+                print("proxied-client-cert-authenticated")
             finally:
                 if proc.poll() is None:
                     proc.terminate()
