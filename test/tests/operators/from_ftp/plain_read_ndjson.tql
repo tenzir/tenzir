@@ -1,0 +1,8 @@
+---
+fixtures: [ftp]
+timeout: 60
+---
+
+from_ftp env("FTP_DOWNLOAD_URL_NO_SCHEME") {
+  read_ndjson
+}
