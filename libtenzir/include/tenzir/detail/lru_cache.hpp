@@ -40,8 +40,7 @@ public:
   using const_list_iterator = typename list_type::const_iterator;
 
   lru_cache(size_t max_size, Factory factory)
-    : max_size_{max_size},
-      factory_{std::move(factory)} {
+    : max_size_{max_size}, factory_{std::move(factory)} {
   }
 
   auto clear() -> void {

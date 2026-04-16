@@ -495,12 +495,13 @@ struct zeek_log_state {
   std::vector<std::string> types = {};
 
   friend auto inspect(auto& f, zeek_log_state& x) -> bool {
-    return f.object(x).fields(
-      f.field("separator", x.separator),
-      f.field("set_separator", x.set_separator),
-      f.field("empty_field", x.empty_field),
-      f.field("unset_field", x.unset_field), f.field("path", x.path),
-      f.field("fields", x.fields), f.field("types", x.types));
+    return f.object(x).fields(f.field("separator", x.separator),
+                              f.field("set_separator", x.set_separator),
+                              f.field("empty_field", x.empty_field),
+                              f.field("unset_field", x.unset_field),
+                              f.field("path", x.path),
+                              f.field("fields", x.fields),
+                              f.field("types", x.types));
   }
 };
 
@@ -687,8 +688,8 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         };
         const auto make_empty_parser
           = [&, field]<concrete_type Type>(const Type& type) {
-              return ignore(parsers::str{log.empty_field} >> &(
-                              parsers::chr{log.separator} | parsers::eoi))
+              return ignore(parsers::str{log.empty_field}
+                            >> &(parsers::chr{log.separator} | parsers::eoi))
                 .then([&, field]() {
                   if constexpr (std::is_same_v<Type, map_type>) {
                     TENZIR_UNREACHABLE();
@@ -728,8 +729,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
       auto target_schema = modules::get_schema(schema_name);
-      log.target_schema
-        = target_schema ? std::move(*target_schema) : type{};
+      log.target_schema = target_schema ? std::move(*target_schema) : type{};
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.
@@ -799,22 +799,22 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
-        if (args_.operator_location) {
-          auto replaced_unknown_location = false;
-          for (auto& annotation : d.annotations) {
-            if (annotation.source) {
-              continue;
-            }
-            annotation.source = args_.operator_location;
-            replaced_unknown_location = true;
+      if (args_.operator_location) {
+        auto replaced_unknown_location = false;
+        for (auto& annotation : d.annotations) {
+          if (annotation.source) {
+            continue;
           }
-          if (not replaced_unknown_location and d.annotations.empty()) {
-            d.annotations.emplace(d.annotations.begin(), true, "",
-                                  args_.operator_location);
-          }
+          annotation.source = args_.operator_location;
+          replaced_unknown_location = true;
         }
-        return d;
-      });
+        if (not replaced_unknown_location and d.annotations.empty()) {
+          d.annotations.emplace(d.annotations.begin(), true, "",
+                                args_.operator_location);
+        }
+      }
+      return d;
+    });
     co_return;
   }
 
@@ -893,7 +893,8 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx&) -> Task<void> override {
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
     if (failed_) {
       co_return;
     }
@@ -1115,21 +1116,22 @@ private:
             return true;
           });
       };
-      auto const make_empty_parser = [&, field]<concrete_type Type>(
-                                       Type const& type) {
-        return ignore(parsers::str{log_.empty_field}
-                      >> &(parsers::chr{log_.separator} | parsers::eoi))
-          .then([&, field]() {
-            if constexpr (std::same_as<Type, map_type>) {
-              TENZIR_UNREACHABLE();
-            } else {
-              log_.event->field(field, std::move(type.construct()));
-            }
-            return true;
-          });
-      };
-      auto make_field_parser = [&]<concrete_type Type>(Type const& type)
-        -> rule<std::string_view::const_iterator, bool> {
+      auto const make_empty_parser
+        = [&, field]<concrete_type Type>(Type const& type) {
+            return ignore(parsers::str{log_.empty_field}
+                          >> &(parsers::chr{log_.separator} | parsers::eoi))
+              .then([&, field]() {
+                if constexpr (std::same_as<Type, map_type>) {
+                  TENZIR_UNREACHABLE();
+                } else {
+                  log_.event->field(field, std::move(type.construct()));
+                }
+                return true;
+              });
+          };
+      auto make_field_parser
+        = [&]<concrete_type Type>(
+            Type const& type) -> rule<std::string_view::const_iterator, bool> {
         return make_unset_parser() | make_empty_parser(type)
                | zeek_parser<Type>{}(type, log_.separator,
                                      std::same_as<Type, list_type>
@@ -1148,7 +1150,8 @@ private:
       record_fields.push_back({field, std::move(*parsed_type)});
     }
     auto const schema_name = fmt::format("zeek.{}", log_.path);
-    log_.builder = series_builder{type{schema_name, record_type{record_fields}}};
+    log_.builder
+      = series_builder{type{schema_name, record_type{record_fields}}};
     auto target_schema = modules::get_schema(schema_name);
     log_.target_schema = target_schema ? std::move(*target_schema) : type{};
     log_has_body_ = true;
@@ -1177,9 +1180,9 @@ public:
     if (input.rows() == 0) {
       co_return;
     }
-    auto printer = zeek_printer{resolved_set_separator(), args_.empty_field,
-                                args_.unset_field,
-                                args_.disable_timestamp_tags};
+    auto printer
+      = zeek_printer{resolved_set_separator(), args_.empty_field,
+                     args_.unset_field, args_.disable_timestamp_tags};
     auto buffer = std::vector<char>{};
     auto out_iter = std::back_inserter(buffer);
     auto resolved_slice = flatten(resolve_enumerations(input)).slice;
@@ -1208,8 +1211,8 @@ public:
       TENZIR_ASSERT(ok);
       out_iter = fmt::format_to(out_iter, "\n");
     }
-    co_await push(chunk::make(std::move(buffer),
-                              {.content_type = "application/x-zeek"}));
+    co_await push(
+      chunk::make(std::move(buffer), {.content_type = "application/x-zeek"}));
   }
 
 private:
@@ -1374,19 +1377,22 @@ public:
       = d.named_optional("set_separator", &WriteZeekTsvArgs::set_separator);
     d.named_optional("empty_field", &WriteZeekTsvArgs::empty_field);
     d.named_optional("unset_field", &WriteZeekTsvArgs::unset_field);
-    d.named("disable_timestamp_tags", &WriteZeekTsvArgs::disable_timestamp_tags);
+    d.named("disable_timestamp_tags",
+            &WriteZeekTsvArgs::disable_timestamp_tags);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto sep = ctx.get(set_separator)) {
         auto converted = to_xsv_sep(sep->inner);
         if (not converted) {
           diagnostic::error("`{}` is not a valid separator", sep->inner)
-            .primary(ctx.get_location(set_separator).value_or(location::unknown))
+            .primary(
+              ctx.get_location(set_separator).value_or(location::unknown))
             .note(fmt::to_string(converted.error()))
             .emit(ctx);
         } else if (*converted == '\t') {
           diagnostic::error("the `\\t` separator is not allowed here",
                             sep->inner)
-            .primary(ctx.get_location(set_separator).value_or(location::unknown))
+            .primary(
+              ctx.get_location(set_separator).value_or(location::unknown))
             .emit(ctx);
         }
       }

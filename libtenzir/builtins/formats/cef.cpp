@@ -345,24 +345,24 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
-        if (args_.operator_location) {
-          auto replaced_unknown_location = false;
-          for (auto& annotation : d.annotations) {
-            if (annotation.source) {
-              continue;
-            }
-            annotation.source = args_.operator_location;
-            replaced_unknown_location = true;
+      if (args_.operator_location) {
+        auto replaced_unknown_location = false;
+        for (auto& annotation : d.annotations) {
+          if (annotation.source) {
+            continue;
           }
-          if (not replaced_unknown_location and d.annotations.empty()) {
-            d.annotations.emplace(d.annotations.begin(), true, "",
-                                  args_.operator_location);
-          }
+          annotation.source = args_.operator_location;
+          replaced_unknown_location = true;
         }
-        d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
-                        fmt::format("line {}", line_counter_));
-        return d;
-      });
+        if (not replaced_unknown_location and d.annotations.empty()) {
+          d.annotations.emplace(d.annotations.begin(), true, "",
+                                args_.operator_location);
+        }
+      }
+      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                      fmt::format("line {}", line_counter_));
+      return d;
+    });
     msb_ = multi_series_builder{args_.msb_options, *dh_};
     co_return;
   }
@@ -432,7 +432,8 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx&) -> Task<void> override {
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
     TENZIR_ASSERT(msb_);
     for (auto& slice : msb_->finalize_as_table_slice()) {
       co_await push(std::move(slice));
