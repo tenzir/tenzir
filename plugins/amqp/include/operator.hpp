@@ -1002,7 +1002,7 @@ inline auto build_secret_requests(const Option<located<secret>>& url,
 }
 
 /// Shared state between the background consumer thread and the FromAmqp
-/// operator, following the GCP Pub/Sub SharedState pattern.
+/// operator.
 struct consumer_shared_state {
   static constexpr size_t max_pending = 16;
 
