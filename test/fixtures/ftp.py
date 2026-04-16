@@ -21,6 +21,8 @@ _UPLOAD_PATH = "/upload.ndjson"
 @dataclass(frozen=True)
 class FtpOptions:
     download_payload: str = '{"message":"hello-from-from_ftp"}\n'
+    download_chunk_size: int | None = None
+    download_chunk_delay: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,8 @@ def _handle_client(
     control: socket.socket,
     state: _FtpState,
     download_payload: bytes,
+    download_chunk_size: int | None,
+    download_chunk_delay: float,
 ) -> None:
     control.settimeout(1.0)
     control_file = control.makefile("rb")
@@ -138,7 +142,18 @@ def _handle_client(
                 passive_listener.close()
                 passive_listener = None
                 with data_conn:
-                    data_conn.sendall(download_payload)
+                    if download_chunk_size is None or download_chunk_size <= 0:
+                        data_conn.sendall(download_payload)
+                    else:
+                        for i in range(0, len(download_payload), download_chunk_size):
+                            data_conn.sendall(
+                                download_payload[i : i + download_chunk_size]
+                            )
+                            if (
+                                download_chunk_delay > 0
+                                and i + download_chunk_size < len(download_payload)
+                            ):
+                                time.sleep(download_chunk_delay)
                 _send_line(control, "226 transfer complete")
                 continue
             if command == "STOR":
@@ -172,7 +187,12 @@ def _handle_client(
 
 
 def _run_server(
-    stop_event: threading.Event, state: _FtpState, payload: str, port: int
+    stop_event: threading.Event,
+    state: _FtpState,
+    payload: str,
+    port: int,
+    download_chunk_size: int | None,
+    download_chunk_delay: float,
 ) -> None:
     download_payload = payload.encode("utf-8")
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -186,7 +206,13 @@ def _run_server(
             except TimeoutError:
                 continue
             with control:
-                _handle_client(control, state, download_payload)
+                _handle_client(
+                    control,
+                    state,
+                    download_payload,
+                    download_chunk_size,
+                    download_chunk_delay,
+                )
 
 
 @fixture(options=FtpOptions, assertions=FtpAssertions)
@@ -202,6 +228,8 @@ def ftp() -> FixtureHandle:
             "state": state,
             "payload": opts.download_payload,
             "port": port,
+            "download_chunk_size": opts.download_chunk_size,
+            "download_chunk_delay": opts.download_chunk_delay,
         },
         daemon=True,
     )
