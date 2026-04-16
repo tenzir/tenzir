@@ -58,18 +58,17 @@ public:
     co_return;
   }
 
-  /// Serializes mutable operator state for checkpointing.
+  /// Checkpointing is not supported.
   ///
-  /// `out_buffer_` is guaranteed empty between `process()` calls because we
-  /// call `purge()` at the end of every `process()` invocation, which drains
-  /// all bytes Arrow's `WriteRecordBatch` flushed synchronously to the stream.
-  /// `writer_` and `parquet_writer_props_` are not serialized: `writer_` is
-  /// re-created lazily on the first `process()` after restore (using the
-  /// deserialized `input_schema_`), and `parquet_writer_props_` is rebuilt
-  /// from `args_` in `start()`.
-  auto snapshot(Serde& serde) -> void override {
-    serde("failed", failed_);
-    serde("input_schema", input_schema_);
+  /// Each `process()` call immediately flushes a row group to downstream via
+  /// `purge()`. Those bytes are already in-flight and cannot be recalled. The
+  /// Parquet footer (written only on `Close()`) references every prior row
+  /// group by file offset, so restoring from a snapshot would either drop
+  /// pre-checkpoint rows from the final file or produce an invalid concatenated
+  /// Parquet stream. Until we support seekable/appendable Parquet output, we
+  /// fail checkpoints explicitly rather than silently producing corrupt data.
+  auto snapshot(Serde&) -> void override {
+    diagnostic::error("write_parquet does not support checkpoints yet").throw_();
   }
 
   auto state() -> OperatorState override {
@@ -79,6 +78,9 @@ public:
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     if (failed_) {
+      co_return;
+    }
+    if (input.rows() == 0) {
       co_return;
     }
     auto input_schema = input.schema();
