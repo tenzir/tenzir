@@ -1,0 +1,4 @@
+from_file f"{env("TENZIR_INPUTS")}/pcap/concatenated-mixed-endian.pcap" {
+  read_pcap emit_file_headers=true
+}
+drop data?

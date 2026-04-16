@@ -1,0 +1,6 @@
+error: `filter` must not be empty
+ --> tests/operators/from_nic/error_empty_filter.tql:5:23
+  |
+5 | from_nic "lo", filter=""
+  |                       ^^ 
+  |

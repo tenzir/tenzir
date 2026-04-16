@@ -64,10 +64,10 @@ auto is_file_header(const packet_header& header) -> bool {
     return false;
   }
   // In theory, checking for zeroed out reserved fields should be sufficient.
-  // But we don't all PCAP generating tools, so do a few extra checks.
-  auto is_magic = header.timestamp == pcap::magic_number_1
-                  or header.timestamp == pcap::magic_number_2;
-  if (not is_magic) {
+  // But we don't trust all PCAP generating tools, so do a few extra checks.
+  // Accept both host-order and swapped raw magic values so concatenated traces
+  // with mixed endianness still recognize the next file header.
+  if (not need_byte_swap(header.timestamp)) {
     return false;
   }
   // We're actually stopping here for now, even though we could go deeper. The
