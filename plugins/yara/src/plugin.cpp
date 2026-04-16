@@ -568,9 +568,12 @@ public:
     }
     auto first_chunk = std::exchange(first_chunk_, {});
     auto buffer = std::exchange(buffer_, std::vector<std::byte>{});
-    auto bytes = not buffer.empty()   ? as_bytes(buffer)
-                 : first_chunk        ? as_bytes(first_chunk)
-                                      : std::span<const std::byte>{};
+    auto bytes = std::span<const std::byte>{};
+    if (not buffer.empty()) {
+      bytes = as_bytes(buffer);
+    } else if (first_chunk) {
+      bytes = as_bytes(first_chunk);
+    }
     auto slices = scanner_->scan(bytes);
     if (not slices) {
       diagnostic::error("failed to scan input with YARA rules")
