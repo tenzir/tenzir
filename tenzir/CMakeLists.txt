@@ -483,16 +483,16 @@ target_compile_definitions(
 # deterministic builds.
 string(TIMESTAMP TENZIR_LAST_COMMIT_DATE)
 if (TENZIR_ENABLE_MANPAGES)
-  add_custom_target(
-    tenzir-manpage
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.1.md"
     COMMAND
       "${PANDOC}" -s -f gfm -t man -V date:${TENZIR_LAST_COMMIT_DATE}
       "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.1.md" -o
       "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
     COMMENT "Generating tenzir.1"
     VERBATIM)
+  add_custom_target(tenzir-manpage DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1")
   add_dependencies(tenzir tenzir-manpage)
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
