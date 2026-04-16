@@ -1,0 +1,54 @@
+{
+  magic_number: 2712847316,
+  major_version: 2,
+  minor_version: 4,
+  reserved1: 0,
+  reserved2: 0,
+  snaplen: 65535,
+  linktype: 1,
+}
+{
+  linktype: 1,
+  timestamp: 1999-11-05T18:20:40.056226Z,
+  captured_packet_length: 1518,
+  original_packet_length: 1518,
+}
+{
+  linktype: 1,
+  timestamp: 1999-11-05T18:20:40.056331Z,
+  captured_packet_length: 650,
+  original_packet_length: 650,
+}
+{
+  linktype: 1,
+  timestamp: 1999-11-05T18:20:40.059915Z,
+  captured_packet_length: 64,
+  original_packet_length: 64,
+}
+{
+  linktype: 1,
+  timestamp: 1999-11-05T18:20:40.063897Z,
+  captured_packet_length: 1518,
+  original_packet_length: 1518,
+}
+{
+  linktype: 1,
+  timestamp: 1999-11-05T18:20:40.063982Z,
+  captured_packet_length: 350,
+  original_packet_length: 350,
+}
+{
+  magic_number: 3569595041,
+  major_version: 2,
+  minor_version: 4,
+  reserved1: 0,
+  reserved2: 0,
+  snaplen: 65535,
+  linktype: 1,
+}
+{
+  linktype: 1,
+  timestamp: 1970-01-01T00:00:00.000001Z,
+  captured_packet_length: 1,
+  original_packet_length: 1,
+}

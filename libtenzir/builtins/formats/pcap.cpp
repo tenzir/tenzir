@@ -386,10 +386,9 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    if (failed_) {
-      co_return FinalizeBehavior::done;
+    if (not failed_) {
+      co_await parse_available(push, ctx.dh());
     }
-    co_await parse_available(push, ctx.dh());
     if (builder_.length() > 0) {
       co_await flush_packets(push);
     }
@@ -646,23 +645,9 @@ struct WritePcapArgs {};
 
 struct printer_args {};
 
-/// Creates a file header from the first row of table slice (that is assumed to
-/// have one row).
-auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
-  if (slice.schema().name() != "pcap.file_header" or slice.rows() == 0) {
-    return std::nullopt;
-  }
+auto make_file_header(view<record> row) -> file_header {
   auto result = file_header{};
-  auto array = check(to_record_batch(slice)->ToStructArray());
-  auto xs = values(slice.schema(), *array);
-  auto begin = xs.begin();
-  if (begin == xs.end() or is<caf::none_t>(*begin)) {
-    return std::nullopt;
-  }
-  const auto row = *begin;
-  const auto* row_view = try_as<view<record>>(&row);
-  TENZIR_ASSERT(row_view);
-  for (const auto& [key, value] : **row_view) {
+  for (const auto& [key, value] : row) {
     // TODO: Make this more robust, and give a helpful error message if the
     // types are not as expected. This also applies to `to_packet_record`.
     if (key == "magic_number") {
@@ -709,6 +694,24 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     }
     TENZIR_DEBUG("ignoring unknown PCAP file header key '{}' with value {}",
                  key, value);
+  }
+  return result;
+}
+
+auto make_file_headers(const table_slice& slice) -> std::vector<file_header> {
+  if (slice.schema().name() != "pcap.file_header" or slice.rows() == 0) {
+    return {};
+  }
+  auto array = check(to_record_batch(slice)->ToStructArray());
+  auto result = std::vector<file_header>{};
+  result.reserve(slice.rows());
+  for (const auto& row : values(slice.schema(), *array)) {
+    if (is<caf::none_t>(row)) {
+      continue;
+    }
+    const auto* row_view = try_as<view<record>>(&row);
+    TENZIR_ASSERT(row_view);
+    result.push_back(make_file_header(*row_view));
   }
   return result;
 }
@@ -789,18 +792,27 @@ public:
     }
     if (input.schema().name() == "pcap.file_header") {
       TENZIR_DEBUG("got new PCAP file header");
-      if (auto header = make_file_header(input)) {
-        if (not normalized_magic_number(header->magic_number)) {
+      auto headers = make_file_headers(input);
+      if (headers.empty()) {
+        diagnostic::warning("failed to parse PCAP file header").emit(ctx.dh());
+        co_return;
+      }
+      auto buffer = std::vector<std::byte>{};
+      buffer.reserve(headers.size() * sizeof(file_header));
+      for (const auto& header : headers) {
+        if (not normalized_magic_number(header.magic_number)) {
           diagnostic::warning("failed to parse PCAP file header")
             .note("invalid magic number")
             .emit(ctx.dh());
-          co_return;
+          continue;
         }
-        current_file_header_ = *header;
+        current_file_header_ = header;
         auto serialized_header = serialize_file_header(*current_file_header_);
-        co_await push(chunk::copy(as_bytes(serialized_header), metadata_));
-      } else {
-        diagnostic::warning("failed to parse PCAP file header").emit(ctx.dh());
+        auto bytes = as_bytes(serialized_header);
+        buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+      }
+      if (not buffer.empty()) {
+        co_await push(chunk::make(std::move(buffer), metadata_));
       }
       co_return;
     }
@@ -920,20 +932,34 @@ public:
         // it into consideration for timestamp resolution.
         if (slice.schema().name() == "pcap.file_header") {
           TENZIR_DEBUG("got new PCAP file header");
-          if (auto header = make_file_header(slice)) {
-            if (not normalized_magic_number(header->magic_number)) {
+          auto headers = make_file_headers(slice);
+          if (headers.empty()) {
+            diagnostic::warning("failed to parse PCAP file header")
+              .emit(ctrl.diagnostics());
+            co_yield {};
+            co_return;
+          }
+          auto header_buffer = std::vector<std::byte>{};
+          header_buffer.reserve(headers.size() * sizeof(file_header));
+          for (const auto& header : headers) {
+            if (not normalized_magic_number(header.magic_number)) {
               diagnostic::warning("failed to parse PCAP file header")
                 .note("invalid magic number")
                 .emit(ctrl.diagnostics());
-              co_yield {};
-              co_return;
+              continue;
             }
-            current_file_header = *header;
-          } else {
-            diagnostic::warning("failed to parse PCAP file header")
-              .emit(ctrl.diagnostics());
+            current_file_header = header;
+            auto serialized_header = serialize_file_header(*current_file_header);
+            auto bytes = as_bytes(serialized_header);
+            header_buffer.insert(header_buffer.end(), bytes.begin(),
+                                 bytes.end());
           }
-          co_yield {};
+          if (header_buffer.empty()) {
+            co_yield {};
+            co_return;
+          }
+          file_header_printed = true;
+          co_yield chunk::make(std::move(header_buffer), meta);
           co_return;
         }
         // Helper function to process a row in a table slice of packets.

@@ -1,6 +1,7 @@
 from_file f"{env("TENZIR_INPUTS")}/pcap/concatenated-vlan-files.pcap" {
   read_pcap emit_file_headers=true
 }
+where magic_number? != null
+batch 2
 write_pcap
 read_pcap emit_file_headers=true
-drop data?
