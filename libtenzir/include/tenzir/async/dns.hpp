@@ -126,6 +126,9 @@ public:
   /// Return a cached result if available and still fresh.
   auto cached(std::string_view hostname) -> Task<Option<ForwardDnsResult>>;
 
+  /// Return the resolver startup error when c-ares initialization failed.
+  [[nodiscard]] auto startup_error() const -> Option<DnsError>;
+
 private:
   friend struct detail::DnsResolverTestAccess;
 
@@ -153,6 +156,9 @@ public:
 
   /// Return a cached result if available and still fresh.
   auto cached(ip address) -> Task<Option<ReverseDnsResult>>;
+
+  /// Return the resolver startup error when c-ares initialization failed.
+  [[nodiscard]] auto startup_error() const -> Option<DnsError>;
 
 private:
   friend struct detail::DnsResolverTestAccess;

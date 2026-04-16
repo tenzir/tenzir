@@ -1,6 +1,6 @@
 from {
-  // Cloudflare DNS - stable IP
-  ip: 1.1.1.1,
+  // Loopback IP resolved without network access
+  ip: 127.0.0.1,
   name: "test"
 }
 dns_lookup ip

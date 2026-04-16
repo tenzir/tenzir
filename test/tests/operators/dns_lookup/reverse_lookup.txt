@@ -1,6 +1,6 @@
 {
-  ip: 8.8.8.8,
+  ip: 127.0.0.2,
   dns_lookup: {
-    hostname: "dns.google",
+    hostname: "localhost",
   },
 }

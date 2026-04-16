@@ -362,6 +362,7 @@ auto append_reverse_result(series_builder& builder,
 struct DnsLookupArgs {
   ast::expression field;
   ast::field_path result = default_result_field();
+  location operator_location = location::unknown;
 };
 
 class DnsLookup final : public Operator<table_slice, table_slice> {
@@ -374,8 +375,25 @@ public:
   DnsLookup(DnsLookup&&) noexcept = default;
   auto operator=(DnsLookup&&) noexcept -> DnsLookup& = default;
 
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto error = forward_dns_.startup_error();
+    if (not error) {
+      error = reverse_dns_.startup_error();
+    }
+    if (error) {
+      diagnostic::error("failed to initialize DNS resolver")
+        .primary(args_.operator_location, "reason: {}", error->error)
+        .emit(ctx);
+      startup_failed_ = true;
+    }
+    co_return;
+  }
+
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    if (startup_failed_) {
+      co_return;
+    }
     auto fields = eval(args_.field, input, ctx.dh());
     auto slice_start = int64_t{0};
     for (auto& field : fields) {
@@ -399,6 +417,10 @@ public:
       slice_start = slice_end;
       co_await push(std::move(output));
     }
+  }
+
+  auto state() -> OperatorState override {
+    return startup_failed_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
@@ -463,6 +485,7 @@ private:
   DnsLookupArgs args_;
   ForwardDnsResolver forward_dns_;
   ReverseDnsResolver reverse_dns_;
+  bool startup_failed_ = false;
 };
 
 class dns_lookup_operator final : public crtp_operator<dns_lookup_operator> {
@@ -571,6 +594,7 @@ public:
     auto d = Describer<DnsLookupArgs, DnsLookup>{};
     d.positional("field", &DnsLookupArgs::field, "string|ip");
     d.named_optional("result", &DnsLookupArgs::result);
+    d.operator_location(&DnsLookupArgs::operator_location);
     return d.without_optimize();
   }
 };

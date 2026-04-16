@@ -75,6 +75,35 @@ TEST("forward dns zero ttl answers are not cached") {
   check(folly::coro::blockingWait(resolver.cached("127.0.0.1")) == None{});
 }
 
+TEST("forward dns cached ttl reflects remaining lifetime") {
+  auto resolver = detail::DnsResolverTestAccess::make_forward(
+    ForwardDnsConfig{
+      .positive_ttl = std::chrono::hours{1},
+      .negative_ttl = std::chrono::hours{1},
+      .literal_ttl = std::chrono::hours{1},
+    },
+    [](std::string) -> Task<ForwardDnsResult> {
+      co_return ForwardDnsLookup{ForwardDnsResolved{
+        .answers = {{
+          .address = loopback_ip(1),
+          .type = "A",
+          .ttl = std::chrono::seconds{5},
+        }},
+      }};
+    });
+  auto result = folly::coro::blockingWait(resolver.resolve("one.example"));
+  require(not result->is_err());
+  std::this_thread::sleep_for(std::chrono::milliseconds{1100});
+  auto cached = folly::coro::blockingWait(resolver.cached("one.example"));
+  check(static_cast<bool>(cached));
+  require(not cached->is_err());
+  auto* resolved = try_as<ForwardDnsResolved>(&cached->unwrap());
+  require(static_cast<bool>(resolved));
+  check_eq(resolved->answers.size(), size_t{1});
+  check(resolved->answers[0].ttl < std::chrono::seconds{5});
+  check(resolved->answers[0].ttl > std::chrono::seconds{0});
+}
+
 TEST("reverse dns resolves loopback addresses without network access") {
   auto resolver = ReverseDnsResolver{};
   auto result = folly::coro::blockingWait(resolver.resolve(loopback_ip(1)));

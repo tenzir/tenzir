@@ -1,10 +1,10 @@
 {
   x: {
     y: {
-      z: 8.8.8.8,
+      z: 127.0.0.3,
     },
   },
   dns_lookup: {
-    hostname: "dns.google",
+    hostname: "localhost",
   },
 }
