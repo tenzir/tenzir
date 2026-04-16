@@ -1,0 +1,14 @@
+---
+error: true
+---
+
+from {
+  line: r#"51 <165>1 2023-01-01T00:00:00Z host app 123 - - First"#,
+}, {
+  line: "x",
+}, {
+  line: r#"51 <165>1 2023-01-01T00:00:00Z host app 123 - - Third"#,
+}
+write_lines
+split_bytes 1
+read_syslog octet_counting=true

@@ -1,0 +1,9 @@
+{
+  facility: 4,
+  severity: 2,
+  timestamp: "Oct 11 22:14:15",
+  hostname: "mymachine",
+  app_name: "su",
+  process_id: null,
+  content: "failed login",
+}
