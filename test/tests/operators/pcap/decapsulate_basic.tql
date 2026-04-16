@@ -1,7 +1,7 @@
 // Make sure basic decapsulation logic works.
-from_file env("TENZIR_INPUTS") + "/pcap/example.pcap.gz" {
+from_file f"{env("TENZIR_INPUTS")}/pcap/example.pcap.gz" {
   decompress_gzip
   read_pcap
 }
 this = decapsulate(this)
-write_ndjson
+write_tql compact=true

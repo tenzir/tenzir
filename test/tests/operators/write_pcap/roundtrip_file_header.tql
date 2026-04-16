@@ -1,6 +1,6 @@
-from_file env("TENZIR_INPUTS") + "/pcap/vlan-single-tagging.pcap" {
+from_file f"{env("TENZIR_INPUTS")}/pcap/vlan-single-tagging.pcap" {
   read_pcap emit_file_headers=true
-  | write_pcap
-  | read_pcap emit_file_headers=true
 }
-| head 1
+write_pcap
+read_pcap emit_file_headers=true
+head 1
