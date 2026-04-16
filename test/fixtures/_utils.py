@@ -11,29 +11,37 @@ from pathlib import Path
 
 _COMMON_NAME = "tenzir-node.example.org"
 
-# Keep a process-local ledger of ports that this test harness already handed out.
-# This avoids intra-run collisions when many fixtures race to "find" a free port.
-# It does not protect against unrelated external processes binding the same port,
-# but that is substantially less likely than duplicate fixture allocation.
+# Use a deterministic, process-local allocator over a non-ephemeral range.
+# This avoids collisions with client source ports from the kernel's ephemeral
+# pool and guarantees that this process never hands out a port twice.
+_PORT_RANGE_START = 20_000
+_PORT_RANGE_END = 29_999
 _PORT_ALLOCATION_LOCK = threading.Lock()
-_ALLOCATED_PORTS: set[int] = set()
+_NEXT_PORT = _PORT_RANGE_START
+
+
+def _is_port_available(port: int, sock_type: int) -> bool:
+    with socket.socket(socket.AF_INET, sock_type) as sock:
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
 
 
 def find_free_port(sock_type: int = socket.SOCK_STREAM) -> int:
-    """Find an available port on localhost.
-
-    This function never returns the same port twice within one Python process.
-    """
-    for _ in range(512):
-        with socket.socket(socket.AF_INET, sock_type) as sock:
-            sock.bind(("127.0.0.1", 0))
-            port = sock.getsockname()[1]
-        with _PORT_ALLOCATION_LOCK:
-            if port in _ALLOCATED_PORTS:
-                continue
-            _ALLOCATED_PORTS.add(port)
-            return port
-    raise RuntimeError("failed to allocate a unique free localhost port")
+    """Find an available localhost port from a deterministic range."""
+    global _NEXT_PORT
+    with _PORT_ALLOCATION_LOCK:
+        while _NEXT_PORT <= _PORT_RANGE_END:
+            port = _NEXT_PORT
+            _NEXT_PORT += 1
+            if _is_port_available(port, sock_type):
+                return port
+    raise RuntimeError(
+        "exhausted localhost fixture port range "
+        f"{_PORT_RANGE_START}-{_PORT_RANGE_END}"
+    )
 
 
 def find_container_runtime() -> str | None:
