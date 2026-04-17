@@ -8,7 +8,9 @@
 
 #include "tenzir_plugins/nats/common.hpp"
 
+#include <tenzir/async.hpp>
 #include <tenzir/detail/overload.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/try.hpp>
 
 #include <caf/error.hpp>
@@ -86,6 +88,23 @@ auto check(natsStatus status, diagnostic_builder diag, diagnostic_handler& dh)
   }
   emit_nats_error(std::move(diag), status, dh);
   return failure::promise();
+}
+
+auto set_auth_value(auth_config& auth, std::string const& key,
+                    std::string value) -> void {
+  if (key == "user") {
+    auth.user = std::move(value);
+  } else if (key == "password") {
+    auth.password = std::move(value);
+  } else if (key == "token") {
+    auth.token = std::move(value);
+  } else if (key == "credentials") {
+    auth.credentials = std::move(value);
+  } else if (key == "seed") {
+    auth.seed = std::move(value);
+  } else if (key == "credentials_memory") {
+    auth.credentials_memory = std::move(value);
+  }
 }
 
 } // namespace
@@ -205,6 +224,50 @@ auto validate_auth_record(Option<located<data>> const& auth,
     return failure::promise();
   }
   return {};
+}
+
+auto resolve_connection_config(OpCtx& ctx, Option<located<secret>> const& url,
+                               Option<located<data>> const& auth)
+  -> Task<Option<connection_config>> {
+  auto result = connection_config{};
+  auto requests = std::vector<secret_request>{};
+  auto const& url_secret = url ? url->inner : default_url();
+  auto const url_loc = url ? url->source : location::unknown;
+  requests.push_back(
+    make_secret_request("url", url_secret, url_loc, result.url, ctx.dh()));
+  if (auth) {
+    if (auto const* auth_record = try_as<record>(&auth->inner)) {
+      for (auto const& [key, value] : *auth_record) {
+        match(
+          value,
+          [&](std::string const& str) {
+            set_auth_value(result.auth, key, str);
+          },
+          [&](secret const& sec) {
+            requests.emplace_back(
+              sec, auth->source,
+              [&result, key, loc = auth->source, &dh = ctx.dh()](
+                resolved_secret_value value) -> failure_or<void> {
+                TRY(auto view, value.utf8_view(key, loc, dh));
+                set_auth_value(result.auth, key, std::string{view});
+                return {};
+              });
+          },
+          [](auto const&) {
+            TENZIR_UNREACHABLE();
+          });
+      }
+    }
+  }
+  if (auto ok = co_await ctx.resolve_secrets(std::move(requests));
+      ok.is_error()) {
+    co_return None{};
+  }
+  if (result.url.empty()) {
+    diagnostic::error("`url` must not be empty").primary(url_loc).emit(ctx);
+    co_return None{};
+  }
+  co_return result;
 }
 
 auto apply_auth(natsOptions* options, auth_config const& auth,

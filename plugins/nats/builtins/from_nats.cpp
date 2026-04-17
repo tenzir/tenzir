@@ -20,7 +20,6 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret_resolution.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -99,7 +98,7 @@ enum class DirectParser {
   read_lines,
 };
 
-struct DirectMetadataUsage {
+struct MetadataUsage {
   bool subject = false;
   bool reply = false;
   bool headers = false;
@@ -270,53 +269,66 @@ auto make_payload_chunk(natsMsg* msg) -> chunk_ptr {
   return chunk::copy(natsMsg_GetData(msg), static_cast<size_t>(size));
 }
 
-auto add_metadata_to_env(FromNatsArgs const& args, natsMsg* msg,
-                         substitute_ctx::env_t& env) -> void {
-  env[args.subject_var] = get_optional_c_string(natsMsg_GetSubject(msg));
-  env[args.reply_var] = get_optional_c_string(natsMsg_GetReply(msg));
-  env[args.headers_var] = message_headers(msg);
-  auto meta = message_metadata(msg);
-  if (not meta) {
-    env[args.stream_var] = caf::none;
-    env[args.consumer_var] = caf::none;
-    env[args.stream_sequence_var] = caf::none;
-    env[args.consumer_sequence_var] = caf::none;
-    env[args.num_delivered_var] = caf::none;
-    env[args.num_pending_var] = caf::none;
-    env[args.timestamp_var] = caf::none;
-    return;
+auto add_metadata_to_env(FromNatsArgs const& args, MetadataUsage const& usage,
+                         natsMsg* msg, substitute_ctx::env_t& env) -> void {
+  if (usage.subject) {
+    env[args.subject_var] = get_optional_c_string(natsMsg_GetSubject(msg));
   }
-  env[args.stream_var] = get_optional_c_string(meta->Stream);
-  env[args.consumer_var] = get_optional_c_string(meta->Consumer);
-  env[args.stream_sequence_var] = meta->Sequence.Stream;
-  env[args.consumer_sequence_var] = meta->Sequence.Consumer;
-  env[args.num_delivered_var] = meta->NumDelivered;
-  env[args.num_pending_var] = meta->NumPending;
-  env[args.timestamp_var] = time{} + duration{meta->Timestamp};
-}
-
-auto parser_references_metadata(FromNatsArgs const& args) -> bool {
-  for (auto id : std::array{
-         args.subject_var,
-         args.reply_var,
-         args.headers_var,
-         args.stream_var,
-         args.consumer_var,
-         args.stream_sequence_var,
-         args.consumer_sequence_var,
-         args.num_delivered_var,
-         args.num_pending_var,
-         args.timestamp_var,
-       }) {
-    if (args.parser.inner.references(id)) {
-      return true;
+  if (usage.reply) {
+    env[args.reply_var] = get_optional_c_string(natsMsg_GetReply(msg));
+  }
+  if (usage.headers) {
+    env[args.headers_var] = message_headers(msg);
+  }
+  auto meta
+    = usage.jetstream() ? message_metadata(msg) : js_msg_meta_data_ptr{};
+  if (usage.stream) {
+    env[args.stream_var]
+      = meta ? get_optional_c_string(meta->Stream) : caf::none;
+  }
+  if (usage.consumer) {
+    env[args.consumer_var]
+      = meta ? get_optional_c_string(meta->Consumer) : caf::none;
+  }
+  if (usage.stream_sequence) {
+    if (meta) {
+      env[args.stream_sequence_var] = meta->Sequence.Stream;
+    } else {
+      env[args.stream_sequence_var] = caf::none;
     }
   }
-  return false;
+  if (usage.consumer_sequence) {
+    if (meta) {
+      env[args.consumer_sequence_var] = meta->Sequence.Consumer;
+    } else {
+      env[args.consumer_sequence_var] = caf::none;
+    }
+  }
+  if (usage.num_delivered) {
+    if (meta) {
+      env[args.num_delivered_var] = meta->NumDelivered;
+    } else {
+      env[args.num_delivered_var] = caf::none;
+    }
+  }
+  if (usage.num_pending) {
+    if (meta) {
+      env[args.num_pending_var] = meta->NumPending;
+    } else {
+      env[args.num_pending_var] = caf::none;
+    }
+  }
+  if (usage.timestamp) {
+    if (meta) {
+      env[args.timestamp_var] = time{} + duration{meta->Timestamp};
+    } else {
+      env[args.timestamp_var] = caf::none;
+    }
+  }
 }
 
-auto direct_metadata_usage(FromNatsArgs const& args, ir::pipeline const& pipe)
-  -> DirectMetadataUsage {
+auto metadata_usage(FromNatsArgs const& args, ir::pipeline const& pipe)
+  -> MetadataUsage {
   return {
     .subject = pipe.references(args.subject_var),
     .reply = pipe.references(args.reply_var),
@@ -405,71 +417,11 @@ auto schedule_direct_flush(Arc<SourceState> source,
   source->flush_slots.signal();
 }
 
-auto set_auth_value(auth_config& auth, std::string const& key,
-                    std::string value) -> void {
-  if (key == "user") {
-    auth.user = std::move(value);
-  } else if (key == "password") {
-    auth.password = std::move(value);
-  } else if (key == "token") {
-    auth.token = std::move(value);
-  } else if (key == "credentials") {
-    auth.credentials = std::move(value);
-  } else if (key == "seed") {
-    auth.seed = std::move(value);
-  } else if (key == "credentials_memory") {
-    auth.credentials_memory = std::move(value);
-  }
-}
-
-auto resolve_connection_config(OpCtx& ctx, FromNatsArgs const& args)
-  -> Task<Option<connection_config>> {
-  auto result = connection_config{};
-  auto requests = std::vector<secret_request>{};
-  auto const& url = args.url ? args.url->inner : default_url();
-  auto const url_loc = args.url ? args.url->source : location::unknown;
-  requests.push_back(
-    make_secret_request("url", url, url_loc, result.url, ctx.dh()));
-  if (args.auth) {
-    if (auto const* auth = try_as<record>(&args.auth->inner)) {
-      for (auto const& [key, value] : *auth) {
-        match(
-          value,
-          [&](std::string const& str) {
-            set_auth_value(result.auth, key, str);
-          },
-          [&](secret const& sec) {
-            requests.emplace_back(
-              sec, args.auth->source,
-              [&result, key, loc = args.auth->source, &dh = ctx.dh()](
-                resolved_secret_value value) -> failure_or<void> {
-                TRY(auto view, value.utf8_view(key, loc, dh));
-                set_auth_value(result.auth, key, std::string{view});
-                return {};
-              });
-          },
-          [](auto const&) {
-            TENZIR_UNREACHABLE();
-          });
-      }
-    }
-  }
-  if (auto ok = co_await ctx.resolve_secrets(std::move(requests));
-      ok.is_error()) {
-    co_return None{};
-  }
-  if (result.url.empty()) {
-    diagnostic::error("`url` must not be empty").primary(url_loc).emit(ctx);
-    co_return None{};
-  }
-  co_return result;
-}
-
 class FromNats final : public Operator<void, table_slice> {
 public:
   explicit FromNats(FromNatsArgs args)
     : args_{std::move(args)}, source_{std::in_place, args_.queue_capacity} {
-    parser_references_metadata_ = parser_references_metadata(args_);
+    parser_metadata_usage_ = metadata_usage(args_, args_.parser.inner);
     direct_parser_ = direct_parser_for(args_);
   }
 
@@ -492,7 +444,7 @@ public:
         done_ = true;
         co_return;
       }
-    } else if (not parser_references_metadata_) {
+    } else if (not parser_metadata_usage_.any()) {
       auto parser = args_.parser.inner;
       if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
         done_ = true;
@@ -500,7 +452,8 @@ public:
       }
       parser_template_ = std::move(parser);
     }
-    auto resolved = co_await resolve_connection_config(ctx, args_);
+    auto resolved
+      = co_await resolve_connection_config(ctx, args_.url, args_.auth);
     if (not resolved) {
       done_ = true;
       co_return;
@@ -736,7 +689,7 @@ private:
       direct_arrow_lines_enabled_ = true;
       co_return true;
     }
-    direct_metadata_usage_ = direct_metadata_usage(args_, tail);
+    direct_metadata_usage_ = metadata_usage(args_, tail);
     if (not direct_metadata_usage_.any()) {
       direct_arrow_lines_enabled_ = true;
     }
@@ -1249,7 +1202,7 @@ private:
     }();
     if (not parser_template_) {
       auto env = substitute_ctx::env_t{};
-      add_metadata_to_env(args_, msg.get(), env);
+      add_metadata_to_env(args_, parser_metadata_usage_, msg.get(), env);
       auto sub_result
         = pipeline.substitute(substitute_ctx{base_ctx{ctx}, &env}, true);
       if (not sub_result) {
@@ -1349,12 +1302,12 @@ private:
   arrow::StringBuilder direct_arrow_lines_{arrow_memory_pool()};
   int64_t direct_arrow_line_count_ = 0;
   Option<series_builder::clock::time_point> direct_arrow_oldest_ = None{};
-  DirectMetadataUsage direct_metadata_usage_;
+  MetadataUsage direct_metadata_usage_;
+  MetadataUsage parser_metadata_usage_;
   std::vector<ast::field_path> direct_metadata_drop_fields_;
   uint64_t next_msg_id_ = 0;
   uint64_t received_ = 0;
   DirectParser direct_parser_ = DirectParser::none;
-  bool parser_references_metadata_ = true;
   bool direct_flush_scheduled_ = false;
   bool direct_arrow_lines_enabled_ = false;
   bool direct_ack_all_ = false;

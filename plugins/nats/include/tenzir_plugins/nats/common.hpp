@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <tenzir/async/task.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
@@ -22,6 +23,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+namespace tenzir {
+
+class OpCtx;
+
+} // namespace tenzir
 
 namespace tenzir::plugins::nats {
 
@@ -113,6 +120,9 @@ auto emit_nats_error(diagnostic_builder diag, natsStatus status,
 
 auto validate_auth_record(Option<located<data>> const& auth,
                           diagnostic_handler& dh) -> failure_or<void>;
+auto resolve_connection_config(OpCtx& ctx, Option<located<secret>> const& url,
+                               Option<located<data>> const& auth)
+  -> Task<Option<connection_config>>;
 auto apply_auth(natsOptions* options, auth_config const& auth,
                 location auth_location, diagnostic_handler& dh)
   -> failure_or<void>;

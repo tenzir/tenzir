@@ -17,7 +17,6 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret_resolution.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -81,66 +80,6 @@ void publish_error_handler(jsCtx*, jsPubAckErr* error, void* closure) {
   if (error) {
     std::ignore = errors->try_enqueue(make_publish_ack_error(*error));
   }
-}
-
-auto set_auth_value(auth_config& auth, std::string const& key,
-                    std::string value) -> void {
-  if (key == "user") {
-    auth.user = std::move(value);
-  } else if (key == "password") {
-    auth.password = std::move(value);
-  } else if (key == "token") {
-    auth.token = std::move(value);
-  } else if (key == "credentials") {
-    auth.credentials = std::move(value);
-  } else if (key == "seed") {
-    auth.seed = std::move(value);
-  } else if (key == "credentials_memory") {
-    auth.credentials_memory = std::move(value);
-  }
-}
-
-auto resolve_connection_config(OpCtx& ctx, ToNatsArgs const& args)
-  -> Task<Option<connection_config>> {
-  auto result = connection_config{};
-  auto requests = std::vector<secret_request>{};
-  auto const& url = args.url ? args.url->inner : default_url();
-  auto const url_loc = args.url ? args.url->source : location::unknown;
-  requests.push_back(
-    make_secret_request("url", url, url_loc, result.url, ctx.dh()));
-  if (args.auth) {
-    if (auto const* auth = try_as<record>(&args.auth->inner)) {
-      for (auto const& [key, value] : *auth) {
-        match(
-          value,
-          [&](std::string const& str) {
-            set_auth_value(result.auth, key, str);
-          },
-          [&](secret const& sec) {
-            requests.emplace_back(
-              sec, args.auth->source,
-              [&result, key, loc = args.auth->source, &dh = ctx.dh()](
-                resolved_secret_value value) -> failure_or<void> {
-                TRY(auto view, value.utf8_view(key, loc, dh));
-                set_auth_value(result.auth, key, std::string{view});
-                return {};
-              });
-          },
-          [](auto const&) {
-            TENZIR_UNREACHABLE();
-          });
-      }
-    }
-  }
-  if (auto ok = co_await ctx.resolve_secrets(std::move(requests));
-      ok.is_error()) {
-    co_return None{};
-  }
-  if (result.url.empty()) {
-    diagnostic::error("`url` must not be empty").primary(url_loc).emit(ctx);
-    co_return None{};
-  }
-  co_return result;
 }
 
 auto add_header_values(natsMsg* msg, std::string const& key, list const& values,
@@ -233,7 +172,8 @@ public:
     write_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_nats"},
                          MetricsDirection::write, MetricsVisibility::external_);
-    auto resolved = co_await resolve_connection_config(ctx, args_);
+    auto resolved
+      = co_await resolve_connection_config(ctx, args_.url, args_.auth);
     if (not resolved) {
       done_ = true;
       co_return;
