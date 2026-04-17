@@ -37,7 +37,7 @@ struct CurlBodySource::Impl {
       auto resume = std::function<void()>{};
       {
         auto lock = std::unique_lock{mutex};
-        if (aborted or closed) {
+        if (aborted or closed or terminated) {
           co_return false;
         }
         if (buffered.size() < capacity) {
@@ -62,7 +62,7 @@ struct CurlBodySource::Impl {
     auto resume = std::function<void()>{};
     {
       auto lock = std::lock_guard{mutex};
-      if (closed or aborted) {
+      if (closed or aborted or terminated) {
         return;
       }
       closed = true;
@@ -82,10 +82,30 @@ struct CurlBodySource::Impl {
     auto resume = std::function<void()>{};
     {
       auto lock = std::lock_guard{mutex};
-      if (aborted) {
+      if (aborted or terminated) {
         return;
       }
       aborted = true;
+      if (paused) {
+        paused = false;
+        resume = resume_callback;
+      }
+    }
+    data_ready.notify_one();
+    space_available.notify_one();
+    if (resume) {
+      resume();
+    }
+  }
+
+  auto terminate() -> void {
+    auto resume = std::function<void()>{};
+    {
+      auto lock = std::lock_guard{mutex};
+      if (terminated) {
+        return;
+      }
+      terminated = true;
       if (paused) {
         paused = false;
         resume = resume_callback;
@@ -107,7 +127,7 @@ struct CurlBodySource::Impl {
         return CURL_READFUNC_ABORT;
       }
       if (buffered.empty()) {
-        if (closed) {
+        if (closed or terminated) {
           return 0;
         }
         paused = true;
@@ -139,12 +159,17 @@ struct CurlBodySource::Impl {
     while (true) {
       {
         auto lock = std::lock_guard{mutex};
-        if (aborted or closed or not buffered.empty()) {
+        if (aborted or closed or terminated or not buffered.empty()) {
           co_return;
         }
       }
       co_await data_ready.wait();
     }
+  }
+
+  auto is_aborted() -> bool {
+    auto lock = std::lock_guard{mutex};
+    return aborted;
   }
 
   auto set_resume_callback(std::function<void()> callback) -> void {
@@ -160,6 +185,7 @@ struct CurlBodySource::Impl {
   size_t front_offset = 0;
   bool closed = false;
   bool aborted = false;
+  bool terminated = false;
   bool paused = false;
   std::function<void()> resume_callback;
 };
@@ -268,8 +294,16 @@ auto CurlBodySource::wait_until_ready() -> Task<void> {
   co_await impl_->wait_until_ready();
 }
 
+auto CurlBodySource::is_aborted() -> bool {
+  return impl_->is_aborted();
+}
+
 auto CurlBodySource::abort() -> void {
   impl_->abort();
+}
+
+auto CurlBodySource::terminate() -> void {
+  impl_->terminate();
 }
 
 auto CurlBodySource::read(std::span<std::byte> buffer) -> size_t {
@@ -544,7 +578,7 @@ private:
   auto cleanup() -> void {
     if (handlers_.source) {
       handlers_.source->set_resume_callback({});
-      handlers_.source->abort();
+      handlers_.source->terminate();
     }
     if (handlers_.sink) {
       handlers_.sink->set_resume_callback({});
@@ -643,15 +677,15 @@ auto TimerHandler::timeoutExpired() noexcept -> void {
 auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                   curl::easy& handle, CurlBodyHandlers handlers)
   -> Task<caf::error> {
-  co_return co_await folly::coro::co_withExecutor(
-    executor,
-    [executor = std::move(executor), &handle, handlers]() mutable
-      -> Task<caf::error> {
-      auto state = PerformState{std::move(executor), handle, handlers};
-      state.start();
-      co_await state.wait();
-      co_return std::move(state).result();
-    }());
+  auto state_executor = executor;
+  auto task = [state_executor = std::move(state_executor), &handle,
+               handlers]() mutable -> Task<caf::error> {
+    auto state = PerformState{std::move(state_executor), handle, handlers};
+    state.start();
+    co_await state.wait();
+    co_return std::move(state).result();
+  };
+  co_return co_await folly::coro::co_withExecutor(std::move(executor), task());
 }
 
 } // namespace tenzir

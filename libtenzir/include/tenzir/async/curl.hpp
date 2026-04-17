@@ -52,6 +52,9 @@ public:
   /// Wait until the stream has buffered data or reached a terminal state.
   auto wait_until_ready() -> Task<void>;
 
+  /// Returns whether the stream was aborted.
+  auto is_aborted() -> bool;
+
   /// Abort the stream. Subsequent reads fail with `CURLE_ABORTED_BY_CALLBACK`.
   auto abort() -> void;
 
@@ -60,6 +63,11 @@ public:
 
   /// Internal hook for `perform_curl`.
   auto set_resume_callback(std::function<void()> callback) -> void;
+
+  /// Internal hook for `perform_curl`.
+  /// Stops producers after the transfer finishes without recording a local
+  /// abort.
+  auto terminate() -> void;
 
 private:
   struct Impl;

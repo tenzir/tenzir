@@ -31,12 +31,14 @@ class FtpOptions:
 @dataclass(frozen=True)
 class FtpAssertions:
     uploaded_contains: str | None = None
+    upload_count: int | None = None
 
 
 @dataclass
 class _FtpState:
     lock: threading.Lock = field(default_factory=threading.Lock)
     uploaded: bytearray = field(default_factory=bytearray)
+    upload_count: int = 0
 
 
 def _normalize_path(path: str) -> str:
@@ -168,6 +170,8 @@ def _handle_client(
                 if passive_listener is None:
                     _send_line(control, "425 use PASV or EPSV first")
                     continue
+                with state.lock:
+                    state.upload_count += 1
                 _send_line(control, "150 opening data connection")
                 passive_listener.settimeout(1.0)
                 data_conn, _ = passive_listener.accept()
@@ -280,16 +284,27 @@ def ftp() -> FixtureHandle:
         while True:
             with state.lock:
                 uploaded = state.uploaded.decode("utf-8", errors="replace")
+                upload_count = state.upload_count
             if (
-                assertions.uploaded_contains is None
-                or assertions.uploaded_contains in uploaded
+                assertions.uploaded_contains is not None
+                and assertions.uploaded_contains not in uploaded
             ):
-                return
-            if time.monotonic() >= deadline:
-                raise AssertionError(
+                error = (
                     f"{test.name}: expected uploaded data to contain "
                     f"{assertions.uploaded_contains!r}, got {uploaded!r}"
                 )
+            elif (
+                assertions.upload_count is not None
+                and assertions.upload_count != upload_count
+            ):
+                error = (
+                    f"{test.name}: expected upload count to be "
+                    f"{assertions.upload_count}, got {upload_count}"
+                )
+            else:
+                return
+            if time.monotonic() >= deadline:
+                raise AssertionError(error)
             time.sleep(_ASSERTION_WAIT_INTERVAL)
 
     def _teardown() -> None:
