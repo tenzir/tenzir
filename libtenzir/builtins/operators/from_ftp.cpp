@@ -93,18 +93,23 @@ auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
     co_await queue->enqueue(TransferFailed{fmt::format("{}", err)});
     co_return;
   }
-  auto curl_error = caf::error{};
+  auto curl_result = CurlPerformResult::success();
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn([&]() -> Task<void> {
       while (auto chunk = co_await download_body->pop()) {
         co_await queue->enqueue(Payload{std::move(*chunk)});
       }
     });
-    curl_error = co_await perform_curl_download(std::move(io_executor),
-                                                tx.handle(), *download_body);
+    curl_result = co_await perform_curl_download(std::move(io_executor),
+                                                 tx.handle(), *download_body);
   });
-  if (curl_error.valid()) {
-    co_await queue->enqueue(TransferFailed{fmt::format("{}", curl_error)});
+  if (curl_result.is_failure()) {
+    co_await queue->enqueue(
+      TransferFailed{fmt::format("{}", curl_result.error())});
+    co_return;
+  }
+  if (curl_result.is_local_abort()) {
+    co_await queue->enqueue(TransferDone{});
     co_return;
   }
   auto [code, response_code]
@@ -170,12 +175,14 @@ public:
         }
         auto sub = ctx.get_sub(caf::none);
         if (not sub) {
+          download_body_->abort();
           lifecycle_ = Lifecycle::done;
           co_return;
         }
         auto& parser = as<SubHandle<chunk_ptr>>(*sub);
         auto push_result = co_await parser.push(std::move(payload.chunk));
         if (push_result.is_err()) {
+          download_body_->abort();
           lifecycle_ = Lifecycle::done;
         }
       },

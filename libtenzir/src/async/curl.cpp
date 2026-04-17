@@ -20,6 +20,7 @@
 #include <folly/io/async/EventHandler.h>
 
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <utility>
@@ -281,6 +282,11 @@ struct CurlDownloadBody::Impl {
     }
   }
 
+  auto is_aborted() -> bool {
+    auto lock = std::lock_guard{mutex};
+    return aborted;
+  }
+
   auto write(std::span<const std::byte> buffer) -> size_t {
     auto lock = std::lock_guard{mutex};
     if (aborted) {
@@ -359,6 +365,10 @@ auto CurlDownloadBody::pop() -> Task<Option<chunk_ptr>> {
   co_return co_await impl_->pop();
 }
 
+auto CurlDownloadBody::is_aborted() -> bool {
+  return impl_->is_aborted();
+}
+
 auto CurlDownloadBody::abort() -> void {
   impl_->abort();
 }
@@ -407,7 +417,7 @@ private:
   PerformState& owner_;
 };
 
-class PerformState {
+class PerformState final : public std::enable_shared_from_this<PerformState> {
 public:
   PerformState(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                curl::easy& easy, CurlUploadBody* upload_body,
@@ -423,43 +433,49 @@ public:
 
   auto start() -> void {
     if (upload_body_) {
-      detail::CurlBodyAccess::set_resume_callback(*upload_body_, [this]() {
-        request_resume_send();
+      auto weak = weak_from_this();
+      detail::CurlBodyAccess::set_resume_callback(*upload_body_, [weak]() {
+        if (auto self = weak.lock()) {
+          self->request_resume_send();
+        }
       });
       auto code = easy_.set([this](std::span<std::byte> buffer) -> size_t {
         return read_from_source(buffer);
       });
       if (code != curl::easy::code::ok) {
-        complete(curl::to_error(code));
+        complete(CurlPerformResult::failure(curl::to_error(code)));
         return;
       }
     }
     if (download_body_) {
-      detail::CurlBodyAccess::set_resume_callback(*download_body_, [this]() {
-        request_resume_recv();
+      auto weak = weak_from_this();
+      detail::CurlBodyAccess::set_resume_callback(*download_body_, [weak]() {
+        if (auto self = weak.lock()) {
+          self->request_resume_recv();
+        }
       });
       auto code = easy_.set_write_result_callback(
         [this](std::span<const std::byte> buffer) -> size_t {
           return write_to_sink(buffer);
         });
       if (code != curl::easy::code::ok) {
-        complete(curl::to_error(code));
+        complete(CurlPerformResult::failure(curl::to_error(code)));
         return;
       }
     }
     auto code = multi_.set_socket_callback(&socket_callback, this);
     if (code != curl::multi::code::ok) {
-      complete(curl::to_error(code));
+      complete(CurlPerformResult::failure(curl::to_error(code)));
       return;
     }
     code = multi_.set_timer_callback(&timer_callback, this);
     if (code != curl::multi::code::ok) {
-      complete(curl::to_error(code));
+      complete(CurlPerformResult::failure(curl::to_error(code)));
       return;
     }
     code = multi_.add(easy_);
     if (code != curl::multi::code::ok) {
-      complete(curl::to_error(code));
+      complete(CurlPerformResult::failure(curl::to_error(code)));
       return;
     }
     added_ = true;
@@ -477,7 +493,7 @@ public:
     }
   }
 
-  auto result() && -> caf::error {
+  auto take_result() -> CurlPerformResult {
     return std::move(result_);
   }
 
@@ -550,20 +566,23 @@ private:
   }
 
   auto request_resume_send() -> void {
-    evb_->runInEventBaseThread([this]() {
-      resume_send();
+    auto self = shared_from_this();
+    evb_->runInEventBaseThread([self = std::move(self)]() {
+      self->resume_send();
     });
   }
 
   auto request_resume_recv() -> void {
-    evb_->runInEventBaseThread([this]() {
-      resume_recv();
+    auto self = shared_from_this();
+    evb_->runInEventBaseThread([self = std::move(self)]() {
+      self->resume_recv();
     });
   }
 
   auto request_cancel() -> void {
-    evb_->runInEventBaseThread([this]() {
-      cancel();
+    auto self = shared_from_this();
+    evb_->runInEventBaseThread([self = std::move(self)]() {
+      self->cancel();
     });
   }
 
@@ -574,7 +593,7 @@ private:
     paused_send_ = false;
     auto code = easy_.pause(current_pause_mask());
     if (code != curl::easy::code::ok) {
-      complete(curl::to_error(code));
+      complete(CurlPerformResult::failure(curl::to_error(code)));
       return;
     }
     drive(CURL_SOCKET_TIMEOUT, 0);
@@ -587,7 +606,7 @@ private:
     paused_recv_ = false;
     auto code = easy_.pause(current_pause_mask());
     if (code != curl::easy::code::ok) {
-      complete(curl::to_error(code));
+      complete(CurlPerformResult::failure(curl::to_error(code)));
       return;
     }
     drive(CURL_SOCKET_TIMEOUT, 0);
@@ -611,15 +630,15 @@ private:
     auto [code, running_handles] = multi_.socket_action(socket, ev_bitmask);
     std::ignore = running_handles;
     if (code != curl::multi::code::ok) {
-      complete(curl::to_error(code));
+      complete(CurlPerformResult::failure(curl::to_error(code)));
       return;
     }
     for (auto result : multi_.info_read()) {
       if (result != curl::easy::code::ok) {
-        complete(curl::to_error(result));
+        complete(CurlPerformResult::failure(curl::to_error(result)));
         return;
       }
-      complete({});
+      complete(CurlPerformResult::success());
       return;
     }
   }
@@ -635,7 +654,7 @@ private:
     if (download_body_) {
       download_body_->abort();
     }
-    complete(caf::error{});
+    complete(CurlPerformResult::success());
   }
 
   auto cleanup() -> void {
@@ -657,7 +676,7 @@ private:
     }
   }
 
-  auto complete(caf::error result) -> void {
+  auto complete(CurlPerformResult result) -> void {
     if (completed_) {
       return;
     }
@@ -676,7 +695,7 @@ private:
   std::unordered_map<curl_socket_t, Box<SocketHandler>> socket_handlers_;
   TimerHandler timer_;
   folly::coro::Baton done_;
-  caf::error result_;
+  CurlPerformResult result_ = CurlPerformResult::success();
   bool added_ = false;
   bool completed_ = false;
   bool cancelled_ = false;
@@ -744,15 +763,17 @@ namespace {
 
 auto perform_curl_impl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                        curl::easy& handle, CurlUploadBody* upload_body,
-                       CurlDownloadBody* download_body) -> Task<caf::error> {
+                       CurlDownloadBody* download_body)
+  -> Task<CurlPerformResult> {
   auto state_executor = executor;
   auto task = [state_executor = std::move(state_executor), &handle, upload_body,
-               download_body]() mutable -> Task<caf::error> {
-    auto state = PerformState{std::move(state_executor), handle, upload_body,
-                              download_body};
-    state.start();
-    co_await state.wait();
-    co_return std::move(state).result();
+               download_body]() mutable -> Task<CurlPerformResult> {
+    auto state = std::make_shared<PerformState>(std::move(state_executor),
+                                                handle, upload_body,
+                                                download_body);
+    state->start();
+    co_await state->wait();
+    co_return state->take_result();
   };
   co_return co_await folly::coro::co_withExecutor(std::move(executor), task());
 }
@@ -760,14 +781,14 @@ auto perform_curl_impl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 } // namespace
 
 auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                  curl::easy& handle) -> Task<caf::error> {
+                  curl::easy& handle) -> Task<CurlPerformResult> {
   co_return co_await perform_curl_impl(std::move(executor), handle, nullptr,
                                        nullptr);
 }
 
 auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                          curl::easy& handle, CurlUploadBody& body)
-  -> Task<caf::error> {
+  -> Task<CurlPerformResult> {
   try {
     co_await detail::CurlBodyAccess::wait_until_ready(body);
   } catch (folly::OperationCancelled const&) {
@@ -775,17 +796,25 @@ auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
     throw;
   }
   if (body.is_aborted()) {
-    co_return caf::error{};
+    co_return CurlPerformResult::local_abort();
   }
-  co_return co_await perform_curl_impl(std::move(executor), handle, &body,
-                                       nullptr);
+  auto result = co_await perform_curl_impl(std::move(executor), handle, &body,
+                                           nullptr);
+  if (body.is_aborted()) {
+    co_return CurlPerformResult::local_abort();
+  }
+  co_return result;
 }
 
 auto perform_curl_download(
   folly::Executor::KeepAlive<folly::IOExecutor> executor, curl::easy& handle,
-  CurlDownloadBody& body) -> Task<caf::error> {
-  co_return co_await perform_curl_impl(std::move(executor), handle, nullptr,
-                                       &body);
+  CurlDownloadBody& body) -> Task<CurlPerformResult> {
+  auto result = co_await perform_curl_impl(std::move(executor), handle,
+                                           nullptr, &body);
+  if (body.is_aborted()) {
+    co_return CurlPerformResult::local_abort();
+  }
+  co_return result;
 }
 
 } // namespace tenzir
