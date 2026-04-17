@@ -273,6 +273,10 @@ private:
                                    Option<char>& quote) -> bool {
     auto c = text[i];
     if (quote) {
+      if (c == '\\' and i + 1 < text.size()) {
+        ++i;
+        return true;
+      }
       if (c == *quote) {
         if (i + 1 < text.size() and text[i + 1] == *quote) {
           ++i;
