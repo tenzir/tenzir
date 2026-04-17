@@ -439,6 +439,22 @@ private:
   }
 
   static auto
+  check_time_nanos_range(::clickhouse::Int128 value, std::string_view type_name,
+                         value_path path, diagnostic_handler& dh)
+    -> failure_or<int64_t> {
+    auto min = ::clickhouse::Int128{std::numeric_limits<int64_t>::min()};
+    auto max = ::clickhouse::Int128{std::numeric_limits<int64_t>::max()};
+    if (value < min or value > max) {
+      diagnostic::error("{} value for `{}` is out of range after rescaling to "
+                        "nanoseconds",
+                        type_name, path)
+        .emit(dh);
+      return failure::promise();
+    }
+    return static_cast<int64_t>(value);
+  }
+
+  static auto
   rescale_datetime64_to_nanos(int64_t value, size_t precision, value_path path,
                               diagnostic_handler& dh) -> failure_or<int64_t> {
     if (precision == 9) {
@@ -446,19 +462,33 @@ private:
     }
     if (precision < 9) {
       auto factor = ::clickhouse::Int128{pow10(9 - precision)};
-      auto scaled = ::clickhouse::Int128{value} * factor;
-      auto min = ::clickhouse::Int128{std::numeric_limits<int64_t>::min()};
-      auto max = ::clickhouse::Int128{std::numeric_limits<int64_t>::max()};
-      if (scaled < min or scaled > max) {
-        diagnostic::error("DateTime64 value for `{}` is out of range after "
-                          "rescaling to nanoseconds",
-                          path)
-          .emit(dh);
-        return failure::promise();
-      }
-      return static_cast<int64_t>(scaled);
+      return check_time_nanos_range(::clickhouse::Int128{value} * factor,
+                                    "DateTime64", path, dh);
     }
     return value / pow10(precision - 9);
+  }
+
+  static auto
+  time_from_unix_seconds(int64_t seconds, std::string_view type_name,
+                         value_path path, diagnostic_handler& dh)
+    -> failure_or<time> {
+    TRY(auto nanos,
+        check_time_nanos_range(::clickhouse::Int128{seconds}
+                                 * ::clickhouse::Int128{1'000'000'000},
+                               type_name, path, dh));
+    return time{
+      std::chrono::duration_cast<duration>(std::chrono::nanoseconds{nanos})};
+  }
+
+  static auto time_from_unix_days(int64_t days, std::string_view type_name,
+                                  value_path path, diagnostic_handler& dh)
+    -> failure_or<time> {
+    auto seconds = ::clickhouse::Int128{days} * ::clickhouse::Int128{86400};
+    TRY(auto nanos,
+        check_time_nanos_range(seconds * ::clickhouse::Int128{1'000'000'000},
+                               type_name, path, dh));
+    return time{
+      std::chrono::duration_cast<duration>(std::chrono::nanoseconds{nanos})};
   }
 
   static auto is_scalar_kind(ParsedType::Kind kind) -> bool {
@@ -1014,20 +1044,22 @@ private:
         switch (item.type) {
           case ::clickhouse::Type::Date: {
             auto days = int64_t{item.get<uint16_t>()};
-            builder.data(time{std::chrono::duration_cast<duration>(
-              std::chrono::seconds{days * 86400})});
+            TRY(auto value, time_from_unix_days(days, "Date", path, dh));
+            builder.data(value);
             return {};
           }
           case ::clickhouse::Type::Date32: {
             auto days = int64_t{item.get<int32_t>()};
-            builder.data(time{std::chrono::duration_cast<duration>(
-              std::chrono::seconds{days * 86400})});
+            TRY(auto value, time_from_unix_days(days, "Date32", path, dh));
+            builder.data(value);
             return {};
           }
-          case ::clickhouse::Type::DateTime:
-            builder.data(time{std::chrono::duration_cast<duration>(
-              std::chrono::seconds{item.get<uint32_t>()})});
+          case ::clickhouse::Type::DateTime: {
+            TRY(auto value, time_from_unix_seconds(item.get<uint32_t>(),
+                                                   "DateTime", path, dh));
+            builder.data(value);
             return {};
+          }
           case ::clickhouse::Type::DateTime64: {
             TRY(auto ns, rescale_datetime64_to_nanos(
                            item.get<int64_t>(), desc.time_precision, path, dh));
