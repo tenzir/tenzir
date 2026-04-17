@@ -55,23 +55,23 @@ emit_invalid_identifier(std::string_view name, std::string_view value,
 }
 
 struct split_table_name_result {
-  std::optional<std::string_view> database;
+  Option<std::string_view> database = None{};
   std::string_view table;
 };
 
 template <bool error>
 inline auto split_table_name(std::string_view table, location table_loc,
                              diagnostic_handler& dh)
-  -> std::optional<split_table_name_result> {
+  -> Option<split_table_name_result> {
   const auto dot = table_name_quoting.find_first_of_not_in_quotes(table, ".");
   if (dot == std::string::npos) {
-    return split_table_name_result{std::nullopt, table};
+    return split_table_name_result{None{}, table};
   }
   if (dot == table.size() - 1) {
     diag_root<error>("expected table name after `.`")
       .primary(table_loc)
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   const auto dot2
     = table_name_quoting.find_first_of_not_in_quotes(table, ".", dot + 1);
@@ -82,7 +82,7 @@ inline auto split_table_name(std::string_view table, location table_loc,
             "identifier")
       .primary(table_loc)
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   return split_table_name_result{
     table.substr(0, dot),
@@ -117,12 +117,12 @@ inline auto validate_table_name(std::string_view table, location table_loc,
 struct operator_arguments {
   tenzir::location operator_location;
   located<secret> host = {secret::make_literal("localhost"), operator_location};
-  std::optional<located<uint64_t>> port = std::nullopt;
+  Option<located<uint64_t>> port = None{};
   located<secret> user = {secret::make_literal("default"), operator_location};
   located<secret> password = {secret::make_literal(""), operator_location};
   ast::expression table = {};
   located<enum mode> mode = located{mode::create_append, operator_location};
-  std::optional<located<std::string>> primary = std::nullopt;
+  Option<located<std::string>> primary = None{};
   tls_options ssl = {};
 
   static auto try_parse(std::string operator_name,
@@ -133,8 +133,8 @@ struct operator_arguments {
       to_string(mode::create_append),
       res.operator_location,
     };
-    auto port = std::optional<located<int64_t>>{};
-    auto primary_selector = std::optional<ast::field_path>{};
+    auto port = Option<located<int64_t>>{};
+    auto primary_selector = Option<ast::field_path>{};
     auto parser = argument_parser2::operator_(operator_name);
     parser.named_optional("host", res.host);
     parser.named("port", port);
