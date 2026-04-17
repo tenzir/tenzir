@@ -662,11 +662,11 @@ public:
     TENZIR_UNUSED(push);
     auto trailing_bytes = truncated_bytes_ + available();
     if (not done_ and trailing_bytes != 0) {
-      emit_with_location(
-        diagnostic::warning("truncated Feather input")
-          .note("discarded {} trailing bytes", trailing_bytes)
-          .severity(decoded_once_ ? severity::warning : severity::error),
-        ctx.dh(), args_.operator_location);
+      emit_with_location(diagnostic::warning("truncated Feather input")
+                           .note("discarded {} trailing bytes", trailing_bytes)
+                           .severity(decoded_once_ ? severity::warning
+                                                   : severity::error),
+                         ctx.dh(), args_.operator_location);
     }
     co_return FinalizeBehavior::done;
   }
