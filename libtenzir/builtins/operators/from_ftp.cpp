@@ -83,15 +83,10 @@ auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto download(std::string url, Option<located<data>> tls,
-              caf::actor_system_config const* cfg, Arc<MessageQueue> queue)
-  -> Task<void> {
-  auto options = transfer_options{};
-  options.default_protocol = "ftp";
+auto download(std::string url, transfer_options options,
+              Arc<MessageQueue> queue) -> Task<void> {
   auto request = http::request{};
   request.uri = std::move(url);
-  options.ssl = make_tls_options(request.uri, tls);
-  options.ssl.update_from_config(cfg);
   auto tx = transfer{std::move(options)};
   if (auto err = tx.prepare(std::move(request)); err.valid()) {
     co_await queue->enqueue(TransferFailed{fmt::format("{}", err)});
@@ -145,11 +140,14 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto* cfg = std::addressof(ctx.actor_system().config());
+    tls.update_from_config(std::addressof(ctx.actor_system().config()));
+    auto options = transfer_options{};
+    options.default_protocol = "ftp";
+    options.ssl = tls;
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
     ctx.spawn_task(folly::coro::co_withExecutor(
       folly::getGlobalCPUExecutor(),
-      download(resolved_url_, args_.tls, cfg, message_queue_)));
+      download(resolved_url_, std::move(options), message_queue_)));
     co_return;
   }
 
