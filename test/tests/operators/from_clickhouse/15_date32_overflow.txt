@@ -1,0 +1,6 @@
+error: Date32 value for `too_late` is out of range after rescaling to nanoseconds
+ --> tests/operators/from_clickhouse/15_date32_overflow.tql:5:1
+  |
+5 | from_clickhouse sql="SELECT toDate32('2263-01-01') AS too_late",
+  | ^^^^^^^^^^^^^^^ 
+  |
