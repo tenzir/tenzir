@@ -63,6 +63,10 @@ auto unquote_identifier_component(std::string_view text) -> std::string {
   return table_name_quoting.unquote_unescape(text);
 }
 
+auto quote_identifier_component(std::string_view text) -> std::string {
+  return fmt::format("\"{}\"", detail::double_escape(text, "\""));
+}
+
 struct FromClickhouseArgs {
   Option<located<std::string>> table;
   located<secret> host = {secret::make_literal("localhost"), location::unknown};
@@ -1160,6 +1164,20 @@ private:
     return {None{}, table};
   }
 
+  static auto make_select_query(std::string_view table,
+                                std::vector<ParsedField> const& columns)
+    -> std::string {
+    auto result = std::string{"SELECT "};
+    for (auto i = size_t{0}; i < columns.size(); ++i) {
+      if (i != 0) {
+        result += ", ";
+      }
+      result += quote_identifier_component(columns[i].name);
+    }
+    result += fmt::format(" FROM {}", table);
+    return result;
+  }
+
   static auto make_schema_name_from_table(std::string_view table)
     -> std::string {
     auto split = split_validated_table_name(table);
@@ -1229,7 +1247,12 @@ private:
         co_return;
       }
       auto failed = false;
-      auto query = ::clickhouse::Query{plan.query};
+      auto query_text = std::string{plan.query};
+      if (plan.described_table) {
+        TENZIR_ASSERT(schema);
+        query_text = make_select_query(*plan.described_table, schema->columns);
+      }
+      auto query = ::clickhouse::Query{query_text};
       query.OnDataCancelable([&](::clickhouse::Block const& block) {
         if (runtime_->stop_requested.load(std::memory_order_acquire)) {
           return false;
@@ -1241,12 +1264,12 @@ private:
           schema = infer_schema_from_block(block, plan.schema_name, error);
           if (not schema) {
             failed = true;
-            runtime_->stop_requested.store(true, std::memory_order_release);
             std::ignore = folly::coro::blockingWait(
               enqueue_message(*runtime_, Message{ErrorMessage{
                                            .message = std::move(error),
                                            .add_tls_hints = false,
                                          }}));
+            runtime_->stop_requested.store(true, std::memory_order_release);
             return false;
           }
         }
@@ -1256,12 +1279,12 @@ private:
         auto slices = block_to_slices(block, *schema, error);
         if (not slices) {
           failed = true;
-          runtime_->stop_requested.store(true, std::memory_order_release);
           std::ignore = folly::coro::blockingWait(
             enqueue_message(*runtime_, Message{ErrorMessage{
                                          .message = std::move(error),
                                          .add_tls_hints = false,
                                        }}));
+          runtime_->stop_requested.store(true, std::memory_order_release);
           return false;
         }
         for (auto& slice : *slices) {
