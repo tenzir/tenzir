@@ -124,7 +124,7 @@ public:
 
   caf::error& get_error() noexcept override;
 
-  caf::actor_system* sys() const noexcept override;
+  caf::actor_handle_codec* actor_handle_codec() override;
 
   bool has_human_readable_format() const noexcept override;
 
