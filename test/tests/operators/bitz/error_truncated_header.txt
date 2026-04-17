@@ -1,0 +1,7 @@
+error: unexpected BITZ header length 3
+ --> tests/operators/bitz/error_truncated_header.tql:5:3
+  |
+5 |   read_bitz
+  |   ^^^^^^^^^ 
+  |
+  = note: expected 8

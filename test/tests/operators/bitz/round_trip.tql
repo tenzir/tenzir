@@ -1,0 +1,6 @@
+from_stdin {
+  read_ndjson
+}
+write_bitz
+read_bitz
+write_ndjson
