@@ -11,7 +11,9 @@
 #include "tenzir/async/notify.hpp"
 
 #include <curl/curl.h>
+#include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
+#include <folly/coro/Error.h>
 #include <folly/coro/Task.h>
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/EventBase.h>
@@ -465,7 +467,14 @@ public:
   }
 
   auto wait() -> Task<void> {
+    auto& token = co_await folly::coro::co_current_cancellation_token;
+    auto callback = folly::CancellationCallback{token, [&]() noexcept {
+                                                  request_cancel();
+                                                }};
     co_await done_;
+    if (cancelled_) {
+      co_yield folly::coro::co_stopped_may_throw;
+    }
   }
 
   auto result() && -> caf::error {
@@ -552,6 +561,12 @@ private:
     });
   }
 
+  auto request_cancel() -> void {
+    evb_->runInEventBaseThread([this]() {
+      cancel();
+    });
+  }
+
   auto resume_send() -> void {
     if (completed_ or not paused_send_) {
       return;
@@ -609,6 +624,20 @@ private:
     }
   }
 
+  auto cancel() -> void {
+    if (completed_) {
+      return;
+    }
+    cancelled_ = true;
+    if (upload_body_) {
+      upload_body_->abort();
+    }
+    if (download_body_) {
+      download_body_->abort();
+    }
+    complete(caf::error{});
+  }
+
   auto cleanup() -> void {
     if (upload_body_) {
       detail::CurlBodyAccess::set_resume_callback(*upload_body_, {});
@@ -650,6 +679,7 @@ private:
   caf::error result_;
   bool added_ = false;
   bool completed_ = false;
+  bool cancelled_ = false;
   bool paused_send_ = false;
   bool paused_recv_ = false;
 
@@ -738,7 +768,12 @@ auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                          curl::easy& handle, CurlUploadBody& body)
   -> Task<caf::error> {
-  co_await detail::CurlBodyAccess::wait_until_ready(body);
+  try {
+    co_await detail::CurlBodyAccess::wait_until_ready(body);
+  } catch (folly::OperationCancelled const&) {
+    body.abort();
+    throw;
+  }
   if (body.is_aborted()) {
     co_return caf::error{};
   }
