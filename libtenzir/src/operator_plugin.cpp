@@ -332,7 +332,8 @@ public:
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
     if (desc_->spawner) {
-      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, dh};
+      auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
+                             *desc_, main_location(), dh};
       TRY(auto spawn, (*desc_->spawner)(input, ctx));
       if (spawn) {
         return match(*spawn,
@@ -369,7 +370,8 @@ public:
     auto spawner = std::optional<AnySpawn>{};
     if (desc_->spawner) {
       auto noop_dh = null_diagnostic_handler{};
-      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
+      auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
+                             *desc_, main_location(), noop_dh};
       auto result = (*desc_->spawner)(input, ctx);
       TENZIR_ASSERT(result);
       if (*result) {
@@ -585,8 +587,8 @@ public:
     // Run custom validation if provided.
     if (desc_->validator) {
       auto error_tracker = error_tracking_handler{ctx};
-      auto validate_ctx
-        = DescribeCtx{args_, named_args_, pipeline_, *desc_, error_tracker};
+      auto validate_ctx = DescribeCtx{args_,  named_args_,     pipeline_,
+                                      *desc_, main_location(), error_tracker};
       (*desc_->validator)(validate_ctx);
       if (error_tracker.had_error()) {
         return failure::promise();
