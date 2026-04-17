@@ -20,9 +20,12 @@ _UPLOAD_PATH = "/upload.ndjson"
 
 @dataclass(frozen=True)
 class FtpOptions:
+    port: int | None = None
     download_payload: str = '{"message":"hello-from-from_ftp"}\n'
     download_chunk_size: int | None = None
     download_chunk_delay: float = 0.0
+    upload_abort_after_bytes: int | None = None
+    upload_chunk_delay: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -47,7 +50,10 @@ def _send_line(control: socket.socket, line: str) -> None:
 
 
 def _recv_line(control_file) -> str | None:
-    line = control_file.readline()
+    try:
+        line = control_file.readline()
+    except OSError:
+        return None
     if not line:
         return None
     return line.decode("utf-8", errors="replace").rstrip("\r\n")
@@ -67,6 +73,8 @@ def _handle_client(
     download_payload: bytes,
     download_chunk_size: int | None,
     download_chunk_delay: float,
+    upload_abort_after_bytes: int | None,
+    upload_chunk_delay: float,
 ) -> None:
     control.settimeout(1.0)
     control_file = control.makefile("rb")
@@ -166,15 +174,31 @@ def _handle_client(
                 passive_listener.close()
                 passive_listener = None
                 received = bytearray()
+                aborted = False
                 with data_conn:
                     while True:
                         chunk = data_conn.recv(65536)
                         if not chunk:
                             break
                         received.extend(chunk)
+                        if (
+                            upload_abort_after_bytes is not None
+                            and len(received) >= upload_abort_after_bytes
+                        ):
+                            aborted = True
+                            try:
+                                data_conn.shutdown(socket.SHUT_RDWR)
+                            except OSError:
+                                pass
+                            break
+                        if upload_chunk_delay > 0:
+                            time.sleep(upload_chunk_delay)
                 with state.lock:
                     state.uploaded = received
-                _send_line(control, "226 transfer complete")
+                if aborted:
+                    _send_line(control, "426 transfer aborted")
+                else:
+                    _send_line(control, "226 transfer complete")
                 continue
             if command == "QUIT":
                 _send_line(control, "221 goodbye")
@@ -193,6 +217,8 @@ def _run_server(
     port: int,
     download_chunk_size: int | None,
     download_chunk_delay: float,
+    upload_abort_after_bytes: int | None,
+    upload_chunk_delay: float,
 ) -> None:
     download_payload = payload.encode("utf-8")
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -212,13 +238,15 @@ def _run_server(
                     download_payload,
                     download_chunk_size,
                     download_chunk_delay,
+                    upload_abort_after_bytes,
+                    upload_chunk_delay,
                 )
 
 
 @fixture(options=FtpOptions, assertions=FtpAssertions)
 def ftp() -> FixtureHandle:
     opts = current_options("ftp")
-    port = find_free_port()
+    port = opts.port if opts.port is not None else find_free_port()
     state = _FtpState()
     stop_event = threading.Event()
     worker = threading.Thread(
@@ -230,6 +258,8 @@ def ftp() -> FixtureHandle:
             "port": port,
             "download_chunk_size": opts.download_chunk_size,
             "download_chunk_delay": opts.download_chunk_delay,
+            "upload_abort_after_bytes": opts.upload_abort_after_bytes,
+            "upload_chunk_delay": opts.upload_chunk_delay,
         },
         daemon=True,
     )

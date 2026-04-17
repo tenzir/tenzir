@@ -163,17 +163,26 @@ private:
 
 auto feed_upload(Arc<PrinterQueue> input, Arc<UploadBridge> bridge)
   -> Task<void> {
+  auto discard_remaining_chunks = false;
   while (true) {
     auto chunk = co_await input->dequeue();
     if (not chunk) {
-      bridge->close();
+      if (not discard_remaining_chunks) {
+        bridge->close();
+      }
       co_return;
     }
     if (chunk->size() == 0) {
       continue;
     }
+    if (discard_remaining_chunks) {
+      continue;
+    }
     if (not bridge->push(std::move(chunk))) {
-      co_return;
+      // Keep draining printer output after an aborted upload so concurrent
+      // producers can finish instead of blocking forever on the bounded
+      // queue.
+      discard_remaining_chunks = true;
     }
   }
 }
