@@ -1,0 +1,10 @@
+---
+error: true
+timeout: 60
+---
+
+from {message: "hello-from-invalid-url"}
+repeat 2000
+to_ftp "ftp://[" {
+  write_ndjson
+}
