@@ -148,11 +148,10 @@ struct SourceState {
       message_slots{capacity} {
   }
 
-  // The queue has `message_slots` plus one slot for a delayed direct flush and
-  // one slot for the first terminal completion.
+  // The queue has `message_slots` plus one slot for the single delayed direct
+  // flush and one slot for the first terminal completion.
   SourceQueue queue;
   folly::fibers::Semaphore message_slots;
-  folly::fibers::Semaphore flush_slots{1};
   Atomic<bool> stopping = false;
   Atomic<bool> terminal_completion_queued = false;
 };
@@ -408,13 +407,7 @@ auto schedule_direct_flush(Arc<SourceState> source,
   if (source->stopping.load(std::memory_order_acquire)) {
     co_return;
   }
-  if (not source->flush_slots.try_wait()) {
-    co_return;
-  }
-  if (source->queue.try_enqueue(SourceMessage{FlushDirect{}})) {
-    co_return;
-  }
-  source->flush_slots.signal();
+  co_await source->queue.enqueue(SourceMessage{FlushDirect{}});
 }
 
 class FromNats final : public Operator<void, table_slice> {
@@ -580,9 +573,7 @@ public:
           source_->message_slots.signal();
         },
         [](SubscriptionComplete const&) {},
-        [&](FlushDirect const&) {
-          source_->flush_slots.signal();
-        });
+        [](FlushDirect const&) {});
     }
     for (auto& message : *batch) {
       co_await process_source_message(std::move(message), push, ctx);
@@ -1248,9 +1239,7 @@ private:
           natsMsg_Nak(item.msg.get(), nullptr);
         },
         [](SubscriptionComplete) {},
-        [&](FlushDirect) {
-          source_->flush_slots.signal();
-        });
+        [](FlushDirect) {});
     }
     if (pending_messages == PendingMessages::nak) {
       for (auto& [_, msg] : pending_) {
