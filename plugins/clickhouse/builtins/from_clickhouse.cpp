@@ -1154,9 +1154,8 @@ private:
     return {table.substr(0, dot), table.substr(dot + 1)};
   }
 
-  static auto
-  make_schema_name_from_table(std::string_view table,
-                              Option<std::string_view> database)
+  static auto make_schema_name_from_table(std::string_view table,
+                                          Option<std::string_view> database)
     -> std::string {
     auto split = split_validated_table_name(table);
     auto table_name = unquote_identifier_component(split.table);
@@ -1185,8 +1184,8 @@ private:
     return result;
   }
 
-  static auto qualify_table_name(std::string_view table,
-                                 Option<std::string_view> database)
+  static auto
+  qualify_table_name(std::string_view table, Option<std::string_view> database)
     -> std::string {
     auto split = split_validated_table_name(table);
     if (split.database or not database) {
@@ -1229,8 +1228,8 @@ private:
       }
       if (args.show->inner == "columns") {
         TENZIR_ASSERT(args.table);
-        auto database
-          = args.database ? Option<std::string_view>{args.database->inner}
+        auto database = args.database
+                          ? Option<std::string_view>{args.database->inner}
                           : None{};
         auto split = split_validated_table_name(args.table->inner);
         auto effective_database
@@ -1276,9 +1275,8 @@ private:
       };
     }
     TENZIR_ASSERT(args.table);
-    auto database = args.database
-                      ? Option<std::string_view>{args.database->inner}
-                      : None{};
+    auto database
+      = args.database ? Option<std::string_view>{args.database->inner} : None{};
     auto qualified = qualify_table_name(args.table->inner, database);
     return QueryPlan{
       .query = fmt::format("SELECT * FROM {}", qualified),
