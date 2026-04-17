@@ -30,8 +30,8 @@ namespace tenzir {
 namespace detail {
 
 struct CurlBodyAccess {
-  static auto wait_until_ready(CurlUploadBody& body) -> Task<void> {
-    co_await body.wait_until_ready();
+  static auto wait_until_ready(CurlUploadBody& body) -> Task<bool> {
+    co_return co_await body.wait_until_ready();
   }
 
   static auto read(CurlUploadBody& body, std::span<std::byte> buffer)
@@ -190,12 +190,18 @@ struct CurlUploadBody::Impl {
     return written;
   }
 
-  auto wait_until_ready() -> Task<void> {
+  auto wait_until_ready() -> Task<bool> {
     while (true) {
       {
         auto lock = std::lock_guard{mutex};
-        if (aborted or closed or terminated or not buffered.empty()) {
-          co_return;
+        if (aborted) {
+          co_return false;
+        }
+        if (not buffered.empty()) {
+          co_return true;
+        }
+        if (closed or terminated) {
+          co_return false;
         }
       }
       co_await data_ready.wait();
@@ -334,8 +340,8 @@ auto CurlUploadBody::close() -> void {
   impl_->close();
 }
 
-auto CurlUploadBody::wait_until_ready() -> Task<void> {
-  co_await impl_->wait_until_ready();
+auto CurlUploadBody::wait_until_ready() -> Task<bool> {
+  co_return co_await impl_->wait_until_ready();
 }
 
 auto CurlUploadBody::is_aborted() -> bool {
@@ -792,14 +798,19 @@ auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                          curl::easy& handle, CurlUploadBody& body)
   -> Task<CurlPerformResult> {
+  auto should_start_transfer = false;
   try {
-    co_await detail::CurlBodyAccess::wait_until_ready(body);
+    should_start_transfer
+      = co_await detail::CurlBodyAccess::wait_until_ready(body);
   } catch (folly::OperationCancelled const&) {
     body.abort();
     throw;
   }
   if (body.is_aborted()) {
     co_return CurlPerformResult::local_abort();
+  }
+  if (not should_start_transfer) {
+    co_return CurlPerformResult::success();
   }
   auto result
     = co_await perform_curl_impl(std::move(executor), handle, &body, nullptr);

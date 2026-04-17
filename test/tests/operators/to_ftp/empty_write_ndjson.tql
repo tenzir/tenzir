@@ -1,0 +1,16 @@
+---
+fixtures: [ftp]
+assertions:
+  fixtures:
+    ftp:
+      upload_count: 0
+timeout: 60
+---
+
+from {
+  message: "hello-from-empty-to_ftp"
+}
+where false
+to_ftp env("FTP_UPLOAD_URL") {
+  write_ndjson
+}
