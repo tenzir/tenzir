@@ -9,6 +9,8 @@
 #include "tenzir/async.hpp"
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/curl.hpp>
+#include <tenzir/async/scope.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -20,9 +22,6 @@
 
 #include <fmt/format.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/executors/GlobalExecutor.h>
-
-#include <memory>
 
 namespace tenzir::plugins::from_ftp {
 
@@ -83,8 +82,9 @@ auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto download(std::string url, transfer_options options,
-              Arc<MessageQueue> queue) -> Task<void> {
+auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
+              std::string url, transfer_options options,
+              CurlBodySink* sink, Arc<MessageQueue> queue) -> Task<void> {
   auto request = http::request{};
   request.uri = std::move(url);
   auto tx = transfer{std::move(options)};
@@ -92,27 +92,27 @@ auto download(std::string url, transfer_options options,
     co_await queue->enqueue(TransferFailed{fmt::format("{}", err)});
     co_return;
   }
-  auto saw_error = false;
-  for (auto&& item : tx.download_chunks()) {
-    if (not item) {
-      saw_error = true;
-      co_await queue->enqueue(TransferFailed{fmt::format("{}", item.error())});
-      co_return;
-    }
-    if (not *item or (*item)->size() == 0) {
-      continue;
-    }
-    co_await queue->enqueue(Payload{std::move(*item)});
+  auto curl_error = caf::error{};
+  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+    scope.spawn([&]() -> Task<void> {
+      while (auto chunk = co_await sink->pop()) {
+        co_await queue->enqueue(Payload{std::move(*chunk)});
+      }
+    });
+    curl_error = co_await perform_curl(std::move(io_executor), tx.handle(),
+                                       {.sink = sink});
+  });
+  if (curl_error.valid()) {
+    co_await queue->enqueue(TransferFailed{fmt::format("{}", curl_error)});
+    co_return;
   }
-  if (not saw_error) {
-    auto [code, response_code]
-      = tx.handle().get<curl::easy::info::response_code>();
-    if (code == curl::easy::code::ok
-        and (response_code < 200 or response_code > 299)) {
-      co_await queue->enqueue(
-        TransferFailed{fmt::format("FTP response code: {}", response_code)});
-      co_return;
-    }
+  auto [code, response_code]
+    = tx.handle().get<curl::easy::info::response_code>();
+  if (code == curl::easy::code::ok
+      and (response_code < 200 or response_code > 299)) {
+    co_await queue->enqueue(
+      TransferFailed{fmt::format("FTP response code: {}", response_code)});
+    co_return;
   }
   co_await queue->enqueue(TransferDone{});
 }
@@ -120,7 +120,8 @@ auto download(std::string url, transfer_options options,
 class FromFtp final : public Operator<void, table_slice> {
 public:
   explicit FromFtp(FromFtpArgs args)
-    : message_queue_{std::in_place, message_queue_capacity},
+    : download_body_{std::in_place, message_queue_capacity},
+      message_queue_{std::in_place, message_queue_capacity},
       args_{std::move(args)} {
   }
 
@@ -145,9 +146,9 @@ public:
     options.default_protocol = "ftp";
     options.ssl = tls;
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
-    ctx.spawn_task(folly::coro::co_withExecutor(
-      folly::getGlobalCPUExecutor(),
-      download(resolved_url_, std::move(options), message_queue_)));
+    ctx.spawn_task(
+      download(ctx.io_executor(), resolved_url_, std::move(options),
+               &*download_body_, message_queue_));
     co_return;
   }
 
@@ -212,6 +213,16 @@ public:
     co_return;
   }
 
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    download_body_->abort();
+    if (auto sub = ctx.get_sub(caf::none)) {
+      auto& parser = as<SubHandle<chunk_ptr>>(*sub);
+      co_await parser.close();
+    }
+    lifecycle_ = Lifecycle::done;
+    co_return;
+  }
+
   auto state() -> OperatorState override {
     return lifecycle_ == Lifecycle::done ? OperatorState::done
                                          : OperatorState::unspecified;
@@ -224,6 +235,7 @@ private:
     done,
   };
 
+  Box<CurlBodySink> download_body_;
   mutable Arc<MessageQueue> message_queue_;
   FromFtpArgs args_;
   std::string resolved_url_;

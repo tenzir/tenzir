@@ -9,6 +9,8 @@
 #include "tenzir/async.hpp"
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/curl.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -18,24 +20,15 @@
 #include <tenzir/tls_options.hpp>
 #include <tenzir/transfer.hpp>
 
-#include <curl/curl.h>
 #include <fmt/format.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/executors/GlobalExecutor.h>
-
-#include <condition_variable>
-#include <cstring>
-#include <deque>
-#include <memory>
-#include <mutex>
 
 namespace tenzir::plugins::to_ftp {
 
 namespace {
 
-constexpr auto input_queue_capacity = uint32_t{16};
+constexpr auto upload_queue_capacity = size_t{16};
 constexpr auto result_queue_capacity = uint32_t{2};
-constexpr auto upload_bridge_capacity = size_t{16};
 
 struct ToFtpArgs {
   located<secret> url;
@@ -50,7 +43,6 @@ struct UploadFailed {
 };
 
 using ResultMessage = variant<UploadFinished, UploadFailed>;
-using PrinterQueue = folly::coro::BoundedQueue<chunk_ptr>;
 using ResultQueue = folly::coro::BoundedQueue<ResultMessage>;
 
 auto add_default_ftp_scheme(std::string& url) -> void {
@@ -87,108 +79,9 @@ auto resolve_url(OpCtx& ctx, ToFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-class UploadBridge {
-public:
-  explicit UploadBridge(size_t capacity) : capacity_{capacity} {
-  }
-
-  auto push(chunk_ptr chunk) -> bool {
-    TENZIR_ASSERT(chunk);
-    auto lock = std::unique_lock{mutex_};
-    space_cv_.wait(lock, [&] {
-      return aborted_ or buffered_.size() < capacity_;
-    });
-    if (aborted_) {
-      return false;
-    }
-    buffered_.push_back(std::move(chunk));
-    data_cv_.notify_one();
-    return true;
-  }
-
-  auto close() -> void {
-    auto lock = std::lock_guard{mutex_};
-    closed_ = true;
-    data_cv_.notify_all();
-  }
-
-  auto abort() -> void {
-    auto lock = std::lock_guard{mutex_};
-    aborted_ = true;
-    data_cv_.notify_all();
-    space_cv_.notify_all();
-  }
-
-  auto read(std::span<std::byte> buffer) -> size_t {
-    auto lock = std::unique_lock{mutex_};
-    data_cv_.wait(lock, [&] {
-      return aborted_ or not buffered_.empty() or closed_;
-    });
-    if (aborted_) {
-      return CURL_READFUNC_ABORT;
-    }
-    if (buffered_.empty()) {
-      TENZIR_ASSERT(closed_);
-      return 0;
-    }
-    auto written = size_t{0};
-    while (written < buffer.size() and not buffered_.empty()) {
-      auto const& front = buffered_.front();
-      TENZIR_ASSERT(front);
-      auto remaining = front->size() - front_offset_;
-      auto count = std::min(buffer.size() - written, remaining);
-      std::memcpy(buffer.data() + written, front->data() + front_offset_,
-                  count);
-      written += count;
-      front_offset_ += count;
-      if (front_offset_ == front->size()) {
-        buffered_.pop_front();
-        front_offset_ = 0;
-        space_cv_.notify_one();
-      }
-    }
-    return written;
-  }
-
-private:
-  std::mutex mutex_;
-  std::condition_variable data_cv_;
-  std::condition_variable space_cv_;
-  std::deque<chunk_ptr> buffered_;
-  size_t capacity_ = 0;
-  size_t front_offset_ = 0;
-  bool closed_ = false;
-  bool aborted_ = false;
-};
-
-auto feed_upload(Arc<PrinterQueue> input, Arc<UploadBridge> bridge)
-  -> Task<void> {
-  auto discard_remaining_chunks = false;
-  while (true) {
-    auto chunk = co_await input->dequeue();
-    if (not chunk) {
-      if (not discard_remaining_chunks) {
-        bridge->close();
-      }
-      co_return;
-    }
-    if (chunk->size() == 0) {
-      continue;
-    }
-    if (discard_remaining_chunks) {
-      continue;
-    }
-    if (not bridge->push(std::move(chunk))) {
-      // Keep draining printer output after an aborted upload so concurrent
-      // producers can finish instead of blocking forever on the bounded
-      // queue.
-      discard_remaining_chunks = true;
-    }
-  }
-}
-
-auto upload(std::string url, transfer_options options,
-            Arc<UploadBridge> bridge, Arc<ResultQueue> results) -> Task<void> {
+auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
+            std::string url, transfer_options options,
+            CurlBodySource* body_source, Arc<ResultQueue> results) -> Task<void> {
   auto request = http::request{};
   request.uri = std::move(url);
   request.method = "PUT";
@@ -199,12 +92,10 @@ auto upload(std::string url, transfer_options options,
   }
   auto code = tx.handle().set([](std::span<const std::byte>) {});
   TENZIR_ASSERT(code == curl::easy::code::ok);
-  code
-    = tx.handle().set([bridge](std::span<std::byte> buffer) mutable -> size_t {
-        return bridge->read(buffer);
-      });
-  TENZIR_ASSERT(code == curl::easy::code::ok);
-  if (auto err = tx.perform(); err.valid()) {
+  co_await body_source->wait_until_ready();
+  if (auto err = co_await perform_curl(std::move(io_executor), tx.handle(),
+                                       {.source = body_source});
+      err.valid()) {
     co_await results->enqueue(UploadFailed{fmt::format("{}", err)});
     co_return;
   }
@@ -222,9 +113,8 @@ auto upload(std::string url, transfer_options options,
 class ToFtp final : public Operator<table_slice, void> {
 public:
   explicit ToFtp(ToFtpArgs args)
-    : printer_queue_{std::in_place, input_queue_capacity},
+    : upload_body_{std::in_place, upload_queue_capacity},
       result_queue_{std::in_place, result_queue_capacity},
-      upload_bridge_{std::in_place, upload_bridge_capacity},
       args_{std::move(args)} {
   }
 
@@ -249,13 +139,8 @@ public:
     options.default_protocol = "ftp";
     options.ssl = tls;
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
-    ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                                feed_upload(printer_queue_,
-                                                            upload_bridge_)));
-    ctx.spawn_task(folly::coro::co_withExecutor(
-      folly::getGlobalCPUExecutor(),
-      upload(resolved_url_, std::move(options), upload_bridge_,
-             result_queue_)));
+    ctx.spawn_task(upload(ctx.io_executor(), resolved_url_, std::move(options),
+                          &*upload_body_, result_queue_));
     co_return;
   }
 
@@ -272,7 +157,7 @@ public:
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
       lifecycle_ = Lifecycle::done;
-      upload_bridge_->abort();
+      upload_body_->abort();
     }
   }
 
@@ -280,7 +165,9 @@ public:
     if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
       co_return;
     }
-    co_await printer_queue_->enqueue(std::move(chunk));
+    if (not co_await upload_body_->push(std::move(chunk))) {
+      lifecycle_ = Lifecycle::done;
+    }
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -299,7 +186,7 @@ public:
                           failure.error)
           .primary(args_.url.source)
           .emit(ctx);
-        upload_bridge_->abort();
+        upload_body_->abort();
         if (auto sub = ctx.get_sub(caf::none)) {
           auto& printer = as<SubHandle<table_slice>>(*sub);
           co_await printer.close();
@@ -310,7 +197,7 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (lifecycle_ == Lifecycle::done) {
-      upload_bridge_->abort();
+      upload_body_->abort();
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
@@ -320,7 +207,7 @@ public:
         co_await printer.close();
         co_return FinalizeBehavior::continue_;
       }
-      upload_bridge_->close();
+      upload_body_->close();
       co_return FinalizeBehavior::continue_;
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
@@ -328,7 +215,7 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    co_await printer_queue_->enqueue(chunk_ptr{});
+    upload_body_->close();
     co_return;
   }
 
@@ -337,7 +224,7 @@ public:
       co_return;
     }
     lifecycle_ = Lifecycle::done;
-    upload_bridge_->abort();
+    upload_body_->abort();
     if (auto sub = ctx.get_sub(caf::none)) {
       auto& printer = as<SubHandle<table_slice>>(*sub);
       co_await printer.close();
@@ -357,9 +244,8 @@ private:
     done,
   };
 
-  Arc<PrinterQueue> printer_queue_;
+  Box<CurlBodySource> upload_body_;
   mutable Arc<ResultQueue> result_queue_;
-  Arc<UploadBridge> upload_bridge_;
   ToFtpArgs args_;
   std::string resolved_url_;
   Lifecycle lifecycle_ = Lifecycle::running;
