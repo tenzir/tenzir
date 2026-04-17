@@ -73,9 +73,13 @@ public:
     while (running_ > 0) {
       auto item = co_await queue_.dequeue();
       running_ -= 1;
-      // A cancelled task does not return a result.
+      // A cancelled task does not return a result, but we still need to check
+      // whether we were cancelled ourselves as we catch cancellation to produce
+      // nothing and at the same time, `.dequeue()` doesn't check itself.
       if (item) {
         co_return item;
+      } else {
+        co_await folly::coro::co_safe_point;
       }
     }
     co_return None{};
