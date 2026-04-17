@@ -96,6 +96,10 @@ public:
     return {};
   }
 
+  auto references(let_id) const -> bool override {
+    return false;
+  }
+
   auto spawn(element_type_tag input) and -> AnyOperator override {
     return input.match([]<class T>(tag<T>) -> AnyOperator {
       if constexpr (std::is_void_v<T>) {

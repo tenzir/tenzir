@@ -60,8 +60,12 @@ public:
   /// depends on the operator. For example, the implementation of `if` also
   /// instantiates its subpipelines, but `every` does not.
   virtual auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void>
-    = 0;
+    -> failure_or<void> = 0;
+
+  /// Returns true if this operator may reference a let binding.
+  ///
+  /// Implementations that cannot inspect their contents should return true.
+  virtual auto references(let_id id) const -> bool;
 
   /// Return a potentially optimized version of this operator.
   ///
@@ -123,6 +127,9 @@ struct pipeline {
 
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
+
+  /// @see Operator
+  auto references(let_id id) const -> bool;
 
   /// @see Operator
   auto spawn(element_type_tag input) and -> std::vector<AnyOperator>;

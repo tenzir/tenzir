@@ -27,6 +27,7 @@
 #include <folly/fibers/Semaphore.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <limits>
 #include <memory>
@@ -77,6 +78,7 @@ struct SubscriptionComplete {
 };
 
 using SourceMessage = variant<IncomingMessage, SubscriptionComplete>;
+using SourceBatch = std::vector<SourceMessage>;
 using SourceQueue = folly::coro::BoundedQueue<SourceMessage>;
 
 struct js_stream_names_list_deleter {
@@ -249,6 +251,26 @@ auto add_metadata_to_env(FromNatsArgs const& args, natsMsg* msg,
   env[args.timestamp_var] = time{} + duration{meta->Timestamp};
 }
 
+auto parser_references_metadata(FromNatsArgs const& args) -> bool {
+  for (auto id : std::array{
+         args.subject_var,
+         args.reply_var,
+         args.headers_var,
+         args.stream_var,
+         args.consumer_var,
+         args.stream_sequence_var,
+         args.consumer_sequence_var,
+         args.num_delivered_var,
+         args.num_pending_var,
+         args.timestamp_var,
+       }) {
+    if (args.parser.inner.references(id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 auto set_auth_value(auth_config& auth, std::string const& key,
                     std::string value) -> void {
   if (key == "user") {
@@ -313,6 +335,7 @@ class FromNats final : public Operator<void, table_slice> {
 public:
   explicit FromNats(FromNatsArgs args)
     : args_{std::move(args)}, source_{std::in_place, args_.queue_capacity} {
+    parser_references_metadata_ = parser_references_metadata(args_);
   }
 
   FromNats(FromNats const&) = delete;
@@ -328,6 +351,14 @@ public:
     read_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
                          MetricsDirection::read, MetricsVisibility::external_);
+    if (not parser_references_metadata_) {
+      auto parser = args_.parser.inner;
+      if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+        done_ = true;
+        co_return;
+      }
+      parser_template_ = std::move(parser);
+    }
     auto resolved = co_await resolve_connection_config(ctx, args_);
     if (not resolved) {
       done_ = true;
@@ -422,19 +453,45 @@ public:
     if (done_) {
       co_await wait_forever();
     }
-    co_return co_await source_->queue.dequeue();
+    auto batch = SourceBatch{};
+    auto const max_batch_size = detail::narrow_cast<size_t>(
+      std::min(args_.batch_size, args_.queue_capacity));
+    batch.reserve(max_batch_size);
+    batch.push_back(co_await source_->queue.dequeue());
+    while (batch.size() < max_batch_size) {
+      auto next = source_->queue.try_dequeue();
+      if (not next) {
+        break;
+      }
+      batch.push_back(std::move(*next));
+    }
+    co_return batch;
   }
 
   auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    auto* message = result.try_as<SourceMessage>();
-    if (not message) {
+    auto* batch = result.try_as<SourceBatch>();
+    if (not batch) {
       co_return;
     }
+    for (auto& message : *batch) {
+      match(
+        message,
+        [&](IncomingMessage const&) {
+          source_->message_slots.signal();
+        },
+        [](SubscriptionComplete const&) {});
+    }
+    for (auto& message : *batch) {
+      co_await process_source_message(std::move(message), ctx);
+    }
+  }
+
+private:
+  auto process_source_message(SourceMessage message, OpCtx& ctx) -> Task<void> {
     co_await co_match(
-      std::move(*message),
+      std::move(message),
       [&](IncomingMessage item) -> Task<void> {
-        source_->message_slots.signal();
         if (done_) {
           natsMsg_Nak(item.msg.get(), nullptr);
           co_return;
@@ -456,6 +513,7 @@ public:
       });
   }
 
+public:
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx&) -> Task<void> override {
     co_await push(std::move(slice));
@@ -588,14 +646,21 @@ private:
     }
     auto const msg_id = next_msg_id_++;
     ++received_;
-    auto pipeline = args_.parser.inner;
-    auto env = substitute_ctx::env_t{};
-    add_metadata_to_env(args_, msg.get(), env);
-    auto sub_result
-      = pipeline.substitute(substitute_ctx{base_ctx{ctx}, &env}, true);
-    if (not sub_result) {
-      natsMsg_Nak(msg.get(), nullptr);
-      co_return;
+    auto pipeline = [&] {
+      if (parser_template_) {
+        return *parser_template_;
+      }
+      return args_.parser.inner;
+    }();
+    if (not parser_template_) {
+      auto env = substitute_ctx::env_t{};
+      add_metadata_to_env(args_, msg.get(), env);
+      auto sub_result
+        = pipeline.substitute(substitute_ctx{base_ctx{ctx}, &env}, true);
+      if (not sub_result) {
+        natsMsg_Nak(msg.get(), nullptr);
+        co_return;
+      }
     }
     auto chunk = make_payload_chunk(msg.get());
     if (not chunk) {
@@ -667,8 +732,10 @@ private:
   nats_subscription_ptr subscription_;
   std::unordered_map<uint64_t, nats_msg_ptr> pending_;
   MetricsCounter read_bytes_counter_;
+  Option<ir::pipeline> parser_template_ = None{};
   uint64_t next_msg_id_ = 0;
   uint64_t received_ = 0;
+  bool parser_references_metadata_ = true;
   bool subscription_failed_ = false;
   bool done_ = false;
 };

@@ -709,6 +709,31 @@ private:
   substitute_ctx ctx_;
 };
 
+class reference_finder : public ast::visitor<reference_finder> {
+public:
+  explicit reference_finder(let_id id) : id_{id} {
+  }
+
+  void visit(ast::dollar_var& x) {
+    result_ = result_ or x.let == id_;
+  }
+
+  template <class T>
+  void visit(T& x) {
+    if (not result_) {
+      this->enter(x);
+    }
+  }
+
+  auto result() const -> bool {
+    return result_;
+  }
+
+private:
+  let_id id_;
+  bool result_ = false;
+};
+
 } // namespace
 
 // TODO: Where to put this?
@@ -716,6 +741,13 @@ auto ast::expression::substitute(
   substitute_ctx ctx) & -> failure_or<substitute_result> {
   auto visitor = substitutor{ctx};
   visitor.visit(*this);
+  return visitor.result();
+}
+
+auto ast::references(ast::expression const& expr, let_id id) -> bool {
+  auto copy = expr;
+  auto visitor = reference_finder{id};
+  visitor.visit(copy);
   return visitor.result();
 }
 

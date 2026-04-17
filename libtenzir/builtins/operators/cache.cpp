@@ -1377,6 +1377,13 @@ public:
     return {};
   }
 
+  auto references(let_id id) const -> bool override {
+    return ast::references(id_, id) or (mode_ and ast::references(*mode_, id))
+           or (capacity_ and ast::references(*capacity_, id))
+           or (read_timeout_ and ast::references(*read_timeout_, id))
+           or (write_timeout_ and ast::references(*write_timeout_, id));
+  }
+
   auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(mode_value_);
     TENZIR_ASSERT(id_value_);

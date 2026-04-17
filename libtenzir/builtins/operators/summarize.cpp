@@ -993,6 +993,18 @@ public:
     return {};
   }
 
+  auto references(let_id id) const -> bool override {
+    for (auto const& aggregate : cfg_.aggregates) {
+      for (auto const& arg : aggregate.call.args) {
+        if (ast::references(arg, id)) {
+          return true;
+        }
+      }
+    }
+    return (cfg_.frequency_expr and ast::references(*cfg_.frequency_expr, id))
+           or (cfg_.mode_expr and ast::references(*cfg_.mode_expr, id));
+  }
+
   auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Summarize{std::move(cfg_)};

@@ -240,6 +240,9 @@ struct expression {
   auto is_deterministic(const registry& reg) const -> bool;
 };
 
+/// Returns true if the expression contains a dollar variable bound to `id`.
+auto references(expression const& expr, let_id id) -> bool;
+
 /// A field path is a list of constant field names.
 ///
 /// This can contain expressions like `foo`, `foo.?bar` and `this.foo["bar"]`.

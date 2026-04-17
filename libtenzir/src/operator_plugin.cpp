@@ -598,6 +598,24 @@ public:
     return {};
   }
 
+  auto references(let_id id) const -> bool override {
+    auto arg_references = [id](Arg const& arg) {
+      auto* incomplete = try_as<Incomplete>(arg);
+      return incomplete and ast::references(incomplete->expr, id);
+    };
+    for (auto const& arg : args_) {
+      if (arg_references(arg)) {
+        return true;
+      }
+    }
+    for (auto const& named_arg : named_args_) {
+      if (arg_references(named_arg.value)) {
+        return true;
+      }
+    }
+    return pipeline_ and pipeline_->pipeline.inner.references(id);
+  }
+
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
     order_ = std::max(order_, order);

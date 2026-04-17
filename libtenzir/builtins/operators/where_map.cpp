@@ -876,6 +876,10 @@ public:
     return {};
   }
 
+  auto references(let_id id) const -> bool override {
+    return ast::references(predicate_, id);
+  }
+
   auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Where{std::move(predicate_)};
