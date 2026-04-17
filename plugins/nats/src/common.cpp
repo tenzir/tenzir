@@ -217,6 +217,12 @@ auto validate_auth_record(Option<located<data>> const& auth,
       .emit(dh);
     return failure::promise();
   }
+  if (has("password") and not has("user")) {
+    diagnostic::error("`auth.password` requires `auth.user`")
+      .primary(auth->source)
+      .emit(dh);
+    return failure::promise();
+  }
   if (has("seed") and not has("credentials")) {
     diagnostic::error("`auth.seed` requires `auth.credentials`")
       .primary(auth->source)

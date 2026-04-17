@@ -1,0 +1,9 @@
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1 {
+  read_lines
+  group $subject {
+    subject = $subject
+  }
+}

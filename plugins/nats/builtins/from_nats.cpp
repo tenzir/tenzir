@@ -98,6 +98,12 @@ enum class DirectParser {
   read_lines,
 };
 
+enum class DirectReadLinesSetup {
+  enabled,
+  fallback,
+  error,
+};
+
 struct MetadataUsage {
   bool subject = false;
   bool reply = false;
@@ -432,18 +438,21 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
                          MetricsDirection::read, MetricsVisibility::external_);
     if (direct_parser_ == DirectParser::read_lines) {
-      auto ok = co_await prepare_direct_read_lines(ctx);
+      auto setup = co_await prepare_direct_read_lines(ctx);
+      if (setup == DirectReadLinesSetup::error) {
+        done_ = true;
+        co_return;
+      }
+      if (setup == DirectReadLinesSetup::fallback) {
+        direct_parser_ = DirectParser::none;
+      }
+    }
+    if (direct_parser_ == DirectParser::none) {
+      auto ok = prepare_generic_parser(ctx);
       if (not ok) {
         done_ = true;
         co_return;
       }
-    } else if (not parser_metadata_usage_.any()) {
-      auto parser = args_.parser.inner;
-      if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-        done_ = true;
-        co_return;
-      }
-      parser_template_ = std::move(parser);
     }
     auto resolved
       = co_await resolve_connection_config(ctx, args_.url, args_.auth);
@@ -671,14 +680,26 @@ private:
                                                       : js_AckExplicit;
   }
 
-  auto prepare_direct_read_lines(OpCtx& ctx) -> Task<bool> {
+  auto prepare_generic_parser(OpCtx& ctx) -> bool {
+    if (parser_metadata_usage_.any()) {
+      return true;
+    }
+    auto parser = args_.parser.inner;
+    if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+      return false;
+    }
+    parser_template_ = std::move(parser);
+    return true;
+  }
+
+  auto prepare_direct_read_lines(OpCtx& ctx) -> Task<DirectReadLinesSetup> {
     auto tail = args_.parser.inner;
     TENZIR_ASSERT(not tail.operators.empty());
     TENZIR_ASSERT(tail.operators.front()->is_default_invocation("read_lines"));
     tail.operators.erase(tail.operators.begin());
     if (tail.operators.empty()) {
       direct_arrow_lines_enabled_ = true;
-      co_return true;
+      co_return DirectReadLinesSetup::enabled;
     }
     direct_metadata_usage_ = metadata_usage(args_, tail);
     if (not direct_metadata_usage_.any()) {
@@ -687,23 +708,17 @@ private:
     if (direct_metadata_usage_.any()) {
       auto replacements = direct_metadata_replacements(args_);
       if (not tail.replace_dollar_vars(replacements)) {
-        diagnostic::error("cannot use NATS metadata variables in this "
-                          "subpipeline")
-          .primary(args_.parser.source)
-          .note("the optimized `read_lines` path could not rewrite all "
-                "metadata references")
-          .emit(ctx);
-        co_return false;
+        co_return DirectReadLinesSetup::fallback;
       }
       direct_metadata_drop_fields_.push_back(
         direct_metadata_drop_field(args_.parser.source));
     }
     if (not tail.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      co_return false;
+      co_return DirectReadLinesSetup::error;
     }
     direct_tail_active_ = true;
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(tail));
-    co_return true;
+    co_return DirectReadLinesSetup::enabled;
   }
 
   auto ensure_durable_consumer(OpCtx& ctx) -> Task<Option<std::string>> {
