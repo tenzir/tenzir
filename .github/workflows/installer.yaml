@@ -24,8 +24,12 @@ jobs:
     env:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
-      - name: Run installer
-        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
+      - name: Download installer script
+        run: |
+          curl --retry 3 --retry-delay 5 --retry-connrefused -fsSL \
+            https://get.tenzir.app -o /tmp/tenzir-install.sh
+      - name: Execute installer script
+        run: sh /tmp/tenzir-install.sh
   stock-macos:
     name: Provided macOS runners
     strategy:
@@ -37,8 +41,12 @@ jobs:
     env:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
-      - name: Run installer
-        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
+      - name: Download installer script
+        run: |
+          curl --retry 3 --retry-delay 5 --retry-connrefused -fsSL \
+            https://get.tenzir.app -o /tmp/tenzir-install.sh
+      - name: Execute installer script
+        run: sh /tmp/tenzir-install.sh
   container-debian-based:
     name: Debian based distros in containers
     runs-on: ubuntu-latest
@@ -59,9 +67,44 @@ jobs:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Setup dependencies
-        run: apt update && apt install -y curl sudo adduser
-      - name: Run installer
-        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
+        run: |
+          retry() {
+            attempt=1
+            while [ "$attempt" -le 3 ]; do
+              "$@" && return 0
+              if [ "$attempt" -eq 3 ]; then
+                return 1
+              fi
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          }
+
+          update_apt_indices() {
+            log_file="$(mktemp)"
+            if apt-get update -o Acquire::Retries=3 > "$log_file" 2>&1; then
+              cat "$log_file"
+              if grep -q '^W: Failed to fetch ' "$log_file"; then
+                rm -f "$log_file"
+                return 1
+              fi
+              rm -f "$log_file"
+              return 0
+            fi
+            cat "$log_file"
+            rm -f "$log_file"
+            return 1
+          }
+
+          retry update_apt_indices
+          retry env DEBIAN_FRONTEND=noninteractive apt-get install -o Acquire::Retries=3 \
+            -y --no-install-recommends ca-certificates curl sudo adduser
+      - name: Download installer script
+        run: |
+          curl --retry 3 --retry-delay 5 --retry-connrefused -fsSL \
+            https://get.tenzir.app -o /tmp/tenzir-install.sh
+      - name: Execute installer script
+        run: sh /tmp/tenzir-install.sh
   container-redhat-based:
     name: Red Hat based distros in containers
     runs-on: ubuntu-latest
@@ -84,28 +127,78 @@ jobs:
     steps:
       - name: Setup dependencies
         run: |
-          yum install -y tar sudo
+          retry() {
+            attempt=1
+            while [ "$attempt" -le 3 ]; do
+              "$@" && return 0
+              if [ "$attempt" -eq 3 ]; then
+                return 1
+              fi
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          }
+
+          retry yum install -y tar sudo
           # Amazon Linux 2023+ ships with curl-minimal, which provides the curl
           # command but conflicts with the full curl package. We only install
           # curl if it's not already available.
           if ! command -v curl >/dev/null 2>&1; then
-            yum install -y curl
+            retry yum install -y curl
           fi
-      - name: Run installer
-        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
+      - name: Download installer script
+        run: |
+          curl --retry 3 --retry-delay 5 --retry-connrefused -fsSL \
+            https://get.tenzir.app -o /tmp/tenzir-install.sh
+      - name: Execute installer script
+        run: sh /tmp/tenzir-install.sh
 
   notify-failure:
     name: Notify on failure
     runs-on: ubuntu-latest
     needs: [stock-linux, stock-macos, container-debian-based, container-redhat-based]
-    if: failure()
+    if: always() && contains(join(needs.*.result, ','), 'failure')
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Classify failed steps
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          failed_steps_file="$RUNNER_TEMP/failed-steps.txt"
+          if ! gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --paginate \
+            --jq '.jobs[]
+              | select(.conclusion == "failure")
+              | .steps[]
+              | select(.conclusion == "failure")
+              | .name' > "$failed_steps_file"
+          then
+            echo "::warning::Failed to inspect failed steps; notifying to avoid missing a real installer issue"
+            echo "notify=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Failed steps:"
+          cat "$failed_steps_file"
+
+          if grep -Eq '^(Download installer script|Execute installer script)$' "$failed_steps_file"; then
+            echo "notify=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notify=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Send Discord notification
+        if: steps.classify.outputs.notify == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEVELOPERS }}
         run: |
           .github/scripts/notify-discord.sh \
             "⚠️ Installer Test Failed" \
-            "The install script tests failed. The installer may be broken for users."
+            "Downloading or executing the installer failed. The installer may be broken or unavailable for users."
+      - name: Skip Discord notification for infrastructure-only failures
+        if: steps.classify.outputs.notify != 'true'
+        run: |
+          echo "Only setup/bootstrap steps failed; skipping Discord notification."
