@@ -80,23 +80,7 @@ jobs:
             done
           }
 
-          update_apt_indices() {
-            log_file="$(mktemp)"
-            if apt-get update -o Acquire::Retries=3 > "$log_file" 2>&1; then
-              cat "$log_file"
-              if grep -q '^W: Failed to fetch ' "$log_file"; then
-                rm -f "$log_file"
-                return 1
-              fi
-              rm -f "$log_file"
-              return 0
-            fi
-            cat "$log_file"
-            rm -f "$log_file"
-            return 1
-          }
-
-          retry update_apt_indices
+          retry apt-get update -o Acquire::Retries=3 --error-on=any
           retry env DEBIAN_FRONTEND=noninteractive apt-get install -o Acquire::Retries=3 \
             -y --no-install-recommends ca-certificates curl sudo adduser
       - name: Download installer script
@@ -199,7 +183,3 @@ jobs:
           .github/scripts/notify-discord.sh \
             "⚠️ Installer Test Failed" \
             "Downloading or executing the installer failed. The installer may be broken or unavailable for users."
-      - name: Skip Discord notification for infrastructure-only failures
-        if: steps.classify.outputs.notify != 'true'
-        run: |
-          echo "Only setup/bootstrap steps failed; skipping Discord notification."
