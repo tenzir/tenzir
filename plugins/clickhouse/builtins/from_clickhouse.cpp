@@ -33,7 +33,8 @@
 #include <clickhouse/columns/string.h>
 #include <clickhouse/columns/tuple.h>
 #include <fmt/format.h>
-#include <folly/coro/UnboundedQueue.h>
+#include <folly/coro/BlockingWait.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/executors/GlobalExecutor.h>
 
 #include <algorithm>
@@ -128,9 +129,14 @@ struct ErrorMessage {
 struct DoneMessage {};
 
 using Message = variant<SliceMessage, ErrorMessage, DoneMessage>;
-using MessageQueue = folly::coro::UnboundedQueue<Message>;
+using MessageQueue = folly::coro::BoundedQueue<Message, true, true>;
+constexpr auto message_queue_capacity = uint32_t{16};
+constexpr auto message_queue_backoff = std::chrono::milliseconds{1};
 
 struct RuntimeState {
+  RuntimeState() : queue{message_queue_capacity} {
+  }
+
   MessageQueue queue;
   Atomic<bool> stop_requested = false;
 };
@@ -1301,9 +1307,21 @@ private:
     };
   }
 
+  static auto enqueue_message(RuntimeState& runtime, Message message)
+    -> Task<bool> {
+    while (not runtime.stop_requested.load(std::memory_order_acquire)) {
+      if (runtime.queue.try_enqueue(std::move(message))) {
+        co_return true;
+      }
+      co_await sleep_for(message_queue_backoff);
+    }
+    co_return false;
+  }
+
   static auto run_query(Arc<RuntimeState> runtime,
                         ::clickhouse::ClientOptions options, QueryPlan plan)
     -> Task<void> {
+    auto terminal_error = Option<ErrorMessage>{};
     try {
       auto client = ::clickhouse::Client{std::move(options)};
       auto error = std::string{};
@@ -1312,12 +1330,15 @@ private:
         schema = describe_table_schema(client, *plan.described_table,
                                        plan.schema_name, error);
         if (not schema) {
-          runtime->queue.enqueue(Message{ErrorMessage{
+          terminal_error = ErrorMessage{
             .message = std::move(error),
             .add_tls_hints = false,
-          }});
-          co_return;
+          };
         }
+      }
+      if (terminal_error) {
+        co_await enqueue_message(*runtime, Message{std::move(*terminal_error)});
+        co_return;
       }
       auto failed = false;
       auto query = ::clickhouse::Query{plan.query};
@@ -1332,11 +1353,11 @@ private:
           schema = infer_schema_from_block(block, plan.schema_name, error);
           if (not schema) {
             failed = true;
-            runtime->queue.enqueue(Message{ErrorMessage{
-              .message = std::move(error),
-              .add_tls_hints = false,
-            }});
-            return false;
+            return folly::coro::blockingWait(
+              enqueue_message(*runtime, Message{ErrorMessage{
+                                          .message = std::move(error),
+                                          .add_tls_hints = false,
+                                        }}));
           }
         }
         if (block.GetRowCount() == 0) {
@@ -1345,15 +1366,17 @@ private:
         auto slices = block_to_slices(block, *schema, error);
         if (not slices) {
           failed = true;
-          runtime->queue.enqueue(Message{ErrorMessage{
-            .message = std::move(error),
-            .add_tls_hints = false,
-          }});
-          return false;
+          return folly::coro::blockingWait(
+            enqueue_message(*runtime, Message{ErrorMessage{
+                                        .message = std::move(error),
+                                        .add_tls_hints = false,
+                                      }}));
         }
         for (auto& slice : *slices) {
-          runtime->queue.enqueue(
-            Message{SliceMessage{.slice = std::move(slice)}});
+          if (not folly::coro::blockingWait(enqueue_message(
+                *runtime, Message{SliceMessage{.slice = std::move(slice)}}))) {
+            return false;
+          }
         }
         return not runtime->stop_requested.load(std::memory_order_acquire);
       });
@@ -1361,20 +1384,27 @@ private:
       if (failed) {
         co_return;
       }
-      runtime->queue.enqueue(Message{DoneMessage{}});
+      if (runtime->stop_requested.load(std::memory_order_acquire)) {
+        std::ignore = runtime->queue.try_enqueue(Message{DoneMessage{}});
+        co_return;
+      }
+      co_await enqueue_message(*runtime, Message{DoneMessage{}});
     } catch (const panic_exception&) {
       throw;
     } catch (const ::clickhouse::ServerError& e) {
-      runtime->queue.enqueue(Message{ErrorMessage{
+      terminal_error = ErrorMessage{
         .message
         = fmt::format("ClickHouse error {}: {}", e.GetCode(), e.what()),
         .add_tls_hints = true,
-      }});
+      };
     } catch (const std::exception& e) {
-      runtime->queue.enqueue(Message{ErrorMessage{
+      terminal_error = ErrorMessage{
         .message = fmt::format("ClickHouse error: {}", e.what()),
         .add_tls_hints = true,
-      }});
+      };
+    }
+    if (terminal_error) {
+      co_await enqueue_message(*runtime, Message{std::move(*terminal_error)});
     }
     co_return;
   }
