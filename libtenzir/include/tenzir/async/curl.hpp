@@ -13,14 +13,15 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/curl.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
 
-#include <caf/error.hpp>
 #include <folly/Executor.h>
 #include <folly/executors/IOExecutor.h>
 
 #include <cstddef>
 #include <functional>
 #include <span>
+#include <string>
 #include <utility>
 
 namespace tenzir {
@@ -29,59 +30,20 @@ namespace detail {
 struct CurlBodyAccess;
 } // namespace detail
 
-/// The outcome of `perform_curl*()`.
+/// The successful outcomes of `perform_curl*()`.
 
-enum class CurlPerformResultKind {
+enum class CurlPerformOutcome {
   success,
   local_abort,
-  failure,
 };
 
-class CurlPerformResult {
-public:
-  static auto success() -> CurlPerformResult {
-    return CurlPerformResult{CurlPerformResultKind::success, {}};
-  }
-
-  static auto local_abort() -> CurlPerformResult {
-    return CurlPerformResult{CurlPerformResultKind::local_abort, {}};
-  }
-
-  static auto failure(caf::error error) -> CurlPerformResult {
-    return CurlPerformResult{CurlPerformResultKind::failure, std::move(error)};
-  }
-
-  auto kind() const -> CurlPerformResultKind {
-    return kind_;
-  }
-
-  auto is_success() const -> bool {
-    return kind_ == CurlPerformResultKind::success;
-  }
-
-  auto is_local_abort() const -> bool {
-    return kind_ == CurlPerformResultKind::local_abort;
-  }
-
-  auto is_failure() const -> bool {
-    return kind_ == CurlPerformResultKind::failure;
-  }
-
-  /// The transport error for failed transfers.
-  ///
-  /// Only inspect this if `is_failure()` is `true`.
-  auto error() const -> caf::error const& {
-    return error_;
-  }
-
-private:
-  CurlPerformResult(CurlPerformResultKind kind, caf::error error)
-    : kind_{kind}, error_{std::move(error)} {
-  }
-
-  CurlPerformResultKind kind_;
-  caf::error error_;
-};
+/// The result of `perform_curl*()`.
+///
+/// `Ok(CurlPerformOutcome::success)` means the transfer completed cleanly.
+/// `Ok(CurlPerformOutcome::local_abort)` means the local upload or download
+/// body aborted the transfer intentionally.
+/// `Err(std::string)` contains the transport failure message.
+using CurlPerformResult = Result<CurlPerformOutcome, std::string>;
 
 /// Asynchronously drive a prepared `curl::easy` handle on a Folly IO executor.
 ///
@@ -201,8 +163,9 @@ private:
 
 /// Drive a prepared curl handle with no streaming body callbacks.
 ///
-/// Returns `success` on completion or `failure` with the curl error.
-/// Cancellation aborts the transfer and propagates `folly::OperationCancelled`.
+/// Returns `Ok(CurlPerformOutcome::success)` on completion and
+/// `Err(std::string)` on transport failure. Cancellation aborts the transfer
+/// and propagates `folly::OperationCancelled`.
 auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                   curl::easy& handle) -> Task<CurlPerformResult>;
 
@@ -211,12 +174,12 @@ auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 /// The upload waits until the body has buffered data or reached a terminal
 /// state before it starts the transfer, so callers do not need a separate
 /// readiness barrier. If the body was already aborted at that point, the
-/// function returns `local_abort` without touching the remote peer. If the
-/// body closes before any bytes were queued, the function returns `success`
-/// without starting the transfer.
+/// function returns `Ok(CurlPerformOutcome::local_abort)` without touching the
+/// remote peer. If the body closes before any bytes were queued, the function
+/// returns `Ok(CurlPerformOutcome::success)` without starting the transfer.
 ///
-/// Returns `local_abort` if the upload body was aborted locally, and `failure`
-/// for transport errors.
+/// Returns `Ok(CurlPerformOutcome::local_abort)` if the upload body was
+/// aborted locally, and `Err(std::string)` for transport errors.
 /// Cancellation aborts the body, aborts the transfer, and propagates
 /// `folly::OperationCancelled`.
 auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
@@ -228,8 +191,8 @@ auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 /// Callers should consume `body.pop()` concurrently while this task is running.
 /// The body is closed automatically when the transfer finishes or fails.
 ///
-/// Returns `local_abort` if the download body was aborted locally, and
-/// `failure` for transport errors.
+/// Returns `Ok(CurlPerformOutcome::local_abort)` if the download body was
+/// aborted locally, and `Err(std::string)` for transport errors.
 /// Cancellation aborts the body, aborts the transfer, and propagates
 /// `folly::OperationCancelled`.
 auto perform_curl_download(

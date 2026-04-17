@@ -398,6 +398,24 @@ auto CurlDownloadBody::set_resume_callback(std::function<void()> callback)
 
 namespace {
 
+auto render_curl_error(curl::easy::code code) -> std::string {
+  return std::string{"!! unspecified: curl: "}
+         + std::string{curl::to_string(code)};
+}
+
+auto render_curl_error(curl::multi::code code) -> std::string {
+  return std::string{"!! unspecified: curl: "}
+         + std::string{curl::to_string(code)};
+}
+
+auto curl_perform_failure(curl::easy::code code) -> CurlPerformResult {
+  return Err{render_curl_error(code)};
+}
+
+auto curl_perform_failure(curl::multi::code code) -> CurlPerformResult {
+  return Err{render_curl_error(code)};
+}
+
 class PerformState;
 
 class SocketHandler final : private folly::EventHandler {
@@ -453,7 +471,7 @@ public:
         return read_from_source(buffer);
       });
       if (code != curl::easy::code::ok) {
-        complete(CurlPerformResult::failure(curl::to_error(code)));
+        complete(curl_perform_failure(code));
         return;
       }
     }
@@ -469,23 +487,23 @@ public:
           return write_to_sink(buffer);
         });
       if (code != curl::easy::code::ok) {
-        complete(CurlPerformResult::failure(curl::to_error(code)));
+        complete(curl_perform_failure(code));
         return;
       }
     }
     auto code = multi_.set_socket_callback(&socket_callback, this);
     if (code != curl::multi::code::ok) {
-      complete(CurlPerformResult::failure(curl::to_error(code)));
+      complete(curl_perform_failure(code));
       return;
     }
     code = multi_.set_timer_callback(&timer_callback, this);
     if (code != curl::multi::code::ok) {
-      complete(CurlPerformResult::failure(curl::to_error(code)));
+      complete(curl_perform_failure(code));
       return;
     }
     code = multi_.add(easy_);
     if (code != curl::multi::code::ok) {
-      complete(CurlPerformResult::failure(curl::to_error(code)));
+      complete(curl_perform_failure(code));
       return;
     }
     added_ = true;
@@ -603,7 +621,7 @@ private:
     paused_send_ = false;
     auto code = easy_.pause(current_pause_mask());
     if (code != curl::easy::code::ok) {
-      complete(CurlPerformResult::failure(curl::to_error(code)));
+      complete(curl_perform_failure(code));
       return;
     }
     drive(CURL_SOCKET_TIMEOUT, 0);
@@ -616,7 +634,7 @@ private:
     paused_recv_ = false;
     auto code = easy_.pause(current_pause_mask());
     if (code != curl::easy::code::ok) {
-      complete(CurlPerformResult::failure(curl::to_error(code)));
+      complete(curl_perform_failure(code));
       return;
     }
     drive(CURL_SOCKET_TIMEOUT, 0);
@@ -640,15 +658,15 @@ private:
     auto [code, running_handles] = multi_.socket_action(socket, ev_bitmask);
     std::ignore = running_handles;
     if (code != curl::multi::code::ok) {
-      complete(CurlPerformResult::failure(curl::to_error(code)));
+      complete(curl_perform_failure(code));
       return;
     }
     for (auto result : multi_.info_read()) {
       if (result != curl::easy::code::ok) {
-        complete(CurlPerformResult::failure(curl::to_error(result)));
+        complete(curl_perform_failure(result));
         return;
       }
-      complete(CurlPerformResult::success());
+      complete(CurlPerformOutcome::success);
       return;
     }
   }
@@ -664,7 +682,7 @@ private:
     if (download_body_) {
       download_body_->abort();
     }
-    complete(CurlPerformResult::success());
+    complete(CurlPerformOutcome::success);
   }
 
   auto cleanup() -> void {
@@ -705,7 +723,7 @@ private:
   std::unordered_map<curl_socket_t, Box<SocketHandler>> socket_handlers_;
   TimerHandler timer_;
   folly::coro::Baton done_;
-  CurlPerformResult result_ = CurlPerformResult::success();
+  CurlPerformResult result_ = CurlPerformOutcome::success;
   bool added_ = false;
   bool completed_ = false;
   bool cancelled_ = false;
@@ -807,15 +825,15 @@ auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
     throw;
   }
   if (body.is_aborted()) {
-    co_return CurlPerformResult::local_abort();
+    co_return CurlPerformOutcome::local_abort;
   }
   if (not should_start_transfer) {
-    co_return CurlPerformResult::success();
+    co_return CurlPerformOutcome::success;
   }
   auto result
     = co_await perform_curl_impl(std::move(executor), handle, &body, nullptr);
   if (body.is_aborted()) {
-    co_return CurlPerformResult::local_abort();
+    co_return CurlPerformOutcome::local_abort;
   }
   co_return result;
 }
@@ -826,7 +844,7 @@ auto perform_curl_download(
   auto result
     = co_await perform_curl_impl(std::move(executor), handle, nullptr, &body);
   if (body.is_aborted()) {
-    co_return CurlPerformResult::local_abort();
+    co_return CurlPerformOutcome::local_abort;
   }
   co_return result;
 }
