@@ -33,25 +33,9 @@
 namespace tenzir::plugins::bitz {
 namespace {
 
-static constexpr auto BITZ_MAGIC = std::array<char, 4>{'T', 'N', 'Z', '1'};
+constexpr auto BITZ_MAGIC = std::array<char, 4>{'T', 'N', 'Z', '1'};
 
-auto has_location(diagnostic const& diag) -> bool {
-  for (auto const& annotation : diag.annotations) {
-    if (annotation.source != location::unknown) {
-      return true;
-    }
-  }
-  return false;
-}
-
-auto emit_with_location(diagnostic_builder diag, location operator_location,
-                        diagnostic_handler& dh) -> void {
-  auto result = std::move(diag).done();
-  if (operator_location and not has_location(result)) {
-    result.annotations.emplace_back(true, std::string{}, operator_location);
-  }
-  dh.emit(std::move(result));
-}
+using message_length_type = uint64_t;
 
 struct ReadBitzArgs {
   location operator_location = location::unknown;
@@ -71,7 +55,6 @@ public:
     while (true) {
       if (state_ == State::magic) {
         if (available() < BITZ_MAGIC.size()) {
-          compact_if_needed();
           co_return;
         }
         auto magic = consume(BITZ_MAGIC.size());
@@ -85,29 +68,29 @@ public:
         state_ = State::header;
       }
       if (state_ == State::header) {
-        if (available() < sizeof(uint64_t)) {
-          compact_if_needed();
+        if (available() < sizeof(message_length_type)) {
           co_return;
         }
-        auto header = consume(sizeof(uint64_t));
+        auto header = consume(sizeof(message_length_type));
         std::memcpy(&message_length_, header.data(), sizeof(message_length_));
         message_length_ = detail::to_host_order(message_length_);
         state_ = State::message;
       }
       if (state_ == State::message) {
-        if (available() < message_length_) {
-          compact_if_needed();
+        auto const message_size = detail::narrow<size_t>(message_length_);
+        if (available() < message_size) {
           co_return;
         }
-        auto message_size = detail::narrow<size_t>(message_length_);
-        auto message = chunk::copy(buffer_.data() + offset_, message_size);
+        auto const* data
+          = reinterpret_cast<std::byte const*>(buffer_.data() + offset_);
+        auto message = std::span{data, message_size};
         offset_ += message_size;
         state_ = State::magic;
         message_length_ = 0;
-        co_await parse_message(std::move(message), push, ctx.dh());
+        co_await parse_message(message, push, ctx.dh());
       }
       if (available() == 0) {
-        compact();
+        resize_buffer(0);
         co_return;
       }
     }
@@ -116,7 +99,7 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
-    compact();
+    resize_buffer(available());
     auto const remaining = buffer_.size();
     switch (state_) {
       case State::magic:
@@ -128,7 +111,7 @@ public:
         break;
       case State::header:
         emit(diagnostic::error("unexpected BITZ header length {}", remaining)
-               .note("expected {}", sizeof(uint64_t)),
+               .note("expected {}", sizeof(message_length_type)),
              ctx.dh());
         break;
       case State::message:
@@ -141,7 +124,7 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
-    compact();
+    resize_buffer(available());
     auto state = static_cast<uint8_t>(state_);
     serde("buffer", buffer_);
     serde("state", state);
@@ -153,19 +136,19 @@ private:
   enum class State : uint8_t { magic, header, message };
 
   auto emit(diagnostic_builder diag, diagnostic_handler& dh) const -> void {
-    emit_with_location(std::move(diag), args_.operator_location, dh);
+    if (args_.operator_location) {
+      std::move(diag).primary(args_.operator_location).emit(dh);
+      return;
+    }
+    std::move(diag).emit(dh);
   }
 
   auto append(chunk_ptr const& input) -> void {
     TENZIR_ASSERT(input);
-    if (offset_ == buffer_.size()) {
-      buffer_.clear();
-      offset_ = 0;
-    } else if (offset_ > 0 and input->size() > offset_) {
-      compact();
-    }
+    auto const old_size = available();
+    resize_buffer(old_size + input->size());
     auto const* data = reinterpret_cast<char const*>(input->data());
-    buffer_.append(data, input->size());
+    std::memcpy(buffer_.data() + old_size, data, input->size());
   }
 
   auto available() const -> size_t {
@@ -180,33 +163,32 @@ private:
     return result;
   }
 
-  auto compact_if_needed() -> void {
-    if (offset_ == buffer_.size() or offset_ > buffer_.size() / 2) {
-      compact();
-    }
-  }
-
-  auto compact() -> void {
+  auto resize_buffer(size_t target_size) -> void {
+    auto const remaining = available();
+    TENZIR_ASSERT(target_size >= remaining);
     if (offset_ == 0) {
+      buffer_.resize(target_size);
       return;
     }
-    if (offset_ == buffer_.size()) {
-      buffer_.clear();
+    if (buffer_.capacity() >= target_size) {
+      std::memmove(buffer_.data(), buffer_.data() + offset_, remaining);
+      buffer_.resize(target_size);
       offset_ = 0;
       return;
     }
-    auto remaining = available();
-    std::memmove(buffer_.data(), buffer_.data() + offset_, remaining);
-    buffer_.resize(remaining);
+    auto new_buffer = std::string{};
+    new_buffer.resize(target_size);
+    std::memcpy(new_buffer.data(), buffer_.data() + offset_, remaining);
+    buffer_.swap(new_buffer);
     offset_ = 0;
   }
 
-  auto parse_message(chunk_ptr message, Push<table_slice>& push,
-                     diagnostic_handler& dh) const -> Task<void> {
-    TENZIR_ASSERT(message);
-    auto const expected_size = detail::narrow<int64_t>(message->size());
+  auto parse_message(std::span<std::byte const> message,
+                     Push<table_slice>& push, diagnostic_handler& dh) const
+    -> Task<void> {
+    auto const expected_size = detail::narrow<int64_t>(message.size());
     auto input = std::make_shared<arrow::io::BufferReader>(
-      as_arrow_buffer(std::move(message)));
+      arrow::Buffer::Wrap(message.data(), message.size()));
     auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(
       input, arrow_ipc_read_options());
     if (not reader_result.ok()) {
@@ -267,7 +249,7 @@ private:
   std::string buffer_;
   size_t offset_ = 0;
   State state_ = State::magic;
-  uint64_t message_length_ = 0;
+  message_length_type message_length_ = 0;
 };
 
 struct WriteBitzArgs {
@@ -286,7 +268,6 @@ public:
       emit(diagnostic::error("failed to get default Zstd compression level")
              .note("{}", default_level.status().ToStringWithoutContextLines()),
            ctx.dh());
-      failed_ = true;
       co_return;
     }
     auto codec_result
@@ -295,7 +276,6 @@ public:
       emit(diagnostic::error("failed to create Zstd codec")
              .note("{}", codec_result.status().ToStringWithoutContextLines()),
            ctx.dh());
-      failed_ = true;
       co_return;
     }
     codec_ = codec_result.MoveValueUnsafe();
@@ -304,32 +284,27 @@ public:
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (failed_ or input.rows() == 0) {
+    if (input.rows() == 0) {
       co_return;
     }
     auto payload = serialize(std::move(input), ctx.dh());
     if (not payload) {
-      failed_ = true;
       co_return;
     }
-    auto message_length
-      = detail::to_network_order(detail::narrow<uint64_t>((*payload)->size()));
+    auto message_length = detail::to_network_order(
+      detail::narrow<message_length_type>((*payload)->size()));
     co_await push(chunk::copy(BITZ_MAGIC.data(), BITZ_MAGIC.size()));
     co_await push(chunk::copy(&message_length, sizeof(message_length)));
     co_await push(std::move(*payload));
   }
 
-  auto state() -> OperatorState override {
-    return failed_ ? OperatorState::done : OperatorState::unspecified;
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    serde("failed", failed_);
-  }
-
 private:
   auto emit(diagnostic_builder diag, diagnostic_handler& dh) const -> void {
-    emit_with_location(std::move(diag), args_.operator_location, dh);
+    if (args_.operator_location) {
+      std::move(diag).primary(args_.operator_location).emit(dh);
+      return;
+    }
+    std::move(diag).emit(dh);
   }
 
   auto serialize(table_slice input, diagnostic_handler& dh) const
@@ -392,14 +367,11 @@ private:
 
   WriteBitzArgs args_;
   std::shared_ptr<arrow::util::Codec> codec_;
-  bool failed_ = false;
 };
 
 class bitz_parser final : public plugin_parser {
 public:
-  explicit bitz_parser(location operator_location = location::unknown)
-    : operator_location_{operator_location} {
-  }
+  bitz_parser() = default;
 
   auto name() const -> std::string override {
     return "bitz";
@@ -409,9 +381,8 @@ public:
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
     return std::invoke(
-      [operator_location = operator_location_](
-        auto byte_reader,
-        operator_control_plane& ctrl) -> generator<table_slice> {
+      [](auto byte_reader,
+         operator_control_plane& ctrl) -> generator<table_slice> {
         while (true) {
           auto magic = byte_reader(BITZ_MAGIC.size());
           while (not magic) {
@@ -420,21 +391,19 @@ public:
           }
           if (magic->size() < BITZ_MAGIC.size()) {
             if (magic->size() != 0) {
-              emit_with_location(diagnostic::error("unexpected BITZ magic "
-                                                   "length {}",
-                                                   magic->size())
-                                   .note("expected {}", BITZ_MAGIC.size()),
-                                 operator_location, ctrl.diagnostics());
+              diagnostic::error("unexpected BITZ magic length {}",
+                                magic->size())
+                .note("expected {}", BITZ_MAGIC.size())
+                .emit(ctrl.diagnostics());
             }
             co_return;
           }
           if (std::memcmp(magic->data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
               != 0) {
-            emit_with_location(
-              diagnostic::error("unexpected BITZ magic")
-                .note("expected {}",
-                      std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()}),
-              operator_location, ctrl.diagnostics());
+            diagnostic::error("unexpected BITZ magic")
+              .note("expected {}",
+                    std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
+              .emit(ctrl.diagnostics());
           }
           auto header = byte_reader(sizeof(uint64_t));
           while (not header) {
@@ -442,11 +411,10 @@ public:
             header = byte_reader(sizeof(uint64_t));
           }
           if (header->size() < sizeof(uint64_t)) {
-            emit_with_location(diagnostic::error("unexpected BITZ header "
-                                                 "length {}",
-                                                 header->size())
-                                 .note("expected {}", sizeof(uint64_t)),
-                               operator_location, ctrl.diagnostics());
+            diagnostic::error("unexpected BITZ header length {}",
+                              header->size())
+              .note("expected {}", sizeof(uint64_t))
+              .emit(ctrl.diagnostics());
             co_return;
           }
           auto message_length = uint64_t{};
@@ -458,10 +426,9 @@ public:
             message = byte_reader(message_length);
           }
           if (message->size() < message_length) {
-            emit_with_location(diagnostic::error("unexpected message length {}",
-                                                 message->size())
-                                 .note("expected {}", message_length),
-                               operator_location, ctrl.diagnostics());
+            diagnostic::error("unexpected message length {}", message->size())
+              .note("expected {}", message_length)
+              .emit(ctrl.diagnostics());
             co_return;
           }
           auto parser
@@ -487,12 +454,8 @@ public:
   }
 
   friend auto inspect(auto& f, bitz_parser& x) -> bool {
-    return f.object(x).fields(
-      f.field("operator_location", x.operator_location_));
+    return f.object(x).fields();
   }
-
-private:
-  location operator_location_ = location::unknown;
 };
 
 class bitz_printer final : public plugin_printer {
@@ -565,11 +528,10 @@ class plugin final : public virtual parser_plugin<bitz_parser>,
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto operator_location = p.current_span();
     auto parser = argument_parser{"bitz", "https://docs.tenzir.com/"
                                           "formats/bitz"};
     parser.parse(p);
-    return std::make_unique<bitz_parser>(operator_location);
+    return std::make_unique<bitz_parser>();
   }
 
   auto parse_printer(parser_interface& p) const

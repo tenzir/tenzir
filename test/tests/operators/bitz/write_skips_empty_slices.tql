@@ -5,4 +5,3 @@ measure
 write_bitz
 measure
 summarize chunks=count()
-write_ndjson

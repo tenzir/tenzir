@@ -3,4 +3,3 @@ from_stdin {
 }
 write_bitz
 read_bitz
-write_ndjson
