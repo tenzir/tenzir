@@ -53,6 +53,10 @@ namespace {
 
 constexpr auto clickhouse_plaintext_port = uint64_t{9000};
 constexpr auto clickhouse_tls_port = uint64_t{9440};
+inline const auto clickhouse_type_quoting = detail::quoting_escaping_policy{
+  .quotes = R"('"`)",
+  .doubled_quotes_escape = true,
+};
 
 auto unquote_identifier_component(std::string_view text) -> std::string {
   return table_name_quoting.unquote_unescape(text);
@@ -243,32 +247,17 @@ public:
   }
 
 private:
-  static auto is_quoted_token(char c) -> bool {
-    return c == '\'' or c == '"' or c == '`';
-  }
-
-  static auto process_quoted_token(std::string_view text, size_t& i,
-                                   Option<char>& quote) -> bool {
-    auto c = text[i];
-    if (quote) {
-      if (c == '\\' and i + 1 < text.size()) {
-        ++i;
-        return true;
-      }
-      if (c == *quote) {
-        if (i + 1 < text.size() and text[i + 1] == *quote) {
-          ++i;
-        } else {
-          quote = None{};
-        }
-      }
-      return true;
+  static auto skip_quoted_token(std::string_view text, size_t& i) -> bool {
+    if (not clickhouse_type_quoting.is_quote_character(text[i])) {
+      return false;
     }
-    if (is_quoted_token(c)) {
-      quote = c;
-      return true;
+    if (auto closing = clickhouse_type_quoting.find_closing_quote(text, i);
+        closing != std::string_view::npos) {
+      i = closing;
+    } else {
+      i = text.size() - 1;
     }
-    return false;
+    return true;
   }
 
   static auto split_top_level(std::string_view text)
@@ -276,9 +265,8 @@ private:
     auto result = std::vector<std::string_view>{};
     auto depth = size_t{0};
     auto begin = size_t{0};
-    auto quote = Option<char>{};
     for (auto i = size_t{0}; i < text.size(); ++i) {
-      if (process_quoted_token(text, i, quote)) {
+      if (skip_quoted_token(text, i)) {
         continue;
       }
       auto c = text[i];
@@ -302,9 +290,8 @@ private:
 
   static auto find_top_level_space(std::string_view text) -> size_t {
     auto depth = size_t{0};
-    auto quote = Option<char>{};
     for (auto i = size_t{0}; i < text.size(); ++i) {
-      if (process_quoted_token(text, i, quote)) {
+      if (skip_quoted_token(text, i)) {
         continue;
       }
       auto c = text[i];
@@ -1180,16 +1167,7 @@ private:
   }
 
   static auto sql_string_literal(std::string_view text) -> std::string {
-    auto result = std::string{"'"};
-    for (auto c : text) {
-      if (c == '\'') {
-        result += "''";
-      } else {
-        result += c;
-      }
-    }
-    result += '\'';
-    return result;
+    return "'" + detail::replace_all(std::string{text}, "'", "''") + "'";
   }
 
   static auto
