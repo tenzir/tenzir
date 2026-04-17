@@ -265,25 +265,41 @@ private:
     return x;
   }
 
+  static auto is_quoted_token(char c) -> bool {
+    return c == '\'' or c == '"' or c == '`';
+  }
+
+  static auto process_quoted_token(std::string_view text, size_t& i,
+                                   Option<char>& quote) -> bool {
+    auto c = text[i];
+    if (quote) {
+      if (c == *quote) {
+        if (i + 1 < text.size() and text[i + 1] == *quote) {
+          ++i;
+        } else {
+          quote = None{};
+        }
+      }
+      return true;
+    }
+    if (is_quoted_token(c)) {
+      quote = c;
+      return true;
+    }
+    return false;
+  }
+
   static auto split_top_level(std::string_view text)
     -> std::vector<std::string_view> {
     auto result = std::vector<std::string_view>{};
     auto depth = size_t{0};
     auto begin = size_t{0};
-    auto in_string = false;
+    auto quote = Option<char>{};
     for (auto i = size_t{0}; i < text.size(); ++i) {
+      if (process_quoted_token(text, i, quote)) {
+        continue;
+      }
       auto c = text[i];
-      if (c == '\'') {
-        if (in_string and i + 1 < text.size() and text[i + 1] == '\'') {
-          ++i;
-          continue;
-        }
-        in_string = not in_string;
-        continue;
-      }
-      if (in_string) {
-        continue;
-      }
       if (c == '(') {
         ++depth;
         continue;
@@ -304,20 +320,12 @@ private:
 
   static auto find_top_level_space(std::string_view text) -> size_t {
     auto depth = size_t{0};
-    auto in_string = false;
+    auto quote = Option<char>{};
     for (auto i = size_t{0}; i < text.size(); ++i) {
+      if (process_quoted_token(text, i, quote)) {
+        continue;
+      }
       auto c = text[i];
-      if (c == '\'') {
-        if (in_string and i + 1 < text.size() and text[i + 1] == '\'') {
-          ++i;
-          continue;
-        }
-        in_string = not in_string;
-        continue;
-      }
-      if (in_string) {
-        continue;
-      }
       if (c == '(') {
         ++depth;
         continue;
@@ -384,17 +392,22 @@ private:
 
   static auto format_int128(::clickhouse::Int128 value) -> std::string {
     auto result = std::string{};
-    auto sign = value >= 0;
-    if (not sign) {
-      value = -value;
+    auto negative = value < 0;
+    auto magnitude = absl::uint128{};
+    if (negative) {
+      magnitude = static_cast<absl::uint128>(-(value + 1));
+      ++magnitude;
+    } else {
+      magnitude = static_cast<absl::uint128>(value);
     }
-    while (value != 0) {
-      result += static_cast<char>(value % 10) + '0';
-      value /= 10;
+    while (magnitude != 0) {
+      auto digit = static_cast<uint8_t>(magnitude % absl::uint128{10});
+      result += static_cast<char>('0' + digit);
+      magnitude /= absl::uint128{10};
     }
     if (result.empty()) {
       result = "0";
-    } else if (not sign) {
+    } else if (negative) {
       result.push_back('-');
     }
     std::reverse(result.begin(), result.end());
@@ -504,7 +517,8 @@ private:
           field_name = fmt::format("field{}", i);
           field_type = part;
         } else {
-          field_name = std::string{trim(part.substr(0, split))};
+          field_name
+            = unquote_identifier_component(trim(part.substr(0, split)));
           field_type = trim(part.substr(split + 1));
         }
         auto nested_path
@@ -584,14 +598,27 @@ private:
                             path, text);
         return None{};
       }
+      auto precision = size_t{0};
       auto scale = size_t{0};
-      if (not parse_size(parts[1], scale)) {
+      if (not parse_size(parts[0], precision)
+          or not parse_size(parts[1], scale)) {
         error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
                             path, text);
         return None{};
       }
+      if (precision > 38) {
+        error = fmt::format("{}; Decimal precisions above 38 are currently not "
+                            "supported",
+                            make_type_error(path, text));
+        return None{};
+      }
       return ParsedType{.kind = ParsedType::Kind::decimal_string_,
                         .decimal_scale = scale};
+    }
+    if (text.starts_with("Decimal256(")) {
+      error = fmt::format("{}; Decimal256 values are currently not supported",
+                          make_type_error(path, text));
+      return None{};
     }
     if (text.starts_with("Decimal32(") or text.starts_with("Decimal64(")
         or text.starts_with("Decimal128(")) {
