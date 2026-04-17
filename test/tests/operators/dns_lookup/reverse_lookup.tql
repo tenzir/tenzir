@@ -1,0 +1,5 @@
+from {
+  // Loopback reverse lookup works without network access
+  ip: 127.0.0.2
+}
+dns_lookup ip

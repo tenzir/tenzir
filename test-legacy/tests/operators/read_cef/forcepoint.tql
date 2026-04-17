@@ -1,3 +1,0 @@
-from f"{env("TENZIR_INPUTS")}/cef/forcepoint.log" {
-  read_cef
-}

@@ -1,0 +1,4 @@
+from {data: b"\x00\x01\x02"}
+md5 = data.hash_md5()
+sha256 = data.hash_sha256()
+drop data

@@ -1,0 +1,6 @@
+error: `list_separator` must not be empty
+ --> tests/operators/write_kv/error_empty_list_separator.tql:6:25
+  |
+6 | write_kv list_separator=""
+  |                         ^^ 
+  |

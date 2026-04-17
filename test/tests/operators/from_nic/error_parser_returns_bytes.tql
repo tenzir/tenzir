@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_nic "lo" { pass }

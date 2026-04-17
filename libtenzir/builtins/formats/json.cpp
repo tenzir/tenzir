@@ -2079,9 +2079,9 @@ public:
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
     d.named("color", &WriteJsonArgs::color);
+    d.named("compact", &WriteJsonArgs::compact);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     if (not tql_) {
-      d.named("compact", &WriteJsonArgs::compact);
       d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
       d.validate([=](DescribeCtx& ctx) -> Empty {
         if (ctx.get(jobs_arg)) {

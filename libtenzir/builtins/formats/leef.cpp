@@ -8,6 +8,9 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/async/pusher.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -22,6 +25,7 @@
 #include <tenzir/module.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
@@ -295,6 +299,146 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   }
 }
 
+struct ReadLeefArgs {
+  multi_series_builder::options msb_options;
+  location operator_location = location::unknown;
+};
+
+class ReadLeef final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadLeef(ReadLeefArgs args) : args_{std::move(args)} {
+    if (args_.msb_options.settings.default_schema_name.empty()) {
+      args_.msb_options.settings.default_schema_name = "leef.event";
+    }
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    quoting_ = detail::quoting_escaping_policy{.unescape_operation = unescape};
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
+      if (args_.operator_location) {
+        auto replaced_unknown_location = false;
+        for (auto& annotation : d.annotations) {
+          if (annotation.source) {
+            continue;
+          }
+          annotation.source = args_.operator_location;
+          replaced_unknown_location = true;
+        }
+        if (not replaced_unknown_location and d.annotations.empty()) {
+          d.annotations.emplace(d.annotations.begin(), true, "",
+                                args_.operator_location);
+        }
+      }
+      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                      fmt::format("line {}", line_counter_));
+      return d;
+    });
+    msb_ = multi_series_builder{args_.msb_options, *dh_};
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(msb_);
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    auto& dh = **dh_;
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    auto ready = series_builder::YieldReadyResult{};
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current}, dh);
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_, dh);
+        buffer_.clear();
+      }
+      ready.merge(msb_->yield_ready_as_table_slice());
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    ready.merge(msb_->yield_ready_as_table_slice());
+    co_await pusher_.push(std::move(ready), push);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_ASSERT(msb_);
+    if (not buffer_.empty()) {
+      process_line(buffer_, **dh_);
+      buffer_.clear();
+    }
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_counter", line_counter_);
+  }
+
+private:
+  auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
+    ++line_counter_;
+    if (line.empty()) {
+      TENZIR_DEBUG("LEEF parser ignored empty line");
+      return;
+    }
+    auto d = parse_line(line, *msb_, quoting_);
+    if (d) {
+      dh.emit(std::move(*d));
+    }
+  }
+
+  ReadLeefArgs args_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  size_t line_counter_ = 0;
+  detail::quoting_escaping_policy quoting_;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<multi_series_builder> msb_;
+  SeriesPusher pusher_;
+};
+
 class leef_parser final : public plugin_parser {
 public:
   auto name() const -> std::string override {
@@ -348,11 +492,22 @@ class leef_plugin final : public virtual parser_plugin<leef_parser> {
   }
 };
 
-class read_leef : public operator_plugin2<parser_adapter<leef_parser>> {
+class read_leef final : public operator_plugin2<parser_adapter<leef_parser>>,
+                        public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_leef";
   }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadLeefArgs, ReadLeef>{ReadLeefArgs{
+      .msb_options = {.settings = {.default_schema_name = "leef.event"}},
+    }};
+    d.validate(add_msb_to_describer(d, &ReadLeefArgs::msb_options));
+    d.operator_location(&ReadLeefArgs::operator_location);
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
@@ -363,8 +518,14 @@ public:
     return std::make_unique<parser_adapter<leef_parser>>(
       leef_parser{std::move(opts)});
   }
-};
 
+  auto read_properties() const -> read_properties_t override {
+    return {
+      .extensions = {"leef"},
+      .mime_types = {"application/x-leef"},
+    };
+  }
+};
 class parse_leef final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {

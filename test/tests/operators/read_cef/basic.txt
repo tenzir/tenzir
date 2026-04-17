@@ -1,0 +1,13 @@
+{
+  cef_version: 0,
+  device_vendor: "Vendor",
+  device_product: "Product",
+  device_version: "1.0",
+  signature_id: "42",
+  name: "Msg",
+  severity: "Low",
+  extension: {
+    src: "foo",
+    dst: "bar",
+  },
+}

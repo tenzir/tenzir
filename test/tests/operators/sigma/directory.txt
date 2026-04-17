@@ -1,0 +1,28 @@
+{
+  event: {
+    foo: "needle",
+  },
+  rule: {
+    title: "alpha sigma rule",
+    detection: {
+      selection: {
+        foo: "needle",
+      },
+      condition: "selection",
+    },
+  },
+}
+{
+  event: {
+    foo: "needle",
+  },
+  rule: {
+    title: "bravo sigma rule",
+    detection: {
+      selection: {
+        foo: "needle",
+      },
+      condition: "selection",
+    },
+  },
+}

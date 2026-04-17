@@ -23,7 +23,7 @@ auto replaced = detail::replace_all(str, "old", "new");
 
 - `detail/flat_map.hpp`, `detail/flat_set.hpp` — Sorted vector, O(log n) lookup
 - `detail/stable_map.hpp`, `detail/stable_set.hpp` — Insertion-order preserving
-- `detail/lru_cache.hpp` — LRU cache with factory function
+- `detail/lru_cache.hpp` — Keep frequently used values around and evict older ones automatically
 
 ```cpp
 detail::flat_map<std::string, int> sorted_map;
@@ -31,7 +31,11 @@ detail::flat_map<std::string, int> sorted_map;
 detail::lru_cache<Key, Value> cache{capacity, [](const Key& k) {
   return compute_value(k);
 }};
-auto& value = cache.get(key);  // Creates if missing
+if (auto* value = cache.get(key)) {
+  use(*value);                 // Reuse a cached value and keep it hot
+}
+auto* cached = cache.peek(key); // Check what's cached without affecting recency
+auto& loaded = cache.get_or_load(key);
 ```
 
 ## Iteration — `detail/enumerate.hpp`, `<ranges>`

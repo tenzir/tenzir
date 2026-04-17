@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "tenzir"
 version = "5.31.0"
 description = "Tenzir CLI bindings and binary launchers"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "BSD-3-Clause"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [

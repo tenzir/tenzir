@@ -1,0 +1,6 @@
+from_file f"{env("TENZIR_INPUTS")}/pcap/vlan-single-tagging.pcap" {
+  read_pcap
+}
+write_pcap
+read_pcap
+summarize count=count()

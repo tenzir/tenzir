@@ -1,0 +1,28 @@
+{
+  host: "127.0.0.1",
+  addr: 127.0.0.1,
+  dns_lookup: [
+    {
+      address: 127.0.0.1,
+      type: "A",
+      ttl: 1min,
+    },
+  ],
+  reverse: {
+    hostname: "localhost",
+  },
+}
+{
+  host: "127.0.0.1",
+  addr: 127.0.0.1,
+  dns_lookup: [
+    {
+      address: 127.0.0.1,
+      type: "A",
+      ttl: 1min,
+    },
+  ],
+  reverse: {
+    hostname: "localhost",
+  },
+}

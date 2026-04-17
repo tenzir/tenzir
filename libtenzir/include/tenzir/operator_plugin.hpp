@@ -319,6 +319,11 @@ public:
       dh_{&dh} {
   }
 
+  /// Returns the parsed argument value or `std::nullopt` if the caller omitted
+  /// the argument. This also applies to omitted `named_optional(...)`
+  /// arguments, even when the destination member in `Args` has a default
+  /// initializer. Validation callbacks must apply args-struct defaults
+  /// explicitly when they need an effective value.
   template <class Args, class T>
   auto get(Argument<Args, T> arg) -> std::optional<T> {
     const Arg* value = nullptr;

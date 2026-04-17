@@ -1,0 +1,6 @@
+error: `value_separator` must not be empty
+ --> tests/operators/write_kv/error_empty_value_separator.tql:6:26
+  |
+6 | write_kv value_separator=""
+  |                          ^^ 
+  |

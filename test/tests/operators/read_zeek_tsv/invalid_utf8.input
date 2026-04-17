@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	test
+#open	2014-05-23-18-02-04
+#fields	msg
+#types	string
+\xae
+#close	2014-05-23-18-02-35

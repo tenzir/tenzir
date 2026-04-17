@@ -1,0 +1,6 @@
+{
+  slices: 2,
+  min_rows: 1,
+  max_rows: 65536,
+  total_rows: 65537,
+}

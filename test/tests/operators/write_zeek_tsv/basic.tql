@@ -1,0 +1,2 @@
+from {uid: "foo", msg: "bar"}, {uid: "baz", msg: "qux"}
+write_zeek_tsv disable_timestamp_tags=true
