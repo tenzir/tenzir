@@ -78,8 +78,9 @@ Use it like this:
   `perform_curl_download(...)`.
 - Always run `perform_curl*()` on a `folly::IOExecutor`; the returned task
   drives libcurl's multi socket/timer API from that executor's `EventBase`.
-- Inspect the returned `CurlPerformResult` to distinguish clean completion,
-  local body aborts, and transport failures.
+- Inspect the returned `CurlPerformResult` to distinguish
+  `Ok(CurlPerformOutcome::success)`,
+  `Ok(CurlPerformOutcome::local_abort)`, and `Err(std::string)`.
 - Cancellation of `perform_curl*()` aborts the transfer on that EventBase and
   wakes the associated body objects before propagating
   `folly::OperationCancelled`.

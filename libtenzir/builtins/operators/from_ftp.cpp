@@ -93,7 +93,7 @@ auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
     co_await queue->enqueue(TransferFailed{fmt::format("{}", err)});
     co_return;
   }
-  auto curl_result = CurlPerformResult::success();
+  auto curl_result = CurlPerformResult{CurlPerformOutcome::success};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn([&]() -> Task<void> {
       while (auto chunk = co_await download_body->pop()) {
@@ -103,12 +103,11 @@ auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
     curl_result = co_await perform_curl_download(std::move(io_executor),
                                                  tx.handle(), *download_body);
   });
-  if (curl_result.is_failure()) {
-    co_await queue->enqueue(
-      TransferFailed{fmt::format("{}", curl_result.error())});
+  if (curl_result.is_err()) {
+    co_await queue->enqueue(TransferFailed{curl_result.unwrap_err()});
     co_return;
   }
-  if (curl_result.is_local_abort()) {
+  if (curl_result.unwrap() == CurlPerformOutcome::local_abort) {
     co_await queue->enqueue(TransferDone{});
     co_return;
   }
