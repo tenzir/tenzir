@@ -1,0 +1,10 @@
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  event_id: 42,
+  message: "login attempt",
+}
+{
+  timestamp: 2024-01-01T00:00:01Z,
+  event_id: 43,
+  message: "logout",
+}

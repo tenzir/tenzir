@@ -1,0 +1,9 @@
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  active: true,
+  signed_delta: -99,
+  large_count: 10000000000000000000,
+  ratio: 2.718281828,
+  label: "alpha",
+  nothing: null,
+}

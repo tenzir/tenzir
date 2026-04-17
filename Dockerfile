@@ -292,6 +292,16 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
     DESTDIR=/plugin/context cmake --install build-context --component Runtime && \
     rm -rf build-context
 
+FROM plugins-source AS from_sentinelone_data_lake-plugin
+
+COPY contrib/tenzir-plugins/from_sentinelone_data_lake ./contrib/tenzir-plugins/from_sentinelone_data_lake
+RUN --mount=target=/ccache,type=cache,from=cache-context \
+    cmake -S contrib/tenzir-plugins/from_sentinelone_data_lake -B build-from_sentinelone_data_lake -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+    cmake --build build-from_sentinelone_data_lake --parallel && \
+    DESTDIR=/plugin/from_sentinelone_data_lake cmake --install build-from_sentinelone_data_lake --component Runtime && \
+    rm -rf build-from_sentinelone_data_lake
+
 FROM plugins-source AS pipeline-manager-plugin
 
 COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-manager
@@ -411,6 +421,7 @@ FROM tenzir-de AS tenzir-ce-untested
 
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
+COPY --from=from_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/from_sentinelone_data_lake /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /

@@ -1,0 +1,10 @@
+---
+fixtures: [sentinelone]
+timeout: 60
+---
+
+// Eight rows of user-activity data. Verifies that the columnar parser emits
+// all rows correctly when the values array contains more than a trivial count.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=secret("test-token-s1-12345", _literal=true),
+  query="select_many_rows"

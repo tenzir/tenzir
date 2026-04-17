@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_sentinelone_data_lake "",
+  token=secret("x", _literal=true),
+  query="select_basic"
