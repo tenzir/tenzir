@@ -50,7 +50,7 @@ using namespace tenzir::si_literals;
 constexpr auto default_batch_size = uint64_t{1_Ki / 8};
 constexpr auto default_queue_capacity = uint64_t{1_Ki};
 constexpr auto max_queue_capacity
-  = uint64_t{std::numeric_limits<uint32_t>::max()} - 2;
+  = uint64_t{std::numeric_limits<int>::max()};
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 constexpr auto direct_read_lines_schema = std::string_view{"tenzir.line"};
 constexpr auto direct_metadata_field = std::string_view{"__tenzir_nats"};
@@ -523,7 +523,7 @@ public:
     if (not durable) {
       direct_ack_all_ = desired_ack_policy() == js_AckAll;
       sub_options.Config.MaxAckPending
-        = detail::narrow_cast<int>(args_.queue_capacity);
+        = detail::narrow<int>(args_.queue_capacity);
     }
     if (durable) {
       TENZIR_ASSERT(durable_stream);
@@ -784,7 +784,7 @@ private:
     config.Durable = args_.durable->inner.c_str();
     config.FilterSubject = args_.subject.inner.c_str();
     config.AckPolicy = desired_ack_policy();
-    config.MaxAckPending = detail::narrow_cast<int>(args_.queue_capacity);
+    config.MaxAckPending = detail::narrow<int>(args_.queue_capacity);
     status = co_await spawn_blocking([&] {
       return js_AddConsumer(nullptr, js_.get(), stream.c_str(), &config,
                             nullptr, &js_error);
