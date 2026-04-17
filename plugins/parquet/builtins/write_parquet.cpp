@@ -26,6 +26,7 @@ struct WriteParquetArgs {
   Option<located<int64_t>> compression_level;
   Option<located<std::string>> compression_type;
   Option<location> times_in_milliseconds;
+  location operator_loc;
 };
 
 auto build_writer_props(WriteParquetArgs& args)
@@ -90,6 +91,7 @@ public:
           .note("all input slices to `write_parquet` must have the same schema")
           .note("first schema shape: `{}`", as<record_type>(*input_schema_))
           .note("current schema shape: `{}`", as<record_type>(input_schema))
+          .primary(args_.operator_loc)
           .emit(ctx);
         failed_ = true;
         co_return;
@@ -110,6 +112,7 @@ public:
     if (has_secrets) {
       diagnostic::warning("`secret` is serialized as text")
         .note("fields will be `\"***\"`")
+        .primary(args_.operator_loc)
         .emit(ctx);
     }
     auto record_batch = remove_empty_records(
@@ -118,6 +121,7 @@ public:
     if (not record_batch_status.ok()) {
       diagnostic::error("{}", record_batch_status.ToStringWithoutContextLines())
         .note("failed to write record batch")
+        .primary(args_.operator_loc)
         .emit(ctx);
       failed_ = true;
       co_return;
@@ -134,6 +138,7 @@ public:
     if (not close_status.ok()) {
       diagnostic::error("{}", close_status.ToStringWithoutContextLines())
         .note("failed to write metadata and close")
+        .primary(args_.operator_loc)
         .emit(ctx);
       co_return FinalizeBehavior::done;
     }
@@ -157,6 +162,7 @@ private:
     if (not file_result.ok()) {
       diagnostic::error("failed to create parquet writer: {}",
                         file_result.status().ToStringWithoutContextLines())
+        .primary(args_.operator_loc)
         .emit(ctx);
       return failure::promise();
     }
@@ -177,54 +183,51 @@ private:
   bool failed_ = false;
 };
 
-auto validate_compression_arguments(const Option<located<std::string>>& type,
-                                    const Option<located<int64_t>>& level,
-                                    DescribeCtx& ctx) {
-  if (type) {
-    auto result_compression_type
-      = arrow::util::Codec::GetCompressionType(type->inner);
-    if (not result_compression_type.ok()) {
-      diagnostic::error(
-        "{}", result_compression_type.status().ToStringWithoutContextLines())
-        .note("failed to parse compression type")
-        .note("must be `brotli`, `gzip`, `snappy`, or `zstd`")
-        .primary(type->source)
+auto validate_args(const Option<located<std::string>>& type,
+                   const Option<located<int64_t>>& level, DescribeCtx& ctx) {
+  if (not type) {
+    if (level) {
+      diagnostic::warning("ignoring compression level option")
+        .primary(level->source)
         .emit(ctx);
     }
-    if (level) {
-      if (type->inner == "brotli" and (level->inner < 1 or level->inner > 11)) {
-        diagnostic::error("invalid compression level")
-          .note("must be a value between 1 and 11")
-          .primary(level->source)
-          .emit(ctx);
-      }
-      if (type->inner == "gzip" and (level->inner < 1 or level->inner > 9)) {
-        diagnostic::error("invalid compression level")
-          .note("must be a value between 1 and 9")
-          .primary(level->source)
-          .emit(ctx);
-      }
-      if (type->inner != "snappy") {
-        if (level->inner < std::numeric_limits<int>::min()
-            or level->inner > std::numeric_limits<int>::max()) {
-          diagnostic::error("invalid compression level")
-            .note("must fit into a 32-bit signed integer")
-            .primary(level->source)
-            .emit(ctx);
-        }
-      } else {
-        diagnostic::warning("ignoring compression level option")
-          .note("snappy does not accept `compression level`")
-          .primary(level->source)
-          .primary(type->source)
-          .emit(ctx);
-      }
-    }
-  } else if (level) {
-    diagnostic::warning("ignoring compression level option")
-      .note("has no effect without `compression type`")
-      .primary(level->source)
+    return;
+  }
+  auto result_compression_type
+    = arrow::util::Codec::GetCompressionType(type->inner);
+  if (not result_compression_type.ok()) {
+    diagnostic::error(
+      "{}", result_compression_type.status().ToStringWithoutContextLines())
+      .note("failed to parse compression type")
+      .note("must be `brotli`, `gzip`, `snappy`, or `zstd`")
+      .primary(type->source)
       .emit(ctx);
+  }
+  if (level) {
+    if (type->inner == "brotli" and (level->inner < 1 or level->inner > 11)) {
+      diagnostic::error("invalid compression level")
+        .note("must be a value between 1 and 11")
+        .primary(level->source)
+        .emit(ctx);
+    }
+    if (type->inner == "gzip" and (level->inner < 1 or level->inner > 9)) {
+      diagnostic::error("invalid compression level")
+        .note("must be a value between 1 and 9")
+        .primary(level->source)
+        .emit(ctx);
+    }
+    if (type->inner == "snappy") {
+      diagnostic::warning("ignoring compression level option")
+        .note("snappy does not accept `compression level`")
+        .primary(level->source)
+        .emit(ctx);
+    }
+    if (type->inner == "zstd" and (level->inner < 1 or level->inner > 22)) {
+      diagnostic::error("invalid compression level")
+        .note("must fit into a 32-bit signed integer")
+        .primary(level->source)
+        .emit(ctx);
+    }
   }
 }
 
@@ -241,10 +244,11 @@ public:
     auto compression_type
       = d.named("compression_type", &WriteParquetArgs::compression_type);
     d.named("_times_in_milliseconds", &WriteParquetArgs::times_in_milliseconds);
+    d.operator_location(&WriteParquetArgs::operator_loc);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto level = ctx.get(compression_level);
       auto type = ctx.get(compression_type);
-      validate_compression_arguments(type, level, ctx);
+      validate_args(type, level, ctx);
       return {};
     });
     return d.without_optimize();
