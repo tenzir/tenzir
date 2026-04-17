@@ -66,31 +66,25 @@ template <bool error>
 inline auto split_table_name(std::string_view table, location table_loc,
                              diagnostic_handler& dh)
   -> Option<split_table_name_result> {
-  const auto dot = table_name_quoting.find_first_of_not_in_quotes(table, ".");
-  if (dot == std::string::npos) {
-    return split_table_name_result{None{}, table};
+  if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
+    if (split->second.empty()) {
+      diag_root<error>("expected table name after `.`")
+        .primary(table_loc)
+        .emit(dh);
+      return None{};
+    }
+    if (table_name_quoting.split_at_unquoted(split->second, '.')) {
+      diag_root<error>("`table` may contain at most one `.`")
+        .note("the `.` separates database and table name")
+        .hint("quote the identifiers if you want the `.` to be part of the "
+              "identifier")
+        .primary(table_loc)
+        .emit(dh);
+      return None{};
+    }
+    return split_table_name_result{split->first, split->second};
   }
-  if (dot == table.size() - 1) {
-    diag_root<error>("expected table name after `.`")
-      .primary(table_loc)
-      .emit(dh);
-    return None{};
-  }
-  const auto dot2
-    = table_name_quoting.find_first_of_not_in_quotes(table, ".", dot + 1);
-  if (dot2 != std::string::npos) {
-    diag_root<error>("`table` may contain at most one `.`")
-      .note("the `.` separates database and table name")
-      .hint("quote the identifiers if you want the `.` to be part of the "
-            "identifier")
-      .primary(table_loc)
-      .emit(dh);
-    return None{};
-  }
-  return split_table_name_result{
-    table.substr(0, dot),
-    table.substr(dot + 1),
-  };
+  return split_table_name_result{None{}, table};
 }
 
 template <bool error>
