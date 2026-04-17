@@ -1,0 +1,6 @@
+{
+  id: 1,
+  base: "hello",
+  alias_col: "hello-alias",
+  materialized_col: 2,
+}
