@@ -522,6 +522,17 @@ public:
       }
       if (server_) {
         (*server_)->getServer().drain();
+        // The operator is never destroyed by the executor, so we must
+        // destroy the server explicitly.  The ScopedHTTPServer destructor
+        // blocks on thread_.join(), so run it in a detached thread to
+        // avoid blocking the executor fiber.  We only call drain() here
+        // (not forceStop) because forceStop drops in-flight responses.
+        // The destructor will call forceStop after a brief delay.
+        auto srv = std::move(*server_);
+        server_ = None{};
+        std::thread([srv = std::move(srv)]() {
+          // srv destructor calls drain()+forceStop()+thread_.join()
+        }).detach();
       }
     });
     lifecycle_ = Lifecycle::running;
@@ -689,7 +700,8 @@ private:
   };
 
   friend auto inspect(auto& f, Lifecycle& x) {
-    return tenzir::detail::inspect_enum_str(f, x, {"running", "draining", "done"});
+    return tenzir::detail::inspect_enum_str(f, x,
+                                            {"running", "draining", "done"});
   }
 
   struct ActiveRequest {

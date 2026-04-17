@@ -5,7 +5,6 @@ fixtures:
       requests:
         - body: '{"a": 1}'
           tls: true
-timeout: 5
 ---
 
 let $tls = {
