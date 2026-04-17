@@ -11,6 +11,7 @@
 #include "clickhouse/client.h"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -23,8 +24,10 @@ namespace tenzir::plugins::clickhouse {
 TENZIR_ENUM(mode, create_append, create, append);
 
 constexpr static auto validation_expr = "^[a-zA-Z_][0-9a-zA-Z_]*$";
-inline const auto table_name_quoting
-  = detail::quoting_escaping_policy{.quotes = "\"`"};
+inline const auto table_name_quoting = detail::quoting_escaping_policy{
+  .quotes = "\"`",
+  .doubled_quotes_escape = true,
+};
 
 inline auto validate_identifier(std::string_view text) -> bool {
   if (table_name_quoting.is_quoted(text)) {
