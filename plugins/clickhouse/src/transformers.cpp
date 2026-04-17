@@ -221,18 +221,42 @@ auto remove_non_significant_whitespace(std::string_view str) -> std::string {
   std::string ret;
   ret.reserve(str.size());
   auto can_skip = false;
+  auto quote = char{};
   constexpr static auto syntax_characters = "(),"sv;
   for (size_t i = 0; i < str.size(); ++i) {
-    const auto is_space = std::isspace(str[i]);
-    if (can_skip and std::isspace(str[i])) {
+    auto c = str[i];
+    if (quote != '\0') {
+      ret += c;
+      can_skip = false;
+      if (c == '\\' and i + 1 < str.size()) {
+        ret += str[++i];
+        continue;
+      }
+      if (c == quote) {
+        if (i + 1 < str.size() and str[i + 1] == quote) {
+          ret += str[++i];
+          continue;
+        }
+        quote = '\0';
+      }
       continue;
     }
-    ret += str[i];
-    const auto is_syntax
-      = syntax_characters.find(str[i]) != std::string_view::npos;
+    if (c == '\'' or c == '"' or c == '`') {
+      ret += c;
+      quote = c;
+      can_skip = false;
+      continue;
+    }
+    const auto is_space = std::isspace(static_cast<unsigned char>(c));
+    if (can_skip and is_space) {
+      continue;
+    }
+    ret += c;
+    const auto is_syntax = syntax_characters.find(c) != std::string_view::npos;
     can_skip = is_space or is_syntax;
     // Remove space *before* the current syntax token. Handles e.g. `text )`
-    if (is_syntax and i > 0 and std::isspace(str[i - 1])) {
+    if (is_syntax and i > 0
+        and std::isspace(static_cast<unsigned char>(str[i - 1]))) {
       ret.pop_back();
     }
   }
