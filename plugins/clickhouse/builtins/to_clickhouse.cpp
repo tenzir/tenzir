@@ -186,7 +186,7 @@ public:
     auto& dh = ctx.dh();
     auto mode_val = from_string<enum clickhouse::mode>(args_.mode.inner);
     TENZIR_ASSERT(mode_val);
-    auto primary = std::optional<located<std::string>>{};
+    auto primary = Option<located<std::string>>{};
     if (args_.primary) {
       // We know that primary is a top level field, as it was validated.
       primary = {args_.primary->path().front().id.name,
@@ -394,7 +394,7 @@ public:
               .emit(ctx);
           }
         }
-        auto mode_enum = std::optional<enum mode>{};
+        auto mode_enum = Option<enum mode>{};
         if (auto mode_opt = ctx.get(mode_arg)) {
           if (auto x = from_string<enum mode>(mode_opt->inner)) {
             mode_enum = x;

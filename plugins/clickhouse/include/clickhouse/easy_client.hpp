@@ -42,7 +42,7 @@ public:
     tls_options ssl;
     ast::expression table = {};
     located<enum mode> mode = located{mode::create_append, operator_location};
-    std::optional<located<std::string>> primary = std::nullopt;
+    Option<located<std::string>> primary = None{};
     location operator_location;
 
     auto make_options(const caf::actor_system_config& cfg) const
