@@ -391,6 +391,7 @@ public:
       = active_connections_->fetch_add(1, std::memory_order_acq_rel);
     if (previous >= max_connections_) {
       active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+      co_await queue_->enqueue(Noop{});
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(503);
     }
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
