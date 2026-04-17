@@ -240,8 +240,8 @@ auto multi::remove(easy& handle) -> code {
   return static_cast<code>(curl_code);
 }
 
-auto multi::set_socket_callback(curl_socket_callback callback,
-                                void* user_data) -> code {
+auto multi::set_socket_callback(curl_socket_callback callback, void* user_data)
+  -> code {
   auto curl_code
     = curl_multi_setopt(multi_.get(), CURLMOPT_SOCKETFUNCTION, callback);
   if (curl_code != CURLM_OK) {
