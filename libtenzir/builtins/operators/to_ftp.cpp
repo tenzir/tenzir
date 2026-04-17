@@ -88,6 +88,7 @@ auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
   request.method = "PUT";
   auto tx = transfer{std::move(options)};
   if (auto err = tx.prepare(std::move(request)); err.valid()) {
+    upload_body->abort();
     co_await results->enqueue(UploadFailed{fmt::format("{}", err)});
     co_return;
   }
