@@ -10,19 +10,26 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/atomic.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 
+#include <arrow/array/builder_binary.h>
+#include <arrow/record_batch.h>
+#include <arrow/util/utf8.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/fibers/Semaphore.h>
 
@@ -31,6 +38,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -45,6 +53,8 @@ constexpr auto default_queue_capacity = uint64_t{1_Ki};
 constexpr auto max_queue_capacity
   = uint64_t{std::numeric_limits<uint32_t>::max()} - 1;
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
+constexpr auto direct_read_lines_schema = std::string_view{"tenzir.line"};
+constexpr auto direct_metadata_field = std::string_view{"__tenzir_nats"};
 
 struct FromNatsArgs {
   located<std::string> subject;
@@ -77,9 +87,40 @@ struct SubscriptionComplete {
   natsStatus status;
 };
 
-using SourceMessage = variant<IncomingMessage, SubscriptionComplete>;
+struct FlushDirect {};
+
+using SourceMessage
+  = variant<IncomingMessage, SubscriptionComplete, FlushDirect>;
 using SourceBatch = std::vector<SourceMessage>;
 using SourceQueue = folly::coro::BoundedQueue<SourceMessage>;
+
+enum class DirectParser {
+  none,
+  read_lines,
+};
+
+struct DirectMetadataUsage {
+  bool subject = false;
+  bool reply = false;
+  bool headers = false;
+  bool stream = false;
+  bool consumer = false;
+  bool stream_sequence = false;
+  bool consumer_sequence = false;
+  bool num_delivered = false;
+  bool num_pending = false;
+  bool timestamp = false;
+
+  auto any() const -> bool {
+    return subject or reply or headers or stream or consumer or stream_sequence
+           or consumer_sequence or num_delivered or num_pending or timestamp;
+  }
+
+  auto jetstream() const -> bool {
+    return stream or consumer or stream_sequence or consumer_sequence
+           or num_delivered or num_pending or timestamp;
+  }
+};
 
 struct js_stream_names_list_deleter {
   auto operator()(jsStreamNamesList* ptr) const noexcept -> void {
@@ -271,6 +312,90 @@ auto parser_references_metadata(FromNatsArgs const& args) -> bool {
   return false;
 }
 
+auto direct_metadata_usage(FromNatsArgs const& args, ir::pipeline const& pipe)
+  -> DirectMetadataUsage {
+  return {
+    .subject = pipe.references(args.subject_var),
+    .reply = pipe.references(args.reply_var),
+    .headers = pipe.references(args.headers_var),
+    .stream = pipe.references(args.stream_var),
+    .consumer = pipe.references(args.consumer_var),
+    .stream_sequence = pipe.references(args.stream_sequence_var),
+    .consumer_sequence = pipe.references(args.consumer_sequence_var),
+    .num_delivered = pipe.references(args.num_delivered_var),
+    .num_pending = pipe.references(args.num_pending_var),
+    .timestamp = pipe.references(args.timestamp_var),
+  };
+}
+
+auto direct_metadata_expr(std::string_view field, location loc)
+  -> ast::expression {
+  auto root = ast::expression{ast::root_field{
+    ast::identifier{std::string{direct_metadata_field}, loc},
+  }};
+  return ast::field_access{
+    std::move(root),
+    loc,
+    false,
+    ast::identifier{std::string{field}, loc},
+  };
+}
+
+auto direct_metadata_replacements(FromNatsArgs const& args)
+  -> std::vector<ast::dollar_var_replacement> {
+  auto const loc = args.parser.source;
+  return {
+    {args.subject_var, direct_metadata_expr("subject", loc)},
+    {args.reply_var, direct_metadata_expr("reply", loc)},
+    {args.headers_var, direct_metadata_expr("headers", loc)},
+    {args.stream_var, direct_metadata_expr("stream", loc)},
+    {args.consumer_var, direct_metadata_expr("consumer", loc)},
+    {args.stream_sequence_var, direct_metadata_expr("stream_sequence", loc)},
+    {args.consumer_sequence_var,
+     direct_metadata_expr("consumer_sequence", loc)},
+    {args.num_delivered_var, direct_metadata_expr("num_delivered", loc)},
+    {args.num_pending_var, direct_metadata_expr("num_pending", loc)},
+    {args.timestamp_var, direct_metadata_expr("timestamp", loc)},
+  };
+}
+
+auto direct_metadata_drop_field(location loc) -> ast::field_path {
+  return ast::field_path::try_from(ast::root_field{
+                                     ast::identifier{
+                                       std::string{direct_metadata_field},
+                                       loc,
+                                     },
+                                   })
+    .value();
+}
+
+auto direct_read_lines_type() -> type {
+  return type{
+    std::string{direct_read_lines_schema},
+    record_type{{"line", string_type{}}},
+  };
+}
+
+auto direct_parser_for(FromNatsArgs const& args) -> DirectParser {
+  auto const& pipe = args.parser.inner;
+  if (pipe.operators.empty()) {
+    return DirectParser::none;
+  }
+  if (pipe.operators.front()->is_default_invocation("read_lines")) {
+    return DirectParser::read_lines;
+  }
+  return DirectParser::none;
+}
+
+auto schedule_direct_flush(Arc<SourceState> source,
+                           series_builder::duration wait_for) -> Task<void> {
+  co_await sleep_for(wait_for);
+  if (source->stopping.load(std::memory_order_acquire)) {
+    co_return;
+  }
+  source->queue.try_enqueue(SourceMessage{FlushDirect{}});
+}
+
 auto set_auth_value(auth_config& auth, std::string const& key,
                     std::string value) -> void {
   if (key == "user") {
@@ -336,6 +461,7 @@ public:
   explicit FromNats(FromNatsArgs args)
     : args_{std::move(args)}, source_{std::in_place, args_.queue_capacity} {
     parser_references_metadata_ = parser_references_metadata(args_);
+    direct_parser_ = direct_parser_for(args_);
   }
 
   FromNats(FromNats const&) = delete;
@@ -351,7 +477,13 @@ public:
     read_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
                          MetricsDirection::read, MetricsVisibility::external_);
-    if (not parser_references_metadata_) {
+    if (direct_parser_ == DirectParser::read_lines) {
+      auto ok = co_await prepare_direct_read_lines(ctx);
+      if (not ok) {
+        done_ = true;
+        co_return;
+      }
+    } else if (not parser_references_metadata_) {
       auto parser = args_.parser.inner;
       if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
         done_ = true;
@@ -421,9 +553,14 @@ public:
     auto sub_options = jsSubOptions{};
     jsSubOptions_Init(&sub_options);
     sub_options.ManualAck = true;
-    sub_options.Config.AckPolicy = js_AckExplicit;
+    sub_options.Config.AckPolicy = desired_ack_policy();
     auto const* durable
       = args_.durable ? args_.durable->inner.c_str() : nullptr;
+    if (not durable) {
+      direct_ack_all_ = desired_ack_policy() == js_AckAll;
+      sub_options.Config.MaxAckPending
+        = detail::narrow_cast<int>(args_.queue_capacity);
+    }
     if (durable) {
       TENZIR_ASSERT(durable_stream);
       sub_options.Stream = durable_stream->c_str();
@@ -468,7 +605,7 @@ public:
     co_return batch;
   }
 
-  auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     auto* batch = result.try_as<SourceBatch>();
     if (not batch) {
@@ -480,15 +617,16 @@ public:
         [&](IncomingMessage const&) {
           source_->message_slots.signal();
         },
-        [](SubscriptionComplete const&) {});
+        [](SubscriptionComplete const&) {}, [](FlushDirect const&) {});
     }
     for (auto& message : *batch) {
-      co_await process_source_message(std::move(message), ctx);
+      co_await process_source_message(std::move(message), push, ctx);
     }
   }
 
 private:
-  auto process_source_message(SourceMessage message, OpCtx& ctx) -> Task<void> {
+  auto process_source_message(SourceMessage message, Push<table_slice>& push,
+                              OpCtx& ctx) -> Task<void> {
     co_await co_match(
       std::move(message),
       [&](IncomingMessage item) -> Task<void> {
@@ -496,7 +634,11 @@ private:
           natsMsg_Nak(item.msg.get(), nullptr);
           co_return;
         }
-        co_await process_message(std::move(item.msg), ctx);
+        if (direct_parser_ == DirectParser::read_lines) {
+          co_await process_read_lines_message(std::move(item.msg), push, ctx);
+        } else {
+          co_await process_message(std::move(item.msg), ctx);
+        }
         maybe_finish();
       },
       [&](SubscriptionComplete complete) -> Task<void> {
@@ -510,41 +652,48 @@ private:
           maybe_finish();
         }
         co_return;
+      },
+      [&](FlushDirect) -> Task<void> {
+        if (direct_parser_ == DirectParser::read_lines) {
+          direct_flush_scheduled_ = false;
+          co_await flush_direct_read_lines(push, ctx);
+          maybe_finish();
+        }
+        co_return;
       });
   }
 
 public:
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
-                   OpCtx&) -> Task<void> override {
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    if (direct_tail_active_ and is<caf::none_t>(key)) {
+      if (not direct_metadata_drop_fields_.empty()) {
+        slice = drop(slice, direct_metadata_drop_fields_, ctx.dh(), false);
+      }
+    }
     co_await push(std::move(slice));
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
+    if (direct_tail_active_ and is<caf::none_t>(key)) {
+      direct_tail_finished_ = true;
+      if (direct_tail_closing_) {
+        done_ = true;
+        request_stop();
+      }
+      co_return;
+    }
     auto msg_id = detail::narrow_cast<uint64_t>(as<int64_t>(key));
     auto it = pending_.find(msg_id);
     if (it == pending_.end()) {
       co_return;
     }
-    auto status = natsMsg_Ack(it->second.get(), nullptr);
-    if (status != NATS_OK) {
-      emit_nats_error(diagnostic::warning("failed to acknowledge NATS message")
-                        .primary(args_.subject.source),
-                      status, ctx.dh());
-    }
+    auto const acked = acknowledge(it->second.get(), ctx);
     pending_.erase(it);
     if (args_.count and received_ >= args_.count->inner and pending_.empty()) {
-      if (status == NATS_OK) {
-        status = co_await spawn_blocking([this] {
-          return natsConnection_FlushTimeout(connection_.get(),
-                                             shutdown_flush_timeout_ms);
-        });
-        if (status != NATS_OK) {
-          emit_nats_error(diagnostic::warning("failed to flush NATS "
-                                              "acknowledgement")
-                            .primary(args_.subject.source),
-                          status, ctx.dh());
-        }
+      if (acked) {
+        co_await flush_acknowledgements(ctx);
       }
       done_ = true;
       request_stop();
@@ -560,6 +709,46 @@ private:
     nak,
     keep,
   };
+
+  auto desired_ack_policy() const -> jsAckPolicy {
+    return direct_parser_ == DirectParser::read_lines ? js_AckAll
+                                                      : js_AckExplicit;
+  }
+
+  auto prepare_direct_read_lines(OpCtx& ctx) -> Task<bool> {
+    auto tail = args_.parser.inner;
+    TENZIR_ASSERT(not tail.operators.empty());
+    TENZIR_ASSERT(tail.operators.front()->is_default_invocation("read_lines"));
+    tail.operators.erase(tail.operators.begin());
+    if (tail.operators.empty()) {
+      direct_arrow_lines_enabled_ = true;
+      co_return true;
+    }
+    direct_metadata_usage_ = direct_metadata_usage(args_, tail);
+    if (not direct_metadata_usage_.any()) {
+      direct_arrow_lines_enabled_ = true;
+    }
+    if (direct_metadata_usage_.any()) {
+      auto replacements = direct_metadata_replacements(args_);
+      if (not tail.replace_dollar_vars(replacements)) {
+        diagnostic::error("cannot use NATS metadata variables in this "
+                          "subpipeline")
+          .primary(args_.parser.source)
+          .note("the optimized `read_lines` path could not rewrite all "
+                "metadata references")
+          .emit(ctx);
+        co_return false;
+      }
+      direct_metadata_drop_fields_.push_back(
+        direct_metadata_drop_field(args_.parser.source));
+    }
+    if (not tail.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+      co_return false;
+    }
+    direct_tail_active_ = true;
+    co_await ctx.spawn_sub<table_slice>(caf::none, std::move(tail));
+    co_return true;
+  }
 
   auto ensure_durable_consumer(OpCtx& ctx) -> Task<Option<std::string>> {
     TENZIR_ASSERT(args_.durable);
@@ -604,6 +793,9 @@ private:
     });
     auto consumer = js_consumer_info_ptr{raw_consumer};
     if (status == NATS_OK) {
+      direct_ack_all_ = direct_parser_ == DirectParser::read_lines
+                        and consumer->Config
+                        and consumer->Config->AckPolicy == js_AckAll;
       co_return stream;
     }
     if (status != NATS_NOT_FOUND) {
@@ -620,7 +812,8 @@ private:
     config.Name = args_.durable->inner.c_str();
     config.Durable = args_.durable->inner.c_str();
     config.FilterSubject = args_.subject.inner.c_str();
-    config.AckPolicy = js_AckExplicit;
+    config.AckPolicy = desired_ack_policy();
+    config.MaxAckPending = detail::narrow_cast<int>(args_.queue_capacity);
     status = co_await spawn_blocking([&] {
       return js_AddConsumer(nullptr, js_.get(), stream.c_str(), &config,
                             nullptr, &js_error);
@@ -634,7 +827,397 @@ private:
                       status, ctx.dh());
       co_return None{};
     }
+    direct_ack_all_ = config.AckPolicy == js_AckAll;
     co_return stream;
+  }
+
+  auto acknowledge(natsMsg* msg, OpCtx& ctx) -> bool {
+    auto status = natsMsg_Ack(msg, nullptr);
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::warning("failed to acknowledge NATS message")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+      return false;
+    }
+    return true;
+  }
+
+  auto flush_acknowledgements(OpCtx& ctx) -> Task<void> {
+    auto status = co_await spawn_blocking([this] {
+      return natsConnection_FlushTimeout(connection_.get(),
+                                         shutdown_flush_timeout_ms);
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::warning("failed to flush NATS "
+                                          "acknowledgement")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+    }
+  }
+
+  auto acknowledge_direct_pending(OpCtx& ctx) -> void {
+    if (direct_ack_all_) {
+      if (not pending_direct_.empty()) {
+        acknowledge(pending_direct_.back().get(), ctx);
+        pending_direct_.clear();
+      }
+      return;
+    }
+    for (auto& msg : pending_direct_) {
+      acknowledge(msg.get(), ctx);
+    }
+    pending_direct_.clear();
+  }
+
+  auto schedule_direct_flush_if_needed(
+    series_builder::YieldReadyResult const& result, OpCtx& ctx) -> void {
+    if (not result.wait_for or direct_flush_scheduled_) {
+      return;
+    }
+    direct_flush_scheduled_ = true;
+    ctx.spawn_task(schedule_direct_flush(source_, result.wait_for.unwrap()));
+  }
+
+  auto push_direct_slice(table_slice slice, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<bool> {
+    if (direct_tail_active_) {
+      auto sub = ctx.get_sub(caf::none);
+      if (not sub) {
+        co_return false;
+      }
+      auto& tail = as<SubHandle<table_slice>>(*sub);
+      auto push_result = co_await tail.push(std::move(slice));
+      co_return not push_result.is_err();
+    }
+    co_await push(std::move(slice));
+    co_return true;
+  }
+
+  auto push_direct_result(series_builder::YieldReadyResult result,
+                          Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
+    auto const had_slices = not result.slices.empty();
+    for (auto& slice : result.slices) {
+      if (not co_await push_direct_slice(std::move(slice), push, ctx)) {
+        for (auto& msg : pending_direct_) {
+          natsMsg_Nak(msg.get(), nullptr);
+        }
+        pending_direct_.clear();
+        done_ = true;
+        request_stop();
+        co_return;
+      }
+    }
+    if (had_slices) {
+      acknowledge_direct_pending(ctx);
+      direct_flush_scheduled_ = false;
+    }
+    schedule_direct_flush_if_needed(result, ctx);
+  }
+
+  auto direct_line_count() const -> int64_t {
+    return direct_arrow_lines_enabled_ ? direct_arrow_line_count_
+                                       : direct_read_lines_.length();
+  }
+
+  auto finish_direct_arrow_lines() -> table_slice {
+    auto array = std::shared_ptr<arrow::Array>{};
+    check(direct_arrow_lines_.Finish(&array));
+    auto ty = direct_read_lines_type();
+    auto batch = arrow::RecordBatch::Make(
+      ty.to_arrow_schema(), direct_arrow_line_count_, {std::move(array)});
+    direct_arrow_line_count_ = 0;
+    direct_arrow_oldest_ = None{};
+    return table_slice{std::move(batch), std::move(ty)};
+  }
+
+  auto flush_direct_arrow_lines(Push<table_slice>& push, OpCtx& ctx,
+                                bool force = false) -> Task<void> {
+    auto const length = detail::narrow_cast<uint64_t>(direct_arrow_line_count_);
+    if (length == 0) {
+      direct_arrow_oldest_ = None{};
+      co_return;
+    }
+    auto const now = series_builder::clock::now();
+    auto const desired_size
+      = std::min(args_.batch_size, defaults::import::table_slice_size);
+    auto ready = force or length >= desired_size;
+    if (not ready and not direct_arrow_oldest_) {
+      direct_arrow_oldest_ = now;
+      schedule_direct_flush_if_needed(
+        {.wait_for = defaults::import::batch_timeout}, ctx);
+      co_return;
+    }
+    if (not ready) {
+      auto const waiting = now - *direct_arrow_oldest_;
+      ready = waiting >= defaults::import::batch_timeout;
+      if (not ready) {
+        schedule_direct_flush_if_needed(
+          {.wait_for = defaults::import::batch_timeout - waiting}, ctx);
+        co_return;
+      }
+    }
+    auto slice = finish_direct_arrow_lines();
+    if (not co_await push_direct_slice(std::move(slice), push, ctx)) {
+      for (auto& msg : pending_direct_) {
+        natsMsg_Nak(msg.get(), nullptr);
+      }
+      pending_direct_.clear();
+      done_ = true;
+      request_stop();
+      co_return;
+    }
+    acknowledge_direct_pending(ctx);
+    direct_flush_scheduled_ = false;
+  }
+
+  auto flush_direct_read_lines(Push<table_slice>& push, OpCtx& ctx,
+                               bool force = false) -> Task<void> {
+    if (direct_arrow_lines_enabled_) {
+      co_await flush_direct_arrow_lines(push, ctx, force);
+      co_return;
+    }
+    if (force) {
+      for (auto& slice :
+           direct_read_lines_.finish_as_table_slice(direct_read_lines_schema)) {
+        if (not co_await push_direct_slice(std::move(slice), push, ctx)) {
+          for (auto& msg : pending_direct_) {
+            natsMsg_Nak(msg.get(), nullptr);
+          }
+          pending_direct_.clear();
+          done_ = true;
+          request_stop();
+          co_return;
+        }
+      }
+      acknowledge_direct_pending(ctx);
+      direct_flush_scheduled_ = false;
+      co_return;
+    }
+    auto result = direct_read_lines_.yield_ready(
+      direct_read_lines_schema, series_builder::clock::now(),
+      std::min(args_.batch_size, defaults::import::table_slice_size));
+    co_await push_direct_result(std::move(result), push, ctx);
+  }
+
+  auto close_direct_tail(OpCtx& ctx) -> Task<void> {
+    if (not direct_tail_active_ or direct_tail_closing_) {
+      done_ = true;
+      request_stop();
+      co_return;
+    }
+    auto sub = ctx.get_sub(caf::none);
+    if (not sub) {
+      direct_tail_finished_ = true;
+      done_ = true;
+      request_stop();
+      co_return;
+    }
+    direct_tail_closing_ = true;
+    auto& tail = as<SubHandle<table_slice>>(*sub);
+    co_await tail.close();
+  }
+
+  auto emit_metadata_string(record_ref metadata, std::string_view field,
+                            char const* value) -> void {
+    if (value and *value) {
+      metadata.field(field, std::string_view{value});
+    } else {
+      metadata.field(field, caf::none);
+    }
+  }
+
+  auto emit_direct_metadata(record_ref row, natsMsg* msg,
+                            js_msg_meta_data_ptr const& meta,
+                            Option<record> const& headers) -> void {
+    if (not direct_metadata_usage_.any()) {
+      return;
+    }
+    auto metadata = row.field(direct_metadata_field).record();
+    if (direct_metadata_usage_.subject) {
+      emit_metadata_string(metadata, "subject", natsMsg_GetSubject(msg));
+    }
+    if (direct_metadata_usage_.reply) {
+      emit_metadata_string(metadata, "reply", natsMsg_GetReply(msg));
+    }
+    if (direct_metadata_usage_.headers) {
+      metadata.field("headers", headers ? data{*headers} : data{record{}});
+    }
+    auto emit_js_string
+      = [&](bool enabled, std::string_view field, char const* value) {
+          if (enabled) {
+            emit_metadata_string(metadata, field, value);
+          }
+        };
+    auto emit_js_data = [&](bool enabled, std::string_view field, auto value) {
+      if (not enabled) {
+        return;
+      }
+      if (meta) {
+        metadata.field(field, value);
+      } else {
+        metadata.field(field, caf::none);
+      }
+    };
+    emit_js_string(direct_metadata_usage_.stream, "stream",
+                   meta ? meta->Stream : nullptr);
+    emit_js_string(direct_metadata_usage_.consumer, "consumer",
+                   meta ? meta->Consumer : nullptr);
+    emit_js_data(direct_metadata_usage_.stream_sequence, "stream_sequence",
+                 meta ? meta->Sequence.Stream : uint64_t{0});
+    emit_js_data(direct_metadata_usage_.consumer_sequence, "consumer_sequence",
+                 meta ? meta->Sequence.Consumer : uint64_t{0});
+    emit_js_data(direct_metadata_usage_.num_delivered, "num_delivered",
+                 meta ? meta->NumDelivered : uint64_t{0});
+    emit_js_data(direct_metadata_usage_.num_pending, "num_pending",
+                 meta ? meta->NumPending : uint64_t{0});
+    emit_js_data(direct_metadata_usage_.timestamp, "timestamp",
+                 meta ? time{} + duration{meta->Timestamp} : time{});
+  }
+
+  auto emit_direct_line(std::string_view line, natsMsg* msg,
+                        js_msg_meta_data_ptr const& meta,
+                        Option<record> const& headers, OpCtx& ctx) -> bool {
+    if (direct_arrow_lines_enabled_) {
+      check(direct_arrow_lines_.Append(line));
+      ++direct_arrow_line_count_;
+      return true;
+    }
+    if (not arrow::util::ValidateUTF8(line)) {
+      diagnostic::warning("got invalid UTF-8")
+        .primary(args_.parser.source)
+        .hint("use a parser subpipeline with `read_lines binary=true` if you "
+              "are reading binary data")
+        .emit(ctx);
+      return false;
+    }
+    auto row = direct_read_lines_.record();
+    row.field("line", line);
+    emit_direct_metadata(row, msg, meta, headers);
+    return true;
+  }
+
+  auto validate_direct_arrow_lines(natsMsg* msg, OpCtx& ctx) -> bool {
+    auto const size = natsMsg_GetDataLength(msg);
+    if (size <= 0) {
+      return true;
+    }
+    auto const* const data = natsMsg_GetData(msg);
+    auto const* begin = data;
+    auto const* const end = data + size;
+    auto validate = [&](std::string_view line) {
+      if (arrow::util::ValidateUTF8(line)) {
+        return true;
+      }
+      diagnostic::warning("got invalid UTF-8")
+        .primary(args_.parser.source)
+        .hint("use a parser subpipeline with `read_lines binary=true` if you "
+              "are reading binary data")
+        .emit(ctx);
+      return false;
+    };
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (not validate(std::string_view{begin, current})) {
+        return false;
+      }
+      if (*current == '\r') {
+        auto const* next = current + 1;
+        if (next != end and *next == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    return begin == end or validate(std::string_view{begin, end});
+  }
+
+  auto append_direct_read_lines(natsMsg* msg, OpCtx& ctx) -> bool {
+    auto const size = natsMsg_GetDataLength(msg);
+    if (size <= 0) {
+      return true;
+    }
+    if (direct_arrow_lines_enabled_
+        and not validate_direct_arrow_lines(msg, ctx)) {
+      return false;
+    }
+    auto meta = direct_metadata_usage_.jetstream() ? message_metadata(msg)
+                                                   : js_msg_meta_data_ptr{};
+    auto headers = direct_metadata_usage_.headers
+                     ? Option<record>{message_headers(msg)}
+                     : None{};
+    auto const* const data = natsMsg_GetData(msg);
+    auto const* begin = data;
+    auto const* const end = data + size;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (not emit_direct_line(std::string_view{begin, current}, msg, meta,
+                               headers, ctx)) {
+        return false;
+      }
+      if (*current == '\r') {
+        auto const* next = current + 1;
+        if (next != end and *next == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    if (begin != end) {
+      return emit_direct_line(std::string_view{begin, end}, msg, meta, headers,
+                              ctx);
+    }
+    return true;
+  }
+
+  auto process_read_lines_message(nats_msg_ptr msg, Push<table_slice>& push,
+                                  OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(msg);
+    if (args_.count and received_ >= args_.count->inner) {
+      natsMsg_Nak(msg.get(), nullptr);
+      request_stop(PendingMessages::keep);
+      co_return;
+    }
+    ++received_;
+    auto const before = direct_line_count();
+    auto const size = natsMsg_GetDataLength(msg.get());
+    if (size > 0) {
+      read_bytes_counter_.add(static_cast<size_t>(size));
+    }
+    if (not append_direct_read_lines(msg.get(), ctx)) {
+      while (direct_read_lines_.length() > before) {
+        direct_read_lines_.remove_last();
+      }
+      if (direct_ack_all_ and not pending_direct_.empty()) {
+        co_await flush_direct_read_lines(push, ctx, true);
+      }
+      natsMsg_Nak(msg.get(), nullptr);
+      if (direct_ack_all_) {
+        done_ = true;
+        request_stop(PendingMessages::keep);
+      }
+      co_return;
+    }
+    if (direct_line_count() == before) {
+      if (direct_ack_all_ and not pending_direct_.empty()) {
+        pending_direct_.push_back(std::move(msg));
+        co_await flush_direct_read_lines(push, ctx, true);
+      } else {
+        acknowledge(msg.get(), ctx);
+      }
+    } else {
+      pending_direct_.push_back(std::move(msg));
+      auto const force_flush = args_.count and received_ >= args_.count->inner;
+      co_await flush_direct_read_lines(push, ctx, force_flush);
+    }
+    if (args_.count and received_ >= args_.count->inner
+        and pending_direct_.empty()) {
+      co_await flush_acknowledgements(ctx);
+      co_await close_direct_tail(ctx);
+    }
   }
 
   auto process_message(nats_msg_ptr msg, OpCtx& ctx) -> Task<void> {
@@ -699,26 +1282,39 @@ private:
           source_->message_slots.signal();
           natsMsg_Nak(item.msg.get(), nullptr);
         },
-        [](SubscriptionComplete) {});
+        [](SubscriptionComplete) {}, [](FlushDirect) {});
     }
     if (pending_messages == PendingMessages::nak) {
       for (auto& [_, msg] : pending_) {
         natsMsg_Nak(msg.get(), nullptr);
       }
       pending_.clear();
+      for (auto& msg : pending_direct_) {
+        natsMsg_Nak(msg.get(), nullptr);
+      }
+      pending_direct_.clear();
     }
-    if (pending_messages == PendingMessages::nak or pending_.empty()) {
+    if (pending_messages == PendingMessages::nak
+        or (pending_.empty() and pending_direct_.empty())) {
       subscription_.reset();
     }
   }
 
   auto maybe_finish() -> void {
-    if (args_.count and received_ >= args_.count->inner and pending_.empty()) {
+    if (args_.count and received_ >= args_.count->inner and pending_.empty()
+        and pending_direct_.empty()) {
+      if (direct_tail_active_ and not direct_tail_finished_) {
+        return;
+      }
       done_ = true;
       request_stop();
       return;
     }
-    if (subscription_failed_ and pending_.empty() and source_->queue.empty()) {
+    if (subscription_failed_ and pending_.empty() and pending_direct_.empty()
+        and source_->queue.empty()) {
+      if (direct_tail_active_ and not direct_tail_finished_) {
+        return;
+      }
       done_ = true;
       request_stop();
     }
@@ -731,11 +1327,25 @@ private:
   mutable Arc<SourceState> source_;
   nats_subscription_ptr subscription_;
   std::unordered_map<uint64_t, nats_msg_ptr> pending_;
+  std::vector<nats_msg_ptr> pending_direct_;
   MetricsCounter read_bytes_counter_;
   Option<ir::pipeline> parser_template_ = None{};
+  series_builder direct_read_lines_;
+  arrow::StringBuilder direct_arrow_lines_{arrow_memory_pool()};
+  int64_t direct_arrow_line_count_ = 0;
+  Option<series_builder::clock::time_point> direct_arrow_oldest_ = None{};
+  DirectMetadataUsage direct_metadata_usage_;
+  std::vector<ast::field_path> direct_metadata_drop_fields_;
   uint64_t next_msg_id_ = 0;
   uint64_t received_ = 0;
+  DirectParser direct_parser_ = DirectParser::none;
   bool parser_references_metadata_ = true;
+  bool direct_flush_scheduled_ = false;
+  bool direct_arrow_lines_enabled_ = false;
+  bool direct_ack_all_ = false;
+  bool direct_tail_active_ = false;
+  bool direct_tail_closing_ = false;
+  bool direct_tail_finished_ = false;
   bool subscription_failed_ = false;
   bool done_ = false;
 };

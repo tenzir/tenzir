@@ -355,7 +355,7 @@ def run_native_once(
             "js",
             "fetch",
             "--acks",
-            "none",
+            "all",
             "--msgs",
             str(case.events),
             "--size",

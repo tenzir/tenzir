@@ -1,0 +1,8 @@
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1,
+          _batch_size=10,
+          _queue_capacity=10 {
+  read_lines
+}

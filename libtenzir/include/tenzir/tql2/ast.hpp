@@ -18,8 +18,10 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
+#include <span>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 
 namespace tenzir::detail {
 
@@ -242,6 +244,13 @@ struct expression {
 
 /// Returns true if the expression contains a dollar variable bound to `id`.
 auto references(expression const& expr, let_id id) -> bool;
+
+using dollar_var_replacement = std::pair<let_id, expression>;
+
+/// Replaces dollar variables in `expr` by the corresponding expressions.
+auto replace_dollar_vars(expression& expr,
+                         std::span<const dollar_var_replacement> replacements)
+  -> void;
 
 /// A field path is a list of constant field names.
 ///

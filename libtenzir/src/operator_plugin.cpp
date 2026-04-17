@@ -616,6 +616,35 @@ public:
     return pipeline_ and pipeline_->pipeline.inner.references(id);
   }
 
+  auto
+  replace_dollar_vars(std::span<const ast::dollar_var_replacement> replacements)
+    -> bool override {
+    auto replace_arg = [&](Arg& arg) {
+      if (auto* incomplete = try_as<Incomplete>(arg)) {
+        ast::replace_dollar_vars(incomplete->expr, replacements);
+      }
+    };
+    for (auto& arg : args_) {
+      replace_arg(arg);
+    }
+    for (auto& named_arg : named_args_) {
+      replace_arg(named_arg.value);
+    }
+    if (pipeline_
+        and not pipeline_->pipeline.inner.replace_dollar_vars(replacements)) {
+      return false;
+    }
+    for (auto& expr : filter_) {
+      ast::replace_dollar_vars(expr, replacements);
+    }
+    return true;
+  }
+
+  auto is_default_invocation(std::string_view name) const -> bool override {
+    return desc_->name == name and args_.empty() and named_args_.empty()
+           and filter_.empty() and not pipeline_;
+  }
+
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
     order_ = std::max(order_, order);

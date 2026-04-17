@@ -13,6 +13,8 @@
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
+#include <span>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -66,6 +68,18 @@ public:
   ///
   /// Implementations that cannot inspect their contents should return true.
   virtual auto references(let_id id) const -> bool;
+
+  /// Returns true if this operator represents a call to the named operator
+  /// without explicit arguments, filter state, or nested subpipelines.
+  virtual auto is_default_invocation(std::string_view name) const -> bool;
+
+  /// Replaces dollar variables in this operator.
+  ///
+  /// Returns false if the operator may contain one of the replacements, but
+  /// cannot inspect and rewrite its contents.
+  virtual auto
+  replace_dollar_vars(std::span<const ast::dollar_var_replacement> replacements)
+    -> bool;
 
   /// Return a potentially optimized version of this operator.
   ///
@@ -130,6 +144,11 @@ struct pipeline {
 
   /// @see Operator
   auto references(let_id id) const -> bool;
+
+  /// @see Operator
+  auto
+  replace_dollar_vars(std::span<const ast::dollar_var_replacement> replacements)
+    -> bool;
 
   /// @see Operator
   auto spawn(element_type_tag input) and -> std::vector<AnyOperator>;
