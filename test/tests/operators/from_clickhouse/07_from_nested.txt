@@ -1,0 +1,14 @@
+{
+  id: 1,
+  meta: {
+    source: "sensor_a",
+    location: {
+      building: "HQ",
+      floor: 3,
+    },
+  },
+  tags: [
+    "alpha",
+    "beta",
+  ],
+}

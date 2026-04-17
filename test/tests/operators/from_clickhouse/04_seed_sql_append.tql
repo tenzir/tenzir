@@ -1,0 +1,7 @@
+from {id: 2, label: "beta"}
+to_clickhouse table="fc_sql",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"
