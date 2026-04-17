@@ -141,7 +141,7 @@ private:
 };
 
 struct FromAbsArgs : ArrowFsArgs {
-  Option<std::string> account_key;
+  Option<located<secret>> account_key;
 };
 
 class FromAbsOperator final : public ArrowFsOperator {
@@ -158,8 +158,8 @@ protected:
       make_uri_request(args_.url, "", uri, ctx.dh()),
     };
     if (args_.account_key) {
-      requests.push_back(
-        make_secret_request("account_key", args_.url, account_key, ctx.dh()));
+      requests.push_back(make_secret_request("account_key", *args_.account_key,
+                                             account_key, ctx.dh()));
     }
     auto result = co_await ctx.resolve_secrets(std::move(requests));
     if (result.is_error()) {
