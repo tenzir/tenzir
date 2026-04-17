@@ -132,8 +132,12 @@ public:
   } catch (const panic_exception& e) {
     throw;
   } catch (const std::exception& e) {
-    diagnostic::error("ClickHouse error: {}", e.what())
-      .primary(args_.operator_location)
+    auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                  .primary(args_.operator_location);
+    add_tls_client_diagnostic_hints(std::move(diag),
+                                    args_.ssl.get_tls(&ctrl).inner,
+                                    "ClickHouse", clickhouse_plaintext_port,
+                                    clickhouse_tls_port)
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -223,8 +227,11 @@ public:
       } catch (const panic_exception&) {
         throw;
       } catch (const std::exception& e) {
-        diagnostic::error("ClickHouse error: {}", e.what())
-          .primary(args_.operator_location)
+        auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                      .primary(args_.operator_location);
+        add_tls_client_diagnostic_hints(std::move(diag), tls_enabled,
+                                        "ClickHouse", clickhouse_plaintext_port,
+                                        clickhouse_tls_port)
           .emit(dh);
         state_->done.store(true, std::memory_order_release);
         co_return;
