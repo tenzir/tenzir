@@ -660,10 +660,11 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
-    if (not done_ and available() != 0) {
+    auto trailing_bytes = truncated_bytes_ + available();
+    if (not done_ and trailing_bytes != 0) {
       emit_with_location(
         diagnostic::warning("truncated Feather input")
-          .note("discarded {} trailing bytes", truncated_bytes_ + available())
+          .note("discarded {} trailing bytes", trailing_bytes)
           .severity(decoded_once_ ? severity::warning : severity::error),
         ctx.dh(), args_.operator_location);
     }
@@ -738,6 +739,9 @@ private:
           dh, args_.operator_location);
         done_ = true;
         co_return;
+      }
+      if (stream_decoder_->next_required_size() == 0) {
+        truncated_bytes_ = 0;
       }
       while (not listener_->record_batch_buffer.empty()) {
         decoded_once_ = true;
