@@ -13,6 +13,7 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/inspect_enum_str.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
@@ -392,10 +393,6 @@ public:
       active_connections_->fetch_sub(1, std::memory_order_acq_rel);
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(503);
     }
-    auto connection_guard
-      = folly::makeGuard([active = active_connections_]() mutable {
-          active->fetch_sub(1, std::memory_order_acq_rel);
-        });
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
     std::string path;
     auto bytes_received = size_t{};
@@ -461,6 +458,10 @@ public:
     co_await queue_->enqueue(RequestFinished{request_id});
     // send response
     auto res_status = co_await response_signal->recv();
+    // Decrement before dismissing the guard so the operator sees the updated
+    // count, then wake it to re-evaluate maybe_finish_draining.
+    active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+    co_await queue_->enqueue(Noop{});
     if (res_status != 200) {
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
     }
@@ -488,10 +489,10 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    active_connections_->store(0, std::memory_order_relaxed);
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
-    auto active_connections = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
     auto request_handler = std::make_shared<RequestHandler>(
-      args_, message_queue_, request_id_gen, active_connections,
+      args_, message_queue_, request_id_gen, active_connections_,
       get_max_request_size(), get_max_connections());
     try {
       auto server = proxygen::coro::ScopedHTTPServer::start(
@@ -505,15 +506,22 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    // HACK: if this operator gets forcefully stopped via task cancellation
-    // this task will catch cancellation and tell the server to respond to
-    // requests that have already finished. Other requests will get
-    // disconnected, but I guess this is fine.
+    // When the operator is forcefully stopped (e.g., by `head 1` finishing),
+    // the executor skips `finish_sub` and just cancels the operator scope.
+    // This task catches that cancellation, unblocks any in-flight handlers
+    // by sending them a 200, then drains the server while the main EventBase
+    // is still running.  drain() only stops accepting new connections;
+    // existing keep-alive connections close via connIdleTimeout (200ms).
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      auto active_requests = co_await active_requests_.lock();
-      for (auto& it : *active_requests) {
-        it.second.finished->send(200); // ok
+      {
+        auto active_requests = co_await active_requests_.lock();
+        for (auto& it : *active_requests) {
+          it.second.finished->send(200); // ok
+        }
+      }
+      if (server_) {
+        (*server_)->getServer().drain();
       }
     });
     lifecycle_ = Lifecycle::running;
@@ -669,12 +677,20 @@ public:
                                          : OperatorState::unspecified;
   }
 
+  auto snapshot(Serde& serde) -> void override {
+    serde("lifecycle", lifecycle_);
+  }
+
 private:
   enum class Lifecycle {
     running,
     draining,
     done,
   };
+
+  friend auto inspect(auto& f, Lifecycle& x) {
+    return tenzir::detail::inspect_enum_str(f, x, {"running", "draining", "done"});
+  }
 
   struct ActiveRequest {
     RequestMetadata metadata;
@@ -700,6 +716,13 @@ private:
 
   auto maybe_finish_draining() -> Task<void> {
     if (lifecycle_ != Lifecycle::draining) {
+      co_return;
+    }
+    // Wait until every handleRequest coroutine has decremented the counter.
+    // A handler that has been accepted but hasn't yet enqueued RequestStarted
+    // is invisible to both active_requests_ and message_queue_, so checking
+    // those alone is insufficient.
+    if (active_connections_->load(std::memory_order_acquire) != 0) {
       co_return;
     }
     auto active_requests = co_await active_requests_.lock();
@@ -751,6 +774,11 @@ private:
       co_return None{};
     }
     config.numIOThreads = 1;
+    // Short idle timeout: accept_http processes one-shot requests, so
+    // HTTP/1.1 keep-alive connections are unnecessary.  A short idle
+    // timeout ensures they close promptly after each response, allowing
+    // the IO thread pool to drain during server shutdown.
+    config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
     config.socketConfig.maxNumPendingConnectionsPerWorker
       = detail::narrow<uint32_t>(get_max_connections());
     if (tls_enabled) {
@@ -781,6 +809,7 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{256}};
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
   Mutex<std::unordered_map<uint64_t, ActiveRequest>> active_requests_{{}};
+  Arc<Atomic<uint64_t>> active_connections_{std::in_place, uint64_t{0}};
   // --- state ---
   Lifecycle lifecycle_ = Lifecycle::running;
 };

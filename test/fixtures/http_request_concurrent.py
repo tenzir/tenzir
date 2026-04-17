@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.client
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -28,7 +29,7 @@ class HttpRequestConcurrentOptions:
     initial_delay: float = 0.5
     retry_delay: float = 0.1
     request_timeout: float = 5.0
-    max_attempts: int = 300
+    max_attempts: int = 30
 
 
 @dataclass(frozen=True)
@@ -166,14 +167,22 @@ def http_request_concurrent() -> FixtureHandle:
     sent_count = [0]
     stopped_early = [False]
     stop_event = threading.Event()
+    t0 = time.monotonic()
+    dbg: list[str] = []
+
+    def _log(msg: str) -> None:
+        dbg.append(f"  [{time.monotonic() - t0:6.2f}s] {msg}")
 
     def _worker() -> None:
+        _log(f"worker started, endpoint={endpoint}")
         if opts.initial_delay > 0:
+            _log(f"initial delay {opts.initial_delay}s")
             time.sleep(opts.initial_delay)
         connection_refused_error: str | None = None
         sent = False
-        for _attempt in range(max(opts.max_attempts, 1)):
+        for attempt in range(max(opts.max_attempts, 1)):
             if stop_event.is_set():
+                _log(f"stop requested on attempt {attempt}")
                 stopped_early[0] = True
                 return
             result = _dispatch_concurrent_requests(
@@ -186,10 +195,12 @@ def http_request_concurrent() -> FixtureHandle:
                 time.sleep(opts.retry_delay)
                 continue
             if result.fatal_error is not None:
+                _log(f"attempt {attempt}: fatal error: {result.fatal_error}")
                 errors.append(result.fatal_error)
                 return
             got = sorted(result.statuses)
-            want = sorted(opts.expected_statuses)
+            want = sorted(opts.expected_statuses)  # type: ignore[arg-type]
+            _log(f"attempt {attempt}: dispatched, statuses={got}")
             if got != want:
                 errors.append(f"expected concurrent HTTP statuses {want}, got {got}")
             sent_count[0] = len(result.statuses)
@@ -197,12 +208,18 @@ def http_request_concurrent() -> FixtureHandle:
             break
         if not sent:
             attempts = max(opts.max_attempts, 1)
+            _log(
+                f"gave up after {attempts} attempts, "
+                f"last_connection_refused={connection_refused_error!r}"
+            )
             if connection_refused_error is not None:
                 errors.append(
                     "connection refused while delivering concurrent HTTP requests to "
                     f"http://{endpoint}{_normalize_request_path(opts.path)} "
                     f"after {attempts} attempts: {connection_refused_error}"
                 )
+        else:
+            _log("worker finished")
 
     worker = threading.Thread(target=_worker, daemon=True)
     worker.start()
@@ -215,16 +232,35 @@ def http_request_concurrent() -> FixtureHandle:
     def _teardown() -> None:
         stop_event.set()
         worker.join(timeout=2)
-        if worker.is_alive():
-            raise RuntimeError(
-                "http_request_concurrent fixture worker did not stop within 2 seconds"
-            )
-        if errors:
-            raise AssertionError("; ".join(errors))
-        if not stopped_early[0] and sent_count[0] < opts.concurrent:
-            raise AssertionError(
-                f"expected to send {opts.concurrent} requests, sent {sent_count[0]}"
-            )
+        elapsed = time.monotonic() - t0
+        failed = False
+        try:
+            if worker.is_alive():
+                failed = True
+                raise RuntimeError(
+                    "http_request_concurrent fixture worker did not stop within 2 seconds"
+                )
+            if errors:
+                failed = True
+                raise AssertionError("; ".join(errors))
+            if not stopped_early[0] and sent_count[0] < opts.concurrent:
+                failed = True
+                raise AssertionError(
+                    f"expected to send {opts.concurrent} requests, sent {sent_count[0]}"
+                )
+        finally:
+            incomplete = stopped_early[0] and sent_count[0] < opts.concurrent
+            late = elapsed > 5.0
+            if failed or incomplete or late:
+                _log(
+                    f"teardown: sent={sent_count[0]}, "
+                    f"stopped_early={stopped_early[0]}, errors={errors}"
+                )
+                print(
+                    "http_request_concurrent fixture log:\n" + "\n".join(dbg),
+                    file=sys.stderr,
+                    flush=True,
+                )
 
     return FixtureHandle(
         env={"HTTP_REQUEST_ENDPOINT": endpoint},
