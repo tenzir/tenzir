@@ -1,0 +1,10 @@
+// Verify the first message was ACKed, not NAKed, when the count stopped the
+// subscription while the parser subpipeline was still running.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1,
+          _batch_size=1,
+          _queue_capacity=1 {
+  read_lines
+}

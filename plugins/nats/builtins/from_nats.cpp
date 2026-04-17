@@ -43,6 +43,7 @@ constexpr auto default_batch_size = uint64_t{1_Ki / 8};
 constexpr auto default_queue_capacity = uint64_t{1_Ki};
 constexpr auto max_queue_capacity
   = uint64_t{std::numeric_limits<uint32_t>::max()} - 1;
+constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 
 struct FromNatsArgs {
   located<std::string> subject;
@@ -78,6 +79,27 @@ struct SubscriptionComplete {
 using SourceMessage = variant<IncomingMessage, SubscriptionComplete>;
 using SourceQueue = folly::coro::BoundedQueue<SourceMessage>;
 
+struct js_stream_names_list_deleter {
+  auto operator()(jsStreamNamesList* ptr) const noexcept -> void {
+    if (ptr) {
+      jsStreamNamesList_Destroy(ptr);
+    }
+  }
+};
+
+struct js_consumer_info_deleter {
+  auto operator()(jsConsumerInfo* ptr) const noexcept -> void {
+    if (ptr) {
+      jsConsumerInfo_Destroy(ptr);
+    }
+  }
+};
+
+using js_stream_names_list_ptr
+  = std::unique_ptr<jsStreamNamesList, js_stream_names_list_deleter>;
+using js_consumer_info_ptr
+  = std::unique_ptr<jsConsumerInfo, js_consumer_info_deleter>;
+
 struct SourceState {
   explicit SourceState(uint64_t capacity)
     : queue{detail::narrow_cast<uint32_t>(capacity + 1)},
@@ -87,6 +109,7 @@ struct SourceState {
   SourceQueue queue;
   folly::fibers::Semaphore message_slots;
   Atomic<bool> stopping = false;
+  Atomic<bool> terminal_completion_queued = false;
 };
 
 auto normal_completion(natsStatus status) -> bool {
@@ -122,6 +145,15 @@ void complete_callback(natsConnection*, natsSubscription*, natsStatus status,
   auto* state = static_cast<SourceState*>(closure);
   TENZIR_ASSERT(state);
   if (state->stopping.load(std::memory_order_acquire)) {
+    return;
+  }
+  // Normal fetch completions are non-terminal. The queue has one slot beyond
+  // the data-message capacity, reserved for the first terminal completion.
+  if (status == NATS_OK or normal_completion(status)) {
+    return;
+  }
+  if (state->terminal_completion_queued.exchange(true,
+                                                 std::memory_order_acq_rel)) {
     return;
   }
   [[maybe_unused]] auto enqueued
@@ -335,6 +367,14 @@ public:
       co_return;
     }
     js_ = js_ctx_ptr{raw_js};
+    auto durable_stream = Option<std::string>{};
+    if (args_.durable) {
+      durable_stream = co_await ensure_durable_consumer(ctx);
+      if (not durable_stream) {
+        done_ = true;
+        co_return;
+      }
+    }
     auto js_options = jsOptions{};
     jsOptions_Init(&js_options);
     js_options.PullSubscribeAsync.FetchSize
@@ -354,7 +394,9 @@ public:
     auto const* durable
       = args_.durable ? args_.durable->inner.c_str() : nullptr;
     if (durable) {
-      sub_options.Config.Durable = durable;
+      TENZIR_ASSERT(durable_stream);
+      sub_options.Stream = durable_stream->c_str();
+      sub_options.Consumer = durable;
     }
     auto js_error = jsErrCode{};
     auto* raw_subscription = static_cast<natsSubscription*>(nullptr);
@@ -434,6 +476,18 @@ public:
     }
     pending_.erase(it);
     if (args_.count and received_ >= args_.count->inner and pending_.empty()) {
+      if (status == NATS_OK) {
+        status = co_await spawn_blocking([this] {
+          return natsConnection_FlushTimeout(connection_.get(),
+                                             shutdown_flush_timeout_ms);
+        });
+        if (status != NATS_OK) {
+          emit_nats_error(diagnostic::warning("failed to flush NATS "
+                                              "acknowledgement")
+                            .primary(args_.subject.source),
+                          status, ctx.dh());
+        }
+      }
       done_ = true;
       request_stop();
     }
@@ -444,11 +498,92 @@ public:
   }
 
 private:
+  enum class PendingMessages {
+    nak,
+    keep,
+  };
+
+  auto ensure_durable_consumer(OpCtx& ctx) -> Task<Option<std::string>> {
+    TENZIR_ASSERT(args_.durable);
+    auto stream_options = jsOptions{};
+    jsOptions_Init(&stream_options);
+    stream_options.Stream.Info.SubjectsFilter = args_.subject.inner.c_str();
+    auto* raw_streams = static_cast<jsStreamNamesList*>(nullptr);
+    auto js_error = jsErrCode{};
+    auto status = co_await spawn_blocking([&] {
+      return js_StreamNames(&raw_streams, js_.get(), &stream_options,
+                            &js_error);
+    });
+    auto streams = js_stream_names_list_ptr{raw_streams};
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to resolve NATS stream for "
+                                        "durable consumer")
+                        .primary(args_.subject.source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      co_return None{};
+    }
+    if (streams->Count == 0) {
+      diagnostic::error("no NATS stream matches subject")
+        .primary(args_.subject.source)
+        .emit(ctx);
+      co_return None{};
+    }
+    if (streams->Count > 1) {
+      diagnostic::error("multiple NATS streams match subject")
+        .primary(args_.subject.source)
+        .note("matched {} streams", streams->Count)
+        .emit(ctx);
+      co_return None{};
+    }
+    auto stream = std::string{streams->List[0]};
+    auto* raw_consumer = static_cast<jsConsumerInfo*>(nullptr);
+    status = co_await spawn_blocking([&] {
+      return js_GetConsumerInfo(&raw_consumer, js_.get(), stream.c_str(),
+                                args_.durable->inner.c_str(), nullptr,
+                                &js_error);
+    });
+    auto consumer = js_consumer_info_ptr{raw_consumer};
+    if (status == NATS_OK) {
+      co_return stream;
+    }
+    if (status != NATS_NOT_FOUND) {
+      emit_nats_error(diagnostic::error("failed to inspect NATS durable "
+                                        "consumer")
+                        .primary(args_.durable->source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      co_return None{};
+    }
+    auto config = jsConsumerConfig{};
+    jsConsumerConfig_Init(&config);
+    config.Name = args_.durable->inner.c_str();
+    config.Durable = args_.durable->inner.c_str();
+    config.FilterSubject = args_.subject.inner.c_str();
+    config.AckPolicy = js_AckExplicit;
+    status = co_await spawn_blocking([&] {
+      return js_AddConsumer(nullptr, js_.get(), stream.c_str(), &config,
+                            nullptr, &js_error);
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to create NATS durable "
+                                        "consumer")
+                        .primary(args_.durable->source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      co_return None{};
+    }
+    co_return stream;
+  }
+
   auto process_message(nats_msg_ptr msg, OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(msg);
     if (args_.count and received_ >= args_.count->inner) {
       natsMsg_Nak(msg.get(), nullptr);
-      request_stop();
+      request_stop(PendingMessages::keep);
       co_return;
     }
     auto const msg_id = next_msg_id_++;
@@ -484,7 +619,8 @@ private:
     co_await sub.close();
   }
 
-  auto request_stop() -> void {
+  auto request_stop(PendingMessages pending_messages = PendingMessages::nak)
+    -> void {
     if (not source_.not_moved_from()) {
       return;
     }
@@ -500,11 +636,15 @@ private:
         },
         [](SubscriptionComplete) {});
     }
-    for (auto& [_, msg] : pending_) {
-      natsMsg_Nak(msg.get(), nullptr);
+    if (pending_messages == PendingMessages::nak) {
+      for (auto& [_, msg] : pending_) {
+        natsMsg_Nak(msg.get(), nullptr);
+      }
+      pending_.clear();
     }
-    pending_.clear();
-    subscription_.reset();
+    if (pending_messages == PendingMessages::nak or pending_.empty()) {
+      subscription_.reset();
+    }
   }
 
   auto maybe_finish() -> void {
