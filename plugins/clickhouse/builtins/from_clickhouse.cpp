@@ -53,24 +53,7 @@ constexpr auto clickhouse_plaintext_port = uint64_t{9000};
 constexpr auto clickhouse_tls_port = uint64_t{9440};
 
 auto unquote_identifier_component(std::string_view text) -> std::string {
-  if (text.size() < 2) {
-    return std::string{text};
-  }
-  auto quote = text.front();
-  if ((quote != '`' and quote != '"') or text.back() != quote) {
-    return std::string{text};
-  }
-  auto result = std::string{};
-  result.reserve(text.size() - 2);
-  for (auto i = size_t{1}; i + 1 < text.size(); ++i) {
-    if (text[i] == quote and i + 2 < text.size() and text[i + 1] == quote) {
-      result += quote;
-      ++i;
-    } else {
-      result += text[i];
-    }
-  }
-  return result;
+  return table_name_quoting.unquote_unescape(text);
 }
 
 struct FromClickhouseArgs {
