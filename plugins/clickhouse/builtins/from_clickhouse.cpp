@@ -20,6 +20,7 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/value_path.hpp"
 
 #include <arpa/inet.h>
 #include <clickhouse/client.h>
@@ -36,7 +37,6 @@
 #include <fmt/format.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/executors/GlobalExecutor.h>
 
 #include <algorithm>
 #include <cctype>
@@ -44,6 +44,7 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <unordered_map>
 
@@ -64,13 +65,11 @@ auto unquote_identifier_component(std::string_view text) -> std::string {
 
 struct FromClickhouseArgs {
   Option<located<std::string>> table;
-  Option<located<std::string>> database;
   located<secret> host = {secret::make_literal("localhost"), location::unknown};
   Option<located<uint64_t>> port = None{};
   located<secret> user = {secret::make_literal("default"), location::unknown};
   located<secret> password = {secret::make_literal(""), location::unknown};
   Option<located<std::string>> sql;
-  Option<located<std::string>> show;
   Option<located<data>> tls;
   location operator_location;
 };
@@ -78,7 +77,6 @@ struct FromClickhouseArgs {
 struct QueryPlan {
   std::string query;
   std::string schema_name;
-  std::string default_database;
   Option<std::string> described_table = None{};
 };
 
@@ -154,8 +152,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    TENZIR_ASSERT(not runtime_);
-    runtime_ = Arc<RuntimeState>{std::in_place};
     auto plan = make_query_plan(args_, ctx);
     if (not plan) {
       done_ = true;
@@ -189,10 +185,10 @@ public:
       co_return;
     }
     auto options = client_args.make_options(ctx.actor_system().config());
-    options.SetDefaultDatabase(plan->default_database);
-    ctx.spawn_task(folly::coro::co_withExecutor(
-      folly::getGlobalCPUExecutor(),
-      run_query(*runtime_, std::move(options), std::move(*plan))));
+    ctx.spawn_task([this, options = std::move(options),
+                    plan = std::move(*plan)]() mutable -> Task<void> {
+      co_await run_query(std::move(options), std::move(plan));
+    });
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -200,8 +196,7 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    TENZIR_ASSERT(runtime_);
-    co_return co_await (*runtime_)->queue.dequeue();
+    co_return co_await runtime_->queue.dequeue();
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
@@ -236,9 +231,7 @@ public:
   }
 
   auto stop(OpCtx&) -> Task<void> override {
-    if (runtime_) {
-      (*runtime_)->stop_requested.store(true, std::memory_order_release);
-    }
+    runtime_->stop_requested.store(true, std::memory_order_release);
     co_return;
   }
 
@@ -416,6 +409,28 @@ private:
     return result;
   }
 
+  static auto rescale_datetime64_to_nanos(int64_t value, size_t precision,
+                                          value_path path, std::string& error)
+    -> Option<int64_t> {
+    if (precision == 9) {
+      return value;
+    }
+    if (precision < 9) {
+      auto factor = ::clickhouse::Int128{pow10(9 - precision)};
+      auto scaled = ::clickhouse::Int128{value} * factor;
+      auto min = ::clickhouse::Int128{std::numeric_limits<int64_t>::min()};
+      auto max = ::clickhouse::Int128{std::numeric_limits<int64_t>::max()};
+      if (scaled < min or scaled > max) {
+        error = fmt::format("DateTime64 value for `{}` is out of range after "
+                            "rescaling to nanoseconds",
+                            path);
+        return None{};
+      }
+      return static_cast<int64_t>(scaled);
+    }
+    return value / pow10(precision - 9);
+  }
+
   static auto is_scalar_kind(ParsedType::Kind kind) -> bool {
     return kind != ParsedType::Kind::nullable_
            and kind != ParsedType::Kind::record_
@@ -423,16 +438,15 @@ private:
            and kind != ParsedType::Kind::blob_;
   }
 
-  static auto make_type_error(std::string_view path, std::string_view text)
+  static auto make_type_error(value_path path, std::string_view text)
     -> std::string {
     return fmt::format("ClickHouse column `{}` has unsupported ClickHouse type "
                        "`{}`",
                        path, text);
   }
 
-  static auto parse_clickhouse_type(std::string_view text,
-                                    std::string_view path, std::string& error)
-    -> Option<ParsedType> {
+  static auto parse_clickhouse_type(std::string_view text, value_path path,
+                                    std::string& error) -> Option<ParsedType> {
     text = detail::trim(text);
     if (text.empty()) {
       error
@@ -464,8 +478,7 @@ private:
       return ParsedType{.kind = ParsedType::Kind::blob_};
     }
     if (auto inner = unwrap_call(text, "Array")) {
-      auto nested
-        = parse_clickhouse_type(*inner, fmt::format("{}[]", path), error);
+      auto nested = parse_clickhouse_type(*inner, path.list(), error);
       if (not nested) {
         return None{};
       }
@@ -490,9 +503,8 @@ private:
             = unquote_identifier_component(detail::trim(part.substr(0, split)));
           field_type = detail::trim(part.substr(split + 1));
         }
-        auto nested_path
-          = path.empty() ? field_name : fmt::format("{}.{}", path, field_name);
-        auto nested = parse_clickhouse_type(field_type, nested_path, error);
+        auto nested
+          = parse_clickhouse_type(field_type, path.field(field_name), error);
         if (not nested) {
           return None{};
         }
@@ -713,7 +725,8 @@ private:
       auto type_name
         = remove_non_significant_whitespace(block[i]->Type()->GetName());
       auto name = std::string{block.GetColumnName(i)};
-      auto parsed = parse_clickhouse_type(type_name, name, error);
+      auto parsed
+        = parse_clickhouse_type(type_name, value_path{}.field(name), error);
       if (not parsed) {
         return None{};
       }
@@ -755,7 +768,8 @@ private:
       for (auto row = size_t{0}; row < block.GetRowCount(); ++row) {
         auto name = std::string{names->At(row)};
         auto type_name = remove_non_significant_whitespace(types->At(row));
-        auto parsed = parse_clickhouse_type(type_name, name, error);
+        auto parsed
+          = parse_clickhouse_type(type_name, value_path{}.field(name), error);
         if (not parsed) {
           ok = false;
           return;
@@ -775,7 +789,7 @@ private:
 
   static auto
   append_scalar(builder_ref builder, ::clickhouse::ColumnRef const& column,
-                size_t row, ParsedType const& desc, std::string_view path,
+                size_t row, ParsedType const& desc, value_path path,
                 std::string& error) -> bool {
     switch (desc.kind) {
       case ParsedType::Kind::decimal_string_: {
@@ -991,15 +1005,13 @@ private:
               std::chrono::seconds{item.get<uint32_t>()})});
             return true;
           case ::clickhouse::Type::DateTime64: {
-            auto value = item.get<int64_t>();
-            auto ns = value;
-            if (desc.time_precision < 9) {
-              ns *= pow10(9 - desc.time_precision);
-            } else if (desc.time_precision > 9) {
-              ns /= pow10(desc.time_precision - 9);
+            auto ns = rescale_datetime64_to_nanos(
+              item.get<int64_t>(), desc.time_precision, path, error);
+            if (not ns) {
+              return false;
             }
             builder.data(time{std::chrono::duration_cast<duration>(
-              std::chrono::nanoseconds{ns})});
+              std::chrono::nanoseconds{*ns})});
             return true;
           }
           default:
@@ -1022,7 +1034,7 @@ private:
 
   static auto
   append_value(builder_ref builder, ::clickhouse::ColumnRef const& column,
-               size_t row, ParsedType const& desc, std::string_view path,
+               size_t row, ParsedType const& desc, value_path path,
                std::string& error) -> bool {
     switch (desc.kind) {
       case ParsedType::Kind::nullable_:
@@ -1055,10 +1067,9 @@ private:
         }
         auto record = builder.record();
         for (auto i = size_t{0}; i < desc.fields.size(); ++i) {
-          auto nested_path = fmt::format("{}.{}", path, desc.fields[i].name);
           if (not append_value(record.field(desc.fields[i].name), tuple->At(i),
-                               row, *desc.fields[i].value, nested_path,
-                               error)) {
+                               row, *desc.fields[i].value,
+                               path.field(desc.fields[i].name), error)) {
             return false;
           }
         }
@@ -1074,8 +1085,7 @@ private:
         auto nested = array->GetAsColumn(row);
         auto list = builder.list();
         for (auto i = size_t{0}; i < nested->Size(); ++i) {
-          auto nested_path = fmt::format("{}[]", path);
-          if (not append_value(list, nested, i, **desc.child, nested_path,
+          if (not append_value(list, nested, i, **desc.child, path.list(),
                                error)) {
             return false;
           }
@@ -1133,7 +1143,8 @@ private:
       for (auto column = size_t{0}; column < schema.columns.size(); ++column) {
         if (not append_value(event.field(schema.columns[column].name),
                              block[column], row, *schema.columns[column].value,
-                             schema.columns[column].name, error)) {
+                             value_path{}.field(schema.columns[column].name),
+                             error)) {
           return None{};
         }
       }
@@ -1149,8 +1160,7 @@ private:
     return {None{}, table};
   }
 
-  static auto make_schema_name_from_table(std::string_view table,
-                                          Option<std::string_view> database)
+  static auto make_schema_name_from_table(std::string_view table)
     -> std::string {
     auto split = split_validated_table_name(table);
     auto table_name = unquote_identifier_component(split.table);
@@ -1159,116 +1169,28 @@ private:
                          unquote_identifier_component(*split.database),
                          table_name);
     }
-    if (database) {
-      return fmt::format("clickhouse.{}.{}",
-                         unquote_identifier_component(*database), table_name);
-    }
     return fmt::format("clickhouse.{}", table_name);
-  }
-
-  static auto sql_string_literal(std::string_view text) -> std::string {
-    return "'" + detail::replace_all(std::string{text}, "'", "''") + "'";
-  }
-
-  static auto
-  qualify_table_name(std::string_view table, Option<std::string_view> database)
-    -> std::string {
-    auto split = split_validated_table_name(table);
-    if (split.database or not database) {
-      return std::string{table};
-    }
-    return fmt::format("{}.{}", *database, table);
   }
 
   static auto make_query_plan(FromClickhouseArgs const& args, OpCtx& ctx)
     -> Option<QueryPlan> {
-    if (args.show) {
-      if (args.show->inner == "tables") {
-        if (args.table) {
-          diagnostic::error("`show=\"tables\"` does not support `table`")
-            .primary(args.table->source)
-            .primary(args.show->source)
-            .emit(ctx);
-          return None{};
-        }
-        auto query = std::string{};
-        if (args.database) {
-          query = fmt::format(
-            "SELECT database, name AS table FROM system.tables "
-            "WHERE database = {} AND is_temporary = 0 ORDER BY table",
-            sql_string_literal(
-              unquote_identifier_component(args.database->inner)));
-        } else {
-          query = "SELECT database, name AS table FROM system.tables "
-                  "WHERE database = currentDatabase() AND is_temporary = 0 "
-                  "ORDER BY table";
-        }
-        return QueryPlan{
-          .query = std::move(query),
-          .schema_name = "clickhouse.tables",
-          .default_database
-          = args.database ? unquote_identifier_component(args.database->inner)
-                          : "",
-          .described_table = None{},
-        };
-      }
-      if (args.show->inner == "columns") {
-        TENZIR_ASSERT(args.table);
-        auto database = args.database
-                          ? Option<std::string_view>{args.database->inner}
-                          : None{};
-        auto split = split_validated_table_name(args.table->inner);
-        auto effective_database
-          = split.database ? unquote_identifier_component(*split.database)
-            : database     ? unquote_identifier_component(*database)
-                           : std::string{};
-        auto suffix = make_schema_name_from_table(args.table->inner, database);
-        suffix.erase(0, std::string{"clickhouse."}.size());
-        auto query = std::string{};
-        if (effective_database.empty()) {
-          query = fmt::format(
-            "SELECT name, type FROM system.columns "
-            "WHERE database = currentDatabase() AND table = {} "
-            "ORDER BY position",
-            sql_string_literal(unquote_identifier_component(split.table)));
-        } else {
-          query = fmt::format(
-            "SELECT name, type FROM system.columns "
-            "WHERE database = {} AND table = {} "
-            "ORDER BY position",
-            sql_string_literal(effective_database),
-            sql_string_literal(unquote_identifier_component(split.table)));
-        }
-        return QueryPlan{
-          .query = std::move(query),
-          .schema_name = fmt::format("clickhouse.columns.{}", suffix),
-          .default_database
-          = args.database ? unquote_identifier_component(args.database->inner)
-                          : "",
-          .described_table = None{},
-        };
-      }
-      TENZIR_UNREACHABLE();
-    }
     if (args.sql) {
       return QueryPlan{
         .query = args.sql->inner,
         .schema_name = "clickhouse.query",
-        .default_database
-        = args.database ? unquote_identifier_component(args.database->inner)
-                        : "",
         .described_table = None{},
       };
     }
-    TENZIR_ASSERT(args.table);
-    auto database
-      = args.database ? Option<std::string_view>{args.database->inner} : None{};
-    auto qualified = qualify_table_name(args.table->inner, database);
+    if (not args.table) {
+      diagnostic::error("no query specified")
+        .hint("specify `table` or `sql`")
+        .emit(ctx);
+      return None{};
+    }
+    auto qualified = std::string{args.table->inner};
     return QueryPlan{
       .query = fmt::format("SELECT * FROM {}", qualified),
-      .schema_name = make_schema_name_from_table(args.table->inner, database),
-      .default_database
-      = args.database ? unquote_identifier_component(args.database->inner) : "",
+      .schema_name = make_schema_name_from_table(args.table->inner),
       .described_table = qualified,
     };
   }
@@ -1284,8 +1206,7 @@ private:
     co_return false;
   }
 
-  static auto run_query(Arc<RuntimeState> runtime,
-                        ::clickhouse::ClientOptions options, QueryPlan plan)
+  auto run_query(::clickhouse::ClientOptions options, QueryPlan plan)
     -> Task<void> {
     auto terminal_error = Option<ErrorMessage>{};
     try {
@@ -1303,58 +1224,63 @@ private:
         }
       }
       if (terminal_error) {
-        co_await enqueue_message(*runtime, Message{std::move(*terminal_error)});
+        co_await enqueue_message(*runtime_,
+                                 Message{std::move(*terminal_error)});
         co_return;
       }
       auto failed = false;
       auto query = ::clickhouse::Query{plan.query};
       query.OnDataCancelable([&](::clickhouse::Block const& block) {
-        if (runtime->stop_requested.load(std::memory_order_acquire)) {
+        if (runtime_->stop_requested.load(std::memory_order_acquire)) {
           return false;
         }
         if (block.GetColumnCount() == 0) {
-          return not runtime->stop_requested.load(std::memory_order_acquire);
+          return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
         if (not schema) {
           schema = infer_schema_from_block(block, plan.schema_name, error);
           if (not schema) {
             failed = true;
-            return folly::coro::blockingWait(
-              enqueue_message(*runtime, Message{ErrorMessage{
-                                          .message = std::move(error),
-                                          .add_tls_hints = false,
-                                        }}));
+            runtime_->stop_requested.store(true, std::memory_order_release);
+            std::ignore = folly::coro::blockingWait(
+              enqueue_message(*runtime_, Message{ErrorMessage{
+                                           .message = std::move(error),
+                                           .add_tls_hints = false,
+                                         }}));
+            return false;
           }
         }
         if (block.GetRowCount() == 0) {
-          return not runtime->stop_requested.load(std::memory_order_acquire);
+          return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
         auto slices = block_to_slices(block, *schema, error);
         if (not slices) {
           failed = true;
-          return folly::coro::blockingWait(
-            enqueue_message(*runtime, Message{ErrorMessage{
-                                        .message = std::move(error),
-                                        .add_tls_hints = false,
-                                      }}));
+          runtime_->stop_requested.store(true, std::memory_order_release);
+          std::ignore = folly::coro::blockingWait(
+            enqueue_message(*runtime_, Message{ErrorMessage{
+                                         .message = std::move(error),
+                                         .add_tls_hints = false,
+                                       }}));
+          return false;
         }
         for (auto& slice : *slices) {
           if (not folly::coro::blockingWait(enqueue_message(
-                *runtime, Message{SliceMessage{.slice = std::move(slice)}}))) {
+                *runtime_, Message{SliceMessage{.slice = std::move(slice)}}))) {
             return false;
           }
         }
-        return not runtime->stop_requested.load(std::memory_order_acquire);
+        return not runtime_->stop_requested.load(std::memory_order_acquire);
       });
       client.Select(query);
       if (failed) {
         co_return;
       }
-      if (runtime->stop_requested.load(std::memory_order_acquire)) {
-        std::ignore = runtime->queue.try_enqueue(Message{DoneMessage{}});
+      if (runtime_->stop_requested.load(std::memory_order_acquire)) {
+        std::ignore = runtime_->queue.try_enqueue(Message{DoneMessage{}});
         co_return;
       }
-      co_await enqueue_message(*runtime, Message{DoneMessage{}});
+      co_await enqueue_message(*runtime_, Message{DoneMessage{}});
     } catch (const panic_exception&) {
       throw;
     } catch (const ::clickhouse::ServerError& e) {
@@ -1370,13 +1296,13 @@ private:
       };
     }
     if (terminal_error) {
-      co_await enqueue_message(*runtime, Message{std::move(*terminal_error)});
+      co_await enqueue_message(*runtime_, Message{std::move(*terminal_error)});
     }
     co_return;
   }
 
   FromClickhouseArgs args_;
-  mutable Option<Arc<RuntimeState>> runtime_ = None{};
+  mutable Arc<RuntimeState> runtime_ = Arc<RuntimeState>{std::in_place};
   bool tls_enabled_ = false;
   bool done_ = false;
 };
@@ -1390,13 +1316,11 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<FromClickhouseArgs, FromClickhouse>{};
     auto table_arg = d.named("table", &FromClickhouseArgs::table);
-    auto database_arg = d.named("database", &FromClickhouseArgs::database);
     d.named_optional("host", &FromClickhouseArgs::host);
     auto port_arg = d.named("port", &FromClickhouseArgs::port);
     d.named_optional("user", &FromClickhouseArgs::user);
     d.named_optional("password", &FromClickhouseArgs::password);
     auto sql_arg = d.named("sql", &FromClickhouseArgs::sql);
-    auto show_arg = d.named("show", &FromClickhouseArgs::show);
     auto tls_validate
       = tls_options{}.add_to_describer(d, &FromClickhouseArgs::tls);
     d.operator_location(&FromClickhouseArgs::operator_location);
@@ -1405,19 +1329,14 @@ public:
       tls_validate(ctx);
       auto has_table = ctx.get(table_arg).has_value();
       auto has_sql = ctx.get(sql_arg).has_value();
-      auto has_show = ctx.get(show_arg).has_value();
-      if (not has_table and not has_sql and not has_show) {
+      if (not has_table and not has_sql) {
         diagnostic::error("no query specified")
-          .hint("specify `table`, `sql`, or `show`")
+          .hint("specify `table` or `sql`")
           .emit(ctx);
         return {};
       }
       if (has_sql and has_table) {
         diagnostic::error("`sql` and `table` are mutually exclusive").emit(ctx);
-        return {};
-      }
-      if (has_sql and has_show) {
-        diagnostic::error("`sql` and `show` are mutually exclusive").emit(ctx);
         return {};
       }
       if (auto port = ctx.get(port_arg)) {
@@ -1427,51 +1346,9 @@ public:
             .emit(ctx);
         }
       }
-      if (auto database = ctx.get(database_arg)) {
-        if (not validate_identifier(database->inner)) {
-          emit_invalid_identifier<true>("database", database->inner,
-                                        database->source, ctx);
-          return {};
-        }
-      }
-      auto table_split = Option<split_table_name_result>{};
       if (auto table = ctx.get(table_arg)) {
         if (not validate_table_name<true>(table->inner, table->source, ctx)) {
           return {};
-        }
-        table_split = split_table_name<false>(table->inner, table->source, ctx);
-      }
-      if (auto show = ctx.get(show_arg)) {
-        if (show->inner != "tables" and show->inner != "columns") {
-          diagnostic::error("invalid show mode `{}`", show->inner)
-            .primary(show->source)
-            .hint("expected `tables` or `columns`")
-            .emit(ctx);
-          return {};
-        }
-        if (show->inner == "columns" and not has_table) {
-          diagnostic::error("`show=\"columns\"` requires `table`")
-            .primary(show->source)
-            .emit(ctx);
-          return {};
-        }
-        if (show->inner == "tables" and has_table) {
-          diagnostic::error("`show=\"tables\"` does not support `table`")
-            .primary(ctx.get_location(table_arg).value())
-            .primary(show->source)
-            .emit(ctx);
-          return {};
-        }
-      }
-      if (auto database = ctx.get(database_arg)) {
-        if (table_split and table_split->database
-            and unquote_identifier_component(*table_split->database)
-                  != unquote_identifier_component(database->inner)) {
-          diagnostic::error(
-            "`database` conflicts with the database-qualified `table`")
-            .primary(database->source)
-            .primary(ctx.get_location(table_arg).value())
-            .emit(ctx);
         }
       }
       return {};
