@@ -1,0 +1,9 @@
+let $wanted_subject = "from_nats_read_lines_let_test"
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1 {
+  read_lines
+  where $subject == $wanted_subject
+  subject = $subject
+}

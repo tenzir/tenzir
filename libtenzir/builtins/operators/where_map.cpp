@@ -880,6 +880,13 @@ public:
     return ast::references(predicate_, id);
   }
 
+  auto
+  replace_dollar_vars(std::span<const ast::dollar_var_replacement> replacements)
+    -> bool override {
+    ast::replace_dollar_vars(predicate_, replacements);
+    return true;
+  }
+
   auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Where{std::move(predicate_)};
