@@ -81,7 +81,8 @@ auto resolve_url(OpCtx& ctx, ToFtpArgs const& args, std::string& resolved_url)
 
 auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
             std::string url, transfer_options options,
-            CurlBodySource* body_source, Arc<ResultQueue> results) -> Task<void> {
+            CurlUploadBody* upload_body, Arc<ResultQueue> results)
+  -> Task<void> {
   auto request = http::request{};
   request.uri = std::move(url);
   request.method = "PUT";
@@ -92,16 +93,10 @@ auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
   }
   auto code = tx.handle().set([](std::span<const std::byte>) {});
   TENZIR_ASSERT(code == curl::easy::code::ok);
-  co_await body_source->wait_until_ready();
-  if (body_source->is_aborted()) {
-    // The printer subpipeline failed before the FTP PUT started.
-    co_await results->enqueue(UploadFinished{});
-    co_return;
-  }
-  if (auto err = co_await perform_curl(std::move(io_executor), tx.handle(),
-                                       {.source = body_source});
+  if (auto err = co_await perform_curl_upload(std::move(io_executor),
+                                              tx.handle(), *upload_body);
       err.valid()) {
-    if (body_source->is_aborted()) {
+    if (upload_body->is_aborted()) {
       // A local printer failure aborted an in-flight upload; report the local
       // error instead of a derived curl callback failure.
       co_await results->enqueue(UploadFinished{});
@@ -255,7 +250,7 @@ private:
     done,
   };
 
-  Box<CurlBodySource> upload_body_;
+  Box<CurlUploadBody> upload_body_;
   mutable Arc<ResultQueue> result_queue_;
   ToFtpArgs args_;
   std::string resolved_url_;

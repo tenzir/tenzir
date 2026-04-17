@@ -24,77 +24,98 @@
 
 namespace tenzir {
 
-struct CurlBodyHandlers;
+namespace detail {
+struct CurlBodyAccess;
+} // namespace detail
 
-/// Single-producer, single-consumer byte stream for libcurl read callbacks.
+/// Asynchronously drive a prepared `curl::easy` handle on a Folly IO executor.
+///
+/// This layer owns only the libcurl/Folly integration. Callers are expected to
+/// configure the `curl::easy` handle themselves, either directly via
+/// `tenzir::curl` or through higher-level helpers. Using `transfer` is
+/// optional.
+///
+/// Typical usage:
+/// - For uploads, create a `CurlUploadBody`, spawn a producer task that
+///   repeatedly `push()`es chunks and eventually calls `close()` or `abort()`,
+///   and then `co_await perform_curl_upload(...)`.
+/// - For downloads, create a `CurlDownloadBody`, spawn a consumer task that
+///   repeatedly `pop()`s chunks until it gets `None`, and then
+///   `co_await perform_curl_download(...)`.
+///
+/// In other words, callers should mostly interact with `push()`/`pop()` and
+/// `close()`/`abort()`. The libcurl callback plumbing stays internal to this
+/// module.
+///
+/// Lifetime:
+/// - The `curl::easy` handle and body objects must outlive the returned task.
+/// - The transfer itself is driven on the provided IO executor's EventBase.
+/// - Producer and consumer coroutines may run elsewhere; backpressure is
+///   propagated through libcurl pause/resume callbacks.
+
+/// Single-producer, single-consumer byte stream for libcurl upload callbacks.
 ///
 /// The producer side is asynchronous and can wait for bounded capacity. The
-/// consumer side is synchronous so it can be called directly from
-/// `CURLOPT_READFUNCTION`. When the callback runs out of queued data, it pauses
-/// the transfer instead of blocking.
-class CurlBodySource {
+/// consumer side is synchronous so libcurl can pull data directly from
+/// `CURLOPT_READFUNCTION`. When the callback runs out of queued data, the
+/// transfer pauses instead of blocking an EventBase thread.
+class CurlUploadBody {
 public:
-  explicit CurlBodySource(size_t capacity);
-  ~CurlBodySource();
+  explicit CurlUploadBody(size_t capacity);
+  ~CurlUploadBody();
 
-  CurlBodySource(CurlBodySource const&) = delete;
-  auto operator=(CurlBodySource const&) -> CurlBodySource& = delete;
-  CurlBodySource(CurlBodySource&&) = delete;
-  auto operator=(CurlBodySource&&) -> CurlBodySource& = delete;
+  CurlUploadBody(CurlUploadBody const&) = delete;
+  auto operator=(CurlUploadBody const&) -> CurlUploadBody& = delete;
+  CurlUploadBody(CurlUploadBody&&) = delete;
+  auto operator=(CurlUploadBody&&) -> CurlUploadBody& = delete;
 
   /// Queue a chunk for libcurl to read.
   /// Returns `false` if the stream has already been closed or aborted.
   auto push(chunk_ptr chunk) -> Task<bool>;
 
   /// Signal end-of-stream. Subsequent reads return EOF after buffered data.
+  /// Call this after the last queued chunk was pushed successfully.
   auto close() -> void;
 
-  /// Wait until the stream has buffered data or reached a terminal state.
-  auto wait_until_ready() -> Task<void>;
-
-  /// Returns whether the stream was aborted.
+  /// Returns whether the stream was aborted locally.
   auto is_aborted() -> bool;
 
-  /// Abort the stream. Subsequent reads fail with `CURLE_ABORTED_BY_CALLBACK`.
+  /// Abort the stream because the local producer failed or was cancelled.
+  /// Subsequent reads fail with `CURLE_ABORTED_BY_CALLBACK`.
   auto abort() -> void;
 
-  /// Internal hook for `perform_curl`.
+private:
+  auto wait_until_ready() -> Task<void>;
   auto read(std::span<std::byte> buffer) -> size_t;
-
-  /// Internal hook for `perform_curl`.
   auto set_resume_callback(std::function<void()> callback) -> void;
-
-  /// Internal hook for `perform_curl`.
-  /// Stops producers after the transfer finishes without recording a local
-  /// abort.
   auto terminate() -> void;
 
-private:
   struct Impl;
   Box<Impl> impl_;
 
-  friend struct CurlBodyHandlers;
-  friend auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor>,
-                           curl::easy&, CurlBodyHandlers) -> Task<caf::error>;
+  friend struct detail::CurlBodyAccess;
 };
 
-/// Single-producer, single-consumer byte stream for libcurl write callbacks.
+/// Single-producer, single-consumer byte stream for libcurl download
+/// callbacks.
 ///
-/// The producer side is synchronous so it can be called directly from
+/// The producer side is synchronous so libcurl can call it directly from
 /// `CURLOPT_WRITEFUNCTION`. The consumer side is asynchronous and can apply
 /// backpressure by letting the callback pause the transfer when the bounded
 /// queue is full.
-class CurlBodySink {
+class CurlDownloadBody {
 public:
-  explicit CurlBodySink(size_t capacity);
-  ~CurlBodySink();
+  explicit CurlDownloadBody(size_t capacity);
+  ~CurlDownloadBody();
 
-  CurlBodySink(CurlBodySink const&) = delete;
-  auto operator=(CurlBodySink const&) -> CurlBodySink& = delete;
-  CurlBodySink(CurlBodySink&&) = delete;
-  auto operator=(CurlBodySink&&) -> CurlBodySink& = delete;
+  CurlDownloadBody(CurlDownloadBody const&) = delete;
+  auto operator=(CurlDownloadBody const&) -> CurlDownloadBody& = delete;
+  CurlDownloadBody(CurlDownloadBody&&) = delete;
+  auto operator=(CurlDownloadBody&&) -> CurlDownloadBody& = delete;
 
   /// Receive the next queued chunk. Returns `None` after close or abort.
+  /// Check the result of `perform_curl_download(...)` to distinguish a clean
+  /// end-of-stream from transfer failure.
   auto pop() -> Task<Option<chunk_ptr>>;
 
   /// Abort the stream and wake a blocked consumer.
@@ -103,32 +124,36 @@ public:
   /// Close the stream and wake a blocked consumer.
   auto close() -> void;
 
-  /// Internal hook for `perform_curl`.
+private:
   auto write(std::span<const std::byte> buffer) -> size_t;
-
-  /// Internal hook for `perform_curl`.
   auto set_resume_callback(std::function<void()> callback) -> void;
 
-private:
   struct Impl;
   Box<Impl> impl_;
 
-  friend struct CurlBodyHandlers;
-  friend auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor>,
-                           curl::easy&, CurlBodyHandlers) -> Task<caf::error>;
+  friend struct detail::CurlBodyAccess;
 };
 
-struct CurlBodyHandlers {
-  CurlBodySource* source = nullptr;
-  CurlBodySink* sink = nullptr;
-};
-
-/// Drive a prepared libcurl easy handle from a Folly IO executor.
-///
-/// The handle must outlive the returned task. Optional body handlers integrate
-/// bounded, pause-aware upload and download streams with the transfer.
+/// Drive a prepared curl handle with no streaming body callbacks.
 auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                  curl::easy& handle, CurlBodyHandlers handlers = {})
+                  curl::easy& handle) -> Task<caf::error>;
+
+/// Drive a prepared curl handle with a streaming upload body.
+///
+/// The upload waits until the body has buffered data or reached a terminal
+/// state before it starts the transfer, so callers do not need a separate
+/// readiness barrier. If the body was already aborted at that point, the
+/// function returns without touching the remote peer.
+auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
+                         curl::easy& handle, CurlUploadBody& body)
   -> Task<caf::error>;
+
+/// Drive a prepared curl handle with a streaming download body.
+///
+/// Callers should consume `body.pop()` concurrently while this task is running.
+/// The body is closed automatically when the transfer finishes or fails.
+auto perform_curl_download(
+  folly::Executor::KeepAlive<folly::IOExecutor> executor, curl::easy& handle,
+  CurlDownloadBody& body) -> Task<caf::error>;
 
 } // namespace tenzir
