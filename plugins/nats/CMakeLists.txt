@@ -62,4 +62,6 @@ TenzirRegisterPlugin(
   INCLUDE_DIRECTORIES include)
 
 target_link_libraries(nats PUBLIC ${nats_library})
+target_include_directories(nats BEFORE
+                           PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/compat/libevent2")
 target_link_libraries(nats PUBLIC PkgConfig::Libevent)
