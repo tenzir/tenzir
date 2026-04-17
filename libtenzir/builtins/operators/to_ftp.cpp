@@ -95,7 +95,7 @@ auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
   auto code = tx.handle().set([](std::span<const std::byte>) {});
   TENZIR_ASSERT(code == curl::easy::code::ok);
   auto curl_result = co_await perform_curl_upload(std::move(io_executor),
-                                                   tx.handle(), *upload_body);
+                                                  tx.handle(), *upload_body);
   if (curl_result.is_local_abort()) {
     // A local printer failure aborted the upload; report the local error
     // instead of a derived curl transfer failure.
