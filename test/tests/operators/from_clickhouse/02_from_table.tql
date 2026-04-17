@@ -1,4 +1,4 @@
-from_clickhouse table="fc_one",
+from_clickhouse table="default.fc_one",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),
