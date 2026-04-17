@@ -1,0 +1,8 @@
+from {id: 1, label: "alpha"}
+to_clickhouse table="fc_sql",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

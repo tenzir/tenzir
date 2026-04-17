@@ -1,0 +1,28 @@
+{
+  name: "id",
+  type: "UInt64",
+}
+{
+  name: "addr4",
+  type: "IPv4",
+}
+{
+  name: "addr6",
+  type: "IPv6",
+}
+{
+  name: "uid",
+  type: "UUID",
+}
+{
+  name: "dec",
+  type: "Decimal(18, 2)",
+}
+{
+  name: "stamp",
+  type: "DateTime64(3)",
+}
+{
+  name: "status",
+  type: "Enum8('low' = 1, 'high' = 2)",
+}
