@@ -49,8 +49,7 @@ using namespace tenzir::si_literals;
 
 constexpr auto default_batch_size = uint64_t{1_Ki / 8};
 constexpr auto default_queue_capacity = uint64_t{1_Ki};
-constexpr auto max_queue_capacity
-  = uint64_t{std::numeric_limits<int>::max()};
+constexpr auto max_queue_capacity = uint64_t{std::numeric_limits<int>::max()};
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 constexpr auto direct_read_lines_schema = std::string_view{"tenzir.line"};
 constexpr auto direct_metadata_field = std::string_view{"__tenzir_nats"};
@@ -581,8 +580,7 @@ public:
         [&](IncomingMessage const&) {
           source_->message_slots.signal();
         },
-        [](SubscriptionComplete const&) {},
-        [](FlushDirect const&) {});
+        [](SubscriptionComplete const&) {}, [](FlushDirect const&) {});
     }
     for (auto& message : *batch) {
       co_await process_source_message(std::move(message), push, ctx);
@@ -604,7 +602,7 @@ private:
         } else {
           co_await process_message(std::move(item.msg), ctx);
         }
-        maybe_finish();
+        co_await maybe_finish(ctx);
       },
       [&](SubscriptionComplete complete) -> Task<void> {
         if (not normal_completion(complete.status)
@@ -614,7 +612,7 @@ private:
                             .primary(args_.subject.source),
                           complete.status, ctx.dh());
           subscription_failed_ = true;
-          maybe_finish();
+          co_await maybe_finish(ctx);
         }
         co_return;
       },
@@ -622,7 +620,7 @@ private:
         if (direct_parser_ == DirectParser::read_lines) {
           direct_flush_scheduled_ = false;
           co_await flush_direct_read_lines(push, ctx);
-          maybe_finish();
+          co_await maybe_finish(ctx);
         }
         co_return;
       });
@@ -971,9 +969,12 @@ private:
   }
 
   auto close_direct_tail(OpCtx& ctx) -> Task<void> {
-    if (not direct_tail_active_ or direct_tail_closing_) {
+    if (not direct_tail_active_) {
       done_ = true;
       request_stop();
+      co_return;
+    }
+    if (direct_tail_closing_) {
       co_return;
     }
     auto sub = ctx.get_sub(caf::none);
@@ -1253,8 +1254,7 @@ private:
           source_->message_slots.signal();
           natsMsg_Nak(item.msg.get(), nullptr);
         },
-        [](SubscriptionComplete) {},
-        [](FlushDirect) {});
+        [](SubscriptionComplete) {}, [](FlushDirect) {});
     }
     if (pending_messages == PendingMessages::nak) {
       for (auto& [_, msg] : pending_) {
@@ -1272,24 +1272,27 @@ private:
     }
   }
 
-  auto maybe_finish() -> void {
+  auto maybe_finish(OpCtx& ctx) -> Task<void> {
     if (args_.count and received_ >= args_.count->inner and pending_.empty()
         and pending_direct_.empty()) {
       if (direct_tail_active_ and not direct_tail_finished_) {
-        return;
+        co_await close_direct_tail(ctx);
+        co_return;
       }
       done_ = true;
       request_stop();
-      return;
+      co_return;
     }
     if (subscription_failed_ and pending_.empty() and pending_direct_.empty()
         and source_->queue.empty()) {
       if (direct_tail_active_ and not direct_tail_finished_) {
-        return;
+        co_await close_direct_tail(ctx);
+        co_return;
       }
       done_ = true;
       request_stop();
     }
+    co_return;
   }
 
   FromNatsArgs args_;

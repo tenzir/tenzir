@@ -62,7 +62,8 @@ public:
   /// depends on the operator. For example, the implementation of `if` also
   /// instantiates its subpipelines, but `every` does not.
   virtual auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> = 0;
+    -> failure_or<void>
+    = 0;
 
   /// Returns true if this operator may reference a let binding.
   ///
