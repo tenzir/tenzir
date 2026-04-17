@@ -236,6 +236,9 @@ struct CurlDownloadBody::Impl {
       auto resume = std::function<void()>{};
       {
         auto lock = std::unique_lock{mutex};
+        if (aborted) {
+          co_return None{};
+        }
         if (not buffered.empty()) {
           chunk = std::move(buffered.front());
           buffered.pop_front();
@@ -243,7 +246,7 @@ struct CurlDownloadBody::Impl {
             paused = false;
             resume = resume_callback;
           }
-        } else if (closed or aborted) {
+        } else if (closed) {
           co_return None{};
         }
       }
@@ -271,6 +274,7 @@ struct CurlDownloadBody::Impl {
         return;
       }
       aborted = true;
+      buffered.clear();
       if (paused) {
         paused = false;
         resume = resume_callback;
@@ -768,9 +772,8 @@ auto perform_curl_impl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   auto state_executor = executor;
   auto task = [state_executor = std::move(state_executor), &handle, upload_body,
                download_body]() mutable -> Task<CurlPerformResult> {
-    auto state = std::make_shared<PerformState>(std::move(state_executor),
-                                                handle, upload_body,
-                                                download_body);
+    auto state = std::make_shared<PerformState>(
+      std::move(state_executor), handle, upload_body, download_body);
     state->start();
     co_await state->wait();
     co_return state->take_result();
@@ -798,8 +801,8 @@ auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   if (body.is_aborted()) {
     co_return CurlPerformResult::local_abort();
   }
-  auto result = co_await perform_curl_impl(std::move(executor), handle, &body,
-                                           nullptr);
+  auto result
+    = co_await perform_curl_impl(std::move(executor), handle, &body, nullptr);
   if (body.is_aborted()) {
     co_return CurlPerformResult::local_abort();
   }
@@ -809,8 +812,8 @@ auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 auto perform_curl_download(
   folly::Executor::KeepAlive<folly::IOExecutor> executor, curl::easy& handle,
   CurlDownloadBody& body) -> Task<CurlPerformResult> {
-  auto result = co_await perform_curl_impl(std::move(executor), handle,
-                                           nullptr, &body);
+  auto result
+    = co_await perform_curl_impl(std::move(executor), handle, nullptr, &body);
   if (body.is_aborted()) {
     co_return CurlPerformResult::local_abort();
   }
