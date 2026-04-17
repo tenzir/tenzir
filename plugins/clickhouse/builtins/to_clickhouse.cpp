@@ -152,6 +152,12 @@ public:
       .emit(ctrl.diagnostics());
     co_return;
   } catch (const std::exception& e) {
+    auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                  .primary(args_.operator_location);
+    add_tls_client_diagnostic_hints(std::move(diag),
+                                    args_.ssl.get_tls(&ctrl).inner,
+                                    "ClickHouse", clickhouse_plaintext_port,
+                                    clickhouse_tls_port)
     clickhouse_error_diagnostic(e.what(), args_.operator_location)
       .emit(ctrl.diagnostics());
     co_return;
