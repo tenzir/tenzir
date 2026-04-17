@@ -61,6 +61,26 @@ writers have been dropped, and the writers aware if all readers have been
 dropped. This is important to ensure that partial termination does not lead to
 buffers filling up, or even deadlocks in the case of bounded channels.
 
+## Async curl patterns
+
+The async curl layer is intended to drive a prepared `tenzir::curl::easy`
+handle on a Folly IO executor. It owns the libcurl/Folly integration only; it
+is not coupled to `transfer`.
+
+Use it like this:
+
+- For uploads, create a `CurlUploadBody`, spawn one producer task that
+  `push()`es chunks and eventually calls `close()`.
+- If the local producer fails, call `abort()` on the upload body so libcurl
+  fails the transfer callback instead of hanging.
+- For downloads, create a `CurlDownloadBody`, spawn one consumer task that
+  repeatedly `pop()`s until it gets `None`, and concurrently await
+  `perform_curl_download(...)`.
+- Always run `perform_curl*()` on a `folly::IOExecutor`; the returned task
+  drives libcurl's multi socket/timer API from that executor's `EventBase`.
+- Treat both curl body types as single-producer, single-consumer adapters.
+  They are not general-purpose multi-reader or multi-writer channels.
+
 ## Notes
 
 - Don't use `folly::makePromise()`, as `co_await` does not cancel.

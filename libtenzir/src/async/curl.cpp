@@ -10,14 +10,12 @@
 
 #include "tenzir/async/notify.hpp"
 
-#include <folly/CancellationToken.h>
+#include <curl/curl.h>
 #include <folly/coro/Baton.h>
 #include <folly/coro/Task.h>
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
-
-#include <curl/curl.h>
 
 #include <deque>
 #include <mutex>
@@ -26,7 +24,41 @@
 
 namespace tenzir {
 
-struct CurlBodySource::Impl {
+namespace detail {
+
+struct CurlBodyAccess {
+  static auto wait_until_ready(CurlUploadBody& body) -> Task<void> {
+    co_await body.wait_until_ready();
+  }
+
+  static auto read(CurlUploadBody& body, std::span<std::byte> buffer)
+    -> size_t {
+    return body.read(buffer);
+  }
+
+  static auto set_resume_callback(CurlUploadBody& body,
+                                  std::function<void()> callback) -> void {
+    body.set_resume_callback(std::move(callback));
+  }
+
+  static auto terminate(CurlUploadBody& body) -> void {
+    body.terminate();
+  }
+
+  static auto write(CurlDownloadBody& body, std::span<const std::byte> buffer)
+    -> size_t {
+    return body.write(buffer);
+  }
+
+  static auto set_resume_callback(CurlDownloadBody& body,
+                                  std::function<void()> callback) -> void {
+    body.set_resume_callback(std::move(callback));
+  }
+};
+
+} // namespace detail
+
+struct CurlUploadBody::Impl {
   explicit Impl(size_t capacity) : capacity{capacity} {
     TENZIR_ASSERT(capacity > 0);
   }
@@ -190,7 +222,7 @@ struct CurlBodySource::Impl {
   std::function<void()> resume_callback;
 };
 
-struct CurlBodySink::Impl {
+struct CurlDownloadBody::Impl {
   explicit Impl(size_t capacity) : capacity{capacity} {
     TENZIR_ASSERT(capacity > 0);
   }
@@ -276,68 +308,68 @@ struct CurlBodySink::Impl {
   std::function<void()> resume_callback;
 };
 
-CurlBodySource::CurlBodySource(size_t capacity)
+CurlUploadBody::CurlUploadBody(size_t capacity)
   : impl_{std::in_place, capacity} {
 }
 
-CurlBodySource::~CurlBodySource() = default;
+CurlUploadBody::~CurlUploadBody() = default;
 
-auto CurlBodySource::push(chunk_ptr chunk) -> Task<bool> {
+auto CurlUploadBody::push(chunk_ptr chunk) -> Task<bool> {
   co_return co_await impl_->push(std::move(chunk));
 }
 
-auto CurlBodySource::close() -> void {
+auto CurlUploadBody::close() -> void {
   impl_->close();
 }
 
-auto CurlBodySource::wait_until_ready() -> Task<void> {
+auto CurlUploadBody::wait_until_ready() -> Task<void> {
   co_await impl_->wait_until_ready();
 }
 
-auto CurlBodySource::is_aborted() -> bool {
+auto CurlUploadBody::is_aborted() -> bool {
   return impl_->is_aborted();
 }
 
-auto CurlBodySource::abort() -> void {
+auto CurlUploadBody::abort() -> void {
   impl_->abort();
 }
 
-auto CurlBodySource::terminate() -> void {
+auto CurlUploadBody::terminate() -> void {
   impl_->terminate();
 }
 
-auto CurlBodySource::read(std::span<std::byte> buffer) -> size_t {
+auto CurlUploadBody::read(std::span<std::byte> buffer) -> size_t {
   return impl_->read(buffer);
 }
 
-auto CurlBodySource::set_resume_callback(std::function<void()> callback)
+auto CurlUploadBody::set_resume_callback(std::function<void()> callback)
   -> void {
   impl_->set_resume_callback(std::move(callback));
 }
 
-CurlBodySink::CurlBodySink(size_t capacity)
+CurlDownloadBody::CurlDownloadBody(size_t capacity)
   : impl_{std::in_place, capacity} {
 }
 
-CurlBodySink::~CurlBodySink() = default;
+CurlDownloadBody::~CurlDownloadBody() = default;
 
-auto CurlBodySink::pop() -> Task<Option<chunk_ptr>> {
+auto CurlDownloadBody::pop() -> Task<Option<chunk_ptr>> {
   co_return co_await impl_->pop();
 }
 
-auto CurlBodySink::abort() -> void {
+auto CurlDownloadBody::abort() -> void {
   impl_->abort();
 }
 
-auto CurlBodySink::close() -> void {
+auto CurlDownloadBody::close() -> void {
   impl_->close();
 }
 
-auto CurlBodySink::write(std::span<const std::byte> buffer) -> size_t {
+auto CurlDownloadBody::write(std::span<const std::byte> buffer) -> size_t {
   return impl_->write(buffer);
 }
 
-auto CurlBodySink::set_resume_callback(std::function<void()> callback)
+auto CurlDownloadBody::set_resume_callback(std::function<void()> callback)
   -> void {
   impl_->set_resume_callback(std::move(callback));
 }
@@ -376,18 +408,20 @@ private:
 class PerformState {
 public:
   PerformState(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-               curl::easy& easy, CurlBodyHandlers handlers)
+               curl::easy& easy, CurlUploadBody* upload_body,
+               CurlDownloadBody* download_body)
     : executor_{std::move(executor)},
       evb_{executor_->getEventBase()},
       easy_{easy},
-      handlers_{handlers},
+      upload_body_{upload_body},
+      download_body_{download_body},
       timer_{evb_, *this} {
     TENZIR_ASSERT(evb_ != nullptr);
   }
 
   auto start() -> void {
-    if (handlers_.source) {
-      handlers_.source->set_resume_callback([this]() {
+    if (upload_body_) {
+      detail::CurlBodyAccess::set_resume_callback(*upload_body_, [this]() {
         request_resume_send();
       });
       auto code = easy_.set([this](std::span<std::byte> buffer) -> size_t {
@@ -398,8 +432,8 @@ public:
         return;
       }
     }
-    if (handlers_.sink) {
-      handlers_.sink->set_resume_callback([this]() {
+    if (download_body_) {
+      detail::CurlBodyAccess::set_resume_callback(*download_body_, [this]() {
         request_resume_recv();
       });
       auto code = easy_.set_write_result_callback(
@@ -489,8 +523,8 @@ private:
   }
 
   auto read_from_source(std::span<std::byte> buffer) -> size_t {
-    TENZIR_ASSERT(handlers_.source);
-    auto result = handlers_.source->read(buffer);
+    TENZIR_ASSERT(upload_body_);
+    auto result = detail::CurlBodyAccess::read(*upload_body_, buffer);
     if (result == CURL_READFUNC_PAUSE) {
       paused_send_ = true;
     }
@@ -498,8 +532,8 @@ private:
   }
 
   auto write_to_sink(std::span<const std::byte> buffer) -> size_t {
-    TENZIR_ASSERT(handlers_.sink);
-    auto result = handlers_.sink->write(buffer);
+    TENZIR_ASSERT(download_body_);
+    auto result = detail::CurlBodyAccess::write(*download_body_, buffer);
     if (result == CURL_WRITEFUNC_PAUSE) {
       paused_recv_ = true;
     }
@@ -576,13 +610,13 @@ private:
   }
 
   auto cleanup() -> void {
-    if (handlers_.source) {
-      handlers_.source->set_resume_callback({});
-      handlers_.source->terminate();
+    if (upload_body_) {
+      detail::CurlBodyAccess::set_resume_callback(*upload_body_, {});
+      detail::CurlBodyAccess::terminate(*upload_body_);
     }
-    if (handlers_.sink) {
-      handlers_.sink->set_resume_callback({});
-      handlers_.sink->close();
+    if (download_body_) {
+      detail::CurlBodyAccess::set_resume_callback(*download_body_, {});
+      download_body_->close();
     }
     timer_.update(-1);
     socket_handlers_.clear();
@@ -607,7 +641,8 @@ private:
   folly::Executor::KeepAlive<folly::IOExecutor> executor_;
   folly::EventBase* evb_ = nullptr;
   curl::easy& easy_;
-  CurlBodyHandlers handlers_;
+  CurlUploadBody* upload_body_ = nullptr;
+  CurlDownloadBody* download_body_ = nullptr;
   curl::multi multi_;
   std::unordered_map<curl_socket_t, Box<SocketHandler>> socket_handlers_;
   TimerHandler timer_;
@@ -644,7 +679,8 @@ auto SocketHandler::update(int what) -> void {
   if (what == CURL_POLL_OUT or what == CURL_POLL_INOUT) {
     events |= folly::EventHandler::WRITE;
   }
-  if ((events & (folly::EventHandler::READ | folly::EventHandler::WRITE)) != 0) {
+  if ((events & (folly::EventHandler::READ | folly::EventHandler::WRITE))
+      != 0) {
     registerHandler(events);
   }
 }
@@ -674,18 +710,47 @@ auto TimerHandler::timeoutExpired() noexcept -> void {
 
 } // namespace
 
-auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                  curl::easy& handle, CurlBodyHandlers handlers)
-  -> Task<caf::error> {
+namespace {
+
+auto perform_curl_impl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
+                       curl::easy& handle, CurlUploadBody* upload_body,
+                       CurlDownloadBody* download_body) -> Task<caf::error> {
   auto state_executor = executor;
-  auto task = [state_executor = std::move(state_executor), &handle,
-               handlers]() mutable -> Task<caf::error> {
-    auto state = PerformState{std::move(state_executor), handle, handlers};
+  auto task = [state_executor = std::move(state_executor), &handle, upload_body,
+               download_body]() mutable -> Task<caf::error> {
+    auto state = PerformState{std::move(state_executor), handle, upload_body,
+                              download_body};
     state.start();
     co_await state.wait();
     co_return std::move(state).result();
   };
   co_return co_await folly::coro::co_withExecutor(std::move(executor), task());
+}
+
+} // namespace
+
+auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
+                  curl::easy& handle) -> Task<caf::error> {
+  co_return co_await perform_curl_impl(std::move(executor), handle, nullptr,
+                                       nullptr);
+}
+
+auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
+                         curl::easy& handle, CurlUploadBody& body)
+  -> Task<caf::error> {
+  co_await detail::CurlBodyAccess::wait_until_ready(body);
+  if (body.is_aborted()) {
+    co_return caf::error{};
+  }
+  co_return co_await perform_curl_impl(std::move(executor), handle, &body,
+                                       nullptr);
+}
+
+auto perform_curl_download(
+  folly::Executor::KeepAlive<folly::IOExecutor> executor, curl::easy& handle,
+  CurlDownloadBody& body) -> Task<caf::error> {
+  co_return co_await perform_curl_impl(std::move(executor), handle, nullptr,
+                                       &body);
 }
 
 } // namespace tenzir

@@ -84,7 +84,8 @@ auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
 
 auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
               std::string url, transfer_options options,
-              CurlBodySink* sink, Arc<MessageQueue> queue) -> Task<void> {
+              CurlDownloadBody* download_body, Arc<MessageQueue> queue)
+  -> Task<void> {
   auto request = http::request{};
   request.uri = std::move(url);
   auto tx = transfer{std::move(options)};
@@ -95,12 +96,12 @@ auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
   auto curl_error = caf::error{};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn([&]() -> Task<void> {
-      while (auto chunk = co_await sink->pop()) {
+      while (auto chunk = co_await download_body->pop()) {
         co_await queue->enqueue(Payload{std::move(*chunk)});
       }
     });
-    curl_error = co_await perform_curl(std::move(io_executor), tx.handle(),
-                                       {.sink = sink});
+    curl_error = co_await perform_curl_download(std::move(io_executor),
+                                                tx.handle(), *download_body);
   });
   if (curl_error.valid()) {
     co_await queue->enqueue(TransferFailed{fmt::format("{}", curl_error)});
@@ -146,9 +147,9 @@ public:
     options.default_protocol = "ftp";
     options.ssl = tls;
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
-    ctx.spawn_task(
-      download(ctx.io_executor(), resolved_url_, std::move(options),
-               &*download_body_, message_queue_));
+    ctx.spawn_task(download(ctx.io_executor(), resolved_url_,
+                            std::move(options), &*download_body_,
+                            message_queue_));
     co_return;
   }
 
@@ -235,7 +236,7 @@ private:
     done,
   };
 
-  Box<CurlBodySink> download_body_;
+  Box<CurlDownloadBody> download_body_;
   mutable Arc<MessageQueue> message_queue_;
   FromFtpArgs args_;
   std::string resolved_url_;
