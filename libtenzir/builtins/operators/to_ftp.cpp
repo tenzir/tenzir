@@ -187,15 +187,10 @@ auto feed_upload(Arc<PrinterQueue> input, Arc<UploadBridge> bridge)
   }
 }
 
-auto upload(std::string url, Option<located<data>> tls,
-            caf::actor_system_config const* cfg, Arc<UploadBridge> bridge,
-            Arc<ResultQueue> results) -> Task<void> {
-  auto options = transfer_options{};
-  options.default_protocol = "ftp";
+auto upload(std::string url, transfer_options options,
+            Arc<UploadBridge> bridge, Arc<ResultQueue> results) -> Task<void> {
   auto request = http::request{};
   request.uri = std::move(url);
-  options.ssl = make_tls_options(request.uri, tls);
-  options.ssl.update_from_config(cfg);
   request.method = "PUT";
   auto tx = transfer{std::move(options)};
   if (auto err = tx.prepare(std::move(request)); err.valid()) {
@@ -249,14 +244,18 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto* cfg = std::addressof(ctx.actor_system().config());
+    tls.update_from_config(std::addressof(ctx.actor_system().config()));
+    auto options = transfer_options{};
+    options.default_protocol = "ftp";
+    options.ssl = tls;
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
     ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
                                                 feed_upload(printer_queue_,
                                                             upload_bridge_)));
     ctx.spawn_task(folly::coro::co_withExecutor(
       folly::getGlobalCPUExecutor(),
-      upload(resolved_url_, args_.tls, cfg, upload_bridge_, result_queue_)));
+      upload(resolved_url_, std::move(options), upload_bridge_,
+             result_queue_)));
     co_return;
   }
 
