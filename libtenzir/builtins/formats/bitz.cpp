@@ -127,11 +127,9 @@ public:
         }
         break;
       case State::header:
-        if (remaining != 0) {
-          emit(diagnostic::error("unexpected BITZ header length {}", remaining)
-                 .note("expected {}", sizeof(uint64_t)),
-               ctx.dh());
-        }
+        emit(diagnostic::error("unexpected BITZ header length {}", remaining)
+               .note("expected {}", sizeof(uint64_t)),
+             ctx.dh());
         break;
       case State::message:
         emit(diagnostic::error("unexpected message length {}", remaining)
@@ -212,9 +210,9 @@ private:
     auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(
       input, arrow_ipc_read_options());
     if (not reader_result.ok()) {
-      emit(diagnostic::error(
-             "{}", reader_result.status().ToStringWithoutContextLines())
-             .note("failed to decode BITZ payload as Feather stream"),
+      emit(diagnostic::error("failed to decode BITZ payload as Feather stream")
+             .note("{}",
+                   reader_result.status().ToStringWithoutContextLines()),
            dh);
       co_return;
     }
@@ -222,9 +220,8 @@ private:
     while (true) {
       auto next = reader->ReadNext();
       if (not next.ok()) {
-        emit(diagnostic::error("{}",
-                               next.status().ToStringWithoutContextLines())
-               .note("failed to read record batch from BITZ payload"),
+        emit(diagnostic::error("failed to read record batch from BITZ payload")
+               .note("{}", next.status().ToStringWithoutContextLines()),
              dh);
         co_return;
       }
@@ -249,8 +246,8 @@ private:
     if (not consumed_result.ok()) {
       emit(
         diagnostic::error(
-          "{}", consumed_result.status().ToStringWithoutContextLines())
-          .note("failed to determine how many BITZ payload bytes were consumed"),
+          "failed to determine how many BITZ payload bytes were consumed")
+          .note("{}", consumed_result.status().ToStringWithoutContextLines()),
         dh);
       std::ignore = reader->Close();
       co_return;
@@ -287,9 +284,8 @@ public:
     auto default_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
     if (not default_level.ok()) {
-      emit(diagnostic::error(
-             "{}", default_level.status().ToStringWithoutContextLines())
-             .note("failed to get default Zstd compression level"),
+      emit(diagnostic::error("failed to get default Zstd compression level")
+             .note("{}", default_level.status().ToStringWithoutContextLines()),
            ctx.dh());
       failed_ = true;
       co_return;
@@ -297,9 +293,8 @@ public:
     auto codec_result
       = arrow::util::Codec::Create(arrow::Compression::ZSTD, *default_level);
     if (not codec_result.ok()) {
-      emit(diagnostic::error(
-             "{}", codec_result.status().ToStringWithoutContextLines())
-             .note("failed to create Zstd codec"),
+      emit(diagnostic::error("failed to create Zstd codec")
+             .note("{}", codec_result.status().ToStringWithoutContextLines()),
            ctx.dh());
       failed_ = true;
       co_return;
@@ -354,9 +349,8 @@ private:
     auto sink_result
       = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
     if (not sink_result.ok()) {
-      emit(diagnostic::error("{}",
-                             sink_result.status().ToStringWithoutContextLines())
-             .note("failed to create BufferOutputStream"),
+      emit(diagnostic::error("failed to create BufferOutputStream")
+             .note("{}", sink_result.status().ToStringWithoutContextLines()),
            dh);
       return None{};
     }
@@ -367,32 +361,30 @@ private:
     auto writer_result
       = arrow::ipc::MakeStreamWriter(sink, batch->schema(), write_options);
     if (not writer_result.ok()) {
-      emit(diagnostic::error(
-             "{}", writer_result.status().ToStringWithoutContextLines())
-             .note("failed to initialize Feather stream writer"),
+      emit(diagnostic::error("failed to initialize Feather stream writer")
+             .note("{}", writer_result.status().ToStringWithoutContextLines()),
            dh);
       return None{};
     }
     auto writer = writer_result.MoveValueUnsafe();
     auto write_status = writer->WriteRecordBatch(*batch);
     if (not write_status.ok()) {
-      emit(diagnostic::error("{}", write_status.ToStringWithoutContextLines())
-             .note("failed to write record batch"),
+      emit(diagnostic::error("failed to write record batch")
+             .note("{}", write_status.ToStringWithoutContextLines()),
            dh);
       return None{};
     }
     auto close_status = writer->Close();
     if (not close_status.ok()) {
-      emit(diagnostic::error("{}", close_status.ToStringWithoutContextLines())
-             .note("failed to close Feather stream writer"),
+      emit(diagnostic::error("failed to close Feather stream writer")
+             .note("{}", close_status.ToStringWithoutContextLines()),
            dh);
       return None{};
     }
     auto buffer_result = sink->Finish();
     if (not buffer_result.ok()) {
-      emit(diagnostic::error(
-             "{}", buffer_result.status().ToStringWithoutContextLines())
-             .note("failed to finish Feather stream"),
+      emit(diagnostic::error("failed to finish Feather stream")
+             .note("{}", buffer_result.status().ToStringWithoutContextLines()),
            dh);
       return None{};
     }
@@ -406,7 +398,9 @@ private:
 
 class bitz_parser final : public plugin_parser {
 public:
-  bitz_parser() = default;
+  explicit bitz_parser(location operator_location = location::unknown)
+    : operator_location_{operator_location} {
+  }
 
   auto name() const -> std::string override {
     return "bitz";
@@ -416,8 +410,9 @@ public:
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
     return std::invoke(
-      [](auto byte_reader,
-         operator_control_plane& ctrl) -> generator<table_slice> {
+      [operator_location = operator_location_](
+        auto byte_reader,
+        operator_control_plane& ctrl) -> generator<table_slice> {
         while (true) {
           auto magic = byte_reader(BITZ_MAGIC.size());
           while (not magic) {
@@ -426,19 +421,21 @@ public:
           }
           if (magic->size() < BITZ_MAGIC.size()) {
             if (magic->size() != 0) {
-              diagnostic::error("unexpected BITZ magic length {}",
-                                magic->size())
-                .note("expected {}", BITZ_MAGIC.size())
-                .emit(ctrl.diagnostics());
+              emit_with_location(
+                diagnostic::error("unexpected BITZ magic length {}",
+                                  magic->size())
+                  .note("expected {}", BITZ_MAGIC.size()),
+                operator_location, ctrl.diagnostics());
             }
             co_return;
           }
           if (std::memcmp(magic->data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
               != 0) {
-            diagnostic::error("unexpected BITZ magic")
-              .note("expected {}",
-                    std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
-              .emit(ctrl.diagnostics());
+            emit_with_location(
+              diagnostic::error("unexpected BITZ magic")
+                .note("expected {}",
+                      std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()}),
+              operator_location, ctrl.diagnostics());
           }
           auto header = byte_reader(sizeof(uint64_t));
           while (not header) {
@@ -446,12 +443,11 @@ public:
             header = byte_reader(sizeof(uint64_t));
           }
           if (header->size() < sizeof(uint64_t)) {
-            if (header->size() != 0) {
+            emit_with_location(
               diagnostic::error("unexpected BITZ header length {}",
                                 header->size())
-                .note("expected {}", sizeof(uint64_t))
-                .emit(ctrl.diagnostics());
-            }
+                .note("expected {}", sizeof(uint64_t)),
+              operator_location, ctrl.diagnostics());
             co_return;
           }
           auto message_length = uint64_t{};
@@ -463,9 +459,11 @@ public:
             message = byte_reader(message_length);
           }
           if (message->size() < message_length) {
-            diagnostic::error("unexpected message length {}", message->size())
-              .note("expected {}", message_length)
-              .emit(ctrl.diagnostics());
+            emit_with_location(
+              diagnostic::error("unexpected message length {}",
+                                message->size())
+                .note("expected {}", message_length),
+              operator_location, ctrl.diagnostics());
             co_return;
           }
           auto parser
@@ -491,8 +489,12 @@ public:
   }
 
   friend auto inspect(auto& f, bitz_parser& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(
+      f.field("operator_location", x.operator_location_));
   }
+
+private:
+  location operator_location_ = location::unknown;
 };
 
 class bitz_printer final : public plugin_printer {
@@ -565,10 +567,11 @@ class plugin final : public virtual parser_plugin<bitz_parser>,
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
+    auto operator_location = p.current_span();
     auto parser = argument_parser{"bitz", "https://docs.tenzir.com/"
                                           "formats/bitz"};
     parser.parse(p);
-    return std::make_unique<bitz_parser>();
+    return std::make_unique<bitz_parser>(operator_location);
   }
 
   auto parse_printer(parser_interface& p) const
