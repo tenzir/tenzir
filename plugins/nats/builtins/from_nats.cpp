@@ -401,15 +401,15 @@ public:
         maybe_finish();
       },
       [&](SubscriptionComplete complete) -> Task<void> {
-        subscription_done_ = true;
         if (not normal_completion(complete.status)
             and complete.status != NATS_OK) {
           emit_nats_error(diagnostic::error("NATS subscription ended with "
                                             "error")
                             .primary(args_.subject.source),
                           complete.status, ctx.dh());
+          subscription_failed_ = true;
+          maybe_finish();
         }
-        maybe_finish();
         co_return;
       });
   }
@@ -513,7 +513,7 @@ private:
       request_stop();
       return;
     }
-    if (subscription_done_ and pending_.empty() and source_->queue.empty()) {
+    if (subscription_failed_ and pending_.empty() and source_->queue.empty()) {
       done_ = true;
       request_stop();
     }
@@ -529,7 +529,7 @@ private:
   MetricsCounter read_bytes_counter_;
   uint64_t next_msg_id_ = 0;
   uint64_t received_ = 0;
-  bool subscription_done_ = false;
+  bool subscription_failed_ = false;
   bool done_ = false;
 };
 

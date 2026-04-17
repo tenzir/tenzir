@@ -219,6 +219,7 @@ RUN apt-get update && \
       libcap2-bin \
       libdouble-conversion3 \
       libevent-2.1-7 \
+      libevent-pthreads-2.1-7 \
       libflatbuffers23.5.26 \
       libfmt10 \
       libgoogle-glog0v6 \
