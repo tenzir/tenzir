@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from_clickhouse sql="SELECT toDate32('2263-01-01') AS too_late",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
