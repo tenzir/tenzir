@@ -211,8 +211,7 @@ private:
       input, arrow_ipc_read_options());
     if (not reader_result.ok()) {
       emit(diagnostic::error("failed to decode BITZ payload as Feather stream")
-             .note("{}",
-                   reader_result.status().ToStringWithoutContextLines()),
+             .note("{}", reader_result.status().ToStringWithoutContextLines()),
            dh);
       co_return;
     }
@@ -244,11 +243,11 @@ private:
     }
     auto consumed_result = input->Tell();
     if (not consumed_result.ok()) {
-      emit(
-        diagnostic::error(
-          "failed to determine how many BITZ payload bytes were consumed")
-          .note("{}", consumed_result.status().ToStringWithoutContextLines()),
-        dh);
+      emit(diagnostic::error("failed to determine how many BITZ payload bytes "
+                             "were consumed")
+             .note("{}",
+                   consumed_result.status().ToStringWithoutContextLines()),
+           dh);
       std::ignore = reader->Close();
       co_return;
     }
@@ -421,11 +420,11 @@ public:
           }
           if (magic->size() < BITZ_MAGIC.size()) {
             if (magic->size() != 0) {
-              emit_with_location(
-                diagnostic::error("unexpected BITZ magic length {}",
-                                  magic->size())
-                  .note("expected {}", BITZ_MAGIC.size()),
-                operator_location, ctrl.diagnostics());
+              emit_with_location(diagnostic::error("unexpected BITZ magic "
+                                                   "length {}",
+                                                   magic->size())
+                                   .note("expected {}", BITZ_MAGIC.size()),
+                                 operator_location, ctrl.diagnostics());
             }
             co_return;
           }
@@ -443,11 +442,11 @@ public:
             header = byte_reader(sizeof(uint64_t));
           }
           if (header->size() < sizeof(uint64_t)) {
-            emit_with_location(
-              diagnostic::error("unexpected BITZ header length {}",
-                                header->size())
-                .note("expected {}", sizeof(uint64_t)),
-              operator_location, ctrl.diagnostics());
+            emit_with_location(diagnostic::error("unexpected BITZ header "
+                                                 "length {}",
+                                                 header->size())
+                                 .note("expected {}", sizeof(uint64_t)),
+                               operator_location, ctrl.diagnostics());
             co_return;
           }
           auto message_length = uint64_t{};
@@ -459,11 +458,10 @@ public:
             message = byte_reader(message_length);
           }
           if (message->size() < message_length) {
-            emit_with_location(
-              diagnostic::error("unexpected message length {}",
-                                message->size())
-                .note("expected {}", message_length),
-              operator_location, ctrl.diagnostics());
+            emit_with_location(diagnostic::error("unexpected message length {}",
+                                                 message->size())
+                                 .note("expected {}", message_length),
+                               operator_location, ctrl.diagnostics());
             co_return;
           }
           auto parser
