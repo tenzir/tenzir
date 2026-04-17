@@ -43,6 +43,25 @@ namespace tenzir::plugins::feather {
 
 namespace {
 
+auto has_location(diagnostic const& diag) -> bool {
+  for (auto const& annotation : diag.annotations) {
+    if (annotation.source != location::unknown) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <class DiagnosticBuilder, class DiagnosticHandler>
+auto emit_with_location(DiagnosticBuilder&& diag, DiagnosticHandler& dh,
+                        location operator_location) -> void {
+  if (operator_location and not has_location(diag.inner())) {
+    diag.inner().annotations.emplace_back(true, std::string{},
+                                          operator_location);
+  }
+  std::forward<DiagnosticBuilder>(diag).emit(dh);
+}
+
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
@@ -617,7 +636,9 @@ private:
   feather_options options_;
 };
 
-struct ReadFeatherArgs {};
+struct ReadFeatherArgs {
+  location operator_location = location::unknown;
+};
 
 class ReadFeather final : public Operator<chunk_ptr, table_slice> {
 public:
@@ -640,10 +661,11 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     if (not done_ and available() != 0) {
-      diagnostic::warning("truncated {} trailing bytes",
-                          truncated_bytes_ + available())
-        .severity(decoded_once_ ? severity::warning : severity::error)
-        .emit(ctx.dh());
+      emit_with_location(
+        diagnostic::warning("truncated Feather input")
+          .note("discarded {} trailing bytes", truncated_bytes_ + available())
+          .severity(decoded_once_ ? severity::warning : severity::error),
+        ctx.dh(), args_.operator_location);
     }
     co_return FinalizeBehavior::done;
   }
@@ -709,9 +731,11 @@ private:
       truncated_bytes_ += payload->size();
       auto decode_result = stream_decoder_->Consume(as_arrow_buffer(payload));
       if (not decode_result.ok()) {
-        diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
-          .note("failed to decode the byte stream into a record batch")
-          .emit(dh);
+        emit_with_location(
+          diagnostic::error("failed to decode Feather input")
+            .note("{}", decode_result.ToStringWithoutContextLines())
+            .note("failed to decode the byte stream into a record batch"),
+          dh, args_.operator_location);
         done_ = true;
         co_return;
       }
@@ -727,9 +751,11 @@ private:
             or std::find(metadata->keys().begin(), metadata->keys().end(),
                          "TENZIR:name:0")
                  == metadata->keys().end()) {
-          diagnostic::error("not implemented")
-            .note("cannot convert Feather without Tenzir metadata")
-            .emit(dh);
+          emit_with_location(
+            diagnostic::error("missing Tenzir metadata in Feather input")
+              .note("cannot convert Feather without the `TENZIR:name:0` "
+                    "metadata entry"),
+            dh, args_.operator_location);
           done_ = true;
           co_return;
         }
@@ -738,7 +764,7 @@ private:
     }
   }
 
-  [[maybe_unused]] ReadFeatherArgs args_;
+  ReadFeatherArgs args_;
   chunk_ptr buffer_ = chunk::make_empty();
   size_t offset_ = 0;
   size_t truncated_bytes_ = 0;
@@ -749,13 +775,15 @@ private:
 };
 
 struct WriteFeatherArgs {
+  location operator_location = location::unknown;
   Option<located<int64_t>> compression_level;
   Option<located<std::string>> compression_type;
   Option<located<double>> min_space_savings;
 };
 
+template <class DiagnosticHandler>
 auto make_feather_write_options(WriteFeatherArgs const& args,
-                                diagnostic_handler& dh)
+                                DiagnosticHandler& dh)
   -> failure_or<arrow::ipc::IpcWriteOptions> {
   auto result = arrow::ipc::IpcWriteOptions::Defaults();
   if (not args.compression_type) {
@@ -773,15 +801,22 @@ auto make_feather_write_options(WriteFeatherArgs const& args,
     }
     return result;
   }
+  if (args.min_space_savings
+      and (args.min_space_savings->inner < 0.0
+           or args.min_space_savings->inner > 1.0)) {
+    diagnostic::error("min space savings must be between 0 and 1")
+      .primary(args.min_space_savings->source)
+      .emit(dh);
+    return failure::promise();
+  }
   auto const& compression_type = args.compression_type->inner;
   if (compression_type != "uncompressed" and compression_type != "lz4"
       and compression_type != "zstd") {
     auto parse_result
       = arrow::util::Codec::GetCompressionType(compression_type);
     if (not parse_result.ok()) {
-      diagnostic::error("{}",
-                        parse_result.status().ToStringWithoutContextLines())
-        .note("failed to parse compression type")
+      diagnostic::error("invalid Feather compression type")
+        .note("{}", parse_result.status().ToStringWithoutContextLines())
         .note("must be `uncompressed`, `lz4`, or `zstd`")
         .primary(args.compression_type->source)
         .emit(dh);
@@ -804,9 +839,8 @@ auto make_feather_write_options(WriteFeatherArgs const& args,
     compression_type_result.MoveValueUnsafe(), compression_level);
   if (not codec_result.ok()) {
     auto diagnostic
-      = diagnostic::error("{}",
-                          codec_result.status().ToStringWithoutContextLines())
-          .note("failed to create codec")
+      = diagnostic::error("failed to create Feather codec")
+          .note("{}", codec_result.status().ToStringWithoutContextLines())
           .primary(args.compression_type->source);
     if (args.compression_level) {
       diagnostic
@@ -838,29 +872,31 @@ public:
         co_return;
       }
     } else if (*schema_ != input.schema()) {
-      diagnostic::error("`feather` writer does not support heterogeneous "
-                        "outputs")
-        .note("cannot initialize for schema `{}` after schema `{}`",
-              input.schema(), *schema_)
-        .emit(ctx.dh());
+      emit_with_location(
+        diagnostic::error("`feather` writer does not support heterogeneous "
+                          "outputs")
+          .note("cannot initialize for schema `{}` after schema `{}`",
+                input.schema(), *schema_),
+        ctx.dh(), args_.operator_location);
       done_ = true;
       co_return;
     }
     auto has_secrets = false;
     std::tie(has_secrets, input) = replace_secrets(std::move(input));
     if (has_secrets) {
-      diagnostic::warning("`secret` is serialized as text")
-        .note("fields will be `\"***\"`")
-        .emit(ctx.dh());
+      emit_with_location(diagnostic::warning("`secret` is serialized as text")
+                           .note("fields will be `\"***\"`"),
+                         ctx.dh(), args_.operator_location);
     }
     auto batch = to_record_batch(input);
     auto validate_status = batch->Validate();
     TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
     auto write_status = writer_->WriteRecordBatch(*batch);
     if (not write_status.ok()) {
-      diagnostic::error("{}", write_status.ToStringWithoutContextLines())
-        .note("failed to write record batch")
-        .emit(ctx.dh());
+      emit_with_location(
+        diagnostic::error("failed to write Feather record batch")
+          .note("{}", write_status.ToStringWithoutContextLines()),
+        ctx.dh(), args_.operator_location);
       done_ = true;
       co_return;
     }
@@ -874,13 +910,13 @@ public:
     }
     auto close_status = writer_->Close();
     if (not close_status.ok()) {
-      diagnostic::error("{}", close_status.ToStringWithoutContextLines())
-        .note("failed to close stream")
-        .emit(ctx.dh());
+      emit_with_location(
+        diagnostic::error("failed to close Feather output stream")
+          .note("{}", close_status.ToStringWithoutContextLines()),
+        ctx.dh(), args_.operator_location);
       done_ = true;
       co_return FinalizeBehavior::done;
     }
-    writer_.reset();
     co_await emit_buffer(push, ctx.dh(), false);
     co_return FinalizeBehavior::done;
   }
@@ -894,10 +930,10 @@ private:
     auto sink_result
       = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
     if (not sink_result.ok()) {
-      diagnostic::error("{}",
-                        sink_result.status().ToStringWithoutContextLines())
-        .note("failed to create BufferOutputStream")
-        .emit(dh);
+      emit_with_location(
+        diagnostic::error("failed to create Feather buffer output stream")
+          .note("{}", sink_result.status().ToStringWithoutContextLines()),
+        dh, args_.operator_location);
       return false;
     }
     auto write_options = make_feather_write_options(args_, dh);
@@ -907,9 +943,11 @@ private:
     auto stream_writer_result = arrow::ipc::MakeStreamWriter(
       sink_result.ValueUnsafe(), schema.to_arrow_schema(), *write_options);
     if (not stream_writer_result.ok()) {
-      diagnostic::error(
-        "{}", stream_writer_result.status().ToStringWithoutContextLines())
-        .emit(dh);
+      emit_with_location(
+        diagnostic::error("failed to create Feather stream writer")
+          .note("{}",
+                stream_writer_result.status().ToStringWithoutContextLines()),
+        dh, args_.operator_location);
       return false;
     }
     schema_ = std::move(schema);
@@ -922,10 +960,10 @@ private:
     -> Task<void> {
     auto buffer_result = sink_->Finish();
     if (not buffer_result.ok()) {
-      diagnostic::error("{}",
-                        buffer_result.status().ToStringWithoutContextLines())
-        .note("failed to finish stream")
-        .emit(dh);
+      emit_with_location(
+        diagnostic::error("failed to finish Feather output stream")
+          .note("{}", buffer_result.status().ToStringWithoutContextLines()),
+        dh, args_.operator_location);
       done_ = true;
       co_return;
     }
@@ -939,9 +977,10 @@ private:
     }
     auto reset_result = sink_->Reset(1024, arrow_memory_pool());
     if (not reset_result.ok()) {
-      diagnostic::error("{}", reset_result.ToStringWithoutContextLines())
-        .note("failed to reset stream")
-        .emit(dh);
+      emit_with_location(
+        diagnostic::error("failed to reset Feather output stream")
+          .note("{}", reset_result.ToStringWithoutContextLines()),
+        dh, args_.operator_location);
       done_ = true;
     }
   }
@@ -1010,6 +1049,7 @@ class read_plugin final
 public:
   auto describe() const -> Description override {
     auto d = Describer<ReadFeatherArgs, ReadFeather>{};
+    d.operator_location(&ReadFeatherArgs::operator_location);
     return d.without_optimize();
   }
 
@@ -1030,6 +1070,7 @@ class write_plugin final
 public:
   auto describe() const -> Description override {
     auto d = Describer<WriteFeatherArgs, WriteFeather>{};
+    d.operator_location(&WriteFeatherArgs::operator_location);
     auto compression_level
       = d.named("compression_level", &WriteFeatherArgs::compression_level);
     auto compression_type
@@ -1037,52 +1078,11 @@ public:
     auto min_space_savings
       = d.named("min_space_savings", &WriteFeatherArgs::min_space_savings);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto type = ctx.get(compression_type)) {
-        if (type->inner != "uncompressed" and type->inner != "lz4"
-            and type->inner != "zstd") {
-          auto parse_result
-            = arrow::util::Codec::GetCompressionType(type->inner);
-          if (not parse_result.ok()) {
-            diagnostic::error(
-              "{}", parse_result.status().ToStringWithoutContextLines())
-              .note("failed to parse compression type")
-              .note("must be `uncompressed`, `lz4`, or `zstd`")
-              .primary(type->source)
-              .emit(ctx);
-          } else {
-            diagnostic::error("unsupported Feather compression type `{}`",
-                              type->inner)
-              .note("must be `uncompressed`, `lz4`, or `zstd`")
-              .primary(type->source)
-              .emit(ctx);
-          }
-        } else {
-          auto codec_type = arrow::util::Codec::GetCompressionType(type->inner);
-          TENZIR_ASSERT(codec_type.ok());
-          auto level = ctx.get(compression_level);
-          auto compression_level_value
-            = level ? level->inner : arrow::util::kUseDefaultCompressionLevel;
-          auto codec_result = arrow::util::Codec::Create(
-            codec_type.MoveValueUnsafe(), compression_level_value);
-          if (not codec_result.ok()) {
-            auto diagnostic
-              = diagnostic::error(
-                  "{}", codec_result.status().ToStringWithoutContextLines())
-                  .note("failed to create codec")
-                  .primary(type->source);
-            if (level) {
-              diagnostic = std::move(diagnostic).primary(level->source);
-            }
-            std::move(diagnostic).emit(ctx);
-          }
-        }
-      }
-      if (auto savings = ctx.get(min_space_savings);
-          savings and (savings->inner < 0.0 or savings->inner > 1.0)) {
-        diagnostic::error("min space savings must be between 0 and 1")
-          .primary(savings->source)
-          .emit(ctx);
-      }
+      auto args = WriteFeatherArgs{};
+      args.compression_level = ctx.get(compression_level);
+      args.compression_type = ctx.get(compression_type);
+      args.min_space_savings = ctx.get(min_space_savings);
+      std::ignore = make_feather_write_options(args, ctx);
       return {};
     });
     return d.without_optimize();
