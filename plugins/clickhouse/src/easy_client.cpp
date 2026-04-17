@@ -30,7 +30,7 @@ auto easy_client::remote_check_exists(std::string_view object_kind,
                                       std::string_view object_name)
   -> failure_or<bool> {
   auto query = Query{fmt::format("EXISTS {} {}", object_kind, object_name)};
-  auto exists = std::optional<bool>{};
+  auto exists = Option<bool>{};
   auto ok = true;
   auto emit_unexpected = [&](std::string_view note) {
     diagnostic::error("unexpected clickhouse response")
@@ -186,7 +186,7 @@ auto easy_client::ensure_transformations(const tenzir::record_type& schema,
       it != transformations_.end()) {
     return &it.value();
   }
-  auto qualified_database = std::optional<std::string_view>{};
+  auto qualified_database = Option<std::string_view>{};
   if (auto split
       = split_table_name<true>(table_name, args_.table.get_location(), dh_)) {
     qualified_database = split->database;
