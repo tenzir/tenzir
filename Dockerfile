@@ -226,6 +226,7 @@ RUN apt-get update && \
       libhttp-parser2.9 \
       libmaxminddb0 \
       libmimalloc3 \
+      libnats3.10 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \

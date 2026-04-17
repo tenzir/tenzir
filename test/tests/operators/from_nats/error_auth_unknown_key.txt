@@ -1,0 +1,7 @@
+error: unknown key `foo` in `auth` record
+ --> tests/operators/from_nats/error_auth_unknown_key.tql:6:16
+  |
+6 |           auth={foo: "bar"} {
+  |                ^^^^^^^^^^^^ 
+  |
+  = hint: valid keys are: user, password, token, credentials, seed, credentials_memory

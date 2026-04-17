@@ -37,6 +37,7 @@ let
       libunwind,
       xxHash,
       rabbitmq-c,
+      nats-c,
       yaml-cpp,
       yara,
       jansson,
@@ -93,6 +94,7 @@ let
         "plugins/gcs"
         "plugins/google-cloud-pubsub"
         "plugins/kafka"
+        "plugins/nats"
         "plugins/nic"
         "plugins/parquet"
         "plugins/s3"
@@ -235,6 +237,7 @@ let
             fluent-bit
             libpcap
             libunwind
+            nats-c
             rabbitmq-c
             rdkafka
             cyrus_sasl

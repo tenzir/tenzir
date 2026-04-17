@@ -36,6 +36,7 @@ apt-get -y --no-install-recommends install \
   libgrpc++-dev \
   libmaxminddb-dev \
   libmimalloc-dev \
+  libnats-dev \
   libpcap-dev tcpdump \
   libprotobuf-dev \
   librabbitmq-dev \

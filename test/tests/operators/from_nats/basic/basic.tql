@@ -1,0 +1,15 @@
+// Consume seeded JetStream messages and expose NATS metadata as dollar vars.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=2 {
+  read_lines
+  subject = $subject
+  has_reply = $reply != null
+  stream = $stream
+  consumer = $consumer
+  stream_sequence = $stream_sequence
+  consumer_sequence = $consumer_sequence
+  num_delivered = $num_delivered
+}
+sort stream_sequence

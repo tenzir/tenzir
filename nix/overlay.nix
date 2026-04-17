@@ -33,6 +33,7 @@ in
   arrow-adbc-go = prevPkgs.callPackage ./arrow-adbc-go { };
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
   fluent-bit = prevPkgs.callPackage ./fluent-bit { };
+  nats-c = prevPkgs.callPackage ./nats-c { };
   pfs = prevPkgs.callPackage ./pfs { };
   proxygen = finalPkgs.callPackage ./proxygen { };
   speeve = prevPkgs.callPackage ./speeve { };

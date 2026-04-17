@@ -1,0 +1,12 @@
+// Smoke-test the fixture by consuming one seeded JetStream message.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1 {
+  read_lines
+  subject = $subject
+  stream = $stream
+  consumer = $consumer
+  stream_sequence = $stream_sequence
+  num_delivered = $num_delivered
+}
