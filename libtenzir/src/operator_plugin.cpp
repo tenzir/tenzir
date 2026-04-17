@@ -613,6 +613,11 @@ public:
         return true;
       }
     }
+    for (auto const& expr : filter_) {
+      if (ast::references(expr, id)) {
+        return true;
+      }
+    }
     return pipeline_ and pipeline_->pipeline.inner.references(id);
   }
 

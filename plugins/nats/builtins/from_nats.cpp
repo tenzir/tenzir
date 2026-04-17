@@ -51,7 +51,7 @@ using namespace tenzir::si_literals;
 constexpr auto default_batch_size = uint64_t{1_Ki / 8};
 constexpr auto default_queue_capacity = uint64_t{1_Ki};
 constexpr auto max_queue_capacity
-  = uint64_t{std::numeric_limits<uint32_t>::max()} - 1;
+  = uint64_t{std::numeric_limits<uint32_t>::max()} - 2;
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 constexpr auto direct_read_lines_schema = std::string_view{"tenzir.line"};
 constexpr auto direct_metadata_field = std::string_view{"__tenzir_nats"};
@@ -145,12 +145,15 @@ using js_consumer_info_ptr
 
 struct SourceState {
   explicit SourceState(uint64_t capacity)
-    : queue{detail::narrow_cast<uint32_t>(capacity + 1)},
+    : queue{detail::narrow_cast<uint32_t>(capacity + 2)},
       message_slots{capacity} {
   }
 
+  // The queue has `message_slots` plus one slot for a delayed direct flush and
+  // one slot for the first terminal completion.
   SourceQueue queue;
   folly::fibers::Semaphore message_slots;
+  folly::fibers::Semaphore flush_slots{1};
   Atomic<bool> stopping = false;
   Atomic<bool> terminal_completion_queued = false;
 };
@@ -393,7 +396,13 @@ auto schedule_direct_flush(Arc<SourceState> source,
   if (source->stopping.load(std::memory_order_acquire)) {
     co_return;
   }
-  source->queue.try_enqueue(SourceMessage{FlushDirect{}});
+  if (not source->flush_slots.try_wait()) {
+    co_return;
+  }
+  if (source->queue.try_enqueue(SourceMessage{FlushDirect{}})) {
+    co_return;
+  }
+  source->flush_slots.signal();
 }
 
 auto set_auth_value(auth_config& auth, std::string const& key,
@@ -617,7 +626,10 @@ public:
         [&](IncomingMessage const&) {
           source_->message_slots.signal();
         },
-        [](SubscriptionComplete const&) {}, [](FlushDirect const&) {});
+        [](SubscriptionComplete const&) {},
+        [&](FlushDirect const&) {
+          source_->flush_slots.signal();
+        });
     }
     for (auto& message : *batch) {
       co_await process_source_message(std::move(message), push, ctx);
@@ -1282,7 +1294,10 @@ private:
           source_->message_slots.signal();
           natsMsg_Nak(item.msg.get(), nullptr);
         },
-        [](SubscriptionComplete) {}, [](FlushDirect) {});
+        [](SubscriptionComplete) {},
+        [&](FlushDirect) {
+          source_->flush_slots.signal();
+        });
     }
     if (pending_messages == PendingMessages::nak) {
       for (auto& [_, msg] : pending_) {
