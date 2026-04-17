@@ -24,6 +24,7 @@ NATS_IMAGE = "nats:2.12-alpine"
 NATS_BOX_IMAGE = "natsio/nats-box:0.18.0"
 MEBIBYTE = 1024 * 1024
 MSG_RATE_PATTERN = re.compile(r"(?P<rate>\d[\d,]*(?:\.\d+)?)\s+msgs/sec")
+SENDER_INPUTS = ("lines", "ndjson")
 
 
 @dataclass(frozen=True)
@@ -220,7 +221,21 @@ def create_stream(
     )
 
 
-def write_dataset(path: Path, case: Case) -> int:
+def write_lines_dataset(path: Path, case: Case) -> int:
+    payload = b"x" * case.payload_size
+    line = payload + b"\n"
+    chunk_size = 4096
+    with path.open("wb") as output:
+        whole_chunks, remainder = divmod(case.events, chunk_size)
+        chunk = line * chunk_size
+        for _ in range(whole_chunks):
+            output.write(chunk)
+        if remainder:
+            output.write(line * remainder)
+    return path.stat().st_size
+
+
+def write_ndjson_dataset(path: Path, case: Case) -> int:
     payload = "x" * case.payload_size
     row = json.dumps({"message": payload}, separators=(",", ":")).encode()
     line = row + b"\n"
@@ -235,6 +250,14 @@ def write_dataset(path: Path, case: Case) -> int:
     return path.stat().st_size
 
 
+def write_dataset(path: Path, case: Case, sender_input: str) -> int:
+    if sender_input == "lines":
+        return write_lines_dataset(path, case)
+    if sender_input == "ndjson":
+        return write_ndjson_dataset(path, case)
+    raise ValueError(f"unsupported sender input: {sender_input}")
+
+
 def write_sender_tql(
     *,
     path: Path,
@@ -242,15 +265,24 @@ def write_sender_tql(
     subject: str,
     url: str,
     max_pending: int,
+    sender_input: str,
 ) -> None:
+    if sender_input == "lines":
+        parser = ["  read_lines binary=true"]
+        message = "line"
+    elif sender_input == "ndjson":
+        parser = ["  read_ndjson"]
+        message = "message"
+    else:
+        raise ValueError(f"unsupported sender input: {sender_input}")
     path.write_text(
         "\n".join(
             [
                 f"from_file {json.dumps(str(input_path))} {{",
-                "  read_ndjson",
+                *parser,
                 "}",
                 (
-                    f"to_nats {json.dumps(subject)}, message=message, "
+                    f"to_nats {json.dumps(subject)}, message={message}, "
                     f"url={json.dumps(url)}, _max_pending={max_pending}"
                 ),
                 "",
@@ -509,13 +541,16 @@ def benchmark_case(
     container_id: str,
     workdir: Path,
 ) -> list[Measurement]:
-    input_path = workdir / f"input-{case.events}-{case.payload_size}.ndjson"
-    input_bytes = write_dataset(input_path, case)
+    input_path = workdir / (
+        f"input-{case.events}-{case.payload_size}.{args.sender_input}"
+    )
+    input_bytes = write_dataset(input_path, case, args.sender_input)
     payload_mib = case.events * case.payload_size / MEBIBYTE
     input_mib = input_bytes / MEBIBYTE
     print(
         f"case events={case.events:,} payload={case.payload_size}B "
-        f"payload={payload_mib:.1f} MiB input={input_mib:.1f} MiB",
+        f"payload={payload_mib:.1f} MiB input={input_mib:.1f} MiB "
+        f"sender_input={args.sender_input}",
         flush=True,
     )
     native = benchmark_native(
@@ -541,6 +576,7 @@ def benchmark_case(
             subject=subject,
             url=url,
             max_pending=args.max_pending,
+            sender_input=args.sender_input,
         )
         write_receiver_tql(
             path=receiver_tql,
@@ -592,6 +628,15 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--queue-capacity", type=int, default=8192)
     parser.add_argument("--max-pending", type=int, default=8192)
+    parser.add_argument(
+        "--sender-input",
+        choices=SENDER_INPUTS,
+        default="lines",
+        help=(
+            "input format for the Tenzir sender; 'lines' avoids JSON parsing "
+            "and reads payload bytes with read_lines binary=true"
+        ),
+    )
     parser.add_argument(
         "--native-runs",
         type=int,
