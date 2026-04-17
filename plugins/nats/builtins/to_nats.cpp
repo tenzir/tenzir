@@ -12,6 +12,7 @@
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concepts.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -74,14 +75,12 @@ auto make_publish_ack_error(jsPubAckErr const& error) -> PublishAckError {
   return {.reason = std::move(reason)};
 }
 
-void publish_ack_handler(jsCtx*, natsMsg* msg, jsPubAck*, jsPubAckErr* error,
-                         void* closure) {
+void publish_error_handler(jsCtx*, jsPubAckErr* error, void* closure) {
   auto* errors = static_cast<PublishAckQueue*>(closure);
   TENZIR_ASSERT(errors);
   if (error) {
     std::ignore = errors->try_enqueue(make_publish_ack_error(*error));
   }
-  natsMsg_Destroy(msg);
 }
 
 auto set_auth_value(auth_config& auth, std::string const& key,
@@ -268,8 +267,8 @@ public:
     js_options.PublishAsync.MaxPending
       = detail::narrow_cast<int64_t>(args_.max_pending);
     js_options.PublishAsync.StallWait = default_stall_wait.count();
-    js_options.PublishAsync.AckHandler = publish_ack_handler;
-    js_options.PublishAsync.AckHandlerClosure = &*ack_errors_;
+    js_options.PublishAsync.ErrHandler = publish_error_handler;
+    js_options.PublishAsync.ErrHandlerClosure = &*ack_errors_;
     auto* raw_js = static_cast<jsCtx*>(nullptr);
     status = natsConnection_JetStream(&raw_js, connection_.get(), &js_options);
     if (status != NATS_OK) {
@@ -286,75 +285,7 @@ public:
     if (done_ or input.rows() == 0 or not js_) {
       co_return;
     }
-    auto& dh = ctx.dh();
-    auto messages = eval(args_.message, input, dh);
-    auto headers = std::optional<multi_series>{};
-    if (args_.headers) {
-      headers = eval(*args_.headers, input, dh);
-    }
-    auto const rows = detail::narrow_cast<int64_t>(input.rows());
-    for (auto row = int64_t{0}; row < rows; ++row) {
-      if (messages.is_null(row)) {
-        diagnostic::warning("expected `string` or `blob`, got `null`")
-          .primary(args_.message)
-          .emit(dh);
-        continue;
-      }
-      auto payload = materialize(messages.view3_at(row));
-      auto bytes = std::vector<std::byte>{};
-      auto ok = match(
-        payload,
-        [&](std::string const& str) {
-          auto view = as_bytes(str);
-          bytes.assign(view.begin(), view.end());
-          return true;
-        },
-        [&](blob const& data) {
-          bytes = data;
-          return true;
-        },
-        [&](auto const&) {
-          diagnostic::warning("expected `string` or `blob`, got `{}`",
-                              type::infer(payload).value_or(type{}).kind())
-            .primary(args_.message)
-            .note("event is skipped")
-            .emit(dh);
-          return false;
-        });
-      if (not ok) {
-        continue;
-      }
-      auto* raw_msg = static_cast<natsMsg*>(nullptr);
-      auto status
-        = natsMsg_Create(&raw_msg, args_.subject.inner.c_str(), nullptr,
-                         reinterpret_cast<char const*>(bytes.data()),
-                         detail::narrow_cast<int>(bytes.size()));
-      auto msg = nats_msg_ptr{raw_msg};
-      if (status != NATS_OK) {
-        emit_nats_error(diagnostic::warning("failed to create NATS message")
-                          .primary(args_.subject.source),
-                        status, dh);
-        continue;
-      }
-      if (headers and not headers->is_null(row)) {
-        auto header_data = materialize(headers->view3_at(row));
-        if (not add_headers(msg.get(), header_data, *args_.headers, dh)) {
-          continue;
-        }
-      }
-      raw_msg = msg.release();
-      status = js_PublishMsgAsync(js_.get(), &raw_msg, nullptr);
-      msg.reset(raw_msg);
-      if (status != NATS_OK) {
-        emit_nats_error(diagnostic::error("failed to publish NATS message")
-                          .primary(args_.subject.source),
-                        status, dh);
-        done_ = true;
-        co_return;
-      }
-      write_bytes_counter_.add(bytes.size());
-    }
-    drain_ack_errors(ctx);
+    publish_slice(std::move(input), ctx);
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
@@ -372,6 +303,157 @@ public:
   }
 
 private:
+  auto publish_slice(table_slice input, OpCtx& ctx) -> bool {
+    if (done_ or input.rows() == 0 or not js_) {
+      return true;
+    }
+    auto& dh = ctx.dh();
+    auto messages = eval(args_.message, input, dh);
+    auto headers = std::optional<multi_series>{};
+    if (args_.headers) {
+      headers = eval(*args_.headers, input, dh);
+    }
+    auto first_row = int64_t{0};
+    auto written_bytes = uint64_t{0};
+    for (auto const& message_series : messages) {
+      auto ok = headers
+                  ? publish_messages_with_headers(message_series, first_row,
+                                                  *headers, ctx, written_bytes)
+                  : publish_messages(message_series, ctx, written_bytes);
+      if (not ok) {
+        write_bytes_counter_.add(written_bytes);
+        return false;
+      }
+      first_row += message_series.length();
+    }
+    write_bytes_counter_.add(written_bytes);
+    drain_ack_errors(ctx);
+    return true;
+  }
+
+  auto publish_payload(std::span<const std::byte> bytes, OpCtx& ctx,
+                       uint64_t& written_bytes) -> bool {
+    auto status
+      = js_PublishAsync(js_.get(), args_.subject.inner.c_str(), bytes.data(),
+                        detail::narrow_cast<int>(bytes.size()), nullptr);
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to publish NATS message")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+      done_ = true;
+      return false;
+    }
+    written_bytes += bytes.size();
+    return true;
+  }
+
+  auto publish_payload_with_headers(std::span<const std::byte> bytes,
+                                    int64_t row, multi_series const& headers,
+                                    OpCtx& ctx, uint64_t& written_bytes)
+    -> bool {
+    auto* raw_msg = static_cast<natsMsg*>(nullptr);
+    auto status = natsMsg_Create(&raw_msg, args_.subject.inner.c_str(), nullptr,
+                                 reinterpret_cast<char const*>(bytes.data()),
+                                 detail::narrow_cast<int>(bytes.size()));
+    auto msg = nats_msg_ptr{raw_msg};
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::warning("failed to create NATS message")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+      return true;
+    }
+    if (not headers.is_null(row)) {
+      auto header_data = materialize(headers.view3_at(row));
+      if (not add_headers(msg.get(), header_data, *args_.headers, ctx.dh())) {
+        return true;
+      }
+    }
+    raw_msg = msg.release();
+    status = js_PublishMsgAsync(js_.get(), &raw_msg, nullptr);
+    msg.reset(raw_msg);
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to publish NATS message")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+      done_ = true;
+      return false;
+    }
+    written_bytes += bytes.size();
+    return true;
+  }
+
+  auto publish_messages(series const& messages, OpCtx& ctx,
+                        uint64_t& written_bytes) -> bool {
+    auto impl
+      = [&](concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto const&
+              array) {
+          for (auto row = int64_t{0}; row < array.length(); ++row) {
+            if (array.IsNull(row)) {
+              diagnostic::warning("expected `string` or `blob`, got `null`")
+                .primary(args_.message)
+                .emit(ctx);
+              continue;
+            }
+            if (not publish_payload(as_bytes(array.Value(row)), ctx,
+                                    written_bytes)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    return match(
+      *messages.array,
+      [&](concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto const&
+            array) {
+        return impl(array);
+      },
+      [&](auto const&) {
+        diagnostic::warning("expected `string` or `blob`, got `{}`",
+                            messages.type.kind())
+          .primary(args_.message)
+          .note("event is skipped")
+          .emit(ctx);
+        return true;
+      });
+  }
+
+  auto publish_messages_with_headers(series const& messages, int64_t first_row,
+                                     multi_series const& headers, OpCtx& ctx,
+                                     uint64_t& written_bytes) -> bool {
+    auto impl
+      = [&](concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto const&
+              array) {
+          for (auto row = int64_t{0}; row < array.length(); ++row) {
+            if (array.IsNull(row)) {
+              diagnostic::warning("expected `string` or `blob`, got `null`")
+                .primary(args_.message)
+                .emit(ctx);
+              continue;
+            }
+            if (not publish_payload_with_headers(as_bytes(array.Value(row)),
+                                                 first_row + row, headers, ctx,
+                                                 written_bytes)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    return match(
+      *messages.array,
+      [&](concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto const&
+            array) {
+        return impl(array);
+      },
+      [&](auto const&) {
+        diagnostic::warning("expected `string` or `blob`, got `{}`",
+                            messages.type.kind())
+          .primary(args_.message)
+          .note("event is skipped")
+          .emit(ctx);
+        return true;
+      });
+  }
+
   auto complete_publishes(OpCtx& ctx) -> Task<void> {
     if (not js_) {
       co_return;
