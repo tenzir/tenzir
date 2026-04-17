@@ -93,9 +93,20 @@ auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
   auto code = tx.handle().set([](std::span<const std::byte>) {});
   TENZIR_ASSERT(code == curl::easy::code::ok);
   co_await body_source->wait_until_ready();
+  if (body_source->is_aborted()) {
+    // The printer subpipeline failed before the FTP PUT started.
+    co_await results->enqueue(UploadFinished{});
+    co_return;
+  }
   if (auto err = co_await perform_curl(std::move(io_executor), tx.handle(),
                                        {.source = body_source});
       err.valid()) {
+    if (body_source->is_aborted()) {
+      // A local printer failure aborted an in-flight upload; report the local
+      // error instead of a derived curl callback failure.
+      co_await results->enqueue(UploadFinished{});
+      co_return;
+    }
     co_await results->enqueue(UploadFailed{fmt::format("{}", err)});
     co_return;
   }
