@@ -129,7 +129,7 @@ struct SliceMessage {
 };
 
 struct ErrorMessage {
-  std::string message;
+  std::vector<diagnostic> diagnostics;
   bool add_tls_hints = false;
 };
 
@@ -139,6 +139,26 @@ using Message = variant<SliceMessage, ErrorMessage, DoneMessage>;
 using MessageQueue = folly::coro::BoundedQueue<Message, true, true>;
 constexpr auto message_queue_capacity = uint32_t{16};
 constexpr auto message_queue_backoff = std::chrono::milliseconds{1};
+
+auto has_primary_annotation(diagnostic const& diag) -> bool {
+  return std::any_of(diag.annotations.begin(), diag.annotations.end(),
+                     [](auto const& annotation) {
+                       return annotation.primary;
+                     });
+}
+
+auto make_error_message(collecting_diagnostic_handler&& dh,
+                        std::string_view fallback, bool add_tls_hints = false)
+  -> ErrorMessage {
+  auto diagnostics = std::move(dh).collect();
+  if (diagnostics.empty()) {
+    diagnostics.push_back(diagnostic::error("{}", fallback).done());
+  }
+  return ErrorMessage{
+    .diagnostics = std::move(diagnostics),
+    .add_tls_hints = add_tls_hints,
+  };
+}
 
 struct RuntimeState {
   RuntimeState() : queue{message_queue_capacity} {
@@ -213,16 +233,21 @@ public:
         co_return;
       },
       [&](ErrorMessage x) -> Task<void> {
-        auto diag
-          = diagnostic::error("{}", x.message).primary(args_.operator_location);
-        if (x.add_tls_hints) {
-          add_tls_client_diagnostic_hints(std::move(diag), tls_enabled_,
-                                          "ClickHouse",
-                                          clickhouse_plaintext_port,
-                                          clickhouse_tls_port)
-            .emit(ctx);
-        } else {
-          std::move(diag).emit(ctx);
+        for (auto& diag : x.diagnostics) {
+          auto add_primary = not has_primary_annotation(diag);
+          auto builder = std::move(diag).modify();
+          if (add_primary) {
+            builder = std::move(builder).primary(args_.operator_location);
+          }
+          if (x.add_tls_hints) {
+            add_tls_client_diagnostic_hints(std::move(builder), tls_enabled_,
+                                            "ClickHouse",
+                                            clickhouse_plaintext_port,
+                                            clickhouse_tls_port)
+              .emit(ctx);
+          } else {
+            std::move(builder).emit(ctx);
+          }
         }
         done_ = true;
         co_return;
@@ -413,9 +438,9 @@ private:
     return result;
   }
 
-  static auto rescale_datetime64_to_nanos(int64_t value, size_t precision,
-                                          value_path path, std::string& error)
-    -> Option<int64_t> {
+  static auto
+  rescale_datetime64_to_nanos(int64_t value, size_t precision, value_path path,
+                              diagnostic_handler& dh) -> failure_or<int64_t> {
     if (precision == 9) {
       return value;
     }
@@ -425,10 +450,11 @@ private:
       auto min = ::clickhouse::Int128{std::numeric_limits<int64_t>::min()};
       auto max = ::clickhouse::Int128{std::numeric_limits<int64_t>::max()};
       if (scaled < min or scaled > max) {
-        error = fmt::format("DateTime64 value for `{}` is out of range after "
-                            "rescaling to nanoseconds",
-                            path);
-        return None{};
+        diagnostic::error("DateTime64 value for `{}` is out of range after "
+                          "rescaling to nanoseconds",
+                          path)
+          .emit(dh);
+        return failure::promise();
       }
       return static_cast<int64_t>(scaled);
     }
@@ -442,52 +468,52 @@ private:
            and kind != ParsedType::Kind::blob_;
   }
 
-  static auto make_type_error(value_path path, std::string_view text)
-    -> std::string {
-    return fmt::format("ClickHouse column `{}` has unsupported ClickHouse type "
-                       "`{}`",
-                       path, text);
+  static auto
+  unsupported_type_diagnostic(value_path path, std::string_view text)
+    -> diagnostic_builder {
+    return diagnostic::error("ClickHouse column `{}` has unsupported "
+                             "ClickHouse type `{}`",
+                             path, text);
   }
 
   static auto parse_clickhouse_type(std::string_view text, value_path path,
-                                    std::string& error) -> Option<ParsedType> {
+                                    diagnostic_handler& dh)
+    -> failure_or<ParsedType> {
+    auto malformed = [&]() -> failure {
+      diagnostic::error("ClickHouse column `{}` has malformed type `{}`", path,
+                        text)
+        .emit(dh);
+      return failure::promise();
+    };
     text = detail::trim(text);
     if (text.empty()) {
-      error
-        = fmt::format("ClickHouse column `{}` has an empty type name", path);
-      return None{};
+      diagnostic::error("ClickHouse column `{}` has an empty type name", path)
+        .emit(dh);
+      return failure::promise();
     }
     if (auto inner = unwrap_call(text, "LowCardinality")) {
-      return parse_clickhouse_type(*inner, path, error);
+      return parse_clickhouse_type(*inner, path, dh);
     }
     if (auto inner = unwrap_call(text, "SimpleAggregateFunction")) {
       auto parts = split_top_level(*inner);
       if (parts.size() != 2) {
-        error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
-                            path, text);
-        return None{};
+        return malformed();
       }
-      return parse_clickhouse_type(parts[1], path, error);
+      return parse_clickhouse_type(parts[1], path, dh);
     }
     if (auto inner = unwrap_call(text, "Nullable")) {
-      auto nested = parse_clickhouse_type(*inner, path, error);
-      if (not nested) {
-        return None{};
-      }
+      TRY(auto nested, parse_clickhouse_type(*inner, path, dh));
       auto result = ParsedType{.kind = ParsedType::Kind::nullable_};
-      result.child = Box<ParsedType>{std::in_place, std::move(*nested)};
+      result.child = Box<ParsedType>{std::in_place, std::move(nested)};
       return result;
     }
     if (text == "Array(UInt8)") {
       return ParsedType{.kind = ParsedType::Kind::blob_};
     }
     if (auto inner = unwrap_call(text, "Array")) {
-      auto nested = parse_clickhouse_type(*inner, path.list(), error);
-      if (not nested) {
-        return None{};
-      }
+      TRY(auto nested, parse_clickhouse_type(*inner, path.list(), dh));
       auto result = ParsedType{.kind = ParsedType::Kind::list_};
-      result.child = Box<ParsedType>{std::in_place, std::move(*nested)};
+      result.child = Box<ParsedType>{std::in_place, std::move(nested)};
       return result;
     }
     if (auto inner = unwrap_call(text, "Tuple")) {
@@ -507,14 +533,11 @@ private:
             = unquote_identifier_component(detail::trim(part.substr(0, split)));
           field_type = detail::trim(part.substr(split + 1));
         }
-        auto nested
-          = parse_clickhouse_type(field_type, path.field(field_name), error);
-        if (not nested) {
-          return None{};
-        }
+        TRY(auto nested,
+            parse_clickhouse_type(field_type, path.field(field_name), dh));
         result.fields.push_back({
           .name = std::move(field_name),
-          .value = Box<ParsedType>{std::in_place, std::move(*nested)},
+          .value = Box<ParsedType>{std::in_place, std::move(nested)},
         });
       }
       make_unique_field_names(result.fields, "field");
@@ -558,15 +581,11 @@ private:
       TENZIR_ASSERT(inner);
       auto parts = split_top_level(*inner);
       if (parts.empty()) {
-        error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
-                            path, text);
-        return None{};
+        return malformed();
       }
       auto precision = size_t{0};
       if (not parse_size(parts[0], precision)) {
-        error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
-                            path, text);
-        return None{};
+        return malformed();
       }
       return ParsedType{.kind = ParsedType::Kind::time_,
                         .time_precision = precision};
@@ -579,31 +598,28 @@ private:
       TENZIR_ASSERT(inner);
       auto parts = split_top_level(*inner);
       if (parts.size() != 2) {
-        error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
-                            path, text);
-        return None{};
+        return malformed();
       }
       auto precision = size_t{0};
       auto scale = size_t{0};
       if (not parse_size(parts[0], precision)
           or not parse_size(parts[1], scale)) {
-        error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
-                            path, text);
-        return None{};
+        return malformed();
       }
       if (precision > 38) {
-        error = fmt::format("{}; Decimal precisions above 38 are currently not "
-                            "supported",
-                            make_type_error(path, text));
-        return None{};
+        unsupported_type_diagnostic(path, text)
+          .hint("Decimal precisions above 38 are currently not supported")
+          .emit(dh);
+        return failure::promise();
       }
       return ParsedType{.kind = ParsedType::Kind::decimal_string_,
                         .decimal_scale = scale};
     }
     if (text.starts_with("Decimal256(")) {
-      error = fmt::format("{}; Decimal256 values are currently not supported",
-                          make_type_error(path, text));
-      return None{};
+      unsupported_type_diagnostic(path, text)
+        .hint("Decimal256 values are currently not supported")
+        .emit(dh);
+      return failure::promise();
     }
     if (text.starts_with("Decimal32(") or text.starts_with("Decimal64(")
         or text.starts_with("Decimal128(")) {
@@ -619,33 +635,32 @@ private:
       TENZIR_ASSERT(inner);
       auto scale = size_t{0};
       if (not parse_size(*inner, scale)) {
-        error = fmt::format("ClickHouse column `{}` has malformed type `{}`",
-                            path, text);
-        return None{};
+        return malformed();
       }
       return ParsedType{.kind = ParsedType::Kind::decimal_string_,
                         .decimal_scale = scale};
     }
     if (text.starts_with("Map(")) {
-      error = fmt::format("{}; maps are currently not supported",
-                          make_type_error(path, text));
-      return None{};
+      unsupported_type_diagnostic(path, text)
+        .hint("maps are currently not supported")
+        .emit(dh);
+      return failure::promise();
     }
-    error = fmt::format("{}; cast unsupported columns in SQL or omit them from "
-                        "the result",
-                        make_type_error(path, text));
-    return None{};
+    unsupported_type_diagnostic(path, text)
+      .hint("cast unsupported columns in SQL or omit them from the result")
+      .emit(dh);
+    return failure::promise();
   }
 
   static auto
-  clickhouse_type_to_tenzir_type(ParsedType const& desc, std::string& error)
-    -> Option<type> {
+  clickhouse_type_to_tenzir_type(ParsedType const& desc, value_path path,
+                                 diagnostic_handler& dh) -> failure_or<type> {
     switch (desc.kind) {
       case ParsedType::Kind::null_:
         return type{null_type{}};
       case ParsedType::Kind::nullable_:
         TENZIR_ASSERT(desc.child);
-        return clickhouse_type_to_tenzir_type(**desc.child, error);
+        return clickhouse_type_to_tenzir_type(**desc.child, path, dh);
       case ParsedType::Kind::bool_:
         return type{bool_type{}};
       case ParsedType::Kind::int64_:
@@ -668,27 +683,26 @@ private:
         return type{blob_type{}};
       case ParsedType::Kind::record_: {
         if (desc.fields.empty()) {
-          error = "empty ClickHouse tuples are not supported";
-          return None{};
+          diagnostic::error("ClickHouse column `{}` is an empty tuple, which "
+                            "is not supported",
+                            path)
+            .emit(dh);
+          return failure::promise();
         }
         auto fields = std::vector<struct record_type::field>{};
         fields.reserve(desc.fields.size());
         for (auto const& field : desc.fields) {
-          auto nested = clickhouse_type_to_tenzir_type(*field.value, error);
-          if (not nested) {
-            return None{};
-          }
-          fields.emplace_back(field.name, *nested);
+          TRY(auto nested, clickhouse_type_to_tenzir_type(
+                             *field.value, path.field(field.name), dh));
+          fields.emplace_back(field.name, std::move(nested));
         }
         return type{record_type{fields}};
       }
       case ParsedType::Kind::list_: {
         TENZIR_ASSERT(desc.child);
-        auto nested = clickhouse_type_to_tenzir_type(**desc.child, error);
-        if (not nested) {
-          return None{};
-        }
-        return type{list_type{*nested}};
+        TRY(auto nested,
+            clickhouse_type_to_tenzir_type(**desc.child, path.list(), dh));
+        return type{list_type{nested}};
       }
     }
     TENZIR_UNREACHABLE();
@@ -696,20 +710,18 @@ private:
 
   static auto
   make_query_schema(std::string name, std::vector<ParsedField> columns,
-                    std::string& error) -> Option<QuerySchema> {
+                    diagnostic_handler& dh) -> failure_or<QuerySchema> {
     if (columns.empty()) {
-      error = "ClickHouse query returned zero columns";
-      return None{};
+      diagnostic::error("ClickHouse query returned zero columns").emit(dh);
+      return failure::promise();
     }
     make_unique_field_names(columns, "column");
     auto fields = std::vector<struct record_type::field>{};
     fields.reserve(columns.size());
     for (auto const& column : columns) {
-      auto nested = clickhouse_type_to_tenzir_type(*column.value, error);
-      if (not nested) {
-        return None{};
-      }
-      fields.emplace_back(column.name, *nested);
+      TRY(auto nested, clickhouse_type_to_tenzir_type(
+                         *column.value, value_path{}.field(column.name), dh));
+      fields.emplace_back(column.name, std::move(nested));
     }
     auto schema = type{name, record_type{fields}};
     return QuerySchema{
@@ -721,31 +733,28 @@ private:
 
   static auto
   infer_schema_from_block(::clickhouse::Block const& block,
-                          std::string schema_name, std::string& error)
-    -> Option<QuerySchema> {
+                          std::string schema_name, diagnostic_handler& dh)
+    -> failure_or<QuerySchema> {
     auto columns = std::vector<ParsedField>{};
     columns.reserve(block.GetColumnCount());
     for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
       auto type_name
         = remove_non_significant_whitespace(block[i]->Type()->GetName());
       auto name = std::string{block.GetColumnName(i)};
-      auto parsed
-        = parse_clickhouse_type(type_name, value_path{}.field(name), error);
-      if (not parsed) {
-        return None{};
-      }
+      TRY(auto parsed,
+          parse_clickhouse_type(type_name, value_path{}.field(name), dh));
       columns.push_back({
         .name = std::move(name),
-        .value = Box<ParsedType>{std::in_place, std::move(*parsed)},
+        .value = Box<ParsedType>{std::in_place, std::move(parsed)},
       });
     }
-    return make_query_schema(std::move(schema_name), std::move(columns), error);
+    return make_query_schema(std::move(schema_name), std::move(columns), dh);
   }
 
   static auto
   describe_table_schema(::clickhouse::Client& client, std::string_view table,
-                        std::string schema_name, std::string& error)
-    -> Option<QuerySchema> {
+                        std::string schema_name, diagnostic_handler& dh)
+    -> failure_or<QuerySchema> {
     auto columns = std::vector<ParsedField>{};
     auto ok = true;
     auto query = ::clickhouse::Query{fmt::format(
@@ -758,14 +767,16 @@ private:
         return;
       }
       if (block.GetColumnCount() < 2) {
-        error = "unexpected ClickHouse response to DESCRIBE TABLE";
+        diagnostic::error("unexpected ClickHouse response to DESCRIBE TABLE")
+          .emit(dh);
         ok = false;
         return;
       }
       auto names = block[0]->As<::clickhouse::ColumnString>();
       auto types = block[1]->As<::clickhouse::ColumnString>();
       if (not names or not types) {
-        error = "unexpected ClickHouse DESCRIBE TABLE column layout";
+        diagnostic::error("unexpected ClickHouse DESCRIBE TABLE column layout")
+          .emit(dh);
         ok = false;
         return;
       }
@@ -773,7 +784,7 @@ private:
         auto name = std::string{names->At(row)};
         auto type_name = remove_non_significant_whitespace(types->At(row));
         auto parsed
-          = parse_clickhouse_type(type_name, value_path{}.field(name), error);
+          = parse_clickhouse_type(type_name, value_path{}.field(name), dh);
         if (not parsed) {
           ok = false;
           return;
@@ -786,21 +797,21 @@ private:
     });
     client.Select(query);
     if (not ok) {
-      return None{};
+      return failure::promise();
     }
-    return make_query_schema(std::move(schema_name), std::move(columns), error);
+    return make_query_schema(std::move(schema_name), std::move(columns), dh);
   }
 
   static auto
   append_scalar(builder_ref builder, ::clickhouse::ColumnRef const& column,
                 size_t row, ParsedType const& desc, value_path path,
-                std::string& error) -> bool {
+                diagnostic_handler& dh) -> failure_or<void> {
     switch (desc.kind) {
       case ParsedType::Kind::decimal_string_: {
         if (auto decimal = column->As<::clickhouse::ColumnDecimal>()) {
           builder.data(format_scaled_integer(format_int128(decimal->At(row)),
                                              desc.decimal_scale));
-          return true;
+          return {};
         }
         auto bytes = column->GetItem(row).AsBinaryData();
         switch (bytes.size()) {
@@ -809,27 +820,28 @@ private:
             std::memcpy(&value, bytes.data(), sizeof(value));
             builder.data(
               format_scaled_integer(std::to_string(value), desc.decimal_scale));
-            return true;
+            return {};
           }
           case 8: {
             auto value = int64_t{0};
             std::memcpy(&value, bytes.data(), sizeof(value));
             builder.data(
               format_scaled_integer(std::to_string(value), desc.decimal_scale));
-            return true;
+            return {};
           }
           case 16: {
             auto value = ::clickhouse::Int128{};
             std::memcpy(&value, bytes.data(), sizeof(value));
             builder.data(
               format_scaled_integer(format_int128(value), desc.decimal_scale));
-            return true;
+            return {};
           }
           default:
             break;
         }
-        error = fmt::format("expected decimal ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected decimal ClickHouse type for `{}`", path)
+          .emit(dh);
+        return failure::promise();
       }
       case ParsedType::Kind::ip_: {
         if (auto ipv4 = column->As<::clickhouse::ColumnIPv4>()) {
@@ -839,7 +851,7 @@ private:
             auto view = std::span<const uint8_t, 4>{
               reinterpret_cast<const uint8_t*>(&addr), 4};
             builder.data(ip::v4(view));
-            return true;
+            return {};
           }
         }
         if (auto ipv6 = column->As<::clickhouse::ColumnIPv6>()) {
@@ -849,7 +861,7 @@ private:
             auto view = std::span<const uint8_t, 16>{
               reinterpret_cast<const uint8_t*>(&addr), 16};
             builder.data(ip::v6(view));
-            return true;
+            return {};
           }
         }
         auto bytes = column->GetItem(row).AsBinaryData();
@@ -857,16 +869,16 @@ private:
           auto view = std::span<const uint8_t, 4>{
             reinterpret_cast<const uint8_t*>(bytes.data()), 4};
           builder.data(ip::v4(view));
-          return true;
+          return {};
         }
         if (bytes.size() == 16) {
           auto view = std::span<const uint8_t, 16>{
             reinterpret_cast<const uint8_t*>(bytes.data()), 16};
           builder.data(ip::v6(view));
-          return true;
+          return {};
         }
-        error = fmt::format("expected IP ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected IP ClickHouse type for `{}`", path).emit(dh);
+        return failure::promise();
       }
       default:
         break;
@@ -875,83 +887,88 @@ private:
     switch (desc.kind) {
       case ParsedType::Kind::null_:
         builder.null();
-        return true;
+        return {};
       case ParsedType::Kind::bool_:
         if (item.type == ::clickhouse::Type::UInt8) {
           builder.data(item.get<uint8_t>() != 0);
-          return true;
+          return {};
         }
-        error = fmt::format("expected bool-compatible ClickHouse type for `{}`",
-                            path);
-        return false;
+        diagnostic::error("expected bool-compatible ClickHouse type for `{}`",
+                          path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::int64_:
         switch (item.type) {
           case ::clickhouse::Type::Int8:
             builder.data(int64_t{item.get<int8_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::Int16:
             builder.data(int64_t{item.get<int16_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::Int32:
             builder.data(int64_t{item.get<int32_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::Int64:
             builder.data(item.get<int64_t>());
-            return true;
+            return {};
           case ::clickhouse::Type::Enum8:
             builder.data(int64_t{item.get<int8_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::Enum16:
             builder.data(int64_t{item.get<int16_t>()});
-            return true;
+            return {};
           default:
             break;
         }
-        error = fmt::format("expected signed integer ClickHouse type for `{}`",
-                            path);
-        return false;
+        diagnostic::error("expected signed integer ClickHouse type for `{}`",
+                          path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::uint64_:
         switch (item.type) {
           case ::clickhouse::Type::UInt8:
             builder.data(uint64_t{item.get<uint8_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::UInt16:
             builder.data(uint64_t{item.get<uint16_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::UInt32:
             builder.data(uint64_t{item.get<uint32_t>()});
-            return true;
+            return {};
           case ::clickhouse::Type::UInt64:
             builder.data(item.get<uint64_t>());
-            return true;
+            return {};
           default:
             break;
         }
-        error = fmt::format(
-          "expected unsigned integer ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected unsigned integer ClickHouse type for `{}`",
+                          path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::double_:
         switch (item.type) {
           case ::clickhouse::Type::Float32:
             builder.data(double{item.get<float>()});
-            return true;
+            return {};
           case ::clickhouse::Type::Float64:
             builder.data(item.get<double>());
-            return true;
+            return {};
           default:
             break;
         }
-        error = fmt::format("expected floating-point ClickHouse type for `{}`",
-                            path);
-        return false;
+        diagnostic::error("expected floating-point ClickHouse type for `{}`",
+                          path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::string_:
         if (item.type == ::clickhouse::Type::String
             or item.type == ::clickhouse::Type::FixedString) {
           builder.data(std::string{item.get<std::string_view>()});
-          return true;
+          return {};
         }
-        error = fmt::format("expected string ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected string ClickHouse type for `{}`", path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::uuid_:
         if (item.type == ::clickhouse::Type::UUID) {
           auto data = item.AsBinaryData();
@@ -960,69 +977,70 @@ private:
           std::memcpy(&first, data.data(), sizeof(first));
           std::memcpy(&second, data.data() + sizeof(first), sizeof(second));
           builder.data(format_uuid(::clickhouse::UUID{first, second}));
-          return true;
+          return {};
         }
-        error = fmt::format("expected UUID ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected UUID ClickHouse type for `{}`", path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::enum_name_:
         if (auto enum8 = column->As<::clickhouse::ColumnEnum8>()) {
           builder.data(std::string{enum8->NameAt(row)});
-          return true;
+          return {};
         }
         if (auto enum16 = column->As<::clickhouse::ColumnEnum16>()) {
           builder.data(std::string{enum16->NameAt(row)});
-          return true;
+          return {};
         }
         if (item.type == ::clickhouse::Type::Enum8) {
           builder.data(std::to_string(item.get<int8_t>()));
-          return true;
+          return {};
         }
         if (item.type == ::clickhouse::Type::Enum16) {
           builder.data(std::to_string(item.get<int16_t>()));
-          return true;
+          return {};
         }
-        error = fmt::format("expected enum ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected enum ClickHouse type for `{}`", path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::int128_string_:
         if (item.type == ::clickhouse::Type::Int128) {
           builder.data(format_int128(item.get<::clickhouse::Int128>()));
-          return true;
+          return {};
         }
-        error = fmt::format("expected Int128 ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected Int128 ClickHouse type for `{}`", path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::time_:
         switch (item.type) {
           case ::clickhouse::Type::Date: {
             auto days = int64_t{item.get<uint16_t>()};
             builder.data(time{std::chrono::duration_cast<duration>(
               std::chrono::seconds{days * 86400})});
-            return true;
+            return {};
           }
           case ::clickhouse::Type::Date32: {
             auto days = int64_t{item.get<int32_t>()};
             builder.data(time{std::chrono::duration_cast<duration>(
               std::chrono::seconds{days * 86400})});
-            return true;
+            return {};
           }
           case ::clickhouse::Type::DateTime:
             builder.data(time{std::chrono::duration_cast<duration>(
               std::chrono::seconds{item.get<uint32_t>()})});
-            return true;
+            return {};
           case ::clickhouse::Type::DateTime64: {
-            auto ns = rescale_datetime64_to_nanos(
-              item.get<int64_t>(), desc.time_precision, path, error);
-            if (not ns) {
-              return false;
-            }
+            TRY(auto ns, rescale_datetime64_to_nanos(
+                           item.get<int64_t>(), desc.time_precision, path, dh));
             builder.data(time{std::chrono::duration_cast<duration>(
-              std::chrono::nanoseconds{*ns})});
-            return true;
+              std::chrono::nanoseconds{ns})});
+            return {};
           }
           default:
             break;
         }
-        error = fmt::format("expected temporal ClickHouse type for `{}`", path);
-        return false;
+        diagnostic::error("expected temporal ClickHouse type for `{}`", path)
+          .emit(dh);
+        return failure::promise();
       case ParsedType::Kind::ip_:
       case ParsedType::Kind::decimal_string_:
         TENZIR_UNREACHABLE();
@@ -1032,82 +1050,81 @@ private:
       case ParsedType::Kind::list_:
         break;
     }
-    error = fmt::format("unexpected ClickHouse type mapping for `{}`", path);
-    return false;
+    diagnostic::error("unexpected ClickHouse type mapping for `{}`", path)
+      .emit(dh);
+    return failure::promise();
   }
 
   static auto
   append_value(builder_ref builder, ::clickhouse::ColumnRef const& column,
                size_t row, ParsedType const& desc, value_path path,
-               std::string& error) -> bool {
+               diagnostic_handler& dh) -> failure_or<void> {
     switch (desc.kind) {
       case ParsedType::Kind::nullable_:
         TENZIR_ASSERT(desc.child);
         if (auto nullable = column->As<::clickhouse::ColumnNullable>()) {
           if (nullable->IsNull(row)) {
             builder.null();
-            return true;
+            return {};
           }
           return append_value(builder, nullable->Nested(), row, **desc.child,
-                              path, error);
+                              path, dh);
         }
         if (is_scalar_kind((**desc.child).kind)) {
           auto item = column->GetItem(row);
           if (item.type == ::clickhouse::Type::Void) {
             builder.null();
-            return true;
+            return {};
           }
         }
-        return append_value(builder, column, row, **desc.child, path, error);
+        return append_value(builder, column, row, **desc.child, path, dh);
       case ParsedType::Kind::record_: {
         auto tuple = column->As<::clickhouse::ColumnTuple>();
         if (not tuple) {
-          error = fmt::format("expected tuple ClickHouse type for `{}`", path);
-          return false;
+          diagnostic::error("expected tuple ClickHouse type for `{}`", path)
+            .emit(dh);
+          return failure::promise();
         }
         if (tuple->TupleSize() != desc.fields.size()) {
-          error = fmt::format("unexpected tuple size for `{}`", path);
-          return false;
+          diagnostic::error("unexpected tuple size for `{}`", path).emit(dh);
+          return failure::promise();
         }
         auto record = builder.record();
         for (auto i = size_t{0}; i < desc.fields.size(); ++i) {
-          if (not append_value(record.field(desc.fields[i].name), tuple->At(i),
-                               row, *desc.fields[i].value,
-                               path.field(desc.fields[i].name), error)) {
-            return false;
-          }
+          TRY(append_value(record.field(desc.fields[i].name), tuple->At(i), row,
+                           *desc.fields[i].value,
+                           path.field(desc.fields[i].name), dh));
         }
-        return true;
+        return {};
       }
       case ParsedType::Kind::list_: {
         TENZIR_ASSERT(desc.child);
         auto array = column->As<::clickhouse::ColumnArray>();
         if (not array) {
-          error = fmt::format("expected array ClickHouse type for `{}`", path);
-          return false;
+          diagnostic::error("expected array ClickHouse type for `{}`", path)
+            .emit(dh);
+          return failure::promise();
         }
         auto nested = array->GetAsColumn(row);
         auto list = builder.list();
         for (auto i = size_t{0}; i < nested->Size(); ++i) {
-          if (not append_value(list, nested, i, **desc.child, path.list(),
-                               error)) {
-            return false;
-          }
+          TRY(append_value(list, nested, i, **desc.child, path.list(), dh));
         }
-        return true;
+        return {};
       }
       case ParsedType::Kind::blob_: {
         auto array = column->As<::clickhouse::ColumnArray>();
         if (not array) {
-          error
-            = fmt::format("expected byte array ClickHouse type for `{}`", path);
-          return false;
+          diagnostic::error("expected byte array ClickHouse type for `{}`",
+                            path)
+            .emit(dh);
+          return failure::promise();
         }
         auto nested = array->GetAsColumn(row);
         auto bytes = nested->As<::clickhouse::ColumnUInt8>();
         if (not bytes) {
-          error = fmt::format("expected Array(UInt8) for `{}`", path);
-          return false;
+          diagnostic::error("expected Array(UInt8) for `{}`", path).emit(dh);
+          return failure::promise();
         }
         auto value = blob{};
         value.reserve(bytes->Size());
@@ -1115,7 +1132,7 @@ private:
           value.push_back(static_cast<std::byte>(bytes->At(i)));
         }
         builder.data(std::move(value));
-        return true;
+        return {};
       }
       case ParsedType::Kind::null_:
       case ParsedType::Kind::bool_:
@@ -1129,28 +1146,27 @@ private:
       case ParsedType::Kind::enum_name_:
       case ParsedType::Kind::int128_string_:
       case ParsedType::Kind::decimal_string_:
-        return append_scalar(builder, column, row, desc, path, error);
+        return append_scalar(builder, column, row, desc, path, dh);
     }
     TENZIR_UNREACHABLE();
   }
 
   static auto block_to_slices(::clickhouse::Block const& block,
-                              QuerySchema const& schema, std::string& error)
-    -> Option<std::vector<table_slice>> {
+                              QuerySchema const& schema, diagnostic_handler& dh)
+    -> failure_or<std::vector<table_slice>> {
     if (block.GetColumnCount() != schema.columns.size()) {
-      error = "ClickHouse query changed its column count unexpectedly";
-      return None{};
+      diagnostic::error("ClickHouse query changed its column count "
+                        "unexpectedly")
+        .emit(dh);
+      return failure::promise();
     }
     auto builder = series_builder{schema.schema};
     for (auto row = size_t{0}; row < block.GetRowCount(); ++row) {
       auto event = builder.record();
       for (auto column = size_t{0}; column < schema.columns.size(); ++column) {
-        if (not append_value(event.field(schema.columns[column].name),
-                             block[column], row, *schema.columns[column].value,
-                             value_path{}.field(schema.columns[column].name),
-                             error)) {
-          return None{};
-        }
+        TRY(append_value(event.field(schema.columns[column].name),
+                         block[column], row, *schema.columns[column].value,
+                         value_path{}.field(schema.columns[column].name), dh));
       }
     }
     return builder.finish_as_table_slice();
@@ -1229,16 +1245,16 @@ private:
     auto terminal_error = Option<ErrorMessage>{};
     try {
       auto client = ::clickhouse::Client{std::move(options)};
-      auto error = std::string{};
       auto schema = Option<QuerySchema>{};
       if (plan.described_table) {
-        schema = describe_table_schema(client, *plan.described_table,
-                                       plan.schema_name, error);
-        if (not schema) {
-          terminal_error = ErrorMessage{
-            .message = std::move(error),
-            .add_tls_hints = false,
-          };
+        auto dh = collecting_diagnostic_handler{};
+        auto described = describe_table_schema(client, *plan.described_table,
+                                               plan.schema_name, dh);
+        if (not described) {
+          terminal_error = make_error_message(
+            std::move(dh), "failed to describe ClickHouse table");
+        } else {
+          schema = std::move(*described);
         }
       }
       if (terminal_error) {
@@ -1261,29 +1277,29 @@ private:
           return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
         if (not schema) {
-          schema = infer_schema_from_block(block, plan.schema_name, error);
-          if (not schema) {
+          auto dh = collecting_diagnostic_handler{};
+          auto inferred = infer_schema_from_block(block, plan.schema_name, dh);
+          if (not inferred) {
             failed = true;
-            std::ignore = folly::coro::blockingWait(
-              enqueue_message(*runtime_, Message{ErrorMessage{
-                                           .message = std::move(error),
-                                           .add_tls_hints = false,
-                                         }}));
+            std::ignore = folly::coro::blockingWait(enqueue_message(
+              *runtime_, Message{make_error_message(
+                           std::move(dh), "failed to infer ClickHouse query "
+                                          "schema")}));
             runtime_->stop_requested.store(true, std::memory_order_release);
             return false;
           }
+          schema = std::move(*inferred);
         }
         if (block.GetRowCount() == 0) {
           return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
-        auto slices = block_to_slices(block, *schema, error);
+        auto dh = collecting_diagnostic_handler{};
+        auto slices = block_to_slices(block, *schema, dh);
         if (not slices) {
           failed = true;
-          std::ignore = folly::coro::blockingWait(
-            enqueue_message(*runtime_, Message{ErrorMessage{
-                                         .message = std::move(error),
-                                         .add_tls_hints = false,
-                                       }}));
+          std::ignore = folly::coro::blockingWait(enqueue_message(
+            *runtime_, Message{make_error_message(
+                         std::move(dh), "failed to decode ClickHouse block")}));
           runtime_->stop_requested.store(true, std::memory_order_release);
           return false;
         }
@@ -1308,13 +1324,15 @@ private:
       throw;
     } catch (const ::clickhouse::ServerError& e) {
       terminal_error = ErrorMessage{
-        .message
-        = fmt::format("ClickHouse error {}: {}", e.GetCode(), e.what()),
+        .diagnostics
+        = {diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what())
+             .done()},
         .add_tls_hints = true,
       };
     } catch (const std::exception& e) {
       terminal_error = ErrorMessage{
-        .message = fmt::format("ClickHouse error: {}", e.what()),
+        .diagnostics
+        = {diagnostic::error("ClickHouse error: {}", e.what()).done()},
         .add_tls_hints = true,
       };
     }
