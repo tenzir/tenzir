@@ -15,6 +15,7 @@
 #include "tenzir/box.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
@@ -242,18 +243,6 @@ public:
   }
 
 private:
-  static auto trim(std::string_view x) -> std::string_view {
-    while (not x.empty()
-           and std::isspace(static_cast<unsigned char>(x.front()))) {
-      x.remove_prefix(1);
-    }
-    while (not x.empty()
-           and std::isspace(static_cast<unsigned char>(x.back()))) {
-      x.remove_suffix(1);
-    }
-    return x;
-  }
-
   static auto is_quoted_token(char c) -> bool {
     return c == '\'' or c == '"' or c == '`';
   }
@@ -303,11 +292,11 @@ private:
         continue;
       }
       if (c == ',' and depth == 0) {
-        result.push_back(trim(text.substr(begin, i - begin)));
+        result.push_back(detail::trim(text.substr(begin, i - begin)));
         begin = i + 1;
       }
     }
-    result.push_back(trim(text.substr(begin)));
+    result.push_back(detail::trim(text.substr(begin)));
     return result;
   }
 
@@ -457,7 +446,7 @@ private:
   static auto parse_clickhouse_type(std::string_view text,
                                     std::string_view path, std::string& error)
     -> Option<ParsedType> {
-    text = trim(text);
+    text = detail::trim(text);
     if (text.empty()) {
       error
         = fmt::format("ClickHouse column `{}` has an empty type name", path);
@@ -502,7 +491,7 @@ private:
       auto parts = split_top_level(*inner);
       result.fields.reserve(parts.size());
       for (auto i = size_t{0}; i < parts.size(); ++i) {
-        auto part = trim(parts[i]);
+        auto part = detail::trim(parts[i]);
         auto split = find_top_level_space(part);
         auto field_name = std::string{};
         auto field_type = std::string_view{};
@@ -511,8 +500,8 @@ private:
           field_type = part;
         } else {
           field_name
-            = unquote_identifier_component(trim(part.substr(0, split)));
-          field_type = trim(part.substr(split + 1));
+            = unquote_identifier_component(detail::trim(part.substr(0, split)));
+          field_type = detail::trim(part.substr(split + 1));
         }
         auto nested_path
           = path.empty() ? field_name : fmt::format("{}.{}", path, field_name);
@@ -1167,11 +1156,10 @@ private:
 
   static auto split_validated_table_name(std::string_view table)
     -> split_table_name_result {
-    auto dot = table_name_quoting.find_first_of_not_in_quotes(table, ".");
-    if (dot == std::string::npos) {
-      return {None{}, table};
+    if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
+      return {split->first, split->second};
     }
-    return {table.substr(0, dot), table.substr(dot + 1)};
+    return {None{}, table};
   }
 
   static auto make_schema_name_from_table(std::string_view table,
