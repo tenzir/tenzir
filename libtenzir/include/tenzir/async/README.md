@@ -78,6 +78,9 @@ Use it like this:
   `perform_curl_download(...)`.
 - Always run `perform_curl*()` on a `folly::IOExecutor`; the returned task
   drives libcurl's multi socket/timer API from that executor's `EventBase`.
+- Cancellation of `perform_curl*()` aborts the transfer on that EventBase and
+  wakes the associated body objects before propagating
+  `folly::OperationCancelled`.
 - Treat both curl body types as single-producer, single-consumer adapters.
   They are not general-purpose multi-reader or multi-writer channels.
 

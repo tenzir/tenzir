@@ -52,6 +52,13 @@ struct CurlBodyAccess;
 /// - The transfer itself is driven on the provided IO executor's EventBase.
 /// - Producer and consumer coroutines may run elsewhere; backpressure is
 ///   propagated through libcurl pause/resume callbacks.
+///
+/// Cancellation:
+/// - Cancelling the awaiting task aborts the in-flight transfer on the IO
+///   executor, wakes associated upload/download bodies, and propagates
+///   `folly::OperationCancelled`.
+/// - Upload cancellation before the transfer starts aborts the upload body so
+///   blocked producers do not wait forever for a transfer that will never run.
 
 /// Single-producer, single-consumer byte stream for libcurl upload callbacks.
 ///
@@ -135,6 +142,8 @@ private:
 };
 
 /// Drive a prepared curl handle with no streaming body callbacks.
+///
+/// Cancellation aborts the transfer and propagates `folly::OperationCancelled`.
 auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                   curl::easy& handle) -> Task<caf::error>;
 
@@ -144,6 +153,9 @@ auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 /// state before it starts the transfer, so callers do not need a separate
 /// readiness barrier. If the body was already aborted at that point, the
 /// function returns without touching the remote peer.
+///
+/// Cancellation aborts the body, aborts the transfer, and propagates
+/// `folly::OperationCancelled`.
 auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                          curl::easy& handle, CurlUploadBody& body)
   -> Task<caf::error>;
@@ -152,6 +164,9 @@ auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 ///
 /// Callers should consume `body.pop()` concurrently while this task is running.
 /// The body is closed automatically when the transfer finishes or fails.
+///
+/// Cancellation aborts the body, aborts the transfer, and propagates
+/// `folly::OperationCancelled`.
 auto perform_curl_download(
   folly::Executor::KeepAlive<folly::IOExecutor> executor, curl::easy& handle,
   CurlDownloadBody& body) -> Task<caf::error>;

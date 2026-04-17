@@ -145,8 +145,9 @@ public:
     options.default_protocol = "ftp";
     options.ssl = tls;
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
-    ctx.spawn_task(upload(ctx.io_executor(), resolved_url_, std::move(options),
-                          &*upload_body_, result_queue_));
+    upload_task_ = ctx.spawn_task(upload(ctx.io_executor(), resolved_url_,
+                                         std::move(options), &*upload_body_,
+                                         result_queue_));
     co_return;
   }
 
@@ -222,6 +223,10 @@ public:
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     upload_body_->close();
+    if (upload_task_) {
+      co_await upload_task_->try_join();
+      upload_task_ = None{};
+    }
     co_return;
   }
 
@@ -252,6 +257,7 @@ private:
 
   Box<CurlUploadBody> upload_body_;
   mutable Arc<ResultQueue> result_queue_;
+  Option<AsyncHandle<void>> upload_task_;
   ToFtpArgs args_;
   std::string resolved_url_;
   Lifecycle lifecycle_ = Lifecycle::running;
