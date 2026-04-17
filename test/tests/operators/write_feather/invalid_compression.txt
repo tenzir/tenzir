@@ -1,0 +1,8 @@
+error: invalid Feather compression type
+  --> tests/operators/write_feather/invalid_compression.tql:10:54
+   |
+10 | write_feather compression_level=-1, compression_type="wrongname"
+   |                                                      ^^^^^^^^^^^ 
+   |
+   = note: Invalid: Unrecognized compression type: wrongname
+   = note: must be `uncompressed`, `lz4`, or `zstd`

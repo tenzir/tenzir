@@ -1,0 +1,28 @@
+{
+  total: 4067,
+  service: "dns",
+}
+{
+  total: 2,
+  service: "ftp",
+}
+{
+  total: 2,
+  service: "ftp-data",
+}
+{
+  total: 2386,
+  service: "http",
+}
+{
+  total: 21,
+  service: "smtp",
+}
+{
+  total: 121,
+  service: "ssl",
+}
+{
+  total: 1863,
+  service: null,
+}
