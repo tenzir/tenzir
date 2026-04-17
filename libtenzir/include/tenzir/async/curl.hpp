@@ -147,7 +147,7 @@ public:
   auto abort() -> void;
 
 private:
-  auto wait_until_ready() -> Task<void>;
+  auto wait_until_ready() -> Task<bool>;
   auto read(std::span<std::byte> buffer) -> size_t;
   auto set_resume_callback(std::function<void()> callback) -> void;
   auto terminate() -> void;
@@ -211,7 +211,9 @@ auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 /// The upload waits until the body has buffered data or reached a terminal
 /// state before it starts the transfer, so callers do not need a separate
 /// readiness barrier. If the body was already aborted at that point, the
-/// function returns `local_abort` without touching the remote peer.
+/// function returns `local_abort` without touching the remote peer. If the
+/// body closes before any bytes were queued, the function returns `success`
+/// without starting the transfer.
 ///
 /// Returns `local_abort` if the upload body was aborted locally, and `failure`
 /// for transport errors.
