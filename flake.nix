@@ -108,7 +108,8 @@
         devShells.default = import ./shell.nix { inherit pkgs package; };
         formatter = self.packages.${system}.format;
         checks = {
-          formatting = treefmtEval.config.build.check self;
+          # Disabled until the custom Style Check workflow is aligned.
+          #formatting = treefmtEval.config.build.check self;
         };
       }
     );
