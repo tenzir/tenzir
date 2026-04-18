@@ -645,6 +645,26 @@ else ()
 endif ()
 target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
+# Link against backend_rewrite.
+if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/backend_rewrite/CMakeLists.txt")
+  message(
+    FATAL_ERROR
+      "backend_rewrite library not found; initialize the libtenzir/aux/backend_rewrite submodule"
+  )
+endif ()
+set(BUILD_TESTING OFF)
+set(BUILD_SHARED_LIBS OFF)
+set(TENZIR_BACKEND_REWRITE_SANITIZE OFF)
+set(TENZIR_BACKEND_REWRITE_LIBSTDCPP_DEBUG OFF)
+set(TENZIR_BACKEND_REWRITE_ASSERTIONS ON)
+set(TENZIR_BACKEND_REWRITE_ASSERTIONS_CHEAP OFF)
+set(TENZIR_BACKEND_REWRITE_ENABLE_WARNINGS OFF)
+add_subdirectory(aux/backend_rewrite)
+target_link_libraries(libtenzir PUBLIC $<BUILD_LOCAL_INTERFACE:backend>)
+dependency_summary("backend_rewrite"
+                   "${CMAKE_CURRENT_SOURCE_DIR}/aux/backend_rewrite"
+                   "Dependencies")
+
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule"

@@ -51,3 +51,6 @@
 	path = libtenzir/aux/facebook/proxygen
 	url = https://github.com/facebook/proxygen.git
 	shallow = true
+[submodule "libtenzir/aux/backend_rewrite"]
+	path = libtenzir/aux/backend_rewrite
+	url = git@github.com:IyeOnline/backend_rewrite.git
