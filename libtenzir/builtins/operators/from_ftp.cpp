@@ -128,6 +128,10 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (lifecycle_ != Lifecycle::running) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
     TENZIR_ASSERT(download_);
     if (auto event = co_await download_->next()) {
       co_return Any{std::in_place_type<CurlDownloadEvent>, std::move(*event)};
