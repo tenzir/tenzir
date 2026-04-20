@@ -54,18 +54,6 @@ namespace {
 
 constexpr auto clickhouse_plaintext_port = uint64_t{9000};
 constexpr auto clickhouse_tls_port = uint64_t{9440};
-inline const auto clickhouse_type_quoting = detail::quoting_escaping_policy{
-  .quotes = R"('"`)",
-  .doubled_quotes_escape = true,
-};
-
-auto unquote_identifier_component(std::string_view text) -> std::string {
-  return table_name_quoting.unquote_unescape(text);
-}
-
-auto quote_identifier_component(std::string_view text) -> std::string {
-  return fmt::format("\"{}\"", detail::double_escape(text, "\""));
-}
 
 struct FromClickhouseArgs {
   located<secret> uri = {secret::make_literal(""), location::unknown};
@@ -289,93 +277,6 @@ public:
   }
 
 private:
-  static auto skip_quoted_token(std::string_view text, size_t& i) -> bool {
-    if (not clickhouse_type_quoting.is_quote_character(text[i])) {
-      return false;
-    }
-    if (auto closing = clickhouse_type_quoting.find_closing_quote(text, i);
-        closing != std::string_view::npos) {
-      i = closing;
-    } else {
-      i = text.size() - 1;
-    }
-    return true;
-  }
-
-  static auto split_top_level(std::string_view text)
-    -> std::vector<std::string_view> {
-    auto result = std::vector<std::string_view>{};
-    auto depth = size_t{0};
-    auto begin = size_t{0};
-    for (auto i = size_t{0}; i < text.size(); ++i) {
-      if (skip_quoted_token(text, i)) {
-        continue;
-      }
-      auto c = text[i];
-      if (c == '(') {
-        ++depth;
-        continue;
-      }
-      if (c == ')') {
-        TENZIR_ASSERT(depth > 0);
-        --depth;
-        continue;
-      }
-      if (c == ',' and depth == 0) {
-        result.push_back(detail::trim(text.substr(begin, i - begin)));
-        begin = i + 1;
-      }
-    }
-    result.push_back(detail::trim(text.substr(begin)));
-    return result;
-  }
-
-  static auto find_top_level_space(std::string_view text) -> size_t {
-    auto depth = size_t{0};
-    for (auto i = size_t{0}; i < text.size(); ++i) {
-      if (skip_quoted_token(text, i)) {
-        continue;
-      }
-      auto c = text[i];
-      if (c == '(') {
-        ++depth;
-        continue;
-      }
-      if (c == ')') {
-        TENZIR_ASSERT(depth > 0);
-        --depth;
-        continue;
-      }
-      if (depth == 0 and std::isspace(static_cast<unsigned char>(c))) {
-        return i;
-      }
-    }
-    return std::string_view::npos;
-  }
-
-  static auto unwrap_call(std::string_view text, std::string_view name)
-    -> Option<std::string_view> {
-    if (not text.starts_with(name)) {
-      return None{};
-    }
-    if (text.size() <= name.size() + 1 or text[name.size()] != '('
-        or text.back() != ')') {
-      return None{};
-    }
-    return text.substr(name.size() + 1, text.size() - name.size() - 2);
-  }
-
-  static auto parse_size(std::string_view text, size_t& result) -> bool {
-    auto value = uint64_t{0};
-    auto [ptr, ec]
-      = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (ec != std::errc{} or ptr != text.data() + text.size()) {
-      return false;
-    }
-    result = detail::narrow_cast<size_t>(value);
-    return true;
-  }
-
   static auto make_unique_field_names(std::vector<ParsedField>& fields,
                                       std::string_view prefix) -> void {
     auto used = std::unordered_map<std::string, size_t>{};
@@ -541,17 +442,18 @@ private:
         .emit(dh);
       return failure::promise();
     }
-    if (auto inner = unwrap_call(text, "LowCardinality")) {
+    if (auto inner = unwrap_clickhouse_type_call(text, "LowCardinality")) {
       return parse_clickhouse_type(*inner, path, dh);
     }
-    if (auto inner = unwrap_call(text, "SimpleAggregateFunction")) {
-      auto parts = split_top_level(*inner);
+    if (auto inner
+        = unwrap_clickhouse_type_call(text, "SimpleAggregateFunction")) {
+      auto parts = split_top_level_clickhouse_type_arguments(*inner);
       if (parts.size() != 2) {
         return malformed();
       }
       return parse_clickhouse_type(parts[1], path, dh);
     }
-    if (auto inner = unwrap_call(text, "Nullable")) {
+    if (auto inner = unwrap_clickhouse_type_call(text, "Nullable")) {
       TRY(auto nested, parse_clickhouse_type(*inner, path, dh));
       auto result = ParsedType{.kind = ParsedType::Kind::nullable_};
       result.child = Box<ParsedType>{std::in_place, std::move(nested)};
@@ -560,19 +462,19 @@ private:
     if (text == "Array(UInt8)") {
       return ParsedType{.kind = ParsedType::Kind::blob_};
     }
-    if (auto inner = unwrap_call(text, "Array")) {
+    if (auto inner = unwrap_clickhouse_type_call(text, "Array")) {
       TRY(auto nested, parse_clickhouse_type(*inner, path.list(), dh));
       auto result = ParsedType{.kind = ParsedType::Kind::list_};
       result.child = Box<ParsedType>{std::in_place, std::move(nested)};
       return result;
     }
-    if (auto inner = unwrap_call(text, "Tuple")) {
+    if (auto inner = unwrap_clickhouse_type_call(text, "Tuple")) {
       auto result = ParsedType{.kind = ParsedType::Kind::record_};
-      auto parts = split_top_level(*inner);
+      auto parts = split_top_level_clickhouse_type_arguments(*inner);
       result.fields.reserve(parts.size());
       for (auto i = size_t{0}; i < parts.size(); ++i) {
         auto part = detail::trim(parts[i]);
-        auto split = find_top_level_space(part);
+        auto split = find_top_level_clickhouse_type_space(part);
         auto field_name = std::string{};
         auto field_type = std::string_view{};
         if (split == std::string_view::npos) {
@@ -627,14 +529,14 @@ private:
       return ParsedType{.kind = ParsedType::Kind::time_};
     }
     if (text.starts_with("DateTime64(")) {
-      auto inner = unwrap_call(text, "DateTime64");
+      auto inner = unwrap_clickhouse_type_call(text, "DateTime64");
       TENZIR_ASSERT(inner);
-      auto parts = split_top_level(*inner);
+      auto parts = split_top_level_clickhouse_type_arguments(*inner);
       if (parts.empty()) {
         return malformed();
       }
       auto precision = size_t{0};
-      if (not parse_size(parts[0], precision)) {
+      if (not parse_clickhouse_size(parts[0], precision)) {
         return malformed();
       }
       return ParsedType{.kind = ParsedType::Kind::time_,
@@ -644,16 +546,16 @@ private:
       return ParsedType{.kind = ParsedType::Kind::ip_};
     }
     if (text.starts_with("Decimal(")) {
-      auto inner = unwrap_call(text, "Decimal");
+      auto inner = unwrap_clickhouse_type_call(text, "Decimal");
       TENZIR_ASSERT(inner);
-      auto parts = split_top_level(*inner);
+      auto parts = split_top_level_clickhouse_type_arguments(*inner);
       if (parts.size() != 2) {
         return malformed();
       }
       auto precision = size_t{0};
       auto scale = size_t{0};
-      if (not parse_size(parts[0], precision)
-          or not parse_size(parts[1], scale)) {
+      if (not parse_clickhouse_size(parts[0], precision)
+          or not parse_clickhouse_size(parts[1], scale)) {
         return malformed();
       }
       if (precision > 38) {
@@ -681,10 +583,10 @@ private:
       } else {
         prefix = "Decimal128";
       }
-      auto inner = unwrap_call(text, prefix);
+      auto inner = unwrap_clickhouse_type_call(text, prefix);
       TENZIR_ASSERT(inner);
       auto scale = size_t{0};
-      if (not parse_size(*inner, scale)) {
+      if (not parse_clickhouse_size(*inner, scale)) {
         return malformed();
       }
       return ParsedType{.kind = ParsedType::Kind::decimal_string_,
