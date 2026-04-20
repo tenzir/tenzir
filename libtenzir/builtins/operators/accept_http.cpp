@@ -468,6 +468,7 @@ public:
     // reschedule back to the proxygen IO EventBase before touching the
     // queue or returning the response, because proxygen writes the
     // response on this coroutine's executor.
+    permit.release();
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
     if (res_status != 200) {
