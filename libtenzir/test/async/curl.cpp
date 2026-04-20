@@ -19,23 +19,23 @@ namespace tenzir {
 TEST("session tracks active transfers") {
   auto session = CurlSession::make(folly::getGlobalIOExecutor());
   check(not session.busy());
-  auto transfer = session.start_perform();
-  check(session.busy());
-  transfer.cancel();
+  {
+    auto transfer = session.start_send();
+    check(session.busy());
+  }
   check(not session.busy());
 }
 
 TEST("session refuses concurrent transfers") {
   auto session = CurlSession::make(folly::getGlobalIOExecutor());
-  auto transfer = session.start_perform();
+  auto transfer = session.start_send();
   auto refused = false;
   try {
-    auto other = session.start_perform();
+    auto other = session.start_receive();
     TENZIR_UNUSED(other);
   } catch (panic_exception const&) {
     refused = true;
   }
-  transfer.cancel();
   check(refused);
 }
 
@@ -46,7 +46,7 @@ TEST("empty send completes without starting curl") {
     send.close();
     auto result = co_await send.wait();
     require(result.is_ok());
-    check_eq(result.unwrap().kind, CurlCompletionKind::finished);
+    check_eq(result.unwrap(), CurlTransferStatus::finished);
     check(not session.busy());
   }());
 }

@@ -122,11 +122,11 @@ auto configure_upload(CurlSession& session, std::string_view url,
   return curl::to_error(code);
 }
 
-auto upload(CurlSession* session, CurlSendTransfer* send,
-            Arc<ResultQueue> results) -> Task<void> {
+auto upload(CurlSession* session, CurlTransfer* send, Arc<ResultQueue> results)
+  -> Task<void> {
   auto curl_result = co_await send->wait();
   if (curl_result.is_ok()
-      and curl_result.unwrap().kind == CurlCompletionKind::local_abort) {
+      and curl_result.unwrap() == CurlTransferStatus::local_abort) {
     // A local printer failure aborted the upload; report the local error
     // instead of a derived curl transfer failure.
     co_await results->enqueue(UploadFinished{});
@@ -134,7 +134,7 @@ auto upload(CurlSession* session, CurlSendTransfer* send,
   }
   if (curl_result.is_err()) {
     co_await results->enqueue(
-      UploadFailed{std::move(curl_result).unwrap_err().message});
+      UploadFailed{std::move(curl_result).unwrap_err()});
     co_return;
   }
   auto [response_code_status, response_code]
@@ -181,8 +181,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    send_.emplace(
-      session_->start_send({.send_buffer_capacity = upload_queue_capacity}));
+    send_.emplace(session_->start_send(upload_queue_capacity));
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
     upload_task_ = ctx.spawn_task(upload(&*session_, &*send_, result_queue_));
     co_return;
@@ -306,7 +305,7 @@ private:
   };
 
   Option<CurlSession> session_;
-  Option<CurlSendTransfer> send_;
+  Option<CurlTransfer> send_;
   mutable Arc<ResultQueue> result_queue_;
   Option<AsyncHandle<void>> upload_task_;
   ToFtpArgs args_;

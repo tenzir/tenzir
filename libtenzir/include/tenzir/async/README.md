@@ -72,20 +72,19 @@ Use it like this:
 
 - Create a session with `CurlSession::make(ctx.io_executor())`, configure
   `session.easy()` directly, then start one semantic transfer with
-  `start_perform()`, `start_send()`, `start_receive()`, or `start_duplex()`.
+  `start_send()` or `start_receive()`.
 - A session supports one active transfer at a time. Reuse the session only after
-  the current transfer has completed or has been cancelled.
+  the current transfer has completed or has been dropped.
 - For uploads, call `start_send()`, spawn a task awaiting `wait()`, then
   `push()` chunks and eventually call `close()`. If the local producer fails,
   call `abort()` so libcurl fails the transfer callback instead of hanging.
 - For downloads, call `start_receive()`, spawn a task awaiting `wait()`, and
   concurrently drain `next()` until it returns `None`.
-- For bidirectional streaming, call `start_duplex()` and use `push()` /
-  `close_send()` together with `next()`.
-- Inspect the returned `CurlResult` to distinguish a clean completion,
-  `CurlCompletionKind::local_abort`, and `Err(CurlError{...})`.
-- Cancelling the awaiting task or calling `cancel()` aborts the transfer on the
-  session's EventBase and propagates `folly::OperationCancelled`.
+- Inspect the returned `CurlTransferResult` to distinguish
+  `CurlTransferStatus::finished`, `CurlTransferStatus::local_abort`, and
+  `Err(std::string{...})`.
+- Cancelling the awaiting task aborts the transfer on the session's EventBase
+  and propagates `folly::OperationCancelled`.
 - Receive-capable transfers use bounded buffering. Keep draining `next()` while
   the transfer is active unless the receive side is intentionally aborted.
 
