@@ -766,34 +766,21 @@ auto make_record_functions_from_clickhouse(path_type& path,
       .emit(dh);
     return nullptr;
   }
-  auto fields = std::vector<std::pair<std::string_view, std::string_view>>{};
-  auto open_count = 0;
-  size_t part_start_index = 0;
-  const auto add_field = [&](size_t start, size_t size) {
-    const auto part = detail::trim(tuple_elements.substr(start, size));
-    const auto split = part.find(' ');
-    const auto name = part.substr(0, split);
-    const auto type = part.substr(split + 1);
-    fields.emplace_back(name, type);
-  };
-  for (size_t i = 0; i < tuple_elements.size(); ++i) {
-    const auto c = tuple_elements[i];
-    if (c == ')') {
-      TENZIR_ASSERT(open_count > 0);
-      --open_count;
-      continue;
+  auto fields = std::vector<std::pair<std::string, std::string_view>>{};
+  for (auto part : split_top_level_clickhouse_type_arguments(tuple_elements)) {
+    auto split = find_top_level_clickhouse_type_space(part);
+    if (split == std::string_view::npos) {
+      diagnostic::error("ClickHouse column `{}` has malformed tuple element "
+                        "`{}`",
+                        fmt::join(path, "."), part)
+        .emit(dh);
+      return nullptr;
     }
-    if (c == '(') {
-      ++open_count;
-      continue;
-    }
-    if (c == ',' and open_count == 0) {
-      add_field(part_start_index, i - part_start_index);
-      part_start_index = i + 1;
-      continue;
-    }
+    auto name
+      = unquote_identifier_component(detail::trim(part.substr(0, split)));
+    auto type = detail::trim(part.substr(split + 1));
+    fields.emplace_back(std::move(name), type);
   }
-  add_field(part_start_index, clickhouse_typename.npos);
   for (const auto& [k, t] : fields) {
     path.push_back(k);
     auto functions = make_functions_from_clickhouse(path, t, dh);

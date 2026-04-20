@@ -20,6 +20,11 @@
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 
+#include <cctype>
+#include <charconv>
+#include <limits>
+#include <vector>
+
 namespace tenzir::plugins::clickhouse {
 
 TENZIR_ENUM(mode, create_append, create, append);
@@ -107,6 +112,110 @@ parse_connection_uri(std::string_view uri, location loc, diagnostic_handler& dh)
     return failure::promise();
   }
   return boost::urls::url{*parsed};
+}
+
+inline auto unquote_identifier_component(std::string_view text) -> std::string {
+  return table_name_quoting.unquote_unescape(text);
+}
+
+inline auto quote_identifier_component(std::string_view text) -> std::string {
+  return fmt::format("\"{}\"", detail::double_escape(text, "\""));
+}
+
+inline const auto clickhouse_type_quoting = detail::quoting_escaping_policy{
+  .quotes = R"('"`)",
+  .doubled_quotes_escape = true,
+};
+
+inline auto skip_quoted_token(std::string_view text, size_t& i) -> bool {
+  if (not clickhouse_type_quoting.is_quote_character(text[i])) {
+    return false;
+  }
+  if (auto closing = clickhouse_type_quoting.find_closing_quote(text, i);
+      closing != std::string_view::npos) {
+    i = closing;
+  } else {
+    i = text.size() - 1;
+  }
+  return true;
+}
+
+inline auto split_top_level_clickhouse_type_arguments(std::string_view text)
+  -> std::vector<std::string_view> {
+  auto result = std::vector<std::string_view>{};
+  auto depth = size_t{0};
+  auto begin = size_t{0};
+  for (auto i = size_t{0}; i < text.size(); ++i) {
+    if (skip_quoted_token(text, i)) {
+      continue;
+    }
+    auto c = text[i];
+    if (c == '(') {
+      ++depth;
+      continue;
+    }
+    if (c == ')') {
+      TENZIR_ASSERT(depth > 0);
+      --depth;
+      continue;
+    }
+    if (c == ',' and depth == 0) {
+      result.push_back(detail::trim(text.substr(begin, i - begin)));
+      begin = i + 1;
+    }
+  }
+  result.push_back(detail::trim(text.substr(begin)));
+  return result;
+}
+
+inline auto find_top_level_clickhouse_type_space(std::string_view text)
+  -> size_t {
+  auto depth = size_t{0};
+  for (auto i = size_t{0}; i < text.size(); ++i) {
+    if (skip_quoted_token(text, i)) {
+      continue;
+    }
+    auto c = text[i];
+    if (c == '(') {
+      ++depth;
+      continue;
+    }
+    if (c == ')') {
+      TENZIR_ASSERT(depth > 0);
+      --depth;
+      continue;
+    }
+    if (depth == 0 and std::isspace(static_cast<unsigned char>(c))) {
+      return i;
+    }
+  }
+  return std::string_view::npos;
+}
+
+inline auto
+unwrap_clickhouse_type_call(std::string_view text, std::string_view name)
+  -> Option<std::string_view> {
+  if (not text.starts_with(name)) {
+    return None{};
+  }
+  if (text.size() <= name.size() + 1 or text[name.size()] != '('
+      or text.back() != ')') {
+    return None{};
+  }
+  return text.substr(name.size() + 1, text.size() - name.size() - 2);
+}
+
+inline auto parse_clickhouse_size(std::string_view text, size_t& result)
+  -> bool {
+  auto value = uint64_t{0};
+  auto [ptr, ec]
+    = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (ec != std::errc{} or ptr != text.data() + text.size()
+      or value > std::numeric_limits<size_t>::max()) {
+    return false;
+  }
+  result = static_cast<size_t>(value);
+  return true;
 }
 
 template <bool error>
