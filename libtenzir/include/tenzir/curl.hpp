@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/data.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/generator.hpp"
 
 #include <caf/error.hpp>
@@ -18,6 +19,7 @@
 #include <curl/curl.h>
 
 #include <chrono>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -461,6 +463,12 @@ inline void check(curl::easy::code ec) {
 
 /// @relates easy
 auto to_error(easy::code code) -> caf::error;
+
+[[nodiscard]] auto try_set(easy& handle, CURLoption option, long value)
+  -> failure_or<void>;
+
+[[nodiscard]] auto try_set(easy& handle, CURLoption option,
+                           std::string_view value) -> failure_or<void>;
 
 /// A group of transfers, corresponding to a cURL "multi" handle.
 class multi {

@@ -19,79 +19,60 @@
 #include <folly/executors/IOExecutor.h>
 
 #include <cstddef>
-#include <functional>
-#include <span>
 #include <string>
-#include <utility>
 
 namespace tenzir {
 
-namespace detail {
-struct CurlBodyAccess;
-} // namespace detail
+struct CurlStreamOptions {
+  size_t send_buffer_capacity = 16;
+  size_t receive_buffer_capacity = 16;
+};
 
-/// The successful outcomes of `perform_curl*()`.
-
-enum class CurlPerformOutcome {
-  success,
+enum class CurlCompletionKind {
+  finished,
   local_abort,
 };
 
-/// The result of `perform_curl*()`.
-///
-/// `Ok(CurlPerformOutcome::success)` means the transfer completed cleanly.
-/// `Ok(CurlPerformOutcome::local_abort)` means the local upload or download
-/// body aborted the transfer intentionally.
-/// `Err(std::string)` contains the transport failure message.
-using CurlPerformResult = Result<CurlPerformOutcome, std::string>;
+struct CurlCompletion {
+  CurlCompletionKind kind = CurlCompletionKind::finished;
+};
 
-/// Asynchronously drive a prepared `curl::easy` handle on a Folly IO executor.
-///
-/// This layer owns only the libcurl/Folly integration. Callers are expected to
-/// configure the `curl::easy` handle themselves, either directly via
-/// `tenzir::curl` or through higher-level helpers. Using `transfer` is
-/// optional.
-///
-/// Typical usage:
-/// - For uploads, create a `CurlUploadBody`, spawn a producer task that
-///   repeatedly `push()`es chunks and eventually calls `close()` or `abort()`,
-///   and then `co_await perform_curl_upload(...)`.
-/// - For downloads, create a `CurlDownloadBody`, spawn a consumer task that
-///   repeatedly `pop()`s chunks until it gets `None`, and then
-///   `co_await perform_curl_download(...)`.
-///
-/// In other words, callers should mostly interact with `push()`/`pop()` and
-/// `close()`/`abort()`. The libcurl callback plumbing stays internal to this
-/// module.
-///
-/// Lifetime:
-/// - The `curl::easy` handle and body objects must outlive the returned task.
-/// - The transfer itself is driven on the provided IO executor's EventBase.
-/// - Producer and consumer coroutines may run elsewhere; backpressure is
-///   propagated through libcurl pause/resume callbacks.
-///
-/// Cancellation:
-/// - Cancelling the awaiting task aborts the in-flight transfer on the IO
-///   executor, wakes associated upload/download bodies, and propagates
-///   `folly::OperationCancelled`.
-/// - Upload cancellation before the transfer starts aborts the upload body so
-///   blocked producers do not wait forever for a transfer that will never run.
+struct CurlError {
+  std::string message;
+};
 
-/// Single-producer, single-consumer byte stream for libcurl upload callbacks.
-///
-/// The producer side is asynchronous and can wait for bounded capacity. The
-/// consumer side is synchronous so libcurl can pull data directly from
-/// `CURLOPT_READFUNCTION`. When the callback runs out of queued data, the
-/// transfer pauses instead of blocking an EventBase thread.
-class CurlUploadBody {
+using CurlResult = Result<CurlCompletion, CurlError>;
+
+class CurlPerformTransfer {
 public:
-  explicit CurlUploadBody(size_t capacity);
-  ~CurlUploadBody();
+  ~CurlPerformTransfer();
 
-  CurlUploadBody(CurlUploadBody const&) = delete;
-  auto operator=(CurlUploadBody const&) -> CurlUploadBody& = delete;
-  CurlUploadBody(CurlUploadBody&&) = delete;
-  auto operator=(CurlUploadBody&&) -> CurlUploadBody& = delete;
+  CurlPerformTransfer(CurlPerformTransfer const&) = delete;
+  auto operator=(CurlPerformTransfer const&) -> CurlPerformTransfer& = delete;
+  CurlPerformTransfer(CurlPerformTransfer&&) noexcept;
+  auto operator=(CurlPerformTransfer&&) noexcept -> CurlPerformTransfer&;
+
+  auto wait() -> Task<CurlResult>;
+  auto cancel() -> void;
+
+private:
+  struct Impl;
+
+  explicit CurlPerformTransfer(Box<Impl> impl);
+
+  Box<Impl> impl_;
+
+  friend class CurlSession;
+};
+
+class CurlSendTransfer {
+public:
+  ~CurlSendTransfer();
+
+  CurlSendTransfer(CurlSendTransfer const&) = delete;
+  auto operator=(CurlSendTransfer const&) -> CurlSendTransfer& = delete;
+  CurlSendTransfer(CurlSendTransfer&&) noexcept;
+  auto operator=(CurlSendTransfer&&) noexcept -> CurlSendTransfer&;
 
   /// Queue a chunk for libcurl to read.
   /// Returns `false` if the stream has already been closed or aborted.
@@ -101,102 +82,115 @@ public:
   /// Call this after the last queued chunk was pushed successfully.
   auto close() -> void;
 
-  /// Returns whether the stream was aborted locally.
-  auto is_aborted() -> bool;
-
   /// Abort the stream because the local producer failed or was cancelled.
   /// Subsequent reads fail with `CURLE_ABORTED_BY_CALLBACK`.
   auto abort() -> void;
 
-private:
-  auto wait_until_ready() -> Task<bool>;
-  auto read(std::span<std::byte> buffer) -> size_t;
-  auto set_resume_callback(std::function<void()> callback) -> void;
-  auto terminate() -> void;
+  auto wait() -> Task<CurlResult>;
+  auto cancel() -> void;
 
+private:
   struct Impl;
+
+  explicit CurlSendTransfer(Box<Impl> impl);
+
   Box<Impl> impl_;
 
-  friend struct detail::CurlBodyAccess;
+  friend class CurlSession;
 };
 
-/// Single-producer, single-consumer byte stream for libcurl download
-/// callbacks.
-///
-/// The producer side is synchronous so libcurl can call it directly from
-/// `CURLOPT_WRITEFUNCTION`. The consumer side is asynchronous and can apply
-/// backpressure by letting the callback pause the transfer when the bounded
-/// queue is full.
-class CurlDownloadBody {
+class CurlReceiveTransfer {
 public:
-  explicit CurlDownloadBody(size_t capacity);
-  ~CurlDownloadBody();
+  ~CurlReceiveTransfer();
 
-  CurlDownloadBody(CurlDownloadBody const&) = delete;
-  auto operator=(CurlDownloadBody const&) -> CurlDownloadBody& = delete;
-  CurlDownloadBody(CurlDownloadBody&&) = delete;
-  auto operator=(CurlDownloadBody&&) -> CurlDownloadBody& = delete;
+  CurlReceiveTransfer(CurlReceiveTransfer const&) = delete;
+  auto operator=(CurlReceiveTransfer const&) -> CurlReceiveTransfer& = delete;
+  CurlReceiveTransfer(CurlReceiveTransfer&&) noexcept;
+  auto operator=(CurlReceiveTransfer&&) noexcept -> CurlReceiveTransfer&;
 
   /// Receive the next queued chunk. Returns `None` after close or abort.
-  /// Check the result of `perform_curl_download(...)` to distinguish a clean
-  /// end-of-stream, a local abort, and a transport failure.
-  auto pop() -> Task<Option<chunk_ptr>>;
-
-  /// Returns whether the stream was aborted locally.
-  auto is_aborted() -> bool;
+  /// Check the result of `wait()` to distinguish a clean end-of-stream, a local
+  /// abort, and a transport failure.
+  auto next() -> Task<Option<chunk_ptr>>;
 
   /// Abort the stream and wake a blocked consumer.
   auto abort() -> void;
 
-  /// Close the stream and wake a blocked consumer.
-  auto close() -> void;
+  auto wait() -> Task<CurlResult>;
+  auto cancel() -> void;
 
 private:
-  auto write(std::span<const std::byte> buffer) -> size_t;
-  auto set_resume_callback(std::function<void()> callback) -> void;
-
   struct Impl;
+
+  explicit CurlReceiveTransfer(Box<Impl> impl);
+
   Box<Impl> impl_;
 
-  friend struct detail::CurlBodyAccess;
+  friend class CurlSession;
 };
 
-/// Drive a prepared curl handle with no streaming body callbacks.
+class CurlDuplexTransfer {
+public:
+  ~CurlDuplexTransfer();
+
+  CurlDuplexTransfer(CurlDuplexTransfer const&) = delete;
+  auto operator=(CurlDuplexTransfer const&) -> CurlDuplexTransfer& = delete;
+  CurlDuplexTransfer(CurlDuplexTransfer&&) noexcept;
+  auto operator=(CurlDuplexTransfer&&) noexcept -> CurlDuplexTransfer&;
+
+  auto push(chunk_ptr chunk) -> Task<bool>;
+  auto close_send() -> void;
+  auto abort_send() -> void;
+
+  auto next() -> Task<Option<chunk_ptr>>;
+  auto abort_receive() -> void;
+
+  auto wait() -> Task<CurlResult>;
+  auto cancel() -> void;
+
+private:
+  struct Impl;
+
+  explicit CurlDuplexTransfer(Box<Impl> impl);
+
+  Box<Impl> impl_;
+
+  friend class CurlSession;
+};
+
+/// Reusable async curl session.
 ///
-/// Returns `Ok(CurlPerformOutcome::success)` on completion and
-/// `Err(std::string)` on transport failure. Cancellation aborts the transfer
+/// Configure `easy()` directly, then start one semantic transfer at a time. The
+/// transfer runs on the Folly IO executor provided to `make()`. Cancelling the
+/// awaiting task or calling `cancel()` aborts the in-flight libcurl transfer
 /// and propagates `folly::OperationCancelled`.
-auto perform_curl(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                  curl::easy& handle) -> Task<CurlPerformResult>;
+class CurlSession {
+public:
+  static auto make(folly::Executor::KeepAlive<folly::IOExecutor> executor)
+    -> CurlSession;
 
-/// Drive a prepared curl handle with a streaming upload body.
-///
-/// The upload waits until the body has buffered data or reached a terminal
-/// state before it starts the transfer, so callers do not need a separate
-/// readiness barrier. If the body was already aborted at that point, the
-/// function returns `Ok(CurlPerformOutcome::local_abort)` without touching the
-/// remote peer. If the body closes before any bytes were queued, the function
-/// returns `Ok(CurlPerformOutcome::success)` without starting the transfer.
-///
-/// Returns `Ok(CurlPerformOutcome::local_abort)` if the upload body was
-/// aborted locally, and `Err(std::string)` for transport errors.
-/// Cancellation aborts the body, aborts the transfer, and propagates
-/// `folly::OperationCancelled`.
-auto perform_curl_upload(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                         curl::easy& handle, CurlUploadBody& body)
-  -> Task<CurlPerformResult>;
+  ~CurlSession();
 
-/// Drive a prepared curl handle with a streaming download body.
-///
-/// Callers should consume `body.pop()` concurrently while this task is running.
-/// The body is closed automatically when the transfer finishes or fails.
-///
-/// Returns `Ok(CurlPerformOutcome::local_abort)` if the download body was
-/// aborted locally, and `Err(std::string)` for transport errors.
-/// Cancellation aborts the body, aborts the transfer, and propagates
-/// `folly::OperationCancelled`.
-auto perform_curl_download(
-  folly::Executor::KeepAlive<folly::IOExecutor> executor, curl::easy& handle,
-  CurlDownloadBody& body) -> Task<CurlPerformResult>;
+  CurlSession(CurlSession const&) = delete;
+  auto operator=(CurlSession const&) -> CurlSession& = delete;
+  CurlSession(CurlSession&&) noexcept;
+  auto operator=(CurlSession&&) noexcept -> CurlSession&;
+
+  auto easy() -> curl::easy&;
+
+  auto start_perform() -> CurlPerformTransfer;
+  auto start_send(CurlStreamOptions options = {}) -> CurlSendTransfer;
+  auto start_receive(CurlStreamOptions options = {}) -> CurlReceiveTransfer;
+  auto start_duplex(CurlStreamOptions options = {}) -> CurlDuplexTransfer;
+
+  auto busy() const -> bool;
+
+private:
+  struct Impl;
+
+  explicit CurlSession(Box<Impl> impl);
+
+  Box<Impl> impl_;
+};
 
 } // namespace tenzir

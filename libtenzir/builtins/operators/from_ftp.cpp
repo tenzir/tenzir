@@ -12,13 +12,12 @@
 #include <tenzir/async/curl.hpp>
 #include <tenzir/async/scope.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/http.hpp>
+#include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
-#include <tenzir/transfer.hpp>
 
 #include <fmt/format.h>
 #include <folly/coro/BoundedQueue.h>
@@ -82,37 +81,66 @@ auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
-              std::string url, transfer_options options,
-              CurlDownloadBody* download_body, Arc<MessageQueue> queue)
-  -> Task<void> {
-  auto request = http::request{};
-  request.uri = std::move(url);
-  auto tx = transfer{std::move(options)};
-  if (auto err = tx.prepare(std::move(request)); err.valid()) {
-    co_await queue->enqueue(TransferFailed{fmt::format("{}", err)});
-    co_return;
+auto set_curl_option(curl::easy& easy, CURLoption option, long value,
+                     std::string_view name) -> caf::error {
+  if (curl::try_set(easy, option, value)) {
+    return {};
   }
-  auto curl_result = CurlPerformResult{CurlPerformOutcome::success};
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: failed to set `{}`", name));
+}
+
+auto set_curl_option(curl::easy& easy, CURLoption option,
+                     std::string_view value, std::string_view name)
+  -> caf::error {
+  if (curl::try_set(easy, option, value)) {
+    return {};
+  }
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: failed to set `{}`", name));
+}
+
+auto configure_download(CurlSession& session, std::string_view url,
+                        tls_options const& tls) -> caf::error {
+  auto& easy = session.easy();
+  if (auto err = set_curl_option(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp",
+                                 "CURLOPT_DEFAULT_PROTOCOL");
+      err.valid()) {
+    return err;
+  }
+  if (auto err = set_curl_option(easy, CURLOPT_URL, url, "CURLOPT_URL");
+      err.valid()) {
+    return err;
+  }
+  if (auto err = set_curl_option(easy, CURLOPT_HTTPGET, 1L, "CURLOPT_HTTPGET");
+      err.valid()) {
+    return err;
+  }
+  return tls.apply_to(easy, url, nullptr);
+}
+
+auto download(CurlSession* session, CurlReceiveTransfer* receive,
+              Arc<MessageQueue> queue) -> Task<void> {
+  auto curl_result = CurlResult{CurlCompletion{}};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn([&]() -> Task<void> {
-      while (auto chunk = co_await download_body->pop()) {
+      while (auto chunk = co_await receive->next()) {
         co_await queue->enqueue(Payload{std::move(*chunk)});
       }
     });
-    curl_result = co_await perform_curl_download(std::move(io_executor),
-                                                 tx.handle(), *download_body);
+    curl_result = co_await receive->wait();
   });
   if (curl_result.is_err()) {
-    co_await queue->enqueue(TransferFailed{curl_result.unwrap_err()});
+    co_await queue->enqueue(
+      TransferFailed{std::move(curl_result).unwrap_err().message});
     co_return;
   }
-  if (curl_result.unwrap() == CurlPerformOutcome::local_abort) {
+  if (curl_result.unwrap().kind == CurlCompletionKind::local_abort) {
     co_await queue->enqueue(TransferDone{});
     co_return;
   }
   auto [code, response_code]
-    = tx.handle().get<curl::easy::info::response_code>();
+    = session->easy().get<curl::easy::info::response_code>();
   if (code == curl::easy::code::ok
       and (response_code < 200 or response_code > 299)) {
     co_await queue->enqueue(
@@ -125,8 +153,7 @@ auto download(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
 class FromFtp final : public Operator<void, table_slice> {
 public:
   explicit FromFtp(FromFtpArgs args)
-    : download_body_{std::in_place, message_queue_capacity},
-      message_queue_{std::in_place, message_queue_capacity},
+    : message_queue_{std::in_place, message_queue_capacity},
       args_{std::move(args)} {
   }
 
@@ -147,13 +174,19 @@ public:
       co_return;
     }
     tls.update_from_config(std::addressof(ctx.actor_system().config()));
-    auto options = transfer_options{};
-    options.default_protocol = "ftp";
-    options.ssl = tls;
+    session_.emplace(CurlSession::make(ctx.io_executor()));
+    if (auto err = configure_download(*session_, resolved_url_, tls);
+        err.valid()) {
+      diagnostic::error("FTP download from `{}` failed: {}", resolved_url_, err)
+        .primary(args_.url.source)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    receive_.emplace(session_->start_receive(
+      {.receive_buffer_capacity = message_queue_capacity}));
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
-    ctx.spawn_task(download(ctx.io_executor(), resolved_url_,
-                            std::move(options), &*download_body_,
-                            message_queue_));
+    ctx.spawn_task(download(&*session_, &*receive_, message_queue_));
     co_return;
   }
 
@@ -174,14 +207,18 @@ public:
         }
         auto sub = ctx.get_sub(caf::none);
         if (not sub) {
-          download_body_->abort();
+          if (receive_) {
+            receive_->abort();
+          }
           lifecycle_ = Lifecycle::done;
           co_return;
         }
         auto& parser = as<SubHandle<chunk_ptr>>(*sub);
         auto push_result = co_await parser.push(std::move(payload.chunk));
         if (push_result.is_err()) {
-          download_body_->abort();
+          if (receive_) {
+            receive_->abort();
+          }
           lifecycle_ = Lifecycle::done;
         }
       },
@@ -221,7 +258,9 @@ public:
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
-    download_body_->abort();
+    if (receive_) {
+      receive_->abort();
+    }
     if (auto sub = ctx.get_sub(caf::none)) {
       auto& parser = as<SubHandle<chunk_ptr>>(*sub);
       co_await parser.close();
@@ -242,7 +281,8 @@ private:
     done,
   };
 
-  Box<CurlDownloadBody> download_body_;
+  Option<CurlSession> session_;
+  Option<CurlReceiveTransfer> receive_;
   mutable Arc<MessageQueue> message_queue_;
   FromFtpArgs args_;
   std::string resolved_url_;

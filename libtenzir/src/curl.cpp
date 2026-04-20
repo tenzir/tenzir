@@ -227,6 +227,21 @@ auto to_error(easy::code code) -> caf::error {
                          fmt::format("curl: {}", to_string(code)));
 }
 
+auto try_set(easy& handle, CURLoption option, long value) -> failure_or<void> {
+  if (handle.set(option, value) == easy::code::ok) {
+    return {};
+  }
+  return failure::promise();
+}
+
+auto try_set(easy& handle, CURLoption option, std::string_view value)
+  -> failure_or<void> {
+  if (handle.set(option, value) == easy::code::ok) {
+    return {};
+  }
+  return failure::promise();
+}
+
 multi::multi() : multi_{curl_multi_init(), curlm_deleter{}} {
 }
 

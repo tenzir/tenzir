@@ -63,29 +63,31 @@ buffers filling up, or even deadlocks in the case of bounded channels.
 
 ## Async curl patterns
 
-The async curl layer is intended to drive a prepared `tenzir::curl::easy`
-handle on a Folly IO executor. It owns the libcurl/Folly integration only; it
-is not coupled to `transfer`.
+The async curl layer is centered around `CurlSession`. A session owns one
+reusable `tenzir::curl::easy` handle and drives transfers on a Folly IO
+executor. It owns the libcurl/Folly integration only; it is not coupled to
+`transfer`.
 
 Use it like this:
 
-- For uploads, create a `CurlUploadBody`, spawn one producer task that
-  `push()`es chunks and eventually calls `close()`.
-- If the local producer fails, call `abort()` on the upload body so libcurl
-  fails the transfer callback instead of hanging.
-- For downloads, create a `CurlDownloadBody`, spawn one consumer task that
-  repeatedly `pop()`s until it gets `None`, and concurrently await
-  `perform_curl_download(...)`.
-- Always run `perform_curl*()` on a `folly::IOExecutor`; the returned task
-  drives libcurl's multi socket/timer API from that executor's `EventBase`.
-- Inspect the returned `CurlPerformResult` to distinguish
-  `Ok(CurlPerformOutcome::success)`,
-  `Ok(CurlPerformOutcome::local_abort)`, and `Err(std::string)`.
-- Cancellation of `perform_curl*()` aborts the transfer on that EventBase and
-  wakes the associated body objects before propagating
-  `folly::OperationCancelled`.
-- Treat both curl body types as single-producer, single-consumer adapters.
-  They are not general-purpose multi-reader or multi-writer channels.
+- Create a session with `CurlSession::make(ctx.io_executor())`, configure
+  `session.easy()` directly, then start one semantic transfer with
+  `start_perform()`, `start_send()`, `start_receive()`, or `start_duplex()`.
+- A session supports one active transfer at a time. Reuse the session only after
+  the current transfer has completed or has been cancelled.
+- For uploads, call `start_send()`, spawn a task awaiting `wait()`, then
+  `push()` chunks and eventually call `close()`. If the local producer fails,
+  call `abort()` so libcurl fails the transfer callback instead of hanging.
+- For downloads, call `start_receive()`, spawn a task awaiting `wait()`, and
+  concurrently drain `next()` until it returns `None`.
+- For bidirectional streaming, call `start_duplex()` and use `push()` /
+  `close_send()` together with `next()`.
+- Inspect the returned `CurlResult` to distinguish a clean completion,
+  `CurlCompletionKind::local_abort`, and `Err(CurlError{...})`.
+- Cancelling the awaiting task or calling `cancel()` aborts the transfer on the
+  session's EventBase and propagates `folly::OperationCancelled`.
+- Receive-capable transfers use bounded buffering. Keep draining `next()` while
+  the transfer is active unless the receive side is intentionally aborted.
 
 ## Notes
 

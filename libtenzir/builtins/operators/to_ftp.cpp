@@ -10,15 +10,13 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/curl.hpp>
-#include <tenzir/box.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/http.hpp>
+#include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
-#include <tenzir/transfer.hpp>
 
 #include <fmt/format.h>
 #include <folly/coro/BoundedQueue.h>
@@ -79,36 +77,68 @@ auto resolve_url(OpCtx& ctx, ToFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
-            std::string url, transfer_options options,
-            CurlUploadBody* upload_body, Arc<ResultQueue> results)
-  -> Task<void> {
-  auto request = http::request{};
-  request.uri = std::move(url);
-  request.method = "PUT";
-  auto tx = transfer{std::move(options)};
-  if (auto err = tx.prepare(std::move(request)); err.valid()) {
-    upload_body->abort();
-    co_await results->enqueue(UploadFailed{fmt::format("{}", err)});
-    co_return;
+auto set_curl_option(curl::easy& easy, CURLoption option, long value,
+                     std::string_view name) -> caf::error {
+  if (curl::try_set(easy, option, value)) {
+    return {};
   }
-  auto code = tx.handle().set([](std::span<const std::byte>) {});
-  TENZIR_ASSERT(code == curl::easy::code::ok);
-  auto curl_result = co_await perform_curl_upload(std::move(io_executor),
-                                                  tx.handle(), *upload_body);
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: failed to set `{}`", name));
+}
+
+auto set_curl_option(curl::easy& easy, CURLoption option,
+                     std::string_view value, std::string_view name)
+  -> caf::error {
+  if (curl::try_set(easy, option, value)) {
+    return {};
+  }
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: failed to set `{}`", name));
+}
+
+auto configure_upload(CurlSession& session, std::string_view url,
+                      tls_options const& tls) -> caf::error {
+  auto& easy = session.easy();
+  if (auto err = set_curl_option(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp",
+                                 "CURLOPT_DEFAULT_PROTOCOL");
+      err.valid()) {
+    return err;
+  }
+  if (auto err = set_curl_option(easy, CURLOPT_URL, url, "CURLOPT_URL");
+      err.valid()) {
+    return err;
+  }
+  if (auto err = set_curl_option(easy, CURLOPT_UPLOAD, 1L, "CURLOPT_UPLOAD");
+      err.valid()) {
+    return err;
+  }
+  if (auto err = tls.apply_to(easy, url, nullptr); err.valid()) {
+    return err;
+  }
+  auto code = easy.set([](std::span<const std::byte>) {});
+  if (code == curl::easy::code::ok) {
+    return {};
+  }
+  return curl::to_error(code);
+}
+
+auto upload(CurlSession* session, CurlSendTransfer* send,
+            Arc<ResultQueue> results) -> Task<void> {
+  auto curl_result = co_await send->wait();
   if (curl_result.is_ok()
-      and curl_result.unwrap() == CurlPerformOutcome::local_abort) {
+      and curl_result.unwrap().kind == CurlCompletionKind::local_abort) {
     // A local printer failure aborted the upload; report the local error
     // instead of a derived curl transfer failure.
     co_await results->enqueue(UploadFinished{});
     co_return;
   }
   if (curl_result.is_err()) {
-    co_await results->enqueue(UploadFailed{curl_result.unwrap_err()});
+    co_await results->enqueue(
+      UploadFailed{std::move(curl_result).unwrap_err().message});
     co_return;
   }
   auto [response_code_status, response_code]
-    = tx.handle().get<curl::easy::info::response_code>();
+    = session->easy().get<curl::easy::info::response_code>();
   if (response_code_status == curl::easy::code::ok
       and (response_code < 200 or response_code > 299)) {
     co_await results->enqueue(
@@ -121,8 +151,7 @@ auto upload(folly::Executor::KeepAlive<folly::IOExecutor> io_executor,
 class ToFtp final : public Operator<table_slice, void> {
 public:
   explicit ToFtp(ToFtpArgs args)
-    : upload_body_{std::in_place, upload_queue_capacity},
-      result_queue_{std::in_place, result_queue_capacity},
+    : result_queue_{std::in_place, result_queue_capacity},
       args_{std::move(args)} {
   }
 
@@ -143,13 +172,19 @@ public:
       co_return;
     }
     tls.update_from_config(std::addressof(ctx.actor_system().config()));
-    auto options = transfer_options{};
-    options.default_protocol = "ftp";
-    options.ssl = tls;
+    session_.emplace(CurlSession::make(ctx.io_executor()));
+    if (auto err = configure_upload(*session_, resolved_url_, tls);
+        err.valid()) {
+      diagnostic::error("FTP upload to `{}` failed: {}", resolved_url_, err)
+        .primary(args_.url.source)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    send_.emplace(
+      session_->start_send({.send_buffer_capacity = upload_queue_capacity}));
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
-    upload_task_ = ctx.spawn_task(upload(ctx.io_executor(), resolved_url_,
-                                         std::move(options), &*upload_body_,
-                                         result_queue_));
+    upload_task_ = ctx.spawn_task(upload(&*session_, &*send_, result_queue_));
     co_return;
   }
 
@@ -166,7 +201,9 @@ public:
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
       lifecycle_ = Lifecycle::done;
-      upload_body_->abort();
+      if (send_) {
+        send_->abort();
+      }
     }
   }
 
@@ -174,7 +211,8 @@ public:
     if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
       co_return;
     }
-    if (not co_await upload_body_->push(std::move(chunk))) {
+    TENZIR_ASSERT(send_);
+    if (not co_await send_->push(std::move(chunk))) {
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -195,7 +233,9 @@ public:
                           failure.error)
           .primary(args_.url.source)
           .emit(ctx);
-        upload_body_->abort();
+        if (send_) {
+          send_->abort();
+        }
         if (auto sub = ctx.get_sub(caf::none)) {
           auto& printer = as<SubHandle<table_slice>>(*sub);
           co_await printer.close();
@@ -206,7 +246,9 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (lifecycle_ == Lifecycle::done) {
-      upload_body_->abort();
+      if (send_) {
+        send_->abort();
+      }
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
@@ -216,7 +258,9 @@ public:
         co_await printer.close();
         co_return FinalizeBehavior::continue_;
       }
-      upload_body_->close();
+      if (send_) {
+        send_->close();
+      }
       co_return FinalizeBehavior::continue_;
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
@@ -224,7 +268,9 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    upload_body_->close();
+    if (send_) {
+      send_->close();
+    }
     if (upload_task_) {
       co_await upload_task_->try_join();
       upload_task_ = None{};
@@ -237,7 +283,9 @@ public:
       co_return;
     }
     lifecycle_ = Lifecycle::done;
-    upload_body_->abort();
+    if (send_) {
+      send_->abort();
+    }
     if (auto sub = ctx.get_sub(caf::none)) {
       auto& printer = as<SubHandle<table_slice>>(*sub);
       co_await printer.close();
@@ -257,7 +305,8 @@ private:
     done,
   };
 
-  Box<CurlUploadBody> upload_body_;
+  Option<CurlSession> session_;
+  Option<CurlSendTransfer> send_;
   mutable Arc<ResultQueue> result_queue_;
   Option<AsyncHandle<void>> upload_task_;
   ToFtpArgs args_;
