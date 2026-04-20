@@ -119,9 +119,9 @@ auto configure_download(CurlSession& session, std::string_view url,
   return tls.apply_to(easy, url, nullptr);
 }
 
-auto download(CurlSession* session, CurlReceiveTransfer* receive,
+auto download(CurlSession* session, CurlTransfer* receive,
               Arc<MessageQueue> queue) -> Task<void> {
-  auto curl_result = CurlResult{CurlCompletion{}};
+  auto curl_result = CurlTransferResult{CurlTransferStatus::finished};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn([&]() -> Task<void> {
       while (auto chunk = co_await receive->next()) {
@@ -132,10 +132,10 @@ auto download(CurlSession* session, CurlReceiveTransfer* receive,
   });
   if (curl_result.is_err()) {
     co_await queue->enqueue(
-      TransferFailed{std::move(curl_result).unwrap_err().message});
+      TransferFailed{std::move(curl_result).unwrap_err()});
     co_return;
   }
-  if (curl_result.unwrap().kind == CurlCompletionKind::local_abort) {
+  if (curl_result.unwrap() == CurlTransferStatus::local_abort) {
     co_await queue->enqueue(TransferDone{});
     co_return;
   }
@@ -183,8 +183,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    receive_.emplace(session_->start_receive(
-      {.receive_buffer_capacity = message_queue_capacity}));
+    receive_.emplace(session_->start_receive(message_queue_capacity));
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
     ctx.spawn_task(download(&*session_, &*receive_, message_queue_));
     co_return;
@@ -282,7 +281,7 @@ private:
   };
 
   Option<CurlSession> session_;
-  Option<CurlReceiveTransfer> receive_;
+  Option<CurlTransfer> receive_;
   mutable Arc<MessageQueue> message_queue_;
   FromFtpArgs args_;
   std::string resolved_url_;

@@ -23,56 +23,21 @@
 
 namespace tenzir {
 
-struct CurlStreamOptions {
-  size_t send_buffer_capacity = 16;
-  size_t receive_buffer_capacity = 16;
-};
-
-enum class CurlCompletionKind {
+enum class CurlTransferStatus {
   finished,
   local_abort,
 };
 
-struct CurlCompletion {
-  CurlCompletionKind kind = CurlCompletionKind::finished;
-};
+using CurlTransferResult = Result<CurlTransferStatus, std::string>;
 
-struct CurlError {
-  std::string message;
-};
-
-using CurlResult = Result<CurlCompletion, CurlError>;
-
-class CurlPerformTransfer {
+class CurlTransfer {
 public:
-  ~CurlPerformTransfer();
+  ~CurlTransfer();
 
-  CurlPerformTransfer(CurlPerformTransfer const&) = delete;
-  auto operator=(CurlPerformTransfer const&) -> CurlPerformTransfer& = delete;
-  CurlPerformTransfer(CurlPerformTransfer&&) noexcept;
-  auto operator=(CurlPerformTransfer&&) noexcept -> CurlPerformTransfer&;
-
-  auto wait() -> Task<CurlResult>;
-  auto cancel() -> void;
-
-private:
-  struct Impl;
-
-  explicit CurlPerformTransfer(Box<Impl> impl);
-
-  Box<Impl> impl_;
-
-  friend class CurlSession;
-};
-
-class CurlSendTransfer {
-public:
-  ~CurlSendTransfer();
-
-  CurlSendTransfer(CurlSendTransfer const&) = delete;
-  auto operator=(CurlSendTransfer const&) -> CurlSendTransfer& = delete;
-  CurlSendTransfer(CurlSendTransfer&&) noexcept;
-  auto operator=(CurlSendTransfer&&) noexcept -> CurlSendTransfer&;
+  CurlTransfer(CurlTransfer const&) = delete;
+  auto operator=(CurlTransfer const&) -> CurlTransfer& = delete;
+  CurlTransfer(CurlTransfer&&) noexcept;
+  auto operator=(CurlTransfer&&) noexcept -> CurlTransfer&;
 
   /// Queue a chunk for libcurl to read.
   /// Returns `false` if the stream has already been closed or aborted.
@@ -82,76 +47,20 @@ public:
   /// Call this after the last queued chunk was pushed successfully.
   auto close() -> void;
 
-  /// Abort the stream because the local producer failed or was cancelled.
-  /// Subsequent reads fail with `CURLE_ABORTED_BY_CALLBACK`.
+  /// Abort the local stream and wake blocked producers or consumers.
   auto abort() -> void;
-
-  auto wait() -> Task<CurlResult>;
-  auto cancel() -> void;
-
-private:
-  struct Impl;
-
-  explicit CurlSendTransfer(Box<Impl> impl);
-
-  Box<Impl> impl_;
-
-  friend class CurlSession;
-};
-
-class CurlReceiveTransfer {
-public:
-  ~CurlReceiveTransfer();
-
-  CurlReceiveTransfer(CurlReceiveTransfer const&) = delete;
-  auto operator=(CurlReceiveTransfer const&) -> CurlReceiveTransfer& = delete;
-  CurlReceiveTransfer(CurlReceiveTransfer&&) noexcept;
-  auto operator=(CurlReceiveTransfer&&) noexcept -> CurlReceiveTransfer&;
 
   /// Receive the next queued chunk. Returns `None` after close or abort.
   /// Check the result of `wait()` to distinguish a clean end-of-stream, a local
   /// abort, and a transport failure.
   auto next() -> Task<Option<chunk_ptr>>;
 
-  /// Abort the stream and wake a blocked consumer.
-  auto abort() -> void;
-
-  auto wait() -> Task<CurlResult>;
-  auto cancel() -> void;
+  auto wait() -> Task<CurlTransferResult>;
 
 private:
   struct Impl;
 
-  explicit CurlReceiveTransfer(Box<Impl> impl);
-
-  Box<Impl> impl_;
-
-  friend class CurlSession;
-};
-
-class CurlDuplexTransfer {
-public:
-  ~CurlDuplexTransfer();
-
-  CurlDuplexTransfer(CurlDuplexTransfer const&) = delete;
-  auto operator=(CurlDuplexTransfer const&) -> CurlDuplexTransfer& = delete;
-  CurlDuplexTransfer(CurlDuplexTransfer&&) noexcept;
-  auto operator=(CurlDuplexTransfer&&) noexcept -> CurlDuplexTransfer&;
-
-  auto push(chunk_ptr chunk) -> Task<bool>;
-  auto close_send() -> void;
-  auto abort_send() -> void;
-
-  auto next() -> Task<Option<chunk_ptr>>;
-  auto abort_receive() -> void;
-
-  auto wait() -> Task<CurlResult>;
-  auto cancel() -> void;
-
-private:
-  struct Impl;
-
-  explicit CurlDuplexTransfer(Box<Impl> impl);
+  explicit CurlTransfer(Box<Impl> impl);
 
   Box<Impl> impl_;
 
@@ -178,10 +87,8 @@ public:
 
   auto easy() -> curl::easy&;
 
-  auto start_perform() -> CurlPerformTransfer;
-  auto start_send(CurlStreamOptions options = {}) -> CurlSendTransfer;
-  auto start_receive(CurlStreamOptions options = {}) -> CurlReceiveTransfer;
-  auto start_duplex(CurlStreamOptions options = {}) -> CurlDuplexTransfer;
+  auto start_send(size_t buffer_capacity = 16) -> CurlTransfer;
+  auto start_receive(size_t buffer_capacity = 16) -> CurlTransfer;
 
   auto busy() const -> bool;
 
