@@ -3,4 +3,4 @@ error: true
 ---
 
 from_nats "unused",
-          _queue_capacity=2147483648
+          metadata_field=message

@@ -1,6 +1,6 @@
 error: `_queue_capacity` must fit into a 32-bit integer
  --> tests/operators/from_nats/error_queue_capacity_too_large.tql:6:27
   |
-6 |           _queue_capacity=2147483648 {
+6 |           _queue_capacity=2147483648
   |                           ^^^^^^^^^^ 
   |

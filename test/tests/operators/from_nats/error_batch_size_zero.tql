@@ -3,6 +3,4 @@ error: true
 ---
 
 from_nats "unused",
-          _batch_size=0 {
-  read_lines
-}
+          _batch_size=0

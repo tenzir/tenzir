@@ -2,11 +2,11 @@
 from_nats env("NATS_SUBJECT"),
           url=env("NATS_URL"),
           durable=env("NATS_DURABLE"),
-          count=1 {
-  read_lines
-  subject = $subject
-  stream = $stream
-  consumer = $consumer
-  stream_sequence = $stream_sequence
-  num_delivered = $num_delivered
-}
+          count=1,
+          metadata_field=nats
+select line = string(message),
+       subject = nats.subject,
+       stream = nats.stream,
+       consumer = nats.consumer,
+       stream_sequence = nats.stream_sequence,
+       num_delivered = nats.num_delivered

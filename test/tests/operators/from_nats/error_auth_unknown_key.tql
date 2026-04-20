@@ -3,6 +3,4 @@ error: true
 ---
 
 from_nats "unused",
-          auth={foo: "bar"} {
-  read_lines
-}
+          auth={foo: "bar"}

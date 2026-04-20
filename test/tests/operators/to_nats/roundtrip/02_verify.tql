@@ -2,8 +2,8 @@
 from_nats env("NATS_SUBJECT"),
           url=env("NATS_URL"),
           durable=env("NATS_DURABLE"),
-          count=1 {
-  read_lines
-  source = $headers.source
-  multi = $headers.multi
-}
+          count=1,
+          metadata_field=nats
+select line = string(message),
+       source = nats.headers.source,
+       multi = nats.headers.multi

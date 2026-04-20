@@ -56,9 +56,8 @@ def main() -> None:
     pipeline = """
 from_nats env("NATS_SUBJECT"),
           url=env("NATS_URL"),
-          durable=env("NATS_DURABLE") {
-  read_lines
-}
+          durable=env("NATS_DURABLE")
+select line = string(message)
 head 1
 """.strip()
     proc = subprocess.Popen(

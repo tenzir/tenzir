@@ -1,13 +1,8 @@
-// Keep the first message in-flight long enough for an extra prefetched message
-// to arrive after the count is reached.
+// Stop after the first message and NAK any prefetched messages.
 from_nats env("NATS_SUBJECT"),
           url=env("NATS_URL"),
           durable=env("NATS_DURABLE"),
           count=1,
           _batch_size=2,
-          _queue_capacity=2 {
-  read_lines
-  write_lines
-  shell "sleep 1; cat"
-  read_lines
-}
+          _queue_capacity=2
+select line = string(message)

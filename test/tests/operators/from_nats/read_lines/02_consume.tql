@@ -3,6 +3,5 @@ from_nats env("NATS_SUBJECT"),
           durable=env("NATS_DURABLE"),
           count=1,
           _batch_size=10,
-          _queue_capacity=10 {
-  read_lines
-}
+          _queue_capacity=10
+select line = string(message)

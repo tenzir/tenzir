@@ -1,6 +1,3 @@
 {
-  line: "alpha",
-}
-{
-  line: "beta",
+  line: "alpha\nbeta",
 }

@@ -1,6 +1,6 @@
 error: `_batch_size` must be greater than zero
  --> tests/operators/from_nats/error_batch_size_zero.tql:6:23
   |
-6 |           _batch_size=0 {
+6 |           _batch_size=0
   |                       ^ 
   |

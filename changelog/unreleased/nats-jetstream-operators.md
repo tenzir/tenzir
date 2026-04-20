@@ -11,9 +11,8 @@ Tenzir can now consume from and publish to NATS JetStream subjects with the
 new `from_nats` and `to_nats` operators:
 
 ```tql
-from_nats "alerts" {
-  read_json
-}
+from_nats "alerts", metadata_field=nats
+this = string(message).parse_json()
 ```
 
 ```tql
@@ -22,4 +21,6 @@ to_nats "alerts", message=message
 ```
 
 Both operators support configurable connection settings, authentication, and
-the standard `tls` record.
+the standard `tls` record. `from_nats` emits one event per message with the raw
+payload in the `message` blob field and can attach NATS metadata with
+`metadata_field`.
