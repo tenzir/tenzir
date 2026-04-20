@@ -65,8 +65,7 @@ buffers filling up, or even deadlocks in the case of bounded channels.
 
 The async curl layer is centered around `CurlSession`. A session owns one
 reusable `tenzir::curl::easy` handle and drives transfers on a Folly IO
-executor. It owns the libcurl/Folly integration only; it is not coupled to
-`transfer`.
+executor.
 
 Use it like this:
 
@@ -79,14 +78,14 @@ Use it like this:
   `push()` chunks and eventually call `close()`. If the local producer fails,
   call `abort()` so libcurl fails the transfer callback instead of hanging.
 - For downloads, call `start_receive()`, spawn a task awaiting `wait()`, and
-  concurrently drain `next()` until it returns `None`.
+  concurrently drain `next()` until it returns `None`. The `buffer_capacity`
+  argument controls how many chunks the receive queue holds; if it fills up,
+  libcurl pauses until `next()` drains another chunk.
 - Inspect the returned `CurlTransferResult` to distinguish
   `CurlTransferStatus::finished`, `CurlTransferStatus::local_abort`, and
   `Err(std::string{...})`.
 - Cancelling the awaiting task aborts the transfer on the session's EventBase
   and propagates `folly::OperationCancelled`.
-- Receive-capable transfers use bounded buffering. Keep draining `next()` while
-  the transfer is active unless the receive side is intentionally aborted.
 
 ## Notes
 
