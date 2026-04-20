@@ -1,7 +1,8 @@
-export
+from { foo: 42}
 local {
   where foo == 42
 }
+bar = 7
 remote {
   where bar == 7
 }
