@@ -97,6 +97,7 @@ public:
       .user = "default",
       .password = "",
       .default_database = None{},
+      .set_client_default_database = false,
       .ssl = args_.ssl,
       .table = args_.table,
       .mode = args_.mode,
@@ -246,6 +247,7 @@ public:
       .user = "default", // resolved as secret below.
       .password = "",    // resolved as secret below.
       .default_database = None{},
+      .set_client_default_database = false,
       .ssl = std::move(ssl),
       .table = args_.table,
       .mode = {*mode_val, args_.mode.source},

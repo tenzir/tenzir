@@ -40,6 +40,7 @@ public:
     std::string user;
     std::string password;
     Option<std::string> default_database = None{};
+    bool set_client_default_database = true;
     tls_options ssl;
     ast::expression table = {};
     located<enum mode> mode = located{mode::create_append, operator_location};
@@ -54,7 +55,9 @@ public:
               std::string{host}, detail::narrow_cast<uint16_t>(port.inner)}})
             .SetUser(std::string{user})
             .SetPassword(std::string{password})
-            .SetDefaultDatabase(default_database ? *default_database : "");
+            .SetDefaultDatabase(set_client_default_database and default_database
+                                  ? *default_database
+                                  : "");
       if (ssl.get_tls(&cfg).inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
         tls_opts.SetSkipVerification(
@@ -108,6 +111,7 @@ public:
     -> failure_or<void>;
 
 private:
+  auto effective_table_name(std::string_view table_name) const -> std::string;
   auto insert(const table_slice& slice, std::string_view table_name,
               std::string_view query_id) -> failure_or<void>;
   /// Ensures that the transformation for the given name + schema exists. This
