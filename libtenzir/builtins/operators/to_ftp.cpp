@@ -11,7 +11,6 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/async/curl.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
@@ -77,51 +76,6 @@ auto resolve_url(OpCtx& ctx, ToFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto set_curl_option(curl::easy& easy, CURLoption option, long value,
-                     std::string_view name) -> caf::error {
-  if (curl::try_set(easy, option, value)) {
-    return {};
-  }
-  return caf::make_error(ec::unspecified,
-                         fmt::format("curl: failed to set `{}`", name));
-}
-
-auto set_curl_option(curl::easy& easy, CURLoption option,
-                     std::string_view value, std::string_view name)
-  -> caf::error {
-  if (curl::try_set(easy, option, value)) {
-    return {};
-  }
-  return caf::make_error(ec::unspecified,
-                         fmt::format("curl: failed to set `{}`", name));
-}
-
-auto configure_upload(CurlSession& session, std::string_view url,
-                      tls_options const& tls) -> caf::error {
-  auto& easy = session.easy();
-  if (auto err = set_curl_option(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp",
-                                 "CURLOPT_DEFAULT_PROTOCOL");
-      err.valid()) {
-    return err;
-  }
-  if (auto err = set_curl_option(easy, CURLOPT_URL, url, "CURLOPT_URL");
-      err.valid()) {
-    return err;
-  }
-  if (auto err = set_curl_option(easy, CURLOPT_UPLOAD, 1L, "CURLOPT_UPLOAD");
-      err.valid()) {
-    return err;
-  }
-  if (auto err = tls.apply_to(easy, url, nullptr); err.valid()) {
-    return err;
-  }
-  auto code = easy.set([](std::span<const std::byte>) {});
-  if (code == curl::easy::code::ok) {
-    return {};
-  }
-  return curl::to_error(code);
-}
-
 auto upload(CurlSession* session, CurlTransfer* send, Arc<ResultQueue> results)
   -> Task<void> {
   auto curl_result = co_await send->wait();
@@ -173,10 +127,44 @@ public:
     }
     tls.update_from_config(std::addressof(ctx.actor_system().config()));
     session_.emplace(CurlSession::make(ctx.io_executor()));
-    if (auto err = configure_upload(*session_, resolved_url_, tls);
-        err.valid()) {
-      diagnostic::error("FTP upload to `{}` failed: {}", resolved_url_, err)
+    auto& easy = session_->easy();
+    if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
+      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
         .primary(args_.url.source)
+        .note("failed to set curl option `CURLOPT_DEFAULT_PROTOCOL`")
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (not curl::try_set(easy, CURLOPT_URL, resolved_url_)) {
+      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+        .primary(args_.url.source)
+        .note("failed to set curl option `CURLOPT_URL`")
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (not curl::try_set(easy, CURLOPT_UPLOAD, 1L)) {
+      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+        .primary(args_.url.source)
+        .note("failed to set curl option `CURLOPT_UPLOAD`")
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (auto err = tls.apply_to(easy, resolved_url_, nullptr); err.valid()) {
+      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+        .primary(args_.url.source)
+        .note("{}", err)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto code = easy.set([](std::span<const std::byte>) {});
+    if (code != curl::easy::code::ok) {
+      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+        .primary(args_.url.source)
+        .note("curl error: {}", curl::to_string(code))
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
       co_return;
