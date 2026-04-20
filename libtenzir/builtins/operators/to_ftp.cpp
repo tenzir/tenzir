@@ -8,39 +8,24 @@
 
 #include "tenzir/async.hpp"
 
-#include <tenzir/arc.hpp>
 #include <tenzir/async/curl.hpp>
-#include <tenzir/co_match.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 
-#include <fmt/format.h>
-#include <folly/coro/BoundedQueue.h>
-
 namespace tenzir::plugins::to_ftp {
 
 namespace {
 
 constexpr auto upload_queue_capacity = size_t{16};
-constexpr auto result_queue_capacity = uint32_t{2};
 
 struct ToFtpArgs {
   located<secret> url;
   Option<located<data>> tls;
   located<ir::pipeline> printer;
 };
-
-struct UploadFinished {};
-
-struct UploadFailed {
-  std::string error;
-};
-
-using ResultMessage = variant<UploadFinished, UploadFailed>;
-using ResultQueue = folly::coro::BoundedQueue<ResultMessage>;
 
 auto add_default_ftp_scheme(std::string& url) -> void {
   if (not url.starts_with("ftp://") and not url.starts_with("ftps://")) {
@@ -76,37 +61,9 @@ auto resolve_url(OpCtx& ctx, ToFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto upload(CurlSession* session, CurlTransfer* send, Arc<ResultQueue> results)
-  -> Task<void> {
-  auto curl_result = co_await send->wait();
-  if (curl_result.is_ok()
-      and curl_result.unwrap() == CurlTransferStatus::local_abort) {
-    // A local printer failure aborted the upload; report the local error
-    // instead of a derived curl transfer failure.
-    co_await results->enqueue(UploadFinished{});
-    co_return;
-  }
-  if (curl_result.is_err()) {
-    co_await results->enqueue(
-      UploadFailed{std::move(curl_result).unwrap_err()});
-    co_return;
-  }
-  auto [response_code_status, response_code]
-    = session->easy().get<curl::easy::info::response_code>();
-  if (response_code_status == curl::easy::code::ok
-      and (response_code < 200 or response_code > 299)) {
-    co_await results->enqueue(
-      UploadFailed{fmt::format("FTP response code: {}", response_code)});
-    co_return;
-  }
-  co_await results->enqueue(UploadFinished{});
-}
-
 class ToFtp final : public Operator<table_slice, void> {
 public:
-  explicit ToFtp(ToFtpArgs args)
-    : result_queue_{std::in_place, result_queue_capacity},
-      args_{std::move(args)} {
+  explicit ToFtp(ToFtpArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -169,9 +126,8 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    send_.emplace(session_->start_send(upload_queue_capacity));
+    upload_.emplace(session_->start_upload(upload_queue_capacity));
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
-    upload_task_ = ctx.spawn_task(upload(&*session_, &*send_, result_queue_));
     co_return;
   }
 
@@ -188,53 +144,29 @@ public:
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
       lifecycle_ = Lifecycle::done;
-      if (send_) {
-        send_->abort();
+      if (upload_) {
+        upload_->abort();
       }
     }
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> override {
     if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
       co_return;
     }
-    TENZIR_ASSERT(send_);
-    if (not co_await send_->push(std::move(chunk))) {
-      lifecycle_ = Lifecycle::done;
+    TENZIR_ASSERT(upload_);
+    if (not co_await upload_->push(std::move(chunk))) {
+      co_await finish_upload(ctx);
+      co_return;
     }
-  }
-
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await result_queue_->dequeue();
-  }
-
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    co_await co_match(
-      std::move(result).as<ResultMessage>(),
-      [&](UploadFinished) -> Task<void> {
-        lifecycle_ = Lifecycle::done;
-        co_return;
-      },
-      [&](UploadFailed failure) -> Task<void> {
-        diagnostic::error("FTP upload to `{}` failed: {}", resolved_url_,
-                          failure.error)
-          .primary(args_.url.source)
-          .emit(ctx);
-        if (send_) {
-          send_->abort();
-        }
-        if (auto sub = ctx.get_sub(caf::none)) {
-          auto& printer = as<SubHandle<table_slice>>(*sub);
-          co_await printer.close();
-        }
-        lifecycle_ = Lifecycle::done;
-      });
+    uploaded_anything_ = true;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (lifecycle_ == Lifecycle::done) {
-      if (send_) {
-        send_->abort();
+      if (upload_) {
+        upload_->abort();
       }
       co_return FinalizeBehavior::done;
     }
@@ -245,23 +177,17 @@ public:
         co_await printer.close();
         co_return FinalizeBehavior::continue_;
       }
-      if (send_) {
-        send_->close();
+      if (upload_) {
+        co_await finish_upload(ctx);
       }
-      co_return FinalizeBehavior::continue_;
+      co_return FinalizeBehavior::done;
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
   }
 
-  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (send_) {
-      send_->close();
-    }
-    if (upload_task_) {
-      co_await upload_task_->try_join();
-      upload_task_ = None{};
-    }
+  auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
+    co_await finish_upload(ctx);
     co_return;
   }
 
@@ -270,8 +196,8 @@ public:
       co_return;
     }
     lifecycle_ = Lifecycle::done;
-    if (send_) {
-      send_->abort();
+    if (upload_) {
+      upload_->abort();
     }
     if (auto sub = ctx.get_sub(caf::none)) {
       auto& printer = as<SubHandle<table_slice>>(*sub);
@@ -286,6 +212,37 @@ public:
   }
 
 private:
+  auto finish_upload(OpCtx& ctx) -> Task<void> {
+    if (not upload_) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    upload_->close();
+    auto upload_result = co_await upload_->result();
+    if (upload_result.is_ok()
+        and upload_result.unwrap() == CurlTransferStatus::finished
+        and uploaded_anything_) {
+      auto [response_code_status, response_code]
+        = session_->easy().get<curl::easy::info::response_code>();
+      if (response_code_status == curl::easy::code::ok
+          and (response_code < 200 or response_code > 299)) {
+        diagnostic::error("FTP upload to `{}` failed", resolved_url_)
+          .primary(args_.url.source)
+          .note("FTP response code: {}", response_code)
+          .emit(ctx);
+      }
+    }
+    if (upload_result.is_err()) {
+      diagnostic::error("FTP upload to `{}` failed", resolved_url_)
+        .primary(args_.url.source)
+        .note("curl error: {}", to_string(upload_result.unwrap_err()))
+        .emit(ctx);
+    }
+    upload_.reset();
+    lifecycle_ = Lifecycle::done;
+    co_return;
+  }
+
   enum class Lifecycle {
     running,
     draining,
@@ -293,12 +250,11 @@ private:
   };
 
   Option<CurlSession> session_;
-  Option<CurlTransfer> send_;
-  mutable Arc<ResultQueue> result_queue_;
-  Option<AsyncHandle<void>> upload_task_;
+  Option<CurlUploadTransfer> upload_;
   ToFtpArgs args_;
   std::string resolved_url_;
   Lifecycle lifecycle_ = Lifecycle::running;
+  bool uploaded_anything_ = false;
 };
 
 class ToFtpPlugin final : public OperatorPlugin {
