@@ -68,6 +68,7 @@ auto quote_identifier_component(std::string_view text) -> std::string {
 }
 
 struct FromClickhouseArgs {
+  located<secret> uri = {secret::make_literal(""), location::unknown};
   Option<located<std::string>> table;
   located<secret> host = {secret::make_literal("localhost"), location::unknown};
   Option<located<uint64_t>> port = None{};
@@ -189,24 +190,43 @@ public:
       .host = "",
       .port = args_.port ? *args_.port
                          : located<uint64_t>{default_port, location::unknown},
-      .user = "",
+      .user = "default",
       .password = "",
+      .default_database = None{},
       .ssl = std::move(ssl),
       .table = {},
       .mode = {mode::append, location::unknown},
       .primary = None{},
       .operator_location = args_.operator_location,
     };
-    auto requests = std::vector<secret_request>{
-      make_secret_request("host", args_.host, client_args.host, ctx.dh()),
-      make_secret_request("user", args_.user, client_args.user, ctx.dh()),
-      make_secret_request("password", args_.password, client_args.password,
-                          ctx.dh()),
-    };
+    auto uri = std::string{};
+    auto requests = std::vector<secret_request>{};
+    auto has_uri = args_.uri.inner != secret::make_literal("");
+    if (has_uri) {
+      requests.push_back(make_secret_request("uri", args_.uri, uri, ctx.dh()));
+    } else {
+      requests.push_back(
+        make_secret_request("host", args_.host, client_args.host, ctx.dh()));
+      requests.push_back(
+        make_secret_request("user", args_.user, client_args.user, ctx.dh()));
+      requests.push_back(make_secret_request("password", args_.password,
+                                             client_args.password, ctx.dh()));
+    }
     auto ok = co_await ctx.resolve_secrets(std::move(requests));
     if (not ok) {
       done_ = true;
       co_return;
+    }
+    if (has_uri) {
+      auto parsed = parse_connection_uri(uri, args_.uri.source, ctx.dh());
+      if (not parsed) {
+        done_ = true;
+        co_return;
+      }
+      apply_connection_uri(client_args, *parsed);
+      if (not parsed->has_port()) {
+        client_args.port = located<uint64_t>{default_port, location::unknown};
+      }
     }
     auto options = client_args.make_options(ctx.actor_system().config());
     ctx.spawn_task([this, options = std::move(options),
@@ -1388,11 +1408,13 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromClickhouseArgs, FromClickhouse>{};
+    auto uri_arg = d.named_optional("uri", &FromClickhouseArgs::uri);
     auto table_arg = d.named("table", &FromClickhouseArgs::table);
-    d.named_optional("host", &FromClickhouseArgs::host);
+    auto host_arg = d.named_optional("host", &FromClickhouseArgs::host);
     auto port_arg = d.named("port", &FromClickhouseArgs::port);
-    d.named_optional("user", &FromClickhouseArgs::user);
-    d.named_optional("password", &FromClickhouseArgs::password);
+    auto user_arg = d.named_optional("user", &FromClickhouseArgs::user);
+    auto password_arg
+      = d.named_optional("password", &FromClickhouseArgs::password);
     auto sql_arg = d.named("sql", &FromClickhouseArgs::sql);
     auto tls_validate
       = tls_options{}.add_to_describer(d, &FromClickhouseArgs::tls);
@@ -1402,6 +1424,18 @@ public:
       tls_validate(ctx);
       auto has_table = ctx.get(table_arg).has_value();
       auto has_sql = ctx.get(sql_arg).has_value();
+      auto has_uri = ctx.get(uri_arg).has_value();
+      auto has_host = ctx.get(host_arg).has_value();
+      auto has_port = ctx.get(port_arg).has_value();
+      auto has_user = ctx.get(user_arg).has_value();
+      auto has_password = ctx.get(password_arg).has_value();
+      if (has_uri and (has_host or has_port or has_user or has_password)) {
+        diagnostic::error(
+          "`uri` and explicit connection arguments are mutually exclusive")
+          .primary(ctx.get_location(uri_arg).value_or(location::unknown))
+          .emit(ctx);
+        return {};
+      }
       if (not has_table and not has_sql) {
         diagnostic::error("no query specified")
           .hint("specify `table` or `sql`")

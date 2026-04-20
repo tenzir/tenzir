@@ -1,0 +1,3 @@
+from_clickhouse uri=f"clickhouse://default:{env("CLICKHOUSE_PASSWORD")}@{env("CLICKHOUSE_HOST")}:{env("CLICKHOUSE_PORT")}/default",
+                table="fc_one",
+                tls=false

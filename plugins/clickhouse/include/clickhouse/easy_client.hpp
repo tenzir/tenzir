@@ -39,6 +39,7 @@ public:
     located<uint64_t> port = {9000, operator_location};
     std::string user;
     std::string password;
+    Option<std::string> default_database = None{};
     tls_options ssl;
     ast::expression table = {};
     located<enum mode> mode = located{mode::create_append, operator_location};
@@ -53,7 +54,7 @@ public:
               std::string{host}, detail::narrow_cast<uint16_t>(port.inner)}})
             .SetUser(std::string{user})
             .SetPassword(std::string{password})
-            .SetDefaultDatabase("");
+            .SetDefaultDatabase(default_database ? *default_database : "");
       if (ssl.get_tls(&cfg).inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
         tls_opts.SetSkipVerification(
@@ -134,5 +135,30 @@ private:
   detail::heterogeneous_string_hashmap<transformer_record> transformations_;
   dropmask_type dropmask_;
 };
+
+inline auto apply_connection_uri(easy_client::arguments& args,
+                                 const boost::urls::url_view_base& uri)
+  -> void {
+  args.host = std::string{uri.host()};
+  if (uri.has_port()) {
+    args.port
+      = located<uint64_t>{uint64_t{uri.port_number()}, location::unknown};
+  }
+  if (not uri.encoded_user().empty()) {
+    args.user = std::string{uri.user()};
+  }
+  if (uri.has_password()) {
+    args.password = std::string{uri.password()};
+  }
+  auto segments = uri.segments();
+  if (not segments.empty()) {
+    auto database = std::string{segments.front()};
+    if (not database.empty()) {
+      args.default_database = std::move(database);
+      return;
+    }
+  }
+  args.default_database = None{};
+}
 
 } // namespace tenzir::plugins::clickhouse
