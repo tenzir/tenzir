@@ -1,0 +1,8 @@
+error: Invalid: Unrecognized compression type: wrongname
+ --> tests/operators/write_parquet/error_invalid_compression_type_empty_input.tql:6:32
+  |
+6 | write_parquet compression_type="wrongname"
+  |                                ^^^^^^^^^^^ 
+  |
+  = note: failed to parse compression type
+  = note: must be `brotli`, `gzip`, `snappy`, or `zstd`

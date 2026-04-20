@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {x: 1}, {y: 2}
+write_parquet
+read_parquet

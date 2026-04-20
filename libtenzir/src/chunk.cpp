@@ -516,6 +516,26 @@ auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
   };
 }
 
+auto join_chunks(std::vector<chunk_ptr> chunks) -> chunk_ptr {
+  auto total_size = size_t{0};
+  for (const auto& chunk : chunks) {
+    if (chunk) {
+      total_size += chunk->size();
+    }
+  }
+  if (total_size == 0) {
+    return chunk::make_empty();
+  }
+  auto bytes = std::vector<std::byte>{};
+  bytes.reserve(total_size);
+  for (auto& chunk : chunks) {
+    if (chunk) {
+      bytes.insert(bytes.end(), chunk->begin(), chunk->end());
+    }
+  }
+  return chunk::make(std::move(bytes));
+}
+
 auto size(const chunk_ptr& chunk) -> uint64_t {
   return chunk ? chunk->size() : 0;
 }

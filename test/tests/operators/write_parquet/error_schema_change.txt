@@ -1,0 +1,9 @@
+error: input schema changed while writing parquet
+ --> tests/operators/write_parquet/error_schema_change.tql:6:1
+  |
+6 | write_parquet
+  | ^^^^^^^^^^^^^ 
+  |
+  = note: all input slices to `write_parquet` must have the same schema
+  = note: first schema shape: `record {x: int64}`
+  = note: current schema shape: `record {y: int64}`

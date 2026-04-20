@@ -567,6 +567,8 @@ auto split(const chunk_ptr& chunk, size_t partition_point)
 auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
   -> std::pair<std::vector<chunk_ptr>, std::vector<chunk_ptr>>;
 
+auto join_chunks(std::vector<chunk_ptr> chunks) -> chunk_ptr;
+
 auto size(const chunk_ptr& chunk) -> uint64_t;
 
 } // namespace tenzir
