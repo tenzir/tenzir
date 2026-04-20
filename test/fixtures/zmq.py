@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from tenzir_test import FixtureHandle, fixture
-from tenzir_test.fixtures import current_options
+from tenzir_test.fixtures import FixtureUnavailable, current_options
 
 from ._utils import find_free_port
 
@@ -38,6 +39,8 @@ class ZmqAssertions:
 
 @fixture(options=ZmqOptions, assertions=ZmqAssertions)
 def zmq() -> FixtureHandle:
+    if importlib.util.find_spec("zmq") is None:
+        raise FixtureUnavailable("pyzmq package not installed")
     opts = current_options("zmq")
     if opts.role not in {"publisher", "subscriber"}:
         raise RuntimeError(
