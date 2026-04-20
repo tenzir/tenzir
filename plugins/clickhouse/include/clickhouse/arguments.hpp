@@ -18,6 +18,7 @@
 
 #include <boost/regex.hpp>
 #include <boost/url/parse.hpp>
+#include <boost/url/url.hpp>
 
 namespace tenzir::plugins::clickhouse {
 
@@ -61,6 +62,52 @@ struct split_table_name_result {
   Option<std::string_view> database = None{};
   std::string_view table;
 };
+
+inline auto
+parse_connection_uri(std::string_view uri, location loc, diagnostic_handler& dh)
+  -> failure_or<boost::urls::url> {
+  auto parsed = boost::urls::parse_uri(uri);
+  if (not parsed) {
+    diagnostic::error("failed to parse ClickHouse URI")
+      .primary(loc)
+      .note("{}", parsed.error().message())
+      .hint("expected `clickhouse://[user[:password]@]host[:port][/database]`")
+      .emit(dh);
+    return failure::promise();
+  }
+  if (parsed->scheme() != "clickhouse") {
+    diagnostic::error("invalid ClickHouse URI scheme `{}`", parsed->scheme())
+      .primary(loc)
+      .hint("expected `clickhouse://[user[:password]@]host[:port][/database]`")
+      .emit(dh);
+    return failure::promise();
+  }
+  if (parsed->host().empty()) {
+    diagnostic::error("ClickHouse URI requires a host")
+      .primary(loc)
+      .hint("expected `clickhouse://[user[:password]@]host[:port][/database]`")
+      .emit(dh);
+    return failure::promise();
+  }
+  if (parsed->has_query() or parsed->has_fragment()) {
+    diagnostic::error("ClickHouse URI does not support query parameters or "
+                      "fragments")
+      .primary(loc)
+      .hint("expected `clickhouse://[user[:password]@]host[:port][/database]`")
+      .emit(dh);
+    return failure::promise();
+  }
+  auto segments = parsed->segments();
+  if (segments.size() > 1) {
+    diagnostic::error("ClickHouse URI path may contain at most one database "
+                      "name")
+      .primary(loc)
+      .hint("expected `clickhouse://[user[:password]@]host[:port][/database]`")
+      .emit(dh);
+    return failure::promise();
+  }
+  return boost::urls::url{*parsed};
+}
 
 template <bool error>
 inline auto split_table_name(std::string_view table, location table_loc,
@@ -113,6 +160,7 @@ inline auto validate_table_name(std::string_view table, location table_loc,
 
 struct operator_arguments {
   tenzir::location operator_location;
+  Option<located<secret>> uri = None{};
   located<secret> host = {secret::make_literal("localhost"), operator_location};
   Option<located<uint64_t>> port = None{};
   located<secret> user = {secret::make_literal("default"), operator_location};
@@ -130,18 +178,42 @@ struct operator_arguments {
       to_string(mode::create_append),
       res.operator_location,
     };
+    auto uri = Option<located<secret>>{};
+    auto host = Option<located<secret>>{};
     auto port = Option<located<int64_t>>{};
+    auto user = Option<located<secret>>{};
+    auto password = Option<located<secret>>{};
     auto primary_selector = Option<ast::field_path>{};
     auto parser = argument_parser2::operator_(operator_name);
-    parser.named_optional("host", res.host);
+    parser.named("uri", uri);
+    parser.named("host", host);
     parser.named("port", port);
-    parser.named_optional("user", res.user);
-    parser.named_optional("password", res.password);
+    parser.named("user", user);
+    parser.named("password", password);
     parser.named("table", res.table, "string");
     parser.named_optional("mode", mode_str);
     parser.named("primary", primary_selector, "field");
     res.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
+    if (uri and (host or port or user or password)) {
+      diagnostic::error(
+        "`uri` and explicit connection arguments are mutually exclusive")
+        .primary(uri->source)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (uri) {
+      res.uri = std::move(uri);
+    }
+    if (host) {
+      res.host = std::move(*host);
+    }
+    if (user) {
+      res.user = std::move(*user);
+    }
+    if (password) {
+      res.password = std::move(*password);
+    }
     if (auto x = from_string<enum mode>(mode_str.inner)) {
       res.mode = located{*x, mode_str.source};
     } else {
@@ -199,7 +271,7 @@ struct operator_arguments {
 
   friend auto inspect(auto& f, operator_arguments& x) -> bool {
     return f.object(x).fields(
-      f.field("operator_location", x.operator_location),
+      f.field("operator_location", x.operator_location), f.field("uri", x.uri),
       f.field("host", x.host), f.field("port", x.port), f.field("user", x.user),
       f.field("password", x.password), f.field("table", x.table),
       f.field("mode", x.mode), f.field("primary", x.primary),
