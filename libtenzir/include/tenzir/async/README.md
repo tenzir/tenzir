@@ -71,21 +71,21 @@ Use it like this:
 
 - Create a session with `CurlSession::make(ctx.io_executor())`, configure
   `session.easy()` directly, then start one semantic transfer with
-  `start_send()` or `start_receive()`.
+  `start_upload()` or `start_download()`.
 - A session supports one active transfer at a time. Reuse the session only after
   the current transfer has completed or has been dropped.
-- For uploads, call `start_send()`, spawn a task awaiting `wait()`, then
-  `push()` chunks and eventually call `close()`. If the local producer fails,
-  call `abort()` so libcurl fails the transfer callback instead of hanging.
-- For downloads, call `start_receive()`, spawn a task awaiting `wait()`, and
-  concurrently drain `next()` until it returns `None`. The `buffer_capacity`
-  argument controls how many chunks the receive queue holds; if it fills up,
-  libcurl pauses until `next()` drains another chunk.
-- Inspect the returned `CurlTransferResult` to distinguish
-  `CurlTransferStatus::finished`, `CurlTransferStatus::local_abort`, and
-  `Err(std::string{...})`.
-- Cancelling the awaiting task aborts the transfer on the session's EventBase
-  and propagates `folly::OperationCancelled`.
+- For uploads, call `start_upload()`, `push()` chunks, and eventually call
+  `close()`. Await `result()` to distinguish `CurlTransferStatus::finished`,
+  `CurlTransferStatus::local_abort`, and `Err(CurlError{...})`. If the local
+  producer fails, call `abort()` so libcurl fails the transfer callback instead
+  of hanging.
+- For downloads, call `start_download()` and drain `next()`. It returns chunk
+  events while the transfer is active, then one terminal event for completion,
+  local abort, or `CurlError`. The `buffer_capacity` argument controls how many
+  chunks the receive queue holds; if it fills up, libcurl pauses until `next()`
+  drains another chunk.
+- Dropping or aborting a transfer cancels the in-flight libcurl transfer on the
+  session's EventBase.
 
 ## Notes
 

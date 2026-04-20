@@ -14,12 +14,14 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
+#include "tenzir/variant.hpp"
 
 #include <folly/Executor.h>
 #include <folly/executors/IOExecutor.h>
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 
@@ -28,16 +30,43 @@ enum class CurlTransferStatus {
   local_abort,
 };
 
-using CurlTransferResult = Result<CurlTransferStatus, std::string>;
+struct CurlEasyError {
+  curl::easy::code code;
+};
 
-class CurlTransfer {
+struct CurlMultiError {
+  curl::multi::code code;
+};
+
+using CurlError = variant<CurlEasyError, CurlMultiError>;
+
+auto to_string(CurlError const& error) -> std::string_view;
+
+using CurlUploadResult = Result<CurlTransferStatus, CurlError>;
+
+struct CurlDownloadChunk {
+  chunk_ptr chunk;
+};
+
+struct CurlDownloadDone {
+  CurlTransferStatus status;
+};
+
+struct CurlDownloadFailed {
+  CurlError error;
+};
+
+using CurlDownloadEvent
+  = variant<CurlDownloadChunk, CurlDownloadDone, CurlDownloadFailed>;
+
+class CurlUploadTransfer {
 public:
-  ~CurlTransfer();
+  ~CurlUploadTransfer();
 
-  CurlTransfer(CurlTransfer const&) = delete;
-  auto operator=(CurlTransfer const&) -> CurlTransfer& = delete;
-  CurlTransfer(CurlTransfer&&) noexcept;
-  auto operator=(CurlTransfer&&) noexcept -> CurlTransfer&;
+  CurlUploadTransfer(CurlUploadTransfer const&) = delete;
+  auto operator=(CurlUploadTransfer const&) -> CurlUploadTransfer& = delete;
+  CurlUploadTransfer(CurlUploadTransfer&&) noexcept;
+  auto operator=(CurlUploadTransfer&&) noexcept -> CurlUploadTransfer&;
 
   /// Queue a chunk for libcurl to read.
   /// Returns `false` if the stream has already been closed or aborted.
@@ -50,17 +79,41 @@ public:
   /// Abort the local stream and wake blocked producers or consumers.
   auto abort() -> void;
 
-  /// Receive the next queued chunk. Returns `None` after close or abort.
-  /// Check the result of `wait()` to distinguish a clean end-of-stream, a local
-  /// abort, and a transport failure.
-  auto next() -> Task<Option<chunk_ptr>>;
-
-  auto wait() -> Task<CurlTransferResult>;
+  auto result() const -> Task<CurlUploadResult>;
 
 private:
   struct Impl;
 
-  explicit CurlTransfer(Box<Impl> impl);
+  explicit CurlUploadTransfer(Box<Impl> impl);
+
+  Box<Impl> impl_;
+
+  friend class CurlSession;
+};
+
+class CurlDownloadTransfer {
+public:
+  ~CurlDownloadTransfer();
+
+  CurlDownloadTransfer(CurlDownloadTransfer const&) = delete;
+  auto operator=(CurlDownloadTransfer const&) -> CurlDownloadTransfer& = delete;
+  CurlDownloadTransfer(CurlDownloadTransfer&&) noexcept;
+  auto operator=(CurlDownloadTransfer&&) noexcept -> CurlDownloadTransfer&;
+
+  /// Receive the next download event.
+  ///
+  /// The stream yields chunks while the transfer is active, then exactly one
+  /// terminal event for clean completion, local abort, or transport failure.
+  /// Later calls return `None`.
+  auto next() const -> Task<Option<CurlDownloadEvent>>;
+
+  /// Abort the local stream and wake blocked consumers.
+  auto abort() -> void;
+
+private:
+  struct Impl;
+
+  explicit CurlDownloadTransfer(Box<Impl> impl);
 
   Box<Impl> impl_;
 
@@ -70,9 +123,7 @@ private:
 /// Reusable async curl session.
 ///
 /// Configure `easy()` directly, then start one semantic transfer at a time. The
-/// transfer runs on the Folly IO executor provided to `make()`. Cancelling the
-/// awaiting task or calling `cancel()` aborts the in-flight libcurl transfer
-/// and propagates `folly::OperationCancelled`.
+/// transfer runs on the Folly IO executor provided to `make()`.
 class CurlSession {
 public:
   static auto make(folly::Executor::KeepAlive<folly::IOExecutor> executor)
@@ -87,8 +138,8 @@ public:
 
   auto easy() -> curl::easy&;
 
-  auto start_send(size_t buffer_capacity = 16) -> CurlTransfer;
-  auto start_receive(size_t buffer_capacity = 16) -> CurlTransfer;
+  auto start_upload(size_t buffer_capacity = 16) -> CurlUploadTransfer;
+  auto start_download(size_t buffer_capacity = 16) -> CurlDownloadTransfer;
 
   auto busy() const -> bool;
 

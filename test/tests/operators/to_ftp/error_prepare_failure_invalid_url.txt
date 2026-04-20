@@ -1,6 +1,7 @@
-error: FTP upload to `ftp://[` failed: !! unspecified: curl: URL using bad/illegal format or missing URL
+error: FTP upload to `ftp://[` failed
  --> tests/operators/to_ftp/error_prepare_failure_invalid_url.tql:8:8
   |
 8 | to_ftp "ftp://[" {
   |        ^^^^^^^^^ 
   |
+  = note: curl error: URL using bad/illegal format or missing URL

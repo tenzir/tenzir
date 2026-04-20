@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cstring>
 #include <deque>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -34,26 +35,27 @@
 
 namespace tenzir {
 
+auto to_string(CurlError const& error) -> std::string_view {
+  return match(
+    error,
+    [](CurlEasyError const& error) {
+      return curl::to_string(error.code);
+    },
+    [](CurlMultiError const& error) {
+      return curl::to_string(error.code);
+    });
+}
+
 namespace {
 
-using CurlPerformResult = CurlTransferResult;
-
-auto render_curl_error(curl::easy::code code) -> std::string {
-  return std::string{"!! unspecified: curl: "}
-         + std::string{curl::to_string(code)};
-}
-
-auto render_curl_error(curl::multi::code code) -> std::string {
-  return std::string{"!! unspecified: curl: "}
-         + std::string{curl::to_string(code)};
-}
+using CurlPerformResult = CurlUploadResult;
 
 auto curl_perform_failure(curl::easy::code code) -> CurlPerformResult {
-  return Err{render_curl_error(code)};
+  return Err{CurlError{CurlEasyError{code}}};
 }
 
 auto curl_perform_failure(curl::multi::code code) -> CurlPerformResult {
-  return Err{render_curl_error(code)};
+  return Err{CurlError{CurlMultiError{code}}};
 }
 
 class UploadStream {
@@ -748,7 +750,8 @@ private:
   bool busy = false;
 };
 
-struct CurlTransferState final {
+struct CurlTransferState final
+  : public std::enable_shared_from_this<CurlTransferState> {
   CurlTransferState(std::shared_ptr<CurlSessionState> session,
                     TransferDirection direction, size_t capacity)
     : session{std::move(session)} {
@@ -762,6 +765,16 @@ struct CurlTransferState final {
     }
   }
 
+  auto start() -> void {
+    auto self = shared_from_this();
+    folly::coro::co_withExecutor(session->executor, run_driver(std::move(self)))
+      .start([](auto&& result) {
+        if (result.hasException()) {
+          std::terminate();
+        }
+      });
+  }
+
   auto push(chunk_ptr chunk) -> Task<bool> {
     TENZIR_ASSERT(upload);
     co_return co_await (*upload)->push(std::move(chunk));
@@ -772,9 +785,31 @@ struct CurlTransferState final {
     (*upload)->close();
   }
 
-  auto next() -> Task<Option<chunk_ptr>> {
+  auto result() -> Task<CurlUploadResult> {
+    TENZIR_ASSERT(upload);
+    co_return co_await take_result();
+  }
+
+  auto next() -> Task<Option<CurlDownloadEvent>> {
     TENZIR_ASSERT(download);
-    co_return co_await (*download)->pop();
+    {
+      auto lock = std::lock_guard{mutex};
+      if (terminal_delivered) {
+        co_return None{};
+      }
+    }
+    if (auto chunk = co_await (*download)->pop()) {
+      co_return CurlDownloadChunk{std::move(*chunk)};
+    }
+    auto result = co_await take_result();
+    {
+      auto lock = std::lock_guard{mutex};
+      terminal_delivered = true;
+    }
+    if (result.is_err()) {
+      co_return CurlDownloadFailed{std::move(result).unwrap_err()};
+    }
+    co_return CurlDownloadDone{std::move(result).unwrap()};
   }
 
   auto abort() -> void {
@@ -789,25 +824,6 @@ struct CurlTransferState final {
   auto dispose() -> void {
     abort();
     cancellation.requestCancellation();
-    auto release_without_wait = false;
-    {
-      auto lock = std::lock_guard{mutex};
-      release_without_wait = not waiting;
-    }
-    if (release_without_wait) {
-      finish();
-    }
-  }
-
-  auto mark_waiting() -> void {
-    auto lock = std::lock_guard{mutex};
-    if (finished) {
-      panic("curl transfer already completed");
-    }
-    if (waiting) {
-      panic("curl transfer wait() called more than once");
-    }
-    waiting = true;
   }
 
   auto finish() -> void {
@@ -830,6 +846,18 @@ struct CurlTransferState final {
     return finished;
   }
 
+  auto complete(CurlPerformResult result) -> void {
+    {
+      auto lock = std::lock_guard{mutex};
+      if (transfer_result) {
+        return;
+      }
+      transfer_result = std::move(result);
+    }
+    finish();
+    result_ready.notify_one();
+  }
+
   auto run() -> Task<CurlPerformResult> {
     if (upload) {
       co_return co_await run_upload();
@@ -842,6 +870,38 @@ struct CurlTransferState final {
   folly::CancellationSource cancellation;
 
 private:
+  static auto run_driver(std::shared_ptr<CurlTransferState> self)
+    -> Task<void> {
+    auto result = CurlPerformResult{CurlTransferStatus::local_abort};
+    try {
+      result = co_await folly::coro::co_withCancellation(
+        self->cancellation.getToken(), self->run());
+    } catch (folly::OperationCancelled const&) {
+      result = CurlTransferStatus::local_abort;
+    } catch (...) {
+      std::terminate();
+    }
+    self->complete(std::move(result));
+  }
+
+  auto take_result() -> Task<CurlUploadResult> {
+    while (true) {
+      {
+        auto lock = std::lock_guard{mutex};
+        if (transfer_result) {
+          if (result_taken) {
+            panic("curl transfer result consumed more than once");
+          }
+          result_taken = true;
+          auto result = std::move(*transfer_result);
+          transfer_result = None{};
+          co_return result;
+        }
+      }
+      co_await result_ready.wait();
+    }
+  }
+
   auto run_upload() -> Task<CurlPerformResult> {
     auto& body = **upload;
     auto should_start_transfer = false;
@@ -880,34 +940,34 @@ private:
 
   Option<Box<UploadStream>> upload = None{};
   Option<Box<DownloadStream>> download = None{};
+  Notify result_ready;
+  Option<CurlPerformResult> transfer_result = None{};
   mutable std::mutex mutex;
-  bool waiting = false;
   bool finished = false;
+  bool result_taken = false;
+  bool terminal_delivered = false;
 };
 
 auto CurlSessionState::begin(TransferDirection direction, size_t capacity)
   -> std::shared_ptr<CurlTransferState> {
   TENZIR_ASSERT(capacity > 0);
-  auto lock = std::lock_guard{mutex};
-  if (busy) {
-    panic("curl session already has an active transfer");
+  auto result = std::shared_ptr<CurlTransferState>{};
+  {
+    auto lock = std::lock_guard{mutex};
+    if (busy) {
+      panic("curl session already has an active transfer");
+    }
+    busy = true;
+    result = std::make_shared<CurlTransferState>(shared_from_this(), direction,
+                                                 capacity);
   }
-  busy = true;
-  return std::make_shared<CurlTransferState>(shared_from_this(), direction,
-                                             capacity);
+  result->start();
+  return result;
 }
-
-struct TransferFinishGuard {
-  ~TransferFinishGuard() {
-    state->finish();
-  }
-
-  std::shared_ptr<CurlTransferState> state;
-};
 
 } // namespace
 
-struct CurlTransfer::Impl {
+struct CurlUploadTransfer::Impl {
   explicit Impl(std::shared_ptr<CurlTransferState> state)
     : state{std::move(state)} {
   }
@@ -921,40 +981,65 @@ struct CurlTransfer::Impl {
   std::shared_ptr<CurlTransferState> state;
 };
 
-CurlTransfer::CurlTransfer(Box<Impl> impl) : impl_{std::move(impl)} {
+CurlUploadTransfer::CurlUploadTransfer(Box<Impl> impl)
+  : impl_{std::move(impl)} {
 }
 
-CurlTransfer::~CurlTransfer() = default;
+CurlUploadTransfer::~CurlUploadTransfer() = default;
 
-CurlTransfer::CurlTransfer(CurlTransfer&&) noexcept = default;
+CurlUploadTransfer::CurlUploadTransfer(CurlUploadTransfer&&) noexcept = default;
 
-auto CurlTransfer::operator=(CurlTransfer&&) noexcept
-  -> CurlTransfer& = default;
+auto CurlUploadTransfer::operator=(CurlUploadTransfer&&) noexcept
+  -> CurlUploadTransfer& = default;
 
-auto CurlTransfer::push(chunk_ptr chunk) -> Task<bool> {
+auto CurlUploadTransfer::push(chunk_ptr chunk) -> Task<bool> {
   co_return co_await impl_->state->push(std::move(chunk));
 }
 
-auto CurlTransfer::close() -> void {
+auto CurlUploadTransfer::close() -> void {
   impl_->state->close();
 }
 
-auto CurlTransfer::abort() -> void {
+auto CurlUploadTransfer::abort() -> void {
   impl_->state->abort();
 }
 
-auto CurlTransfer::next() -> Task<Option<chunk_ptr>> {
+auto CurlUploadTransfer::result() const -> Task<CurlUploadResult> {
+  co_return co_await impl_->state->result();
+}
+
+struct CurlDownloadTransfer::Impl {
+  explicit Impl(std::shared_ptr<CurlTransferState> state)
+    : state{std::move(state)} {
+  }
+
+  ~Impl() {
+    if (not state->is_finished()) {
+      state->dispose();
+    }
+  }
+
+  std::shared_ptr<CurlTransferState> state;
+};
+
+CurlDownloadTransfer::CurlDownloadTransfer(Box<Impl> impl)
+  : impl_{std::move(impl)} {
+}
+
+CurlDownloadTransfer::~CurlDownloadTransfer() = default;
+
+CurlDownloadTransfer::CurlDownloadTransfer(CurlDownloadTransfer&&) noexcept
+  = default;
+
+auto CurlDownloadTransfer::operator=(CurlDownloadTransfer&&) noexcept
+  -> CurlDownloadTransfer& = default;
+
+auto CurlDownloadTransfer::next() const -> Task<Option<CurlDownloadEvent>> {
   co_return co_await impl_->state->next();
 }
 
-auto CurlTransfer::wait() -> Task<CurlTransferResult> {
-  auto state = impl_->state;
-  state->mark_waiting();
-  auto guard = TransferFinishGuard{state};
-  auto token = folly::cancellation_token_merge(
-    co_await folly::coro::co_current_cancellation_token,
-    state->cancellation.getToken());
-  co_return co_await folly::coro::co_withCancellation(token, state->run());
+auto CurlDownloadTransfer::abort() -> void {
+  impl_->state->abort();
 }
 
 struct CurlSession::Impl {
@@ -983,14 +1068,15 @@ auto CurlSession::easy() -> curl::easy& {
   return impl_->state->easy;
 }
 
-auto CurlSession::start_send(size_t buffer_capacity) -> CurlTransfer {
-  return CurlTransfer{Box<CurlTransfer::Impl>{
+auto CurlSession::start_upload(size_t buffer_capacity) -> CurlUploadTransfer {
+  return CurlUploadTransfer{Box<CurlUploadTransfer::Impl>{
     std::in_place,
     impl_->state->begin(TransferDirection::send, buffer_capacity)}};
 }
 
-auto CurlSession::start_receive(size_t buffer_capacity) -> CurlTransfer {
-  return CurlTransfer{Box<CurlTransfer::Impl>{
+auto CurlSession::start_download(size_t buffer_capacity)
+  -> CurlDownloadTransfer {
+  return CurlDownloadTransfer{Box<CurlDownloadTransfer::Impl>{
     std::in_place,
     impl_->state->begin(TransferDirection::receive, buffer_capacity)}};
 }
