@@ -1,7 +1,0 @@
-error: unexpected 1 trailing bytes in BITZ payload
- --> tests/operators/bitz/error_trailing_garbage.tql:5:3
-  |
-5 |   read_bitz
-  |   ^^^^^^^^^ 
-  |
-  = note: failed to consume the entire Feather stream
