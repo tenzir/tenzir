@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_request:
+      path: /other
+      body: '{"value":8}'
+      expected_status: 200
+      expected_body: ""
+timeout: 60
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT"), responses={"/ingest": {code: 201, content_type: "text/plain", body: "created"}} {
+  read_json
+}
+head 1

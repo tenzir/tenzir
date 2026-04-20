@@ -9,6 +9,7 @@ Usage overview:
   - **HTTP_FIXTURE_METHOD_URL** - Echoes the request method as ``{"method":"…"}``.
   - **HTTP_FIXTURE_METHOD_URL_NO_SCHEME** - Same as above, but without URL scheme.
   - **HTTP_FIXTURE_HEADER_URL** - Echoes the ``X-Test`` header as ``{"x_test":"…"}``.
+  - **HTTP_FIXTURE_HOST_URL** - Echoes the ``Host`` header as ``{"host":"…"}``.
   - **HTTP_FIXTURE_BODY_URL** - Echoes the request body as ``{"body":"…"}``.
   - **HTTP_FIXTURE_STATUS_404_URL** - Always replies 404 with ``{"error":"not-found"}``.
   - **HTTP_FIXTURE_GZIP_EMPTY_URL** - Replies with an empty gzip-encoded body.
@@ -209,6 +210,10 @@ def _make_handler(
                 header = self.headers.get("X-Test", "")
                 self._reply(f'{{"x_test":"{header}"}}\n'.encode())
                 return
+            if path == "/options/host":
+                host = self.headers.get("Host", "")
+                self._reply(f'{{"host":"{host}"}}\n'.encode())
+                return
             if path == "/options/body":
                 self._reply(
                     json.dumps(
@@ -297,6 +302,7 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_METHOD_URL": f"{base_url}/options/method",
             "HTTP_FIXTURE_METHOD_URL_NO_SCHEME": f"127.0.0.1:{port}/options/method",
             "HTTP_FIXTURE_HEADER_URL": f"{base_url}/options/header",
+            "HTTP_FIXTURE_HOST_URL": f"{base_url}/options/host",
             "HTTP_FIXTURE_BODY_URL": f"{base_url}/options/body",
             "HTTP_FIXTURE_STATUS_404_URL": f"{base_url}/status/not-found",
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",

@@ -1,0 +1,10 @@
+---
+fixtures:
+  - http_request:
+      body: '{"value":42}'
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT") {
+  read_json
+}
+head 1

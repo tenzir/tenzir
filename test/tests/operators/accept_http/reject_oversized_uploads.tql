@@ -1,0 +1,18 @@
+---
+fixtures:
+  - http_request:
+      initial_delay: 1.0
+      requests:
+        - path: /ingest
+          body: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n'
+          expected_status: 413
+        - path: /ingest
+          body: 'ok'
+          expected_status: 200
+          expected_body: ""
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT"), max_request_size=32 {
+  read_lines
+}
+head 1

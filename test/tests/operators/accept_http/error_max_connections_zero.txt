@@ -1,0 +1,6 @@
+error: `max_connections` must be greater than 0
+ --> tests/operators/accept_http/error_max_connections_zero.tql:5:47
+  |
+5 | accept_http "127.0.0.1:8080", max_connections=0 {
+  |                                               ^ 
+  |

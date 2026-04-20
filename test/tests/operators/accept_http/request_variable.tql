@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_request:
+      path: /ingest
+      body: '{"value":11}'
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT") {
+  read_json
+  method = $request.method
+  path = $request.path
+}
+| select value, method, path
+| head 1

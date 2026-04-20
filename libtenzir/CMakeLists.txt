@@ -558,6 +558,12 @@ elseif (TARGET proxygen::proxygen)
 else ()
   message(FATAL_ERROR "No supported proxygen target found")
 endif ()
+if (TARGET proxygen::proxygen_coro_server)
+  set(_tenzir_proxygen_server_target proxygen::proxygen_coro_server)
+elseif (TARGET proxygen::proxygen_http_coro_server_coro_httpserver)
+  set(_tenzir_proxygen_server_target
+      proxygen::proxygen_http_coro_server_coro_httpserver)
+endif ()
 # Ensure bundled proxygen headers win over Homebrew's proxygen headers. The
 # bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
 # requirements propagate directly places the proxygen include roots after
@@ -578,6 +584,9 @@ endif ()
 # archive regardless of whether proxygen comes from bundled or system packages.
 target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
                                         proxygen_utils_trace_event_types)
+if (_tenzir_proxygen_server_target)
+  target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_server_target})
+endif ()
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -586,8 +595,17 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
     PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_target}>)
+  if (_tenzir_proxygen_server_target)
+    target_link_libraries(
+      libtenzir_builtins
+      PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_server_target}>)
+  endif ()
 else ()
   target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
+  if (_tenzir_proxygen_server_target)
+    target_link_libraries(libtenzir_builtins
+                          PRIVATE ${_tenzir_proxygen_server_target})
+  endif ()
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)

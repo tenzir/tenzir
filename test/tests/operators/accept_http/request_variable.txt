@@ -1,0 +1,5 @@
+{
+  value: 11,
+  method: "post",
+  path: "/ingest",
+}

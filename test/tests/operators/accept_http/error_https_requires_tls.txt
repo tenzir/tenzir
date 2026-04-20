@@ -1,0 +1,6 @@
+error: `https://` endpoint requires `tls=true`
+ --> tests/operators/accept_http/error_https_requires_tls.tql:5:13
+  |
+5 | accept_http "https://127.0.0.1:8080" {
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

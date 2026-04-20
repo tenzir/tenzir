@@ -9,10 +9,12 @@
 #include "tenzir/http.hpp"
 
 #include "tenzir/curl.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <string_view>
 
 namespace tenzir::http {
@@ -177,6 +179,94 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     req.headers.emplace_back("Accept", std::move(value));
   }
   return {};
+}
+
+auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
+  -> Option<std::shared_ptr<arrow::util::Decompressor>> {
+  if (encoding.empty()) {
+    return None{};
+  }
+  auto compression_type
+    = arrow::util::Codec::GetCompressionType(std::string{encoding});
+  if (not compression_type.ok()) {
+    diagnostic::warning("invalid Content-Encoding: `{}`", encoding)
+      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
+      .note("skipping decompression")
+      .emit(dh);
+    return None{};
+  }
+  auto codec = arrow::util::Codec::Create(
+    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
+  if (not codec.ok() or not codec.ValueUnsafe()) {
+    diagnostic::warning("failed to create codec for Content-Encoding: `{}`",
+                        encoding)
+      .note("skipping decompression")
+      .emit(dh);
+    return None{};
+  }
+  auto dec = codec.ValueUnsafe()->MakeDecompressor();
+  if (not dec.ok()) {
+    diagnostic::warning("failed to create decompressor for Content-Encoding: "
+                        "`{}`",
+                        encoding)
+      .note("skipping decompression")
+      .emit(dh);
+    return None{};
+  }
+  return std::move(dec.ValueUnsafe());
+}
+
+auto decompress_chunk(arrow::util::Decompressor& decompressor,
+                      std::span<std::byte const> input, diagnostic_handler& dh,
+                      size_t max_output_size) -> Result<blob, uint16_t> {
+  auto out = blob{};
+  auto initial_size
+    = std::min(max_output_size, std::max<size_t>(input.size_bytes() * 2, 64));
+  out.resize(initial_size);
+  auto written = size_t{};
+  auto read = size_t{};
+  while (read < input.size_bytes()) {
+    auto result = decompressor.Decompress(
+      detail::narrow<int64_t>(input.size_bytes() - read),
+      reinterpret_cast<uint8_t const*>(input.data() + read),
+      detail::narrow<int64_t>(out.size() - written),
+      reinterpret_cast<uint8_t*>(out.data() + written));
+    if (not result.ok()) {
+      diagnostic::warning("failed to decompress: {}",
+                          result.status().ToString())
+        .note("emitting compressed body")
+        .emit(dh);
+      return Err{(uint16_t)400}; // bad request
+    }
+    auto const bytes_written = detail::narrow<size_t>(result->bytes_written);
+    if (bytes_written > max_output_size - written) [[unlikely]] {
+      diagnostic::warning("decompressed output exceeds limit").emit(dh);
+      return Err{(uint16_t)413}; // payload too large
+    }
+    written += bytes_written;
+    read += detail::narrow<size_t>(result->bytes_read);
+    if (result->need_more_output) {
+      if (out.size() >= max_output_size) [[unlikely]] {
+        diagnostic::warning("decompressed output exceeds limit").emit(dh);
+        return Err{(uint16_t)413}; // payload too large
+      }
+      auto next_size = std::min(out.size() * 2, max_output_size);
+      out.resize(next_size);
+    }
+    // Reset gracefully when a compressed stream ends to handle concatenated
+    // compressed streams (e.g. multiple gzip members in one body).
+    if (decompressor.IsFinished()) {
+      if (auto reset = decompressor.Reset(); not reset.ok()) {
+        diagnostic::warning("failed to reset decompressor: {}",
+                            reset.ToString())
+          .note("emitting compressed body")
+          .emit(dh);
+        return Err{(uint16_t)400}; // bad request
+      }
+    }
+  }
+  out.resize(written);
+  return out;
 }
 
 } // namespace tenzir::http
