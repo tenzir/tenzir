@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "transport.hpp"
+#include "zmq/transport.hpp"
 
 #include <tenzir/async/task.hpp>
 #include <tenzir/chunk.hpp>
@@ -77,7 +77,9 @@ auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
   }
   if (auto strings = series->as<string_type>()) {
     if (strings->array->IsNull(0)) {
-      diagnostic::warning("expected `string`, got `null`").primary(expr).emit(dh);
+      diagnostic::warning("expected `string`, got `null`")
+        .primary(expr)
+        .emit(dh);
       return std::nullopt;
     }
     return std::string{strings->array->Value(0)};
@@ -150,7 +152,8 @@ public:
         if (not prefix) {
           continue;
         }
-        auto with_prefix = transport::prepend_prefix(std::move(framed), *prefix);
+        auto with_prefix
+          = transport::prepend_prefix(std::move(framed), *prefix);
         if (not with_prefix) {
           diagnostic::error("failed to prefix ZeroMQ message")
             .primary(args_.prefix->get_location())

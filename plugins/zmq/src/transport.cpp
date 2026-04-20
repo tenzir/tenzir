@@ -6,8 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "context.hpp"
-#include "transport.hpp"
+#include "zmq/transport.hpp"
 
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/uuid.hpp>
@@ -16,6 +15,8 @@
 #include <cstring>
 #include <utility>
 #include <vector>
+
+#include "context.hpp"
 
 using namespace std::chrono_literals;
 
@@ -53,11 +54,13 @@ public:
 
   explicit Monitor(::zmq::socket_t& socket) {
     auto endpoint = fmt::format("inproc://monitor-{}", uuid::random());
-    int rc = zmq_socket_monitor(socket.handle(), endpoint.c_str(), ZMQ_EVENT_ALL);
+    int rc
+      = zmq_socket_monitor(socket.handle(), endpoint.c_str(), ZMQ_EVENT_ALL);
     if (rc != 0) {
       throw ::zmq::error_t{};
     }
-    monitor_socket_ = ::zmq::socket_t{global_context(), ::zmq::socket_type::pair};
+    monitor_socket_
+      = ::zmq::socket_t{global_context(), ::zmq::socket_type::pair};
     monitor_socket_.connect(endpoint.c_str());
   }
 
@@ -147,9 +150,9 @@ auto strip_prefix(chunk_ptr message, std::string_view prefix)
     message->size(),
   };
   if (not view.starts_with(prefix)) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("message does not start with prefix `{}`",
-                                       prefix));
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("message does not start with prefix `{}`", prefix));
   }
   auto offset = prefix.size();
   return chunk::make(message->data() + offset, message->size() - offset,
@@ -166,7 +169,8 @@ auto prepend_prefix(chunk_ptr payload, std::string_view prefix)
   auto buffer = std::string{};
   buffer.reserve(prefix.size() + payload->size());
   buffer.append(prefix);
-  buffer.append(reinterpret_cast<char const*>(payload->data()), payload->size());
+  buffer.append(reinterpret_cast<char const*>(payload->data()),
+                payload->size());
   return chunk::make(std::move(buffer));
 }
 
@@ -304,8 +308,8 @@ auto Socket::ensure_socket() -> caf::expected<void> {
   }
   try {
     socket_.emplace(global_context(), role_ == SocketRole::publisher
-                                      ? ::zmq::socket_type::pub
-                                      : ::zmq::socket_type::sub);
+                                        ? ::zmq::socket_type::pub
+                                        : ::zmq::socket_type::sub);
     socket_->set(::zmq::sockopt::linger, 0);
     return {};
   } catch (const ::zmq::error_t& e) {

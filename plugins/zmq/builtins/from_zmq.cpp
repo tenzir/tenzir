@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "transport.hpp"
+#include "zmq/transport.hpp"
 
 #include <tenzir/async.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -18,14 +18,14 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <fmt/format.h>
+
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
 #include <variant>
-
-#include <fmt/format.h>
 
 using namespace std::chrono_literals;
 
@@ -79,16 +79,16 @@ public:
       prefix_ = *str;
     }
     if (auto err = socket_.set_subscription_prefix(prefix_); not err) {
-      startup_error_ = fmt::format(
-        "failed to configure ZeroMQ subscription for `{}`: {}", endpoint_,
-        render_socket_error(socket_, err.error()));
+      startup_error_
+        = fmt::format("failed to configure ZeroMQ subscription for `{}`: {}",
+                      endpoint_, render_socket_error(socket_, err.error()));
       request_stop();
       co_return;
     }
     if (auto err = socket_.open(Mode, endpoint_); not err) {
-      startup_error_ = fmt::format("failed to open ZeroMQ socket for `{}`: {}",
-                                   endpoint_,
-                                   render_socket_error(socket_, err.error()));
+      startup_error_
+        = fmt::format("failed to open ZeroMQ socket for `{}`: {}", endpoint_,
+                      render_socket_error(socket_, err.error()));
       request_stop();
       co_return;
     }
@@ -154,8 +154,8 @@ public:
       }
       co_return;
     }
-    TENZIR_ASSERT(next_sub_id_
-                  <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
+    TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
+                    std::numeric_limits<int64_t>::max()));
     auto key = data{int64_t{static_cast<int64_t>(next_sub_id_++)}};
     co_await ctx.spawn_sub<chunk_ptr>(key, std::move(parser));
     auto sub = ctx.get_sub(make_view(key));
@@ -175,12 +175,13 @@ public:
     co_await sub_pipeline.close();
   }
 
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push, OpCtx&)
-    -> Task<void> override {
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
+                   OpCtx&) -> Task<void> override {
     co_await push(std::move(slice));
   }
 
-  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&) -> Task<void> override {
+  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&)
+    -> Task<void> override {
     TENZIR_ASSERT(active_parsers_ > 0);
     --active_parsers_;
     if (stop_requested_ and active_parsers_ == 0) {

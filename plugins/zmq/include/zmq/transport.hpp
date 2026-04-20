@@ -11,14 +11,14 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/error.hpp>
 
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
+
 #include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
 #include <zmq.hpp>
 
 namespace tenzir::plugins::zmq::transport {
@@ -33,7 +33,8 @@ enum class ConnectionMode {
   connect,
 };
 
-inline constexpr auto default_endpoint = std::string_view{"tcp://127.0.0.1:5555"};
+inline constexpr auto default_endpoint
+  = std::string_view{"tcp://127.0.0.1:5555"};
 
 auto normalize_endpoint(std::string endpoint) -> std::string;
 

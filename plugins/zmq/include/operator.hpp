@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "context.hpp"
-
 #include <tenzir/chunk.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -21,6 +19,8 @@
 #include <string>
 #include <string_view>
 #include <zmq.hpp>
+
+#include "context.hpp"
 
 using namespace std::chrono_literals;
 
