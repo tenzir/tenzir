@@ -138,7 +138,7 @@ series or slice first, then iterate only when row-wise access is necessary.
 - [error-handling.md](.agents/references/error-handling.md): TRY, check, and failure_or
 - [functions.md](.agents/references/functions.md): TQL function plugins
 - [operators.md](.agents/references/operators.md): TQL operator plugins and secrets
-- [/Users/mavam/.agents/references/database-operators.md](/Users/mavam/.agents/references/database-operators.md): Common API contract for database `from_*` and `to_*` operators
+- [database-operators.md](.agents/references/database-operators.md): Common API contract for database `from_*` and `to_*` operators
 - [executor.md](.agents/references/executor.md): Executor and pipeline execution
 - [operator-porting.md](.agents/references/operator-porting.md): Porting operators from `crtp_operator` to `Operator<Input, Output>`
 - [operator-review.md](.agents/references/operator-review.md): Review questionnaire for ported operators
