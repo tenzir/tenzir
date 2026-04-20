@@ -12,7 +12,6 @@
 #include <tenzir/async/curl.hpp>
 #include <tenzir/async/scope.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
@@ -81,44 +80,6 @@ auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-auto set_curl_option(curl::easy& easy, CURLoption option, long value,
-                     std::string_view name) -> caf::error {
-  if (curl::try_set(easy, option, value)) {
-    return {};
-  }
-  return caf::make_error(ec::unspecified,
-                         fmt::format("curl: failed to set `{}`", name));
-}
-
-auto set_curl_option(curl::easy& easy, CURLoption option,
-                     std::string_view value, std::string_view name)
-  -> caf::error {
-  if (curl::try_set(easy, option, value)) {
-    return {};
-  }
-  return caf::make_error(ec::unspecified,
-                         fmt::format("curl: failed to set `{}`", name));
-}
-
-auto configure_download(CurlSession& session, std::string_view url,
-                        tls_options const& tls) -> caf::error {
-  auto& easy = session.easy();
-  if (auto err = set_curl_option(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp",
-                                 "CURLOPT_DEFAULT_PROTOCOL");
-      err.valid()) {
-    return err;
-  }
-  if (auto err = set_curl_option(easy, CURLOPT_URL, url, "CURLOPT_URL");
-      err.valid()) {
-    return err;
-  }
-  if (auto err = set_curl_option(easy, CURLOPT_HTTPGET, 1L, "CURLOPT_HTTPGET");
-      err.valid()) {
-    return err;
-  }
-  return tls.apply_to(easy, url, nullptr);
-}
-
 auto download(CurlSession* session, CurlTransfer* receive,
               Arc<MessageQueue> queue) -> Task<void> {
   auto curl_result = CurlTransferResult{CurlTransferStatus::finished};
@@ -175,10 +136,39 @@ public:
     }
     tls.update_from_config(std::addressof(ctx.actor_system().config()));
     session_.emplace(CurlSession::make(ctx.io_executor()));
-    if (auto err = configure_download(*session_, resolved_url_, tls);
-        err.valid()) {
-      diagnostic::error("FTP download from `{}` failed: {}", resolved_url_, err)
+    auto& easy = session_->easy();
+    if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
+      diagnostic::error("failed to configure FTP download from `{}`",
+                        resolved_url_)
         .primary(args_.url.source)
+        .note("failed to set curl option `CURLOPT_DEFAULT_PROTOCOL`")
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (not curl::try_set(easy, CURLOPT_URL, resolved_url_)) {
+      diagnostic::error("failed to configure FTP download from `{}`",
+                        resolved_url_)
+        .primary(args_.url.source)
+        .note("failed to set curl option `CURLOPT_URL`")
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (not curl::try_set(easy, CURLOPT_HTTPGET, 1L)) {
+      diagnostic::error("failed to configure FTP download from `{}`",
+                        resolved_url_)
+        .primary(args_.url.source)
+        .note("failed to set curl option `CURLOPT_HTTPGET`")
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (auto err = tls.apply_to(easy, resolved_url_, nullptr); err.valid()) {
+      diagnostic::error("failed to configure FTP download from `{}`",
+                        resolved_url_)
+        .primary(args_.url.source)
+        .note("{}", err)
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
       co_return;
