@@ -110,21 +110,15 @@ struct ParsedType {
 struct QuerySchema {
   std::string name;
   std::vector<ParsedField> columns;
-  type schema;
 };
 
 struct SliceMessage {
   table_slice slice;
 };
 
-struct ErrorMessage {
-  std::vector<diagnostic> diagnostics;
-  bool add_tls_hints = false;
-};
-
 struct DoneMessage {};
 
-using Message = variant<SliceMessage, ErrorMessage, DoneMessage>;
+using Message = variant<SliceMessage, DoneMessage>;
 using MessageQueue = folly::coro::BoundedQueue<Message, true, true>;
 constexpr auto message_queue_capacity = uint32_t{16};
 constexpr auto message_queue_backoff = std::chrono::milliseconds{1};
@@ -134,19 +128,6 @@ auto has_primary_annotation(diagnostic const& diag) -> bool {
                      [](auto const& annotation) {
                        return annotation.primary;
                      });
-}
-
-auto make_error_message(collecting_diagnostic_handler&& dh,
-                        std::string_view fallback, bool add_tls_hints = false)
-  -> ErrorMessage {
-  auto diagnostics = std::move(dh).collect();
-  if (diagnostics.empty()) {
-    diagnostics.push_back(diagnostic::error("{}", fallback).done());
-  }
-  return ErrorMessage{
-    .diagnostics = std::move(diagnostics),
-    .add_tls_hints = add_tls_hints,
-  };
 }
 
 struct RuntimeState {
@@ -167,7 +148,6 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     auto plan = make_query_plan(args_, ctx);
     if (not plan) {
-      done_ = true;
       co_return;
     }
     auto ssl = args_.tls ? tls_options{*args_.tls} : tls_options{};
@@ -202,13 +182,11 @@ public:
     }
     auto ok = co_await ctx.resolve_secrets(std::move(requests));
     if (not ok) {
-      done_ = true;
       co_return;
     }
     if (has_uri) {
       auto parsed = parse_connection_uri(uri, args_.uri.source, ctx.dh());
       if (not parsed) {
-        done_ = true;
         co_return;
       }
       apply_connection_uri(client_args, *parsed);
@@ -217,9 +195,17 @@ public:
       }
     }
     auto options = client_args.make_options(ctx.actor_system().config());
-    ctx.spawn_task([this, options = std::move(options),
-                    plan = std::move(*plan)]() mutable -> Task<void> {
-      co_await run_query(std::move(options), std::move(plan));
+    ctx.spawn_task([this, options = std::move(options), plan = std::move(*plan),
+                    &dh = ctx.dh(),
+                    loc = args_.operator_location]() mutable -> Task<void> {
+      auto transformed_dh = transforming_diagnostic_handler{
+        dh, [loc](diagnostic diag) {
+          if (not has_primary_annotation(diag)) {
+            diag.annotations.emplace_back(true, std::string{}, loc);
+          }
+          return diag;
+        }};
+      co_await run_query(std::move(options), std::move(plan), transformed_dh);
     });
   }
 
@@ -231,33 +217,13 @@ public:
     co_return co_await runtime_->queue.dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     auto message = std::move(result).as<Message>();
     co_await co_match(
       std::move(message),
       [&](SliceMessage x) -> Task<void> {
         co_await push(std::move(x.slice));
-        co_return;
-      },
-      [&](ErrorMessage x) -> Task<void> {
-        for (auto& diag : x.diagnostics) {
-          auto add_primary = not has_primary_annotation(diag);
-          auto builder = std::move(diag).modify();
-          if (add_primary) {
-            builder = std::move(builder).primary(args_.operator_location);
-          }
-          if (x.add_tls_hints) {
-            add_tls_client_diagnostic_hints(std::move(builder), tls_enabled_,
-                                            "ClickHouse",
-                                            clickhouse_plaintext_port,
-                                            clickhouse_tls_port)
-              .emit(ctx);
-          } else {
-            std::move(builder).emit(ctx);
-          }
-        }
-        done_ = true;
         co_return;
       },
       [&](DoneMessage) -> Task<void> {
@@ -605,62 +571,6 @@ private:
   }
 
   static auto
-  clickhouse_type_to_tenzir_type(ParsedType const& desc, value_path path,
-                                 diagnostic_handler& dh) -> failure_or<type> {
-    switch (desc.kind) {
-      case ParsedType::Kind::null_:
-        return type{null_type{}};
-      case ParsedType::Kind::nullable_:
-        TENZIR_ASSERT(desc.child);
-        return clickhouse_type_to_tenzir_type(**desc.child, path, dh);
-      case ParsedType::Kind::bool_:
-        return type{bool_type{}};
-      case ParsedType::Kind::int64_:
-        return type{int64_type{}};
-      case ParsedType::Kind::uint64_:
-        return type{uint64_type{}};
-      case ParsedType::Kind::double_:
-        return type{double_type{}};
-      case ParsedType::Kind::string_:
-      case ParsedType::Kind::uuid_:
-      case ParsedType::Kind::enum_name_:
-      case ParsedType::Kind::int128_string_:
-      case ParsedType::Kind::decimal_string_:
-        return type{string_type{}};
-      case ParsedType::Kind::time_:
-        return type{time_type{}};
-      case ParsedType::Kind::ip_:
-        return type{ip_type{}};
-      case ParsedType::Kind::blob_:
-        return type{blob_type{}};
-      case ParsedType::Kind::record_: {
-        if (desc.fields.empty()) {
-          diagnostic::error("ClickHouse column `{}` is an empty tuple, which "
-                            "is not supported",
-                            path)
-            .emit(dh);
-          return failure::promise();
-        }
-        auto fields = std::vector<struct record_type::field>{};
-        fields.reserve(desc.fields.size());
-        for (auto const& field : desc.fields) {
-          TRY(auto nested, clickhouse_type_to_tenzir_type(
-                             *field.value, path.field(field.name), dh));
-          fields.emplace_back(field.name, std::move(nested));
-        }
-        return type{record_type{fields}};
-      }
-      case ParsedType::Kind::list_: {
-        TENZIR_ASSERT(desc.child);
-        TRY(auto nested,
-            clickhouse_type_to_tenzir_type(**desc.child, path.list(), dh));
-        return type{list_type{nested}};
-      }
-    }
-    TENZIR_UNREACHABLE();
-  }
-
-  static auto
   make_query_schema(std::string name, std::vector<ParsedField> columns,
                     diagnostic_handler& dh) -> failure_or<QuerySchema> {
     if (columns.empty()) {
@@ -668,18 +578,9 @@ private:
       return failure::promise();
     }
     make_unique_field_names(columns, "column");
-    auto fields = std::vector<struct record_type::field>{};
-    fields.reserve(columns.size());
-    for (auto const& column : columns) {
-      TRY(auto nested, clickhouse_type_to_tenzir_type(
-                         *column.value, value_path{}.field(column.name), dh));
-      fields.emplace_back(column.name, std::move(nested));
-    }
-    auto schema = type{name, record_type{fields}};
     return QuerySchema{
       .name = std::move(name),
       .columns = std::move(columns),
-      .schema = std::move(schema),
     };
   }
 
@@ -708,29 +609,26 @@ private:
                         std::string schema_name, diagnostic_handler& dh)
     -> failure_or<QuerySchema> {
     auto columns = std::vector<ParsedField>{};
-    auto ok = true;
+    auto failed = false;
     auto query = ::clickhouse::Query{fmt::format(
       "DESCRIBE TABLE {} SETTINGS describe_compact_output=1", table)};
-    query.OnData([&](::clickhouse::Block const& block) {
-      if (not ok) {
-        return;
-      }
+    query.OnDataCancelable([&](::clickhouse::Block const& block) {
       if (block.GetColumnCount() == 0) {
-        return;
+        return true;
       }
       if (block.GetColumnCount() < 2) {
         diagnostic::error("unexpected ClickHouse response to DESCRIBE TABLE")
           .emit(dh);
-        ok = false;
-        return;
+        failed = true;
+        return false;
       }
       auto names = block[0]->As<::clickhouse::ColumnString>();
       auto types = block[1]->As<::clickhouse::ColumnString>();
       if (not names or not types) {
         diagnostic::error("unexpected ClickHouse DESCRIBE TABLE column layout")
           .emit(dh);
-        ok = false;
-        return;
+        failed = true;
+        return false;
       }
       for (auto row = size_t{0}; row < block.GetRowCount(); ++row) {
         auto name = std::string{names->At(row)};
@@ -738,17 +636,18 @@ private:
         auto parsed
           = parse_clickhouse_type(type_name, value_path{}.field(name), dh);
         if (not parsed) {
-          ok = false;
-          return;
+          failed = true;
+          return false;
         }
         columns.push_back({
           .name = std::move(name),
           .value = Box<ParsedType>{std::in_place, std::move(*parsed)},
         });
       }
+      return true;
     });
     client.Select(query);
-    if (not ok) {
+    if (failed) {
       return failure::promise();
     }
     return make_query_schema(std::move(schema_name), std::move(columns), dh);
@@ -1114,7 +1013,7 @@ private:
         .emit(dh);
       return failure::promise();
     }
-    auto builder = series_builder{schema.schema};
+    auto builder = series_builder{};
     for (auto row = size_t{0}; row < block.GetRowCount(); ++row) {
       auto event = builder.record();
       for (auto column = size_t{0}; column < schema.columns.size(); ++column) {
@@ -1123,7 +1022,7 @@ private:
                          value_path{}.field(schema.columns[column].name), dh));
       }
     }
-    return builder.finish_as_table_slice();
+    return builder.finish_as_table_slice(schema.name);
   }
 
   static auto split_validated_table_name(std::string_view table)
@@ -1194,27 +1093,20 @@ private:
     co_return false;
   }
 
-  auto run_query(::clickhouse::ClientOptions options, QueryPlan plan)
-    -> Task<void> {
-    auto terminal_error = Option<ErrorMessage>{};
+  auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
+                 diagnostic_handler& dh) -> Task<void> {
+    auto emitted_terminal_diagnostic = false;
     try {
       auto client = ::clickhouse::Client{std::move(options)};
       auto schema = Option<QuerySchema>{};
       if (plan.described_table) {
-        auto dh = collecting_diagnostic_handler{};
         auto described = describe_table_schema(client, *plan.described_table,
                                                plan.schema_name, dh);
         if (not described) {
-          terminal_error = make_error_message(
-            std::move(dh), "failed to describe ClickHouse table");
+          co_return;
         } else {
           schema = std::move(*described);
         }
-      }
-      if (terminal_error) {
-        co_await enqueue_message(*runtime_,
-                                 Message{std::move(*terminal_error)});
-        co_return;
       }
       auto failed = false;
       auto query_text = std::string{plan.query};
@@ -1231,15 +1123,9 @@ private:
           return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
         if (not schema) {
-          auto dh = collecting_diagnostic_handler{};
           auto inferred = infer_schema_from_block(block, plan.schema_name, dh);
           if (not inferred) {
             failed = true;
-            std::ignore = folly::coro::blockingWait(enqueue_message(
-              *runtime_, Message{make_error_message(
-                           std::move(dh), "failed to infer ClickHouse query "
-                                          "schema")}));
-            runtime_->stop_requested.store(true, std::memory_order_release);
             return false;
           }
           schema = std::move(*inferred);
@@ -1247,14 +1133,9 @@ private:
         if (block.GetRowCount() == 0) {
           return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
-        auto dh = collecting_diagnostic_handler{};
         auto slices = block_to_slices(block, *schema, dh);
         if (not slices) {
           failed = true;
-          std::ignore = folly::coro::blockingWait(enqueue_message(
-            *runtime_, Message{make_error_message(
-                         std::move(dh), "failed to decode ClickHouse block")}));
-          runtime_->stop_requested.store(true, std::memory_order_release);
           return false;
         }
         for (auto& slice : *slices) {
@@ -1270,28 +1151,27 @@ private:
         co_return;
       }
       if (runtime_->stop_requested.load(std::memory_order_acquire)) {
-        std::ignore = runtime_->queue.try_enqueue(Message{DoneMessage{}});
         co_return;
       }
       co_await enqueue_message(*runtime_, Message{DoneMessage{}});
     } catch (const panic_exception&) {
       throw;
     } catch (const ::clickhouse::ServerError& e) {
-      terminal_error = ErrorMessage{
-        .diagnostics
-        = {diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what())
-             .done()},
-        .add_tls_hints = true,
-      };
+      add_tls_client_diagnostic_hints(
+        diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what()),
+        tls_enabled_, "ClickHouse", clickhouse_plaintext_port,
+        clickhouse_tls_port)
+        .emit(dh);
+      emitted_terminal_diagnostic = true;
     } catch (const std::exception& e) {
-      terminal_error = ErrorMessage{
-        .diagnostics
-        = {diagnostic::error("ClickHouse error: {}", e.what()).done()},
-        .add_tls_hints = true,
-      };
+      add_tls_client_diagnostic_hints(
+        diagnostic::error("ClickHouse error: {}", e.what()), tls_enabled_,
+        "ClickHouse", clickhouse_plaintext_port, clickhouse_tls_port)
+        .emit(dh);
+      emitted_terminal_diagnostic = true;
     }
-    if (terminal_error) {
-      co_await enqueue_message(*runtime_, Message{std::move(*terminal_error)});
+    if (emitted_terminal_diagnostic) {
+      co_return;
     }
     co_return;
   }
