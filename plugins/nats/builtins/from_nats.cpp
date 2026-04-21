@@ -22,7 +22,6 @@
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/fibers/Semaphore.h>
 
@@ -278,7 +277,8 @@ public:
       done_ = true;
       co_return;
     }
-    auto* evb = ctx.io_executor()->getEventBase();
+    io_executor_ = ctx.io_executor();
+    auto* evb = io_executor_->getEventBase();
     TENZIR_ASSERT(evb);
     auto options
       = make_nats_options(*resolved, args_.tls,
@@ -320,7 +320,7 @@ public:
         co_return;
       }
     }
-    auto const fetch_size = std::min(args_.batch_size, args_.queue_capacity);
+    auto const fetch_size = uint64_t{1};
     auto js_options = jsOptions{};
     jsOptions_Init(&js_options);
     js_options.PullSubscribeAsync.FetchSize
@@ -373,45 +373,21 @@ public:
       co_await wait_forever();
     }
     auto batch = SourceBatch{};
-    auto const max_batch_size = detail::narrow_cast<size_t>(
-      std::min(args_.batch_size, args_.queue_capacity));
-    batch.messages.reserve(max_batch_size);
-    auto first = co_await source_->queue.dequeue();
-    if (auto* item = try_as<IncomingMessage>(&first)) {
+    auto first = Option<SourceMessage>{None{}};
+    if (pending_ack_) {
+      first = co_await source_->queue.co_try_dequeue_for(
+        std::chrono::duration_cast<folly::Duration>(args_.batch_timeout));
+      if (not first) {
+        co_return batch;
+      }
+    } else {
+      first = co_await source_->queue.dequeue();
+    }
+    if (auto* item = try_as<IncomingMessage>(&*first)) {
       batch.messages.push_back(std::move(item->msg));
-    } else if (auto* complete = try_as<SubscriptionComplete>(&first)) {
+    } else if (auto* complete = try_as<SubscriptionComplete>(&*first)) {
       batch.completion = *complete;
       co_return batch;
-    }
-    auto const deadline
-      = std::chrono::steady_clock::now()
-        + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-          args_.batch_timeout);
-    while (batch.messages.size() < max_batch_size and not batch.completion) {
-      auto next = source_->queue.try_dequeue();
-      if (not next) {
-        auto const remaining = deadline - std::chrono::steady_clock::now();
-        if (remaining <= std::chrono::steady_clock::duration::zero()) {
-          break;
-        }
-        try {
-          next = co_await source_->queue.co_try_dequeue_for(
-            std::chrono::duration_cast<folly::Duration>(remaining));
-        } catch (folly::OperationCancelled const&) {
-          break;
-        }
-      }
-      if (not next) {
-        break;
-      }
-      match(
-        std::move(*next),
-        [&](IncomingMessage item) {
-          batch.messages.push_back(std::move(item.msg));
-        },
-        [&](SubscriptionComplete complete) {
-          batch.completion = complete;
-        });
     }
     co_return batch;
   }
@@ -420,6 +396,10 @@ public:
     -> Task<void> override {
     auto* batch = result.try_as<SourceBatch>();
     if (not batch) {
+      co_return;
+    }
+    if (batch->messages.empty() and not batch->completion) {
+      acknowledge_pending(ctx);
       co_return;
     }
     auto accepted = std::vector<nats_msg_ptr>{};
@@ -442,20 +422,33 @@ public:
       accepted.push_back(std::move(msg));
     }
     if (not accepted.empty()) {
-      auto nak_guard = detail::scope_guard{[&accepted]() noexcept {
-        for (auto& msg : accepted) {
+      auto acked = acknowledge_pending(ctx);
+      TENZIR_ASSERT(in_flight_.empty());
+      in_flight_ = std::move(accepted);
+      auto nak_guard = detail::scope_guard{[this]() noexcept {
+        for (auto& msg : in_flight_) {
           if (msg) {
             natsMsg_Nak(msg.get(), nullptr);
           }
         }
+        in_flight_.clear();
       }};
-      for (auto& slice : build_slices(accepted, ctx)) {
-        co_await push(std::move(slice));
+      for (auto& msg : in_flight_) {
+        if (not msg) {
+          continue;
+        }
+        auto one = std::span<nats_msg_ptr const>{&msg, 1};
+        for (auto& slice : build_slices(one, ctx)) {
+          co_await push(std::move(slice));
+        }
+        pending_ack_ = std::move(msg);
       }
-      auto const acked = acknowledge_messages(accepted, ctx);
-      accepted.clear();
+      in_flight_.clear();
       nak_guard.disable();
       if (args_.count and received_ >= args_.count->inner) {
+        if (args_.count->inner == 1) {
+          acked = acknowledge_pending(ctx) or acked;
+        }
         if (acked) {
           co_await flush_acknowledgements(ctx);
         }
@@ -568,7 +561,7 @@ private:
     co_return stream;
   }
 
-  auto build_slices(std::vector<nats_msg_ptr> const& messages, OpCtx& ctx)
+  auto build_slices(std::span<nats_msg_ptr const> messages, OpCtx& ctx)
     -> std::vector<table_slice> {
     auto opts = multi_series_builder::options{};
     opts.settings.default_schema_name = "tenzir.nats";
@@ -600,14 +593,13 @@ private:
     return true;
   }
 
-  auto acknowledge_messages(std::vector<nats_msg_ptr>& messages, OpCtx& ctx)
-    -> bool {
-    auto acked = false;
-    for (auto& msg : messages) {
-      auto const ok = acknowledge(msg.get(), ctx);
-      acked = acked or ok;
+  auto acknowledge_pending(OpCtx& ctx) -> bool {
+    if (not pending_ack_) {
+      return false;
     }
-    return acked;
+    auto const ok = acknowledge(pending_ack_.get(), ctx);
+    pending_ack_.reset();
+    return ok;
   }
 
   auto flush_acknowledgements(OpCtx& ctx) -> Task<void> {
@@ -628,24 +620,45 @@ private:
       return;
     }
     source_->stopping.store(true, std::memory_order_release);
+    auto nacked = false;
     while (auto message = source_->queue.try_dequeue()) {
       match(
         std::move(*message),
         [&](IncomingMessage item) {
           source_->message_slots.signal();
           natsMsg_Nak(item.msg.get(), nullptr);
+          nacked = true;
         },
         [](SubscriptionComplete) {});
+    }
+    if (pending_ack_) {
+      natsMsg_Nak(pending_ack_.get(), nullptr);
+      pending_ack_.reset();
+      nacked = true;
+    }
+    for (auto& msg : in_flight_) {
+      if (msg) {
+        natsMsg_Nak(msg.get(), nullptr);
+        nacked = true;
+      }
+    }
+    in_flight_.clear();
+    if (nacked and connection_) {
+      std::ignore = natsConnection_FlushTimeout(connection_.get(),
+                                                shutdown_flush_timeout_ms);
     }
     subscription_.reset();
   }
 
   FromNatsArgs args_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
   nats_options_ptr options_;
   nats_connection_ptr connection_;
   js_ctx_ptr js_;
   mutable Arc<SourceState> source_;
   nats_subscription_ptr subscription_;
+  mutable nats_msg_ptr pending_ack_;
+  std::vector<nats_msg_ptr> in_flight_;
   MetricsCounter read_bytes_counter_;
   uint64_t received_ = 0;
   bool done_ = false;

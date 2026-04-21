@@ -21,10 +21,9 @@
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 
-#include <folly/coro/BoundedQueue.h>
-
 #include <chrono>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <tuple>
@@ -59,10 +58,9 @@ struct ToNatsArgs {
 };
 
 struct PublishAckError {
+  uint64_t count = 0;
   std::string reason;
 };
-
-using PublishAckQueue = folly::coro::BoundedQueue<PublishAckError>;
 
 auto make_publish_ack_error(jsPubAckErr const& error) -> PublishAckError {
   auto reason = fmt::format("{}: {}", nats_status_string(error.Err),
@@ -74,11 +72,33 @@ auto make_publish_ack_error(jsPubAckErr const& error) -> PublishAckError {
   return {.reason = std::move(reason)};
 }
 
+struct PublishAckFailures {
+  auto record(jsPubAckErr const& error) -> void {
+    auto guard = std::lock_guard{mutex};
+    ++count;
+    if (first_reason.empty()) {
+      first_reason = make_publish_ack_error(error).reason;
+    }
+  }
+
+  auto drain() -> PublishAckError {
+    auto guard = std::lock_guard{mutex};
+    return {
+      .count = std::exchange(count, uint64_t{0}),
+      .reason = std::exchange(first_reason, {}),
+    };
+  }
+
+  std::mutex mutex;
+  uint64_t count = 0;
+  std::string first_reason;
+};
+
 void publish_error_handler(jsCtx*, jsPubAckErr* error, void* closure) {
-  auto* errors = static_cast<PublishAckQueue*>(closure);
-  TENZIR_ASSERT(errors);
+  auto* failures = static_cast<PublishAckFailures*>(closure);
+  TENZIR_ASSERT(failures);
   if (error) {
-    std::ignore = errors->try_enqueue(make_publish_ack_error(*error));
+    failures->record(*error);
   }
 }
 
@@ -158,9 +178,7 @@ auto add_headers(natsMsg* msg, data const& value, ast::expression const& expr,
 class ToNats final : public Operator<table_slice, void> {
 public:
   explicit ToNats(ToNatsArgs args)
-    : args_{std::move(args)},
-      ack_errors_{std::in_place,
-                  detail::narrow_cast<uint32_t>(args_.max_pending)} {
+    : args_{std::move(args)}, ack_failures_{std::in_place} {
   }
 
   ToNats(ToNats const&) = delete;
@@ -178,7 +196,8 @@ public:
       done_ = true;
       co_return;
     }
-    auto* evb = ctx.io_executor()->getEventBase();
+    io_executor_ = ctx.io_executor();
+    auto* evb = io_executor_->getEventBase();
     TENZIR_ASSERT(evb);
     auto options
       = make_nats_options(*resolved, args_.tls,
@@ -208,7 +227,7 @@ public:
       = detail::narrow_cast<int64_t>(args_.max_pending);
     js_options.PublishAsync.StallWait = default_stall_wait.count();
     js_options.PublishAsync.ErrHandler = publish_error_handler;
-    js_options.PublishAsync.ErrHandlerClosure = &*ack_errors_;
+    js_options.PublishAsync.ErrHandlerClosure = &*ack_failures_;
     auto* raw_js = static_cast<jsCtx*>(nullptr);
     status = natsConnection_JetStream(&raw_js, connection_.get(), &js_options);
     if (status != NATS_OK) {
@@ -410,25 +429,19 @@ private:
   }
 
   auto drain_ack_errors(OpCtx& ctx) -> void {
-    auto errors = uint64_t{0};
-    auto first_error = std::string{};
-    while (auto error = ack_errors_->try_dequeue()) {
-      ++errors;
-      if (first_error.empty()) {
-        first_error = std::move(error->reason);
-      }
-    }
-    if (errors != 0) {
-      diagnostic::error("{} NATS publish acknowledgment{} failed", errors,
-                        errors == 1 ? "" : "s")
+    auto failures = ack_failures_->drain();
+    if (failures.count != 0) {
+      diagnostic::error("{} NATS publish acknowledgment{} failed",
+                        failures.count, failures.count == 1 ? "" : "s")
         .primary(args_.subject.source)
-        .note("first error: {}", first_error)
+        .note("first error: {}", failures.reason)
         .emit(ctx);
     }
   }
 
   ToNatsArgs args_;
-  mutable Arc<PublishAckQueue> ack_errors_;
+  mutable Arc<PublishAckFailures> ack_failures_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
   nats_options_ptr options_;
   nats_connection_ptr connection_;
   js_ctx_ptr js_;
