@@ -15,7 +15,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "clickhouse-cpp";
-  version = "2.5.1-unstable-2025-02-26";
+  version = "2.6.1-unstable-2026-05-19";
 
   outputs = [
     "out"
@@ -23,13 +23,11 @@ stdenv.mkDerivation {
     #"dev"
   ];
 
-  # https://github.com/ClickHouse/clickhouse-cpp/pull/411 for easier
-  # integration.
   src = fetchFromGitHub {
     owner = "ClickHouse";
     repo = "clickhouse-cpp";
-    rev = "6b5109cf8d12525bc7d9ae6ba423ec3e23de2b33";
-    hash = "sha256-DAvJNaSKFS2HYHtJh4Q7x91fdmonFt3KITLeZKaOayw=";
+    rev = "7ae2335b1a9d9ebfe38be0098bbc659d7068cac3";
+    hash = "sha256-1/GMsKW6+5W0e0ZAzsoK289U11qXxK9DetKk0TT9wuQ=";
   };
 
   nativeBuildInputs = [
@@ -59,6 +57,7 @@ stdenv.mkDerivation {
     "-DWITH_SYSTEM_LZ4=ON"
     "-DWITH_SYSTEM_ZSTD=ON"
     "-DDISABLE_CLANG_LIBC_WORKAROUND=ON"
+    "-DCH_MAP_BOOL_TO_UINT8=OFF"
   ];
 
   meta = {

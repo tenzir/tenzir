@@ -1,0 +1,10 @@
+warning: malformed ClickHouse values in `too_late_lc`: Date32 value is out of range after rescaling to nanoseconds
+ --> tests/operators/from_clickhouse/19_low_cardinality_overflow_null.tql:1:1
+  |
+1 | from_clickhouse sql="SELECT CAST(toDate32('2263-01-01'), 'LowCardinality(Date32)') AS too_late_lc, toUInt64(7) AS ok",
+  | ^^^^^^^^^^^^^^^ 
+  |
+{
+  too_late_lc: null,
+  ok: 7,
+}

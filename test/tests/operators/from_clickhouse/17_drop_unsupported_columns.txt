@@ -1,0 +1,9 @@
+warning: dropping ClickHouse column `dropped` with unsupported type `Map(String, UInt64)`
+ --> tests/operators/from_clickhouse/17_drop_unsupported_columns.tql:1:1
+  |
+1 | from_clickhouse sql="SELECT toUInt64(1) AS ok, CAST(map('x', toUInt64(1)), 'Map(String, UInt64)') AS dropped",
+  | ^^^^^^^^^^^^^^^ 
+  |
+{
+  ok: 1,
+}
