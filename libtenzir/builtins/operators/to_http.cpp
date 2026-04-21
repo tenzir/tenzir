@@ -127,7 +127,7 @@ public:
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
     if (auto result = co_await pipeline.push(std::move(input));
         result.is_err()) {
-      lifecycle_ = Lifecycle::done;
+      co_await begin_draining(ctx);
     }
   }
 
@@ -157,7 +157,7 @@ public:
     }
     auto chunk = std::move(result).as<Option<chunk_ptr>>();
     if (chunk.is_none()) {
-      // subpipeline finished
+      // subpipeline finished and the queue drained completely.
       lifecycle_ = Lifecycle::done;
       co_return;
     }
@@ -176,7 +176,7 @@ public:
                         std::move(response).unwrap_err())
         .primary(args_.url.source)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
+      co_await begin_draining(ctx);
       co_return;
     }
     auto http_response = std::move(response).unwrap();
@@ -193,16 +193,10 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
-      lifecycle_ = Lifecycle::draining;
-      auto sub = ctx.get_sub(make_view(sub_key_));
-      if (not sub) {
-        lifecycle_ = Lifecycle::done;
-        co_return FinalizeBehavior::done;
-      }
-      auto& pipeline = as<SubHandle<table_slice>>(*sub);
-      co_await pipeline.close();
+      co_await begin_draining(ctx);
     }
-    co_return FinalizeBehavior::continue_;
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto state() -> OperatorState override {
@@ -216,6 +210,20 @@ private:
     draining,
     done,
   };
+
+  auto begin_draining(OpCtx& ctx) -> Task<void> {
+    if (lifecycle_ != Lifecycle::running) {
+      co_return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    auto sub = ctx.get_sub(make_view(sub_key_));
+    if (not sub) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto& pipeline = as<SubHandle<table_slice>>(*sub);
+    co_await pipeline.close();
+  }
 
   auto get_method() -> std::string {
     return args_.method ? args_.method->inner : "POST";
