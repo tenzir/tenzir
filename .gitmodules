@@ -26,7 +26,8 @@
 	shallow = true
 [submodule "plugins/clickhouse/aux/clickhouse-cpp"]
 	path = plugins/clickhouse/aux/clickhouse-cpp
-	url = https://github.com/ClickHouse/clickhouse-cpp
+	url = https://github.com/IyeOnline/clickhouse-cpp
+	branch = topic/tuple-names-and-bool
 	shallow = true
 [submodule "plugins/web/aux/llhttp"]
 	path = plugins/web/aux/llhttp
