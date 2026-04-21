@@ -1,0 +1,6 @@
+suite: to-amazon-security-lake-basic-write
+fixtures: [mock_s3]
+timeout: 60
+skip:
+  on:
+    - fixture-unavailable

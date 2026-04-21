@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {time: 2024-01-01, x: 1}
+to_amazon_security_lake "s3://aws-security-data-lake-x/ext/invalid source name",
+  region="us-east-1",
+  account_id="123456789012",
+  external_id="ext"
