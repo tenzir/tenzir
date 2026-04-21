@@ -23,6 +23,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/coro/BoundedQueue.h>
+#include <folly/Exception.h>
 #include <folly/fibers/Semaphore.h>
 
 #include <algorithm>
@@ -329,10 +330,6 @@ public:
       = detail::narrow_cast<int>(std::max<uint64_t>(1, fetch_size / 2));
     js_options.PullSubscribeAsync.CompleteHandler = complete_callback;
     js_options.PullSubscribeAsync.CompleteHandlerClosure = &*source_;
-    if (args_.count) {
-      js_options.PullSubscribeAsync.MaxMessages
-        = detail::narrow_cast<int>(args_.count->inner);
-    }
     auto sub_options = jsSubOptions{};
     jsSubOptions_Init(&sub_options);
     sub_options.ManualAck = true;
@@ -375,8 +372,16 @@ public:
     auto batch = SourceBatch{};
     auto first = Option<SourceMessage>{None{}};
     if (pending_ack_) {
-      first = co_await source_->queue.co_try_dequeue_for(
-        std::chrono::duration_cast<folly::Duration>(args_.batch_timeout));
+      auto token = co_await folly::coro::co_current_cancellation_token;
+      try {
+        first = co_await source_->queue.co_try_dequeue_for(
+          std::chrono::duration_cast<folly::Duration>(args_.batch_timeout));
+      } catch (folly::OperationCancelled const&) {
+        if (token.isCancellationRequested()) {
+          throw;
+        }
+        co_return batch;
+      }
       if (not first) {
         co_return batch;
       }
@@ -701,12 +706,6 @@ public:
       if (auto count = ctx.get(count_arg); count) {
         if (count->inner == 0) {
           diagnostic::error("`count` must be greater than zero")
-            .primary(ctx.get_location(count_arg).value_or(location::unknown))
-            .emit(ctx);
-        }
-        if (count->inner
-            > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
-          diagnostic::error("`count` must fit into a 32-bit integer")
             .primary(ctx.get_location(count_arg).value_or(location::unknown))
             .emit(ctx);
         }
