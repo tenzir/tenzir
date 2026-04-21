@@ -158,19 +158,16 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
-    order = weaker_event_order(order_, order);
+    order_ = weaker_event_order(order_, order);
     auto ops = std::vector<Box<ir::Operator>>{};
     ops.reserve(1 + filter.size());
-    // Remember the order for potential rebatches.
-    order_ = order;
     ops.emplace_back(SetIr{std::move(*this)});
-    // Prevent the filter from being pushed upstream.
     for (auto& expr : filter) {
       ops.push_back(make_where_ir(expr));
     }
     return {
       ir::optimize_filter{},
-      order,
+      order_,
       ir::pipeline{{}, std::move(ops)},
     };
   }
