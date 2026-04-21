@@ -43,10 +43,6 @@ public:
     return pipeline_.substitute(ctx, instantiate);
   }
 
-  auto references(let_id id) const -> bool override {
-    return pipeline_.references(id);
-  }
-
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
     return pipeline_.infer_type(input, dh);

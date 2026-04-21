@@ -709,65 +709,6 @@ private:
   substitute_ctx ctx_;
 };
 
-class reference_finder : public ast::visitor<reference_finder> {
-public:
-  explicit reference_finder(let_id id) : id_{id} {
-  }
-
-  void visit(ast::dollar_var& x) {
-    result_ = result_ or x.let == id_;
-  }
-
-  template <class T>
-  void visit(T& x) {
-    if (not result_) {
-      this->enter(x);
-    }
-  }
-
-  auto result() const -> bool {
-    return result_;
-  }
-
-private:
-  let_id id_;
-  bool result_ = false;
-};
-
-class dollar_var_replacer : public ast::visitor<dollar_var_replacer> {
-public:
-  explicit dollar_var_replacer(
-    std::span<const ast::dollar_var_replacement> replacements)
-    : replacements_{replacements} {
-  }
-
-  void visit(ast::expression& x) {
-    if (auto* var = try_as<ast::dollar_var>(x)) {
-      for (auto const& [id, replacement] : replacements_) {
-        if (var->let == id) {
-          x = replacement;
-          return;
-        }
-      }
-      return;
-    }
-    enter(x);
-  }
-
-  static void visit(ast::dollar_var&) {
-    // This is handled by the `ast::expression` case above.
-    TENZIR_UNREACHABLE();
-  }
-
-  template <class T>
-  void visit(T& x) {
-    enter(x);
-  }
-
-private:
-  std::span<const ast::dollar_var_replacement> replacements_;
-};
-
 } // namespace
 
 // TODO: Where to put this?
@@ -776,20 +717,6 @@ auto ast::expression::substitute(
   auto visitor = substitutor{ctx};
   visitor.visit(*this);
   return visitor.result();
-}
-
-auto ast::references(ast::expression const& expr, let_id id) -> bool {
-  auto copy = expr;
-  auto visitor = reference_finder{id};
-  visitor.visit(copy);
-  return visitor.result();
-}
-
-auto ast::replace_dollar_vars(
-  expression& expr, std::span<const dollar_var_replacement> replacements)
-  -> void {
-  auto visitor = dollar_var_replacer{replacements};
-  visitor.visit(expr);
 }
 
 auto ast::expression::is_deterministic(const registry& reg) const -> bool {

@@ -27,24 +27,6 @@ namespace tenzir {
 
 namespace {} // namespace
 
-auto ir::Operator::references(let_id) const -> bool {
-  return true;
-}
-
-auto ir::Operator::is_default_invocation(std::string_view) const -> bool {
-  return false;
-}
-
-auto ir::Operator::replace_dollar_vars(
-  std::span<const ast::dollar_var_replacement> replacements) -> bool {
-  for (auto const& [id, _] : replacements) {
-    if (references(id)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   // TODO: This should just be a `where_ir{std::move(filter)}`.
   const auto* where = plugins::find<operator_compiler_plugin>("tql2.where");
@@ -167,24 +149,6 @@ public:
       TRY(x.right.substitute(ctx));
     }
     return {};
-  }
-
-  auto references(let_id id) const -> bool override {
-    for (auto const& assignment : assignments_) {
-      if (ast::references(assignment.right, id)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  auto
-  replace_dollar_vars(std::span<const ast::dollar_var_replacement> replacements)
-    -> bool override {
-    for (auto& assignment : assignments_) {
-      ast::replace_dollar_vars(assignment.right, replacements);
-    }
-    return true;
   }
 
   auto spawn(element_type_tag input) and -> AnyOperator override {
@@ -414,24 +378,6 @@ public:
       TRY(args_.alternative->pipeline.substitute(ctx, instantiate));
     }
     return {};
-  }
-
-  auto references(let_id id) const -> bool override {
-    return ast::references(args_.condition, id)
-           or args_.consequence.references(id)
-           or (args_.alternative
-               and args_.alternative->pipeline.references(id));
-  }
-
-  auto
-  replace_dollar_vars(std::span<const ast::dollar_var_replacement> replacements)
-    -> bool override {
-    ast::replace_dollar_vars(args_.condition, replacements);
-    if (not args_.consequence.replace_dollar_vars(replacements)) {
-      return false;
-    }
-    return not args_.alternative
-           or args_.alternative->pipeline.replace_dollar_vars(replacements);
   }
 
   auto spawn(element_type_tag input) and -> AnyOperator override {
@@ -671,33 +617,6 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
     TRY(op->substitute(ctx, false));
   }
   return {};
-}
-
-auto ir::pipeline::references(let_id id) const -> bool {
-  for (auto const& let : lets) {
-    if (ast::references(let.expr, id)) {
-      return true;
-    }
-  }
-  for (auto const& op : operators) {
-    if (op->references(id)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-auto ir::pipeline::replace_dollar_vars(
-  std::span<const ast::dollar_var_replacement> replacements) -> bool {
-  for (auto& let : lets) {
-    ast::replace_dollar_vars(let.expr, replacements);
-  }
-  for (auto& op : operators) {
-    if (not op->replace_dollar_vars(replacements)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 auto ir::pipeline::spawn(

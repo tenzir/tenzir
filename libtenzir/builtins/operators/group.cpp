@@ -98,10 +98,6 @@ public:
     return {};
   }
 
-  auto references(let_id id) const -> bool override {
-    return ast::references(over_, id) or pipe_.references(id);
-  }
-
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
     return pipe_.infer_type(input, dh);

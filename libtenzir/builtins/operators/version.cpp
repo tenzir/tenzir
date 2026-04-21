@@ -211,11 +211,6 @@ public:
     TENZIR_UNUSED(ctx, instantiate);
     return {};
   }
-
-  auto references(let_id) const -> bool override {
-    return false;
-  }
-
   auto spawn(element_type_tag input) and -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
     return Version{};

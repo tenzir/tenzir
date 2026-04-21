@@ -1,4 +1,0 @@
-{
-  line: "message-0001",
-  subject: "from_nats_read_lines_let_test",
-}
