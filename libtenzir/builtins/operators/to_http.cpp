@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async/task.hpp"
+
+#include <tenzir/arc.hpp>
+#include <tenzir/async/oneshot.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
@@ -37,15 +41,13 @@ namespace {
 
 using Headers = std::vector<std::pair<std::string, std::string>>;
 
-constexpr auto max_inflight_requests = size_t{1024};
-constexpr auto default_timeout = std::chrono::milliseconds{90'000};
-
 struct ToHttpArgs {
   located<secret> url;
   Option<located<std::string>> method;
   Option<located<data>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
+  Option<located<uint64_t>> parallel;
   located<ir::pipeline> printer;
   location operator_location;
 };
@@ -70,7 +72,8 @@ auto resolve_secrets(OpCtx& ctx, ToHttpArgs& args, std::string& resolved_url,
 
 class ToHttp final : public Operator<table_slice, void> {
 public:
-  explicit ToHttp(ToHttpArgs args) : args_{std::move(args)} {
+  explicit ToHttp(ToHttpArgs args)
+    : args_{std::move(args)}, request_slots_{get_parallel()} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -113,14 +116,14 @@ public:
     }
     // spawn writer sub pipeline
     auto pipeline = args_.printer.inner;
-    co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
+    co_await ctx.spawn_sub<table_slice>(sub_key(), std::move(pipeline));
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
-    auto sub = ctx.get_sub(make_view(sub_key_));
+    auto sub = ctx.get_sub(sub_key());
     if (not sub) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -153,10 +156,9 @@ public:
       auto response = co_await (*http_pool_)
                         ->request(method, std::move(body), std::move(headers));
       if (response.is_err()) {
-        diagnostic::error("HTTP request to `{}` failed: {}", url_,
-                          std::move(response).unwrap_err())
-          .primary(args_.operator_location)
-          .emit(*dh);
+        auto error = fmt::format("HTTP request to `{}` failed: {}", url_,
+                                 std::move(response).unwrap_err());
+        std::ignore = error_signal_->send(std::move(error));
       } else {
         auto http_response = std::move(response).unwrap();
         if (http_response.status_code < 200
@@ -169,6 +171,20 @@ public:
       }
       permit.release();
     });
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (error_signal_->has_received()) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return co_await error_signal_->recv();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    auto error = std::move(result).as<std::string>();
+    diagnostic::error("{}", error).primary(args_.operator_location).emit(ctx);
+    co_await begin_draining(ctx);
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
@@ -213,7 +229,7 @@ private:
       co_return;
     }
     lifecycle_ = Lifecycle::draining;
-    auto sub = ctx.get_sub(make_view(sub_key_));
+    auto sub = ctx.get_sub(sub_key());
     if (not sub) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -222,16 +238,24 @@ private:
     co_await pipeline.close();
   }
 
-  auto get_method() -> std::string {
+  auto get_method() const -> std::string {
     return args_.method ? args_.method->inner : "POST";
   }
 
-  auto get_timeout() -> std::chrono::milliseconds {
+  auto get_timeout() const -> std::chrono::milliseconds {
     if (args_.timeout) {
       return std::chrono::duration_cast<std::chrono::milliseconds>(
         args_.timeout->inner);
     }
-    return default_timeout;
+    return std::chrono::milliseconds{90'000};
+  }
+
+  auto get_parallel() const -> uint64_t {
+    return args_.parallel ? args_.parallel->inner : 1;
+  }
+
+  static auto sub_key() -> int64_t {
+    return int64_t{0};
   }
 
   // --- args ---
@@ -239,10 +263,10 @@ private:
   std::string url_;
   Headers headers_;
   // --- transient ---
-  Semaphore request_slots_{max_inflight_requests};
-  data sub_key_ = int64_t{0};
+  Semaphore request_slots_;
   Lifecycle lifecycle_ = Lifecycle::running;
   Option<Box<HttpPool>> http_pool_;
+  mutable Arc<Oneshot<std::string>> error_signal_{std::in_place};
 };
 
 class ToHttpPlugin final : public OperatorPlugin {
@@ -259,6 +283,7 @@ public:
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &ToHttpArgs::timeout);
+    auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
     auto printer_arg = d.pipeline(&ToHttpArgs::printer);
     d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -279,6 +304,13 @@ public:
         if (timeout->inner < duration::zero()) {
           diagnostic::error("`timeout` must be a non-negative duration")
             .primary(timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto parallel = ctx.get(parallel_arg)) {
+        if (parallel->inner == 0) {
+          diagnostic::error("`parallel` must be at least 1")
+            .primary(parallel->source)
             .emit(ctx);
         }
       }

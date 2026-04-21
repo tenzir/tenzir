@@ -13,6 +13,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/panic.hpp"
 
+#include <atomic>
 #include <mutex>
 #include <utility>
 
@@ -62,6 +63,10 @@ public:
       panic("Oneshot::recv() observed empty value");
     }
     co_return std::move(*value_);
+  }
+
+  auto has_received() -> bool {
+    return received_.load(std::memory_order_acquire);
   }
 
 private:
