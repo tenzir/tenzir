@@ -451,9 +451,7 @@ public:
       in_flight_.clear();
       nak_guard.disable();
       if (args_.count and received_ >= args_.count->inner) {
-        if (args_.count->inner == 1) {
-          acked = acknowledge_pending(ctx) or acked;
-        }
+        acked = acknowledge_pending(ctx) or acked;
         if (acked) {
           co_await flush_acknowledgements(ctx);
         }

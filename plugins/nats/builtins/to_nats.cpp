@@ -316,10 +316,11 @@ private:
                                  detail::narrow_cast<int>(bytes.size()));
     auto msg = nats_msg_ptr{raw_msg};
     if (status != NATS_OK) {
-      emit_nats_error(diagnostic::warning("failed to create NATS message")
+      emit_nats_error(diagnostic::error("failed to create NATS message")
                         .primary(args_.subject.source),
                       status, ctx.dh());
-      return true;
+      done_ = true;
+      return false;
     }
     if (not headers.is_null(row)) {
       auto header_data = materialize(headers.view3_at(row));
