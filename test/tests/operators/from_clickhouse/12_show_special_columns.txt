@@ -26,3 +26,27 @@
   name: "status",
   type: "Enum8('low' = 1, 'high' = 2)",
 }
+{
+  name: "tm",
+  type: "Time",
+}
+{
+  name: "tm64",
+  type: "Time64(3)",
+}
+{
+  name: "tm_nullable",
+  type: "Nullable(Time)",
+}
+{
+  name: "tm64_nullable",
+  type: "Nullable(Time64(3))",
+}
+{
+  name: "tm_lc",
+  type: "LowCardinality(Time)",
+}
+{
+  name: "tm64_lc",
+  type: "LowCardinality(Time64(3))",
+}
