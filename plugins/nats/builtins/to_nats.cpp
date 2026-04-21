@@ -60,38 +60,37 @@ struct ToNatsArgs {
 struct PublishAckError {
   uint64_t count = 0;
   std::string reason;
+  int jetstream_error_code = 0;
 };
 
 auto make_publish_ack_error(jsPubAckErr const& error) -> PublishAckError {
   auto reason = fmt::format("{}: {}", nats_status_string(error.Err),
                             error.ErrText ? error.ErrText : "");
-  if (error.ErrCode != 0) {
-    reason += fmt::format(" (JetStream error code {})",
-                          static_cast<int>(error.ErrCode));
-  }
-  return {.reason = std::move(reason)};
+  return {
+    .reason = std::move(reason),
+    .jetstream_error_code = static_cast<int>(error.ErrCode),
+  };
 }
 
 struct PublishAckFailures {
   auto record(jsPubAckErr const& error) -> void {
     auto guard = std::lock_guard{mutex};
     ++count;
-    if (first_reason.empty()) {
-      first_reason = make_publish_ack_error(error).reason;
+    if (first_error.reason.empty()) {
+      first_error = make_publish_ack_error(error);
     }
   }
 
   auto drain() -> PublishAckError {
     auto guard = std::lock_guard{mutex};
-    return {
-      .count = std::exchange(count, uint64_t{0}),
-      .reason = std::exchange(first_reason, {}),
-    };
+    auto result = std::exchange(first_error, {});
+    result.count = std::exchange(count, uint64_t{0});
+    return result;
   }
 
   std::mutex mutex;
   uint64_t count = 0;
-  std::string first_reason;
+  PublishAckError first_error;
 };
 
 void publish_error_handler(jsCtx*, jsPubAckErr* error, void* closure) {
@@ -432,11 +431,16 @@ private:
   auto drain_ack_errors(OpCtx& ctx) -> void {
     auto failures = ack_failures_->drain();
     if (failures.count != 0) {
-      diagnostic::error("{} NATS publish acknowledgment{} failed",
-                        failures.count, failures.count == 1 ? "" : "s")
-        .primary(args_.subject.source)
-        .note("first error: {}", failures.reason)
-        .emit(ctx);
+      auto diag = diagnostic::error("{} NATS publish acknowledgment{} failed",
+                                    failures.count,
+                                    failures.count == 1 ? "" : "s")
+                    .primary(args_.subject.source)
+                    .note("first error: {}", failures.reason);
+      if (failures.jetstream_error_code != 0) {
+        diag = std::move(diag).note("JetStream error code: {}",
+                                    failures.jetstream_error_code);
+      }
+      std::move(diag).emit(ctx);
     }
   }
 

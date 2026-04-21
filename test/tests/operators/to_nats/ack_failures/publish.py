@@ -84,6 +84,11 @@ to_nats "{subject}",
         capture_output=True,
     )
     expected = "5 NATS publish acknowledgments failed"
+    expected_fragments = [
+        expected,
+        "first error: Error: message size exceeds maximum allowed",
+        "JetStream error code: 10054",
+    ]
     if result.returncode == 0:
         raise RuntimeError(
             "to_nats succeeded despite rejected publish acknowledgments\n"
@@ -91,9 +96,10 @@ to_nats "{subject}",
             f"stderr:\n{result.stderr}"
         )
     output = result.stdout + result.stderr
-    if expected not in output:
+    missing = [fragment for fragment in expected_fragments if fragment not in output]
+    if missing:
         raise RuntimeError(
-            f"expected diagnostic to contain {expected!r}\n"
+            f"expected diagnostic to contain {missing!r}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
