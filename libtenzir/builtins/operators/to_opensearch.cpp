@@ -8,12 +8,16 @@
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/notify.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -40,7 +44,6 @@ struct opensearch_args {
   std::optional<located<duration>> buffer_timeout
     = located{std::chrono::seconds{5}, location::unknown};
   std::optional<location> compress = location::unknown;
-  std::optional<location> _debug_curl;
   location operator_location = location::unknown;
 
   auto add_to(argument_parser2& parser) -> void {
@@ -54,8 +57,7 @@ struct opensearch_args {
       .named("include_nulls", include_nulls)
       .named("max_content_length", max_content_length)
       .named("buffer_timeout", buffer_timeout)
-      .named("compress", compress)
-      .named("_debug_curl", _debug_curl);
+      .named("compress", compress);
     ssl.add_tls_options(parser);
   }
 
@@ -73,27 +75,6 @@ struct opensearch_args {
       return failure::promise();
     }
 
-    if (_debug_curl) {
-      if (not url.inner.is_all_literal()) {
-        diagnostic::error(
-          "cannot use `_debug_curl` when an argument is a secret")
-          .primary(*_debug_curl)
-          .primary(url.source)
-          .emit(dh);
-        return failure::promise();
-      }
-#define X(NAME)                                                                \
-  if (NAME and not NAME->inner.is_all_literal()) {                             \
-    diagnostic::error("cannot use `_debug_curl` when an argument is a secret") \
-      .primary(*_debug_curl)                                                   \
-      .primary(NAME->source)                                                   \
-      .emit(dh);                                                               \
-    return failure::promise();                                                 \
-  }
-      X(user)
-      X(passwd)
-#undef X
-    }
     return {};
   }
 
@@ -105,7 +86,7 @@ struct opensearch_args {
       f.field("ssl", x.ssl), f.field("include_nulls", x.include_nulls),
       f.field("max_content_length", x.max_content_length),
       f.field("buffer_timeout", x.buffer_timeout),
-      f.field("compress", x.compress), f.field("_debug_curl", x._debug_curl),
+      f.field("compress", x.compress),
       f.field("operator_location", x.operator_location));
   }
 };
@@ -405,7 +386,6 @@ public:
     }
     check(req.set(CURLOPT_POST, 1));
     check(req.set(CURLOPT_URL, final_url));
-    check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
     auto b = json_builder{
       {
         .style = no_style(),
@@ -514,7 +494,329 @@ private:
   opensearch_args args_;
 };
 
-struct plugin : public virtual operator_plugin2<opensearch_operator> {
+struct ToOpenSearchArgs {
+  located<secret> url;
+  ast::expression action;
+  Option<ast::expression> index;
+  Option<ast::expression> doc;
+  Option<ast::expression> id;
+  Option<located<secret>> user;
+  Option<located<secret>> passwd;
+  Option<located<data>> tls;
+  Option<location> include_nulls;
+  located<uint64_t> max_content_length{5'000'000, location::unknown};
+  located<duration> buffer_timeout{std::chrono::seconds{5}, location::unknown};
+  Option<location> compress;
+  location operator_location = location::unknown;
+};
+
+class ToOpenSearch final : public Operator<table_slice, void> {
+public:
+  explicit ToOpenSearch(ToOpenSearchArgs args)
+    : args_{std::move(args)},
+      builder_{
+        {
+          .style = no_style(),
+          .oneline = true,
+          .omit_null_fields = not args_.include_nulls,
+          .omit_empty_records = false,
+          .omit_empty_lists = false,
+        },
+        args_.max_content_length.inner,
+        args_.compress.is_some(),
+      } {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto url = std::string{};
+    auto user = std::string{};
+    auto password = std::string{};
+    auto requests = std::vector<secret_request>{
+      make_secret_request("url", args_.url, url, ctx.dh()),
+    };
+    if (args_.user) {
+      requests.emplace_back(
+        make_secret_request("user", *args_.user, user, ctx.dh()));
+    }
+    if (args_.passwd) {
+      requests.emplace_back(
+        make_secret_request("passwd", *args_.passwd, password, ctx.dh()));
+    }
+    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
+        result.is_error()) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto parsed_url = boost::urls::parse_uri_reference(url);
+    if (not parsed_url) {
+      diagnostic::error("failed to parse url").primary(args_.url).emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto final_url = boost::urls::url{*parsed_url};
+    if (final_url.segments().empty()
+        or final_url.segments().back() != "_bulk") {
+      final_url.segments().push_back("_bulk");
+    }
+    url_ = fmt::to_string(final_url);
+    auto tls_opts = args_.tls ? tls_options{*args_.tls, {.is_server = false}}
+                              : tls_options{{.is_server = false}};
+    if (not tls_opts.validate(url_, args_.url.source, ctx.dh())) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    req_ = curl::easy{};
+    if (args_.user or args_.passwd) {
+      auto token = detail::base64::encode(fmt::format("{}:{}", user, password));
+      req_->set_http_header("Authorization", fmt::format("Basic {}", token));
+    }
+    req_->set_http_header("Content-Type", "application/json");
+    if (args_.compress) {
+      req_->set_http_header("Content-Encoding", "gzip");
+    }
+    if (auto e = tls_opts.apply_to(*req_, url_, nullptr); e.valid()) {
+      diagnostic::error(e).primary(args_.operator_location).emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    check(req_->set(CURLOPT_POST, 1));
+    check(req_->set(CURLOPT_URL, url_));
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (lifecycle_ != Lifecycle::running) {
+      co_return;
+    }
+    input = resolve_enumerations(std::move(input));
+    constexpr auto null_values
+      = []() -> generator<std::optional<std::string_view>> {
+      co_yield std::nullopt;
+    };
+    auto ids = resolve_str(
+      "id", args_.id ? std::optional<ast::expression>{*args_.id} : std::nullopt,
+      input, ctx.dh());
+    auto idxs = resolve_str(
+      "index",
+      args_.index ? std::optional<ast::expression>{*args_.index} : std::nullopt,
+      input, ctx.dh());
+    auto acts = resolve_str(
+      "action", std::optional<ast::expression>{args_.action}, input, ctx.dh());
+    auto docs
+      = eval(args_.doc ? *args_.doc
+                       : ast::expression{ast::this_{args_.operator_location}},
+             input, ctx.dh());
+    constexpr auto ty = string_type{};
+    auto id
+      = ids ? values(ty, as<arrow::StringArray>(*ids->array)) : null_values();
+    auto idx
+      = idxs ? values(ty, as<arrow::StringArray>(*idxs->array)) : null_values();
+    auto act
+      = acts ? values(ty, as<arrow::StringArray>(*acts->array)) : null_values();
+    for (auto&& doc : docs.values3()) {
+      auto ptr = try_as<view3<record>>(doc);
+      auto action = act.next();
+      auto actual_id = id.next();
+      auto actual_idx = idx.next();
+      if (not ptr) {
+        diagnostic::warning("`doc` evaluated to non-record, skipping event")
+          .primary(args_.doc ? *args_.doc : ast::this_{args_.operator_location})
+          .emit(ctx);
+        continue;
+      }
+      if (not action or not action.value()) {
+        diagnostic::warning("`action` evaluated to `null`, skipping event")
+          .primary(args_.action)
+          .emit(ctx);
+        continue;
+      }
+      if (auto diag = builder_.create_metadata(**action, actual_idx, actual_id,
+                                               to_old_args())) {
+        ctx.dh().emit(std::move(*diag));
+        continue;
+      }
+      builder_.create_doc(**action, *ptr);
+      switch (builder_.finish_event()) {
+        using enum json_builder::state;
+        case ok: {
+          if (next_timeout_.is_none()) {
+            next_timeout_
+              = std::chrono::steady_clock::now() + args_.buffer_timeout.inner;
+            buffer_ready_->notify_one();
+          }
+          break;
+        }
+        case full: {
+          send_request(ctx.dh());
+          if (lifecycle_ != Lifecycle::running) {
+            co_return;
+          }
+          if (builder_.has_contents()) {
+            next_timeout_
+              = std::chrono::steady_clock::now() + args_.buffer_timeout.inner;
+          } else {
+            next_timeout_ = None{};
+          }
+          break;
+        }
+        case event_too_large: {
+          diagnostic::warning("event too large for given `max_content_length`")
+            .note("serialized event size was `{}`",
+                  builder_.last_element_size())
+            .primary(args_.max_content_length)
+            .emit(ctx);
+          break;
+        }
+      }
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (lifecycle_ == Lifecycle::done) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    if (not next_timeout_) {
+      co_await buffer_ready_->wait();
+    }
+    if (next_timeout_) {
+      co_await sleep_until(*next_timeout_);
+    }
+    co_return {};
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(result);
+    if (lifecycle_ != Lifecycle::running or not next_timeout_) {
+      co_return;
+    }
+    if (std::chrono::steady_clock::now() < *next_timeout_) {
+      co_return;
+    }
+    if (builder_.has_contents()) {
+      send_request(ctx.dh());
+    }
+    next_timeout_ = None{};
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (lifecycle_ == Lifecycle::running and builder_.has_contents()) {
+      send_request(ctx.dh());
+    }
+    lifecycle_ = Lifecycle::done;
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("lifecycle", lifecycle_);
+  }
+
+private:
+  enum class Lifecycle {
+    running,
+    done,
+  };
+
+  friend auto inspect(auto& f, Lifecycle& x) {
+    return tenzir::detail::inspect_enum_str(f, x, {"running", "done"});
+  }
+
+  auto to_old_args() const -> opensearch_args {
+    return opensearch_args{
+      .url = args_.url,
+      .action = args_.action,
+      .index = args_.index ? std::optional<ast::expression>{*args_.index}
+                           : std::nullopt,
+      .doc
+      = args_.doc ? std::optional<ast::expression>{*args_.doc} : std::nullopt,
+      .id = args_.id ? std::optional<ast::expression>{*args_.id} : std::nullopt,
+      .user
+      = args_.user ? std::optional<located<secret>>{*args_.user} : std::nullopt,
+      .passwd = args_.passwd ? std::optional<located<secret>>{*args_.passwd}
+                             : std::nullopt,
+      .ssl = args_.tls ? tls_options{*args_.tls, {.is_server = false}}
+                       : tls_options{{.is_server = false}},
+      .include_nulls = args_.include_nulls
+                         ? std::optional<location>{*args_.include_nulls}
+                         : std::nullopt,
+      .max_content_length = args_.max_content_length,
+      .buffer_timeout = args_.buffer_timeout,
+      .compress = args_.compress ? std::optional<location>{*args_.compress}
+                                 : std::nullopt,
+      .operator_location = args_.operator_location,
+    };
+  }
+
+  auto send_request(diagnostic_handler& dh) -> void {
+    TENZIR_ASSERT(req_);
+    auto body = builder_.yield(dh);
+    if (body.empty()) {
+      lifecycle_ = Lifecycle::done;
+      return;
+    }
+    auto response = std::string{};
+    auto write_callback = [&](std::span<std::byte const> data) {
+      response.append(reinterpret_cast<char const*>(data.data()), data.size());
+    };
+    check(req_->set(write_callback));
+    check(req_->set(CURLOPT_POSTFIELDS, body));
+    check(req_->set(CURLOPT_POSTFIELDSIZE, detail::narrow<long>(body.size())));
+    req_->set_http_header("Content-Length", fmt::to_string(body.size()));
+    if (auto ec = req_->perform(); ec != curl::easy::code::ok) {
+      diagnostic::error("{}", to_string(ec))
+        .primary(args_.operator_location)
+        .emit(dh);
+      lifecycle_ = Lifecycle::done;
+      return;
+    }
+    auto [ec, http_code] = req_->get<curl::easy::info::response_code>();
+    check(ec);
+    if (http_code < 200 or http_code > 299) {
+      diagnostic::warning("issue sending data. HTTP response code `{}`",
+                          http_code)
+        .note("response body: {}", response)
+        .primary(args_.operator_location)
+        .emit(dh);
+      lifecycle_ = Lifecycle::done;
+      return;
+    }
+    auto json = from_json(response);
+    if (not json.has_value()) {
+      return;
+    }
+    auto const* r = try_as<record>(&json.value());
+    if (not r) {
+      return;
+    }
+    auto it = r->find("errors");
+    if (it == r->end()) {
+      return;
+    }
+    if (as<bool>(it->second)) {
+      diagnostic::warning("issue sending data")
+        .note("response body: {}", response)
+        .primary(args_.operator_location)
+        .emit(dh);
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  ToOpenSearchArgs args_;
+  json_builder builder_;
+  Option<curl::easy> req_;
+  std::string url_;
+  Lifecycle lifecycle_ = Lifecycle::running;
+  mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
+  mutable Box<Notify> buffer_ready_{std::in_place};
+};
+
+struct plugin : public virtual operator_plugin2<opensearch_operator>,
+                public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return "to_opensearch";
   }
@@ -530,6 +832,47 @@ struct plugin : public virtual operator_plugin2<opensearch_operator> {
       return failure::promise();
     }
     return std::make_unique<opensearch_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ToOpenSearchArgs, ToOpenSearch>{};
+    auto url = d.positional("url", &ToOpenSearchArgs::url);
+    auto action = d.named("action", &ToOpenSearchArgs::action, "string");
+    d.named("index", &ToOpenSearchArgs::index, "string");
+    d.named("id", &ToOpenSearchArgs::id, "string");
+    d.named("doc", &ToOpenSearchArgs::doc, "record");
+    auto user = d.named("user", &ToOpenSearchArgs::user);
+    auto passwd = d.named("passwd", &ToOpenSearchArgs::passwd);
+    d.named("include_nulls", &ToOpenSearchArgs::include_nulls);
+    auto max_content_length = d.named_optional(
+      "max_content_length", &ToOpenSearchArgs::max_content_length);
+    auto buffer_timeout
+      = d.named_optional("buffer_timeout", &ToOpenSearchArgs::buffer_timeout);
+    d.named("compress", &ToOpenSearchArgs::compress);
+    d.operator_location(&ToOpenSearchArgs::operator_location);
+    auto tls_validator = tls_options{
+      {.is_server = false}}.add_to_describer(d, &ToOpenSearchArgs::tls);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      tls_validator(ctx);
+      if (auto value = ctx.get(max_content_length)) {
+        if (value->inner == 0) {
+          diagnostic::error("`max_content_length` must be positive")
+            .primary(value->source)
+            .emit(ctx);
+        }
+      }
+      if (auto value = ctx.get(buffer_timeout)) {
+        if (value->inner <= duration::zero()) {
+          diagnostic::error("`buffer_timeout` must be positive")
+            .primary(value->source)
+            .emit(ctx);
+        }
+      }
+      TRY(auto act, ctx.get(action));
+      TENZIR_UNUSED(act, url, user, passwd);
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto save_properties() const -> save_properties_t override {
