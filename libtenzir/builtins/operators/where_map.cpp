@@ -929,7 +929,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     auto expr = ast::expression{};
     // TODO: We don't want to create a session here. This is just a test to see
     // how far we could go with the existing argument parser.

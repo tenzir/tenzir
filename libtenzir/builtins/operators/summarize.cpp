@@ -1033,7 +1033,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     // We use `operator_compiler_plugin` rather than
     // `OperatorPlugin`/`Describer` because `GenericIr` unconditionally routes
     // any `ast::assignment` arg to the named-argument path (look up LHS in a

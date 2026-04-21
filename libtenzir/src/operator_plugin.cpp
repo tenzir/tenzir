@@ -654,9 +654,10 @@ private:
 };
 
 auto OperatorPlugin::compile(ast::invocation inv, compile_ctx ctx) const
-  -> failure_or<Box<ir::Operator>> {
-  return GenericIr::make(SharedDescription{name(), describe_shared()},
-                         std::move(inv.op), std::move(inv.args), ctx);
+  -> failure_or<ir::CompileResult> {
+  TRY(auto ir, GenericIr::make(SharedDescription{name(), describe_shared()},
+                               std::move(inv.op), std::move(inv.args), ctx));
+  return ir;
 }
 
 // TODO: Clean this up. We might want to be able to just use

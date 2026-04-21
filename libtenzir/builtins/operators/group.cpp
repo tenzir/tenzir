@@ -126,7 +126,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     TENZIR_ASSERT(inv.args.size() == 2);
     auto over = std::move(inv.args[0]);
     TRY(over.bind(ctx));

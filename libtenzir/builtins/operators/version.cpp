@@ -262,7 +262,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     // TODO
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(inv.args.empty());
