@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/async/channel.hpp>
+#include <tenzir/async/semaphore.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
@@ -37,7 +37,7 @@ namespace {
 
 using Headers = std::vector<std::pair<std::string, std::string>>;
 
-constexpr auto queue_capacity = uint32_t{1024};
+constexpr auto max_inflight_requests = size_t{1024};
 constexpr auto default_timeout = std::chrono::milliseconds{90'000};
 
 struct ToHttpArgs {
@@ -47,6 +47,7 @@ struct ToHttpArgs {
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   located<ir::pipeline> printer;
+  location operator_location;
 };
 
 auto resolve_secrets(OpCtx& ctx, ToHttpArgs& args, std::string& resolved_url,
@@ -131,61 +132,57 @@ public:
     }
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> override {
     if (not chunk or chunk->size() == 0) {
       co_return;
     }
-    TENZIR_ASSERT(queue_sender_);
-    co_await queue_sender_->send(std::move(chunk));
-  }
-
-  auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    queue_sender_ = None{}; // close the queue
-    co_return;
-  }
-
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await queue_receiver_.recv();
-  }
-
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    auto chunk = std::move(result).as<Option<chunk_ptr>>();
-    if (chunk.is_none()) {
-      // subpipeline finished and the queue drained completely.
-      lifecycle_ = Lifecycle::done;
-      co_return;
-    }
-    auto body = std::string{reinterpret_cast<char const*>((*chunk)->data()),
-                            (*chunk)->size()};
     TENZIR_ASSERT(http_pool_);
-    auto headers = std::map<std::string, std::string>{};
-    for (auto const& [name, value] : headers_) {
-      headers[name] = value;
-    }
-    auto response
-      = co_await (*http_pool_)
-          ->request(get_method(), std::move(body), std::move(headers));
-    if (response.is_err()) {
-      diagnostic::error("HTTP request to `{}` failed: {}", url_,
-                        std::move(response).unwrap_err())
-        .primary(args_.url.source)
-        .emit(ctx);
-      co_await begin_draining(ctx);
+    auto permit = co_await request_slots_.acquire();
+    auto* dh = &ctx.dh();
+    ctx.spawn_task([this, permit = std::move(permit), chunk = std::move(chunk),
+                    dh]() mutable -> Task<void> {
+      auto method = get_method();
+      auto headers = std::map<std::string, std::string>{};
+      for (auto const& [name, value] : headers_) {
+        headers[name] = value;
+      }
+      auto body = std::string{reinterpret_cast<char const*>(chunk->data()),
+                              chunk->size()};
+
+      auto response = co_await (*http_pool_)
+                        ->request(method, std::move(body), std::move(headers));
+      if (response.is_err()) {
+        diagnostic::error("HTTP request to `{}` failed: {}", url_,
+                          std::move(response).unwrap_err())
+          .primary(args_.operator_location)
+          .emit(*dh);
+      } else {
+        auto http_response = std::move(response).unwrap();
+        if (http_response.status_code < 200
+            or http_response.status_code > 299) {
+          diagnostic::warning("HTTP request returned status {}",
+                              http_response.status_code)
+            .primary(args_.operator_location)
+            .emit(*dh);
+        }
+      }
+      permit.release();
+    });
+  }
+
+  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
-    auto http_response = std::move(response).unwrap();
-    if (http_response.status_code < 200 or http_response.status_code > 299) {
-      diagnostic::warning("HTTP request returned status {}",
-                          http_response.status_code)
-        .primary(args_.url.source)
-        .emit(ctx);
+    // Wait until all spawned request tasks have returned their permits before
+    // letting the executor tear down the operator scope.
+    for (auto i = uint64_t{0}; i < get_parallel(); ++i) {
+      auto permit = co_await request_slots_.acquire();
+      permit.forget();
     }
+    lifecycle_ = Lifecycle::done;
+    co_return;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -242,8 +239,7 @@ private:
   std::string url_;
   Headers headers_;
   // --- transient ---
-  Option<Sender<chunk_ptr>> queue_sender_;
-  mutable Receiver<chunk_ptr> queue_receiver_;
+  Semaphore request_slots_{max_inflight_requests};
   data sub_key_ = int64_t{0};
   Lifecycle lifecycle_ = Lifecycle::running;
   Option<Box<HttpPool>> http_pool_;
@@ -264,6 +260,7 @@ public:
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &ToHttpArgs::timeout);
     auto printer_arg = d.pipeline(&ToHttpArgs::printer);
+    d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto method = ctx.get(method_arg)) {
