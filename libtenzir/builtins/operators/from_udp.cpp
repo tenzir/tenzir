@@ -6,18 +6,24 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/blocking_executor.hpp>
-#include <tenzir/atomic.hpp>
+#include <tenzir/async/channel.hpp>
+#include <tenzir/async/notify.hpp>
 #include <tenzir/box.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/socket.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -28,11 +34,15 @@
 #include <arrow/util/utf8.h>
 #include <caf/uri.hpp>
 #include <folly/CancellationToken.h>
-#include <folly/coro/BoundedQueue.h>
+#include <folly/SocketAddress.h>
+#include <folly/coro/Sleep.h>
+#include <folly/io/async/AsyncUDPSocket.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include <deque>
 #include <netdb.h>
+#include <optional>
 #include <vector>
 
 using namespace std::chrono_literals;
@@ -279,16 +289,13 @@ class plugin final : public virtual operator_plugin2<from_udp_operator>,
 
 // -- new executor ------------------------------------------------------------
 
-// Cap on how long a single `rpoll` poll can block before re-checking the stop
-// flag and the batch deadline. Keeps shutdown latency bounded without burning
-// CPU.
-constexpr auto rpoll_tick = std::chrono::milliseconds{200};
+// A UDP packet carries its own length and is capped at 65,535 bytes including
+// headers. We size the read buffer to accommodate the full userspace payload.
+constexpr auto udp_buffer_size = size_t{65'536};
 
-// Number of completed table_slices the producer may queue before the consumer
-// drains them. The producer flushes at most one slice per batch_timeout (1 s)
-// or per `table_slice_size` datagrams, whichever comes first, so a small queue
-// suffices.
-constexpr auto slice_queue_capacity = uint32_t{8};
+// Allow short bursts of datagrams without forcing immediate backpressure on the
+// socket, while still keeping the queued working set bounded.
+constexpr auto message_queue_capacity = uint32_t{256};
 
 struct FromUdpArgs {
   located<std::string> endpoint;
@@ -296,76 +303,131 @@ struct FromUdpArgs {
   bool binary = false;
 };
 
+struct Datagram {
+  chunk_ptr payload = {};
+  ip peer_ip;
+  uint16_t peer_port = 0;
+  bool truncated = false;
+};
+
+enum class ReaderStopKind {
+  shutdown,
+  startup_error,
+  socket_error,
+};
+
+struct ReaderStopped {
+  ReaderStopKind kind = ReaderStopKind::shutdown;
+  std::string detail;
+};
+
+struct FlushBatch {
+  uint64_t generation = 0;
+};
+
+using Message = variant<Datagram, ReaderStopped, FlushBatch>;
+
+struct MessageChannel {
+  Sender<Message> sender;
+  Receiver<Message> receiver;
+};
+
+auto make_from_udp_channel() -> MessageChannel {
+  auto [sender, receiver] = channel<Message>(message_queue_capacity);
+  return {
+    std::move(sender),
+    std::move(receiver),
+  };
+}
+
+struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
+  std::deque<Message> pending;
+  Notify notify;
+  bool done = false;
+
+  auto getReadBuffer(void** buf, size_t* len) noexcept -> void override {
+    *buf = buffer_.data();
+    *len = buffer_.size();
+  }
+
+  void onDataAvailable(const folly::SocketAddress& client, size_t len,
+                       bool truncated, OnDataAvailableParams) noexcept
+    override {
+    auto storage = sockaddr_storage{};
+    auto addr_len = client.getAddress(&storage);
+    TENZIR_ASSERT(addr_len == sizeof(sockaddr_in)
+                  or addr_len == sizeof(sockaddr_in6));
+    auto peer_ip = ip{};
+    if (client.getFamily() == AF_INET) {
+      auto err = convert(*reinterpret_cast<sockaddr_in const*>(&storage),
+                         peer_ip);
+      TENZIR_ASSERT(err.empty());
+    } else {
+      auto err = convert(*reinterpret_cast<sockaddr_in6 const*>(&storage),
+                         peer_ip);
+      TENZIR_ASSERT(err.empty());
+    }
+    auto datagram = Datagram{};
+    datagram.payload = chunk::copy(std::span{
+      reinterpret_cast<std::byte const*>(buffer_.data()), len});
+    datagram.peer_ip = std::move(peer_ip);
+    datagram.peer_port = client.getPort();
+    datagram.truncated = truncated;
+    pending.emplace_back(std::move(datagram));
+    notify.notify_one();
+  }
+
+  void onReadError(folly::AsyncSocketException const& ex) noexcept override {
+    done = true;
+    auto stopped = ReaderStopped{};
+    stopped.kind = ReaderStopKind::socket_error;
+    stopped.detail = ex.what();
+    pending.emplace_back(std::move(stopped));
+    notify.notify_one();
+  }
+
+  void onReadClosed() noexcept override {
+    done = true;
+    pending.emplace_back(ReaderStopped{});
+    notify.notify_one();
+  }
+
+private:
+  std::array<std::byte, udp_buffer_size> buffer_;
+};
+
 class FromUdp final : public Operator<void, table_slice> {
 public:
-  explicit FromUdp(FromUdpArgs args) : args_{std::move(args)} {
-    if (not args_.endpoint.inner.starts_with("udp://")) {
-      args_.endpoint.inner.insert(0, "udp://");
-    }
+  explicit FromUdp(FromUdpArgs args)
+    : FromUdp{std::move(args), make_from_udp_channel()} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto endpoint = socket_endpoint::parse(args_.endpoint.inner);
-    if (not endpoint) {
+    io_executor_ = ctx.io_executor();
+    auto bind_address
+      = co_await spawn_blocking([url = args_.endpoint.inner] {
+          auto result = folly::SocketAddress{};
+          try {
+            result.setFromHostPort(url);
+          } catch (std::exception const& ex) {
+            return Result<folly::SocketAddress, std::string>{
+              Err{std::string{ex.what()}}};
+          }
+          return Result<folly::SocketAddress, std::string>{std::move(result)};
+        });
+    if (bind_address.is_err()) {
       diagnostic::error("invalid UDP endpoint")
-        .primary(args_.endpoint, "{}", endpoint.error())
+        .primary(args_.endpoint, "{}", std::move(bind_address).unwrap_err())
         .emit(ctx);
+      message_sender_ = None{};
       done_ = true;
       co_return;
     }
-    auto socket = tenzir::socket{*endpoint};
-    if (not socket) {
-      diagnostic::error("failed to create UDP socket")
-        .primary(args_.endpoint, detail::describe_errno())
-        .note("endpoint: {}", endpoint->addr)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    auto enable = int{1};
-    if (::setsockopt(*socket.fd, SOL_SOCKET, SO_REUSEADDR, &enable,
-                     sizeof(enable))
-        < 0) {
-      diagnostic::error("could not set socket to SO_REUSEADDR")
-        .primary(args_.endpoint, detail::describe_errno())
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    if (socket.bind(*endpoint) < 0) {
-      diagnostic::error("failed to bind to socket")
-        .primary(args_.endpoint, detail::describe_errno())
-        .note("endpoint: {}", endpoint->addr)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    if (auto err = detail::make_nonblocking(*socket.fd); err.valid()) {
-      diagnostic::error("failed to make socket nonblocking")
-        .primary(args_.endpoint, detail::describe_errno())
-        .note("{}", err)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    auto peer_record_fields = std::vector<record_type::field_view>{
-      {"ip", ip_type{}},
-      {"port", uint64_type{}},
-    };
-    if (args_.resolve_hostnames) {
-      peer_record_fields.push_back({"hostname", string_type{}});
-    }
-    output_type_ = type{
-      "tenzir.from_udp",
-      record_type{
-        {"data", args_.binary ? type{blob_type{}} : type{string_type{}}},
-        {"peer", record_type{std::move(peer_record_fields)}},
-      },
-    };
-    socket_ = std::move(socket);
-    is_v4_ = endpoint->addr.is_v4();
-    diagnostics_ = &ctx.dh();
-    ctx.spawn_task(producer_loop());
+    TENZIR_ASSERT(message_sender_);
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      io_executor_,
+      read_loop(io_executor_->getEventBase(), std::move(bind_address).unwrap(),
+                *message_sender_)));
     co_return;
   }
 
@@ -374,38 +436,110 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    auto slice = co_await queue_->dequeue();
-    co_return std::move(slice);
+    auto message = co_await message_receiver_.recv();
+    if (not message) {
+      co_return ReaderStopped{};
+    }
+    co_return std::move(*message);
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx&)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto* opt = result.try_as<Option<table_slice>>();
-    if (not opt) {
-      co_return;
-    }
-    if (not *opt) {
-      // Producer finished (shutdown or fatal error). No more slices coming.
-      done_ = true;
-      co_return;
-    }
-    co_await push(std::move(**opt));
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx&)
-    -> Task<FinalizeBehavior> override {
-    // Drain anything the producer enqueued before we noticed it was done.
-    while (auto more = queue_->try_dequeue()) {
-      if (not *more) {
-        break;
-      }
-      co_await push(std::move(**more));
-    }
-    co_return FinalizeBehavior::done;
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](Datagram datagram) -> Task<void> {
+        if (datagram.truncated) {
+          diagnostic::warning("UDP datagram exceeded supported size")
+            .primary(args_.endpoint)
+            .note("peer: {}:{}", datagram.peer_ip, datagram.peer_port)
+            .note("truncated datagram will be dropped")
+            .emit(ctx);
+          co_return;
+        }
+        auto bytes = as_bytes(datagram.payload);
+        auto hostname = Option<std::string>{};
+        if (args_.resolve_hostnames) {
+          hostname = co_await spawn_blocking(
+            [peer_ip = datagram.peer_ip,
+             peer_port = datagram.peer_port] -> Option<std::string> {
+              return reverse_lookup(peer_ip, peer_port);
+            });
+        }
+        auto utf8 = std::optional<std::string>{};
+        auto binary = std::optional<blob>{};
+        if (args_.binary) {
+          binary = blob{bytes.begin(), bytes.end()};
+        } else {
+          const auto valid = arrow::util::ValidateUTF8(
+            reinterpret_cast<unsigned char const*>(bytes.data()), bytes.size());
+          if (not valid) {
+            diagnostic::warning("message is not valid UTF-8")
+              .primary(args_.endpoint)
+              .note("peer: {}:{}", datagram.peer_ip, datagram.peer_port)
+              .note("`data` will be dropped")
+              .emit(ctx);
+            co_return;
+          }
+          utf8.emplace(reinterpret_cast<char const*>(bytes.data()),
+                       bytes.size());
+        }
+        auto event = builder_.record();
+        if (binary) {
+          event.field("data").data(std::move(*binary));
+        } else {
+          event.field("data").data(std::move(*utf8));
+        }
+        auto peer = event.field("peer").record();
+        peer.field("ip").data(datagram.peer_ip);
+        peer.field("port").data(uint64_t{datagram.peer_port});
+        if (hostname) {
+          peer.field("hostname").data(std::move(*hostname));
+        }
+        if (builder_.length() == 1) {
+          schedule_batch_flush(ctx);
+        }
+        if (builder_.length()
+            >= static_cast<int64_t>(defaults::import::table_slice_size)) {
+          co_await flush_builder(push);
+        }
+      },
+      [&](FlushBatch flush) -> Task<void> {
+        if (builder_.length() == 0 or flush.generation != batch_generation_) {
+          co_return;
+        }
+        co_await flush_builder(push);
+      },
+      [&](ReaderStopped stopped) -> Task<void> {
+        cancel_batch_flush();
+        message_sender_ = None{};
+        switch (stopped.kind) {
+          case ReaderStopKind::shutdown:
+            break;
+          case ReaderStopKind::startup_error:
+            diagnostic::error("from_udp: failed to start UDP socket")
+              .primary(args_.endpoint)
+              .note("{}", stopped.detail)
+              .emit(ctx);
+            break;
+          case ReaderStopKind::socket_error:
+            diagnostic::error("from_udp: failed to receive data from socket")
+              .primary(args_.endpoint)
+              .note("{}", stopped.detail)
+              .emit(ctx);
+            break;
+        }
+        if (builder_.length() > 0) {
+          co_await push(builder_.finish_assert_one_slice());
+        }
+        done_ = true;
+      });
   }
 
   auto stop(OpCtx&) -> Task<void> override {
-    stop_.store(true, std::memory_order_relaxed);
+    cancel_batch_flush();
+    message_sender_ = None{};
+    done_ = true;
     co_return;
   }
 
@@ -419,153 +553,143 @@ public:
   }
 
 private:
-  // Drives the receive loop on the blocking executor. The lambda owns the
-  // `series_builder` and the batch deadline; each `spawn_blocking` invocation
-  // returns at most one completed `table_slice`, which the surrounding
-  // coroutine then enqueues for the consumer.
-  auto producer_loop() -> Task<void> {
-    auto builder = series_builder{output_type_};
-    auto first_packet_time = std::chrono::steady_clock::time_point{};
-    while (not stop_.load(std::memory_order_relaxed)) {
-      auto slice = co_await spawn_blocking([&] -> std::optional<table_slice> {
-        return receive_until_slice(builder, first_packet_time);
-      });
-      if (not slice) {
-        break;
-      }
-      co_await queue_->enqueue(Option<table_slice>{std::move(*slice)});
-    }
-    // Signal end of stream so the consumer can shut down cleanly.
-    co_await queue_->enqueue(Option<table_slice>{None{}});
+  explicit FromUdp(FromUdpArgs args, MessageChannel channel)
+    : args_{std::move(args)},
+      builder_{make_output_type(args_)},
+      message_sender_{std::move(channel.sender)},
+      message_receiver_{std::move(channel.receiver)} {
   }
 
-  // Runs on the blocking executor. Polls the socket, appends datagrams to
-  // `builder`, and returns the next completed slice (full or batch-timeout
-  // expired). Returns `std::nullopt` on fatal error or shutdown with no
-  // pending events.
-  auto receive_until_slice(
-    series_builder& builder,
-    std::chrono::steady_clock::time_point& first_packet_time)
-    -> std::optional<table_slice> {
-    constexpr auto rpoll_us = static_cast<int>(
-      std::chrono::duration_cast<std::chrono::microseconds>(rpoll_tick)
-        .count());
-    while (not stop_.load(std::memory_order_relaxed)) {
-      // Honour the batch deadline first — we may have woken from rpoll just
-      // because the timeout elapsed.
-      if (builder.length() > 0) {
-        const auto now = std::chrono::steady_clock::now();
-        if (now - first_packet_time >= defaults::import::batch_timeout) {
-          return builder.finish_assert_one_slice();
-        }
-      }
-      // Don't poll past the batch deadline.
-      auto poll_us = rpoll_us;
-      if (builder.length() > 0) {
-        const auto deadline
-          = first_packet_time + defaults::import::batch_timeout;
-        const auto remaining
-          = std::chrono::duration_cast<std::chrono::microseconds>(
-              deadline - std::chrono::steady_clock::now())
-              .count();
-        poll_us
-          = static_cast<int>(std::clamp<int64_t>(remaining, 0, rpoll_us));
-      }
-      const auto ready = detail::rpoll(*socket_.fd, poll_us);
-      if (not ready) {
-        diagnostic::error("from_udp: failed to poll socket")
-          .primary(args_.endpoint, detail::describe_errno())
-          .note("{}", ready.error())
-          .emit(*diagnostics_);
-        if (builder.length() > 0) {
-          return builder.finish_assert_one_slice();
-        }
-        return std::nullopt;
-      }
-      if (not *ready) {
-        continue;
-      }
-      auto sender = socket_endpoint{};
-      if (is_v4_) {
-        sender.sock_addr = sockaddr_in{};
-      } else {
-        sender.sock_addr = sockaddr_in6{};
-      }
-      auto buf = std::array<char, 65'536>{};
-      const auto n = socket_.recvfrom(as_writeable_bytes(buf), sender);
-      if (n < 0) {
-        diagnostic::error("from_udp: failed to receive data from socket")
-          .primary(args_.endpoint, detail::describe_errno())
-          .emit(*diagnostics_);
-        if (builder.length() > 0) {
-          return builder.finish_assert_one_slice();
-        }
-        return std::nullopt;
-      }
-      TENZIR_ASSERT(n < detail::narrow_cast<ssize_t>(buf.size()));
-      const auto bytes = as_bytes(buf).subspan(0, n);
-      auto event = builder.record();
-      if (args_.binary) {
-        event.field("data").data(blob{bytes.begin(), bytes.end()});
-      } else {
-        const auto valid = arrow::util::ValidateUTF8(
-          reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
-        if (not valid) {
-          diagnostic::warning("message is not valid UTF-8")
-            .primary(args_.endpoint)
-            .note("`data` will be dropped")
-            .emit(*diagnostics_);
-          builder.remove_last();
-          continue;
-        }
-        event.field("data").data(std::string{
-          reinterpret_cast<const char*>(bytes.data()), bytes.size()});
-      }
-      auto peer = event.field("peer").record();
-      if (auto* v = try_as<sockaddr_in>(sender.sock_addr)) {
-        peer.field("ip").data(
-          ip::v4(detail::to_host_order(v->sin_addr.s_addr)));
-        peer.field("port").data(uint64_t{ntohs(v->sin_port)});
-      } else if (auto* v = try_as<sockaddr_in6>(sender.sock_addr)) {
-        peer.field("ip").data(ip::v6(as_bytes<16>(&v->sin6_addr, 16)));
-        peer.field("port").data(uint64_t{ntohs(v->sin6_port)});
-      }
-      if (args_.resolve_hostnames) {
-        auto host = std::array<char, NI_MAXHOST>{};
-        if (::getnameinfo(sender.as_sock_addr(), sender.sock_addr_len(),
-                          host.data(), host.size(), nullptr, 0, NI_NAMEREQD)
-            == 0) {
-          peer.field("hostname").data(std::string{host.data()});
-        }
-      }
-      if (builder.length() == 1) {
-        first_packet_time = std::chrono::steady_clock::now();
-      }
-      if (builder.length()
-          >= static_cast<int64_t>(defaults::import::table_slice_size)) {
-        return builder.finish_assert_one_slice();
-      }
+  static auto make_output_type(FromUdpArgs const& args) -> type {
+    auto peer_record_fields = std::vector<record_type::field_view>{
+      {"ip", ip_type{}},
+      {"port", uint64_type{}},
+    };
+    if (args.resolve_hostnames) {
+      peer_record_fields.push_back({"hostname", string_type{}});
     }
-    // Shutdown requested. Flush any pending events.
-    if (builder.length() > 0) {
-      return builder.finish_assert_one_slice();
+    return type{
+      "tenzir.from_udp",
+      record_type{
+        {"data", args.binary ? type{blob_type{}} : type{string_type{}}},
+        {"peer", record_type{std::move(peer_record_fields)}},
+      },
+    };
+  }
+
+  static auto reverse_lookup(ip const& peer_ip, uint16_t peer_port)
+    -> Option<std::string> {
+    auto host = std::array<char, NI_MAXHOST>{};
+    if (peer_ip.is_v4()) {
+      auto addr = sockaddr_in{};
+      auto err = convert(peer_ip, addr);
+      TENZIR_ASSERT(err.empty());
+      addr.sin_port = htons(peer_port);
+      if (::getnameinfo(reinterpret_cast<sockaddr*>(&addr), sizeof(addr),
+                        host.data(), host.size(), nullptr, 0, NI_NAMEREQD)
+          == 0) {
+        return std::string{host.data()};
+      }
+      return None{};
     }
-    return std::nullopt;
+    auto addr = sockaddr_in6{};
+    auto err = convert(peer_ip, addr);
+    TENZIR_ASSERT(err.empty());
+    addr.sin6_port = htons(peer_port);
+    if (::getnameinfo(reinterpret_cast<sockaddr*>(&addr), sizeof(addr),
+                      host.data(), host.size(), nullptr, 0, NI_NAMEREQD)
+        == 0) {
+      return std::string{host.data()};
+    }
+    return None{};
+  }
+
+  static auto read_loop(folly::EventBase* evb, folly::SocketAddress bind_address,
+                        Sender<Message> message_sender) -> Task<void> {
+    TENZIR_ASSERT(evb);
+    auto socket = Box<folly::AsyncUDPSocket>{std::in_place, evb};
+    auto callback = SocketReadCallback{};
+    auto socket_guard = detail::scope_guard{[&]() noexcept {
+      socket->pauseRead();
+      socket->close();
+    }};
+    auto startup_error = std::optional<std::string>{};
+    try {
+      socket->setReuseAddr(true);
+      socket->bind(bind_address);
+      socket->resumeRead(&callback);
+    } catch (std::exception const& ex) {
+      startup_error = ex.what();
+    }
+    if (startup_error) {
+      auto stopped = ReaderStopped{};
+      stopped.kind = ReaderStopKind::startup_error;
+      stopped.detail = std::move(*startup_error);
+      co_await message_sender.send(std::move(stopped));
+      co_return;
+    }
+    while (true) {
+      while (not callback.pending.empty()) {
+        auto message = std::move(callback.pending.front());
+        callback.pending.pop_front();
+        auto send_result = message_sender.try_send(std::move(message));
+        if (send_result.is_err()) {
+          socket->pauseRead();
+          co_await message_sender.send(std::move(send_result).unwrap_err());
+          if (not callback.done) {
+            socket->resumeRead(&callback);
+          }
+        }
+      }
+      if (callback.done) {
+        break;
+      }
+      co_await callback.notify.wait();
+    }
+  }
+
+  static auto flush_batch_after(Sender<Message> message_sender,
+                                uint64_t generation) -> Task<void> {
+    co_await folly::coro::sleep(defaults::import::batch_timeout);
+    co_await message_sender.send(FlushBatch{generation});
+  }
+
+  auto schedule_batch_flush(OpCtx& ctx) -> void {
+    cancel_batch_flush();
+    batch_generation_ += 1;
+    batch_flush_cancel_.emplace();
+    auto token = batch_flush_cancel_->getToken();
+    auto generation = batch_generation_;
+    TENZIR_ASSERT(message_sender_);
+    auto message_sender = *message_sender_;
+    ctx.spawn_task(folly::coro::co_withCancellation(
+      token, folly::coro::co_withExecutor(
+               io_executor_,
+               flush_batch_after(std::move(message_sender), generation))));
+  }
+
+  auto cancel_batch_flush() -> void {
+    if (batch_flush_cancel_) {
+      batch_flush_cancel_->requestCancellation();
+      batch_flush_cancel_.reset();
+    }
+  }
+
+  auto flush_builder(Push<table_slice>& push) -> Task<void> {
+    if (builder_.length() == 0) {
+      co_return;
+    }
+    cancel_batch_flush();
+    co_await push(builder_.finish_assert_one_slice());
   }
 
   FromUdpArgs args_;
-  type output_type_;
-  tenzir::socket socket_;
-  bool is_v4_ = false;
-  Atomic<bool> stop_{false};
-  // The producer enqueues `Some(slice)` for each completed batch and
-  // exactly one `None` to signal end of stream.
-  mutable Box<folly::coro::BoundedQueue<Option<table_slice>>> queue_{
-    std::in_place, slice_queue_capacity};
-  // Captured from the OpCtx at start() so the producer task can emit
-  // diagnostics from the blocking executor thread. The diagnostic_handler
-  // outlives the operator's spawned tasks.
-  diagnostic_handler* diagnostics_ = nullptr;
+  series_builder builder_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+  Option<Sender<Message>> message_sender_;
+  mutable Receiver<Message> message_receiver_;
+  std::optional<folly::CancellationSource> batch_flush_cancel_;
+  uint64_t batch_generation_ = 0;
   bool done_ = false;
 };
 

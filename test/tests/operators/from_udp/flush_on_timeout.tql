@@ -1,0 +1,13 @@
+---
+fixtures:
+  - udp:
+      mode: client
+      payload: "flush-after-timeout"
+      interval: 5.0
+      initial_delay: 1.0
+timeout: 60
+---
+
+from_udp env("UDP_ENDPOINT")
+head 1
+select data, ip = peer.ip

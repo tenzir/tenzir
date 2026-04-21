@@ -1,0 +1,11 @@
+---
+fixtures:
+  - udp:
+      mode: client
+      payload: "hello-from-from_udp-binary"
+timeout: 60
+---
+
+from_udp env("UDP_ENDPOINT"), binary=true
+head 1
+select data, ip = peer.ip
