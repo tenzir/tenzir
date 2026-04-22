@@ -953,6 +953,7 @@ using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
 using _::operator_plugin::Spawn;
+using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;
 
 } // namespace tenzir

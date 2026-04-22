@@ -1,0 +1,13 @@
+{
+  id: "test1",
+  name: "Test Package with inline config",
+  author: "Tenzir",
+  description: "A package used in integration tests.\n",
+  config: {
+    inputs: {
+      world: "WORLD!!11elf!",
+    },
+    overrides: {},
+    disabled: false,
+  },
+}
