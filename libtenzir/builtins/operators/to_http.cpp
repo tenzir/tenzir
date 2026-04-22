@@ -137,11 +137,14 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (not chunk or chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0 or error_signal_->has_sent()) {
       co_return;
     }
     TENZIR_ASSERT(http_pool_);
     auto permit = co_await request_slots_.acquire();
+    if (error_signal_->has_sent()) {
+      co_return;
+    }
     auto* dh = &ctx.dh();
     ctx.spawn_task([this, permit = std::move(permit), chunk = std::move(chunk),
                     dh]() mutable -> Task<void> {
