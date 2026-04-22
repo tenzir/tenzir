@@ -20,6 +20,7 @@
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -256,6 +257,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
 }
 
 struct RequestMetadata {
+  std::string client_ip;
   std::vector<std::pair<std::string, std::string>> headers;
   std::vector<std::pair<std::string, std::string>> query;
   std::string path;
@@ -297,6 +299,7 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 auto make_request_metadata(proxygen::HTTPMessage const& request)
   -> RequestMetadata {
   auto result = RequestMetadata{};
+  result.client_ip = std::string{request.getClientIP()};
   request.getHeaders().forEach([&](std::string& k, std::string& v) {
     result.headers.emplace_back(k, v);
   });
@@ -582,12 +585,17 @@ public:
           decompressor = http::make_decompressor(msg.content_encoding, ctx);
         }
         auto request_id = msg.request_id;
+        auto bytes_read = ctx.make_counter(
+          MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
+                                      msg.metadata.client_ip)},
+          MetricsDirection::read, MetricsVisibility::external_);
         {
           auto active_requests = co_await active_requests_.lock();
           active_requests->emplace(
             request_id, ActiveRequest{.metadata = std::move(msg.metadata),
                                       .decompressor = std::move(decompressor),
-                                      .finished = msg.response_signal});
+                                      .finished = msg.response_signal,
+                                      .bytes_read = std::move(bytes_read)});
         }
         co_await ctx.spawn_sub(request_id, std::move(pipeline),
                                tag_v<chunk_ptr>);
@@ -628,6 +636,7 @@ public:
             req.finished->send(413); // payload too large
             co_return;
           }
+          req.bytes_read.add(chunk->size());
           req.output_bytes += chunk->size();
         }
         if (auto sub = ctx.get_sub(body.request_id)) {
@@ -718,6 +727,7 @@ private:
     size_t output_bytes = 0;
     bool drop_body = false;
     Arc<ResponseSignal> finished;
+    MetricsCounter bytes_read;
   };
 
   auto request_stop() -> Task<void> {

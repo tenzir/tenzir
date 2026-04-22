@@ -20,6 +20,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/secret_resolution.hpp>
@@ -954,6 +955,7 @@ public:
         if (payload.empty()) {
           co_return;
         }
+        bytes_read_.add(payload.size());
         if (response_->is_success()) {
           // push to parser
           if (auto sub = ctx.get_sub(pagination_.page_count)) {
@@ -1031,8 +1033,13 @@ private:
   // Requires pagination_.current_url and pagination_.page_count to be set.
   auto start_fetch(OpCtx& ctx, RequestConfig request) -> Task<void> {
     response_ = None{};
-    ctx.spawn_task(fetch(evb_, proxygen::URL{pagination_.current_url},
-                         std::move(request), fetch_config_, message_queue_));
+    auto parsed_url = proxygen::URL{pagination_.current_url};
+    bytes_read_ = ctx.make_counter(
+      MetricsLabel{"host",
+                   MetricsLabel::FixedString::truncate(parsed_url.getHost())},
+      MetricsDirection::read, MetricsVisibility::external_);
+    ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
+                         fetch_config_, message_queue_));
     co_return;
   }
 
@@ -1071,6 +1078,7 @@ private:
   // --- transient ---
   mutable Arc<MessageQueue> message_queue_;
   folly::EventBase* evb_{};
+  MetricsCounter bytes_read_;
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
