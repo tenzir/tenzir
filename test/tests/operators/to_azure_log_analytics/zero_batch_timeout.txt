@@ -1,0 +1,6 @@
+error: `batch_timeout` must be a positive duration
+  --> tests/operators/to_azure_log_analytics/zero_batch_timeout.tql:12:38
+   |
+12 |                        batch_timeout=0s
+   |                                      ^^ 
+   |
