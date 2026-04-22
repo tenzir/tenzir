@@ -1,4 +1,4 @@
-error: FTP upload to `ftp://127.0.0.1:43121/upload.ndjson` failed
+error: FTP upload failed
   --> tests/operators/to_ftp/error_upload_aborted.tql:13:8
    |
 13 | to_ftp env("FTP_UPLOAD_URL") {

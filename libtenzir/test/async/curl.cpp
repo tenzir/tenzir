@@ -61,4 +61,22 @@ TEST("empty send completes without starting curl") {
   }());
 }
 
+TEST("session reuses completed transfers") {
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto session = CurlSession::make(folly::getGlobalIOExecutor());
+    auto first = session.start_upload();
+    first.close();
+    auto first_result = co_await first.result();
+    require(first_result.is_ok());
+    check_eq(first_result.unwrap(), CurlTransferStatus::finished);
+    auto second = session.start_upload();
+    check(session.busy());
+    second.close();
+    auto second_result = co_await second.result();
+    require(second_result.is_ok());
+    check_eq(second_result.unwrap(), CurlTransferStatus::finished);
+    check(not session.busy());
+  }());
+}
+
 } // namespace tenzir
