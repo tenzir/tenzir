@@ -328,5 +328,6 @@ public:
 private:
   connector_args args_;
 };
+
 } // namespace
 } // namespace tenzir::plugins::sqs
