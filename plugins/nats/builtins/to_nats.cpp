@@ -19,6 +19,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/ast.hpp>
+#include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
 
 #include <chrono>
@@ -40,15 +41,25 @@ using namespace std::chrono_literals;
 constexpr auto default_max_pending = uint64_t{1_Ki};
 constexpr auto default_stall_wait = 200ms;
 
-auto make_root_field(std::string field) -> ast::root_field {
-  return ast::root_field{
-    ast::identifier{std::move(field), location::unknown},
+/// Builds the default `message=` expression used by `to_nats`.
+auto default_message_expression() -> ast::expression {
+  auto function
+    = ast::entity{{ast::identifier{"print_ndjson", location::unknown}}};
+  // Invariant: defaults bypass parser resolution in `OperatorPlugin`, so the
+  // entity reference must be pre-resolved here.
+  function.ref
+    = entity_path{std::string{entity_pkg_std}, {"print_ndjson"}, entity_ns::fn};
+  return ast::function_call{
+    std::move(function),
+    {ast::this_{location::unknown}},
+    location::unknown,
+    true,
   };
 }
 
 struct ToNatsArgs {
   located<std::string> subject;
-  ast::expression message{make_root_field("message")};
+  ast::expression message = default_message_expression();
   Option<ast::expression> headers;
   Option<located<secret>> url;
   Option<located<data>> tls;
