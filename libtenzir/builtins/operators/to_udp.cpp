@@ -21,15 +21,12 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/tql2/eval.hpp>
-#include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
 #include <folly/io/async/AsyncUDPSocket.h>
 
-#include <algorithm>
 #include <cerrno>
 #include <iterator>
-#include <span>
 #include <string>
 
 namespace tenzir::plugins::to_udp {
