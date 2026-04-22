@@ -882,7 +882,6 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
-    co_await flush_until(steady_clock::now(), push);
     for (auto& slice : impl_->finish(provider_->as_session())) {
       co_await push(std::move(slice));
     }
