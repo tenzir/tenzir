@@ -20,6 +20,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/Exception.h>
@@ -29,6 +30,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <span>
@@ -44,7 +46,9 @@ using namespace tenzir::si_literals;
 constexpr auto default_batch_size = uint64_t{10_k};
 constexpr auto default_queue_capacity = uint64_t{10_k};
 constexpr auto default_batch_timeout = 100ms;
-constexpr auto max_ack_delay = 10ms;
+// After ACKing an emitted row, give downstream early-stop control messages a
+// bounded window to cancel us before we emit the next buffered row.
+constexpr auto ack_handoff_delay = 100us;
 constexpr auto max_queue_capacity = uint64_t{std::numeric_limits<int>::max()};
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 
@@ -73,9 +77,15 @@ struct SubscriptionComplete {
 using SourceMessage = variant<IncomingMessage, SubscriptionComplete>;
 using SourceQueue = folly::coro::BoundedQueue<SourceMessage>;
 
+struct BufferedMessage {
+  nats_msg_ptr msg;
+  table_slice slice;
+};
+
 struct SourceBatch {
   std::vector<nats_msg_ptr> messages;
   Option<SubscriptionComplete> completion = None{};
+  bool emit_buffered = false;
 };
 
 struct js_stream_names_list_deleter {
@@ -370,17 +380,17 @@ public:
     if (done_) {
       co_await wait_forever();
     }
+    if (not pending_acks_.empty()) {
+      acknowledge_pending(dh);
+      co_await wait_for_downstream_stop();
+      co_return SourceBatch{};
+    }
+    if (not buffered_.empty()) {
+      co_return SourceBatch{.emit_buffered = true};
+    }
     auto batch = SourceBatch{};
     auto first = Option<SourceMessage>{None{}};
-    if (pending_acks_.empty()) {
-      first = co_await source_->queue.dequeue();
-    } else {
-      auto const ack_delay
-        = std::min(args_.batch_timeout,
-                   std::chrono::duration_cast<duration>(max_ack_delay));
-      first = co_await try_dequeue_for(ack_delay);
-      acknowledge_pending(dh);
-    }
+    first = co_await source_->queue.dequeue();
     if (not first) {
       co_return batch;
     }
@@ -419,6 +429,11 @@ public:
     if (not batch) {
       co_return;
     }
+    if (batch->emit_buffered) {
+      co_await push_buffered(push, ctx);
+      co_await maybe_stop_after_count(ctx);
+      co_return;
+    }
     if (batch->messages.empty() and not batch->completion) {
       acknowledge_pending(ctx.dh());
       co_return;
@@ -443,7 +458,7 @@ public:
       accepted.push_back(std::move(msg));
     }
     if (not accepted.empty()) {
-      auto acked = acknowledge_pending(ctx.dh());
+      (void)acknowledge_pending(ctx.dh());
       TENZIR_ASSERT(in_flight_.empty());
       in_flight_ = std::move(accepted);
       auto nak_guard = detail::scope_guard{[this]() noexcept {
@@ -454,19 +469,28 @@ public:
         }
         in_flight_.clear();
       }};
-      for (auto& slice : build_slices(in_flight_, ctx)) {
-        co_await push(std::move(slice));
+      auto emitted = false;
+      auto message_index = size_t{0};
+      for (auto const& slice : build_slices(in_flight_, ctx)) {
+        for (auto row = size_t{0}; row < slice.rows(); ++row) {
+          TENZIR_ASSERT(message_index < in_flight_.size());
+          auto item = BufferedMessage{
+            .msg = std::move(in_flight_[message_index]),
+            .slice = subslice(slice, row, row + 1),
+          };
+          if (emitted) {
+            buffered_.push_back(std::move(item));
+          } else {
+            co_await push_buffered(std::move(item), push);
+            emitted = true;
+          }
+          ++message_index;
+        }
       }
-      pending_acks_ = std::move(in_flight_);
+      TENZIR_ASSERT(message_index == in_flight_.size());
       in_flight_.clear();
       nak_guard.disable();
-      if (args_.count and received_ >= args_.count->inner) {
-        acked = acknowledge_pending(ctx.dh()) or acked;
-        if (acked) {
-          co_await flush_acknowledgements(ctx);
-        }
-        done_ = true;
-        request_stop();
+      if (co_await maybe_stop_after_count(ctx)) {
         co_return;
       }
     }
@@ -509,6 +533,46 @@ private:
       return false;
     }
     TENZIR_UNREACHABLE();
+  }
+
+  auto push_buffered(BufferedMessage item, Push<table_slice>& push)
+    -> Task<void> {
+    auto nak_guard = detail::scope_guard{[&item]() noexcept {
+      if (item.msg) {
+        natsMsg_Nak(item.msg.get(), nullptr);
+      }
+    }};
+    co_await push(std::move(item.slice));
+    pending_acks_.push_back(std::move(item.msg));
+    nak_guard.disable();
+  }
+
+  auto push_buffered(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
+    acknowledge_pending(ctx.dh());
+    if (buffered_.empty()) {
+      co_return;
+    }
+    auto item = std::move(buffered_.front());
+    buffered_.pop_front();
+    co_await push_buffered(std::move(item), push);
+  }
+
+  auto wait_for_downstream_stop() const -> Task<void> {
+    co_await sleep_for(ack_handoff_delay);
+  }
+
+  auto maybe_stop_after_count(OpCtx& ctx) -> Task<bool> {
+    if (not args_.count or received_ < args_.count->inner
+        or not buffered_.empty()) {
+      co_return false;
+    }
+    auto const acked = acknowledge_pending(ctx.dh());
+    if (acked) {
+      co_await flush_acknowledgements(ctx);
+    }
+    done_ = true;
+    request_stop();
+    co_return true;
   }
 
   auto ensure_durable_consumer(OpCtx& ctx) -> Task<Option<std::string>> {
@@ -664,34 +728,42 @@ private:
       return;
     }
     source_->stopping.store(true, std::memory_order_release);
-    auto nacked = false;
+    auto needs_flush = false;
     while (auto message = source_->queue.try_dequeue()) {
       match(
         std::move(*message),
         [&](IncomingMessage item) {
           source_->message_slots.signal();
           natsMsg_Nak(item.msg.get(), nullptr);
-          nacked = true;
+          needs_flush = true;
         },
         [](SubscriptionComplete) {});
     }
     for (auto& msg : pending_acks_) {
       if (msg) {
-        natsMsg_Nak(msg.get(), nullptr);
-        nacked = true;
+        (void)natsMsg_Ack(msg.get(), nullptr);
+        needs_flush = true;
       }
     }
     pending_acks_.clear();
+    while (not buffered_.empty()) {
+      auto item = std::move(buffered_.front());
+      buffered_.pop_front();
+      if (item.msg) {
+        natsMsg_Nak(item.msg.get(), nullptr);
+        needs_flush = true;
+      }
+    }
     for (auto& msg : in_flight_) {
       if (msg) {
         natsMsg_Nak(msg.get(), nullptr);
-        nacked = true;
+        needs_flush = true;
       }
     }
     in_flight_.clear();
-    if (nacked and connection_) {
-      std::ignore = natsConnection_FlushTimeout(connection_.get(),
-                                                shutdown_flush_timeout_ms);
+    if (needs_flush and connection_) {
+      (void)natsConnection_FlushTimeout(connection_.get(),
+                                        shutdown_flush_timeout_ms);
     }
     subscription_.reset();
   }
@@ -704,6 +776,7 @@ private:
   mutable Arc<SourceState> source_;
   nats_subscription_ptr subscription_;
   mutable std::vector<nats_msg_ptr> pending_acks_;
+  std::deque<BufferedMessage> buffered_;
   std::vector<nats_msg_ptr> in_flight_;
   MetricsCounter read_bytes_counter_;
   uint64_t received_ = 0;

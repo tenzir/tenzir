@@ -90,6 +90,11 @@ select line = string(message)
         if remaining.returncode != 0:
             break
     remaining_output = "".join(outputs)
+    if "message-0001" in remaining_output:
+        raise RuntimeError(
+            "message-0001 was redelivered after downstream early stop\n"
+            f"stdout:\n{remaining_output}\n"
+        )
     if "message-0002" not in remaining_output:
         raise RuntimeError(
             "message-0002 was not available after downstream early stop\n"
