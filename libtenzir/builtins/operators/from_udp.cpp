@@ -21,6 +21,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/series_builder.hpp>
@@ -373,6 +374,7 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
 
   std::deque<Message> pending;
   Notify notify;
+  MetricsCounter bytes_read_counter;
   folly::AsyncUDPSocket* socket = nullptr;
   bool paused = false;
   bool done = false;
@@ -409,6 +411,7 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
       peer_ip,
       client.getPort(),
     });
+    bytes_read_counter.add(len);
     if (not paused and pending.size() >= pending_high_water) {
       socket->pauseRead();
       paused = true;
@@ -463,10 +466,15 @@ public:
       done_ = true;
       co_return;
     }
+    // A truly label-free counter is not possible with the current metrics API:
+    // `make_counter` always requires exactly one label pair.
+    auto bytes_read_counter = ctx.make_counter(
+      MetricsLabel{"operator", "from_udp"},
+      MetricsDirection::read, MetricsVisibility::external_);
     TENZIR_ASSERT(message_sender_);
     ctx.spawn_task(folly::coro::co_withExecutor(
-      evb_,
-      read_loop(*evb_, std::move(bind_address).unwrap(), *message_sender_)));
+      evb_, read_loop(*evb_, std::move(bind_address).unwrap(),
+                      *message_sender_, std::move(bytes_read_counter))));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -602,9 +610,11 @@ private:
 
   static auto
   read_loop(folly::EventBase& evb, folly::SocketAddress bind_address,
-            Sender<Message> message_sender) -> Task<void> {
+            Sender<Message> message_sender,
+            MetricsCounter bytes_read_counter) -> Task<void> {
     auto socket = folly::AsyncUDPSocket{&evb};
     auto callback = SocketReadCallback{};
+    callback.bytes_read_counter = std::move(bytes_read_counter);
     callback.socket = &socket;
     auto socket_guard = detail::scope_guard{[&]() noexcept {
       socket.pauseRead();
