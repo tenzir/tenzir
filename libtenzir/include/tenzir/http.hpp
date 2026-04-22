@@ -11,6 +11,7 @@
 #include "tenzir/async/result.hpp"
 #include "tenzir/blob.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http_pool.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/tls_options.hpp"
@@ -18,6 +19,7 @@
 #include <arrow/util/compression.h>
 #include <caf/error.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -37,6 +39,12 @@ auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
                            tls_options::options options = {.is_server = false})
   -> failure_or<bool>;
+
+auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
+                           location url_loc, diagnostic_handler& dh,
+                           std::chrono::milliseconds request_timeout,
+                           tls_options::options options = {.is_server = false})
+  -> failure_or<HttpPoolConfig>;
 
 auto make_header_secret_requests(
   Option<located<data>> const& headers,

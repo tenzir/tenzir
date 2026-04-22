@@ -46,6 +46,25 @@ auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
   return url.starts_with("https://");
 }
 
+auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
+                           location url_loc, diagnostic_handler& dh,
+                           std::chrono::milliseconds request_timeout,
+                           tls_options::options options)
+  -> failure_or<HttpPoolConfig> {
+  TRY(auto tls_enabled, normalize_url_and_tls(tls, url, url_loc, dh, options));
+  auto config = HttpPoolConfig{
+    .tls = tls_enabled,
+    .ssl_context = nullptr,
+    .request_timeout = request_timeout,
+  };
+  if (tls_enabled) {
+    auto tls_opts = tls ? tls_options{*tls, options} : tls_options{options};
+    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh));
+    config.ssl_context = std::move(ssl_context);
+  }
+  return config;
+}
+
 auto make_header_secret_requests(
   Option<located<data>> const& headers,
   std::vector<std::pair<std::string, std::string>>& resolved_headers,
