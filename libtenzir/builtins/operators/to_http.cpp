@@ -77,6 +77,12 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_write_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_http",
+      },
+      MetricsDirection::write, MetricsVisibility::external_);
     // setup url, headers & tls
     if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
         result.is_error()) {
@@ -141,6 +147,7 @@ public:
       co_return;
     }
     TENZIR_ASSERT(http_pool_);
+    bytes_write_counter_.add(chunk->size());
     auto permit = co_await request_slots_.acquire();
     if (error_signal_->has_sent()) {
       co_return;
@@ -270,6 +277,7 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
   Option<Box<HttpPool>> http_pool_;
   mutable Arc<Oneshot<std::string>> error_signal_{std::in_place};
+  MetricsCounter bytes_write_counter_ = {};
 };
 
 class ToHttpPlugin final : public OperatorPlugin {
