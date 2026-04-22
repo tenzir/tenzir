@@ -1,0 +1,27 @@
+{
+  facility: 23,
+  severity: 5,
+  timestamp: "2026 Apr 14 08:45:52 UTC",
+  hostname: null,
+  app_name: "ETH_PORT_CHANNEL-5-PORT_SUSPENDED",
+  process_id: null,
+  content: "Ethernet1/54/4: Ethernet1/54/4 is suspended",
+}
+{
+  facility: 23,
+  severity: 5,
+  timestamp: "2026 Apr 4 08:45:52 PDT",
+  hostname: null,
+  app_name: "SYS-5-CONFIG_I",
+  process_id: null,
+  content: "Configured from console by console",
+}
+{
+  facility: 23,
+  severity: 5,
+  timestamp: "2026 Apr 14 08:45:52 UTC",
+  hostname: null,
+  app_name: null,
+  process_id: null,
+  content: "Interface GigabitEthernet0/1, changed state to up",
+}

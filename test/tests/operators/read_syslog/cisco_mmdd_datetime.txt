@@ -1,0 +1,9 @@
+{
+  facility: null,
+  severity: null,
+  timestamp: "3/1 18:47:02",
+  hostname: null,
+  app_name: "SYS-5-CONFIG_I",
+  process_id: null,
+  content: "Configured from console by vty2 (10.34.195.36)",
+}
