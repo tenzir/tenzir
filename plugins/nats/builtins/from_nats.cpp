@@ -22,8 +22,8 @@
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <folly/coro/BoundedQueue.h>
 #include <folly/Exception.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/fibers/Semaphore.h>
 
 #include <algorithm>

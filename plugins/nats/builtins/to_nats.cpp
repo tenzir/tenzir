@@ -431,11 +431,11 @@ private:
   auto drain_ack_errors(OpCtx& ctx) -> void {
     auto failures = ack_failures_->drain();
     if (failures.count != 0) {
-      auto diag = diagnostic::error("{} NATS publish acknowledgment{} failed",
-                                    failures.count,
-                                    failures.count == 1 ? "" : "s")
-                    .primary(args_.subject.source)
-                    .note("first error: {}", failures.reason);
+      auto diag
+        = diagnostic::error("{} NATS publish acknowledgment{} failed",
+                            failures.count, failures.count == 1 ? "" : "s")
+            .primary(args_.subject.source)
+            .note("first error: {}", failures.reason);
       if (failures.jetstream_error_code != 0) {
         diag = std::move(diag).note("JetStream error code: {}",
                                     failures.jetstream_error_code);
