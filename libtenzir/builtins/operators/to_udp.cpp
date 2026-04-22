@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/channel.hpp>
+#include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -17,9 +19,12 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/socket.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <folly/SocketAddress.h>
+#include <folly/io/async/AsyncUDPSocket.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -31,206 +36,222 @@ namespace tenzir::plugins::to_udp {
 
 namespace {
 
+constexpr auto request_queue_capacity = uint32_t{1};
+
 struct ToUdpArgs {
+  location self;
   located<std::string> endpoint;
   Option<ast::expression> message;
 };
 
-struct ConnectResult {
-  failure_or<tenzir::socket> socket;
-  Option<diagnostic> diagnostic;
+struct SendBatchResult {
+  std::vector<diagnostic> diagnostics;
 };
 
-struct SendResult {
-  std::vector<diagnostic> diagnostics;
-  uint64_t bytes_sent = 0;
+struct SendBatch {
+  std::vector<chunk_ptr> payloads;
+  Sender<SendBatchResult> reply_to;
 };
 
 class ToUdp final : public Operator<table_slice, void> {
 public:
-  explicit ToUdp(ToUdpArgs args) : args_{std::move(args)} {
+  explicit ToUdp(ToUdpArgs args)
+    : ToUdp{std::move(args), channel<SendBatch>(request_queue_capacity)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto result = co_await spawn_blocking(
-      [endpoint = args_.endpoint.inner,
-       source = args_.endpoint.source]() mutable -> ConnectResult {
-        auto parsed = socket_endpoint::parse("udp://" + endpoint);
-        if (not parsed) {
-          return {
-            .socket = failure::promise(),
-            .diagnostic = diagnostic::error("invalid UDP endpoint")
-                            .primary(source, "{}", parsed.error())
-                            .done(),
-          };
+    evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
+    auto url = args_.endpoint.inner;
+    auto address = co_await spawn_blocking(
+      [url = std::move(url)] -> Result<folly::SocketAddress, std::string> {
+        auto result = folly::SocketAddress{};
+        try {
+          result.setFromHostPort(url);
+        } catch (std::exception const& ex) {
+          return Err{std::string{ex.what()}};
         }
-        auto socket = tenzir::socket{*parsed};
-        if (not socket) {
-          return {
-            .socket = failure::promise(),
-            .diagnostic = diagnostic::error("failed to create UDP socket")
-                            .primary(source, detail::describe_errno())
-                            .note("endpoint: {}", parsed->addr)
-                            .done(),
-          };
-        }
-        if (socket.connect(*parsed) < 0) {
-          return {
-            .socket = failure::promise(),
-            .diagnostic = diagnostic::error("failed to connect UDP socket")
-                            .primary(source, detail::describe_errno())
-                            .note("endpoint: {}", parsed->addr)
-                            .done(),
-          };
-        }
-        return {
-          .socket = std::move(socket),
-          .diagnostic = None{},
-        };
+        return result;
       });
-    if (result.socket) {
-      socket_ = std::move(*result.socket);
+    if (address.is_err()) {
+      diagnostic::error("invalid UDP endpoint")
+        .primary(args_.endpoint, "{}", std::move(address).unwrap_err())
+        .emit(ctx);
+      co_return;
     }
-    if (result.diagnostic) {
-      std::move(*result.diagnostic).modify().emit(ctx.dh());
+    // A truly label-free counter is not possible with the current metrics API:
+    // `make_counter` always requires exactly one label pair.
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
+                         MetricsDirection::write, MetricsVisibility::external_);
+    auto [startup_sender, startup_receiver]
+      = channel<diagnostic>(request_queue_capacity);
+    TENZIR_ASSERT(write_sender_);
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      evb_, write_loop(*evb_, std::move(address).unwrap(), args_.self,
+                       std::move(write_receiver_), std::move(startup_sender),
+                       bytes_write_counter_)));
+    // Successful startup is signaled by closing the channel without errors.
+    while (auto diagnostic = co_await startup_receiver.recv()) {
+      std::move(*diagnostic).modify().emit(ctx);
     }
-    bytes_write_counter_ = ctx.make_counter(
-      MetricsLabel{"peer",
-                   MetricsLabel::FixedString::truncate(args_.endpoint.inner)},
-      MetricsDirection::write, MetricsVisibility::external_);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
-    auto messages = eval(args_.message ? *args_.message : ast::expression{ast::this_{}},
-                         input, ctx.dh());
-    auto result = co_await spawn_blocking(
-      [this, messages = std::move(messages)]() mutable -> SendResult {
-        auto diagnostics = collecting_diagnostic_handler{};
-        auto bytes_sent = uint64_t{0};
-        auto send_payload = [&](std::span<const std::byte> payload) -> bool {
-          auto num_sent = socket_.send(payload);
-          if (num_sent < 0) {
-            auto builder = diagnostic::error("failed to send UDP datagram")
-                             .primary(args_.endpoint.source,
-                                      detail::describe_errno());
-            if (errno == EMSGSIZE) {
-              builder = std::move(builder).hint(
-                "ensure the payload fits into a single UDP datagram");
-            }
-            std::move(builder).emit(diagnostics);
-            return false;
-          }
-          if (num_sent != detail::narrow_cast<ssize_t>(payload.size())) {
-            diagnostic::error("failed to send complete UDP datagram")
-              .primary(args_.endpoint.source)
-              .note("sent {} of {} bytes", num_sent, payload.size())
-              .emit(diagnostics);
-            return false;
-          }
-          bytes_sent += payload.size();
-          return true;
-        };
-        for (auto const& part : messages.parts()) {
-          if (part.type.kind().is<null_type>()) {
-            diagnostic::warning("`message` evaluated to `null`, skipping event")
-              .primary(args_.message ? *args_.message : ast::expression{ast::this_{}})
-              .emit(diagnostics);
+    auto messages
+      = eval(args_.message ? *args_.message : ast::expression{ast::this_{}},
+             input, ctx);
+    auto payloads = std::vector<chunk_ptr>{};
+    for (auto const& part : messages.parts()) {
+      if (part.type.kind().is<null_type>()) {
+        diagnostic::warning("`message` evaluated to `null`, skipping event")
+          .primary(args_.message.unwrap())
+          .emit(ctx);
+        continue;
+      }
+      if (part.type.kind().is<string_type>()) {
+        for (auto value : part.values<string_type>()) {
+          if (not value) {
             continue;
           }
-          if (part.type.kind().is<string_type>()) {
-            for (auto value : part.values<string_type>()) {
-              if (not value) {
-                continue;
-              }
-              auto payload = std::span{
-                reinterpret_cast<const std::byte*>(value->data()),
-                value->size(),
-              };
-              if (not send_payload(payload)) {
-                return {
-                  .diagnostics = std::move(diagnostics).collect(),
-                  .bytes_sent = bytes_sent,
-                };
-              }
-            }
-            continue;
-          }
-          if (part.type.kind().is<blob_type>()) {
-            for (auto value : part.values<blob_type>()) {
-              if (not value) {
-                continue;
-              }
-              if (not send_payload(*value)) {
-                return {
-                  .diagnostics = std::move(diagnostics).collect(),
-                  .bytes_sent = bytes_sent,
-                };
-              }
-            }
-            continue;
-          }
-          if (part.type.kind().is<record_type>()) {
-            auto buffer = std::string{};
-            auto printer = json_printer{json_printer_options{
-              .style = no_style(),
-              .oneline = true,
-            }};
-            for (auto value : part.values<record_type>()) {
-              if (not value) {
-                continue;
-              }
-              auto it = std::back_inserter(buffer);
-              if (not printer.print(it, value.value())) {
-                diagnostic::error("failed to serialize `message` as JSON")
-                  .primary(args_.message ? *args_.message : ast::expression{ast::this_{}})
-                  .emit(diagnostics);
-                return {
-                  .diagnostics = std::move(diagnostics).collect(),
-                  .bytes_sent = bytes_sent,
-                };
-              }
-              auto payload = std::span{
-                reinterpret_cast<const std::byte*>(buffer.data()),
-                buffer.size(),
-              };
-              if (not send_payload(payload)) {
-                return {
-                  .diagnostics = std::move(diagnostics).collect(),
-                  .bytes_sent = bytes_sent,
-                };
-              }
-              buffer.clear();
-            }
-            continue;
-          }
-          diagnostic::warning(
-            "expected `blob`, `null`, `record`, or `string`, got `{}`",
-            part.type.kind())
-            .primary(args_.message ? *args_.message : ast::expression{ast::this_{}})
-            .emit(diagnostics);
+          payloads.emplace_back(chunk::copy(value->data(), value->size()));
         }
-        return {
-          .diagnostics = std::move(diagnostics).collect(),
-          .bytes_sent = bytes_sent,
-        };
-      });
-    auto stop = false;
-    for (auto& diagnostic : result.diagnostics) {
-      stop = stop or diagnostic.severity == severity::error;
-      std::move(diagnostic).modify().emit(ctx.dh());
+        continue;
+      }
+      if (part.type.kind().is<blob_type>()) {
+        for (auto value : part.values<blob_type>()) {
+          if (not value) {
+            continue;
+          }
+          payloads.emplace_back(chunk::copy(*value));
+        }
+        continue;
+      }
+      if (part.type.kind().is<record_type>()) {
+        auto buffer = std::string{};
+        auto printer = json_printer{json_printer_options{
+          .style = no_style(),
+          .oneline = true,
+        }};
+        for (auto value : part.values<record_type>()) {
+          if (not value) {
+            continue;
+          }
+          auto it = std::back_inserter(buffer);
+          auto success = printer.print(it, value.value());
+          TENZIR_ASSERT(success);
+          payloads.emplace_back(chunk::copy(buffer.data(), buffer.size()));
+          buffer.clear();
+        }
+        continue;
+      }
+      diagnostic::warning("expected `blob`, `record`, or `string`, got `{}`",
+                          part.type.kind())
+        .primary(args_.message.unwrap())
+        .emit(ctx);
     }
-    bytes_write_counter_.add(result.bytes_sent);
-    if (stop) {
+    if (payloads.empty()) {
       co_return;
+    }
+    auto [reply_sender, reply_receiver] = channel<SendBatchResult>(1);
+    // We currently use a one-shot channel to confirm that the data has been
+    // completely sent. That might not be ideal, but it simplifies the code for
+    // now that we don't have to wait for the queue to be drained. As a result,
+    // the writer channel can be capacity one and writing always succeeds.
+    auto write_result = write_sender_->try_send(
+      SendBatch{std::move(payloads), std::move(reply_sender)});
+    TENZIR_ASSERT(write_result.is_ok());
+    auto result = co_await reply_receiver.recv();
+    TENZIR_ASSERT(result);
+    for (auto& diagnostic : result->diagnostics) {
+      std::move(diagnostic).modify().emit(ctx);
     }
   }
 
+  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
+    write_sender_ = None{};
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return write_sender_ ? OperatorState::unspecified : OperatorState::done;
+  }
+
 private:
+  explicit ToUdp(ToUdpArgs args,
+                 std::tuple<Sender<SendBatch>, Receiver<SendBatch>> ch)
+    : args_{std::move(args)},
+      write_sender_{std::move(std::get<0>(ch))},
+      write_receiver_{std::move(std::get<1>(ch))} {
+  }
+
+  static auto write_loop(folly::EventBase& evb, folly::SocketAddress address,
+                         location self, Receiver<SendBatch> write_receiver,
+                         Sender<diagnostic> startup_sender,
+                         MetricsCounter bytes_write_counter) -> Task<void> {
+    auto socket = folly::AsyncUDPSocket{&evb};
+    auto startup_diagnostics = collecting_diagnostic_handler{};
+    try {
+      socket.connect(address);
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to connect UDP socket")
+        .primary(self)
+        .note("{}", ex.what())
+        .emit(startup_diagnostics);
+    }
+    auto startup_result = std::move(startup_diagnostics).collect();
+    for (auto& diagnostic : startup_result) {
+      co_await startup_sender.send(std::move(diagnostic));
+    }
+    {
+      // Let the caller know that startup is complete by dropping the channel.
+      auto _ = std::move(startup_sender);
+    }
+    if (not startup_result.empty()) {
+      co_return;
+    }
+    while (true) {
+      auto batch = co_await write_receiver.recv();
+      if (not batch) {
+        co_return;
+      }
+      auto diagnostics = collecting_diagnostic_handler{};
+      for (auto const& payload : batch->payloads) {
+        auto iov = iovec{
+          const_cast<std::byte*>(payload->data()),
+          payload->size(),
+        };
+        auto num_sent = socket.writev(address, &iov, 1);
+        if (num_sent < 0) {
+          auto builder = diagnostic::warning("failed to send UDP datagram")
+                           .primary(self, detail::describe_errno());
+          if (errno == EMSGSIZE) {
+            builder = std::move(builder).hint(
+              "ensure the payload fits into a single UDP datagram");
+          }
+          std::move(builder).emit(diagnostics);
+          break;
+        }
+        if (num_sent != detail::narrow_cast<ssize_t>(payload->size())) {
+          diagnostic::warning("failed to send complete UDP datagram")
+            .primary(self)
+            .note("sent {} of {} bytes", num_sent, payload->size())
+            .emit(diagnostics);
+          break;
+        }
+        bytes_write_counter.add(payload->size());
+      }
+      // This single-shot channel of capacity 1 can always be written to since
+      // we don't reuse it.
+      auto reply_result = batch->reply_to.try_send(
+        SendBatchResult{std::move(diagnostics).collect()});
+      TENZIR_ASSERT(reply_result.is_ok());
+    }
+  }
+
   ToUdpArgs args_;
-  tenzir::socket socket_;
+  folly::Executor::KeepAlive<folly::EventBase> evb_;
+  Option<Sender<SendBatch>> write_sender_;
+  Receiver<SendBatch> write_receiver_;
   MetricsCounter bytes_write_counter_;
 };
 
@@ -242,6 +263,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToUdpArgs, ToUdp>{};
+    d.operator_location(&ToUdpArgs::self);
     auto endpoint_arg = d.positional("endpoint", &ToUdpArgs::endpoint);
     d.named("message", &ToUdpArgs::message, "any");
     d.validate([=](DescribeCtx& ctx) -> Empty {
