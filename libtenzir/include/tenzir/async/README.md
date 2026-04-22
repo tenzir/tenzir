@@ -72,8 +72,9 @@ Use it like this:
 - Create a session with `CurlSession::make(ctx.io_executor())`, configure
   `session.easy()` directly, then start one semantic transfer with
   `start_upload()` or `start_download()`.
-- A session supports one active transfer at a time. Reuse the session only after
-  the current transfer has completed or has been dropped.
+- A session supports one active transfer at a time. Reuse the session after the
+  current transfer has completed and the upload `result()` or download terminal
+  event has been observed.
 - For uploads, call `start_upload()`, `push()` chunks, and eventually call
   `close()`. Await `result()` to distinguish `CurlTransferStatus::finished`,
   `CurlTransferStatus::local_abort`, and `Err(CurlError{...})`. If the local

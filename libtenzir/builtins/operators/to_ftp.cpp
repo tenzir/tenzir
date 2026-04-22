@@ -86,7 +86,7 @@ public:
     session_.emplace(CurlSession::make(ctx.io_executor()));
     auto& easy = session_->easy();
     if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
-      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+      diagnostic::error("failed to configure FTP upload")
         .primary(args_.url.source)
         .note("failed to set curl option `CURLOPT_DEFAULT_PROTOCOL`")
         .emit(ctx);
@@ -94,7 +94,7 @@ public:
       co_return;
     }
     if (not curl::try_set(easy, CURLOPT_URL, resolved_url_)) {
-      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+      diagnostic::error("failed to configure FTP upload")
         .primary(args_.url.source)
         .note("failed to set curl option `CURLOPT_URL`")
         .emit(ctx);
@@ -102,7 +102,7 @@ public:
       co_return;
     }
     if (not curl::try_set(easy, CURLOPT_UPLOAD, 1L)) {
-      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+      diagnostic::error("failed to configure FTP upload")
         .primary(args_.url.source)
         .note("failed to set curl option `CURLOPT_UPLOAD`")
         .emit(ctx);
@@ -110,7 +110,7 @@ public:
       co_return;
     }
     if (auto err = tls.apply_to(easy, resolved_url_, nullptr); err.valid()) {
-      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+      diagnostic::error("failed to configure FTP upload")
         .primary(args_.url.source)
         .note("{}", err)
         .emit(ctx);
@@ -119,7 +119,7 @@ public:
     }
     auto code = easy.set([](std::span<const std::byte>) {});
     if (code != curl::easy::code::ok) {
-      diagnostic::error("failed to configure FTP upload to `{}`", resolved_url_)
+      diagnostic::error("failed to configure FTP upload")
         .primary(args_.url.source)
         .note("curl error: {}", curl::to_string(code))
         .emit(ctx);
@@ -226,14 +226,14 @@ private:
         = session_->easy().get<curl::easy::info::response_code>();
       if (response_code_status == curl::easy::code::ok
           and (response_code < 200 or response_code > 299)) {
-        diagnostic::error("FTP upload to `{}` failed", resolved_url_)
+        diagnostic::error("FTP upload failed")
           .primary(args_.url.source)
           .note("FTP response code: {}", response_code)
           .emit(ctx);
       }
     }
     if (upload_result.is_err()) {
-      diagnostic::error("FTP upload to `{}` failed", resolved_url_)
+      diagnostic::error("FTP upload failed")
         .primary(args_.url.source)
         .note("curl error: {}", to_string(upload_result.unwrap_err()))
         .emit(ctx);

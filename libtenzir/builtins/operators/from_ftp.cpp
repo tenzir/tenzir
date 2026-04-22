@@ -87,8 +87,7 @@ public:
     session_.emplace(CurlSession::make(ctx.io_executor()));
     auto& easy = session_->easy();
     if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
-      diagnostic::error("failed to configure FTP download from `{}`",
-                        resolved_url_)
+      diagnostic::error("failed to configure FTP download")
         .primary(args_.url.source)
         .note("failed to set curl option `CURLOPT_DEFAULT_PROTOCOL`")
         .emit(ctx);
@@ -96,8 +95,7 @@ public:
       co_return;
     }
     if (not curl::try_set(easy, CURLOPT_URL, resolved_url_)) {
-      diagnostic::error("failed to configure FTP download from `{}`",
-                        resolved_url_)
+      diagnostic::error("failed to configure FTP download")
         .primary(args_.url.source)
         .note("failed to set curl option `CURLOPT_URL`")
         .emit(ctx);
@@ -105,8 +103,7 @@ public:
       co_return;
     }
     if (not curl::try_set(easy, CURLOPT_HTTPGET, 1L)) {
-      diagnostic::error("failed to configure FTP download from `{}`",
-                        resolved_url_)
+      diagnostic::error("failed to configure FTP download")
         .primary(args_.url.source)
         .note("failed to set curl option `CURLOPT_HTTPGET`")
         .emit(ctx);
@@ -114,8 +111,7 @@ public:
       co_return;
     }
     if (auto err = tls.apply_to(easy, resolved_url_, nullptr); err.valid()) {
-      diagnostic::error("failed to configure FTP download from `{}`",
-                        resolved_url_)
+      diagnostic::error("failed to configure FTP download")
         .primary(args_.url.source)
         .note("{}", err)
         .emit(ctx);
@@ -169,7 +165,7 @@ public:
         }
       },
       [&](CurlDownloadFailed failure) -> Task<void> {
-        diagnostic::error("FTP download from `{}` failed", resolved_url_)
+        diagnostic::error("FTP download failed")
           .primary(args_.url.source)
           .note("curl error: {}", to_string(failure.error))
           .emit(ctx);
@@ -187,7 +183,7 @@ public:
             = session_->easy().get<curl::easy::info::response_code>();
           if (code == curl::easy::code::ok
               and (response_code < 200 or response_code > 299)) {
-            diagnostic::error("FTP download from `{}` failed", resolved_url_)
+            diagnostic::error("FTP download failed")
               .primary(args_.url.source)
               .note("FTP response code: {}", response_code)
               .emit(ctx);
