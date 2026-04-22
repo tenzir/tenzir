@@ -6,24 +6,24 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/arc.hpp"
-#include "tenzir/async/mutex.hpp"
-#include "tenzir/async/oneshot.hpp"
-#include "tenzir/async/semaphore.hpp"
-#include "tenzir/atomic.hpp"
-#include "tenzir/chunk.hpp"
-#include "tenzir/co_match.hpp"
-#include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/inspect_enum_str.hpp"
-#include "tenzir/detail/narrow.hpp"
-#include "tenzir/diagnostics.hpp"
-#include "tenzir/http.hpp"
-#include "tenzir/json_parser.hpp"
-#include "tenzir/operator_plugin.hpp"
-#include "tenzir/option.hpp"
-#include "tenzir/plugin/register.hpp"
-#include "tenzir/tls_options.hpp"
-#include "tenzir/variant.hpp"
+#include <tenzir/arc.hpp>
+#include <tenzir/async/mutex.hpp>
+#include <tenzir/async/oneshot.hpp>
+#include <tenzir/async/semaphore.hpp>
+#include <tenzir/atomic.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/co_match.hpp>
+#include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/http.hpp>
+#include <tenzir/json_parser.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
+#include <tenzir/pipeline_metrics.hpp>
+#include <tenzir/plugin/register.hpp>
+#include <tenzir/tls_options.hpp>
+#include <tenzir/variant.hpp>
 
 #include <folly/coro/BoundedQueue.h>
 #include <folly/io/IOBuf.h>
@@ -293,8 +293,7 @@ public:
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
     co_return http::make_server_fixed_response(
-      response.status, std::move(response.content_type),
-      std::move(response.body));
+      response.status, response.content_type, std::move(response.body));
   }
 
 private:
@@ -337,6 +336,9 @@ public:
       co_await catch_cancellation(wait_forever());
       co_await request_stop();
     });
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     lifecycle_ = Lifecycle::running;
     co_return;
   }
@@ -378,6 +380,7 @@ public:
           }
           body = chunk::make(std::move(decompressed).unwrap());
         }
+        bytes_read_counter_.add(body->size());
         auto parser = json::ndjson_parser{"accept_opensearch", ctx.dh(), {}};
         for (auto const& line : split_at_newline(body)) {
           if (line.empty()) {
@@ -474,10 +477,10 @@ private:
     }
   }
 
-  auto make_config(OpCtx& ctx)
+  auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto parsed = http::parse_server_endpoint(
-      args_.url.inner, args_.url.source, ctx.dh(), "url");
+    auto parsed = http::parse_server_endpoint(args_.url.inner, args_.url.source,
+                                              ctx.dh(), "url");
     if (not parsed) {
       co_return None{};
     }
@@ -526,6 +529,7 @@ private:
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
   Mutex<std::unordered_map<uint64_t, Arc<ResponseSignal>>> active_requests_{{}};
   Arc<Semaphore> active_connections_;
+  MetricsCounter bytes_read_counter_ = {};
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
@@ -548,8 +552,8 @@ public:
       tls_validator(ctx);
       auto parsed = Option<http::server_endpoint>{None{}};
       if (auto url = ctx.get(url_arg)) {
-        parsed = http::parse_server_endpoint(url->inner, url->source, ctx,
-                                                  "url");
+        parsed
+          = http::parse_server_endpoint(url->inner, url->source, ctx, "url");
       }
       if (auto max_request_size = ctx.get(max_request_size_arg)) {
         if (max_request_size->inner == 0) {

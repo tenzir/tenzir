@@ -16,6 +16,7 @@
 #include <tenzir/location.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/tls_options.hpp>
@@ -195,7 +196,7 @@ public:
     return not body_.empty();
   }
 
-  auto last_element_size() const -> int64_t {
+  auto last_element_size() const -> uint64_t {
     return last_element_size_;
   }
 
@@ -581,6 +582,9 @@ public:
     }
     check(req_->set(CURLOPT_POST, 1));
     check(req_->set(CURLOPT_URL, url_));
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
+                         MetricsDirection::write, MetricsVisibility::external_);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -759,6 +763,7 @@ private:
       lifecycle_ = Lifecycle::done;
       return;
     }
+    bytes_write_counter_.add(body.size());
     auto response = std::string{};
     auto write_callback = [&](std::span<std::byte const> data) {
       response.append(reinterpret_cast<char const*>(data.data()), data.size());
@@ -810,6 +815,7 @@ private:
   json_builder builder_;
   Option<curl::easy> req_;
   std::string url_;
+  MetricsCounter bytes_write_counter_ = {};
   Lifecycle lifecycle_ = Lifecycle::running;
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
   mutable Box<Notify> buffer_ready_{std::in_place};
