@@ -9,4 +9,4 @@ warning: message is not valid UTF-8
    |          ~~~~~~~~~~~~~~~~~~~ 
    |
    = note: peer: 127.0.0.1:41001
-   = note: `data` will be dropped
+   = hint: use `binary=true` to accept non-UTF8 data
