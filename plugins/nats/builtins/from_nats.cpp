@@ -44,6 +44,7 @@ using namespace tenzir::si_literals;
 constexpr auto default_batch_size = uint64_t{10_k};
 constexpr auto default_queue_capacity = uint64_t{10_k};
 constexpr auto default_batch_timeout = 100ms;
+constexpr auto max_ack_delay = 10ms;
 constexpr auto max_queue_capacity = uint64_t{std::numeric_limits<int>::max()};
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 
@@ -365,34 +366,49 @@ public:
     subscription_ = nats_subscription_ptr{raw_subscription};
   }
 
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     if (done_) {
       co_await wait_forever();
     }
     auto batch = SourceBatch{};
     auto first = Option<SourceMessage>{None{}};
-    if (pending_ack_) {
-      auto token = co_await folly::coro::co_current_cancellation_token;
-      try {
-        first = co_await source_->queue.co_try_dequeue_for(
-          std::chrono::duration_cast<folly::Duration>(args_.batch_timeout));
-      } catch (folly::OperationCancelled const&) {
-        if (token.isCancellationRequested()) {
-          throw;
-        }
-        co_return batch;
-      }
-      if (not first) {
-        co_return batch;
-      }
-    } else {
+    if (pending_acks_.empty()) {
       first = co_await source_->queue.dequeue();
+    } else {
+      auto const ack_delay
+        = std::min(args_.batch_timeout,
+                   std::chrono::duration_cast<duration>(max_ack_delay));
+      first = co_await try_dequeue_for(ack_delay);
+      acknowledge_pending(dh);
     }
-    if (auto* item = try_as<IncomingMessage>(&*first)) {
-      batch.messages.push_back(std::move(item->msg));
-    } else if (auto* complete = try_as<SubscriptionComplete>(&*first)) {
-      batch.completion = *complete;
+    if (not first) {
       co_return batch;
+    }
+    if (not append_to_batch(batch, std::move(*first))) {
+      co_return batch;
+    }
+    auto const max_messages = detail::narrow_cast<size_t>(
+      std::min(args_.batch_size, args_.queue_capacity));
+    auto const started = std::chrono::steady_clock::now();
+    while (batch.messages.size() < max_messages) {
+      if (auto next = source_->queue.try_dequeue()) {
+        if (not append_to_batch(batch, std::move(*next))) {
+          co_return batch;
+        }
+        continue;
+      }
+      auto const elapsed = std::chrono::duration_cast<duration>(
+        std::chrono::steady_clock::now() - started);
+      if (elapsed >= args_.batch_timeout) {
+        break;
+      }
+      auto next = co_await try_dequeue_for(args_.batch_timeout - elapsed);
+      if (not next) {
+        break;
+      }
+      if (not append_to_batch(batch, std::move(*next))) {
+        co_return batch;
+      }
     }
     co_return batch;
   }
@@ -404,7 +420,7 @@ public:
       co_return;
     }
     if (batch->messages.empty() and not batch->completion) {
-      acknowledge_pending(ctx);
+      acknowledge_pending(ctx.dh());
       co_return;
     }
     auto accepted = std::vector<nats_msg_ptr>{};
@@ -427,7 +443,7 @@ public:
       accepted.push_back(std::move(msg));
     }
     if (not accepted.empty()) {
-      auto acked = acknowledge_pending(ctx);
+      auto acked = acknowledge_pending(ctx.dh());
       TENZIR_ASSERT(in_flight_.empty());
       in_flight_ = std::move(accepted);
       auto nak_guard = detail::scope_guard{[this]() noexcept {
@@ -438,20 +454,14 @@ public:
         }
         in_flight_.clear();
       }};
-      for (auto& msg : in_flight_) {
-        if (not msg) {
-          continue;
-        }
-        auto one = std::span<nats_msg_ptr const>{&msg, 1};
-        for (auto& slice : build_slices(one, ctx)) {
-          co_await push(std::move(slice));
-        }
-        pending_ack_ = std::move(msg);
+      for (auto& slice : build_slices(in_flight_, ctx)) {
+        co_await push(std::move(slice));
       }
+      pending_acks_ = std::move(in_flight_);
       in_flight_.clear();
       nak_guard.disable();
       if (args_.count and received_ >= args_.count->inner) {
-        acked = acknowledge_pending(ctx) or acked;
+        acked = acknowledge_pending(ctx.dh()) or acked;
         if (acked) {
           co_await flush_acknowledgements(ctx);
         }
@@ -475,6 +485,32 @@ public:
   }
 
 private:
+  auto try_dequeue_for(duration timeout) const -> Task<Option<SourceMessage>> {
+    auto token = co_await folly::coro::co_current_cancellation_token;
+    try {
+      co_return co_await source_->queue.co_try_dequeue_for(
+        std::chrono::duration_cast<folly::Duration>(timeout));
+    } catch (folly::OperationCancelled const&) {
+      if (token.isCancellationRequested()) {
+        throw;
+      }
+      co_return None{};
+    }
+  }
+
+  static auto append_to_batch(SourceBatch& batch, SourceMessage message)
+    -> bool {
+    if (auto* item = try_as<IncomingMessage>(&message)) {
+      batch.messages.push_back(std::move(item->msg));
+      return true;
+    }
+    if (auto* complete = try_as<SubscriptionComplete>(&message)) {
+      batch.completion = *complete;
+      return false;
+    }
+    TENZIR_UNREACHABLE();
+  }
+
   auto ensure_durable_consumer(OpCtx& ctx) -> Task<Option<std::string>> {
     TENZIR_ASSERT(args_.durable);
     auto stream_options = jsOptions{};
@@ -585,24 +621,29 @@ private:
     return builder.finalize_as_table_slice();
   }
 
-  auto acknowledge(natsMsg* msg, OpCtx& ctx) -> bool {
+  auto acknowledge(natsMsg* msg, diagnostic_handler& dh) const -> bool {
     auto status = natsMsg_Ack(msg, nullptr);
     if (status != NATS_OK) {
       emit_nats_error(diagnostic::warning("failed to acknowledge NATS message")
                         .primary(args_.subject.source),
-                      status, ctx.dh());
+                      status, dh);
       return false;
     }
     return true;
   }
 
-  auto acknowledge_pending(OpCtx& ctx) -> bool {
-    if (not pending_ack_) {
+  auto acknowledge_pending(diagnostic_handler& dh) const -> bool {
+    if (pending_acks_.empty()) {
       return false;
     }
-    auto const ok = acknowledge(pending_ack_.get(), ctx);
-    pending_ack_.reset();
-    return ok;
+    auto acknowledged = false;
+    for (auto& msg : pending_acks_) {
+      if (msg) {
+        acknowledged = acknowledge(msg.get(), dh) or acknowledged;
+      }
+    }
+    pending_acks_.clear();
+    return acknowledged;
   }
 
   auto flush_acknowledgements(OpCtx& ctx) -> Task<void> {
@@ -634,11 +675,13 @@ private:
         },
         [](SubscriptionComplete) {});
     }
-    if (pending_ack_) {
-      natsMsg_Nak(pending_ack_.get(), nullptr);
-      pending_ack_.reset();
-      nacked = true;
+    for (auto& msg : pending_acks_) {
+      if (msg) {
+        natsMsg_Nak(msg.get(), nullptr);
+        nacked = true;
+      }
     }
+    pending_acks_.clear();
     for (auto& msg : in_flight_) {
       if (msg) {
         natsMsg_Nak(msg.get(), nullptr);
@@ -660,7 +703,7 @@ private:
   js_ctx_ptr js_;
   mutable Arc<SourceState> source_;
   nats_subscription_ptr subscription_;
-  mutable nats_msg_ptr pending_ack_;
+  mutable std::vector<nats_msg_ptr> pending_acks_;
   std::vector<nats_msg_ptr> in_flight_;
   MetricsCounter read_bytes_counter_;
   uint64_t received_ = 0;

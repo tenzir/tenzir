@@ -308,10 +308,8 @@ def write_receiver_tql(
                 (
                     f"from_nats {json.dumps(subject)}, url={json.dumps(url)}, "
                     f"durable={json.dumps(durable)}, count={events}, "
-                    f"_batch_size={batch_size}, _queue_capacity={queue_capacity} {{"
+                    f"_batch_size={batch_size}, _queue_capacity={queue_capacity}"
                 ),
-                "  read_lines",
-                "}",
                 "discard",
                 "",
             ]
