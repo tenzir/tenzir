@@ -13,6 +13,7 @@ from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
+from . import splunk  # noqa: F401
 from . import platform_ws  # noqa: F401
 from . import http_request  # noqa: F401
 from . import http_paginate  # noqa: F401
@@ -34,5 +35,6 @@ __all__ = [
     "platform_ws",
     "s3",
     "sentinelone",
+    "splunk",
     "tcp",
 ]

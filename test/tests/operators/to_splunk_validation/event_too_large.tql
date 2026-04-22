@@ -1,0 +1,6 @@
+from {message: "this event does not fit"}
+to_splunk "http://127.0.0.1:8088",
+          hec_token="token",
+          source="tenzir-test-too-large",
+          sourcetype="tenzir:test:too-large",
+          max_content_length=1
