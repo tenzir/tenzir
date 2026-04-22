@@ -15,7 +15,7 @@ Use `from_nats` to receive one event per message. The raw payload appears in the
 
 ```tql
 from_nats "alerts", metadata_field=nats
-this = string(message).parse_json()
+parsed = string(message).parse_json()
 ```
 
 Use `to_nats` to publish one message per event. By default, the operator
