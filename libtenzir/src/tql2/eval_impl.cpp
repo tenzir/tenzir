@@ -15,6 +15,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/similarity.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -22,8 +23,11 @@
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/view3.hpp"
 
+#include <concepts>
 #include <limits>
+#include <optional>
 #include <ranges>
+#include <type_traits>
 
 namespace tenzir {
 
@@ -109,6 +113,37 @@ auto scatter_active_rows(multi_series compressed, ActiveRows const& active,
   flush_current();
   TENZIR_ASSERT_EQ(result.length(), length);
   return result;
+}
+
+template <class Index>
+auto non_negative_index(Index index) -> Option<uint64_t> {
+  if constexpr (std::signed_integral<Index>) {
+    if (index < 0) {
+      return None{};
+    }
+    return static_cast<uint64_t>(index);
+  } else {
+    return index;
+  }
+}
+
+template <class Index>
+auto resolve_list_index(Index index, int64_t length) -> Option<int64_t> {
+  TENZIR_ASSERT_GEQ(length, 0);
+  if constexpr (std::signed_integral<Index>) {
+    if (index < 0) {
+      index = length + index;
+    }
+    if (index < 0 or index >= length) {
+      return None{};
+    }
+    return index;
+  } else {
+    if (index >= static_cast<uint64_t>(length)) {
+      return None{};
+    }
+    return detail::narrow_cast<int64_t>(index);
+  }
 }
 
 } // namespace
@@ -571,14 +606,18 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         result.push_back(b.finish_assert_one_array());
         return multi_series{result};
       }
-      if (auto number = index.as<int64_type>()) {
+      auto eval_numeric_index
+        = [&]<class NumberType>(
+            basic_series<NumberType> const& number) -> multi_series {
         if (auto record = value.as<record_type>()) {
           auto result = multi_series{};
           auto warn_null_index = false;
           auto warn_index_out_of_bounds = false;
-          auto last_field = std::optional<int64_t>{};
+          using Index
+            = std::remove_cvref_t<decltype(number.array->GetView(int64_t{}))>;
+          auto last_field = Option<Index>{};
           auto group_offset = int64_t{};
-          const auto add = [&](int64_t begin, int64_t end) {
+          auto const add = [&](int64_t begin, int64_t end) {
             if (begin == end) {
               return;
             }
@@ -586,7 +625,10 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
               result.append(series::null(null_type{}, end - begin));
               return;
             }
-            if (*last_field < 0 or *last_field >= record->array->num_fields()) {
+            auto const field = non_negative_index(*last_field);
+            auto const num_fields
+              = static_cast<uint64_t>(record->array->num_fields());
+            if (not field or *field >= num_fields) {
               if (not warn_index_out_of_bounds) {
                 for (auto r = begin; r < end; ++r) {
                   if (active_slice.is_active(r)) {
@@ -598,15 +640,15 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
               result.append(series::null(null_type{}, end - begin));
               return;
             }
-
+            auto const field_index = detail::narrow_cast<size_t>(*field);
             result.append(series{
-              record->type.field(*last_field).type,
-              check(record->array->field(detail::narrow_cast<int>(*last_field))
+              record->type.field(field_index).type,
+              check(record->array->field(detail::narrow_cast<int>(field_index))
                       ->SliceSafe(begin, end - begin)),
             });
           };
-          for (auto i = int64_t{}; i < number->length(); ++i) {
-            if (number->array->IsNull(i)) {
+          for (auto i = int64_t{}; i < number.length(); ++i) {
+            if (number.array->IsNull(i)) {
               if (not last_field) {
                 continue;
               }
@@ -618,15 +660,15 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
               group_offset = i;
               continue;
             }
-            const auto field = number->array->GetView(i);
-            if (field == last_field) {
+            auto const field = number.array->GetView(i);
+            if (last_field == field) {
               continue;
             }
             add(group_offset, i);
             last_field = field;
             group_offset = i;
           }
-          add(group_offset, number->length());
+          add(group_offset, number.length());
           if (warn_null_index and not x.has_question_mark) {
             diagnostic::warning("cannot use `null` as index")
               .primary(x.index, "is null")
@@ -667,19 +709,17 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
             check(b->AppendNull());
             continue;
           }
-          if (not number->array->IsValid(i)) {
+          if (not number.array->IsValid(i)) {
             if (active_slice.is_active(i)) {
               number_null = true;
             }
             check(b->AppendNull());
             continue;
           }
-          auto target = number->array->Value(i);
+          auto target = number.array->Value(i);
           auto length = list->array->value_length(i);
-          if (target < 0) {
-            target = length + target;
-          }
-          if (target < 0 or target >= length) {
+          auto list_index = resolve_list_index(target, length);
+          if (not list_index) {
             if (active_slice.is_active(i)) {
               out_of_bounds = true;
             }
@@ -687,7 +727,7 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
             continue;
           }
           auto list_offset = list->array->value_offset(i);
-          auto value_index = list_offset + target;
+          auto value_index = list_offset + *list_index;
           check(
             append_array_slice(*b, value_type, *list_values, value_index, 1));
         }
@@ -710,6 +750,12 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
             .emit(ctx_);
         }
         return series{value_type, finish(*b)};
+      };
+      if (auto number = index.as<int64_type>()) {
+        return eval_numeric_index(*number);
+      }
+      if (auto number = index.as<uint64_type>()) {
+        return eval_numeric_index(*number);
       }
       diagnostic::warning("eval not implemented yet for: {:?}",
                           use_default_formatter(x))
