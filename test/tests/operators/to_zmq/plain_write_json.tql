@@ -3,6 +3,8 @@ fixtures:
   - zmq:
       role: subscriber
       mode: bind
+skip:
+  on: fixture-unavailable
 assertions:
   fixtures:
     zmq:

@@ -4,6 +4,8 @@ fixtures:
       role: publisher
       mode: connect
       payload: '{"line":"hello-from-accept-zmq"}'
+skip:
+  on: fixture-unavailable
 timeout: 60
 ---
 

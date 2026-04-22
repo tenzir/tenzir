@@ -1,3 +1,0 @@
-timeout: 60
-skip:
-  on: fixture-unavailable
