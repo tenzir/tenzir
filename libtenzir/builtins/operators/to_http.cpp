@@ -207,7 +207,11 @@ public:
       auto permit = co_await request_slots_.acquire();
       permit.forget();
     }
-    lifecycle_ = Lifecycle::done;
+    // If a request error already fired, keep the operator draining until the
+    // pending `await_task()` result is consumed by `process_task()`.
+    if (not error_signal_->has_sent()) {
+      lifecycle_ = Lifecycle::done;
+    }
     co_return;
   }
 
