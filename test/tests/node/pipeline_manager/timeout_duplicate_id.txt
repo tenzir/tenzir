@@ -1,3 +1,0 @@
-first response: 200 {'error': 'pipeline launch failed: !! broken_promise'}
-second response: 200 {'error': 'pipeline launch failed: {severity: "error", message: "requested id is not available", annotations: [], notes: []}'}
-timed-out-create-retains-occupied-id: ok
