@@ -1,0 +1,7 @@
+error: regular expression `.` is not a valid splitter
+ --> tests/operators/read_kv/error_field_split_literal_dot.tql:6:23
+  |
+6 |   read_kv field_split="."
+  |                       ^^^ 
+  |
+  = hint: use `\.` if you want to split on the literal character `.`

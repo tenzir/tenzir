@@ -1,0 +1,2 @@
+api "/ping"
+select has_version=(version != "")

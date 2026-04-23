@@ -1,7 +1,0 @@
-error: `mode` is not supported by `from_http` anymore
- --> tests/operators/from_http/from_http_error_mode_arg.tql:5:39
-  |
-5 | from_http "http://127.0.0.1:0/", mode="server" {
-  |                                       ^^^^^^^^ 
-  |
-  = hint: use `accept_http` to listen for incoming HTTP requests

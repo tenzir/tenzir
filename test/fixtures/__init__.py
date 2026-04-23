@@ -12,7 +12,9 @@ from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
 from . import s3  # noqa: F401
+from . import sentinelone  # noqa: F401
 from . import platform_ws  # noqa: F401
+from . import http_request  # noqa: F401
 from . import http_paginate  # noqa: F401
 from . import http_server  # noqa: F401
 from . import tcp  # noqa: F401
@@ -24,6 +26,7 @@ __all__ = [
     "gcs",
     "google_cloud_logging",
     "google_secops",
+    "http_request",
     "http_paginate",
     "http_server",
     "kafka",
@@ -31,6 +34,7 @@ __all__ = [
     "mysql",
     "platform_ws",
     "s3",
+    "sentinelone",
     "tcp",
     "udp",
 ]

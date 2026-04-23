@@ -1,6 +1,0 @@
-error: `max_retry_count` must be <= 4294967295
- --> tests/operators/from_http/from_http_retry_count_overflow.tql:5:49
-  |
-5 | from_http "http://example.com", max_retry_count=4294967296 { read_json }
-  |                                                 ^^^^^^^^^^ 
-  |

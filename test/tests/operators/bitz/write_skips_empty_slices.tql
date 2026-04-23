@@ -1,0 +1,7 @@
+from_stdin {
+  read_ndjson
+}
+measure
+write_bitz
+measure
+summarize chunks=count()

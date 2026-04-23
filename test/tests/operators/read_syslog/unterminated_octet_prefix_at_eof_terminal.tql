@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {
+  line: "12",
+}
+write_lines
+split_bytes 1
+read_syslog octet_counting=true

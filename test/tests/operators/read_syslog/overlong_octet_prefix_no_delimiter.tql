@@ -1,0 +1,15 @@
+---
+error: true
+---
+
+from {
+  line: r#"51 <165>1 2023-01-01T00:00:00Z host app 123 - - First"#,
+}, {
+  // Deliberately malformed: no delimiter after an overlong decimal prefix.
+  line: "1234567890123456789012345678901234567890",
+}, {
+  line: r#"51 <165>1 2023-01-01T00:00:00Z host app 123 - - Third"#,
+}
+write_lines
+split_bytes 1
+read_syslog octet_counting=true

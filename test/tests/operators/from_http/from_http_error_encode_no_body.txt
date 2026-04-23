@@ -1,6 +1,0 @@
-error: `encode` requires a `body`
- --> tests/operators/from_http/from_http_error_encode_no_body.tql:5:41
-  |
-5 | from_http "http://127.0.0.1:0/", encode="form" {
-  |                                         ^^^^^^ 
-  |

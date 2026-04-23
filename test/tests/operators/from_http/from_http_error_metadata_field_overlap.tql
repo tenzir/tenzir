@@ -1,7 +1,0 @@
----
-error: true
----
-
-from_http "http://127.0.0.1:0/",
-          error_field=x,
-          metadata_field=x { read_json }

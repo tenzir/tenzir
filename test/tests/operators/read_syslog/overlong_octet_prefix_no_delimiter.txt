@@ -1,0 +1,6 @@
+error: octet-counting length prefix exceeds 10 bytes without delimiter
+  --> tests/operators/read_syslog/overlong_octet_prefix_no_delimiter.tql:15:1
+   |
+15 | read_syslog octet_counting=true
+   | ----------- 
+   |

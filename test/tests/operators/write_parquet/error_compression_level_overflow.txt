@@ -1,0 +1,7 @@
+error: invalid compression level
+ --> tests/operators/write_parquet/error_compression_level_overflow.tql:6:58
+  |
+6 | write_parquet compression_type="zstd", compression_level=99999999999999
+  |                                                          ^^^^^^^^^^^^^^ 
+  |
+  = note: must fit into a 32-bit signed integer

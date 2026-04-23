@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tenzir"
-version = "5.31.0"
+version = "5.32.1"
 description = "Tenzir CLI bindings and binary launchers"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "BSD-3-Clause"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
@@ -26,7 +26,7 @@ classifiers = [
 dependencies = [
   "numpy>=1.24",
   "python-box>=7.3.2",
-  "tenzir-common>=5.31.0,<5.32.0",
+  "tenzir-common>=5.32.1,<5.33.0",
 ]
 
 [project.urls]

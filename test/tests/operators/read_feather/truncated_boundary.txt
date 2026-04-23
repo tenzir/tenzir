@@ -1,0 +1,7 @@
+error: truncated Feather input
+ --> tests/operators/read_feather/truncated_boundary.tql:6:3
+  |
+6 |   read_feather
+  |   ^^^^^^^^^^^^ 
+  |
+  = note: discarded 344 trailing bytes

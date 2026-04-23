@@ -1,0 +1,3 @@
+from_file env("TENZIR_INPUT"), mmap=true {
+  read_lines
+}

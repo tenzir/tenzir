@@ -1,0 +1,18 @@
+{
+  magic_number: 2712847316,
+  major_version: 2,
+  minor_version: 4,
+  reserved1: 0,
+  reserved2: 0,
+  snaplen: 65535,
+  linktype: 1,
+}
+{
+  magic_number: 2712847316,
+  major_version: 2,
+  minor_version: 4,
+  reserved1: 0,
+  reserved2: 0,
+  snaplen: 65535,
+  linktype: 1,
+}

@@ -1,6 +1,0 @@
-error: pipeline must return events
- --> tests/operators/from_http/from_http_error_parser_returns_bytes.tql:5:32
-  |
-5 | from_http "http://example.com" { pass }
-  |                                ^ 
-  |

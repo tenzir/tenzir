@@ -1,0 +1,14 @@
+{
+  event: {
+    foo: "needle",
+  },
+  rule: {
+    title: "basic sigma rule",
+    detection: {
+      selection: {
+        foo: "needle",
+      },
+      condition: "selection",
+    },
+  },
+}

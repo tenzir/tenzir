@@ -77,6 +77,20 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 - Use `tenzir::Mutex<T>` only for small shared helper state that must be
   touched from multiple tasks.
 
+Use `SeriesPusher` from `tenzir/async/pusher.hpp` when an operator uses
+`series_builder::yield_ready()` together with `await_task()` /
+`process_task()` to drive timeout-based flushes.
+
+### Per-chunk parser flushes
+
+If a `chunk_ptr -> table_slice` parser scans an input chunk incrementally,
+accumulate a `series_builder::YieldReadyResult` for the whole chunk, merge
+`yield_ready_as_table_slice(...)` into it as records become ready, and push
+once after the loop.
+
+This keeps parsing state changes local to `process()` and matches the existing
+parser patterns in `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
 ### Structured concurrency with `async_scope`
 
 Use `async_scope()` for fan-out within a task. If a task spawns child tasks and
@@ -120,9 +134,23 @@ when the operator needs a separate shutdown path to behave correctly. For
 example, a HTTP operator that must stop accepting connections should stop the
 `accept` loop with a custom `folly::CancellationSource`.
 
+When you pass a custom token to `co_withCancellation`, merge it with the
+ambient token from `co_current_cancellation_token`. Otherwise, the custom token
+replaces outer pipeline or executor cancellation for that await.
+
 ```cpp
-ctx.spawn_task(folly::coro::co_withCancellation(cancel_.getToken(), accept_loop()));
+ctx.spawn_task([this]() -> Task<void> {
+  auto token = folly::cancellation_token_merge(
+    co_await folly::coro::co_current_cancellation_token,
+    cancel_.getToken());
+  co_await folly::coro::co_withCancellation(token, accept_loop());
+});
 ```
+
+Pass a bare custom token only when you intentionally want to shield the await
+from outer cancellation. If local shutdown and outer cancellation need
+different behavior, keep both tokens available so you can tell which one fired
+and propagate only the outer cancellation.
 
 Do not add a second `stop_` flag—cancellation tokens already express this.
 
@@ -215,10 +243,28 @@ auto state() -> OperatorState override {
 ## Cross-Executor I/O (folly EventBase)
 
 Socket operations via folly's `AsyncSocket` / `Transport` must run on the
-owning `EventBase` thread. Use `co_withExecutor` to schedule each call there:
+owning `EventBase` thread. Prefer `ctx.io_executor()` inside operators over
+reaching for `folly::getGlobalIOExecutor()` directly.
+
+### KeepAlive pattern
+
+`ctx.io_executor()` returns a
+`folly::Executor::KeepAlive<folly::IOExecutor>`. If an operator keeps using the
+executor after `start()`, store that `KeepAlive` handle as a member. Use
+`io_executor_->getEventBase()` only for APIs that require a raw `EventBase*`.
+Do not keep only a raw `EventBase*`.
 
 ```cpp
-auto n = co_await co_withExecutor(evb_, transport_->read(buf, timeout));
+io_executor_ = ctx.io_executor();
+writer_ = folly::AsyncPipeWriter::newWriter(
+  io_executor_->getEventBase(), folly::NetworkSocket::fromFd(fd));
+co_await folly::coro::co_withExecutor(io_executor_, do_io());
+```
+
+Use `co_withExecutor` to schedule each call there:
+
+```cpp
+auto n = co_await co_withExecutor(io_executor_, transport_->read(buf, timeout));
 ```
 
 Do not use `co_viaIfAsync` — it only controls where the caller resumes, not
@@ -227,7 +273,7 @@ where the task executes. Do not use the deprecated `.scheduleOn()` method.
 For multi-statement blocks, wrap with `co_invoke`:
 
 ```cpp
-co_await co_withExecutor(evb_,
+co_await co_withExecutor(io_executor_,
   folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
     ssl_ptr->sslConn(&cb);
     co_await cb.wait();

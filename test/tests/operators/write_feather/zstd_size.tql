@@ -1,0 +1,8 @@
+from_file f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
+batch
+write_feather compression_level=20, compression_type="zstd"
+measure cumulative=true
+summarize bytes=max(bytes)

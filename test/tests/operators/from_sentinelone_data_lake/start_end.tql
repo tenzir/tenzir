@@ -1,0 +1,15 @@
+---
+fixtures: [sentinelone]
+timeout: 60
+---
+
+// The start and end arguments are encoded as nanoseconds since the Unix epoch
+// and sent as "startTime"/"endTime" in the POST body. The mock server echoes
+// them back as integer columns so the test can verify the encoding is correct.
+//   2024-01-01T00:00:00Z = 1704067200000000000 ns
+//   2024-12-31T00:00:00Z = 1735603200000000000 ns
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=secret("test-token-s1-12345", _literal=true),
+  query="select_echo_times",
+  start=2024-01-01,
+  end=2024-12-31

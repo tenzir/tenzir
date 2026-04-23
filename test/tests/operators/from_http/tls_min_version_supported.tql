@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_server:
+      tls: true
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_METHOD_URL"),
+          tls={
+            cacert: env("HTTP_FIXTURE_TLS_CAFILE"),
+            min_version: "1.2",
+          } {
+  read_json
+}

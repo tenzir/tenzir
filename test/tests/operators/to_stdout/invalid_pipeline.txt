@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/to_stdout/invalid_pipeline.tql:6:11
+  |
+6 | to_stdout {
+  |           ^ 
+  |

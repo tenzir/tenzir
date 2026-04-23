@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_request:
+      body: '{"value":1}'
+      repeat: 500
+      inter_request_delay: 0.0
+      initial_delay: 0.5
+      max_attempts_per_request: 30
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT") {
+  read_json
+}
+head 500
+| summarize count=count()

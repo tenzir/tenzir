@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/from_nic/error_parser_returns_bytes.tql:5:15
+  |
+5 | from_nic "lo" { pass }
+  |               ^ 
+  |

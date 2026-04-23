@@ -1,0 +1,19 @@
+---
+fixtures:
+  - http_request:
+      generate_tls_cert: true
+      requests:
+        - body: '{"a": 1}'
+          tls: true
+---
+
+let $tls = {
+  certfile: env("HTTP_REQUEST_TLS_CERTFILE"),
+  cacert: env("HTTP_REQUEST_TLS_CAFILE"),
+  min_version: "1.2",
+}
+
+accept_http env("HTTP_REQUEST_ENDPOINT"), tls=$tls {
+  read_json
+}
+head 1

@@ -164,7 +164,13 @@ add_subdirectory(wangle/wangle SYSTEM)
 # Fix include path (same CMAKE_SOURCE_DIR issue)
 target_include_directories(
   wangle BEFORE PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wangle>)
-if (NOT TARGET wangle::wangle)
+# wangle's FizzAcceptorHandshakeHelper uses folly::AsyncFdSocket but the
+# upstream CMakeLists.txt is missing the dependency declaration.
+if (TARGET wangle_acceptor AND TARGET folly_io_async_fdsock_async_fd_socket)
+  target_link_libraries(wangle_acceptor
+    PUBLIC folly_io_async_fdsock_async_fd_socket)
+endif ()
+  if (NOT TARGET wangle::wangle)
   add_library(wangle::wangle ALIAS wangle)
 endif ()
 file(

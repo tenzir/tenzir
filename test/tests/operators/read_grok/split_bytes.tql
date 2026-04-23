@@ -1,0 +1,6 @@
+from {
+  line: "foo 42"
+}
+write_lines
+split_bytes 1
+read_grok "%{WORD:word} %{NUMBER:value}"

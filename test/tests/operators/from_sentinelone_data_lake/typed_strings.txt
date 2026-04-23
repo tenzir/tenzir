@@ -1,0 +1,14 @@
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  src_addr: 10.0.0.1,
+  dst_addr: 203.0.113.42,
+  network: 10.0.0.0/8,
+  hostname: "db-01",
+}
+{
+  timestamp: 2024-01-01T00:00:01Z,
+  src_addr: 10.0.0.2,
+  dst_addr: 203.0.113.99,
+  network: 10.0.0.0/8,
+  hostname: "web-01",
+}

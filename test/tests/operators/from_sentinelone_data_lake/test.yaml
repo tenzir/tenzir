@@ -1,0 +1,4 @@
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

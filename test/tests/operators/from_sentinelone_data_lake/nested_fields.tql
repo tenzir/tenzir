@@ -1,0 +1,11 @@
+---
+fixtures: [sentinelone]
+timeout: 60
+---
+
+// Column names containing dots are split by unflattened_field() into nested
+// records: "src.ip" becomes {src: {ip: ...}}, "src.port" → {src: {port: ...}},
+// and so on. The result schema merges shared prefixes into one nested record.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=secret("test-token-s1-12345", _literal=true),
+  query="select_nested_fields"

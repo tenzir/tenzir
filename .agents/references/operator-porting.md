@@ -69,6 +69,9 @@ struct MyArgs {
 
 - `located<T>` — use when you need `.source` to point errors at the right token.
 - `Option<located<T>>` — maps to an optional named argument in `Describer`.
+- Put stable defaults directly in the args struct. Prefer a member initializer
+  over a `normalize_*_args()` helper when the default does not depend on
+  runtime context.
 
 ---
 
@@ -144,6 +147,17 @@ first buffer is created; `await_task()` sleeps on that `Notify` when idle and
 otherwise sleeps until the earliest deadline; `process_task()` flushes all
 expired buffers.
 
+When the operator batches rows in a `series_builder`, use `SeriesPusher` from
+`tenzir/async/pusher.hpp` together with `series_builder::yield_ready()`. Call
+`yield_ready()` from `process()` after appending rows and again from
+`process_task()` for timeout-driven flushes. Keep explicit flushes for
+semantic boundaries such as header transitions, document-close markers,
+snapshots, and finalization. The same applies to operators that use
+`multi_series_builder`.
+
+Do not perform timeout checks while processing some input. Only do one timeout
+check after processing input.
+
 **Duration overflow**: never compute `start + duration::max()`. Guard sentinel
 values before arithmetic:
 
@@ -162,6 +176,23 @@ Sources use `await_task()` to produce data and `process_task()` to push it.
 `read_xxx` operators typically implement `Operator<chunk_ptr, table_slice>`.
 They use `start()` to initialize a parser state, `process()` to parse chunks,
 and `finalize()` to flush the last partial record.
+
+When `process()` scans a chunk incrementally, accumulate a local
+`series_builder::YieldReadyResult`, merge `yield_ready_as_table_slice(...)`
+into it as records become ready, and push once after the loop. Reference
+implementations: `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
+### Diagnostics
+
+Some diagnostics in the old executor do not add a location via `primary`. Some
+operators also make use of a transforming diagnostic handler that modifies diagnostics.
+
+If a diagnostic does not contain a location, use the operators location. Capture
+this location in the `Describer` via `describer.operator_location(&MyArgs::operator_location)`.
+
+If a transforming diagnostic handler is used to modify the diagnostic to hint at
+the operator, such as prepending a hint at the operator to the diagnostic, instead
+add the operators location to these diagnostics.
 
 ---
 
@@ -232,6 +263,23 @@ emitting this data before yielding and allowing `snapshot()` to run.
 ---
 
 ## Step 7 — Plugin registration
+
+### `DescribeCtx::get()` and defaulted named arguments
+
+Inside `d.validate(...)`, `DescribeCtx::get()` returns `std::nullopt` when the
+caller omitted an argument. This also applies to `named_optional(...)`
+arguments whose target member in `Args` has a default initializer.
+
+Do not assume that `ctx.get(arg)` is engaged just because `Args` carries a
+member default. Apply the args-struct defaults explicitly:
+
+```cpp
+auto defaults = MyArgs{};
+auto timeout = ctx.get(timeout_arg);
+auto effective_timeout = timeout ? *timeout : defaults.timeout;
+```
+
+Use `.value()` only when the argument is truly required.
 
 ### Adding to an existing plugin
 
@@ -306,6 +354,8 @@ d.spawner([]<class Input>(DescribeCtx& ctx)
 ```
 
 Use `Describer<MyArgs>{}` (no Impl template args) when providing a full spawner.
+
+Only use a `spawner` if the intended behaviour cannot be modeled via a `Describer` alone.
 
 ### Validating a sub-pipeline's output type
 
