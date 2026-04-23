@@ -191,7 +191,6 @@ public:
         .primary(args_.endpoint, "{}", std::move(bind_address).unwrap_err())
         .emit(ctx);
       message_sender_ = None{};
-      done_ = true;
       co_return;
     }
     if (args_.resolve_hostnames) {
@@ -200,7 +199,6 @@ public:
           .primary(args_.endpoint, "reason: {}", error->error)
           .emit(ctx);
         message_sender_ = None{};
-        done_ = true;
         co_return;
       }
     }
@@ -292,7 +290,6 @@ public:
       [&](Error error) -> Task<void> {
         cancel_batch_flush();
         message_sender_ = None{};
-        done_ = true;
         // No need to flush buffered events on errors as we are shutting down.
         switch (error.stage) {
           case ErrorStage::startup:
@@ -319,12 +316,11 @@ public:
     // acceptable on shutdown.
     cancel_batch_flush();
     message_sender_ = None{};
-    done_ = true;
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return message_sender_ ? OperatorState::unspecified : OperatorState::done;
   }
 
   auto snapshot(Serde&) -> void override {
@@ -445,7 +441,6 @@ private:
   mutable Receiver<Message> message_receiver_;
   Option<folly::CancellationSource> batch_flush_cancel_;
   uint64_t batch_generation_ = 0;
-  bool done_ = false;
   bool peer_resolution_warning_emitted_ = false;
 };
 
