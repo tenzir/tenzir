@@ -160,7 +160,10 @@ set(Fizz_DIR
 
 # ---- 3. WANGLE ----
 # wangle's CMakeLists.txt is in wangle/wangle/
-add_subdirectory(wangle/wangle SYSTEM)
+# Keep bundled wangle non-system so its headers win over any Homebrew wangle
+# installation; otherwise proxygen may compile against mismatched headers while
+# still linking the bundled static archive.
+add_subdirectory(wangle/wangle)
 # Fix include path (same CMAKE_SOURCE_DIR issue)
 target_include_directories(
   wangle BEFORE PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wangle>)
@@ -170,7 +173,7 @@ if (TARGET wangle_acceptor AND TARGET folly_io_async_fdsock_async_fd_socket)
   target_link_libraries(wangle_acceptor
     PUBLIC folly_io_async_fdsock_async_fd_socket)
 endif ()
-  if (NOT TARGET wangle::wangle)
+if (NOT TARGET wangle::wangle)
   add_library(wangle::wangle ALIAS wangle)
 endif ()
 file(
