@@ -367,7 +367,10 @@ public:
           auto decompressor
             = http::make_decompressor(request.content_encoding, ctx.dh());
           if (not decompressor) {
-            request.response_signal->send(Response{});
+            request.response_signal->send(
+              Response{.status = 415,
+                       .content_type = std::string{bulk_content_type},
+                       .body = "{}"});
             co_return;
           }
           auto decompressed = http::decompress_chunk(
@@ -376,7 +379,10 @@ public:
               reinterpret_cast<std::byte const*>(body->data()), body->size()},
             ctx.dh(), args_.get_max_request_size());
           if (decompressed.is_err()) {
-            request.response_signal->send(Response{});
+            request.response_signal->send(
+              Response{.status = std::move(decompressed).unwrap_err(),
+                       .content_type = std::string{bulk_content_type},
+                       .body = "{}"});
             co_return;
           }
           body = chunk::make(std::move(decompressed).unwrap());
