@@ -1,0 +1,6 @@
+error: `https://` endpoint requires `tls=true`
+ --> tests/operators/serve_http/error_https_requires_tls.tql:8:12
+  |
+8 | serve_http "https://127.0.0.1:8080" {
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

@@ -1,0 +1,21 @@
+---
+fixtures:
+  - http_request:
+      method: GET
+      body: ""
+      initial_delay: 1.0
+      request_timeout: 5.0
+      expected_body: |
+        hello-from-serve_http
+timeout: 60
+---
+
+from {
+  data: "hello-from-serve_http",
+  ts: 2025-03-03T12:12:10,
+}
+delay ts, start=2025-03-03T12:12:08, speed=1.0
+drop ts
+serve_http env("HTTP_REQUEST_ENDPOINT") {
+  write_lines
+}
