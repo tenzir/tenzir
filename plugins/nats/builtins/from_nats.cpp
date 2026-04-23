@@ -75,7 +75,12 @@ struct SubscriptionComplete {
   natsStatus status;
 };
 
-using SourceMessage = variant<IncomingMessage, SubscriptionComplete>;
+struct AcknowledgePending {};
+
+struct EmitBuffered {};
+
+using SourceMessage = variant<IncomingMessage, SubscriptionComplete,
+                              AcknowledgePending, EmitBuffered>;
 using SourceMessageQueue = folly::coro::BoundedQueue<SourceMessage>;
 
 struct BufferedMessage {
@@ -86,6 +91,7 @@ struct BufferedMessage {
 struct SourceBatch {
   std::vector<nats_msg_ptr> messages;
   Option<SubscriptionComplete> completion = None{};
+  bool acknowledge_pending = false;
   bool emit_buffered = false;
 };
 
@@ -154,28 +160,70 @@ public:
     TENZIR_ASSERT(enqueued);
   }
 
+  auto enqueue_acknowledge_pending() -> void {
+    enqueue_control(acknowledge_pending_queued_);
+  }
+
+  auto enqueue_emit_buffered() -> void {
+    enqueue_control(emit_buffered_queued_);
+  }
+
   auto dequeue() -> Task<SourceMessage> {
-    co_return co_await messages_.dequeue();
+    while (true) {
+      if (auto ready = take_ready()) {
+        co_return std::move(*ready);
+      }
+      auto message = co_await messages_.dequeue();
+      if (auto control = take_control()) {
+        defer(std::move(message));
+        co_return std::move(*control);
+      }
+      co_return message;
+    }
   }
 
   auto try_dequeue() -> Option<SourceMessage> {
-    auto message = messages_.try_dequeue();
-    if (not message) {
-      return None{};
+    while (true) {
+      if (auto ready = take_ready()) {
+        return ready;
+      }
+      auto message = messages_.try_dequeue();
+      if (not message) {
+        return None{};
+      }
+      if (auto control = take_control()) {
+        defer(std::move(*message));
+        return control;
+      }
+      return std::move(*message);
     }
-    return std::move(*message);
   }
 
   auto try_dequeue_for(duration timeout) -> Task<Option<SourceMessage>> {
     auto token = co_await folly::coro::co_current_cancellation_token;
-    try {
-      co_return co_await messages_.co_try_dequeue_for(
-        std::chrono::duration_cast<folly::Duration>(timeout));
-    } catch (folly::OperationCancelled const&) {
-      if (token.isCancellationRequested()) {
-        throw;
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
+    while (true) {
+      if (auto ready = take_ready()) {
+        co_return std::move(*ready);
       }
-      co_return None{};
+      auto const now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        co_return None{};
+      }
+      try {
+        auto message = co_await messages_.co_try_dequeue_for(
+          std::chrono::duration_cast<folly::Duration>(deadline - now));
+        if (auto control = take_control()) {
+          defer(std::move(message));
+          co_return std::move(*control);
+        }
+        co_return std::move(message);
+      } catch (folly::OperationCancelled const&) {
+        if (token.isCancellationRequested()) {
+          throw;
+        }
+        co_return None{};
+      }
     }
   }
 
@@ -188,18 +236,54 @@ public:
   }
 
 private:
+  auto enqueue_control(Atomic<bool>& queued) -> void {
+    queued.store(true, std::memory_order_release);
+  }
+
+  auto take_ready() -> Option<SourceMessage> {
+    if (auto control = take_control()) {
+      return control;
+    }
+    while (not deferred_.empty()) {
+      auto message = std::move(deferred_.front());
+      deferred_.pop_front();
+      return message;
+    }
+    return None{};
+  }
+
+  auto take_control() -> Option<SourceMessage> {
+    if (acknowledge_pending_queued_.exchange(false,
+                                             std::memory_order_acq_rel)) {
+      return SourceMessage{AcknowledgePending{}};
+    }
+    if (emit_buffered_queued_.exchange(false, std::memory_order_acq_rel)) {
+      return SourceMessage{EmitBuffered{}};
+    }
+    return None{};
+  }
+
+  auto defer(SourceMessage message) -> void {
+    deferred_.push_front(std::move(message));
+  }
+
   static auto reject(natsMsg* msg) -> void {
     natsMsg_Nak(msg, nullptr);
     natsMsg_Destroy(msg);
   }
 
   // NATS invokes callbacks from library-owned threads. This is the only shared
-  // boundary: it reserves one terminal slot and rejects late callbacks. All
-  // subscription lifecycle decisions stay in FromNats.
+  // boundary: it reserves one terminal slot and rejects late callbacks.
+  // FromNats schedules control flags between await_task() invocations; they
+  // take priority over deferred data so ACK and buffered-row handoffs happen
+  // before new NATS messages.
   SourceMessageQueue messages_;
   folly::fibers::Semaphore message_slots_;
+  std::deque<SourceMessage> deferred_;
   Atomic<bool> accepting_ = true;
   Atomic<bool> terminal_completion_queued_ = false;
+  Atomic<bool> acknowledge_pending_queued_ = false;
+  Atomic<bool> emit_buffered_queued_ = false;
 };
 
 void message_callback(natsConnection*, natsSubscription*, natsMsg* msg,
@@ -321,10 +405,6 @@ public:
   FromNats(FromNats&&) noexcept = default;
   auto operator=(FromNats&&) noexcept -> FromNats& = default;
 
-  ~FromNats() override {
-    request_stop();
-  }
-
   auto start(OpCtx& ctx) -> Task<void> override {
     read_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
@@ -378,7 +458,7 @@ public:
         co_return;
       }
     }
-    auto const fetch_size = uint64_t{1};
+    auto const fetch_size = std::min(args_.batch_size, args_.queue_capacity);
     auto js_options = jsOptions{};
     jsOptions_Init(&js_options);
     js_options.PullSubscribeAsync.FetchSize
@@ -442,19 +522,12 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    if (done_) {
-      co_await wait_forever();
-    }
-    if (not pending_acks_.empty()) {
-      acknowledge_pending(dh);
-      co_await wait_for_downstream_stop();
-      co_return SourceBatch{};
-    }
-    if (not buffered_.empty()) {
-      co_return SourceBatch{.emit_buffered = true};
-    }
+    TENZIR_UNUSED(dh);
     auto batch = SourceBatch{};
     auto first = co_await source_->dequeue();
+    if (try_as<EmitBuffered>(&first)) {
+      co_await wait_for_downstream_stop();
+    }
     if (not append_to_batch(batch, std::move(first))) {
       co_return batch;
     }
@@ -463,6 +536,9 @@ public:
     auto const started = std::chrono::steady_clock::now();
     while (batch.messages.size() < max_messages) {
       if (auto next = source_->try_dequeue()) {
+        if (try_as<EmitBuffered>(&*next)) {
+          co_await wait_for_downstream_stop();
+        }
         if (not append_to_batch(batch, std::move(*next))) {
           co_return batch;
         }
@@ -478,6 +554,9 @@ public:
       if (not next) {
         break;
       }
+      if (try_as<EmitBuffered>(&*next)) {
+        co_await wait_for_downstream_stop();
+      }
       if (not append_to_batch(batch, std::move(*next))) {
         co_return batch;
       }
@@ -491,13 +570,22 @@ public:
     if (not batch) {
       co_return;
     }
+    if (batch->acknowledge_pending) {
+      acknowledge_pending(ctx.dh());
+      if (not buffered_.empty()) {
+        source_->enqueue_emit_buffered();
+      }
+      co_return;
+    }
     if (batch->emit_buffered) {
       co_await push_buffered(push, ctx);
-      co_await maybe_stop_after_count(ctx);
+      if (co_await maybe_stop_after_count(ctx)) {
+        co_return;
+      }
+      schedule_ack_handoff();
       co_return;
     }
     if (batch->messages.empty() and not batch->completion) {
-      acknowledge_pending(ctx.dh());
       co_return;
     }
     auto accepted = std::vector<nats_msg_ptr>{};
@@ -520,7 +608,6 @@ public:
       accepted.push_back(std::move(msg));
     }
     if (not accepted.empty()) {
-      (void)acknowledge_pending(ctx.dh());
       TENZIR_ASSERT(in_flight_.empty());
       in_flight_ = std::move(accepted);
       auto nak_guard = detail::scope_guard{[this]() noexcept {
@@ -556,6 +643,7 @@ public:
       if (co_await maybe_stop_after_count(ctx)) {
         co_return;
       }
+      schedule_ack_handoff();
     }
     if (batch->completion and not normal_completion(batch->completion->status)
         and batch->completion->status != NATS_OK) {
@@ -563,12 +651,17 @@ public:
                         .primary(args_.subject.source),
                       batch->completion->status, ctx.dh());
       done_ = true;
-      request_stop();
+      co_await request_stop(ctx);
     }
   }
 
   auto state() -> OperatorState override {
     return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    done_ = true;
+    co_await request_stop(ctx);
   }
 
 private:
@@ -580,6 +673,14 @@ private:
     }
     if (auto* complete = try_as<SubscriptionComplete>(&message)) {
       batch.completion = *complete;
+      return false;
+    }
+    if (try_as<AcknowledgePending>(&message)) {
+      batch.acknowledge_pending = true;
+      return false;
+    }
+    if (try_as<EmitBuffered>(&message)) {
+      batch.emit_buffered = true;
       return false;
     }
     TENZIR_UNREACHABLE();
@@ -606,7 +707,7 @@ private:
   }
 
   auto push_buffered(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
-    acknowledge_pending(ctx.dh());
+    TENZIR_UNUSED(ctx);
     if (buffered_.empty()) {
       co_return;
     }
@@ -615,6 +716,13 @@ private:
 
   auto wait_for_downstream_stop() const -> Task<void> {
     co_await sleep_for(ack_handoff_delay);
+  }
+
+  auto schedule_ack_handoff() -> void {
+    if (done_ or pending_acks_.empty()) {
+      return;
+    }
+    source_->enqueue_acknowledge_pending();
   }
 
   auto maybe_stop_after_count(OpCtx& ctx) -> Task<bool> {
@@ -627,7 +735,7 @@ private:
       co_await flush_acknowledgements(ctx);
     }
     done_ = true;
-    request_stop();
+    co_await request_stop(ctx);
     co_return true;
   }
 
@@ -760,7 +868,7 @@ private:
     return natsMsg_Nak(msg, nullptr) == NATS_OK;
   }
 
-  auto acknowledge_pending(diagnostic_handler& dh) const -> bool {
+  auto acknowledge_pending(diagnostic_handler& dh) -> bool {
     if (pending_acks_.empty()) {
       return false;
     }
@@ -787,20 +895,36 @@ private:
     }
   }
 
-  auto request_stop() -> void {
+  auto unsubscribe_and_flush_subscription(OpCtx& ctx) -> Task<void> {
+    if (not subscription_) {
+      co_return;
+    }
+    auto status = co_await spawn_blocking([this] {
+      auto unsubscribe_status
+        = natsSubscription_Unsubscribe(subscription_.get());
+      if (unsubscribe_status != NATS_OK or not connection_) {
+        return unsubscribe_status;
+      }
+      return natsConnection_FlushTimeout(connection_.get(),
+                                         shutdown_flush_timeout_ms);
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::warning("failed to stop NATS subscription")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+    }
+  }
+
+  auto request_stop(OpCtx& ctx) -> Task<void> {
     if (not source_.not_moved_from()) {
-      return;
+      co_return;
     }
     source_->stop_accepting();
     auto needs_flush = std::exchange(needs_shutdown_flush_, false);
     // Remove interest before NAKing locally held messages. Otherwise JetStream
     // may redeliver them to this subscription while it is tearing down.
     if (subscription_) {
-      if (natsSubscription_Unsubscribe(subscription_.get()) == NATS_OK
-          and connection_) {
-        (void)natsConnection_FlushTimeout(connection_.get(),
-                                          shutdown_flush_timeout_ms);
-      }
+      co_await unsubscribe_and_flush_subscription(ctx);
     }
     while (auto message = source_->try_dequeue()) {
       match(
@@ -809,11 +933,12 @@ private:
           source_->release_message_slot();
           needs_flush = negative_acknowledge(item.msg.get()) or needs_flush;
         },
-        [](SubscriptionComplete) {});
+        [](SubscriptionComplete) {}, [](AcknowledgePending) {},
+        [](EmitBuffered) {});
     }
     for (auto& msg : pending_acks_) {
       if (msg) {
-        needs_flush = acknowledge(msg.get()) or needs_flush;
+        needs_flush = acknowledge(msg.get(), ctx.dh()) or needs_flush;
       }
     }
     pending_acks_.clear();
@@ -831,8 +956,7 @@ private:
     }
     in_flight_.clear();
     if (needs_flush and connection_) {
-      (void)natsConnection_FlushTimeout(connection_.get(),
-                                        shutdown_flush_timeout_ms);
+      co_await flush_acknowledgements(ctx);
     }
     subscription_.reset();
   }
@@ -844,7 +968,7 @@ private:
   js_ctx_ptr js_;
   mutable Arc<SourceQueue> source_;
   nats_subscription_ptr subscription_;
-  mutable std::vector<nats_msg_ptr> pending_acks_;
+  std::vector<nats_msg_ptr> pending_acks_;
   std::deque<BufferedMessage> buffered_;
   std::vector<nats_msg_ptr> in_flight_;
   MetricsCounter read_bytes_counter_;
