@@ -347,7 +347,7 @@ private:
       peer_record_fields.push_back({"hostname", string_type{}});
     }
     return type{
-      "tenzir.from_udp",
+      "tenzir.accept_udp",
       record_type{
         {"data", args.binary ? type{blob_type{}} : type{string_type{}}},
         {"peer", record_type{peer_record_fields}},
