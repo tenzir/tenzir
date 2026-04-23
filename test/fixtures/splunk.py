@@ -3,6 +3,7 @@
 Provides a Splunk single-node container with HTTP Event Collector enabled.
 
 Environment variables yielded:
+- SPLUNK_WEB_URL: Splunk Web base URL.
 - SPLUNK_HEC_URL: HEC endpoint base URL.
 - SPLUNK_HEC_TOKEN: HEC token configured in the container.
 - SPLUNK_INDEX: Index to write test events to.
@@ -110,6 +111,7 @@ def _urlopen(
 def _start_splunk(
     runtime: RuntimeSpec,
     *,
+    web_port: int,
     hec_port: int,
     mgmt_port: int,
     defaults_path: Path,
@@ -121,6 +123,8 @@ def _start_splunk(
         container_name,
         "--platform",
         "linux/amd64",
+        "-p",
+        f"{web_port}:8000",
         "-p",
         f"{hec_port}:8088",
         "-p",
@@ -154,7 +158,7 @@ def _stop_splunk(container: ManagedContainer) -> None:
         )
 
 
-def _wait_for_splunk(hec_port: int, mgmt_port: int) -> None:
+def _wait_for_splunk(web_port: int, hec_port: int, mgmt_port: int) -> None:
     def _probe() -> tuple[bool, dict[str, str]]:
         management_url = (
             f"https://127.0.0.1:{mgmt_port}/services/server/info?output_mode=json"
@@ -163,15 +167,18 @@ def _wait_for_splunk(hec_port: int, mgmt_port: int) -> None:
             management_url,
             headers={"Authorization": _basic_auth_header()},
         )
+        web_url = f"http://127.0.0.1:{web_port}/en-US/account/login"
+        web_request = urllib.request.Request(web_url)
         hec_url = f"http://127.0.0.1:{hec_port}/services/collector/health"
         hec_request = urllib.request.Request(
             hec_url,
             headers={"Authorization": f"Splunk {SPLUNK_HEC_TOKEN}"},
         )
         try:
+            _urlopen(web_request, timeout=3)
             _urlopen(management_request, timeout=3)
             _urlopen(hec_request, timeout=3)
-            return True, {"management": "ready", "hec": "ready"}
+            return True, {"web": "ready", "management": "ready", "hec": "ready"}
         except (urllib.error.URLError, OSError) as exc:
             return False, {"error": str(exc)}
 
@@ -299,6 +306,7 @@ def splunk() -> FixtureHandle:
 
     hec_port = find_free_port()
     mgmt_port = find_free_port()
+    web_port = find_free_port()
     container: ManagedContainer | None = None
     temp_dir = Path(tempfile.mkdtemp(prefix="splunk-fixture-"))
     defaults_path = temp_dir / "default.yml"
@@ -319,11 +327,12 @@ def splunk() -> FixtureHandle:
     try:
         container = _start_splunk(
             runtime,
+            web_port=web_port,
             hec_port=hec_port,
             mgmt_port=mgmt_port,
             defaults_path=defaults_path,
         )
-        _wait_for_splunk(hec_port, mgmt_port)
+        _wait_for_splunk(web_port, hec_port, mgmt_port)
     except Exception:
         if container is not None:
             _stop_splunk(container)
@@ -352,6 +361,7 @@ def splunk() -> FixtureHandle:
 
     return FixtureHandle(
         env={
+            "SPLUNK_WEB_URL": f"http://127.0.0.1:{web_port}",
             "SPLUNK_HEC_URL": f"http://127.0.0.1:{hec_port}",
             "SPLUNK_HEC_TOKEN": SPLUNK_HEC_TOKEN,
             "SPLUNK_INDEX": SPLUNK_INDEX,
