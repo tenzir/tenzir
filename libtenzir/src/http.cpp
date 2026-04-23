@@ -21,6 +21,62 @@ namespace tenzir::http {
 
 namespace {} // namespace
 
+auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void {
+  if (not url.starts_with("http://") and not url.starts_with("https://")) {
+    url.insert(0, tls_enabled ? "https://" : "http://");
+  }
+}
+
+auto is_tls_enabled(Option<located<data>> const& tls,
+                    tls_options::options options,
+                    std::string_view url_when_missing) -> bool {
+  if (tls) {
+    auto tls_opts = tls_options{*tls, options};
+    return tls_opts.get_tls(nullptr).inner;
+  }
+  return not url_when_missing.starts_with("http://");
+}
+
+auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
+                           location url_loc, diagnostic_handler& dh,
+                           tls_options::options options) -> failure_or<bool> {
+  auto tls_opts = tls ? tls_options{*tls, options} : tls_options{options};
+  TRY(tls_opts.validate(url, url_loc, dh));
+  add_default_url_scheme(url, tls_opts.get_tls(nullptr).inner);
+  return url.starts_with("https://");
+}
+
+auto make_header_secret_requests(
+  Option<located<data>> const& headers,
+  std::vector<std::pair<std::string, std::string>>& resolved_headers,
+  diagnostic_handler& dh) -> std::vector<secret_request> {
+  resolved_headers.clear();
+  auto result = std::vector<secret_request>{};
+  if (not headers) {
+    return result;
+  }
+  auto const* rec = try_as<record>(headers->inner);
+  TENZIR_ASSERT(rec);
+  resolved_headers.reserve(rec->size());
+  for (auto const& [header_name, value] : *rec) {
+    match(
+      value,
+      [&](std::string const& literal) {
+        resolved_headers.emplace_back(header_name, literal);
+      },
+      [&](secret const& sec) {
+        auto& out
+          = resolved_headers.emplace_back(header_name, std::string{}).second;
+        result.emplace_back(
+          make_secret_request(header_name, sec, headers->source, out, dh));
+      },
+      [](auto const&) {
+        TENZIR_UNREACHABLE();
+      });
+  }
+  return result;
+}
+
 auto message::header(const std::string& name) -> struct header* {
   auto pred = [&](auto& x) -> bool {
     if (x.name.size() != name.size()) {

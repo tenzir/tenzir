@@ -16,11 +16,13 @@
 
 #include <chrono>
 #include <map>
+#include <memory>
 #include <string>
 
 namespace folly {
 class EventBase;
 class IOExecutor;
+class SSLContext;
 } // namespace folly
 
 namespace tenzir {
@@ -33,6 +35,7 @@ struct HttpResponse {
 
 struct HttpPoolConfig {
   bool tls = true;
+  std::shared_ptr<folly::SSLContext> ssl_context;
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
 };
 
@@ -58,6 +61,11 @@ public:
   auto operator=(HttpPool const&) -> HttpPool& = delete;
   HttpPool(HttpPool&&) noexcept;
   auto operator=(HttpPool&&) noexcept -> HttpPool&;
+
+  /// Request through the session pool.
+  auto request(std::string method, std::string body,
+               std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
 
   /// POST through the session pool.
   auto post(std::string body, std::map<std::string, std::string> headers)

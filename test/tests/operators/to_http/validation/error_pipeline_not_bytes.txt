@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/to_http/validation/error_pipeline_not_bytes.tql:5:34
+  |
+5 | to_http "http://127.0.0.1:31337" {
+  |                                  ^ 
+  |

@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 1
+        method: POST
+        path: /options/body
+        body: "{\"value\":42}\n"
+timeout: 60
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_BODY_URL") {
+  write_ndjson
+}

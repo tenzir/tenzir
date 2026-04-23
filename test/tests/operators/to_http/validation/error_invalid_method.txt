@@ -1,0 +1,6 @@
+error: invalid http method: `INVALID`
+ --> tests/operators/to_http/validation/error_invalid_method.tql:5:42
+  |
+5 | to_http "http://127.0.0.1:31337", method="INVALID" {
+  |                                          ^^^^^^^^^ 
+  |
