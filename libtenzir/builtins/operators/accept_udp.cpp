@@ -173,23 +173,17 @@ public:
     // `dcheckIsInEventBaseThread` holds and access to `SocketReadCallback`'s
     // members needs no synchronization.
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto bind_address = co_await forward_dns_.resolve_bind_address(
-      args_.endpoint.inner);
+    auto bind_endpoint = parse_socket_address(args_.endpoint.inner,
+                                             SocketAddressKind::bind)
+                           .expect("accept_udp endpoint should be valid after "
+                                   "operator validation");
+    auto bind_address
+      = co_await forward_dns_.resolve_bind_address(std::move(bind_endpoint));
     if (bind_address.is_err()) {
-      auto error = std::move(bind_address).unwrap_err();
-      match(
-        std::move(error),
-        [&](InvalidSocketAddress invalid) {
-          diagnostic::error("invalid UDP endpoint")
-            .primary(args_.endpoint, "{}", invalid)
-            .emit(ctx);
-        },
-        [&](ResolveAddressError failed) {
-          diagnostic::error("failed to resolve listen address")
-            .primary(args_.endpoint)
-            .note("reason: {}", failed)
-            .emit(ctx);
-        });
+      diagnostic::error("failed to resolve listen address")
+        .primary(args_.endpoint)
+        .note("reason: {}", std::move(bind_address).unwrap_err())
+        .emit(ctx);
       message_sender_ = None{};
       co_return;
     }
@@ -453,9 +447,20 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<AcceptUdpArgs, AcceptUdp>{};
-    d.positional("endpoint", &AcceptUdpArgs::endpoint);
+    auto endpoint_arg = d.positional("endpoint", &AcceptUdpArgs::endpoint);
     d.named("resolve_hostnames", &AcceptUdpArgs::resolve_hostnames);
     d.named("binary", &AcceptUdpArgs::binary);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto endpoint_str, ctx.get(endpoint_arg));
+      auto location
+        = ctx.get_location(endpoint_arg).value_or(location::unknown);
+      if (not parse_socket_address(endpoint_str.inner, SocketAddressKind::bind)) {
+        diagnostic::error("failed to parse endpoint")
+          .primary(location)
+          .emit(ctx);
+      }
+      return {};
+    });
     auto desc = d.without_optimize();
     desc.name = "accept_udp";
     return desc;

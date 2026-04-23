@@ -9,13 +9,10 @@
 #include <tenzir/async/channel.hpp>
 #include <tenzir/async/dns.hpp>
 #include <tenzir/chunk.hpp>
-#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
-#include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/endpoint.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
@@ -58,12 +55,16 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto address = co_await forward_dns_.resolve_socket_address(
-      args_.endpoint.inner);
+    auto endpoint = parse_socket_address(args_.endpoint.inner,
+                                         SocketAddressKind::remote)
+                      .expect("to_udp endpoint should be valid after "
+                              "operator validation");
+    auto address
+      = co_await forward_dns_.resolve_socket_address(std::move(endpoint));
     if (address.is_err()) {
-      auto error = std::move(address).unwrap_err();
-      diagnostic::error("invalid UDP endpoint")
-        .primary(args_.endpoint, "{}", error)
+      diagnostic::error("failed to resolve remote endpoint")
+        .primary(args_.endpoint)
+        .note("reason: {}", std::move(address).unwrap_err())
         .emit(ctx);
       co_return;
     }
@@ -218,14 +219,14 @@ private:
               "ensure the payload fits into a single UDP datagram");
           }
           std::move(builder).emit(diagnostics);
-          break;
+          continue;
         }
         if (num_sent != detail::narrow_cast<ssize_t>(payload->size())) {
           diagnostic::warning("failed to send complete UDP datagram")
             .primary(self)
             .note("sent {} of {} bytes", num_sent, payload->size())
             .emit(diagnostics);
-          break;
+          continue;
         }
         bytes_write_counter.add(payload->size());
       }
@@ -258,17 +259,12 @@ public:
     d.named("message", &ToUdpArgs::message, "any");
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
-      auto endpoint = to<struct endpoint>(endpoint_str.inner);
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      if (not endpoint) {
+      if (not parse_socket_address(endpoint_str.inner, SocketAddressKind::remote)) {
         diagnostic::error("failed to parse endpoint")
           .primary(location)
           .emit(ctx);
-      } else if (not endpoint->port) {
-        diagnostic::error("port number is required").primary(location).emit(ctx);
-      } else if (endpoint->host.empty()) {
-        diagnostic::error("host is required").primary(location).emit(ctx);
       }
       return {};
     });
