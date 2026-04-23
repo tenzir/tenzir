@@ -822,7 +822,7 @@ public:
     auto fallback = std::optional<ast::expression>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject, "record|list")
-          .positional("field", field, "string|int")
+          .positional("field", field, "string|int|uint")
           .positional("fallback", fallback, "any")
           .parse(inv, ctx));
     return function_use::make(
