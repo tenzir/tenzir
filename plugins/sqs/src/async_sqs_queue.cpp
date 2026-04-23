@@ -20,6 +20,7 @@
 #include <aws/sqs/model/DeleteMessageRequest.h>
 #include <aws/sqs/model/GetQueueUrlRequest.h>
 #include <aws/sqs/model/GetQueueUrlResult.h>
+#include <aws/sqs/model/MessageSystemAttributeName.h>
 #include <aws/sqs/model/ReceiveMessageRequest.h>
 #include <aws/sqs/model/ReceiveMessageResult.h>
 #include <aws/sqs/model/SendMessageRequest.h>
@@ -215,6 +216,10 @@ auto AsyncSqsQueue::receive_messages(size_t num_messages,
   request.SetQueueUrl(url_);
   request.SetMaxNumberOfMessages(detail::narrow_cast<int>(num_messages));
   request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time.count()));
+  // Request all system attributes so events can expose metadata such as
+  // `sent_time`, `receive_count`, and `sender_id`.
+  request.AddMessageSystemAttributeNames(
+    Aws::SQS::Model::MessageSystemAttributeName::All);
   auto aws_result
     = co_await sqs_api_call(*pool_, *signer_, endpoint_url_, request);
   auto result = Aws::SQS::Model::ReceiveMessageResult{aws_result};

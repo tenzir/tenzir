@@ -9,6 +9,8 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/compile_ctx.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 
 #include "operators_neo.hpp"
@@ -63,7 +65,7 @@ auto parse_connector_args(const std::string& name,
 }
 
 class load_plugin final : public virtual operator_plugin2<sqs_loader>,
-                          public virtual OperatorPlugin {
+                          public virtual operator_compiler_plugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -71,13 +73,70 @@ public:
     return std::make_unique<sqs_loader>(std::move(args));
   }
 
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    diagnostic::error("`load_sqs` is not supported by the new executor")
+      .primary(inv.op.get_location())
+      .hint("use `from_sqs` to produce events directly")
+      .emit(ctx);
+    return failure::promise();
+  }
+
+  auto load_properties() const
+    -> operator_factory_plugin::load_properties_t override {
+    return {
+      .schemes = {"sqs"},
+      .strip_scheme = true,
+    };
+  }
+};
+
+class save_plugin final : public virtual operator_plugin2<sqs_saver>,
+                          public virtual operator_compiler_plugin {
+public:
+  auto make(operator_factory_invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(auto args, parse_connector_args(name(), inv, ctx));
+    if (args.poll_time) {
+      diagnostic::warning("`poll_time` is deprecated for `save_sqs` and will "
+                          "be ignored")
+        .primary(args.poll_time->source)
+        .emit(ctx);
+    }
+    return std::make_unique<sqs_saver>(std::move(args));
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    diagnostic::error("`save_sqs` is not supported by the new executor")
+      .primary(inv.op.get_location())
+      .hint("use `to_sqs` to send events directly")
+      .emit(ctx);
+    return failure::promise();
+  }
+
+  auto save_properties() const
+    -> operator_factory_plugin::save_properties_t override {
+    return {
+      .schemes = {"sqs"},
+      .strip_scheme = true,
+    };
+  }
+};
+
+class from_plugin final : public virtual OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "from_sqs";
+  }
+
   auto describe() const -> Description override {
-    auto d = Describer<sqs_args, LoadSqs>{};
-    d.operator_location(&sqs_args::operator_location);
-    auto queue = d.positional("queue", &sqs_args::queue);
-    d.named("aws_region", &sqs_args::aws_region);
-    d.named("aws_iam", &sqs_args::aws_iam);
-    auto pt = d.named("poll_time", &sqs_args::poll_time);
+    auto d = Describer<FromSqsArgs, FromSqs>{};
+    d.operator_location(&FromSqsArgs::operator_location);
+    auto queue = d.positional("queue", &FromSqsArgs::queue);
+    d.named("aws_region", &FromSqsArgs::aws_region);
+    d.named("aws_iam", &FromSqsArgs::aws_iam);
+    auto pt = d.named("poll_time", &FromSqsArgs::poll_time);
     d.validate([queue, pt](DescribeCtx& ctx) -> Empty {
       TRY(auto q, ctx.get(queue));
       if (q.inner.empty()) {
@@ -100,39 +159,24 @@ public:
     });
     return d.without_optimize();
   }
-
-  auto load_properties() const
-    -> operator_factory_plugin::load_properties_t override {
-    return {
-      .schemes = {"sqs"},
-      .strip_scheme = true,
-    };
-  }
 };
 
-class save_plugin final : public virtual operator_plugin2<sqs_saver>,
-                          public virtual OperatorPlugin {
+class to_plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(auto args, parse_connector_args(name(), inv, ctx));
-    if (args.poll_time) {
-      diagnostic::warning("`poll_time` is deprecated for `save_sqs` and will "
-                          "be ignored")
-        .primary(args.poll_time->source)
-        .emit(ctx);
-    }
-    return std::make_unique<sqs_saver>(std::move(args));
+  auto name() const -> std::string override {
+    return "to_sqs";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<sqs_args, SaveSqs>{};
-    d.operator_location(&sqs_args::operator_location);
-    auto queue = d.positional("queue", &sqs_args::queue);
-    d.named("aws_region", &sqs_args::aws_region);
-    d.named("aws_iam", &sqs_args::aws_iam);
-    auto pt = d.named("poll_time", &sqs_args::poll_time);
-    d.validate([queue, pt](DescribeCtx& ctx) -> Empty {
+    auto initial = ToSqsArgs{};
+    initial.message = default_to_sqs_message_expression();
+    auto d = Describer<ToSqsArgs, ToSqs>{std::move(initial)};
+    d.operator_location(&ToSqsArgs::operator_location);
+    auto queue = d.positional("queue", &ToSqsArgs::queue);
+    d.named_optional("message", &ToSqsArgs::message, "blob|string");
+    d.named("aws_region", &ToSqsArgs::aws_region);
+    d.named("aws_iam", &ToSqsArgs::aws_iam);
+    d.validate([queue](DescribeCtx& ctx) -> Empty {
       TRY(auto q, ctx.get(queue));
       if (q.inner.empty()) {
         diagnostic::error("queue must not be empty")
@@ -140,23 +184,9 @@ public:
           .hint("provide a non-empty string as queue name")
           .emit(ctx);
       }
-      if (auto poll_time = ctx.get(pt)) {
-        diagnostic::warning("`poll_time` is deprecated for `save_sqs` and will "
-                            "be ignored")
-          .primary(poll_time->source)
-          .emit(ctx);
-      }
       return {};
     });
     return d.without_optimize();
-  }
-
-  auto save_properties() const
-    -> operator_factory_plugin::save_properties_t override {
-    return {
-      .schemes = {"sqs"},
-      .strip_scheme = true,
-    };
   }
 };
 
@@ -166,3 +196,5 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sqs::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sqs::save_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sqs::from_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sqs::to_plugin)

@@ -9,8 +9,8 @@
 #pragma once
 
 #include <tenzir/async.hpp>
-#include <tenzir/chunk.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/tql2/ast.hpp>
 
 #include <memory>
 
@@ -19,7 +19,7 @@
 
 namespace tenzir::plugins::sqs {
 
-struct sqs_args {
+struct FromSqsArgs {
   located<std::string> queue;
   Option<located<duration>> poll_time;
   Option<located<std::string>> aws_region;
@@ -27,35 +27,43 @@ struct sqs_args {
   location operator_location;
 };
 
-/// Resolves AWS credentials and creates an initialized AsyncSqsQueue.
-auto make_async_sqs_queue(const sqs_args& args, OpCtx& ctx)
-  -> Task<std::shared_ptr<AsyncSqsQueue>>;
+struct ToSqsArgs {
+  located<std::string> queue;
+  ast::expression message;
+  Option<located<std::string>> aws_region;
+  Option<located<record>> aws_iam;
+  location operator_location;
+};
 
-class LoadSqs final : public Operator<void, chunk_ptr> {
+/// Returns the default `message=` expression used by `to_sqs`
+/// (`print_ndjson(this)`).
+auto default_to_sqs_message_expression() -> ast::expression;
+
+class FromSqs final : public Operator<void, table_slice> {
 public:
-  explicit LoadSqs(sqs_args args);
+  explicit FromSqs(FromSqsArgs args);
 
   auto start(OpCtx& ctx) -> Task<void> override;
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
-  auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override;
 
 private:
-  sqs_args args_;
+  FromSqsArgs args_;
   std::chrono::seconds poll_time_ = default_poll_time;
   std::shared_ptr<AsyncSqsQueue> queue_;
 };
 
-class SaveSqs final : public Operator<chunk_ptr, void> {
+class ToSqs final : public Operator<table_slice, void> {
 public:
-  explicit SaveSqs(sqs_args args);
+  explicit ToSqs(ToSqsArgs args);
 
   auto start(OpCtx& ctx) -> Task<void> override;
-  auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override;
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override;
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
 
 private:
-  sqs_args args_;
+  ToSqsArgs args_;
   std::shared_ptr<AsyncSqsQueue> queue_;
 };
 
