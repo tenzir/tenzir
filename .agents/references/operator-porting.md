@@ -182,6 +182,29 @@ When `process()` scans a chunk incrementally, accumulate a local
 into it as records become ready, and push once after the loop. Reference
 implementations: `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
 
+### Blocking operations
+
+File I/O, subprocess calls, and third-party synchronous SDKs must not run
+directly on an executor thread — they would stall every coroutine sharing
+that thread. Wrap such calls in `co_await spawn_blocking(...)` from
+`tenzir/async/blocking_executor.hpp`, which offloads the callable to a
+dedicated CPU thread pool (Tokio-aligned defaults: up to 512 threads, 10 s
+idle timeout) and resumes the coroutine with its return value:
+
+```cpp
+auto bytes = co_await spawn_blocking([path = path_] {
+  return blocking_file_read(path);
+});
+```
+
+`spawn_blocking` expects a synchronous callable. Passing a coroutine
+function returning `Task<T>` only constructs the coroutine handle on the
+pool thread without running its body — use folly's `co_withExecutor` /
+`scheduleOn` for that instead. Exceptions thrown by the callable are
+captured and rethrown at the await site. Reference implementations:
+`from_file.cpp`, `file.cpp`, `python.cpp`, and the cloud `from_*` operators
+under `plugins/s3`, `plugins/gcs`, and `plugins/azure-blob-storage`.
+
 ### Diagnostics
 
 Some diagnostics in the old executor do not add a location via `primary`. Some
@@ -424,6 +447,7 @@ if (timeout_ != duration::max() and now - start > timeout_) { … }
 - [ ] `state()` returns `done` for early-terminating operators
 - [ ] `Box<T>` used instead of `std::unique_ptr<T>`
 - [ ] Duration overflow guarded when a `duration::max()` sentinel is possible
+- [ ] Blocking calls (file I/O, subprocess, sync SDKs) wrapped in `co_await spawn_blocking(...)`
 - [ ] Complex shutdown uses `enum class Lifecycle`; `stop()`/`finalize()` share a teardown helper
 - [ ] Sub-pipeline active key accessed via `ctx.get_sub(next_ - 1)`, guarded for `next_ == 0`
 - [ ] `OperatorPlugin` added to plugin base classes; `describe()` implemented
