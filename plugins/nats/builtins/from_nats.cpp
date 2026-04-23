@@ -75,7 +75,7 @@ struct SubscriptionComplete {
 };
 
 using SourceMessage = variant<IncomingMessage, SubscriptionComplete>;
-using SourceQueue = folly::coro::BoundedQueue<SourceMessage>;
+using SourceMessageQueue = folly::coro::BoundedQueue<SourceMessage>;
 
 struct BufferedMessage {
   nats_msg_ptr msg;
@@ -109,65 +109,110 @@ using js_stream_names_list_ptr
 using js_consumer_info_ptr
   = std::unique_ptr<jsConsumerInfo, js_consumer_info_deleter>;
 
-struct SourceState {
-  explicit SourceState(uint64_t capacity)
-    : queue{detail::narrow_cast<uint32_t>(capacity + 1)},
-      message_slots{capacity} {
-  }
-
-  // The queue has `message_slots` plus one slot for the first terminal
-  // completion.
-  SourceQueue queue;
-  folly::fibers::Semaphore message_slots;
-  Atomic<bool> stopping = false;
-  Atomic<bool> terminal_completion_queued = false;
-};
-
 auto normal_completion(natsStatus status) -> bool {
   return status == NATS_MAX_DELIVERED_MSGS or status == NATS_TIMEOUT
          or status == NATS_NOT_FOUND or status == NATS_LIMIT_REACHED;
 }
 
+class SourceQueue {
+public:
+  explicit SourceQueue(uint64_t capacity)
+    : messages_{detail::narrow_cast<uint32_t>(capacity + 1)},
+      message_slots_{capacity} {
+  }
+
+  auto enqueue(natsMsg* msg) -> void {
+    if (not accepting_.load(std::memory_order_acquire)) {
+      reject(msg);
+      return;
+    }
+    if (not message_slots_.try_wait()) {
+      reject(msg);
+      return;
+    }
+    if (messages_.try_enqueue(
+          SourceMessage{IncomingMessage{nats_msg_ptr{msg}}})) {
+      return;
+    }
+    release_message_slot();
+    reject(msg);
+  }
+
+  auto enqueue(natsStatus status) -> void {
+    if (not accepting_.load(std::memory_order_acquire)) {
+      return;
+    }
+    if (status == NATS_OK or normal_completion(status)) {
+      return;
+    }
+    if (terminal_completion_queued_.exchange(true, std::memory_order_acq_rel)) {
+      return;
+    }
+    [[maybe_unused]] auto enqueued
+      = messages_.try_enqueue(SourceMessage{SubscriptionComplete{status}});
+    TENZIR_ASSERT(enqueued);
+  }
+
+  auto dequeue() -> Task<SourceMessage> {
+    co_return co_await messages_.dequeue();
+  }
+
+  auto try_dequeue() -> Option<SourceMessage> {
+    auto message = messages_.try_dequeue();
+    if (not message) {
+      return None{};
+    }
+    return std::move(*message);
+  }
+
+  auto try_dequeue_for(duration timeout) -> Task<Option<SourceMessage>> {
+    auto token = co_await folly::coro::co_current_cancellation_token;
+    try {
+      co_return co_await messages_.co_try_dequeue_for(
+        std::chrono::duration_cast<folly::Duration>(timeout));
+    } catch (folly::OperationCancelled const&) {
+      if (token.isCancellationRequested()) {
+        throw;
+      }
+      co_return None{};
+    }
+  }
+
+  auto stop_accepting() -> void {
+    accepting_.store(false, std::memory_order_release);
+  }
+
+  auto release_message_slot() -> void {
+    message_slots_.signal();
+  }
+
+private:
+  static auto reject(natsMsg* msg) -> void {
+    natsMsg_Nak(msg, nullptr);
+    natsMsg_Destroy(msg);
+  }
+
+  // NATS invokes callbacks from library-owned threads. This is the only shared
+  // boundary: it reserves one terminal slot and rejects late callbacks. All
+  // subscription lifecycle decisions stay in FromNats.
+  SourceMessageQueue messages_;
+  folly::fibers::Semaphore message_slots_;
+  Atomic<bool> accepting_ = true;
+  Atomic<bool> terminal_completion_queued_ = false;
+};
+
 void message_callback(natsConnection*, natsSubscription*, natsMsg* msg,
                       void* closure) {
-  auto* state = static_cast<SourceState*>(closure);
-  TENZIR_ASSERT(state);
-  if (state->stopping.load(std::memory_order_acquire)) {
-    natsMsg_Nak(msg, nullptr);
-    natsMsg_Destroy(msg);
-    return;
-  }
-  if (not state->message_slots.try_wait()) {
-    natsMsg_Nak(msg, nullptr);
-    natsMsg_Destroy(msg);
-    return;
-  }
-  if (state->queue.try_enqueue(
-        SourceMessage{IncomingMessage{nats_msg_ptr{msg}}})) {
-    return;
-  }
-  state->message_slots.signal();
-  natsMsg_Nak(msg, nullptr);
-  natsMsg_Destroy(msg);
+  auto* queue = static_cast<SourceQueue*>(closure);
+  TENZIR_ASSERT(queue);
+  queue->enqueue(msg);
 }
 
 void complete_callback(natsConnection*, natsSubscription*, natsStatus status,
                        void* closure) {
-  auto* state = static_cast<SourceState*>(closure);
-  TENZIR_ASSERT(state);
-  if (state->stopping.load(std::memory_order_acquire)) {
-    return;
-  }
-  if (status == NATS_OK or normal_completion(status)) {
-    return;
-  }
-  if (state->terminal_completion_queued.exchange(true,
-                                                 std::memory_order_acq_rel)) {
-    return;
-  }
-  [[maybe_unused]] auto enqueued
-    = state->queue.try_enqueue(SourceMessage{SubscriptionComplete{status}});
-  TENZIR_ASSERT(enqueued);
+  auto* queue = static_cast<SourceQueue*>(closure);
+  TENZIR_ASSERT(queue);
+  queue->enqueue(status);
 }
 
 auto optional_c_string(char const* str) -> data {
@@ -389,19 +434,15 @@ public:
       co_return SourceBatch{.emit_buffered = true};
     }
     auto batch = SourceBatch{};
-    auto first = Option<SourceMessage>{None{}};
-    first = co_await source_->queue.dequeue();
-    if (not first) {
-      co_return batch;
-    }
-    if (not append_to_batch(batch, std::move(*first))) {
+    auto first = co_await source_->dequeue();
+    if (not append_to_batch(batch, std::move(first))) {
       co_return batch;
     }
     auto const max_messages = detail::narrow_cast<size_t>(
       std::min(args_.batch_size, args_.queue_capacity));
     auto const started = std::chrono::steady_clock::now();
     while (batch.messages.size() < max_messages) {
-      if (auto next = source_->queue.try_dequeue()) {
+      if (auto next = source_->try_dequeue()) {
         if (not append_to_batch(batch, std::move(*next))) {
           co_return batch;
         }
@@ -412,7 +453,8 @@ public:
       if (elapsed >= args_.batch_timeout) {
         break;
       }
-      auto next = co_await try_dequeue_for(args_.batch_timeout - elapsed);
+      auto next
+        = co_await source_->try_dequeue_for(args_.batch_timeout - elapsed);
       if (not next) {
         break;
       }
@@ -441,7 +483,7 @@ public:
     auto accepted = std::vector<nats_msg_ptr>{};
     accepted.reserve(batch->messages.size());
     for (auto& msg : batch->messages) {
-      source_->message_slots.signal();
+      source_->release_message_slot();
       if (done_) {
         natsMsg_Nak(msg.get(), nullptr);
         continue;
@@ -509,19 +551,6 @@ public:
   }
 
 private:
-  auto try_dequeue_for(duration timeout) const -> Task<Option<SourceMessage>> {
-    auto token = co_await folly::coro::co_current_cancellation_token;
-    try {
-      co_return co_await source_->queue.co_try_dequeue_for(
-        std::chrono::duration_cast<folly::Duration>(timeout));
-    } catch (folly::OperationCancelled const&) {
-      if (token.isCancellationRequested()) {
-        throw;
-      }
-      co_return None{};
-    }
-  }
-
   static auto append_to_batch(SourceBatch& batch, SourceMessage message)
     -> bool {
     if (auto* item = try_as<IncomingMessage>(&message)) {
@@ -727,13 +756,13 @@ private:
     if (not source_.not_moved_from()) {
       return;
     }
-    source_->stopping.store(true, std::memory_order_release);
+    source_->stop_accepting();
     auto needs_flush = false;
-    while (auto message = source_->queue.try_dequeue()) {
+    while (auto message = source_->try_dequeue()) {
       match(
         std::move(*message),
         [&](IncomingMessage item) {
-          source_->message_slots.signal();
+          source_->release_message_slot();
           natsMsg_Nak(item.msg.get(), nullptr);
           needs_flush = true;
         },
@@ -773,7 +802,7 @@ private:
   nats_options_ptr options_;
   nats_connection_ptr connection_;
   js_ctx_ptr js_;
-  mutable Arc<SourceState> source_;
+  mutable Arc<SourceQueue> source_;
   nats_subscription_ptr subscription_;
   mutable std::vector<nats_msg_ptr> pending_acks_;
   std::deque<BufferedMessage> buffered_;
