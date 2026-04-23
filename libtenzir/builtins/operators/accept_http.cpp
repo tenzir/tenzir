@@ -70,21 +70,6 @@ struct AcceptHttpArgs {
   }
 };
 
-template <class T>
-auto parse_number(std::string_view text) -> Option<T> {
-  if (text.empty()) {
-    return None{};
-  }
-  auto value = T{};
-  auto const* begin = text.data();
-  auto const* end = begin + text.size();
-  auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} or ptr != end) {
-    return None{};
-  }
-  return value;
-}
-
 struct RequestMetadata {
   std::string client_ip;
   std::vector<std::pair<std::string, std::string>> headers;
@@ -237,7 +222,8 @@ public:
         path = metadata.path;
         auto content_length_header = std::string_view{
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
-        if (auto content_length = parse_number<size_t>(content_length_header);
+        if (auto content_length
+            = http_server::parse_number<size_t>(content_length_header);
             content_length and *content_length > args_.get_max_request_size()) {
           response_signal->send(413); // payload too large
           co_return proxygen::coro::HTTPSourceReader::Cancel;
@@ -551,11 +537,6 @@ private:
       co_return None{};
     }
     config.numIOThreads = 1;
-    // Short idle timeout: accept_http processes one-shot requests, so
-    // HTTP/1.1 keep-alive connections are unnecessary.  A short idle
-    // timeout ensures they close promptly after each response, allowing
-    // the IO thread pool to drain during server shutdown.
-    config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
     if (tls_enabled) {
       auto tls_opts = tls_options::from_optional(
         args_.tls, {.tls_default = false, .is_server = true});

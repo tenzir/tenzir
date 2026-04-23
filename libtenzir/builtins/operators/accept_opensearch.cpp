@@ -573,7 +573,6 @@ private:
       co_return None{};
     }
     config.numIOThreads = 1;
-    config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
     if (tls_enabled) {
       auto tls_opts = tls_options::from_optional(
         args_.tls, {.tls_default = false, .is_server = true});

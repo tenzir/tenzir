@@ -1,0 +1,21 @@
+---
+fixtures:
+  - http_request:
+      method: GET
+      body: ""
+      initial_delay: 1.0
+      request_timeout: 5.0
+      expected_status: 200
+      expected_body: |
+        first-line
+        second-line
+timeout: 60
+---
+
+from {ts: 2025-03-03T12:12:10, data: "first-line"},
+     {ts: 2025-03-03T12:12:11, data: "second-line"}
+delay ts, start=2025-03-03T12:12:08, speed=1.0
+drop ts
+serve_http env("HTTP_REQUEST_ENDPOINT") {
+  write_lines
+}
