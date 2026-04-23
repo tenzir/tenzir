@@ -6,24 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
-#include <tenzir/async.hpp>
-#include <tenzir/async/blocking_executor.hpp>
-#include <tenzir/async/channel.hpp>
-#include <tenzir/async/notify.hpp>
-#include <tenzir/chunk.hpp>
-#include <tenzir/co_match.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/posix.hpp>
-#include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/operator_plugin.hpp>
-#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
-#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/result.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/socket.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -33,16 +21,10 @@
 #include <arrow/util/uri.h>
 #include <arrow/util/utf8.h>
 #include <caf/uri.hpp>
-#include <folly/CancellationToken.h>
-#include <folly/SocketAddress.h>
-#include <folly/coro/Sleep.h>
-#include <folly/io/async/AsyncUDPSocket.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
 #include <netdb.h>
-#include <optional>
-#include <vector>
 
 using namespace std::chrono_literals;
 
