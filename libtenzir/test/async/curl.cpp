@@ -11,13 +11,18 @@
 #include "tenzir/panic.hpp"
 #include "tenzir/test/test.hpp"
 
+#ifdef INFO
+#  undef INFO
+#endif
+
 #include <folly/coro/BlockingWait.h>
-#include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/ScopedEventBaseThread.h>
 
 namespace tenzir {
 
 TEST("session tracks active transfers") {
-  auto session = CurlSession::make(folly::getGlobalIOExecutor());
+  auto io_thread = folly::ScopedEventBaseThread{};
+  auto session = CurlSession::make(folly::getKeepAliveToken(io_thread));
   check(not session.busy());
   folly::coro::blockingWait([&]() -> Task<void> {
     auto transfer = session.start_upload();
@@ -32,7 +37,8 @@ TEST("session tracks active transfers") {
 
 TEST("session refuses concurrent transfers") {
   folly::coro::blockingWait([&]() -> Task<void> {
-    auto session = CurlSession::make(folly::getGlobalIOExecutor());
+    auto io_thread = folly::ScopedEventBaseThread{};
+    auto session = CurlSession::make(folly::getKeepAliveToken(io_thread));
     auto transfer = session.start_upload();
     auto refused = false;
     try {
@@ -51,7 +57,8 @@ TEST("session refuses concurrent transfers") {
 
 TEST("empty send completes without starting curl") {
   folly::coro::blockingWait([&]() -> Task<void> {
-    auto session = CurlSession::make(folly::getGlobalIOExecutor());
+    auto io_thread = folly::ScopedEventBaseThread{};
+    auto session = CurlSession::make(folly::getKeepAliveToken(io_thread));
     auto send = session.start_upload();
     send.close();
     auto result = co_await send.result();
@@ -63,7 +70,8 @@ TEST("empty send completes without starting curl") {
 
 TEST("session reuses completed transfers") {
   folly::coro::blockingWait([&]() -> Task<void> {
-    auto session = CurlSession::make(folly::getGlobalIOExecutor());
+    auto io_thread = folly::ScopedEventBaseThread{};
+    auto session = CurlSession::make(folly::getKeepAliveToken(io_thread));
     auto first = session.start_upload();
     first.close();
     auto first_result = co_await first.result();
