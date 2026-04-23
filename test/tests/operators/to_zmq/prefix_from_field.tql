@@ -8,7 +8,7 @@ skip:
 assertions:
   fixtures:
     zmq:
-      received_contains: 'alerts/{"channel":"alerts/","line":"hello-from-to_zmq-prefix"}'
+      received_contains: "alerts/{\n  \"channel\": \"alerts/\",\n  \"line\": \"hello-from-to_zmq-prefix\"\n}"
 timeout: 60
 ---
 

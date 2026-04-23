@@ -126,7 +126,6 @@ public:
           .primary(args_.endpoint.source)
           .note("{}", render(err.error()))
           .emit(ctx);
-        done_ = true;
         co_return;
       }
     }
@@ -135,7 +134,6 @@ public:
         .primary(args_.endpoint.source)
         .note("{}", render(err.error()))
         .emit(ctx);
-      done_ = true;
       co_return;
     }
   }
@@ -152,7 +150,6 @@ public:
           .primary(args_.encoding.source)
           .note("{}", render(payload.error()))
           .emit(ctx);
-        done_ = true;
         co_return;
       }
       auto framed = *payload;
@@ -168,7 +165,6 @@ public:
             .primary(args_.prefix->get_location())
             .note("{}", render(with_prefix.error()))
             .emit(ctx);
-          done_ = true;
           co_return;
         }
         framed = std::move(*with_prefix);
@@ -185,7 +181,6 @@ public:
             .primary(args_.endpoint.source)
             .note("`monitor=true` requires a connected peer before sending")
             .emit(ctx);
-          done_ = true;
           co_return;
         }
         co_await sleep_for(monitor_wait_poll_interval);
@@ -207,7 +202,6 @@ public:
         .primary(args_.endpoint.source)
         .note("{}", render(err))
         .emit(ctx);
-      done_ = true;
       co_return;
     }
   }
