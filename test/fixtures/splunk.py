@@ -228,6 +228,8 @@ def _run_search(mgmt_port: int, search: str) -> list[dict[str, Any]]:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Splunk search failed with HTTP {exc.code}: {detail}")
+    except (urllib.error.URLError, OSError) as exc:
+        raise RuntimeError(f"Splunk search request failed: {exc}") from exc
     results: list[dict[str, Any]] = []
     for line in body.splitlines():
         if not line:
