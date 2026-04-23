@@ -9,6 +9,7 @@
 #include "zmq/transport.hpp"
 
 #include <tenzir/async.hpp>
+#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
@@ -20,10 +21,12 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <fmt/format.h>
+#include <folly/coro/BoundedQueue.h>
 
 #include <chrono>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <variant>
@@ -33,6 +36,10 @@ using namespace std::chrono_literals;
 namespace tenzir::plugins::zmq {
 
 namespace {
+
+constexpr auto message_queue_capacity = uint32_t{16};
+constexpr auto control_queue_capacity = uint32_t{1};
+constexpr auto receive_timeout = 100ms;
 
 auto render_caf_error(const caf::error& err) -> std::string {
   return fmt::to_string(err);
@@ -61,10 +68,19 @@ struct ReceiveError {
   std::string message;
 };
 
-struct PollTimeout {};
+struct ReadLoopFinished {};
 
-using SourceMessage
-  = variant<StartupError, ReceiveError, PollTimeout, chunk_ptr>;
+using SourceMessage = variant<StartupError, ReceiveError, ReadLoopFinished,
+                              chunk_ptr>;
+using MessageQueue = folly::coro::BoundedQueue<SourceMessage>;
+using ControlQueue = folly::coro::BoundedQueue<std::monostate>;
+
+struct Runtime {
+  explicit Runtime(transport::Socket socket) : socket{std::move(socket)} {
+  }
+
+  transport::Socket socket;
+};
 
 template <transport::ConnectionMode Mode>
 class ZmqSource final : public Operator<void, table_slice> {
@@ -78,49 +94,41 @@ public:
       auto prefix = const_eval(*args_.prefix, ctx.dh());
       if (not prefix) {
         request_stop();
+        done_ = true;
         co_return;
       }
       auto* str = try_as<std::string>(&*prefix);
       if (not str) {
-        startup_error_ = "`prefix` must be a constant string";
-        request_stop();
+        co_await message_queue_->enqueue(
+          SourceMessage{StartupError{"`prefix` must be a constant string"}});
         co_return;
       }
       prefix_ = *str;
     }
-    if (auto err = socket_.set_subscription_prefix(prefix_); not err) {
-      startup_error_
-        = fmt::format("failed to configure ZeroMQ subscription for `{}`: {}",
-                      endpoint_, render_socket_error(socket_, err.error()));
-      request_stop();
+    auto runtime = std::make_shared<Runtime>(
+      transport::Socket{transport::SocketRole::subscriber});
+    if (auto err = runtime->socket.set_subscription_prefix(prefix_); not err) {
+      co_await message_queue_->enqueue(SourceMessage{StartupError{fmt::format(
+        "failed to configure ZeroMQ subscription for `{}`: {}", endpoint_,
+        render_socket_error(runtime->socket, err.error()))}});
       co_return;
     }
-    if (auto err = socket_.open(Mode, endpoint_); not err) {
-      startup_error_
-        = fmt::format("failed to open ZeroMQ socket for `{}`: {}", endpoint_,
-                      render_socket_error(socket_, err.error()));
-      request_stop();
+    if (auto err = runtime->socket.open(Mode, endpoint_); not err) {
+      co_await message_queue_->enqueue(SourceMessage{StartupError{fmt::format(
+        "failed to open ZeroMQ socket for `{}`: {}", endpoint_,
+        render_socket_error(runtime->socket, err.error()))}});
       co_return;
     }
+    read_loop_finished_ = false;
+    ctx.spawn_task(read_loop(runtime, message_queue_, control_queue_));
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (startup_error_) {
-      co_return SourceMessage{StartupError{*startup_error_}};
-    }
-    if (done_ or stop_requested_) {
+    if (done_) {
       co_await wait_forever();
     }
-    if (auto message = socket_.receive(0ms)) {
-      co_return SourceMessage{std::move(*message)};
-    } else if (message == ec::timeout) {
-      co_await sleep_for(250ms);
-      co_return SourceMessage{PollTimeout{}};
-    } else {
-      co_return SourceMessage{
-        ReceiveError{render_socket_error(socket_, message.error())}};
-    }
+    co_return co_await message_queue_->dequeue();
   }
 
   auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
@@ -135,7 +143,6 @@ public:
         diagnostic::error("{}", error.message)
           .primary(args_.endpoint.source)
           .emit(ctx);
-        startup_error_ = None{};
         done_ = true;
         co_return;
       },
@@ -145,12 +152,12 @@ public:
           .note("{}", error.message)
           .emit(ctx);
         request_stop();
-        if (active_parsers_ == 0) {
-          done_ = true;
-        }
+        maybe_finish();
         co_return;
       },
-      [&](PollTimeout) -> Task<void> {
+      [&](ReadLoopFinished) -> Task<void> {
+        read_loop_finished_ = true;
+        maybe_finish();
         co_return;
       },
       [&](chunk_ptr payload) -> Task<void> {
@@ -171,9 +178,7 @@ public:
         auto parser = args_.parser.inner;
         if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
           request_stop();
-          if (active_parsers_ == 0) {
-            done_ = true;
-          }
+          maybe_finish();
           co_return;
         }
         TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
@@ -183,9 +188,7 @@ public:
         auto sub = ctx.get_sub(make_view(key));
         if (not sub) {
           request_stop();
-          if (active_parsers_ == 0) {
-            done_ = true;
-          }
+          maybe_finish();
           co_return;
         }
         ++active_parsers_;
@@ -193,6 +196,7 @@ public:
         auto push_result = co_await sub_pipeline.push(std::move(payload));
         if (push_result.is_err()) {
           request_stop();
+          maybe_finish();
         }
         co_await sub_pipeline.close();
       });
@@ -207,17 +211,13 @@ public:
     -> Task<void> override {
     TENZIR_ASSERT(active_parsers_ > 0);
     --active_parsers_;
-    if (stop_requested_ and active_parsers_ == 0) {
-      done_ = true;
-    }
+    maybe_finish();
     co_return;
   }
 
   auto stop(OpCtx&) -> Task<void> override {
     request_stop();
-    if (active_parsers_ == 0) {
-      done_ = true;
-    }
+    maybe_finish();
     co_return;
   }
 
@@ -227,16 +227,51 @@ public:
 
 private:
   auto request_stop() -> void {
+    if (stop_requested_) {
+      return;
+    }
     stop_requested_ = true;
+    static_cast<void>(control_queue_->try_enqueue(std::monostate{}));
+  }
+
+  auto maybe_finish() -> void {
+    if (stop_requested_ and active_parsers_ == 0 and read_loop_finished_) {
+      done_ = true;
+    }
+  }
+
+  static auto read_loop(std::shared_ptr<Runtime> runtime,
+                        std::shared_ptr<MessageQueue> message_queue,
+                        std::shared_ptr<ControlQueue> control_queue)
+    -> Task<void> {
+    while (not control_queue->try_dequeue()) {
+      auto message = co_await spawn_blocking([runtime] {
+        return runtime->socket.receive(receive_timeout);
+      });
+      if (message) {
+        co_await message_queue->enqueue(SourceMessage{std::move(*message)});
+        continue;
+      }
+      if (message == ec::timeout) {
+        continue;
+      }
+      co_await message_queue->enqueue(SourceMessage{
+        ReceiveError{render_socket_error(runtime->socket, message.error())}});
+      break;
+    }
+    co_await message_queue->enqueue(SourceMessage{ReadLoopFinished{}});
   }
 
   SourceArgs args_;
   std::string endpoint_;
   std::string prefix_;
-  mutable transport::Socket socket_{transport::SocketRole::subscriber};
+  std::shared_ptr<MessageQueue> message_queue_
+    = std::make_shared<MessageQueue>(message_queue_capacity);
+  std::shared_ptr<ControlQueue> control_queue_
+    = std::make_shared<ControlQueue>(control_queue_capacity);
   bool stop_requested_ = false;
   bool done_ = false;
-  Option<std::string> startup_error_ = None{};
+  bool read_loop_finished_ = true;
   size_t active_parsers_ = 0;
   uint64_t next_sub_id_ = 0;
 };
