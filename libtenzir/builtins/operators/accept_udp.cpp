@@ -10,6 +10,7 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/channel.hpp>
+#include <tenzir/async/dns.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
@@ -34,7 +35,6 @@
 
 #include <array>
 #include <deque>
-#include <netdb.h>
 #include <vector>
 
 namespace tenzir::plugins::accept_udp {
@@ -87,33 +87,6 @@ struct Flush {
 };
 
 using Message = variant<Datagram, Error, Flush>;
-
-auto reverse_lookup(ip const& peer_ip, uint16_t peer_port)
-  -> Option<std::string> {
-  auto host = std::array<char, NI_MAXHOST>{};
-  if (peer_ip.is_v4()) {
-    auto addr = sockaddr_in{};
-    auto err = convert(peer_ip, addr);
-    TENZIR_ASSERT(err.empty());
-    addr.sin_port = htons(peer_port);
-    if (::getnameinfo(reinterpret_cast<sockaddr*>(&addr), sizeof(addr),
-                      host.data(), host.size(), nullptr, 0, NI_NAMEREQD)
-        == 0) {
-      return std::string{host.data()};
-    }
-    return None{};
-  }
-  auto addr = sockaddr_in6{};
-  auto err = convert(peer_ip, addr);
-  TENZIR_ASSERT(err.empty());
-  addr.sin6_port = htons(peer_port);
-  if (::getnameinfo(reinterpret_cast<sockaddr*>(&addr), sizeof(addr),
-                    host.data(), host.size(), nullptr, 0, NI_NAMEREQD)
-      == 0) {
-    return std::string{host.data()};
-  }
-  return None{};
-}
 
 // Callback and reader coroutine both run on the EventBase thread, so access
 // to the members below is unsynchronized by design.
@@ -218,6 +191,16 @@ public:
       done_ = true;
       co_return;
     }
+    if (args_.resolve_hostnames) {
+      if (auto error = reverse_dns_.startup_error()) {
+        diagnostic::error("failed to initialize DNS resolver")
+          .primary(args_.endpoint, "reason: {}", error->error)
+          .emit(ctx);
+        message_sender_ = None{};
+        done_ = true;
+        co_return;
+      }
+    }
     // A truly label-free counter is not possible with the current metrics API:
     // `make_counter` always requires exactly one label pair.
     auto bytes_read_counter
@@ -249,10 +232,22 @@ public:
       [&](Datagram datagram) -> Task<void> {
         auto hostname = Option<std::string>{};
         if (args_.resolve_hostnames) {
-          // This is not very efficient can could be a bottleneck when enabled.
-          hostname = co_await spawn_blocking([datagram] -> Option<std::string> {
-            return reverse_lookup(datagram.peer_ip, datagram.peer_port);
-          });
+          auto reverse_dns = co_await reverse_dns_.resolve(datagram.peer_ip);
+          if (reverse_dns->is_err()) {
+            if (not peer_resolution_warning_emitted_) {
+              diagnostic::warning("{}", reverse_dns->unwrap_err().error)
+                .note("failed to resolve peer hostname for {}",
+                      datagram.peer_ip)
+                .note(
+                  "set `resolve_hostnames=false` to disable hostname resolution")
+                .primary(args_.endpoint)
+                .emit(ctx);
+              peer_resolution_warning_emitted_ = true;
+            }
+          } else if (auto* resolved
+                     = try_as<ReverseDnsResolved>(&reverse_dns->unwrap())) {
+            hostname = resolved->hostname;
+          }
         }
         auto bytes = as_bytes(datagram.payload);
         auto string = std::string_view{
@@ -441,12 +436,14 @@ private:
 
   AcceptUdpArgs args_;
   series_builder builder_;
+  ReverseDnsResolver reverse_dns_;
   folly::Executor::KeepAlive<folly::EventBase> evb_;
   Option<Sender<Message>> message_sender_;
   mutable Receiver<Message> message_receiver_;
   Option<folly::CancellationSource> batch_flush_cancel_;
   uint64_t batch_generation_ = 0;
   bool done_ = false;
+  bool peer_resolution_warning_emitted_ = false;
 };
 
 class AcceptUdpPlugin final : public virtual OperatorPlugin {
