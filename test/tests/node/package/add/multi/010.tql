@@ -1,0 +1,4 @@
+pipeline::list
+select id, definition
+write_tql
+save_stdout

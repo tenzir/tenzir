@@ -1,0 +1,5 @@
+{
+  num_entries: 0,
+  name: "test1-context",
+  configured: true,
+}

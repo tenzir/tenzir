@@ -1,0 +1,5 @@
+{
+  num_entries: 0,
+  name: "disabled-context-test3",
+  configured: true,
+}
