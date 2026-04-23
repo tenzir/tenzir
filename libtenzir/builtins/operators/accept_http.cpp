@@ -18,6 +18,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
+#include "tenzir/http_server.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
@@ -295,8 +296,8 @@ public:
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
     }
     auto response = get_response_for_path(args_, path);
-    co_return http::make_server_fixed_response(
-      response.status, response.content_type, response.body);
+    co_return http_server::make_response(response.status, response.content_type,
+                                         response.body);
   }
 
 private:
@@ -591,12 +592,12 @@ private:
         result.is_error()) {
       co_return None{};
     }
-    auto parsed = http::parse_server_endpoint(resolved_endpoint,
+    auto parsed = http_server::parse_endpoint(resolved_endpoint,
                                               args_.endpoint.source, ctx.dh());
     if (not parsed) {
       co_return None{};
     }
-    auto tls_enabled = http::is_server_tls_enabled(args_.tls);
+    auto tls_enabled = http_server::is_tls_enabled(args_.tls);
     if (parsed->scheme_tls) {
       if (*parsed->scheme_tls and not tls_enabled) {
         diagnostic::error("`https://` endpoint requires `tls=true`")

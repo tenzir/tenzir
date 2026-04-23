@@ -18,7 +18,6 @@
 #include <arrow/util/compression.h>
 #include <caf/error.hpp>
 #include <folly/io/async/SSLContext.h>
-#include <proxygen/lib/http/coro/HTTPSourceHolder.h>
 #include <wangle/ssl/SSLContextConfig.h>
 
 #include <cstdint>
@@ -45,24 +44,6 @@ auto make_header_secret_requests(
   Option<located<data>> const& headers,
   std::vector<std::pair<std::string, std::string>>& resolved_headers,
   diagnostic_handler& dh) -> std::vector<secret_request>;
-
-struct server_endpoint {
-  std::string host;
-  uint16_t port;
-  Option<bool> scheme_tls;
-};
-
-auto parse_server_endpoint(std::string_view endpoint, location loc,
-                           diagnostic_handler& dh,
-                           std::string_view argument_name = "endpoint")
-  -> Option<server_endpoint>;
-
-auto is_server_tls_enabled(Option<located<data>> const& tls) -> bool;
-
-auto make_server_fixed_response(uint16_t status,
-                                const std::string& content_type,
-                                std::string body)
-  -> proxygen::coro::HTTPSourceHolder;
 
 auto parse_folly_tls_version(std::string_view input)
   -> Option<folly::SSLContext::SSLVersion>;

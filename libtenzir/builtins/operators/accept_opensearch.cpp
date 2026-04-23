@@ -17,6 +17,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
+#include <tenzir/http_server.hpp>
 #include <tenzir/json_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -292,8 +293,8 @@ public:
     permit.release();
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
-    co_return http::make_server_fixed_response(
-      response.status, response.content_type, std::move(response.body));
+    co_return http_server::make_response(response.status, response.content_type,
+                                         std::move(response.body));
   }
 
 private:
@@ -479,12 +480,12 @@ private:
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto parsed = http::parse_server_endpoint(args_.url.inner, args_.url.source,
+    auto parsed = http_server::parse_endpoint(args_.url.inner, args_.url.source,
                                               ctx.dh(), "url");
     if (not parsed) {
       co_return None{};
     }
-    auto tls_enabled = http::is_server_tls_enabled(args_.tls);
+    auto tls_enabled = http_server::is_tls_enabled(args_.tls);
     if (parsed->scheme_tls) {
       if (*parsed->scheme_tls and not tls_enabled) {
         diagnostic::error("`https://` endpoint requires `tls=true`")
@@ -550,10 +551,9 @@ public:
         d, &AcceptOpenSearchArgs::tls);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
-      auto parsed = Option<http::server_endpoint>{None{}};
+      auto parsed = Option<http_server::server_endpoint>{None{}};
       if (auto url = ctx.get(url_arg)) {
-        parsed
-          = http::parse_server_endpoint(url->inner, url->source, ctx, "url");
+        http_server::parse_endpoint(url->inner, url->source, ctx, "url");
       }
       if (auto max_request_size = ctx.get(max_request_size_arg)) {
         if (max_request_size->inner == 0) {
@@ -569,7 +569,6 @@ public:
             .emit(ctx);
         }
       }
-      TENZIR_UNUSED(parsed);
       return {};
     });
     return d.without_optimize();

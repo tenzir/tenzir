@@ -842,13 +842,13 @@ struct plugin : public virtual operator_plugin2<opensearch_operator>,
 
   auto describe() const -> Description override {
     auto d = Describer<ToOpenSearchArgs, ToOpenSearch>{};
-    auto url = d.positional("url", &ToOpenSearchArgs::url);
-    auto action = d.named("action", &ToOpenSearchArgs::action, "string");
+    d.positional("url", &ToOpenSearchArgs::url);
+    d.named("action", &ToOpenSearchArgs::action, "string");
     d.named("index", &ToOpenSearchArgs::index, "string");
     d.named("id", &ToOpenSearchArgs::id, "string");
     d.named("doc", &ToOpenSearchArgs::doc, "record");
-    auto user = d.named("user", &ToOpenSearchArgs::user);
-    auto passwd = d.named("passwd", &ToOpenSearchArgs::passwd);
+    d.named("user", &ToOpenSearchArgs::user);
+    d.named("passwd", &ToOpenSearchArgs::passwd);
     d.named("include_nulls", &ToOpenSearchArgs::include_nulls);
     auto max_content_length = d.named_optional(
       "max_content_length", &ToOpenSearchArgs::max_content_length);
@@ -874,8 +874,6 @@ struct plugin : public virtual operator_plugin2<opensearch_operator>,
             .emit(ctx);
         }
       }
-      TRY(auto act, ctx.get(action));
-      TENZIR_UNUSED(act, url, user, passwd);
       return {};
     });
     return d.without_optimize();

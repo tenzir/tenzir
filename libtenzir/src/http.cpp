@@ -11,6 +11,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/http_server.hpp"
 
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
@@ -79,127 +80,6 @@ auto make_header_secret_requests(
       });
   }
   return result;
-}
-
-template <class T>
-auto parse_http_server_number(std::string_view text) -> Option<T> {
-  if (text.empty()) {
-    return None{};
-  }
-  auto value = T{};
-  auto const* begin = text.data();
-  auto const* end = begin + text.size();
-  auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} or ptr != end) {
-    return None{};
-  }
-  return value;
-}
-
-auto parse_server_endpoint(std::string_view endpoint, location loc,
-                           diagnostic_handler& dh,
-                           std::string_view argument_name)
-  -> Option<server_endpoint> {
-  if (endpoint.contains("://")) {
-    auto parsed = proxygen::URL{std::string{endpoint}};
-    if (not parsed.isValid() or not parsed.hasHost()) {
-      diagnostic::error("failed to parse endpoint URL").primary(loc).emit(dh);
-      return None{};
-    }
-    auto scheme = parsed.getScheme();
-    auto scheme_tls = Option<bool>{None{}};
-    if (scheme == "https") {
-      scheme_tls = true;
-    } else if (scheme == "http") {
-      scheme_tls = false;
-    } else {
-      diagnostic::error("unsupported endpoint URL scheme: `{}`", scheme)
-        .primary(loc)
-        .hint("use `http://` or `https://`")
-        .emit(dh);
-      return None{};
-    }
-    return server_endpoint{
-      .host = parsed.getHost(),
-      .port = parsed.getPort(),
-      .scheme_tls = scheme_tls,
-    };
-  }
-  if (endpoint.empty()) {
-    diagnostic::error("`{}` must not be empty", argument_name)
-      .primary(loc)
-      .emit(dh);
-    return None{};
-  }
-  if (endpoint.front() == '[') {
-    auto const close = endpoint.find(']');
-    if (close == std::string_view::npos) {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto const host = endpoint.substr(1, close - 1);
-    auto const rest = endpoint.substr(close + 1);
-    if (rest.empty() or rest.front() != ':') {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto port = parse_http_server_number<uint16_t>(rest.substr(1));
-    if (not port) {
-      diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-      return None{};
-    }
-    return server_endpoint{
-      .host = std::string{host},
-      .port = *port,
-      .scheme_tls = None{},
-    };
-  }
-  auto const colon = endpoint.rfind(':');
-  if (colon == std::string_view::npos) {
-    diagnostic::error("failed to parse endpoint")
-      .primary(loc)
-      .hint("expected `host:port`, `[host]:port`, or URL")
-      .emit(dh);
-    return None{};
-  }
-  auto const host = endpoint.substr(0, colon);
-  auto port = parse_http_server_number<uint16_t>(endpoint.substr(colon + 1));
-  if (not port) {
-    diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-    return None{};
-  }
-  return server_endpoint{
-    .host = std::string{host},
-    .port = *port,
-    .scheme_tls = None{},
-  };
-}
-
-auto is_server_tls_enabled(Option<located<data>> const& tls) -> bool {
-  if (not tls) {
-    return false;
-  }
-  auto tls_opts = tls_options{*tls, {.tls_default = false, .is_server = true}};
-  return tls_opts.get_tls(nullptr).inner;
-}
-
-auto make_server_fixed_response(uint16_t status,
-                                const std::string& content_type,
-                                std::string body)
-  -> proxygen::coro::HTTPSourceHolder {
-  auto* source = proxygen::coro::HTTPFixedSource::makeFixedResponse(
-    status, std::move(body));
-  if (not content_type.empty()) {
-    source->msg_->getHeaders().set(proxygen::HTTP_HEADER_CONTENT_TYPE,
-                                   content_type);
-  }
-  return proxygen::coro::HTTPSourceHolder{source};
 }
 
 auto parse_folly_tls_version(std::string_view input)
@@ -525,3 +405,111 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
 }
 
 } // namespace tenzir::http
+
+namespace tenzir::http_server {
+
+auto parse_endpoint(std::string_view endpoint, location loc,
+                           diagnostic_handler& dh,
+                           std::string_view argument_name)
+  -> Option<server_endpoint> {
+  if (endpoint.contains("://")) {
+    auto parsed = proxygen::URL{std::string{endpoint}};
+    if (not parsed.isValid() or not parsed.hasHost()) {
+      diagnostic::error("failed to parse endpoint URL").primary(loc).emit(dh);
+      return None{};
+    }
+    auto scheme = parsed.getScheme();
+    auto scheme_tls = Option<bool>{None{}};
+    if (scheme == "https") {
+      scheme_tls = true;
+    } else if (scheme == "http") {
+      scheme_tls = false;
+    } else {
+      diagnostic::error("unsupported endpoint URL scheme: `{}`", scheme)
+        .primary(loc)
+        .hint("use `http://` or `https://`")
+        .emit(dh);
+      return None{};
+    }
+    return server_endpoint{
+      .host = parsed.getHost(),
+      .port = parsed.getPort(),
+      .scheme_tls = scheme_tls,
+    };
+  }
+  if (endpoint.empty()) {
+    diagnostic::error("`{}` must not be empty", argument_name)
+      .primary(loc)
+      .emit(dh);
+    return None{};
+  }
+  if (endpoint.front() == '[') {
+    auto const close = endpoint.find(']');
+    if (close == std::string_view::npos) {
+      diagnostic::error("invalid IPv6 endpoint syntax")
+        .primary(loc)
+        .hint("expected `[host]:port`")
+        .emit(dh);
+      return None{};
+    }
+    auto const host = endpoint.substr(1, close - 1);
+    auto const rest = endpoint.substr(close + 1);
+    if (rest.empty() or rest.front() != ':') {
+      diagnostic::error("invalid IPv6 endpoint syntax")
+        .primary(loc)
+        .hint("expected `[host]:port`")
+        .emit(dh);
+      return None{};
+    }
+    auto port = parse_number<uint16_t>(rest.substr(1));
+    if (not port) {
+      diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
+      return None{};
+    }
+    return server_endpoint{
+      .host = std::string{host},
+      .port = *port,
+      .scheme_tls = None{},
+    };
+  }
+  auto const colon = endpoint.rfind(':');
+  if (colon == std::string_view::npos) {
+    diagnostic::error("failed to parse endpoint")
+      .primary(loc)
+      .hint("expected `host:port`, `[host]:port`, or URL")
+      .emit(dh);
+    return None{};
+  }
+  auto const host = endpoint.substr(0, colon);
+  auto port = parse_number<uint16_t>(endpoint.substr(colon + 1));
+  if (not port) {
+    diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
+    return None{};
+  }
+  return server_endpoint{
+    .host = std::string{host},
+    .port = *port,
+    .scheme_tls = None{},
+  };
+}
+
+auto is_tls_enabled(Option<located<data>> const& tls) -> bool {
+  if (not tls) {
+    return false;
+  }
+  auto tls_opts = tls_options{*tls, {.tls_default = false, .is_server = true}};
+  return tls_opts.get_tls(nullptr).inner;
+}
+
+auto make_response(uint16_t status, const std::string& content_type,
+                   std::string body) -> proxygen::coro::HTTPSourceHolder {
+  auto* source = proxygen::coro::HTTPFixedSource::makeFixedResponse(
+    status, std::move(body));
+  if (not content_type.empty()) {
+    source->msg_->getHeaders().set(proxygen::HTTP_HEADER_CONTENT_TYPE,
+                                   content_type);
+  }
+  return proxygen::coro::HTTPSourceHolder{source};
+}
+
+} // namespace tenzir::http_server
