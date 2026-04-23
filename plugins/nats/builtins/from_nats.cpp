@@ -34,6 +34,7 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::nats {
@@ -506,7 +507,8 @@ public:
       auto nak_guard = detail::scope_guard{[this]() noexcept {
         for (auto& msg : in_flight_) {
           if (msg) {
-            natsMsg_Nak(msg.get(), nullptr);
+            needs_shutdown_flush_
+              = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
           }
         }
         in_flight_.clear();
@@ -566,9 +568,10 @@ private:
 
   auto push_buffered(BufferedMessage item, Push<table_slice>& push)
     -> Task<void> {
-    auto nak_guard = detail::scope_guard{[&item]() noexcept {
+    auto nak_guard = detail::scope_guard{[this, &item]() noexcept {
       if (item.msg) {
-        natsMsg_Nak(item.msg.get(), nullptr);
+        needs_shutdown_flush_
+          = negative_acknowledge(item.msg.get()) or needs_shutdown_flush_;
       }
     }};
     co_await push(std::move(item.slice));
@@ -725,6 +728,14 @@ private:
     return true;
   }
 
+  static auto acknowledge(natsMsg* msg) -> bool {
+    return natsMsg_Ack(msg, nullptr) == NATS_OK;
+  }
+
+  static auto negative_acknowledge(natsMsg* msg) noexcept -> bool {
+    return natsMsg_Nak(msg, nullptr) == NATS_OK;
+  }
+
   auto acknowledge_pending(diagnostic_handler& dh) const -> bool {
     if (pending_acks_.empty()) {
       return false;
@@ -757,21 +768,28 @@ private:
       return;
     }
     source_->stop_accepting();
-    auto needs_flush = false;
+    auto needs_flush = std::exchange(needs_shutdown_flush_, false);
+    // Remove interest before NAKing locally held messages. Otherwise JetStream
+    // may redeliver them to this subscription while it is tearing down.
+    if (subscription_) {
+      if (natsSubscription_Unsubscribe(subscription_.get()) == NATS_OK
+          and connection_) {
+        (void)natsConnection_FlushTimeout(connection_.get(),
+                                          shutdown_flush_timeout_ms);
+      }
+    }
     while (auto message = source_->try_dequeue()) {
       match(
         std::move(*message),
         [&](IncomingMessage item) {
           source_->release_message_slot();
-          natsMsg_Nak(item.msg.get(), nullptr);
-          needs_flush = true;
+          needs_flush = negative_acknowledge(item.msg.get()) or needs_flush;
         },
         [](SubscriptionComplete) {});
     }
     for (auto& msg : pending_acks_) {
       if (msg) {
-        (void)natsMsg_Ack(msg.get(), nullptr);
-        needs_flush = true;
+        needs_flush = acknowledge(msg.get()) or needs_flush;
       }
     }
     pending_acks_.clear();
@@ -779,14 +797,12 @@ private:
       auto item = std::move(buffered_.front());
       buffered_.pop_front();
       if (item.msg) {
-        natsMsg_Nak(item.msg.get(), nullptr);
-        needs_flush = true;
+        needs_flush = negative_acknowledge(item.msg.get()) or needs_flush;
       }
     }
     for (auto& msg : in_flight_) {
       if (msg) {
-        natsMsg_Nak(msg.get(), nullptr);
-        needs_flush = true;
+        needs_flush = negative_acknowledge(msg.get()) or needs_flush;
       }
     }
     in_flight_.clear();
@@ -809,6 +825,7 @@ private:
   std::vector<nats_msg_ptr> in_flight_;
   MetricsCounter read_bytes_counter_;
   uint64_t received_ = 0;
+  bool needs_shutdown_flush_ = false;
   bool done_ = false;
 };
 
