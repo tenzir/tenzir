@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/detail/padded_buffer.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
@@ -302,6 +304,10 @@ public:
 
   auto parse(simdjson::padded_string_view json_line) -> void;
   auto validate_completion() const -> void;
+
+  /// Parses all NDJSON lines from a chunk using this parser.
+  /// Allocates a single padded buffer instead of per-line copies.
+  auto parse_lines(const chunk_ptr& body) -> void;
 
 private:
   std::size_t lines_processed_ = 0u;

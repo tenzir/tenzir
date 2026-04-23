@@ -37,10 +37,10 @@
 #include <proxygen/lib/http/coro/server/ScopedHTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
 
-#include <charconv>
 #include <cstddef>
 #include <limits>
 #include <span>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -70,21 +70,6 @@ struct AcceptOpenSearchArgs {
   }
 };
 
-template <class T>
-auto parse_number(std::string_view text) -> Option<T> {
-  if (text.empty()) {
-    return None{};
-  }
-  auto value = T{};
-  auto const* begin = text.data();
-  auto const* end = begin + text.size();
-  auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} or ptr != end) {
-    return None{};
-  }
-  return value;
-}
-
 struct Response {
   uint16_t status = 200;
   std::string content_type = std::string{bulk_content_type};
@@ -104,29 +89,6 @@ struct Noop {};
 
 using Message = variant<Noop, Request>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
-
-auto split_at_newline(const chunk_ptr& chunk)
-  -> std::vector<std::vector<std::byte>> {
-  if (not chunk or chunk->size() == 0) {
-    return {};
-  }
-  auto svs = std::vector<std::vector<std::byte>>{};
-  auto const end = chunk->end();
-  auto start = chunk->begin();
-  auto newline = std::find(start, end, std::byte{'\n'});
-  while (newline != end) {
-    ++newline;
-    auto& vec = svs.emplace_back();
-    vec.reserve(std::distance(start, newline) + simdjson::SIMDJSON_PADDING);
-    vec.insert(vec.begin(), start, newline);
-    start = newline;
-    newline = std::find(start, end, std::byte{'\n'});
-  }
-  auto& vec = svs.emplace_back();
-  vec.reserve(std::distance(start, newline) + simdjson::SIMDJSON_PADDING);
-  vec.insert(vec.begin(), start, newline);
-  return svs;
-}
 
 auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
   if (slice.rows() == 0) {
@@ -231,7 +193,8 @@ public:
         }
         auto content_length_header = std::string_view{
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
-        if (auto content_length = parse_number<size_t>(content_length_header);
+        if (auto content_length
+            = http_server::parse_number<size_t>(content_length_header);
             content_length and *content_length > args_.get_max_request_size()) {
           response = Response{.status = 413,
                               .content_type = std::string{bulk_content_type},
@@ -308,7 +271,8 @@ private:
 class AcceptOpenSearch final : public Operator<void, table_slice> {
 public:
   explicit AcceptOpenSearch(AcceptOpenSearchArgs args)
-    : args_{std::move(args)}, active_connections_{std::in_place, uint64_t{10}} {
+    : args_{std::move(args)},
+      active_connections_{std::in_place, get_max_connections()} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -333,9 +297,31 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    // When the operator is forcefully stopped (e.g., by `head 1` finishing),
+    // the executor cancels the operator scope. This task catches that
+    // cancellation, unblocks any in-flight handlers, then drains the server
+    // while the main EventBase is still running.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      co_await request_stop();
+      {
+        auto active_requests = co_await active_requests_.lock();
+        for (auto& [_, signal] : *active_requests) {
+          signal->send(Response{.status = 503,
+                                .content_type = std::string{bulk_content_type},
+                                .body = "{}"});
+        }
+      }
+      if (server_) {
+        (*server_)->getServer().drain();
+        // The ScopedHTTPServer destructor blocks on thread_.join(), so
+        // run it in a detached thread to avoid blocking the executor fiber.
+        auto srv = std::move(*server_);
+        server_ = None{};
+        std::thread([srv = std::move(srv)]() {
+          // srv destructor calls drain()+forceStop()+thread_.join()
+        }).detach();
+      }
+      lifecycle_ = Lifecycle::done;
     });
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
@@ -389,20 +375,7 @@ public:
         }
         bytes_read_counter_.add(body->size());
         auto parser = json::ndjson_parser{"accept_opensearch", ctx.dh(), {}};
-        for (auto const& line : split_at_newline(body)) {
-          if (line.empty()) {
-            continue;
-          }
-          auto view = simdjson::padded_string_view{
-            reinterpret_cast<char const*>(line.data()),
-            line.size(),
-            line.capacity(),
-          };
-          parser.parse(view);
-          if (parser.abort_requested) {
-            break;
-          }
-        }
+        parser.parse_lines(body);
         auto result = parser.builder.finalize_as_table_slice();
         if (args_.keep_actions) {
           for (auto& slice : result) {
@@ -451,6 +424,10 @@ private:
     done,
   };
 
+  static auto get_max_connections() -> uint64_t {
+    return 10;
+  }
+
   auto request_stop() -> Task<void> {
     if (lifecycle_ == Lifecycle::done or lifecycle_ == Lifecycle::draining) {
       co_return;
@@ -474,7 +451,7 @@ private:
     if (lifecycle_ != Lifecycle::draining) {
       co_return;
     }
-    if (active_connections_->available_permits() != uint64_t{10}) {
+    if (active_connections_->available_permits() != get_max_connections()) {
       co_return;
     }
     auto active_requests = co_await active_requests_.lock();
@@ -531,12 +508,15 @@ private:
     co_return config;
   }
 
+  // --- args ---
   AcceptOpenSearchArgs args_;
-  mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
+  // --- transient ---
+  Arc<Semaphore> active_connections_;
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
   Mutex<std::unordered_map<uint64_t, Arc<ResponseSignal>>> active_requests_{{}};
-  Arc<Semaphore> active_connections_;
-  MetricsCounter bytes_read_counter_ = {};
+  MetricsCounter bytes_read_counter_;
+  mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
+  // --- state ---
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 

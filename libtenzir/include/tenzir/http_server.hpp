@@ -15,7 +15,6 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/tls_options.hpp"
 
 #include <proxygen/lib/http/coro/HTTPSourceHolder.h>
 
@@ -48,8 +47,8 @@ struct server_endpoint {
 };
 
 auto parse_endpoint(std::string_view endpoint, location loc,
-                           diagnostic_handler& dh,
-                           std::string_view argument_name = "endpoint")
+                    diagnostic_handler& dh,
+                    std::string_view argument_name = "endpoint")
   -> Option<server_endpoint>;
 
 auto is_tls_enabled(Option<located<data>> const& tls) -> bool;
