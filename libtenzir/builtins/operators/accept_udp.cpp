@@ -8,7 +8,6 @@
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
-#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/channel.hpp>
 #include <tenzir/async/dns.hpp>
 #include <tenzir/async/notify.hpp>
@@ -174,22 +173,23 @@ public:
     // `dcheckIsInEventBaseThread` holds and access to `SocketReadCallback`'s
     // members needs no synchronization.
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    // The underlying `getaddrinfo` call is blocking.
-    auto url = args_.endpoint.inner;
-    auto bind_address = co_await spawn_blocking(
-      [url = std::move(url)] -> Result<folly::SocketAddress, std::string> {
-        auto result = folly::SocketAddress{};
-        try {
-          result.setFromHostPort(url);
-        } catch (std::exception const& ex) {
-          return Err{std::string{ex.what()}};
-        }
-        return result;
-      });
+    auto bind_address = co_await forward_dns_.resolve_bind_address(
+      args_.endpoint.inner);
     if (bind_address.is_err()) {
-      diagnostic::error("invalid UDP endpoint")
-        .primary(args_.endpoint, "{}", std::move(bind_address).unwrap_err())
-        .emit(ctx);
+      auto error = std::move(bind_address).unwrap_err();
+      match(
+        std::move(error),
+        [&](InvalidSocketAddress invalid) {
+          diagnostic::error("invalid UDP endpoint")
+            .primary(args_.endpoint, "{}", invalid)
+            .emit(ctx);
+        },
+        [&](ResolveAddressError failed) {
+          diagnostic::error("failed to resolve listen address")
+            .primary(args_.endpoint)
+            .note("reason: {}", failed)
+            .emit(ctx);
+        });
       message_sender_ = None{};
       co_return;
     }
@@ -435,6 +435,7 @@ private:
 
   AcceptUdpArgs args_;
   series_builder builder_;
+  ForwardDnsResolver forward_dns_;
   ReverseDnsResolver reverse_dns_;
   folly::Executor::KeepAlive<folly::EventBase> evb_;
   Option<Sender<Message>> message_sender_;

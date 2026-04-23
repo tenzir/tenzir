@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/channel.hpp>
+#include <tenzir/async/dns.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -58,20 +58,12 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto url = args_.endpoint.inner;
-    auto address = co_await spawn_blocking(
-      [url = std::move(url)] -> Result<folly::SocketAddress, std::string> {
-        auto result = folly::SocketAddress{};
-        try {
-          result.setFromHostPort(url);
-        } catch (std::exception const& ex) {
-          return Err{std::string{ex.what()}};
-        }
-        return result;
-      });
+    auto address = co_await forward_dns_.resolve_socket_address(
+      args_.endpoint.inner);
     if (address.is_err()) {
+      auto error = std::move(address).unwrap_err();
       diagnostic::error("invalid UDP endpoint")
-        .primary(args_.endpoint, "{}", std::move(address).unwrap_err())
+        .primary(args_.endpoint, "{}", error)
         .emit(ctx);
       co_return;
     }
@@ -247,6 +239,7 @@ private:
 
   ToUdpArgs args_;
   folly::Executor::KeepAlive<folly::EventBase> evb_;
+  ForwardDnsResolver forward_dns_;
   Option<Sender<SendBatch>> write_sender_;
   Receiver<SendBatch> write_receiver_;
   MetricsCounter bytes_write_counter_;

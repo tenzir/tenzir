@@ -20,7 +20,9 @@
 #include "tenzir/socket.hpp"
 
 #include <folly/CancellationToken.h>
+#include <folly/IPAddress.h>
 #include <folly/OperationCancelled.h>
+#include <folly/SocketAddress.h>
 #include <folly/coro/AsyncScope.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/WithCancellation.h>
@@ -30,6 +32,7 @@
 
 #include <algorithm>
 #include <ares.h>
+#include <charconv>
 #include <chrono>
 #include <cstring>
 #include <limits>
@@ -47,6 +50,11 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using DnsDuration = Clock::duration;
 
+enum class SocketAddressEndpointKind {
+  remote,
+  bind,
+};
+
 auto normalize_config(DnsResolverConfig config) -> DnsResolverConfig {
   config.max_in_flight = std::max(size_t{1}, config.max_in_flight);
   config.max_entries = std::max(size_t{1}, config.max_entries);
@@ -59,6 +67,60 @@ auto normalize_config(DnsResolverConfig config) -> DnsResolverConfig {
   config.literal_ttl
     = std::max(config.literal_ttl, std::chrono::seconds::zero());
   return config;
+}
+
+auto parse_socket_address(std::string_view endpoint,
+                          SocketAddressEndpointKind kind)
+  -> Result<std::pair<std::string, uint16_t>, SocketAddressResolutionError> {
+  auto host = std::string_view{};
+  auto port = std::string_view{};
+  if (endpoint.empty()) {
+    return Err{SocketAddressResolutionError{InvalidSocketAddress{}}};
+  }
+  if (endpoint.front() == '[') {
+    auto close = endpoint.find(']');
+    if (close == std::string_view::npos or close + 1 >= endpoint.size()
+        or endpoint[close + 1] != ':') {
+      return Err{SocketAddressResolutionError{InvalidSocketAddress{}}};
+    }
+    host = endpoint.substr(1, close - 1);
+    port = endpoint.substr(close + 2);
+  } else {
+    auto colon = endpoint.rfind(':');
+    if (colon == std::string_view::npos) {
+      return Err{SocketAddressResolutionError{InvalidSocketAddress{}}};
+    }
+    host = endpoint.substr(0, colon);
+    port = endpoint.substr(colon + 1);
+    if (host.find(':') != std::string_view::npos) {
+      return Err{SocketAddressResolutionError{InvalidSocketAddress{}}};
+    }
+  }
+  if (port.empty()
+      or (kind == SocketAddressEndpointKind::remote and host.empty())) {
+    return Err{SocketAddressResolutionError{InvalidSocketAddress{}}};
+  }
+  auto parsed_port = uint64_t{};
+  auto [ptr, ec]
+    = std::from_chars(port.data(), port.data() + port.size(), parsed_port);
+  if (ec != std::errc{} or ptr != port.data() + port.size()
+      or parsed_port > std::numeric_limits<uint16_t>::max()) {
+    return Err{SocketAddressResolutionError{InvalidSocketAddress{}}};
+  }
+  return std::pair{std::string{host}, static_cast<uint16_t>(parsed_port)};
+}
+
+auto to_folly_ip(ip address) -> folly::IPAddress {
+  if (address.is_v4()) {
+    auto sockaddr = sockaddr_in{};
+    auto err = convert(address, sockaddr);
+    TENZIR_ASSERT(err.empty());
+    return folly::IPAddress{sockaddr.sin_addr};
+  }
+  auto sockaddr = sockaddr_in6{};
+  auto err = convert(address, sockaddr);
+  TENZIR_ASSERT(err.empty());
+  return folly::IPAddress{sockaddr.sin6_addr};
 }
 
 struct AresLibrary {
@@ -694,6 +756,50 @@ auto ForwardDnsResolver::startup_error() const -> Option<DnsError> {
     return None{};
   }
   return make_dns_error(impl_->channel_.status());
+}
+
+auto ForwardDnsResolver::resolve_socket_address(std::string_view endpoint)
+  -> Task<Result<folly::SocketAddress, SocketAddressResolutionError>> {
+  auto parsed = parse_socket_address(endpoint, SocketAddressEndpointKind::remote);
+  if (parsed.is_err()) {
+    co_return Err{SocketAddressResolutionError{std::move(parsed).unwrap_err()}};
+  }
+  auto [host, port] = std::move(parsed).unwrap();
+  auto resolved = co_await resolve(host);
+  auto* addresses = resolved->is_err()
+                      ? nullptr
+                      : try_as<ForwardDnsResolved>(&resolved->unwrap());
+  if (not addresses or addresses->answers.empty()) {
+    if (resolved->is_err()) {
+      co_return Err{
+        SocketAddressResolutionError{ResolveAddressError{
+          resolved->unwrap_err(),
+        }},
+      };
+    }
+    co_return Err{
+      SocketAddressResolutionError{ResolveAddressError{DnsNotFound{}}},
+    };
+  }
+  auto address = folly::SocketAddress{};
+  address.setFromIpAddrPort(to_folly_ip(addresses->answers.front().address),
+                            port);
+  co_return address;
+}
+
+auto ForwardDnsResolver::resolve_bind_address(std::string_view endpoint)
+  -> Task<Result<folly::SocketAddress, SocketAddressResolutionError>> {
+  auto parsed = parse_socket_address(endpoint, SocketAddressEndpointKind::bind);
+  if (parsed.is_err()) {
+    co_return Err{SocketAddressResolutionError{std::move(parsed).unwrap_err()}};
+  }
+  auto [host, port] = std::move(parsed).unwrap();
+  if (host.empty()) {
+    auto address = folly::SocketAddress{};
+    address.setFromLocalPort(port);
+    co_return address;
+  }
+  co_return co_await resolve_socket_address(endpoint);
 }
 
 struct ReverseDnsResolver::Impl {

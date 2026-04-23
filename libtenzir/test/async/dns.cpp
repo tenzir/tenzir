@@ -14,6 +14,7 @@
 
 #include <folly/CancellationToken.h>
 #include <folly/OperationCancelled.h>
+#include <folly/SocketAddress.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/WithCancellation.h>
 
@@ -102,6 +103,51 @@ TEST("forward dns cached ttl reflects remaining lifetime") {
   check_eq(resolved->answers.size(), size_t{1});
   check(resolved->answers[0].ttl < std::chrono::seconds{5});
   check(resolved->answers[0].ttl > std::chrono::seconds{0});
+}
+
+TEST("forward dns resolves remote socket addresses") {
+  auto resolver = detail::DnsResolverTestAccess::make_forward(
+    ForwardDnsConfig{
+      .positive_ttl = std::chrono::hours{1},
+      .negative_ttl = std::chrono::hours{1},
+      .literal_ttl = std::chrono::hours{1},
+    },
+    [](std::string) -> Task<ForwardDnsResult> {
+      co_return ForwardDnsLookup{ForwardDnsResolved{
+        .answers = {{
+          .address = loopback_ip(42),
+          .type = "A",
+          .ttl = std::chrono::seconds{60},
+        }},
+      }};
+    });
+  auto result
+    = folly::coro::blockingWait(resolver.resolve_socket_address("dns.test:9000"));
+  require(not result.is_err());
+  check_eq(result.unwrap().describe(), std::string{"127.0.0.42:9000"});
+}
+
+TEST("forward dns resolves bind socket addresses with empty host") {
+  auto resolver = ForwardDnsResolver{};
+  auto result = folly::coro::blockingWait(resolver.resolve_bind_address(":4242"));
+  require(not result.is_err());
+  check(result.unwrap().getIPAddress().isZero());
+  check_eq(result.unwrap().getPort(), uint16_t{4242});
+}
+
+TEST("forward dns socket address helper rejects malformed endpoints") {
+  auto resolver = ForwardDnsResolver{};
+  auto result = folly::coro::blockingWait(resolver.resolve_socket_address(
+    "missing-port"));
+  require(result.is_err());
+  check(match(
+    result.unwrap_err(),
+    [](InvalidSocketAddress) {
+      return true;
+    },
+    [](ResolveAddressError const&) {
+      return false;
+    }));
 }
 
 TEST("reverse dns resolves loopback addresses without network access") {
