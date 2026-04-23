@@ -60,6 +60,30 @@ Prefer `detail::narrow<T>()` over `static_cast<T>()` when narrowing to catch
 overflow bugs. Use `detail::narrow_cast<T>()` only when the narrowing is
 provably safe.
 
+## Diagnostics and Pipeline Cancellation
+
+Emitting `diagnostic::error(...)` at runtime (i.e., during `start()`,
+`process()`, `finalize()`, or any other operator method) cancels the pipeline.
+
+The executor wraps the diagnostic handler in `ExecDiagHandler`
+(`libtenzir/src/tql2/exec.cpp`), which intercepts every error-level diagnostic:
+
+```cpp
+if (d.severity == severity::error) {
+    failure_ = failure::promise();
+    cancel_source_->requestCancellation();
+}
+```
+
+This means operators do not need to manually abort after emitting an error
+diagnostic — the executor will cancel the pipeline via folly's cancellation
+token. However, operators should still `co_return` after emitting an error to
+avoid executing further logic that depends on the failed precondition.
+
+During the compile phase (in `describe()` / `GenericIr::make()`), error
+diagnostics are tracked by an `error_tracking_handler` and prevent the operator
+from being instantiated (`failure::promise()` is returned instead).
+
 ## Return Types
 
 - `failure_or<T>` — For functions that emit diagnostic errors and signal when an error occurred
