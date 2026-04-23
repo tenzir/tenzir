@@ -2,4 +2,4 @@
 error: true
 ---
 
-from_udp "127.0.0.1"
+accept_udp "127.0.0.1"
