@@ -9,23 +9,36 @@
 #include "tenzir/async.hpp"
 
 #include <tenzir/async/curl.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 
+#include <folly/coro/BoundedQueue.h>
+
 namespace tenzir::plugins::to_ftp {
 
 namespace {
 
 constexpr auto upload_queue_capacity = size_t{16};
+constexpr auto upload_message_queue_capacity = uint32_t{16};
 
 struct ToFtpArgs {
   located<secret> url;
   Option<located<data>> tls;
   located<ir::pipeline> printer;
 };
+
+struct UploadChunk {
+  chunk_ptr chunk;
+};
+
+struct UploadInputDone {};
+
+using UploadMessage = variant<UploadChunk, UploadInputDone>;
+using UploadMessageQueue = folly::coro::BoundedQueue<UploadMessage>;
 
 auto add_default_ftp_scheme(std::string& url) -> void {
   if (not url.starts_with("ftp://") and not url.starts_with("ftps://")) {
@@ -138,29 +151,58 @@ public:
     auto sub = ctx.get_sub(caf::none);
     if (not sub) {
       lifecycle_ = Lifecycle::done;
+      if (upload_) {
+        upload_->abort();
+      }
       co_return;
     }
     auto& printer = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
-      lifecycle_ = Lifecycle::done;
+      lifecycle_ = Lifecycle::draining;
       if (upload_) {
         upload_->abort();
       }
     }
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
-    -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+    if (not chunk or chunk->size() == 0) {
       co_return;
     }
-    TENZIR_ASSERT(upload_);
-    if (not co_await upload_->push(std::move(chunk))) {
-      co_await finish_upload(ctx);
-      co_return;
-    }
-    uploaded_anything_ = true;
+    co_await upload_messages_->enqueue(UploadChunk{std::move(chunk)});
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await upload_messages_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    co_await co_match(
+      std::move(result).as<UploadMessage>(),
+      [&](UploadChunk message) -> Task<void> {
+        if (lifecycle_ == Lifecycle::done or not upload_) {
+          co_return;
+        }
+        if (not co_await upload_->push(std::move(message.chunk))) {
+          co_await finish_upload(ctx);
+          if (lifecycle_ == Lifecycle::running) {
+            lifecycle_ = Lifecycle::draining;
+            if (auto sub = ctx.get_sub(caf::none)) {
+              auto& printer = as<SubHandle<table_slice>>(*sub);
+              co_await printer.close();
+            } else {
+              lifecycle_ = Lifecycle::done;
+            }
+          }
+          co_return;
+        }
+        uploaded_anything_ = true;
+      },
+      [&](UploadInputDone) -> Task<void> {
+        co_await finish_upload(ctx);
+        lifecycle_ = Lifecycle::done;
+      });
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -180,6 +222,7 @@ public:
       if (upload_) {
         co_await finish_upload(ctx);
       }
+      lifecycle_ = Lifecycle::done;
       co_return FinalizeBehavior::done;
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
@@ -187,7 +230,12 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
-    co_await finish_upload(ctx);
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    ctx.spawn_task([this]() -> Task<void> {
+      co_await upload_messages_->enqueue(UploadInputDone{});
+    });
     co_return;
   }
 
@@ -214,7 +262,6 @@ public:
 private:
   auto finish_upload(OpCtx& ctx) -> Task<void> {
     if (not upload_) {
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     upload_->close();
@@ -239,7 +286,6 @@ private:
         .emit(ctx);
     }
     upload_.reset();
-    lifecycle_ = Lifecycle::done;
     co_return;
   }
 
@@ -251,6 +297,10 @@ private:
 
   Option<CurlSession> session_;
   Option<CurlUploadTransfer> upload_;
+  mutable Box<UploadMessageQueue> upload_messages_{
+    std::in_place,
+    upload_message_queue_capacity,
+  };
   ToFtpArgs args_;
   std::string resolved_url_;
   Lifecycle lifecycle_ = Lifecycle::running;
