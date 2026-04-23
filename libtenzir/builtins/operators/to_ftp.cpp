@@ -37,7 +37,11 @@ struct UploadChunk {
 
 struct UploadInputDone {};
 
-using UploadMessage = variant<UploadChunk, UploadInputDone>;
+struct UploadAbort {
+  bool terminal = false;
+};
+
+using UploadMessage = variant<UploadChunk, UploadInputDone, UploadAbort>;
 using UploadMessageQueue = folly::coro::BoundedQueue<UploadMessage>;
 
 auto add_default_ftp_scheme(std::string& url) -> void {
@@ -139,8 +143,8 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    upload_.emplace(session_->start_upload(upload_queue_capacity));
     co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
+    upload_task_.emplace(ctx.spawn_task(upload_loop(ctx)));
     co_return;
   }
 
@@ -150,19 +154,16 @@ public:
     }
     auto sub = ctx.get_sub(caf::none);
     if (not sub) {
-      lifecycle_ = Lifecycle::done;
-      if (upload_) {
-        upload_->abort();
-      }
+      lifecycle_ = Lifecycle::draining;
+      co_await request_upload_abort(true);
+      co_await finish_upload_task();
       co_return;
     }
     auto& printer = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
       lifecycle_ = Lifecycle::draining;
-      if (upload_) {
-        upload_->abort();
-      }
+      co_await request_upload_abort(false);
     }
   }
 
@@ -173,43 +174,8 @@ public:
     co_await upload_messages_->enqueue(UploadChunk{std::move(chunk)});
   }
 
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await upload_messages_->dequeue();
-  }
-
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    co_await co_match(
-      std::move(result).as<UploadMessage>(),
-      [&](UploadChunk message) -> Task<void> {
-        if (lifecycle_ == Lifecycle::done or not upload_) {
-          co_return;
-        }
-        if (not co_await upload_->push(std::move(message.chunk))) {
-          co_await finish_upload(ctx);
-          if (lifecycle_ == Lifecycle::running) {
-            lifecycle_ = Lifecycle::draining;
-            if (auto sub = ctx.get_sub(caf::none)) {
-              auto& printer = as<SubHandle<table_slice>>(*sub);
-              co_await printer.close();
-            } else {
-              lifecycle_ = Lifecycle::done;
-            }
-          }
-          co_return;
-        }
-        uploaded_anything_ = true;
-      },
-      [&](UploadInputDone) -> Task<void> {
-        co_await finish_upload(ctx);
-        lifecycle_ = Lifecycle::done;
-      });
-  }
-
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (lifecycle_ == Lifecycle::done) {
-      if (upload_) {
-        upload_->abort();
-      }
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
@@ -219,24 +185,20 @@ public:
         co_await printer.close();
         co_return FinalizeBehavior::continue_;
       }
-      if (upload_) {
-        co_await finish_upload(ctx);
-      }
-      lifecycle_ = Lifecycle::done;
+      co_await request_upload_done();
+      co_await finish_upload_task();
       co_return FinalizeBehavior::done;
     }
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
   }
 
-  auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
+  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
-    ctx.spawn_task([this]() -> Task<void> {
-      co_await upload_messages_->enqueue(UploadInputDone{});
-    });
-    co_return;
+    co_await upload_messages_->enqueue(UploadInputDone{});
+    co_await finish_upload_task();
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -244,9 +206,7 @@ public:
       co_return;
     }
     lifecycle_ = Lifecycle::done;
-    if (upload_) {
-      upload_->abort();
-    }
+    co_await request_upload_abort(true);
     if (auto sub = ctx.get_sub(caf::none)) {
       auto& printer = as<SubHandle<table_slice>>(*sub);
       co_await printer.close();
@@ -260,15 +220,84 @@ public:
   }
 
 private:
-  auto finish_upload(OpCtx& ctx) -> Task<void> {
-    if (not upload_) {
+  auto request_upload_done() -> Task<void> {
+    if (not upload_task_) {
       co_return;
     }
-    upload_->close();
-    auto upload_result = co_await upload_->result();
+    co_await upload_messages_->enqueue(UploadInputDone{});
+  }
+
+  auto request_upload_abort(bool terminal) -> Task<void> {
+    if (not upload_task_) {
+      co_return;
+    }
+    co_await upload_messages_->enqueue(UploadAbort{.terminal = terminal});
+  }
+
+  auto finish_upload_task() -> Task<void> {
+    if (not upload_task_) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto upload_task = std::move(*upload_task_);
+    upload_task_.reset();
+    co_await upload_task.join();
+    lifecycle_ = Lifecycle::done;
+  }
+
+  auto upload_loop(OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(session_);
+    auto upload = session_->start_upload(upload_queue_capacity);
+    auto uploaded_anything = false;
+    auto local_abort = false;
+    auto accepting_chunks = true;
+    auto finish = [&]() -> Task<void> {
+      auto upload_result = co_await upload.result();
+      emit_upload_result(ctx, upload_result, uploaded_anything, local_abort);
+    };
+    while (true) {
+      auto message = co_await upload_messages_->dequeue();
+      auto done = co_await co_match(
+        std::move(message),
+        [&](UploadChunk message) -> Task<bool> {
+          if (not accepting_chunks) {
+            co_return false;
+          }
+          if (co_await upload.push(std::move(message.chunk))) {
+            uploaded_anything = true;
+            co_return false;
+          }
+          accepting_chunks = false;
+          co_return false;
+        },
+        [&](UploadInputDone) -> Task<bool> {
+          if (not local_abort) {
+            upload.close();
+          }
+          co_await finish();
+          co_return true;
+        },
+        [&](UploadAbort abort) -> Task<bool> {
+          local_abort = true;
+          accepting_chunks = false;
+          upload.abort();
+          if (not abort.terminal) {
+            co_return false;
+          }
+          co_await finish();
+          co_return true;
+        });
+      if (done) {
+        co_return;
+      }
+    }
+  }
+
+  auto emit_upload_result(OpCtx& ctx, CurlUploadResult& upload_result,
+                          bool uploaded_anything, bool local_abort) -> void {
     if (upload_result.is_ok()
         and upload_result.unwrap() == CurlTransferStatus::finished
-        and uploaded_anything_) {
+        and uploaded_anything) {
       auto [response_code_status, response_code]
         = session_->easy().get<curl::easy::info::response_code>();
       if (response_code_status == curl::easy::code::ok
@@ -279,14 +308,12 @@ private:
           .emit(ctx);
       }
     }
-    if (upload_result.is_err()) {
+    if (upload_result.is_err() and not local_abort) {
       diagnostic::error("FTP upload failed")
         .primary(args_.url.source)
         .note("curl error: {}", to_string(upload_result.unwrap_err()))
         .emit(ctx);
     }
-    upload_.reset();
-    co_return;
   }
 
   enum class Lifecycle {
@@ -296,7 +323,7 @@ private:
   };
 
   Option<CurlSession> session_;
-  Option<CurlUploadTransfer> upload_;
+  Option<AsyncHandle<void>> upload_task_;
   mutable Box<UploadMessageQueue> upload_messages_{
     std::in_place,
     upload_message_queue_capacity,
@@ -304,7 +331,6 @@ private:
   ToFtpArgs args_;
   std::string resolved_url_;
   Lifecycle lifecycle_ = Lifecycle::running;
-  bool uploaded_anything_ = false;
 };
 
 class ToFtpPlugin final : public OperatorPlugin {
