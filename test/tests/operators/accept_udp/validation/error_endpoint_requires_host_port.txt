@@ -1,5 +1,5 @@
 error: invalid UDP endpoint
- --> tests/operators/from_udp/validation/error_endpoint_requires_host_port.tql:5:12
+ --> tests/operators/accept_udp/validation/error_endpoint_requires_host_port.tql:5:12
   |
 5 | accept_udp "127.0.0.1"
   |            ^^^^^^^^^^^ expected a host and port string of the form "<host>:<port>"
