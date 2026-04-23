@@ -266,9 +266,12 @@ public:
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto endpoint = to<struct endpoint>(endpoint_str.inner);
-      auto location = ctx.get_location(endpoint_arg).value_or(location::unknown);
+      auto location
+        = ctx.get_location(endpoint_arg).value_or(location::unknown);
       if (not endpoint) {
-        diagnostic::error("failed to parse endpoint").primary(location).emit(ctx);
+        diagnostic::error("failed to parse endpoint")
+          .primary(location)
+          .emit(ctx);
       } else if (not endpoint->port) {
         diagnostic::error("port number is required").primary(location).emit(ctx);
       } else if (endpoint->host.empty()) {

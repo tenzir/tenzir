@@ -384,9 +384,9 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
     *len = buffer_.size();
   }
 
-  void onDataAvailable(const folly::SocketAddress& client, size_t len,
-                       bool truncated, OnDataAvailableParams) noexcept
-    override {
+  void
+  onDataAvailable(const folly::SocketAddress& client, size_t len,
+                  bool truncated, OnDataAvailableParams) noexcept override {
     // The buffer is sized to fit any valid UDP datagram payload (max 65,527
     // bytes), so the kernel should never truncate.
     TENZIR_ASSERT(not truncated);
@@ -396,12 +396,12 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
                   or addr_len == sizeof(sockaddr_in6));
     auto peer_ip = ip{};
     if (client.getFamily() == AF_INET) {
-      auto err = convert(*reinterpret_cast<sockaddr_in const*>(&storage),
-                         peer_ip);
+      auto err
+        = convert(*reinterpret_cast<sockaddr_in const*>(&storage), peer_ip);
       TENZIR_ASSERT(err.empty());
     } else {
-      auto err = convert(*reinterpret_cast<sockaddr_in6 const*>(&storage),
-                         peer_ip);
+      auto err
+        = convert(*reinterpret_cast<sockaddr_in6 const*>(&storage), peer_ip);
       TENZIR_ASSERT(err.empty());
     }
     auto payload = chunk::copy(
@@ -468,13 +468,13 @@ public:
     }
     // A truly label-free counter is not possible with the current metrics API:
     // `make_counter` always requires exactly one label pair.
-    auto bytes_read_counter = ctx.make_counter(
-      MetricsLabel{"operator", "from_udp"},
-      MetricsDirection::read, MetricsVisibility::external_);
+    auto bytes_read_counter
+      = ctx.make_counter(MetricsLabel{"operator", "from_udp"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     TENZIR_ASSERT(message_sender_);
     ctx.spawn_task(folly::coro::co_withExecutor(
-      evb_, read_loop(*evb_, std::move(bind_address).unwrap(),
-                      *message_sender_, std::move(bytes_read_counter))));
+      evb_, read_loop(*evb_, std::move(bind_address).unwrap(), *message_sender_,
+                      std::move(bytes_read_counter))));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -610,8 +610,8 @@ private:
 
   static auto
   read_loop(folly::EventBase& evb, folly::SocketAddress bind_address,
-            Sender<Message> message_sender,
-            MetricsCounter bytes_read_counter) -> Task<void> {
+            Sender<Message> message_sender, MetricsCounter bytes_read_counter)
+    -> Task<void> {
     auto socket = folly::AsyncUDPSocket{&evb};
     auto callback = SocketReadCallback{};
     callback.bytes_read_counter = std::move(bytes_read_counter);
