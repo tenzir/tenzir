@@ -10,6 +10,7 @@
 
 #include <tenzir/async/task.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
@@ -55,14 +56,6 @@ auto parse_encoding(std::string_view encoding) -> std::optional<Encoding> {
   return std::nullopt;
 }
 
-auto make_json_printer(Encoding encoding) -> json_printer2 {
-  TENZIR_UNUSED(encoding);
-  return json_printer2{json_printer_options{
-    .style = no_style(),
-    .oneline = true,
-  }};
-}
-
 auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
                      diagnostic_handler& dh) -> std::optional<std::string> {
   auto result = eval(expr, input, dh);
@@ -90,12 +83,27 @@ auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
   return std::nullopt;
 }
 
-auto serialize_row(json_printer2& printer, const table_slice& input)
+auto serialize_row(Encoding encoding, const table_slice& input)
   -> caf::expected<chunk_ptr> {
   for (auto row : values3(input)) {
-    printer.load_new(row);
-    auto bytes = printer.bytes();
-    return chunk::copy(bytes.data(), bytes.size());
+    if (encoding == Encoding::ndjson) {
+      auto compact_printer = json_printer2{json_printer_options{
+        .style = no_style(),
+        .oneline = true,
+      }};
+      compact_printer.load_new(row);
+      auto bytes = compact_printer.bytes();
+      return chunk::copy(bytes.data(), bytes.size());
+    }
+    auto pretty_printer = json_printer{json_printer_options{
+      .style = no_style(),
+    }};
+    auto buffer = std::string{};
+    auto it = std::back_inserter(buffer);
+    if (not pretty_printer.print(it, row)) {
+      return caf::make_error(ec::invalid_argument, "failed to print JSON");
+    }
+    return chunk::copy(buffer.data(), buffer.size());
   }
   return caf::make_error(ec::invalid_argument, "expected one event");
 }
@@ -104,9 +112,7 @@ template <transport::ConnectionMode Mode>
 class ZmqSink final : public Operator<table_slice, void> {
 public:
   explicit ZmqSink(SinkArgs args)
-    : args_{std::move(args)},
-      encoding_{*parse_encoding(args_.encoding.inner)},
-      printer_{make_json_printer(encoding_)} {
+    : args_{std::move(args)}, encoding_{*parse_encoding(args_.encoding.inner)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -137,7 +143,7 @@ public:
     }
     for (size_t row = 0; row < input.rows(); ++row) {
       auto row_slice = subslice(input, row, row + 1);
-      auto payload = serialize_row(printer_, row_slice);
+      auto payload = serialize_row(encoding_, row_slice);
       if (not payload) {
         diagnostic::error("failed to serialize ZeroMQ message")
           .primary(args_.encoding.source)
@@ -205,7 +211,6 @@ private:
   SinkArgs args_;
   std::string endpoint_;
   Encoding encoding_;
-  json_printer2 printer_;
   transport::Socket socket_{transport::SocketRole::publisher};
   bool done_ = false;
 };

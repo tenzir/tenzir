@@ -8,7 +8,7 @@ skip:
 assertions:
   fixtures:
     zmq:
-      received_contains: '"line":"hello-from-to_zmq"'
+      received_contains: "{\n  \"line\": \"hello-from-to_zmq\"\n}"
 timeout: 60
 ---
 
