@@ -37,7 +37,7 @@ let
       libunwind,
       xxHash,
       rabbitmq-c,
-      nats-c,
+      libnats-c,
       yaml-cpp,
       yara,
       jansson,
@@ -237,7 +237,7 @@ let
             fluent-bit
             libpcap
             libunwind
-            nats-c
+            libnats-c
             rabbitmq-c
             rdkafka
             cyrus_sasl
