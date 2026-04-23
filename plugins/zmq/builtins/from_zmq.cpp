@@ -94,7 +94,6 @@ public:
       auto prefix = const_eval(*args_.prefix, ctx.dh());
       if (not prefix) {
         request_stop();
-        done_ = true;
         co_return;
       }
       auto* str = try_as<std::string>(&*prefix);
@@ -125,9 +124,6 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (done_) {
-      co_await wait_forever();
-    }
     co_return co_await message_queue_->dequeue();
   }
 
@@ -140,10 +136,10 @@ public:
     co_await co_match(
       std::move(*message),
       [&](StartupError error) -> Task<void> {
+        request_stop();
         diagnostic::error("{}", error.message)
           .primary(args_.endpoint.source)
           .emit(ctx);
-        done_ = true;
         co_return;
       },
       [&](ReceiveError error) -> Task<void> {
@@ -152,12 +148,10 @@ public:
           .note("{}", error.message)
           .emit(ctx);
         request_stop();
-        maybe_finish();
         co_return;
       },
       [&](ReadLoopFinished) -> Task<void> {
         read_loop_finished_ = true;
-        maybe_finish();
         co_return;
       },
       [&](chunk_ptr payload) -> Task<void> {
@@ -178,7 +172,6 @@ public:
         auto parser = args_.parser.inner;
         if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
           request_stop();
-          maybe_finish();
           co_return;
         }
         TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
@@ -188,7 +181,6 @@ public:
         auto sub = ctx.get_sub(make_view(key));
         if (not sub) {
           request_stop();
-          maybe_finish();
           co_return;
         }
         ++active_parsers_;
@@ -196,7 +188,6 @@ public:
         auto push_result = co_await sub_pipeline.push(std::move(payload));
         if (push_result.is_err()) {
           request_stop();
-          maybe_finish();
         }
         co_await sub_pipeline.close();
       });
@@ -211,18 +202,16 @@ public:
     -> Task<void> override {
     TENZIR_ASSERT(active_parsers_ > 0);
     --active_parsers_;
-    maybe_finish();
     co_return;
   }
 
   auto stop(OpCtx&) -> Task<void> override {
     request_stop();
-    maybe_finish();
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return is_done() ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
@@ -234,10 +223,8 @@ private:
     static_cast<void>(control_queue_->try_enqueue(std::monostate{}));
   }
 
-  auto maybe_finish() -> void {
-    if (stop_requested_ and active_parsers_ == 0 and read_loop_finished_) {
-      done_ = true;
-    }
+  auto is_done() const -> bool {
+    return stop_requested_ and active_parsers_ == 0 and read_loop_finished_;
   }
 
   static auto read_loop(std::shared_ptr<Runtime> runtime,
@@ -270,7 +257,6 @@ private:
   std::shared_ptr<ControlQueue> control_queue_
     = std::make_shared<ControlQueue>(control_queue_capacity);
   bool stop_requested_ = false;
-  bool done_ = false;
   bool read_loop_finished_ = true;
   size_t active_parsers_ = 0;
   uint64_t next_sub_id_ = 0;
