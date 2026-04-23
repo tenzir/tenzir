@@ -11,6 +11,9 @@ with section("parse"):
                 "nargs": 1,
             },
         },
+        "tenzirgetcommonprecompileheaders": {
+            "spelling": "TenzirGetCommonPrecompileHeaders",
+        },
         "tenzircompileflatbuffers": {
             "spelling": "TenzirCompileFlatBuffers",
             "kwargs": {

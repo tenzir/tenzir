@@ -134,7 +134,7 @@ function (TenzirConfigurePchReuse target)
   if (NOT PCH_DONOR_TARGET)
     set(PCH_DONOR_TARGET "tenzir_common__pch")
   endif ()
-  tenzirgetcommonprecompileheaders(common_precompile_headers)
+  TenzirGetCommonPrecompileHeaders(common_precompile_headers)
   if (NOT TARGET ${PCH_DONOR_TARGET})
     file(WRITE "${PCH_BINARY_DIR}/${PCH_DONOR_TARGET}.cpp" "")
     add_library(${PCH_DONOR_TARGET} OBJECT
