@@ -151,8 +151,11 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
   }
 
   void onReadClosed() noexcept override {
-    done = true;
-    notify.notify_one();
+    // Folly only calls `onReadClosed()` from `AsyncUDPSocket::close()` while a
+    // read callback is still registered. Our teardown always does
+    // `pauseRead()` before `close()`, so reaching this path means that teardown
+    // ordering changed somewhere.
+    TENZIR_UNREACHABLE();
   }
 
 private:
@@ -213,14 +216,14 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (done_) {
+    auto message = co_await message_receiver_.recv();
+    if (not message) {
+      // The sender side can be dropped after `await_task()` was already
+      // enqueued. We cannot safely read `done_` here, so park this stale await
+      // until the executor observes `state() == done` and cancels it.
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    auto message = co_await message_receiver_.recv();
-    // Every path that drops `message_sender_` also sets `done_ = true`, so
-    // once we get here the channel must still have a live sender.
-    TENZIR_ASSERT(message);
     co_return std::move(*message);
   }
 
