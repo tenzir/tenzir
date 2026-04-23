@@ -10,6 +10,8 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/channel.hpp>
+#include <tenzir/atomic.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
@@ -21,13 +23,14 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <fmt/format.h>
-#include <folly/coro/BoundedQueue.h>
+#include <folly/coro/BlockingWait.h>
 
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <variant>
 
@@ -38,8 +41,8 @@ namespace tenzir::plugins::zmq {
 namespace {
 
 constexpr auto message_queue_capacity = uint32_t{16};
-constexpr auto control_queue_capacity = uint32_t{1};
 constexpr auto receive_timeout = 100ms;
+constexpr auto message_queue_retry_delay = 1ms;
 
 auto render_caf_error(const caf::error& err) -> std::string {
   return fmt::to_string(err);
@@ -60,26 +63,20 @@ struct SourceArgs {
   located<ir::pipeline> parser;
 };
 
-struct StartupError {
-  std::string message;
-};
-
 struct ReceiveError {
   std::string message;
 };
 
-struct ReadLoopFinished {};
-
-using SourceMessage = variant<StartupError, ReceiveError, ReadLoopFinished,
-                              chunk_ptr>;
-using MessageQueue = folly::coro::BoundedQueue<SourceMessage>;
-using ControlQueue = folly::coro::BoundedQueue<std::monostate>;
+using SourceMessage = variant<ReceiveError, chunk_ptr>;
+using MessageSender = Sender<SourceMessage>;
+using MessageReceiver = Receiver<SourceMessage>;
 
 struct Runtime {
   explicit Runtime(transport::Socket socket) : socket{std::move(socket)} {
   }
 
   transport::Socket socket;
+  Atomic<bool> stop_requested = false;
 };
 
 template <transport::ConnectionMode Mode>
@@ -98,50 +95,58 @@ public:
       }
       auto* str = try_as<std::string>(&*prefix);
       if (not str) {
-        co_await message_queue_->enqueue(
-          SourceMessage{StartupError{"`prefix` must be a constant string"}});
+        request_stop();
+        diagnostic::error("`prefix` must be a constant string")
+          .primary(args_.prefix->get_location())
+          .emit(ctx);
         co_return;
       }
       prefix_ = *str;
     }
+    auto [sender, receiver] = channel<SourceMessage>(message_queue_capacity);
+    message_receiver_ = std::make_shared<MessageReceiver>(std::move(receiver));
     auto runtime = std::make_shared<Runtime>(
       transport::Socket{transport::SocketRole::subscriber});
     if (auto err = runtime->socket.set_subscription_prefix(prefix_); not err) {
-      co_await message_queue_->enqueue(SourceMessage{StartupError{fmt::format(
-        "failed to configure ZeroMQ subscription for `{}`: {}", endpoint_,
-        render_socket_error(runtime->socket, err.error()))}});
+      request_stop();
+      diagnostic::error("failed to configure ZeroMQ subscription for `{}`: {}",
+                        endpoint_,
+                        render_socket_error(runtime->socket, err.error()))
+        .primary(args_.endpoint.source)
+        .emit(ctx);
       co_return;
     }
     if (auto err = runtime->socket.open(Mode, endpoint_); not err) {
-      co_await message_queue_->enqueue(SourceMessage{StartupError{fmt::format(
-        "failed to open ZeroMQ socket for `{}`: {}", endpoint_,
-        render_socket_error(runtime->socket, err.error()))}});
+      request_stop();
+      diagnostic::error("failed to open ZeroMQ socket for `{}`: {}", endpoint_,
+                        render_socket_error(runtime->socket, err.error()))
+        .primary(args_.endpoint.source)
+        .emit(ctx);
       co_return;
     }
+    runtime_ = runtime;
     read_loop_finished_ = false;
-    ctx.spawn_task(read_loop(runtime, message_queue_, control_queue_));
+    ctx.spawn_task(read_loop(runtime, std::move(sender)));
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    co_return co_await message_queue_->dequeue();
+    TENZIR_ASSERT(message_receiver_);
+    co_return co_await message_receiver_->recv();
   }
 
   auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    auto* message = result.try_as<SourceMessage>();
+    auto* message = result.try_as<Option<SourceMessage>>();
     if (not message) {
       co_return;
     }
+    if (message->is_none()) {
+      read_loop_finished_ = true;
+      co_return;
+    }
     co_await co_match(
-      std::move(*message),
-      [&](StartupError error) -> Task<void> {
-        request_stop();
-        diagnostic::error("{}", error.message)
-          .primary(args_.endpoint.source)
-          .emit(ctx);
-        co_return;
-      },
+      std::move(**message),
       [&](ReceiveError error) -> Task<void> {
         diagnostic::error("failed to receive ZeroMQ message")
           .primary(args_.endpoint.source)
@@ -150,12 +155,11 @@ public:
         request_stop();
         co_return;
       },
-      [&](ReadLoopFinished) -> Task<void> {
-        read_loop_finished_ = true;
-        co_return;
-      },
       [&](chunk_ptr payload) -> Task<void> {
         if (stop_requested_) {
+          // PUB/SUB gives us no delivery acknowledgements, so if shutdown
+          // starts before this payload enters the parser subpipeline we can
+          // safely drop it and behave as if it was never received.
           co_return;
         }
         if (not args_.keep_prefix and not prefix_.empty()) {
@@ -220,42 +224,57 @@ private:
       return;
     }
     stop_requested_ = true;
-    static_cast<void>(control_queue_->try_enqueue(std::monostate{}));
+    if (runtime_) {
+      runtime_->stop_requested.store(true, std::memory_order_release);
+    }
   }
 
   auto is_done() const -> bool {
     return stop_requested_ and active_parsers_ == 0 and read_loop_finished_;
   }
 
-  static auto read_loop(std::shared_ptr<Runtime> runtime,
-                        std::shared_ptr<MessageQueue> message_queue,
-                        std::shared_ptr<ControlQueue> control_queue)
+  static auto read_loop(std::shared_ptr<Runtime> runtime, MessageSender sender)
     -> Task<void> {
-    while (not control_queue->try_dequeue()) {
-      auto message = co_await spawn_blocking([runtime] {
-        return runtime->socket.receive(receive_timeout);
-      });
-      if (message) {
-        co_await message_queue->enqueue(SourceMessage{std::move(*message)});
-        continue;
+    auto enqueue = [runtime = std::weak_ptr{runtime}](
+                     MessageSender& sender, SourceMessage message) -> void {
+      auto current = runtime.lock();
+      TENZIR_ASSERT(current);
+      while (true) {
+        auto result = sender.try_send(std::move(message));
+        if (result.is_ok()) {
+          return;
+        }
+        message = std::move(result).unwrap_err();
+        if (current->stop_requested.load(std::memory_order_acquire)) {
+          return;
+        }
+        std::this_thread::sleep_for(message_queue_retry_delay);
       }
-      if (message == ec::timeout) {
-        continue;
+    };
+    co_await spawn_blocking([runtime = std::move(runtime),
+                             sender = std::move(sender),
+                             enqueue = std::move(enqueue)]() mutable {
+      while (not runtime->stop_requested.load(std::memory_order_acquire)) {
+        auto message = runtime->socket.receive(receive_timeout);
+        if (message) {
+          enqueue(sender, SourceMessage{std::move(*message)});
+          continue;
+        }
+        if (message == ec::timeout) {
+          continue;
+        }
+        enqueue(sender, SourceMessage{ReceiveError{render_socket_error(
+                          runtime->socket, message.error())}});
+        break;
       }
-      co_await message_queue->enqueue(SourceMessage{
-        ReceiveError{render_socket_error(runtime->socket, message.error())}});
-      break;
-    }
-    co_await message_queue->enqueue(SourceMessage{ReadLoopFinished{}});
+    });
   }
 
   SourceArgs args_;
   std::string endpoint_;
   std::string prefix_;
-  std::shared_ptr<MessageQueue> message_queue_
-    = std::make_shared<MessageQueue>(message_queue_capacity);
-  std::shared_ptr<ControlQueue> control_queue_
-    = std::make_shared<ControlQueue>(control_queue_capacity);
+  std::shared_ptr<Runtime> runtime_;
+  std::shared_ptr<MessageReceiver> message_receiver_;
   bool stop_requested_ = false;
   bool read_loop_finished_ = true;
   size_t active_parsers_ = 0;
