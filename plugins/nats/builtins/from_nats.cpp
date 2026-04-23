@@ -422,6 +422,25 @@ public:
     subscription_ = nats_subscription_ptr{raw_subscription};
   }
 
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&) -> Task<void> override {
+    // Defer ACKs for rows flushed into the checkpoint until post_commit().
+    while (not buffered_.empty()) {
+      co_await push_next_buffered(push);
+    }
+  }
+
+  auto post_commit(OpCtx& ctx) -> Task<void> override {
+    auto const acknowledged = acknowledge_pending(ctx.dh());
+    if (acknowledged and connection_) {
+      co_await flush_acknowledgements(ctx);
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("received", received_);
+    serde("done", done_);
+  }
+
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     if (done_) {
       co_await wait_forever();
@@ -579,14 +598,19 @@ private:
     nak_guard.disable();
   }
 
+  auto push_next_buffered(Push<table_slice>& push) -> Task<void> {
+    TENZIR_ASSERT(not buffered_.empty());
+    auto item = std::move(buffered_.front());
+    buffered_.pop_front();
+    co_await push_buffered(std::move(item), push);
+  }
+
   auto push_buffered(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
     acknowledge_pending(ctx.dh());
     if (buffered_.empty()) {
       co_return;
     }
-    auto item = std::move(buffered_.front());
-    buffered_.pop_front();
-    co_await push_buffered(std::move(item), push);
+    co_await push_next_buffered(push);
   }
 
   auto wait_for_downstream_stop() const -> Task<void> {
