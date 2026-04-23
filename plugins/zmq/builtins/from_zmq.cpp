@@ -9,6 +9,7 @@
 #include "zmq/transport.hpp"
 
 #include <tenzir/async.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
@@ -52,9 +53,18 @@ struct SourceArgs {
   located<ir::pipeline> parser;
 };
 
+struct StartupError {
+  std::string message;
+};
+
+struct ReceiveError {
+  std::string message;
+};
+
 struct PollTimeout {};
 
-using SourceMessage = variant<PollTimeout, chunk_ptr>;
+using SourceMessage
+  = variant<StartupError, ReceiveError, PollTimeout, chunk_ptr>;
 
 template <transport::ConnectionMode Mode>
 class ZmqSource final : public Operator<void, table_slice> {
@@ -95,13 +105,9 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
     if (startup_error_) {
-      diagnostic::error("{}", *startup_error_)
-        .primary(args_.endpoint.source)
-        .emit(dh);
-      startup_error_ = None{};
-      done_ = true;
-      co_await wait_forever();
+      co_return SourceMessage{StartupError{*startup_error_}};
     }
     if (done_ or stop_requested_) {
       co_await wait_forever();
@@ -112,16 +118,8 @@ public:
       co_await sleep_for(250ms);
       co_return SourceMessage{PollTimeout{}};
     } else {
-      diagnostic::error("failed to receive ZeroMQ message")
-        .primary(args_.endpoint.source)
-        .note("{}", render_socket_error(socket_, message.error()))
-        .emit(dh);
-      request_stop();
-      if (active_parsers_ == 0) {
-        done_ = true;
-      }
-      co_await wait_forever();
-      co_return SourceMessage{PollTimeout{}};
+      co_return SourceMessage{
+        ReceiveError{render_socket_error(socket_, message.error())}};
     }
   }
 
@@ -131,48 +129,73 @@ public:
     if (not message) {
       co_return;
     }
-    if (is<PollTimeout>(*message) or stop_requested_) {
-      co_return;
-    }
-    auto payload = std::move(as<chunk_ptr>(*message));
-    if (not args_.keep_prefix and not prefix_.empty()) {
-      auto stripped = transport::strip_prefix(std::move(payload), prefix_);
-      if (not stripped) {
-        diagnostic::warning("failed to strip ZeroMQ prefix")
+    co_await co_match(
+      std::move(*message),
+      [&](StartupError error) -> Task<void> {
+        diagnostic::error("{}", error.message)
           .primary(args_.endpoint.source)
-          .note("{}", render(stripped.error()))
           .emit(ctx);
+        startup_error_ = None{};
+        done_ = true;
         co_return;
-      }
-      payload = std::move(*stripped);
-    }
-    auto parser = args_.parser.inner;
-    if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      request_stop();
-      if (active_parsers_ == 0) {
-        done_ = true;
-      }
-      co_return;
-    }
-    TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
-                    std::numeric_limits<int64_t>::max()));
-    auto key = data{int64_t{static_cast<int64_t>(next_sub_id_++)}};
-    co_await ctx.spawn_sub<chunk_ptr>(key, std::move(parser));
-    auto sub = ctx.get_sub(make_view(key));
-    if (not sub) {
-      request_stop();
-      if (active_parsers_ == 0) {
-        done_ = true;
-      }
-      co_return;
-    }
-    ++active_parsers_;
-    auto& sub_pipeline = as<SubHandle<chunk_ptr>>(*sub);
-    auto push_result = co_await sub_pipeline.push(std::move(payload));
-    if (push_result.is_err()) {
-      request_stop();
-    }
-    co_await sub_pipeline.close();
+      },
+      [&](ReceiveError error) -> Task<void> {
+        diagnostic::error("failed to receive ZeroMQ message")
+          .primary(args_.endpoint.source)
+          .note("{}", error.message)
+          .emit(ctx);
+        request_stop();
+        if (active_parsers_ == 0) {
+          done_ = true;
+        }
+        co_return;
+      },
+      [&](PollTimeout) -> Task<void> {
+        co_return;
+      },
+      [&](chunk_ptr payload) -> Task<void> {
+        if (stop_requested_) {
+          co_return;
+        }
+        if (not args_.keep_prefix and not prefix_.empty()) {
+          auto stripped = transport::strip_prefix(std::move(payload), prefix_);
+          if (not stripped) {
+            diagnostic::warning("failed to strip ZeroMQ prefix")
+              .primary(args_.endpoint.source)
+              .note("{}", render(stripped.error()))
+              .emit(ctx);
+            co_return;
+          }
+          payload = std::move(*stripped);
+        }
+        auto parser = args_.parser.inner;
+        if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+          request_stop();
+          if (active_parsers_ == 0) {
+            done_ = true;
+          }
+          co_return;
+        }
+        TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
+                        std::numeric_limits<int64_t>::max()));
+        auto key = data{int64_t{static_cast<int64_t>(next_sub_id_++)}};
+        co_await ctx.spawn_sub<chunk_ptr>(key, std::move(parser));
+        auto sub = ctx.get_sub(make_view(key));
+        if (not sub) {
+          request_stop();
+          if (active_parsers_ == 0) {
+            done_ = true;
+          }
+          co_return;
+        }
+        ++active_parsers_;
+        auto& sub_pipeline = as<SubHandle<chunk_ptr>>(*sub);
+        auto push_result = co_await sub_pipeline.push(std::move(payload));
+        if (push_result.is_err()) {
+          request_stop();
+        }
+        co_await sub_pipeline.close();
+      });
   }
 
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
@@ -203,7 +226,7 @@ public:
   }
 
 private:
-  auto request_stop() const -> void {
+  auto request_stop() -> void {
     stop_requested_ = true;
   }
 
@@ -211,9 +234,9 @@ private:
   std::string endpoint_;
   std::string prefix_;
   mutable transport::Socket socket_{transport::SocketRole::subscriber};
-  mutable bool stop_requested_ = false;
-  mutable bool done_ = false;
-  mutable Option<std::string> startup_error_ = None{};
+  bool stop_requested_ = false;
+  bool done_ = false;
+  Option<std::string> startup_error_ = None{};
   size_t active_parsers_ = 0;
   uint64_t next_sub_id_ = 0;
 };

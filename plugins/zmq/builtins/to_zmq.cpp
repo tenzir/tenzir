@@ -34,6 +34,9 @@ namespace tenzir::plugins::zmq {
 
 namespace {
 
+constexpr auto monitor_wait_poll_interval = 250ms;
+constexpr auto monitor_wait_timeout = 5s;
+
 enum class Encoding {
   json,
   ndjson,
@@ -170,11 +173,22 @@ public:
         }
         framed = std::move(*with_prefix);
       }
+      auto monitor_deadline
+        = std::chrono::steady_clock::now() + monitor_wait_timeout;
       while (args_.monitor and socket_.num_peers() == 0 and not done_) {
         socket_.poll_monitor(0ms);
-        if (socket_.num_peers() == 0) {
-          co_await sleep_for(250ms);
+        if (socket_.num_peers() != 0) {
+          break;
         }
+        if (std::chrono::steady_clock::now() >= monitor_deadline) {
+          diagnostic::error("timed out waiting for a ZeroMQ peer")
+            .primary(args_.endpoint.source)
+            .note("`monitor=true` requires a connected peer before sending")
+            .emit(ctx);
+          done_ = true;
+          co_return;
+        }
+        co_await sleep_for(monitor_wait_poll_interval);
       }
       socket_.poll_monitor(0ms);
       auto deadline = std::chrono::steady_clock::now() + 250ms;
