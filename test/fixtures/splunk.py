@@ -11,7 +11,7 @@ Environment variables yielded:
 - SPLUNK_ADMIN_PASSWORD: Management API password.
 
 Assertions payload accepted under ``assertions.fixtures.splunk``:
-- count: number of search results expected.
+- count: optional number of search results expected.
 - contains: substring or list of substrings expected in matching events.
 - index: Splunk index to search, defaults to SPLUNK_INDEX.
 - source: optional source filter.
@@ -65,7 +65,7 @@ ASSERTION_INTERVAL = 1
 
 @dataclass(frozen=True)
 class SplunkAssertions:
-    count: int = 0
+    count: int | None = None
     contains: list[str] = field(default_factory=list)
     index: str = SPLUNK_INDEX
     source: str | None = None
@@ -252,22 +252,36 @@ def _verify_search(
     search = _make_search(assertions)
     deadline = time.monotonic() + ASSERTION_TIMEOUT
     last_results: list[dict[str, Any]] = []
+    last_error: str | None = None
     while True:
-        results = _run_search(mgmt_port, search)
-        last_results = results
-        result_texts = [_result_text(result) for result in results]
+        search_failed = False
+        try:
+            results = _run_search(mgmt_port, search)
+            last_results = results
+            last_error = None
+            result_texts = [_result_text(result) for result in results]
+        except RuntimeError as exc:
+            results = []
+            result_texts = []
+            last_error = str(exc)
+            search_failed = True
         all_contains = all(
             any(needle in text for text in result_texts)
             for needle in assertions.contains
         )
-        count_matches = assertions.count == 0 or len(results) == assertions.count
-        if count_matches and all_contains:
+        count_matches = assertions.count is None or len(results) == assertions.count
+        if not search_failed and count_matches and all_contains:
             return
         if time.monotonic() >= deadline:
             details = "; ".join(result_texts) or "no results"
+            if last_error:
+                details = f"{details}; last search error: {last_error}"
+            expected_count = (
+                "any" if assertions.count is None else str(assertions.count)
+            )
             raise AssertionError(
                 f"{test.name}: Splunk search did not match {search!r}: "
-                f"expected count={assertions.count}, contains={assertions.contains}, "
+                f"expected count={expected_count}, contains={assertions.contains}, "
                 f"got {len(last_results)} result(s): {details}"
             )
         time.sleep(ASSERTION_INTERVAL)
