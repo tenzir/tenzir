@@ -12,6 +12,8 @@
 // functions. Include it in exactly one translation unit.
 #include <nats/adapters/libevent.h>
 
+#include <mutex>
+
 namespace tenzir::plugins::nats {
 
 auto configure_folly_event_loop(natsOptions* options,
@@ -22,7 +24,10 @@ auto configure_folly_event_loop(natsOptions* options,
 }
 
 auto initialize_folly_event_loop_adapter() -> void {
-  natsLibevent_Init();
+  static std::once_flag once;
+  std::call_once(once, [] {
+    natsLibevent_Init();
+  });
 }
 
 } // namespace tenzir::plugins::nats
