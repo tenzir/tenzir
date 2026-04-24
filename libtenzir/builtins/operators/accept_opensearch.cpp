@@ -139,6 +139,29 @@ auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
   return subslice(slice, 0, 1);
 }
 
+auto get_static_opensearch_response(proxygen::HTTPMessage const& msg)
+  -> Option<Response> {
+  auto path = std::string_view{msg.getPathAsStringPiece()};
+  auto method = msg.getMethod();
+  if (method == proxygen::HTTPMethod::GET and path == "/") {
+    return Response{
+      .status = 200,
+      .content_type = std::string{bulk_content_type},
+      .body = std::string{info_response},
+    };
+  }
+  if (path != "/_bulk") {
+    return Response{
+      .status = 200,
+      .content_type = method == proxygen::HTTPMethod::HEAD
+                        ? ""
+                        : std::string{bulk_content_type},
+      .body = method == proxygen::HTTPMethod::HEAD ? "" : "{}",
+    };
+  }
+  return None{};
+}
+
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
   RequestHandler(AcceptOpenSearchArgs args, Arc<MessageQueue> queue,
@@ -166,26 +189,11 @@ public:
         if (not is_final) {
           co_return proxygen::coro::HTTPSourceReader::Continue;
         }
-        auto path = std::string_view{msg->getPathAsStringPiece()};
-        auto method = msg->getMethod();
-        if (method == proxygen::HTTPMethod::GET and path == "/") {
-          response_signal->send(Response{
-            .status = 200,
-            .content_type = std::string{bulk_content_type},
-            .body = std::string{info_response},
-          });
-          co_return proxygen::coro::HTTPSourceReader::Cancel;
+        // static response
+        if (auto response = get_static_opensearch_response(*msg)) {
+          response_signal->send(std::move(*response));
         }
-        if (path != "/_bulk") {
-          response_signal->send(Response{
-            .status = 200,
-            .content_type = method == proxygen::HTTPMethod::HEAD
-                              ? ""
-                              : std::string{bulk_content_type},
-            .body = method == proxygen::HTTPMethod::HEAD ? "" : "{}",
-          });
-          co_return proxygen::coro::HTTPSourceReader::Cancel;
-        }
+        // validate content-length
         auto content_length_header = std::string_view{
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
         if (auto content_length
