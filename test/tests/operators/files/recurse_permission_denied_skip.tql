@@ -1,0 +1,4 @@
+files env("FILES_PERMISSION_ROOT"), recurse=true, skip_permission_denied=true
+path = path.replace(env("FILES_PERMISSION_ROOT"), "<ROOT>")
+select path, type
+sort path
