@@ -1,10 +1,20 @@
 from (
-  {label: "v4-24", addr: 10.10.1.124, text: "10.20.1.124", net: 10.30.1.124/32, prefix: 24},
-  {label: "v4-16", addr: 10.10.1.124, text: "10.20.1.124", net: 10.30.1.124/32, prefix: 16},
-  {label: "v6-64", addr: ip("2001:db8::1"), text: "2001:db8::1", net: 2001:db8::1/128, prefix: 64},
+  {
+    label: "v4-24",
+    from_ip: subnet(10.10.1.124, 24),
+    from_string: subnet("10.20.1.124", 24),
+    from_subnet: subnet(10.30.1.124/32, 24),
+  },
+  {
+    label: "v4-16",
+    from_ip: subnet(10.10.1.124, 16),
+    from_string: subnet("10.20.1.124", 16),
+    from_subnet: subnet(10.30.1.124/32, 16),
+  },
+  {
+    label: "v6-64",
+    from_ip: subnet(ip("2001:db8::1"), 64),
+    from_string: subnet("2001:db8::1", 64),
+    from_subnet: subnet(2001:db8::1/128, 64),
+  },
 )
-select \
-  label,
-  from_ip = subnet(addr, prefix),
-  from_string = subnet(text, prefix),
-  from_subnet = subnet(net, prefix)

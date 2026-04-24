@@ -1,12 +1,32 @@
 from (
-  {case: "bad-string", x: "not an ip", prefix: 24},
-  {case: "v4-too-wide", x: "10.1.2.3", prefix: 33},
-  {case: "v6-too-wide", x: "2001:db8::1", prefix: 129},
-  {case: "duplicate-prefix", x: "10.1.2.3/24", prefix: 16},
-  {case: "null-input", x: null.string(), prefix: 24},
-  {case: "null-prefix", x: "10.1.2.3", prefix: null.int()},
+  {
+    case: "bad-string",
+    result: subnet("not an ip", 24),
+    host: subnet("not an ip"),
+  },
+  {
+    case: "v4-too-wide",
+    result: subnet("10.1.2.3", 33),
+    host: subnet("10.1.2.3"),
+  },
+  {
+    case: "v6-too-wide",
+    result: subnet("2001:db8::1", 129),
+    host: subnet("2001:db8::1"),
+  },
+  {
+    case: "duplicate-prefix",
+    result: subnet("10.1.2.3/24", 16),
+    host: subnet("10.1.2.3/24"),
+  },
+  {
+    case: "null-input",
+    result: subnet(null.string(), 24),
+    host: subnet(null.string()),
+  },
+  {
+    case: "null-prefix",
+    result: subnet("10.1.2.3", null.int()),
+    host: subnet("10.1.2.3"),
+  },
 )
-select \
-  case,
-  result = subnet(x, prefix),
-  host = subnet(x)

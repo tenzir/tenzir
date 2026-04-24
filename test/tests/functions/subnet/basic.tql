@@ -1,15 +1,8 @@
 from {
-  cidr: "10.0.1.5/24",
-  plain_v4: "10.20.1.124",
-  typed_v4: 10.10.1.124,
-  plain_v6: "2001:db8::1",
-  typed_v6: ip("2001:db8::1"),
-  existing: 172.16.4.5/16,
+  cidr: subnet("10.0.1.5/24"),
+  plain_v4: subnet("10.20.1.124"),
+  typed_v4: subnet(10.10.1.124),
+  plain_v6: subnet("2001:db8::1"),
+  typed_v6: subnet(ip("2001:db8::1")),
+  existing: subnet(172.16.4.5/16),
 }
-select \
-  cidr = subnet(cidr),
-  plain_v4 = subnet(plain_v4),
-  typed_v4 = subnet(typed_v4),
-  plain_v6 = subnet(plain_v6),
-  typed_v6 = subnet(typed_v6),
-  existing = subnet(existing)
