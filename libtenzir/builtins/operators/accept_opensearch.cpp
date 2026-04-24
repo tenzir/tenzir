@@ -40,6 +40,7 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <span>
 #include <thread>
@@ -80,16 +81,24 @@ struct Response {
 
 using ResponseSignal = Oneshot<Response>;
 
-struct Request {
+struct RequestStarted {
   uint64_t request_id;
   std::string content_encoding;
-  chunk_ptr body;
   Arc<ResponseSignal> response_signal;
+};
+
+struct RequestBody {
+  uint64_t request_id;
+  std::vector<std::byte> data;
+};
+
+struct RequestFinished {
+  uint64_t request_id;
 };
 
 struct Noop {};
 
-using Message = variant<Noop, Request>;
+using Message = variant<Noop, RequestStarted, RequestBody, RequestFinished>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
@@ -179,21 +188,19 @@ public:
     auto permit = co_await active_connections_->acquire();
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
-    auto content_encoding = std::string{};
     auto bytes_received = size_t{};
-    auto body = std::vector<std::byte>{};
     auto response_signal = Arc<ResponseSignal>{std::in_place};
+    auto started = false;
     reader
       .onHeadersAsync([&](std::unique_ptr<proxygen::HTTPMessage> msg,
                           bool is_final, bool) -> folly::coro::Task<bool> {
         if (not is_final) {
           co_return proxygen::coro::HTTPSourceReader::Continue;
         }
-        // static response
         if (auto response = get_static_opensearch_response(*msg)) {
           response_signal->send(std::move(*response));
+          co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
-        // validate content-length
         auto content_length_header = std::string_view{
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
         if (auto content_length
@@ -205,8 +212,13 @@ public:
                      .body = "{}"});
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
-        content_encoding
+        auto content_encoding
           = std::string{msg->getHeaders().getSingleOrEmpty("Content-Encoding")};
+        co_await queue_->enqueue(
+          RequestStarted{.request_id = request_id,
+                         .content_encoding = std::move(content_encoding),
+                         .response_signal = response_signal});
+        started = true;
         co_return proxygen::coro::HTTPSourceReader::Continue;
       })
       .onBodyAsync([&](quic::BufQueue queue, bool) -> folly::coro::Task<bool> {
@@ -224,27 +236,26 @@ public:
                        .body = "{}"});
             co_return proxygen::coro::HTTPSourceReader::Cancel;
           }
-          auto chunk = std::span{
-            reinterpret_cast<std::byte const*>(iobuf->data()), iobuf->length()};
-          body.insert(body.end(), chunk.begin(), chunk.end());
+          auto data = std::vector<std::byte>(iobuf->length());
+          std::memcpy(data.data(), iobuf->data(), iobuf->length());
+          co_await queue_->enqueue(
+            RequestBody{.request_id = request_id, .data = std::move(data)});
         }
         co_return proxygen::coro::HTTPSourceReader::Continue;
       })
       .onError([&](proxygen::coro::HTTPSourceReader::ErrorContext,
                    proxygen::coro::HTTPError const&) {
-        response_signal->send(
-          Response{.status = 400,
-                   .content_type = std::string{bulk_content_type},
-                   .body = "{}"});
+        if (not response_signal->has_sent()) {
+          response_signal->send(
+            Response{.status = 400,
+                     .content_type = std::string{bulk_content_type},
+                     .body = "{}"});
+        }
       });
     co_await reader.read(
       detail::narrow<uint32_t>(args_.get_max_request_size()));
-    if (not response_signal->has_sent()) {
-      co_await queue_->enqueue(
-        Request{.request_id = request_id,
-                .content_encoding = std::move(content_encoding),
-                .body = chunk::make(std::move(body)),
-                .response_signal = response_signal});
+    if (started) {
+      co_await queue_->enqueue(RequestFinished{.request_id = request_id});
     }
     auto response = co_await response_signal->recv();
     permit.release();
@@ -259,6 +270,13 @@ private:
   Arc<MessageQueue> queue_;
   Arc<Atomic<uint64_t>> request_id_gen_;
   Arc<Semaphore> active_connections_;
+};
+
+struct InFlightRequest {
+  Arc<ResponseSignal> response_signal;
+  Option<std::shared_ptr<arrow::util::Decompressor>> decompressor;
+  json::streaming_ndjson_parser parser;
+  bool is_action = true;
 };
 
 class AcceptOpenSearch final : public Operator<void, table_slice> {
@@ -297,10 +315,11 @@ public:
       co_await catch_cancellation(wait_forever());
       {
         auto active_requests = co_await active_requests_.lock();
-        for (auto& [_, signal] : *active_requests) {
-          signal->send(Response{.status = 503,
-                                .content_type = std::string{bulk_content_type},
-                                .body = "{}"});
+        for (auto& [_, req] : *active_requests) {
+          req.response_signal->send(
+            Response{.status = 503,
+                     .content_type = std::string{bulk_content_type},
+                     .body = "{}"});
         }
       }
       if (server_) {
@@ -331,67 +350,121 @@ public:
     auto message = std::move(result).as<Message>();
     co_await co_match(
       std::move(message),
-      [&](Request request) -> Task<void> {
+      [&](RequestStarted msg) -> Task<void> {
         if (lifecycle_ != Lifecycle::running) {
-          request.response_signal->send(
+          msg.response_signal->send(
             Response{.status = 503,
                      .content_type = std::string{bulk_content_type},
                      .body = "{}"});
           co_return;
         }
-        auto body = request.body;
-        if (not request.content_encoding.empty()) {
-          auto decompressor
-            = http::make_decompressor(request.content_encoding, ctx.dh());
+        auto decompressor
+          = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
+        if (not msg.content_encoding.empty()) {
+          decompressor
+            = http::make_decompressor(msg.content_encoding, ctx.dh());
           if (not decompressor) {
-            request.response_signal->send(
+            msg.response_signal->send(
               Response{.status = 415,
                        .content_type = std::string{bulk_content_type},
                        .body = "{}"});
             co_return;
           }
-          auto decompressed = http::decompress_chunk(
-            **decompressor,
-            std::span<std::byte const>{
-              reinterpret_cast<std::byte const*>(body->data()), body->size()},
-            ctx.dh(), args_.get_max_request_size());
-          if (decompressed.is_err()) {
-            request.response_signal->send(
-              Response{.status = std::move(decompressed).unwrap_err(),
-                       .content_type = std::string{bulk_content_type},
-                       .body = "{}"});
-            co_return;
-          }
-          body = chunk::make(std::move(decompressed).unwrap());
         }
-        bytes_read_counter_.add(body->size());
-        auto parser = json::ndjson_parser{"accept_opensearch", ctx.dh(), {}};
-        parser.parse_lines(body);
-        auto result = parser.builder.finalize_as_table_slice();
+        auto requests = co_await active_requests_.lock();
+        requests->emplace(msg.request_id,
+                          InFlightRequest{
+                            .response_signal = std::move(msg.response_signal),
+                            .decompressor = std::move(decompressor),
+                            .parser = {},
+                            .is_action = true,
+                          });
+      },
+      [&](RequestBody msg) -> Task<void> {
+        auto response_signal = Option<Arc<ResponseSignal>>{None{}};
+        auto decompressor
+          = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
+        auto is_action = true;
+        auto slices = std::vector<table_slice>{};
         {
           auto requests = co_await active_requests_.lock();
-          requests->emplace(request.request_id, request.response_signal);
+          auto it = requests->find(msg.request_id);
+          if (it == requests->end() or it->second.response_signal->has_sent()) {
+            co_return;
+          }
+          response_signal = it->second.response_signal;
+          decompressor = it->second.decompressor;
+          is_action = it->second.is_action;
+          auto data = blob{std::span{msg.data}};
+          if (decompressor) {
+            auto decompressed = http::decompress_chunk(
+              **decompressor,
+              std::span<std::byte const>{msg.data.data(), msg.data.size()},
+              ctx.dh(), args_.get_max_request_size());
+            if (decompressed.is_err()) {
+              (*response_signal)
+                ->send(Response{.status = std::move(decompressed).unwrap_err(),
+                                .content_type = std::string{bulk_content_type},
+                                .body = "{}"});
+              co_return;
+            }
+            data = std::move(decompressed).unwrap();
+          }
+          bytes_read_counter_.add(data.size());
+          slices = it->second.parser.parse_chunk(data, "accept_opensearch",
+                                                 ctx.dh());
         }
         if (args_.keep_actions) {
-          for (auto& slice : result) {
+          for (auto& slice : slices) {
             if (slice.rows() > 0) {
               co_await push(std::move(slice));
             }
           }
         } else {
-          auto is_action = true;
-          for (auto& slice : result) {
+          for (auto& slice : slices) {
             auto filtered = handle_slice(is_action, slice);
             if (filtered.rows() > 0) {
               co_await push(std::move(filtered));
             }
           }
         }
+        auto requests = co_await active_requests_.lock();
+        auto it = requests->find(msg.request_id);
+        if (it != requests->end()) {
+          it->second.is_action = is_action;
+        }
+      },
+      [&](RequestFinished msg) -> Task<void> {
+        auto req = Option<InFlightRequest>{None{}};
         {
           auto requests = co_await active_requests_.lock();
-          requests->erase(request.request_id);
+          auto it = requests->find(msg.request_id);
+          if (it == requests->end()) {
+            co_return;
+          }
+          req = std::move(it->second);
+          requests->erase(it);
         }
-        request.response_signal->send(Response{
+        if (req->response_signal->has_sent()) {
+          co_return;
+        }
+        auto slices = req->parser.finish("accept_opensearch", ctx.dh());
+        if (args_.keep_actions) {
+          for (auto& slice : slices) {
+            if (slice.rows() > 0) {
+              co_await push(std::move(slice));
+            }
+          }
+        } else {
+          auto is_action = req->is_action;
+          for (auto& slice : slices) {
+            auto filtered = handle_slice(is_action, slice);
+            if (filtered.rows() > 0) {
+              co_await push(std::move(filtered));
+            }
+          }
+        }
+        req->response_signal->send(Response{
           .status = 200,
           .content_type = std::string{bulk_content_type},
           .body = std::string{bulk_response},
@@ -517,7 +590,7 @@ private:
   // --- transient ---
   Arc<Semaphore> active_connections_;
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
-  Mutex<std::unordered_map<uint64_t, Arc<ResponseSignal>>> active_requests_{{}};
+  Mutex<std::unordered_map<uint64_t, InFlightRequest>> active_requests_{{}};
   MetricsCounter bytes_read_counter_;
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
   // --- state ---
