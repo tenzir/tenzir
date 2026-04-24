@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
 import json
+import os
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Iterator
@@ -133,14 +136,43 @@ _STATIC_RESPONSES: dict[str, object] = {
 }
 
 
-def _make_handler() -> type[BaseHTTPRequestHandler]:
+def _validate_add_events_payload(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return "payload must be a JSON object"
+    session = payload.get("session")
+    if not isinstance(session, str) or not session:
+        return "session must be a non-empty string"
+    events = payload.get("events")
+    if not isinstance(events, list) or not events:
+        return "events must be a non-empty array"
+    session_info = payload.get("sessionInfo")
+    if session_info is not None and not isinstance(session_info, dict):
+        return "sessionInfo must be an object"
+    for i, event in enumerate(events):
+        if not isinstance(event, dict):
+            return f"events[{i}] must be an object"
+        attrs = event.get("attrs")
+        if not isinstance(attrs, dict):
+            return f"events[{i}].attrs must be an object"
+        ts = event.get("ts")
+        if ts is not None and not isinstance(ts, str):
+            return f"events[{i}].ts must be a string"
+        sev = event.get("sev")
+        if sev is not None and not isinstance(sev, int):
+            return f"events[{i}].sev must be an integer"
+    return None
+
+
+def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
+    lock = threading.Lock()
+
     class SentinelOneHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: object) -> None:
             # Silence the default per-request log lines.
             pass
 
         def do_POST(self) -> None:
-            if self.path != "/api/powerQuery":
+            if self.path not in {"/api/powerQuery", "/api/addEvents"}:
                 self._respond(404, {"error": f"unknown path: {self.path}"})
                 return
 
@@ -151,11 +183,31 @@ def _make_handler() -> type[BaseHTTPRequestHandler]:
                 return
 
             length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode()
+            raw_body = self.rfile.read(length)
+            encoding = self.headers.get("Content-Encoding", "")
+            if encoding == "gzip":
+                try:
+                    raw_body = gzip.decompress(raw_body)
+                except Exception as exc:
+                    self._respond(400, {"error": f"bad gzip: {exc}"})
+                    return
+            elif encoding:
+                self._respond(415, {"error": f"unsupported encoding: {encoding}"})
+                return
             try:
-                payload = json.loads(body)
+                payload = json.loads(raw_body.decode())
             except json.JSONDecodeError as exc:
                 self._respond(400, {"error": f"bad JSON: {exc}"})
+                return
+
+            if self.path == "/api/addEvents":
+                if err := _validate_add_events_payload(payload):
+                    self._respond(400, {"error": err})
+                    return
+                with lock:
+                    with open(capture_path, "a") as file:
+                        file.write(json.dumps(payload, sort_keys=True) + "\n")
+                self._respond(200, {})
                 return
 
             query = payload.get("query", "")
@@ -203,8 +255,11 @@ def sentinelone() -> Iterator[dict[str, str]]:
     Exports:
       S1_FIXTURE_URL   - base URL of the mock server (http://127.0.0.1:<port>)
       S1_FIXTURE_TOKEN - bearer token expected by the server
+      S1_FIXTURE_CAPTURE_FILE - JSONL file containing captured addEvents calls
     """
-    server = HTTPServer((_HOST, 0), _make_handler())
+    fd, capture_path = tempfile.mkstemp(prefix="sentinelone-capture-", suffix=".jsonl")
+    os.close(fd)
+    server = HTTPServer((_HOST, 0), _make_handler(capture_path))
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -212,7 +267,10 @@ def sentinelone() -> Iterator[dict[str, str]]:
         yield {
             "S1_FIXTURE_URL": f"http://{_HOST}:{port}",
             "S1_FIXTURE_TOKEN": _EXPECTED_TOKEN,
+            "S1_FIXTURE_CAPTURE_FILE": capture_path,
         }
     finally:
         server.shutdown()
         thread.join(timeout=2)
+        if os.path.exists(capture_path):
+            os.remove(capture_path)
