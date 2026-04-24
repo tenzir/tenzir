@@ -13,11 +13,10 @@ metadata and raw endpoint ingestion:
 ```tql
 to_splunk "https://splunk:8088",
   hec_token=secret("SPLUNK_HEC_TOKEN"),
-  endpoint="raw",
-  event=message,
+  raw=message,
   sourcetype="syslog"
 ```
 
 Use `time=...` to set Splunk `_time`, `fields={...}` to attach event-mode
-indexed fields, and `endpoint="raw"` to send already-formatted raw log text to
-`/services/collector/raw`.
+indexed fields, and `raw=...` to send already-formatted raw log text to
+`/services/collector/raw`. `event=...` and `raw=...` are mutually exclusive.

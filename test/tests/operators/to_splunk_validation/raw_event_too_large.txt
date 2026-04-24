@@ -1,7 +1,7 @@
 warning: event too large for given `max_content_length`
- --> tests/operators/to_splunk_validation/raw_event_too_large.tql:6:30
+ --> tests/operators/to_splunk_validation/raw_event_too_large.tql:5:30
   |
-6 |           max_content_length=1
+5 |           max_content_length=1
   |                              ~ 
   |
   = note: serialized event size was `27`

@@ -1,6 +1,0 @@
-error: `endpoint` must be either `event` or `raw`
- --> tests/operators/to_splunk_validation/error_endpoint_invalid.tql:7:20
-  |
-7 |           endpoint="invalid"
-  |                    ^^^^^^^^^ 
-  |
