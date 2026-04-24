@@ -1,0 +1,12 @@
+from (
+  {case: "bad-string", x: "not an ip", prefix: 24},
+  {case: "v4-too-wide", x: "10.1.2.3", prefix: 33},
+  {case: "v6-too-wide", x: "2001:db8::1", prefix: 129},
+  {case: "duplicate-prefix", x: "10.1.2.3/24", prefix: 16},
+  {case: "null-input", x: null.string(), prefix: 24},
+  {case: "null-prefix", x: "10.1.2.3", prefix: null.int()},
+)
+select \
+  case,
+  result = subnet(x, prefix),
+  host = subnet(x)

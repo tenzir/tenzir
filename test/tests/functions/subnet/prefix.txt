@@ -1,0 +1,15 @@
+{
+  label: "v4-24",
+  from_ip: 10.10.1.0/24,
+  from_string: 10.20.1.0/24,
+}
+{
+  label: "v4-16",
+  from_ip: 10.10.0.0/16,
+  from_string: 10.20.0.0/16,
+}
+{
+  label: "v6-64",
+  from_ip: 2001:db8::/64,
+  from_string: 2001:db8::/64,
+}
