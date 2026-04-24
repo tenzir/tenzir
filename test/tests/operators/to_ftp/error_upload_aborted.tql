@@ -2,7 +2,6 @@
 error: true
 fixtures:
   - ftp:
-      port: 43121
       upload_abort_after_bytes: 1
       upload_chunk_delay: 0.001
 timeout: 60

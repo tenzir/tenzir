@@ -1,0 +1,18 @@
+---
+fixtures:
+  - ftp:
+      upload_chunk_delay: 0.05
+assertions:
+  fixtures:
+    ftp:
+      uploaded_contains: '{"message":"hello-from-to_ftp-head-1"}'
+      upload_count: 1
+timeout: 60
+---
+
+from {message: "hello-from-to_ftp-head-1"}, {message: "hello-from-to_ftp-head-2"}
+batch 1
+to_ftp env("FTP_UPLOAD_URL") {
+  head 1
+  write_ndjson
+}

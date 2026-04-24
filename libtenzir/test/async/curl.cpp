@@ -18,6 +18,9 @@
 #include <folly/coro/BlockingWait.h>
 #include <folly/io/async/ScopedEventBaseThread.h>
 
+#include <chrono>
+#include <thread>
+
 namespace tenzir {
 
 TEST("session tracks active transfers") {
@@ -83,6 +86,29 @@ TEST("session reuses completed transfers") {
     auto second_result = co_await second.result();
     require(second_result.is_ok());
     check_eq(second_result.unwrap(), CurlTransferStatus::finished);
+    check(not session.busy());
+  }());
+}
+
+TEST("session remains busy until upload result is observed") {
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto io_thread = folly::ScopedEventBaseThread{};
+    auto session = CurlSession::make(folly::getKeepAliveToken(io_thread));
+    auto transfer = session.start_upload();
+    transfer.close();
+    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    check(session.busy());
+    auto refused = false;
+    try {
+      auto other = session.start_upload();
+      TENZIR_UNUSED(other);
+    } catch (panic_exception const&) {
+      refused = true;
+    }
+    check(refused);
+    auto result = co_await transfer.result();
+    require(result.is_ok());
+    check_eq(result.unwrap(), CurlTransferStatus::finished);
     check(not session.busy());
   }());
 }
