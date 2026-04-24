@@ -1,0 +1,7 @@
+error: `max_request_size` is too large
+ --> tests/operators/accept_opensearch/error_max_request_size_too_large.tql:5:54
+  |
+5 | accept_opensearch "127.0.0.1:8080", max_request_size=9999999999
+  |                                                      ^^^^^^^^^^ 
+  |
+  = note: maximum supported value: 4294967295

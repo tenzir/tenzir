@@ -40,29 +40,6 @@ namespace {
 namespace http = caf::net::http;
 namespace ssl = caf::net::ssl;
 
-auto split_at_newline(const chunk_ptr& chunk)
-  -> std::vector<std::vector<std::byte>> {
-  if (not chunk or chunk->size() == 0) {
-    return {};
-  }
-  auto svs = std::vector<std::vector<std::byte>>{};
-  const auto end = chunk->end();
-  auto start = chunk->begin();
-  auto newline = std::find(start, end, std::byte{'\n'});
-  while (newline != end) {
-    ++newline;
-    auto& vec = svs.emplace_back();
-    vec.reserve(std::distance(start, newline) + simdjson::SIMDJSON_PADDING);
-    vec.insert(vec.begin(), start, newline);
-    start = newline;
-    newline = std::find(start, end, std::byte{'\n'});
-  }
-  auto& vec = svs.emplace_back();
-  vec.reserve(std::distance(start, newline) + simdjson::SIMDJSON_PADDING);
-  vec.insert(vec.begin(), start, newline);
-  return svs;
-}
-
 struct opensearch_args {
   location op;
   located<std::string> url{"0.0.0.0:9200", location::unknown};
@@ -295,17 +272,7 @@ public:
                     }
                     auto parser
                       = json::ndjson_parser{"from_opensearch", dh, {}};
-                    for (const auto& chunk : split_at_newline(*ptr)) {
-                      if (chunk.empty()) {
-                        continue;
-                      }
-                      auto view = simdjson::padded_string_view{
-                        reinterpret_cast<const char*>(chunk.data()),
-                        chunk.size(),
-                        chunk.capacity(),
-                      };
-                      parser.parse(view);
-                    }
+                    parser.parse_lines(*ptr);
                     TENZIR_ASSERT(not parser.abort_requested);
                     auto result = parser.builder.finalize_as_table_slice();
                     if (keep_actions) {

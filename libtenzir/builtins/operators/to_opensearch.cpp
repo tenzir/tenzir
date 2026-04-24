@@ -8,12 +8,17 @@
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/notify.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -40,7 +45,6 @@ struct opensearch_args {
   std::optional<located<duration>> buffer_timeout
     = located{std::chrono::seconds{5}, location::unknown};
   std::optional<location> compress = location::unknown;
-  std::optional<location> _debug_curl;
   location operator_location = location::unknown;
 
   auto add_to(argument_parser2& parser) -> void {
@@ -54,8 +58,7 @@ struct opensearch_args {
       .named("include_nulls", include_nulls)
       .named("max_content_length", max_content_length)
       .named("buffer_timeout", buffer_timeout)
-      .named("compress", compress)
-      .named("_debug_curl", _debug_curl);
+      .named("compress", compress);
     ssl.add_tls_options(parser);
   }
 
@@ -73,27 +76,6 @@ struct opensearch_args {
       return failure::promise();
     }
 
-    if (_debug_curl) {
-      if (not url.inner.is_all_literal()) {
-        diagnostic::error(
-          "cannot use `_debug_curl` when an argument is a secret")
-          .primary(*_debug_curl)
-          .primary(url.source)
-          .emit(dh);
-        return failure::promise();
-      }
-#define X(NAME)                                                                \
-  if (NAME and not NAME->inner.is_all_literal()) {                             \
-    diagnostic::error("cannot use `_debug_curl` when an argument is a secret") \
-      .primary(*_debug_curl)                                                   \
-      .primary(NAME->source)                                                   \
-      .emit(dh);                                                               \
-    return failure::promise();                                                 \
-  }
-      X(user)
-      X(passwd)
-#undef X
-    }
     return {};
   }
 
@@ -105,7 +87,7 @@ struct opensearch_args {
       f.field("ssl", x.ssl), f.field("include_nulls", x.include_nulls),
       f.field("max_content_length", x.max_content_length),
       f.field("buffer_timeout", x.buffer_timeout),
-      f.field("compress", x.compress), f.field("_debug_curl", x._debug_curl),
+      f.field("compress", x.compress),
       f.field("operator_location", x.operator_location));
   }
 };
@@ -114,7 +96,7 @@ class json_builder {
 public:
   json_builder(json_printer_options printer_opts, uint64_t max_size,
                bool compress)
-    : printer_{std::move(printer_opts)}, max_size_{max_size} {
+    : printer_{printer_opts}, max_size_{max_size} {
     if (compress) {
       auto codec = arrow::util::Codec::Create(
         arrow::Compression::type::GZIP,
@@ -214,7 +196,7 @@ public:
     return not body_.empty();
   }
 
-  auto last_element_size() const -> int64_t {
+  auto last_element_size() const -> uint64_t {
     return last_element_size_;
   }
 
@@ -248,11 +230,11 @@ public:
 private:
   json_printer printer_;
   uint64_t max_size_{};
-  std::string element_text_{};
-  std::string body_{};
-  std::string result_{};
-  std::unique_ptr<arrow::util::Codec> codec_{};
-  uint64_t last_element_size_{};
+  std::string element_text_;
+  std::string body_;
+  std::string result_;
+  std::unique_ptr<arrow::util::Codec> codec_;
+  uint64_t last_element_size_;
 };
 
 auto resolve_str(std::string_view option_name,
@@ -405,7 +387,6 @@ public:
     }
     check(req.set(CURLOPT_POST, 1));
     check(req.set(CURLOPT_URL, final_url));
-    check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
     auto b = json_builder{
       {
         .style = no_style(),

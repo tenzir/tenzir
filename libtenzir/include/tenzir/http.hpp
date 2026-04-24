@@ -18,6 +18,8 @@
 
 #include <arrow/util/compression.h>
 #include <caf/error.hpp>
+#include <folly/io/async/SSLContext.h>
+#include <wangle/ssl/SSLContextConfig.h>
 
 #include <chrono>
 #include <cstdint>
@@ -50,6 +52,13 @@ auto make_header_secret_requests(
   Option<located<data>> const& headers,
   std::vector<std::pair<std::string, std::string>>& resolved_headers,
   diagnostic_handler& dh) -> std::vector<secret_request>;
+
+auto parse_folly_tls_version(std::string_view input)
+  -> Option<folly::SSLContext::SSLVersion>;
+
+auto make_folly_tls_config(Option<located<data>> const& tls, location primary,
+                           diagnostic_handler& dh, tls_options::options options)
+  -> failure_or<wangle::SSLContextConfig>;
 
 struct header {
   std::string name;
