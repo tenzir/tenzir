@@ -101,6 +101,24 @@ struct Noop {};
 using Message = variant<Noop, RequestStarted, RequestBody, RequestFinished>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
+class failing_diagnostic_handler final : public diagnostic_handler {
+public:
+  failing_diagnostic_handler(diagnostic_handler& inner, bool& failed)
+    : inner_{inner}, failed_{failed} {
+  }
+
+  void emit(diagnostic d) override {
+    if (d.severity == severity::warning or d.severity == severity::error) {
+      failed_ = true;
+    }
+    inner_.emit(std::move(d));
+  }
+
+private:
+  diagnostic_handler& inner_;
+  bool& failed_;
+};
+
 auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
   if (slice.rows() == 0) {
     return {};
@@ -277,6 +295,7 @@ struct InFlightRequest {
   Option<std::shared_ptr<arrow::util::Decompressor>> decompressor;
   json::streaming_ndjson_parser parser;
   bool is_action = true;
+  bool failed = false;
 };
 
 class AcceptOpenSearch final : public Operator<void, table_slice> {
@@ -360,9 +379,11 @@ public:
         }
         auto decompressor
           = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
+        auto failed = false;
         if (not msg.content_encoding.empty()) {
+          auto failing_dh = failing_diagnostic_handler{ctx.dh(), failed};
           decompressor
-            = http::make_decompressor(msg.content_encoding, ctx.dh());
+            = http::make_decompressor(msg.content_encoding, failing_dh);
           if (not decompressor) {
             msg.response_signal->send(
               Response{.status = 415,
@@ -378,6 +399,7 @@ public:
                             .decompressor = std::move(decompressor),
                             .parser = {},
                             .is_action = true,
+                            .failed = failed,
                           });
       },
       [&](RequestBody msg) -> Task<void> {
@@ -385,6 +407,7 @@ public:
         auto decompressor
           = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
         auto is_action = true;
+        auto failed = false;
         auto slices = std::vector<table_slice>{};
         {
           auto requests = co_await active_requests_.lock();
@@ -395,12 +418,14 @@ public:
           response_signal = it->second.response_signal;
           decompressor = it->second.decompressor;
           is_action = it->second.is_action;
+          failed = it->second.failed;
           auto data = blob{std::span{msg.data}};
+          auto failing_dh = failing_diagnostic_handler{ctx.dh(), failed};
           if (decompressor) {
             auto decompressed = http::decompress_chunk(
               **decompressor,
               std::span<std::byte const>{msg.data.data(), msg.data.size()},
-              ctx.dh(), args_.get_max_request_size());
+              failing_dh, args_.get_max_request_size());
             if (decompressed.is_err()) {
               (*response_signal)
                 ->send(Response{.status = std::move(decompressed).unwrap_err(),
@@ -412,7 +437,15 @@ public:
           }
           bytes_read_counter_.add(data.size());
           slices = it->second.parser.parse_chunk(data, "accept_opensearch",
-                                                 ctx.dh());
+                                                 failing_dh);
+          it->second.failed = failed;
+        }
+        if (failed) {
+          (*response_signal)
+            ->send(Response{.status = 400,
+                            .content_type = std::string{bulk_content_type},
+                            .body = "{}"});
+          co_return;
         }
         if (args_.keep_actions) {
           for (auto& slice : slices) {
@@ -448,7 +481,15 @@ public:
         if (req->response_signal->has_sent()) {
           co_return;
         }
-        auto slices = req->parser.finish("accept_opensearch", ctx.dh());
+        auto failing_dh = failing_diagnostic_handler{ctx.dh(), req->failed};
+        auto slices = req->parser.finish("accept_opensearch", failing_dh);
+        if (req->failed) {
+          req->response_signal->send(
+            Response{.status = 400,
+                     .content_type = std::string{bulk_content_type},
+                     .body = "{}"});
+          co_return;
+        }
         if (args_.keep_actions) {
           for (auto& slice : slices) {
             if (slice.rows() > 0) {
