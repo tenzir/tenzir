@@ -96,7 +96,8 @@ auto emit_skipped_directory_warning(const std::filesystem::path& path,
 
 auto should_recurse_into(const std::filesystem::directory_entry& entry,
                          std::filesystem::directory_options options,
-                         diagnostic_handler& dh) -> bool {
+                         bool skip_permission_denied, diagnostic_handler& dh)
+  -> bool {
   auto ec = std::error_code{};
   const auto follow_symlinks
     = (options & std::filesystem::directory_options::follow_directory_symlink)
@@ -104,6 +105,9 @@ auto should_recurse_into(const std::filesystem::directory_entry& entry,
   const auto status
     = follow_symlinks ? entry.status(ec) : entry.symlink_status(ec);
   if (ec) {
+    if (skip_permission_denied and is_permission_error(ec)) {
+      return false;
+    }
     diagnostic::warning("failed to inspect `{}`: {}", entry.path(),
                         ec.message())
       .emit(dh);
@@ -131,6 +135,9 @@ auto list_directory(const std::filesystem::path& path,
     ec.clear();
     iterator.increment(ec);
     if (ec) {
+      if (skip_permission_denied and is_permission_error(ec)) {
+        co_return;
+      }
       emit_filesystem_error(path, ec, dh);
       co_return;
     }
@@ -164,18 +171,24 @@ auto list_directory_recursive(const std::filesystem::path& path,
     ec.clear();
     current.increment(ec);
     if (ec) {
+      if (skip_permission_denied and is_permission_error(ec)) {
+        stack.pop_back();
+        continue;
+      }
       emit_filesystem_error(entry.path(), ec, dh);
       co_return;
     }
     co_yield entry;
-    if (not should_recurse_into(entry, options, dh)) {
+    if (not should_recurse_into(entry, options, skip_permission_denied, dh)) {
       continue;
     }
     ec.clear();
     auto child = std::filesystem::directory_iterator{entry.path(), options, ec};
     if (ec) {
       if (is_permission_error(ec)) {
-        emit_skipped_directory_warning(entry.path(), ec, dh);
+        if (not skip_permission_denied) {
+          emit_skipped_directory_warning(entry.path(), ec, dh);
+        }
         continue;
       }
       emit_filesystem_error(entry.path(), ec, dh);
