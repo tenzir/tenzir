@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+let $worker = "alpha"
+from {x: 1}
+load_balance $worker {
+  discard
+}
