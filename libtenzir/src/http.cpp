@@ -11,6 +11,11 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/series_builder.hpp"
+#include "tenzir/view3.hpp"
+
+#include <boost/url/parse.hpp>
+#include <boost/url/url.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -19,7 +24,168 @@
 
 namespace tenzir::http {
 
-namespace {} // namespace
+namespace {
+
+// Splits a raw HTTP Link header value into individual link-value items at
+// top-level commas (not inside <...> or quoted strings).
+auto split_link_header(std::string_view value)
+  -> std::vector<std::string_view> {
+  auto result = std::vector<std::string_view>{};
+  auto start = size_t{0};
+  auto in_angle = false;
+  auto in_quotes = false;
+  auto escaped = false;
+  for (auto i = size_t{}; i < value.size(); ++i) {
+    const auto c = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\' and in_quotes) {
+      escaped = true;
+      continue;
+    }
+    if (c == '"' and not in_angle) {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == '<' and not in_quotes) {
+      in_angle = true;
+      continue;
+    }
+    if (c == '>' and not in_quotes) {
+      in_angle = false;
+      continue;
+    }
+    if (c == ',' and not in_quotes and not in_angle) {
+      auto item = detail::trim(value.substr(start, i - start));
+      if (not item.empty()) {
+        result.push_back(item);
+      }
+      start = i + 1;
+    }
+  }
+  auto item = detail::trim(value.substr(start));
+  if (not item.empty()) {
+    result.push_back(item);
+  }
+  return result;
+}
+
+// Splits link-value parameters at semicolons, honouring quoted-string escaping.
+auto split_link_params(std::string_view value)
+  -> std::pair<std::vector<std::string_view>, bool> {
+  auto result = std::vector<std::string_view>{};
+  auto start = size_t{0};
+  auto in_quotes = false;
+  auto escaped = false;
+  for (auto i = size_t{}; i < value.size(); ++i) {
+    const auto c = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\' and in_quotes) {
+      escaped = true;
+      continue;
+    }
+    if (c == '"') {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == ';' and not in_quotes) {
+      auto item = detail::trim(value.substr(start, i - start));
+      if (not item.empty()) {
+        result.push_back(item);
+      }
+      start = i + 1;
+    }
+  }
+  auto item = detail::trim(value.substr(start));
+  if (not item.empty()) {
+    result.push_back(item);
+  }
+  return {std::move(result), not in_quotes};
+}
+
+// Returns true when "next" appears as a token in a rel parameter value.
+auto rel_contains_next(std::string_view value) -> bool {
+  value = detail::trim(value);
+  if (value.size() >= 2 and value.front() == '"' and value.back() == '"') {
+    value.remove_prefix(1);
+    value.remove_suffix(1);
+  }
+  auto index = size_t{};
+  while (index < value.size()) {
+    while (index < value.size()
+           and std::isspace(static_cast<unsigned char>(value[index])) != 0) {
+      ++index;
+    }
+    const auto token_begin = index;
+    while (index < value.size()
+           and std::isspace(static_cast<unsigned char>(value[index])) == 0) {
+      ++index;
+    }
+    const auto token = value.substr(token_begin, index - token_begin);
+    if (not token.empty() and detail::ascii_icase_equal(token, "next")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Parses a single RFC 8288 link-value and extracts its `rel=next` target URI.
+// Returns Err(Unit) for malformed link-values.
+auto next_link_target(std::string_view header)
+  -> Result<Option<std::string_view>, Unit> {
+  auto item = detail::trim(header);
+  if (item.empty()) {
+    return None{};
+  }
+  if (item.front() != '<') {
+    return Err{Unit{}};
+  }
+  const auto uri_end = item.find('>');
+  if (uri_end == std::string_view::npos) {
+    return Err{Unit{}};
+  }
+  auto target = item.substr(1, uri_end - 1);
+  auto params = item.substr(uri_end + 1);
+  auto [param_parts, ok] = split_link_params(params);
+  if (not ok) {
+    return Err{Unit{}};
+  }
+  auto has_next = false;
+  for (const auto part : param_parts) {
+    const auto eq = part.find('=');
+    auto name = detail::trim(part.substr(0, eq));
+    if (name.empty() or not detail::ascii_icase_equal(name, "rel")) {
+      continue;
+    }
+    if (eq == std::string_view::npos) {
+      continue;
+    }
+    if (rel_contains_next(detail::trim(part.substr(eq + 1)))) {
+      has_next = true;
+      break;
+    }
+  }
+  if (has_next) {
+    return Option<std::string_view>{target};
+  }
+  return None{};
+}
+
+auto emit_odata_envelope_error(location paginate_loc, diagnostic_handler& dh)
+  -> failure_or<OdataPage> {
+  diagnostic::error(
+    "expected OData response body to contain a top-level `value` array")
+    .primary(paginate_loc)
+    .emit(dh);
+  return failure::promise();
+}
+
+} // namespace
 
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void {
   if (not url.starts_with("http://") and not url.starts_with("https://")) {
@@ -342,6 +508,127 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
   }
   out.resize(written);
   return out;
+}
+
+auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {
+  if (mode == "link") {
+    return PaginationMode::link;
+  }
+  if (mode == "odata") {
+    return PaginationMode::odata;
+  }
+  return None{};
+}
+
+auto next_url_from_link_headers(
+  std::vector<std::pair<std::string, std::string>> const& response_headers,
+  std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
+  -> Option<std::string> {
+  auto base = boost::urls::parse_uri_reference(base_url);
+  if (not base) {
+    diagnostic::warning("failed to parse request URI for link pagination: {}",
+                        base.error().message())
+      .primary(paginate_loc)
+      .note("stopping pagination")
+      .emit(dh);
+    return None{};
+  }
+  auto malformed = false;
+  for (auto const& [name, value] : response_headers) {
+    if (not detail::ascii_icase_equal(name, "link")) {
+      continue;
+    }
+    for (auto header : split_link_header(value)) {
+      auto parsed = next_link_target(header);
+      if (parsed.is_err()) {
+        malformed = true;
+        continue;
+      }
+      auto target = parsed.unwrap();
+      if (not target) {
+        continue;
+      }
+      auto ref = boost::urls::parse_uri_reference(*target);
+      if (not ref) {
+        diagnostic::warning("invalid `rel=next` URL in Link header: {}",
+                            ref.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        return None{};
+      }
+      auto resolved = boost::urls::url{};
+      if (auto r = boost::urls::resolve(*base, *ref, resolved); not r) {
+        diagnostic::warning("failed to resolve `rel=next` URL: {}",
+                            r.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        return None{};
+      }
+      return Option<std::string>{std::string{resolved.buffer()}};
+    }
+  }
+  if (malformed) {
+    diagnostic::warning("failed to parse Link header for pagination")
+      .primary(paginate_loc)
+      .note("stopping pagination")
+      .emit(dh);
+  }
+  return None{};
+}
+
+auto extract_odata_page(table_slice const& slice, location paginate_loc,
+                        diagnostic_handler& dh) -> failure_or<OdataPage> {
+  if (slice.rows() != 1) {
+    return emit_odata_envelope_error(paginate_loc, dh);
+  }
+  auto result = OdataPage{};
+  auto builder = series_builder{};
+  auto saw_body = false;
+  for (auto body : values3(slice)) {
+    saw_body = true;
+    auto value = Option<data_view3>{None{}};
+    for (auto const& [key, field] : body) {
+      if (key == "@odata.nextLink") {
+        if (auto const* next = try_as<std::string_view>(&field)) {
+          result.next_url = std::string{*next};
+        }
+        continue;
+      }
+      if (key == "value") {
+        value = field;
+      }
+    }
+    if (not value) {
+      return emit_odata_envelope_error(paginate_loc, dh);
+    }
+    auto const* items = try_as<view3<list>>(&*value);
+    if (not items) {
+      return emit_odata_envelope_error(paginate_loc, dh);
+    }
+    for (auto item : *items) {
+      auto const* item_record = try_as<view3<record>>(item);
+      if (not item_record) {
+        diagnostic::error("expected OData `value` array to contain objects")
+          .primary(paginate_loc)
+          .emit(dh);
+        return failure::promise();
+      }
+      auto output = builder.record();
+      for (auto const& [key, field] : *item_record) {
+        if (key.starts_with("@odata.")) {
+          continue;
+        }
+        output.field(key, field);
+      }
+    }
+  }
+  if (not saw_body) {
+    return emit_odata_envelope_error(paginate_loc, dh);
+  }
+  result.events = builder.finish_as_table_slice();
+  return result;
 }
 
 } // namespace tenzir::http
