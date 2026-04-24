@@ -21,10 +21,27 @@
 
 #include <type_traits>
 #include <unordered_set>
+#include <vector>
 
 namespace tenzir::ast {
 
 namespace {
+
+auto combine_selector_location(location result, selector const& sel,
+                               std::vector<expression const*>& stack)
+  -> location {
+  sel.match(
+    [&](meta const& x) {
+      result = result.combine(x.source);
+    },
+    [&](field_path const& x) {
+      stack.push_back(&x.inner());
+    },
+    [&](dollar_var const& x) {
+      result = result.combine(x.id.location);
+    });
+  return result;
+}
 
 class named_expression_substituter
   : public ast::visitor<named_expression_substituter> {
@@ -183,9 +200,88 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
 }
 
 auto expression::get_location() const -> location {
-  return match([](const auto& x) {
-    return x.get_location();
-  });
+  auto result = location::unknown;
+  auto stack = std::vector<expression const*>{};
+  stack.reserve(64);
+  stack.push_back(this);
+  while (not stack.empty()) {
+    auto const* current = stack.back();
+    stack.pop_back();
+    TENZIR_ASSERT(current->kind);
+    current->match(
+      [&](record const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](list const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](meta const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](this_ const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](root_field const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](pipeline_expr const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](constant const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](field_access const& x) {
+        result = result.combine(x.name.location);
+        stack.push_back(&x.left);
+      },
+      [&](index_expr const& x) {
+        result = result.combine(x.rbracket);
+        stack.push_back(&x.expr);
+      },
+      [&](binary_expr const& x) {
+        stack.push_back(&x.right);
+        stack.push_back(&x.left);
+      },
+      [&](unary_expr const& x) {
+        result = result.combine(x.op.source);
+        stack.push_back(&x.expr);
+      },
+      [&](function_call const& x) {
+        result = result.combine(x.rpar);
+        if (x.method) {
+          TENZIR_ASSERT(not x.args.empty());
+          stack.push_back(&x.args[0]);
+        } else {
+          result = result.combine(x.fn.get_location());
+        }
+      },
+      [&](lambda_expr const& x) {
+        if (x.params.empty()) {
+          result = result.combine(x.arrow);
+        } else {
+          result = result.combine(x.params.front().location);
+        }
+        stack.push_back(&x.body);
+      },
+      [&](underscore const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](unpack const& x) {
+        result = result.combine(x.brackets);
+        stack.push_back(&x.expr);
+      },
+      [&](assignment const& x) {
+        result = combine_selector_location(result, x.left, stack);
+        stack.push_back(&x.right);
+      },
+      [&](dollar_var const& x) {
+        result = result.combine(x.get_location());
+      },
+      [&](format_expr const& x) {
+        result = result.combine(x.get_location());
+      });
+  }
+  return result;
 }
 
 expression::expression(expression const& other) {
