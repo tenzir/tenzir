@@ -2,7 +2,7 @@
 fixtures:
   - http_request:
       path: /_bulk
-      body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
+      body: "{\"delete\":{\"_index\":\"test\",\"_id\":\"1\"}}\n{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
 timeout: 10
 ---
 

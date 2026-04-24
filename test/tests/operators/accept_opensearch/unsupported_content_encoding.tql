@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /_bulk
+          body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":1}\n"
+          headers:
+            Content-Type: application/x-ndjson
+            Content-Encoding: unsupported-encoding
+          expected_status: 415
+        - path: /_bulk
+          body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
+timeout: 10
+---
+
+accept_opensearch env("HTTP_REQUEST_ENDPOINT")
+head 1

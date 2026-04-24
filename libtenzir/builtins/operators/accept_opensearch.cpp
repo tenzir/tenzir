@@ -20,6 +20,7 @@
 #include <tenzir/http.hpp>
 #include <tenzir/http_server.hpp>
 #include <tenzir/json_parser.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -72,9 +73,9 @@ struct AcceptOpenSearchArgs {
 };
 
 struct Response {
-  uint16_t status = 200;
-  std::string content_type = std::string{bulk_content_type};
-  std::string body = std::string{bulk_response};
+  uint16_t status;
+  std::string content_type;
+  std::string body;
 };
 
 using ResponseSignal = Oneshot<Response>;
@@ -140,15 +141,13 @@ auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
 
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
-  RequestHandler(
-    AcceptOpenSearchArgs args, Arc<MessageQueue> queue,
-    Arc<Atomic<uint64_t>> request_id_gen, Arc<Semaphore> active_connections,
-    Mutex<std::unordered_map<uint64_t, Arc<ResponseSignal>>>& active_requests)
+  RequestHandler(AcceptOpenSearchArgs args, Arc<MessageQueue> queue,
+                 Arc<Atomic<uint64_t>> request_id_gen,
+                 Arc<Semaphore> active_connections)
     : args_{std::move(args)},
       queue_{std::move(queue)},
       request_id_gen_{std::move(request_id_gen)},
-      active_connections_{std::move(active_connections)},
-      active_requests_{active_requests} {
+      active_connections_{std::move(active_connections)} {
   }
 
   auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
@@ -157,39 +156,34 @@ public:
     auto permit = co_await active_connections_->acquire();
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
-    auto response = Response{};
-    auto enqueue_request = false;
     auto content_encoding = std::string{};
     auto bytes_received = size_t{};
     auto body = std::vector<std::byte>{};
     auto response_signal = Arc<ResponseSignal>{std::in_place};
-    auto started = false;
     reader
       .onHeadersAsync([&](std::unique_ptr<proxygen::HTTPMessage> msg,
                           bool is_final, bool) -> folly::coro::Task<bool> {
         if (not is_final) {
           co_return proxygen::coro::HTTPSourceReader::Continue;
         }
-        TENZIR_ASSERT(not started);
-        started = true;
         auto path = std::string_view{msg->getPathAsStringPiece()};
         auto method = msg->getMethod();
         if (method == proxygen::HTTPMethod::GET and path == "/") {
-          response = Response{
+          response_signal->send(Response{
             .status = 200,
             .content_type = std::string{bulk_content_type},
             .body = std::string{info_response},
-          };
+          });
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
         if (path != "/_bulk") {
-          response = Response{
+          response_signal->send(Response{
             .status = 200,
             .content_type = method == proxygen::HTTPMethod::HEAD
                               ? ""
                               : std::string{bulk_content_type},
             .body = method == proxygen::HTTPMethod::HEAD ? "" : "{}",
-          };
+          });
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
         auto content_length_header = std::string_view{
@@ -197,32 +191,31 @@ public:
         if (auto content_length
             = http_server::parse_number<size_t>(content_length_header);
             content_length and *content_length > args_.get_max_request_size()) {
-          response = Response{.status = 413,
-                              .content_type = std::string{bulk_content_type},
-                              .body = "{}"};
+          response_signal->send(
+            Response{.status = 413,
+                     .content_type = std::string{bulk_content_type},
+                     .body = "{}"});
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
         content_encoding
           = std::string{msg->getHeaders().getSingleOrEmpty("Content-Encoding")};
-        enqueue_request = true;
         co_return proxygen::coro::HTTPSourceReader::Continue;
       })
       .onBodyAsync([&](quic::BufQueue queue, bool) -> folly::coro::Task<bool> {
-        TENZIR_ASSERT(started);
-        if (not enqueue_request) {
+        if (response_signal->has_sent()) {
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
         if (not queue.empty()) {
           auto iobuf = queue.move();
           iobuf->coalesce();
-          if (bytes_received + iobuf->length() > args_.get_max_request_size()) {
-            response = Response{.status = 413,
-                                .content_type = std::string{bulk_content_type},
-                                .body = "{}"};
-            enqueue_request = false;
+          bytes_received += iobuf->length();
+          if (bytes_received > args_.get_max_request_size()) {
+            response_signal->send(
+              Response{.status = 413,
+                       .content_type = std::string{bulk_content_type},
+                       .body = "{}"});
             co_return proxygen::coro::HTTPSourceReader::Cancel;
           }
-          bytes_received += iobuf->length();
           auto chunk = std::span{
             reinterpret_cast<std::byte const*>(iobuf->data()), iobuf->length()};
           body.insert(body.end(), chunk.begin(), chunk.end());
@@ -231,29 +224,21 @@ public:
       })
       .onError([&](proxygen::coro::HTTPSourceReader::ErrorContext,
                    proxygen::coro::HTTPError const&) {
-        response = Response{.status = 400,
-                            .content_type = std::string{bulk_content_type},
-                            .body = "{}"};
-        enqueue_request = false;
+        response_signal->send(
+          Response{.status = 400,
+                   .content_type = std::string{bulk_content_type},
+                   .body = "{}"});
       });
     co_await reader.read(
       detail::narrow<uint32_t>(args_.get_max_request_size()));
-    if (enqueue_request) {
-      {
-        auto active_requests = co_await active_requests_.lock();
-        active_requests->emplace(request_id, response_signal);
-      }
+    if (not response_signal->has_sent()) {
       co_await queue_->enqueue(
         Request{.request_id = request_id,
                 .content_encoding = std::move(content_encoding),
                 .body = chunk::make(std::move(body)),
                 .response_signal = response_signal});
-      response = co_await response_signal->recv();
-      {
-        auto active_requests = co_await active_requests_.lock();
-        active_requests->erase(request_id);
-      }
     }
+    auto response = co_await response_signal->recv();
     permit.release();
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
@@ -266,7 +251,6 @@ private:
   Arc<MessageQueue> queue_;
   Arc<Atomic<uint64_t>> request_id_gen_;
   Arc<Semaphore> active_connections_;
-  Mutex<std::unordered_map<uint64_t, Arc<ResponseSignal>>>& active_requests_;
 };
 
 class AcceptOpenSearch final : public Operator<void, table_slice> {
@@ -283,9 +267,8 @@ public:
       co_return;
     }
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
-    auto request_handler
-      = std::make_shared<RequestHandler>(args_, message_queue_, request_id_gen,
-                                         active_connections_, active_requests_);
+    auto request_handler = std::make_shared<RequestHandler>(
+      args_, message_queue_, request_id_gen, active_connections_);
     try {
       auto server = proxygen::coro::ScopedHTTPServer::start(
         std::move(config.unwrap()), std::move(request_handler));
@@ -377,6 +360,10 @@ public:
         auto parser = json::ndjson_parser{"accept_opensearch", ctx.dh(), {}};
         parser.parse_lines(body);
         auto result = parser.builder.finalize_as_table_slice();
+        {
+          auto requests = co_await active_requests_.lock();
+          requests->emplace(request.request_id, request.response_signal);
+        }
         if (args_.keep_actions) {
           for (auto& slice : result) {
             if (slice.rows() > 0) {
@@ -392,7 +379,15 @@ public:
             }
           }
         }
-        request.response_signal->send(Response{});
+        {
+          auto requests = co_await active_requests_.lock();
+          requests->erase(request.request_id);
+        }
+        request.response_signal->send(Response{
+          .status = 200,
+          .content_type = std::string{bulk_content_type},
+          .body = std::string{bulk_response},
+        });
       },
       [&](Noop) -> Task<void> {
         co_return;
