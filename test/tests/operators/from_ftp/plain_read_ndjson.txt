@@ -1,0 +1,3 @@
+{
+  message: "hello-from-from_ftp",
+}

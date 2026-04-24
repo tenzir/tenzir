@@ -61,6 +61,33 @@ writers have been dropped, and the writers aware if all readers have been
 dropped. This is important to ensure that partial termination does not lead to
 buffers filling up, or even deadlocks in the case of bounded channels.
 
+## Async curl patterns
+
+The async curl layer is centered around `CurlSession`. A session owns one
+reusable `tenzir::curl::easy` handle and drives transfers on a Folly IO
+executor.
+
+Use it like this:
+
+- Create a session with `CurlSession::make(ctx.io_executor())`, configure
+  `session.easy()` directly, then start one semantic transfer with
+  `start_upload()` or `start_download()`.
+- A session supports one active transfer at a time. Reuse the session after the
+  current transfer has completed and the upload `result()` or download terminal
+  event has been observed.
+- For uploads, call `start_upload()`, `push()` chunks, and eventually call
+  `close()`. Await `result()` to distinguish `CurlTransferStatus::finished`,
+  `CurlTransferStatus::local_abort`, and `Err(CurlError{...})`. If the local
+  producer fails, call `abort()` so libcurl fails the transfer callback instead
+  of hanging.
+- For downloads, call `start_download()` and drain `next()`. It returns chunk
+  events while the transfer is active, then one terminal event for completion,
+  local abort, or `CurlError`. The `buffer_capacity` argument controls how many
+  chunks the receive queue holds; if it fills up, libcurl pauses until `next()`
+  drains another chunk.
+- Dropping or aborting a transfer cancels the in-flight libcurl transfer on the
+  session's EventBase.
+
 ## Notes
 
 - Don't use `folly::makePromise()`, as `co_await` does not cancel.

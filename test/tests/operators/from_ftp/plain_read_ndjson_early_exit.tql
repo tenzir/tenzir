@@ -1,0 +1,15 @@
+---
+fixtures:
+  - ftp:
+      download_payload: |
+        {"message":"hello-early-exit-1"}
+        {"message":"hello-early-exit-2"}
+      download_chunk_size: 33
+      download_chunk_delay: 0.2
+timeout: 60
+---
+
+from_ftp env("FTP_DOWNLOAD_URL_NO_SCHEME") {
+  read_ndjson
+}
+head 1

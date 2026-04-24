@@ -1,0 +1,7 @@
+error: FTP upload failed
+  --> tests/operators/to_ftp/error_upload_aborted.tql:12:8
+   |
+12 | to_ftp env("FTP_UPLOAD_URL") {
+   |        ^^^^^^^^^^^^^^^^^^^^^ 
+   |
+   = note: curl error: Failed sending data to the peer

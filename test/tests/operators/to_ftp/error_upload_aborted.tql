@@ -1,0 +1,14 @@
+---
+error: true
+fixtures:
+  - ftp:
+      upload_abort_after_bytes: 1
+      upload_chunk_delay: 0.001
+timeout: 60
+---
+
+from {message: "hello-from-to_ftp-abort"}
+repeat 2000
+to_ftp env("FTP_UPLOAD_URL") {
+  write_ndjson
+}
