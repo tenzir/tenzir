@@ -20,9 +20,9 @@
 
 #include <filesystem>
 #include <grp.h>
+#include <optional>
 #include <pwd.h>
 #include <unistd.h>
-#include <optional>
 #include <vector>
 
 namespace tenzir::plugins::files {
