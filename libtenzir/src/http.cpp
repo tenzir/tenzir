@@ -409,8 +409,7 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
 namespace tenzir::http_server {
 
 auto parse_endpoint(std::string_view endpoint, location loc,
-                           diagnostic_handler& dh,
-                           std::string_view argument_name)
+                    diagnostic_handler& dh, std::string_view argument_name)
   -> Option<server_endpoint> {
   if (endpoint.contains("://")) {
     auto parsed = proxygen::URL{std::string{endpoint}};

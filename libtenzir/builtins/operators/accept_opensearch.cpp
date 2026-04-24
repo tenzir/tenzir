@@ -14,6 +14,7 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/inspect_enum_str.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
@@ -321,7 +322,6 @@ public:
           // srv destructor calls drain()+forceStop()+thread_.join()
         }).detach();
       }
-      lifecycle_ = Lifecycle::done;
     });
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
@@ -417,6 +417,10 @@ public:
                                          : OperatorState::unspecified;
   }
 
+  auto snapshot(Serde& serde) -> void override {
+    serde("lifecycle", lifecycle_);
+  }
+
 private:
   enum class Lifecycle {
     running,
@@ -424,25 +428,22 @@ private:
     done,
   };
 
+  friend auto inspect(auto& f, Lifecycle& x) {
+    return tenzir::detail::inspect_enum_str(f, x,
+                                            {"running", "draining", "done"});
+  }
+
   static auto get_max_connections() -> uint64_t {
     return 10;
   }
 
   auto request_stop() -> Task<void> {
-    if (lifecycle_ == Lifecycle::done or lifecycle_ == Lifecycle::draining) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     lifecycle_ = Lifecycle::draining;
     if (server_) {
       (*server_)->getServer().drain();
-    }
-    {
-      auto active_requests = co_await active_requests_.lock();
-      for (auto& [_, signal] : *active_requests) {
-        signal->send(Response{.status = 503,
-                              .content_type = std::string{bulk_content_type},
-                              .body = "{}"});
-      }
     }
     co_await maybe_finish_draining();
   }
