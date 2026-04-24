@@ -287,9 +287,14 @@ auto validate_paginate(Option<ast::expression> const& expr,
     });
 }
 
-auto resolve_paginate_url(std::string_view next_url,
-                          std::string const& base_url, location paginate_loc,
-                          diagnostic_handler& dh) -> Option<std::string> {
+enum class NextUrlSource {
+  paginate_lambda,
+  odata_next_link,
+};
+
+auto resolve_next_url(std::string_view next_url, std::string const& base_url,
+                      location paginate_loc, diagnostic_handler& dh,
+                      NextUrlSource source) -> Option<std::string> {
   auto base = boost::urls::parse_uri_reference(base_url);
   if (not base) {
     diagnostic::warning("failed to parse request URI for pagination: {}",
@@ -301,20 +306,43 @@ auto resolve_paginate_url(std::string_view next_url,
   }
   auto ref = boost::urls::parse_uri_reference(next_url);
   if (not ref) {
-    diagnostic::warning("invalid next URL from `paginate` lambda: {}",
-                        ref.error().message())
-      .primary(paginate_loc)
-      .note("stopping pagination")
-      .emit(dh);
+    switch (source) {
+      case NextUrlSource::paginate_lambda:
+        diagnostic::warning("invalid next URL from `paginate` lambda: {}",
+                            ref.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+      case NextUrlSource::odata_next_link:
+        diagnostic::warning("invalid OData `@odata.nextLink` URL: {}",
+                            ref.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+    }
     return None{};
   }
   auto resolved = boost::urls::url{};
   if (auto r = boost::urls::resolve(*base, *ref, resolved); not r) {
-    diagnostic::warning("failed to resolve next URL from `paginate` lambda: {}",
-                        r.error().message())
-      .primary(paginate_loc)
-      .note("stopping pagination")
-      .emit(dh);
+    switch (source) {
+      case NextUrlSource::paginate_lambda:
+        diagnostic::warning("failed to resolve next URL from `paginate` "
+                            "lambda: {}",
+                            r.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+      case NextUrlSource::odata_next_link:
+        diagnostic::warning("failed to resolve OData `@odata.nextLink` URL: {}",
+                            r.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+    }
     return None{};
   }
   return Option<std::string>{std::string{resolved.buffer()}};
@@ -345,7 +373,8 @@ auto next_url_from_lambda(Option<pagination_spec> const& paginate,
       return None{};
     },
     [&](std::string_view url) -> Option<std::string> {
-      return resolve_paginate_url(url, base_url, paginate->source, dh);
+      return resolve_next_url(url, base_url, paginate->source, dh,
+                              NextUrlSource::paginate_lambda);
     },
     [&](auto const&) -> Option<std::string> {
       diagnostic::error("expected `paginate` to be `string`, got `{}`",
@@ -763,7 +792,12 @@ public:
         co_return;
       }
       odata_envelope_seen_ = true;
-      pagination_.next_url = std::move(page->next_url);
+      pagination_.next_url
+        = page->next_url
+            ? resolve_next_url(*page->next_url, pagination_.current_url,
+                               paginate_->source, ctx.dh(),
+                               NextUrlSource::odata_next_link)
+            : None{};
       for (auto& event_slice : page->events) {
         co_await push(std::move(event_slice));
       }

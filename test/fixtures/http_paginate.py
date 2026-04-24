@@ -15,6 +15,8 @@ Exports:
   HTTP_FIXTURE_META_LAMBDA_URL        — next URL carried in X-Next-Page header (tests
                                         that pagination lambdas can read metadata_field)
   HTTP_FIXTURE_ODATA_USERS_URL        — Microsoft Graph-shaped OData collection pages
+  HTTP_FIXTURE_ODATA_RELATIVE_USERS_URL
+                                      — OData collection with relative nextLink
 """
 
 from __future__ import annotations
@@ -46,10 +48,38 @@ _LARGE_ERROR_PAGE = "/paginate/error/large"
 _META_LAMBDA_PAGE_1 = "/paginate/meta-lambda/1"
 _META_LAMBDA_PAGE_2 = "/paginate/meta-lambda/2"
 _ODATA_PAGE_1 = "/graph/v1.0/users"
+_ODATA_RELATIVE_PAGE_1 = "/graph/v1.0/relative-users"
 _ODATA_PAGE_2 = "/graph/v1.0/users/next"
 _ODATA_SKIPTOKEN = "RFNwdAIAAQAAAD8...AAAAAAAA"
 # Port 9 is IANA Discard Protocol — always refuses connections on most systems.
 _UNREACHABLE_NEXT = "http://127.0.0.1:9/paginate/unreachable/next"
+
+
+def _odata_first_page(base: str, next_link: str) -> bytes:
+    body = {
+        "@odata.context": f"{base}/$metadata#users",
+        "@odata.count": 3,
+        "@odata.nextLink": next_link,
+        "value": [
+            {
+                "@odata.etag": 'W/"user-1"',
+                "id": "user-1",
+                "displayName": "Ada Lovelace",
+                "accountEnabled": True,
+                "manager": {
+                    "@odata.type": "#microsoft.graph.user",
+                    "id": "manager-1",
+                },
+            },
+            {
+                "@odata.type": "#microsoft.graph.user",
+                "id": "user-2",
+                "displayName": "Grace Hopper",
+                "mail": None,
+            },
+        ],
+    }
+    return json.dumps(body).encode()
 
 
 def _page(n: int) -> bytes:
@@ -188,30 +218,12 @@ class _Handler(BaseHTTPRequestHandler):
         if path == _ODATA_PAGE_1:
             base = f"http://{self.headers['Host']}"
             next_link = f"{base}{_ODATA_PAGE_2}?$skiptoken={_ODATA_SKIPTOKEN}"
-            body = {
-                "@odata.context": f"{base}/$metadata#users",
-                "@odata.count": 3,
-                "@odata.nextLink": next_link,
-                "value": [
-                    {
-                        "@odata.etag": 'W/"user-1"',
-                        "id": "user-1",
-                        "displayName": "Ada Lovelace",
-                        "accountEnabled": True,
-                        "manager": {
-                            "@odata.type": "#microsoft.graph.user",
-                            "id": "manager-1",
-                        },
-                    },
-                    {
-                        "@odata.type": "#microsoft.graph.user",
-                        "id": "user-2",
-                        "displayName": "Grace Hopper",
-                        "mail": None,
-                    },
-                ],
-            }
-            self._reply(json.dumps(body).encode())
+            self._reply(_odata_first_page(base, next_link))
+            return
+        if path == _ODATA_RELATIVE_PAGE_1:
+            base = f"http://{self.headers['Host']}"
+            next_link = f"{_ODATA_PAGE_2}?$skiptoken={_ODATA_SKIPTOKEN}"
+            self._reply(_odata_first_page(base, next_link))
             return
         if path == _ODATA_PAGE_2:
             query = parse_qs(parts.query, keep_blank_values=True)
@@ -285,6 +297,9 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_LARGE_ERROR_URL": f"{base}{_LARGE_ERROR_PAGE}",
             "HTTP_FIXTURE_META_LAMBDA_URL": f"{base}{_META_LAMBDA_PAGE_1}",
             "HTTP_FIXTURE_ODATA_USERS_URL": f"{base}{_ODATA_PAGE_1}",
+            "HTTP_FIXTURE_ODATA_RELATIVE_USERS_URL": (
+                f"{base}{_ODATA_RELATIVE_PAGE_1}"
+            ),
         }
     finally:
         server.shutdown()
