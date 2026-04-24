@@ -1,0 +1,25 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      source: tenzir-test-raw-split
+      sourcetype: tenzir:test:raw-split
+      contains:
+        - raw-split-alpha
+        - raw-split-beta
+        - tenzir-raw-a
+        - tenzir-raw-b
+---
+
+from {message: "raw-split-alpha", h: "tenzir-raw-a"},
+     {message: "raw-split-beta", h: "tenzir-raw-b"}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          endpoint="raw",
+          event=message,
+          host=h,
+          source="tenzir-test-raw-split",
+          sourcetype="tenzir:test:raw-split",
+          index=env("SPLUNK_INDEX"),
+          compress=false

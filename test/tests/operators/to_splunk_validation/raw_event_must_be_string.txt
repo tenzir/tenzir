@@ -1,0 +1,6 @@
+warning: raw `event` must evaluate to a string
+ --> tests/operators/to_splunk_validation/raw_event_must_be_string.tql:5:17
+  |
+5 |           event=message
+  |                 ~~~~~~~ 
+  |
