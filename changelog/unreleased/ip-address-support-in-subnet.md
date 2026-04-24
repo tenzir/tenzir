@@ -7,7 +7,8 @@ authors:
 created: 2026-04-24T08:25:26.842453Z
 ---
 
-The `subnet` function now accepts typed IP addresses and plain IP strings, with an optional prefix length:
+The `subnet` function now accepts typed IP addresses, plain IP strings, and
+existing subnet values with an optional prefix length:
 
 ```tql
 from {source_ip: 10.10.1.124}

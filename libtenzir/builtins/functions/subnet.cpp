@@ -159,13 +159,27 @@ auto append_with_prefix(subnet_type::builder_type& builder,
   }
 }
 
+template <class PrefixArray>
+auto append_with_prefix(subnet_type::builder_type& builder,
+                        subnet_type::array_type const& values,
+                        PrefixArray const& prefixes) -> void {
+  for (auto i = int64_t{0}; i < values.length(); ++i) {
+    auto subnet = view_at(values, i);
+    if (not subnet or prefixes.IsNull(i)) {
+      check(builder.AppendNull());
+      continue;
+    }
+    append_subnet(builder, make_subnet(subnet->network(), prefixes.Value(i)));
+  }
+}
+
 auto append_with_prefix(subnet_type::builder_type& builder, series const& value,
                         series const& prefix, ast::expression const& value_expr,
                         ast::expression const& prefix_expr, session ctx)
   -> void {
   auto f = detail::overload{
-    [&](concepts::one_of<arrow::StringArray, ip_type::array_type> auto const&
-          values,
+    [&](concepts::one_of<arrow::StringArray, ip_type::array_type,
+                         subnet_type::array_type> auto const& values,
         concepts::one_of<arrow::Int64Array, arrow::UInt64Array> auto const&
           prefixes) {
       append_with_prefix(builder, values, prefixes);
@@ -173,9 +187,11 @@ auto append_with_prefix(subnet_type::builder_type& builder, series const& value,
     [&](const auto& values, const auto& prefixes) {
       using values_type = std::remove_cvref_t<decltype(values)>;
       using prefixes_type = std::remove_cvref_t<decltype(prefixes)>;
-      if constexpr (not detail::is_any_v<values_type, arrow::StringArray,
-                                         ip_type::array_type, arrow::NullArray>) {
-        diagnostic::warning("`subnet` expected `string` or `ip`, but got `{}`",
+      if constexpr (not detail::is_any_v<
+                      values_type, arrow::StringArray, ip_type::array_type,
+                      subnet_type::array_type, arrow::NullArray>) {
+        diagnostic::warning("`subnet` expected `string`, `ip`, or `subnet`, "
+                            "but got `{}`",
                             value.type.kind())
           .primary(value_expr)
           .emit(ctx);
