@@ -971,6 +971,8 @@ private:
 };
 
 constexpr auto source_channel_capacity = size_t{16};
+constexpr auto sink_stop_wait = std::chrono::seconds{1};
+constexpr auto snapshot_stop_wait = std::chrono::seconds{5};
 
 struct FluentBitArgs {
   located<std::string> plugin;
@@ -1198,22 +1200,17 @@ public:
       done_ = true;
       co_return;
     }
-    auto args = std::move(operator_args).unwrap();
-    auto fluent_bit_args = property_map{};
-    auto plugin_args = property_map{};
-    auto requests = collect_fluent_bit_properties(args, fluent_bit_args,
-                                                  plugin_args, ctx.dh());
+    runtime_args_ = std::move(operator_args).unwrap();
+    auto requests = collect_fluent_bit_properties(
+      *runtime_args_, fluent_bit_args_, plugin_args_, ctx.dh());
     if (not co_await ctx.resolve_secrets(std::move(requests))) {
       done_ = true;
       co_return;
     }
-    engine_ = engine::make_sink(args, config_, fluent_bit_args, plugin_args,
-                                ctx.dh());
-    if (not engine_) {
+    if (not recreate_engine(ctx.dh())) {
       done_ = true;
       co_return;
     }
-    engine_->max_wait_before_stop(std::chrono::seconds{1});
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -1248,6 +1245,17 @@ public:
     write_bytes_counter_.add(bytes);
   }
 
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    if (done_ or not engine_ or not runtime_args_) {
+      co_return;
+    }
+    engine_->max_wait_before_stop(snapshot_stop_wait);
+    engine_.reset();
+    if (not recreate_engine(ctx.dh())) {
+      done_ = true;
+    }
+  }
+
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     engine_.reset();
@@ -1260,8 +1268,22 @@ public:
   }
 
 private:
+  auto recreate_engine(diagnostic_handler& dh) -> bool {
+    TENZIR_ASSERT(runtime_args_);
+    engine_ = engine::make_sink(*runtime_args_, config_, fluent_bit_args_,
+                                plugin_args_, dh);
+    if (not engine_) {
+      return false;
+    }
+    engine_->max_wait_before_stop(sink_stop_wait);
+    return true;
+  }
+
   FluentBitArgs args_;
   record config_;
+  Option<operator_args> runtime_args_;
+  property_map fluent_bit_args_;
+  property_map plugin_args_;
   std::unique_ptr<engine> engine_;
   MetricsCounter write_bytes_counter_;
   bool done_ = false;
