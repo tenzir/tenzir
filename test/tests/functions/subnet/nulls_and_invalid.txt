@@ -1,0 +1,30 @@
+{
+  case: "bad-string",
+  result: null,
+  host: null,
+}
+{
+  case: "v4-too-wide",
+  result: null,
+  host: 10.1.2.3/32,
+}
+{
+  case: "v6-too-wide",
+  result: null,
+  host: 2001:db8::1/128,
+}
+{
+  case: "duplicate-prefix",
+  result: null,
+  host: 10.1.2.0/24,
+}
+{
+  case: "null-input",
+  result: null,
+  host: null,
+}
+{
+  case: "null-prefix",
+  result: null,
+  host: 10.1.2.3/32,
+}
