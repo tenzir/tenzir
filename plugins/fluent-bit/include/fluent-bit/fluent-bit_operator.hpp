@@ -988,6 +988,14 @@ struct FluentBitSourceMessage {
   bool done = false;
 };
 
+struct SourceBridgeLifetime {
+  Arc<Atomic<bool>> alive{std::in_place, true};
+
+  ~SourceBridgeLifetime() {
+    alive->store(false, std::memory_order_release);
+  }
+};
+
 auto make_operator_args(FluentBitArgs args, OpCtx& ctx)
   -> failure_or<operator_args> {
   auto result = operator_args{};
@@ -1019,8 +1027,10 @@ auto collect_fluent_bit_properties(operator_args const& args,
 auto send_blocking(Sender<FluentBitSourceMessage>& sender,
                    FluentBitSourceMessage message,
                    Arc<Atomic<bool>> const& stop_requested,
+                   Arc<Atomic<bool>> const& bridge_alive,
                    std::chrono::milliseconds retry_interval) -> bool {
-  while (not stop_requested->load(std::memory_order_acquire)) {
+  while (not stop_requested->load(std::memory_order_acquire)
+         and bridge_alive->load(std::memory_order_acquire)) {
     auto result = sender.try_send(std::move(message));
     if (result.is_ok()) {
       return true;
@@ -1036,6 +1046,7 @@ auto poll_fluent_bit_source(Sender<FluentBitSourceMessage> sender,
                             property_map fluent_bit_args,
                             property_map plugin_args,
                             Arc<Atomic<bool>> stop_requested,
+                            Arc<Atomic<bool>> bridge_alive,
                             diagnostic_handler& dh) -> void {
   auto engine
     = engine::make_source(args, config, fluent_bit_args, plugin_args, dh);
@@ -1043,6 +1054,7 @@ auto poll_fluent_bit_source(Sender<FluentBitSourceMessage> sender,
     return;
   }
   while (not stop_requested->load(std::memory_order_acquire)
+         and bridge_alive->load(std::memory_order_acquire)
          and engine->running()) {
     auto chunks = std::vector<chunk_ptr>{};
     std::ignore = engine->try_consume([&](chunk_ptr& chunk) {
@@ -1054,7 +1066,7 @@ auto poll_fluent_bit_source(Sender<FluentBitSourceMessage> sender,
       continue;
     }
     if (not send_blocking(sender, {.chunks = std::move(chunks)}, stop_requested,
-                          args.poll_interval)) {
+                          bridge_alive, args.poll_interval)) {
       return;
     }
   }
@@ -1096,22 +1108,26 @@ public:
       = channel<FluentBitSourceMessage>(source_channel_capacity);
     receiver_ = std::move(receiver);
     auto stop_requested = stop_requested_;
+    auto bridge_alive = bridge_lifetime_.alive;
     ctx.spawn_task([sender = std::move(sender), args = std::move(args),
                     config = config_,
                     fluent_bit_args = std::move(fluent_bit_args),
                     plugin_args = std::move(plugin_args),
                     stop_requested = std::move(stop_requested),
+                    bridge_alive = std::move(bridge_alive),
                     &dh = ctx.dh()]() mutable -> Task<void> {
       co_await spawn_blocking(
         [sender = std::move(sender), args = std::move(args),
          config = std::move(config),
          fluent_bit_args = std::move(fluent_bit_args),
          plugin_args = std::move(plugin_args),
-         stop_requested = std::move(stop_requested), &dh]() mutable {
+         stop_requested = std::move(stop_requested),
+         bridge_alive = std::move(bridge_alive), &dh]() mutable {
           poll_fluent_bit_source(std::move(sender), std::move(args),
                                  std::move(config), std::move(fluent_bit_args),
                                  std::move(plugin_args),
-                                 std::move(stop_requested), dh);
+                                 std::move(stop_requested),
+                                 std::move(bridge_alive), dh);
         });
     });
     co_return;
@@ -1165,6 +1181,7 @@ public:
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     stop_requested_->store(true, std::memory_order_release);
+    bridge_lifetime_.alive->store(false, std::memory_order_release);
     co_return;
   }
 
@@ -1177,6 +1194,7 @@ private:
   record config_;
   mutable Option<Receiver<FluentBitSourceMessage>> receiver_;
   Option<multi_series_builder> builder_;
+  SourceBridgeLifetime bridge_lifetime_;
   Arc<Atomic<bool>> stop_requested_{std::in_place, false};
   MetricsCounter read_bytes_counter_;
   bool done_ = false;
