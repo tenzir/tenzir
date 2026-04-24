@@ -51,12 +51,6 @@ struct FilesArgs {
   bool skip_permission_denied = {};
 };
 
-struct FileListingItem {
-  table_slice slice = {};
-  std::vector<diagnostic> diagnostics = {};
-  bool done = false;
-};
-
 auto to_legacy_args(const FilesArgs& args) -> files_args {
   return {
     .path = args.path ? std::optional<std::string>{*args.path} : std::nullopt,
@@ -320,70 +314,38 @@ auto make_file_events(auto listing) -> generator<table_slice> {
   co_yield builder.finish_assert_one_slice();
 }
 
-class FileListing {
-public:
-  explicit FileListing(files_args args) : args_{std::move(args)} {
-  }
-
-  auto next() -> FileListingItem {
-    auto result = FileListingItem{};
-    if (done_) {
-      result.done = true;
-      return result;
-    }
-    try {
-      if (not initialized_) {
-        initialize();
-      }
-      if (not done_) {
-        while (auto slice = slices_.next()) {
-          if (slice->rows() == 0) {
-            continue;
-          }
-          result.slice = std::move(*slice);
-          return result;
-        }
-      }
-    } catch (const std::filesystem::filesystem_error& err) {
-      diagnostic::error("{}", err.what()).emit(diagnostics_);
-    }
-    done_ = true;
-    result.done = true;
-    result.diagnostics = std::move(diagnostics_).collect();
-    return result;
-  }
-
-private:
-  auto initialize() -> void {
-    initialized_ = true;
+auto make_file_listing(files_args args, diagnostic_handler& dh)
+  -> generator<Option<table_slice>> {
+  try {
     auto ec = std::error_code{};
-    auto path = args_.path ? std::filesystem::path{*args_.path}
-                           : std::filesystem::current_path(ec);
+    auto path = args.path ? std::filesystem::path{*args.path}
+                          : std::filesystem::current_path(ec);
     if (ec) {
       diagnostic::error("{}",
                         std::filesystem::filesystem_error{
                           "failed to determine current directory", ec}
                           .what())
-        .emit(diagnostics_);
-      done_ = true;
-      return;
+        .emit(dh);
+      co_yield None{};
+      co_return;
     }
-    const auto options = directory_options(args_);
-    if (args_.recurse_directories) {
-      slices_ = make_file_events(list_directory_recursive(
-        std::move(path), options, args_.skip_permission_denied, diagnostics_));
-    } else {
-      slices_ = make_file_events(list_directory(
-        std::move(path), options, args_.skip_permission_denied, diagnostics_));
+    const auto options = directory_options(args);
+    auto slices
+      = args.recurse_directories
+          ? make_file_events(list_directory_recursive(
+              std::move(path), options, args.skip_permission_denied, dh))
+          : make_file_events(list_directory(std::move(path), options,
+                                            args.skip_permission_denied, dh));
+    for (auto&& slice : std::move(slices)) {
+      if (slice.rows() > 0) {
+        co_yield std::move(slice);
+      }
     }
+  } catch (const std::filesystem::filesystem_error& err) {
+    diagnostic::error("{}", err.what()).emit(dh);
   }
-
-  files_args args_ = {};
-  bool initialized_ = false;
-  bool done_ = false;
-  collecting_diagnostic_handler diagnostics_ = {};
-  generator<table_slice> slices_ = {};
-};
+  co_yield None{};
+}
 
 class files_operator final : public crtp_operator<files_operator> {
 public:
@@ -446,8 +408,7 @@ private:
 
 class Files final : public Operator<void, table_slice> {
 public:
-  explicit Files(FilesArgs args)
-    : listing_{std::in_place, to_legacy_args(args)} {
+  explicit Files(FilesArgs args) : args_{to_legacy_args(args)} {
   }
 
   auto start(OpCtx&) -> Task<void> override {
@@ -455,26 +416,29 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
     if (done_) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    co_return co_await spawn_blocking([listing = listing_]() mutable {
-      return listing->next();
+    if (not listing_) {
+      listing_.emplace(std::in_place, make_file_listing(args_, dh));
+    }
+    auto listing = *listing_;
+    co_return co_await spawn_blocking([listing = std::move(listing)]() mutable {
+      auto result = listing->next();
+      return result ? std::move(*result) : Option<table_slice>{};
     });
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto item = std::move(result).as<FileListingItem>();
-    if (item.slice.rows() > 0) {
-      co_await push(std::move(item.slice));
+    TENZIR_UNUSED(ctx);
+    auto slice = std::move(result).as<Option<table_slice>>();
+    if (slice) {
+      co_await push(std::move(*slice));
+    } else {
+      done_ = true;
     }
-    for (auto& diag : item.diagnostics) {
-      ctx.dh().emit(std::move(diag));
-    }
-    done_ = item.done;
   }
 
   auto state() -> OperatorState override {
@@ -486,7 +450,8 @@ public:
   }
 
 private:
-  Arc<FileListing> listing_;
+  files_args args_ = {};
+  mutable Option<Arc<generator<Option<table_slice>>>> listing_ = {};
   bool done_ = false;
 };
 
@@ -523,8 +488,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FilesArgs, Files>{"https://docs.tenzir.com/operators/"
-                                         "files"};
+    auto d = Describer<FilesArgs, Files>{};
     d.positional("dir", &FilesArgs::path);
     d.named("recurse", &FilesArgs::recurse_directories);
     d.named("follow_symlinks", &FilesArgs::follow_directory_symlink);
