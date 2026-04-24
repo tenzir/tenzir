@@ -173,10 +173,10 @@ public:
     // `dcheckIsInEventBaseThread` holds and access to `SocketReadCallback`'s
     // members needs no synchronization.
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto bind_endpoint = parse_socket_address(args_.endpoint.inner,
-                                             SocketAddressKind::bind)
-                           .expect("accept_udp endpoint should be valid after "
-                                   "operator validation");
+    auto bind_endpoint
+      = parse_socket_address(args_.endpoint.inner, SocketAddressKind::bind)
+          .expect("accept_udp endpoint should be valid after "
+                  "operator validation");
     auto bind_address
       = co_await forward_dns_.resolve_bind_address(std::move(bind_endpoint));
     if (bind_address.is_err()) {
@@ -233,8 +233,8 @@ public:
               diagnostic::warning("{}", reverse_dns->unwrap_err().error)
                 .note("failed to resolve peer hostname for {}",
                       datagram.peer_ip)
-                .note(
-                  "set `resolve_hostnames=false` to disable hostname resolution")
+                .note("set `resolve_hostnames=false` to disable hostname "
+                      "resolution")
                 .primary(args_.endpoint)
                 .emit(ctx);
               peer_resolution_warning_emitted_ = true;
@@ -454,7 +454,8 @@ public:
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      if (not parse_socket_address(endpoint_str.inner, SocketAddressKind::bind)) {
+      if (not parse_socket_address(endpoint_str.inner,
+                                   SocketAddressKind::bind)) {
         diagnostic::error("failed to parse endpoint")
           .primary(location)
           .emit(ctx);

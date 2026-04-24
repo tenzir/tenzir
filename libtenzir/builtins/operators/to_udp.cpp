@@ -55,10 +55,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto endpoint = parse_socket_address(args_.endpoint.inner,
-                                         SocketAddressKind::remote)
-                      .expect("to_udp endpoint should be valid after "
-                              "operator validation");
+    auto endpoint
+      = parse_socket_address(args_.endpoint.inner, SocketAddressKind::remote)
+          .expect("to_udp endpoint should be valid after "
+                  "operator validation");
     auto address
       = co_await forward_dns_.resolve_socket_address(std::move(endpoint));
     if (address.is_err()) {
@@ -261,7 +261,8 @@ public:
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      if (not parse_socket_address(endpoint_str.inner, SocketAddressKind::remote)) {
+      if (not parse_socket_address(endpoint_str.inner,
+                                   SocketAddressKind::remote)) {
         diagnostic::error("failed to parse endpoint")
           .primary(location)
           .emit(ctx);

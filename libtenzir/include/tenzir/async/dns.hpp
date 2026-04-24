@@ -239,16 +239,15 @@ template <>
 struct formatter<tenzir::DnsNotFound> : formatter<std::string_view> {
   auto format(tenzir::DnsNotFound, format_context& ctx) const
     -> format_context::iterator {
-    return formatter<std::string_view>::format(
-      "no matching A or AAAA records", ctx);
+    return formatter<std::string_view>::format("no matching A or AAAA records",
+                                               ctx);
   }
 };
 
 template <>
-struct formatter<tenzir::ResolveAddressError>
-  : formatter<std::string_view> {
-  auto format(tenzir::ResolveAddressError const& x,
-              format_context& ctx) const -> format_context::iterator {
+struct formatter<tenzir::ResolveAddressError> : formatter<std::string_view> {
+  auto format(tenzir::ResolveAddressError const& x, format_context& ctx) const
+    -> format_context::iterator {
     return tenzir::match(
       x,
       [&](tenzir::DnsError const& error) {
