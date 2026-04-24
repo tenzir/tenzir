@@ -1,0 +1,8 @@
+from {seed: 0}
+repeat 65537
+enumerate n
+summarize xs=distinct(n)
+unroll xs
+measure
+summarize batches=count(), rows=sum(events), max_batch_rows=max(events)
+select rows, split_batches=(batches > 1), bounded_batches=(max_batch_rows < rows)
