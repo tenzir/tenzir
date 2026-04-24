@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {
+  data: "x"
+}
+serve_http "https://127.0.0.1:8080" {
+  write_lines
+}

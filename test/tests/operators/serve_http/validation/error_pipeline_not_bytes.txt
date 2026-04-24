@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/serve_http/validation/error_pipeline_not_bytes.tql:8:29
+  |
+8 | serve_http "127.0.0.1:8080" {
+  |                             ^ 
+  |

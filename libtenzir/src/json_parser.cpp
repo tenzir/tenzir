@@ -8,7 +8,10 @@
 
 #include "tenzir/json_parser.hpp"
 
+#include "tenzir/chunk.hpp"
 #include "tenzir/try_simdjson.hpp"
+
+#include <cstring>
 
 namespace tenzir::json {
 
@@ -171,6 +174,40 @@ auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
 
 auto ndjson_parser::validate_completion() const -> void {
   // noop, just exists for easy of implementation
+}
+
+auto ndjson_parser::parse_lines(const chunk_ptr& body) -> void {
+  if (not body or body->size() == 0) {
+    return;
+  }
+  // Allocate one buffer: body bytes + simdjson padding (zeroed).
+  auto const body_size = body->size();
+  auto const padded_size = body_size + simdjson::SIMDJSON_PADDING;
+  auto buf = std::vector<char>(padded_size, '\0');
+  std::memcpy(buf.data(), body->data(), body_size);
+  // Iterate line by line without per-line allocations.
+  auto pos = size_t{0};
+  while (pos < body_size) {
+    auto const* nl = static_cast<char const*>(
+      std::memchr(buf.data() + pos, '\n', body_size - pos));
+    auto line_end = nl ? static_cast<size_t>(nl - buf.data() + 1) : body_size;
+    auto line_len = line_end - pos;
+    if (line_len == 0 or (line_len == 1 and buf[pos] == '\n')) {
+      pos = line_end;
+      continue;
+    }
+    // capacity extends to end of padded buffer, satisfying simdjson.
+    auto view = simdjson::padded_string_view{
+      buf.data() + pos,
+      line_len,
+      padded_size - pos,
+    };
+    parse(view);
+    if (abort_requested) {
+      break;
+    }
+    pos = line_end;
+  }
 }
 
 auto default_parser::parse(const chunk::view_type& json_chunk) -> void {

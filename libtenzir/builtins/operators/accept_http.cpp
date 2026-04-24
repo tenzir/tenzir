@@ -18,6 +18,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
+#include "tenzir/http_server.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
@@ -69,97 +70,6 @@ struct AcceptHttpArgs {
   }
 };
 
-struct ParsedEndpoint {
-  std::string host;
-  uint16_t port;
-  Option<bool> scheme_tls;
-};
-
-auto tls_enabled_from_args(AcceptHttpArgs const& args) -> bool {
-  if (not args.tls) {
-    return false;
-  }
-  auto tls_opts
-    = tls_options{*args.tls, {.tls_default = false, .is_server = true}};
-  return tls_opts.get_tls(nullptr).inner;
-}
-
-auto parse_folly_tls_version(std::string_view input)
-  -> Option<folly::SSLContext::SSLVersion> {
-  if (input == "" or input == "any" or input == "1.0") {
-    return folly::SSLContext::SSLVersion::TLSv1;
-  }
-  if (input == "1.2") {
-    return folly::SSLContext::SSLVersion::TLSv1_2;
-  }
-  if (input == "1.3") {
-    return folly::SSLContext::SSLVersion::TLSv1_3;
-  }
-  return None{};
-}
-
-auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
-  -> failure_or<wangle::SSLContextConfig> {
-  auto tls_opts
-    = args.tls
-        ? tls_options{*args.tls, {.tls_default = false, .is_server = true}}
-        : tls_options{{.tls_default = false, .is_server = true}};
-  auto certfile = tls_opts.get_certfile(nullptr);
-  if (not certfile) {
-    diagnostic::error("`tls.certfile` is required when TLS is enabled")
-      .primary(args.endpoint)
-      .emit(dh);
-    return failure::promise();
-  }
-  auto keyfile = tls_opts.get_keyfile(nullptr);
-  auto password = tls_opts.get_password(nullptr);
-  auto config = proxygen::coro::HTTPServer::getDefaultTLSConfig();
-  if (auto min = tls_opts.get_tls_min_version(nullptr)) {
-    if (not min->inner.empty()) {
-      if (auto parsed = parse_folly_tls_version(min->inner)) {
-        config.sslVersion = *parsed;
-      } else {
-        diagnostic::error("invalid TLS minimum version: `{}`", min->inner)
-          .primary(*min)
-          .hint("supported values are `1.0`, `1.2`, and `1.3`")
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-  }
-  try {
-    config.setCertificate(certfile->inner,
-                          keyfile ? keyfile->inner : certfile->inner,
-                          password ? password->inner : "");
-  } catch (std::exception const& ex) {
-    diagnostic::error("failed to load TLS certificate: {}", ex.what())
-      .primary(*certfile)
-      .emit(dh);
-    return failure::promise();
-  }
-  auto require_client_cert
-    = tls_opts.get_tls_require_client_cert(nullptr).inner;
-  auto skip_peer_verification
-    = tls_opts.get_skip_peer_verification(nullptr).inner;
-  if (require_client_cert) {
-    config.clientVerification
-      = folly::SSLContext::VerifyClientCertificate::ALWAYS;
-  } else if (skip_peer_verification) {
-    config.clientVerification
-      = folly::SSLContext::VerifyClientCertificate::DO_NOT_REQUEST;
-  } else {
-    config.clientVerification
-      = folly::SSLContext::VerifyClientCertificate::IF_PRESENTED;
-  }
-  if (auto client_ca = tls_opts.get_tls_client_ca(nullptr)) {
-    config.clientCAFiles.push_back(client_ca->inner);
-  }
-  if (auto cacert = tls_opts.get_cacert(nullptr)) {
-    config.clientCAFiles.push_back(cacert->inner);
-  }
-  return config;
-}
-
 template <class T>
 auto parse_number(std::string_view text) -> Option<T> {
   if (text.empty()) {
@@ -173,87 +83,6 @@ auto parse_number(std::string_view text) -> Option<T> {
     return None{};
   }
   return value;
-}
-
-auto parse_endpoint(std::string_view endpoint, location loc,
-                    diagnostic_handler& dh) -> Option<ParsedEndpoint> {
-  if (endpoint.contains("://")) {
-    auto parsed = proxygen::URL{std::string{endpoint}};
-    if (not parsed.isValid() or not parsed.hasHost()) {
-      diagnostic::error("failed to parse endpoint URL").primary(loc).emit(dh);
-      return None{};
-    }
-    auto scheme = parsed.getScheme();
-    auto scheme_tls = Option<bool>{None{}};
-    if (scheme == "https") {
-      scheme_tls = true;
-    } else if (scheme == "http") {
-      scheme_tls = false;
-    } else {
-      diagnostic::error("unsupported endpoint URL scheme: `{}`", scheme)
-        .primary(loc)
-        .hint("use `http://` or `https://`")
-        .emit(dh);
-      return None{};
-    }
-    return ParsedEndpoint{
-      .host = parsed.getHost(),
-      .port = parsed.getPort(),
-      .scheme_tls = scheme_tls,
-    };
-  }
-  if (endpoint.empty()) {
-    diagnostic::error("`endpoint` must not be empty").primary(loc).emit(dh);
-    return None{};
-  }
-  if (endpoint.front() == '[') {
-    auto const close = endpoint.find(']');
-    if (close == std::string_view::npos) {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto const host = endpoint.substr(1, close - 1);
-    auto const rest = endpoint.substr(close + 1);
-    if (rest.empty() or rest.front() != ':') {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto port = parse_number<uint16_t>(rest.substr(1));
-    if (not port) {
-      diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-      return None{};
-    }
-    return ParsedEndpoint{
-      .host = std::string{host},
-      .port = *port,
-      .scheme_tls = None{},
-    };
-  }
-  auto const colon = endpoint.rfind(':');
-  if (colon == std::string_view::npos) {
-    diagnostic::error("failed to parse endpoint")
-      .primary(loc)
-      .hint("expected `host:port`, `[host]:port`, or URL")
-      .emit(dh);
-    return None{};
-  }
-  auto const host = endpoint.substr(0, colon);
-  auto port = parse_number<uint16_t>(endpoint.substr(colon + 1));
-  if (not port) {
-    diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-    return None{};
-  }
-  return ParsedEndpoint{
-    .host = std::string{host},
-    .port = *port,
-    .scheme_tls = None{},
-  };
 }
 
 struct RequestMetadata {
@@ -374,17 +203,6 @@ auto get_response_for_path(AcceptHttpArgs const& args, std::string_view path)
   return res;
 }
 
-auto make_fixed_response(Response const& response)
-  -> proxygen::coro::HTTPSourceHolder {
-  auto* source = proxygen::coro::HTTPFixedSource::makeFixedResponse(
-    response.status, std::string{response.body});
-  if (not response.content_type.empty()) {
-    source->msg_->getHeaders().set(proxygen::HTTP_HEADER_CONTENT_TYPE,
-                                   response.content_type);
-  }
-  return source;
-}
-
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
   RequestHandler(AcceptHttpArgs args, Arc<MessageQueue> queue,
@@ -478,7 +296,8 @@ public:
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
     }
     auto response = get_response_for_path(args_, path);
-    co_return make_fixed_response(response);
+    co_return http_server::make_response(response.status, response.content_type,
+                                         response.body);
   }
 
 private:
@@ -773,12 +592,12 @@ private:
         result.is_error()) {
       co_return None{};
     }
-    auto parsed
-      = parse_endpoint(resolved_endpoint, args_.endpoint.source, ctx.dh());
+    auto parsed = http_server::parse_endpoint(resolved_endpoint,
+                                              args_.endpoint.source, ctx.dh());
     if (not parsed) {
       co_return None{};
     }
-    auto tls_enabled = tls_enabled_from_args(args_);
+    auto tls_enabled = http_server::is_tls_enabled(args_.tls);
     if (parsed->scheme_tls) {
       if (*parsed->scheme_tls and not tls_enabled) {
         diagnostic::error("`https://` endpoint requires `tls=true`")
@@ -810,7 +629,9 @@ private:
     // the IO thread pool to drain during server shutdown.
     config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
     if (tls_enabled) {
-      auto tls_config = make_tls_config(args_, ctx.dh());
+      auto tls_config = http::make_folly_tls_config(
+        args_.tls, args_.endpoint.source, ctx.dh(),
+        {.tls_default = false, .is_server = true});
       if (not tls_config) {
         co_return None{};
       }
