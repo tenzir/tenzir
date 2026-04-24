@@ -271,7 +271,7 @@ auto make_file_events(auto listing) -> generator<table_slice> {
           return {};
       }
     }());
-    {
+    if (not status_ec) {
       using std::filesystem::perms;
       auto permissions = event.field("permissions").record();
       auto has_perm = [perms = status.permissions()](auto perm) {

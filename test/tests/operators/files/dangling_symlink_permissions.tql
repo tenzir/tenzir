@@ -1,0 +1,4 @@
+files env("FILES_PERMISSION_ROOT")
+path = path.replace(env("FILES_PERMISSION_ROOT"), "<ROOT>")
+where path == "<ROOT>/dangling"
+select path, type, permissions

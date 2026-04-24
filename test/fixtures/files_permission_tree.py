@@ -1,4 +1,4 @@
-"""Local filesystem fixture with an unreadable child directory."""
+"""Local filesystem fixture with unreadable and dangling entries."""
 
 from __future__ import annotations
 
@@ -31,6 +31,11 @@ def files_permission_tree() -> FixtureHandle:
     (root / "ok").mkdir()
     (root / "after" / "data.json").write_text("{}\n")
     (root / "ok" / "data.json").write_text("{}\n")
+    try:
+        (root / "dangling").symlink_to("missing-target")
+    except OSError as err:
+        shutil.rmtree(root, ignore_errors=True)
+        raise FixtureUnavailable(f"symlink creation failed: {err}") from err
     blocked.mkdir()
     blocked.chmod(0)
 
