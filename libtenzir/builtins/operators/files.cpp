@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -21,6 +22,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <unistd.h>
+#include <optional>
 #include <vector>
 
 namespace tenzir::plugins::files {
@@ -49,9 +51,10 @@ struct FilesArgs {
   bool skip_permission_denied = {};
 };
 
-struct FileListingResult {
-  std::vector<table_slice> slices = {};
+struct FileListingItem {
+  table_slice slice = {};
   std::vector<diagnostic> diagnostics = {};
+  bool done = false;
 };
 
 auto to_legacy_args(const FilesArgs& args) -> files_args {
@@ -116,7 +119,7 @@ auto should_recurse_into(const std::filesystem::directory_entry& entry,
   return status.type() == std::filesystem::file_type::directory;
 }
 
-auto list_directory(const std::filesystem::path& path,
+auto list_directory(std::filesystem::path path,
                     std::filesystem::directory_options options,
                     bool skip_permission_denied, diagnostic_handler& dh)
   -> generator<std::filesystem::directory_entry> {
@@ -144,7 +147,7 @@ auto list_directory(const std::filesystem::path& path,
   }
 }
 
-auto list_directory_recursive(const std::filesystem::path& path,
+auto list_directory_recursive(std::filesystem::path path,
                               std::filesystem::directory_options options,
                               bool skip_permission_denied,
                               diagnostic_handler& dh)
@@ -317,39 +320,70 @@ auto make_file_events(auto listing) -> generator<table_slice> {
   co_yield builder.finish_assert_one_slice();
 }
 
-auto make_file_listing(files_args args) -> FileListingResult {
-  auto result = FileListingResult{};
-  auto dh = collecting_diagnostic_handler{};
-  try {
+class FileListing {
+public:
+  explicit FileListing(files_args args) : args_{std::move(args)} {
+  }
+
+  auto next() -> FileListingItem {
+    auto result = FileListingItem{};
+    if (done_) {
+      result.done = true;
+      return result;
+    }
+    try {
+      if (not initialized_) {
+        initialize();
+      }
+      if (not done_) {
+        while (auto slice = slices_.next()) {
+          if (slice->rows() == 0) {
+            continue;
+          }
+          result.slice = std::move(*slice);
+          return result;
+        }
+      }
+    } catch (const std::filesystem::filesystem_error& err) {
+      diagnostic::error("{}", err.what()).emit(diagnostics_);
+    }
+    done_ = true;
+    result.done = true;
+    result.diagnostics = std::move(diagnostics_).collect();
+    return result;
+  }
+
+private:
+  auto initialize() -> void {
+    initialized_ = true;
     auto ec = std::error_code{};
-    const auto path = args.path ? std::filesystem::path{*args.path}
-                                : std::filesystem::current_path(ec);
+    auto path = args_.path ? std::filesystem::path{*args_.path}
+                           : std::filesystem::current_path(ec);
     if (ec) {
       diagnostic::error("{}",
                         std::filesystem::filesystem_error{
                           "failed to determine current directory", ec}
                           .what())
-        .emit(dh);
-      result.diagnostics = std::move(dh).collect();
-      return result;
+        .emit(diagnostics_);
+      done_ = true;
+      return;
     }
-    const auto options = directory_options(args);
-    auto gen = args.recurse_directories
-                 ? make_file_events(list_directory_recursive(
-                     path, options, args.skip_permission_denied, dh))
-                 : make_file_events(list_directory(
-                     path, options, args.skip_permission_denied, dh));
-    for (auto&& slice : std::move(gen)) {
-      if (slice.rows() > 0) {
-        result.slices.push_back(std::move(slice));
-      }
+    const auto options = directory_options(args_);
+    if (args_.recurse_directories) {
+      slices_ = make_file_events(list_directory_recursive(
+        std::move(path), options, args_.skip_permission_denied, diagnostics_));
+    } else {
+      slices_ = make_file_events(list_directory(
+        std::move(path), options, args_.skip_permission_denied, diagnostics_));
     }
-  } catch (const std::filesystem::filesystem_error& err) {
-    diagnostic::error("{}", err.what()).emit(dh);
   }
-  result.diagnostics = std::move(dh).collect();
-  return result;
-}
+
+  files_args args_ = {};
+  bool initialized_ = false;
+  bool done_ = false;
+  collecting_diagnostic_handler diagnostics_ = {};
+  generator<table_slice> slices_ = {};
+};
 
 class files_operator final : public crtp_operator<files_operator> {
 public:
@@ -412,7 +446,8 @@ private:
 
 class Files final : public Operator<void, table_slice> {
 public:
-  explicit Files(FilesArgs args) : args_{std::move(args)} {
+  explicit Files(FilesArgs args)
+    : listing_{std::in_place, to_legacy_args(args)} {
   }
 
   auto start(OpCtx&) -> Task<void> override {
@@ -425,22 +460,21 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    auto args = to_legacy_args(args_);
-    co_return co_await spawn_blocking([args = std::move(args)]() mutable {
-      return make_file_listing(std::move(args));
+    co_return co_await spawn_blocking([listing = listing_]() mutable {
+      return listing->next();
     });
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto listing = std::move(result).as<FileListingResult>();
-    for (auto& slice : listing.slices) {
-      co_await push(std::move(slice));
+    auto item = std::move(result).as<FileListingItem>();
+    if (item.slice.rows() > 0) {
+      co_await push(std::move(item.slice));
     }
-    for (auto& diag : listing.diagnostics) {
+    for (auto& diag : item.diagnostics) {
       ctx.dh().emit(std::move(diag));
     }
-    done_ = true;
+    done_ = item.done;
   }
 
   auto state() -> OperatorState override {
@@ -452,7 +486,7 @@ public:
   }
 
 private:
-  FilesArgs args_ = {};
+  Arc<FileListing> listing_;
   bool done_ = false;
 };
 
