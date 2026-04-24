@@ -162,8 +162,10 @@ public:
     auto& printer = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
+      // A closed printer input can be an intentional early shutdown, e.g., from
+      // `head`. Let `finish_sub()` close the upload with EOF instead of
+      // turning already-produced printer output into a local abort.
       lifecycle_ = Lifecycle::draining;
-      co_await request_upload_abort(false);
     }
   }
 

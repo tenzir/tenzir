@@ -405,13 +405,18 @@ public:
 
   auto start() -> void {
     if (upload_) {
+      auto code = easy_.set([](std::span<const std::byte>) {});
+      if (code != curl::easy::code::ok) {
+        complete(curl_perform_failure(code));
+        return;
+      }
       auto weak = weak_from_this();
       upload_->set_resume_callback([weak]() {
         if (auto self = weak.lock()) {
           self->request_resume(CURLPAUSE_SEND);
         }
       });
-      auto code = easy_.set([this](std::span<std::byte> buffer) -> size_t {
+      code = easy_.set([this](std::span<std::byte> buffer) -> size_t {
         return read_from_source(buffer);
       });
       if (code != curl::easy::code::ok) {
@@ -420,13 +425,20 @@ public:
       }
     }
     if (download_) {
+      auto code = easy_.set([](std::span<std::byte>) -> size_t {
+        return 0;
+      });
+      if (code != curl::easy::code::ok) {
+        complete(curl_perform_failure(code));
+        return;
+      }
       auto weak = weak_from_this();
       download_->set_resume_callback([weak]() {
         if (auto self = weak.lock()) {
           self->request_resume(CURLPAUSE_RECV);
         }
       });
-      auto code = easy_.set_write_result_callback(
+      code = easy_.set_write_result_callback(
         [this](std::span<const std::byte> buffer) -> size_t {
           return write_to_sink(buffer);
         });
@@ -620,6 +632,10 @@ private:
       std::ignore = multi_.remove(easy_);
       added_ = false;
     }
+    std::ignore = easy_.set([](std::span<std::byte>) -> size_t {
+      return 0;
+    });
+    std::ignore = easy_.set([](std::span<const std::byte>) {});
   }
 
   auto complete(CurlPerformResult result) -> void {
@@ -822,11 +838,21 @@ struct CurlTransferState final
   }
 
   auto dispose() -> void {
+    auto already_finished = false;
+    {
+      auto lock = std::lock_guard{mutex};
+      abandoned = true;
+      already_finished = finished;
+    }
+    if (already_finished) {
+      release_session();
+      return;
+    }
     abort();
     cancellation.requestCancellation();
   }
 
-  auto finish() -> void {
+  auto mark_finished() -> void {
     auto should_release = false;
     {
       auto lock = std::lock_guard{mutex};
@@ -834,16 +860,26 @@ struct CurlTransferState final
         return;
       }
       finished = true;
+      should_release = abandoned;
+    }
+    if (should_release) {
+      release_session();
+    }
+  }
+
+  auto release_session() -> void {
+    auto should_release = false;
+    {
+      auto lock = std::lock_guard{mutex};
+      if (session_released) {
+        return;
+      }
+      session_released = true;
       should_release = true;
     }
     if (should_release) {
       session->release();
     }
-  }
-
-  auto is_finished() const -> bool {
-    auto lock = std::lock_guard{mutex};
-    return finished;
   }
 
   auto complete(CurlPerformResult result) -> void {
@@ -854,7 +890,7 @@ struct CurlTransferState final
       }
       transfer_result = std::move(result);
     }
-    finish();
+    mark_finished();
     result_ready.notify_one();
   }
 
@@ -886,17 +922,23 @@ private:
 
   auto take_result() -> Task<CurlUploadResult> {
     while (true) {
+      auto result = CurlPerformResult{CurlTransferStatus::local_abort};
+      auto ready = false;
       {
         auto lock = std::lock_guard{mutex};
-        if (transfer_result) {
-          if (result_taken) {
-            panic("curl transfer result consumed more than once");
-          }
-          result_taken = true;
-          auto result = std::move(*transfer_result);
-          transfer_result = None{};
-          co_return result;
+        if (result_taken) {
+          panic("curl transfer result consumed more than once");
         }
+        if (transfer_result) {
+          result_taken = true;
+          result = std::move(*transfer_result);
+          transfer_result = None{};
+          ready = true;
+        }
+      }
+      if (ready) {
+        release_session();
+        co_return std::move(result);
       }
       co_await result_ready.wait();
     }
@@ -944,6 +986,8 @@ private:
   Option<CurlPerformResult> transfer_result = None{};
   mutable std::mutex mutex;
   bool finished = false;
+  bool session_released = false;
+  bool abandoned = false;
   bool result_taken = false;
   bool terminal_delivered = false;
 };
@@ -973,9 +1017,7 @@ struct CurlUploadTransfer::Impl {
   }
 
   ~Impl() {
-    if (not state->is_finished()) {
-      state->dispose();
-    }
+    state->dispose();
   }
 
   std::shared_ptr<CurlTransferState> state;
@@ -1014,9 +1056,7 @@ struct CurlDownloadTransfer::Impl {
   }
 
   ~Impl() {
-    if (not state->is_finished()) {
-      state->dispose();
-    }
+    state->dispose();
   }
 
   std::shared_ptr<CurlTransferState> state;
