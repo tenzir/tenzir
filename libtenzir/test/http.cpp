@@ -10,8 +10,11 @@
 
 #include "tenzir/concept/printable/tenzir/http.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
+#include "tenzir/http.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <map>
+#include <span>
 #include <string_view>
 
 using namespace tenzir;
@@ -155,4 +158,28 @@ TEST("HTTP header") {
   CHECK(hdr.name == "CONTENT-TYPE");
   CHECK(hdr.value == "application/pdf");
   CHECK(f == l);
+}
+
+TEST("compress request body") {
+  auto dh = null_diagnostic_handler{};
+  auto encoded = http::compress_request_body("hello"s, "gzip", dh);
+  CHECK(encoded.content_encoding);
+  CHECK_EQUAL(*encoded.content_encoding, "gzip");
+  auto headers = std::map<std::string, std::string>{};
+  http::add_request_body_headers(headers, encoded);
+  CHECK_EQUAL(headers["Content-Encoding"], "gzip");
+  CHECK_EQUAL(headers["Content-Length"], fmt::to_string(encoded.body.size()));
+  auto decompressor = http::make_decompressor("gzip", dh);
+  REQUIRE(decompressor);
+  auto input = std::span{
+    reinterpret_cast<std::byte const*>(encoded.body.data()),
+    encoded.body.size(),
+  };
+  auto decompressed = http::decompress_chunk(**decompressor, input, dh);
+  REQUIRE(decompressed);
+  auto result = std::string{
+    reinterpret_cast<char const*>(decompressed->data()),
+    decompressed->size(),
+  };
+  CHECK_EQUAL(result, "hello");
 }

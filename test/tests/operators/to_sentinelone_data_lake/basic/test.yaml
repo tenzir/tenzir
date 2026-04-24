@@ -1,0 +1,8 @@
+suite: basic
+fixtures:
+  - sentinelone
+timeout: 60
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

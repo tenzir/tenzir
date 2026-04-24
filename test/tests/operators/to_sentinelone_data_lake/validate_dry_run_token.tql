@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+to_sentinelone_data_lake "https://example.com", token=secret("S1_FIXTURE_TOKEN"), _dry_run=true

@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+to_sentinelone_data_lake "", token="TOKEN", _dry_run=true

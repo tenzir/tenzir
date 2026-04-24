@@ -1,0 +1,6 @@
+error: `url` must not be empty
+ --> tests/operators/to_sentinelone_data_lake/validate_empty_url.tql:6:26
+  |
+6 | to_sentinelone_data_lake "", token="TOKEN", _dry_run=true
+  |                          ^^ 
+  |

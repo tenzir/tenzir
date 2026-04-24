@@ -22,6 +22,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -114,6 +115,24 @@ struct request_item {
 /// Applies a list of request items to a given HTTP request.
 /// We mimic HTTPie's behavior in processing request items.
 auto apply(std::vector<request_item> items, request& req) -> caf::error;
+
+struct encoded_request_body {
+  std::string body;
+  Option<std::string> content_encoding = None{};
+};
+
+/// Compresses a request body for use with Content-Encoding.
+///
+/// Returns the original body without a Content-Encoding value and emits a
+/// warning if the encoding is unsupported or compression fails.
+auto compress_request_body(std::string body, std::string_view encoding,
+                           diagnostic_handler& dh,
+                           location loc = location::unknown)
+  -> encoded_request_body;
+
+/// Adds Content-Length and, when present, Content-Encoding headers.
+auto add_request_body_headers(std::map<std::string, std::string>& headers,
+                              encoded_request_body const& body) -> void;
 
 /// Creates a streaming decompressor for the given Content-Encoding value.
 /// Emits a warning and returns None for unknown or unsupported encodings.

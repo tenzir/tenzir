@@ -1,0 +1,2 @@
+from_file env("S1_FIXTURE_CAPTURE_FILE") { read_json }
+drop session
