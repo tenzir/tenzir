@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <deque>
 #include <limits>
 #include <memory>
 #include <span>
@@ -47,8 +46,8 @@ using namespace tenzir::si_literals;
 constexpr auto default_batch_size = uint64_t{10_k};
 constexpr auto default_queue_capacity = uint64_t{10_k};
 constexpr auto default_batch_timeout = 100ms;
-// After ACKing an emitted row, give downstream early-stop control messages a
-// bounded window to cancel us before we emit the next buffered row.
+// Give downstream early-stop control messages a bounded window to arrive
+// before we ACK a delivered batch and pull the next one.
 constexpr auto ack_handoff_delay = 100us;
 constexpr auto max_queue_capacity = uint64_t{std::numeric_limits<int>::max()};
 constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
@@ -75,25 +74,15 @@ struct SubscriptionComplete {
   natsStatus status;
 };
 
+auto negative_acknowledge(natsMsg* msg) noexcept -> bool {
+  return natsMsg_Nak(msg, nullptr) == NATS_OK;
+}
+
 struct AcknowledgePending {};
 
-struct EmitBuffered {};
-
-using SourceMessage = variant<IncomingMessage, SubscriptionComplete,
-                              AcknowledgePending, EmitBuffered>;
+using SourceMessage
+  = variant<IncomingMessage, SubscriptionComplete, AcknowledgePending>;
 using SourceMessageQueue = folly::coro::BoundedQueue<SourceMessage>;
-
-struct BufferedMessage {
-  nats_msg_ptr msg;
-  table_slice slice;
-};
-
-struct SourceBatch {
-  std::vector<nats_msg_ptr> messages;
-  Option<SubscriptionComplete> completion = None{};
-  bool acknowledge_pending = false;
-  bool emit_buffered = false;
-};
 
 struct js_stream_names_list_deleter {
   auto operator()(jsStreamNamesList* ptr) const noexcept -> void {
@@ -161,69 +150,40 @@ public:
   }
 
   auto enqueue_acknowledge_pending() -> void {
-    enqueue_control(acknowledge_pending_queued_);
-  }
-
-  auto enqueue_emit_buffered() -> void {
-    enqueue_control(emit_buffered_queued_);
+    acknowledge_pending_queued_.store(true, std::memory_order_release);
   }
 
   auto dequeue() -> Task<SourceMessage> {
-    while (true) {
-      if (auto ready = take_ready()) {
-        co_return std::move(*ready);
-      }
-      auto message = co_await messages_.dequeue();
-      if (auto control = take_control()) {
-        defer(std::move(message));
-        co_return std::move(*control);
-      }
-      co_return message;
+    if (auto control = take_control()) {
+      co_return std::move(*control);
     }
+    co_return co_await messages_.dequeue();
   }
 
   auto try_dequeue() -> Option<SourceMessage> {
-    while (true) {
-      if (auto ready = take_ready()) {
-        return ready;
-      }
-      auto message = messages_.try_dequeue();
-      if (not message) {
-        return None{};
-      }
-      if (auto control = take_control()) {
-        defer(std::move(*message));
-        return control;
-      }
-      return std::move(*message);
+    if (auto control = take_control()) {
+      return control;
     }
+    auto message = messages_.try_dequeue();
+    if (not message) {
+      return None{};
+    }
+    return std::move(*message);
   }
 
   auto try_dequeue_for(duration timeout) -> Task<Option<SourceMessage>> {
+    if (auto control = take_control()) {
+      co_return std::move(*control);
+    }
     auto token = co_await folly::coro::co_current_cancellation_token;
-    auto const deadline = std::chrono::steady_clock::now() + timeout;
-    while (true) {
-      if (auto ready = take_ready()) {
-        co_return std::move(*ready);
+    try {
+      co_return co_await messages_.co_try_dequeue_for(
+        std::chrono::duration_cast<folly::Duration>(timeout));
+    } catch (folly::OperationCancelled const&) {
+      if (token.isCancellationRequested()) {
+        throw;
       }
-      auto const now = std::chrono::steady_clock::now();
-      if (now >= deadline) {
-        co_return None{};
-      }
-      try {
-        auto message = co_await messages_.co_try_dequeue_for(
-          std::chrono::duration_cast<folly::Duration>(deadline - now));
-        if (auto control = take_control()) {
-          defer(std::move(message));
-          co_return std::move(*control);
-        }
-        co_return std::move(message);
-      } catch (folly::OperationCancelled const&) {
-        if (token.isCancellationRequested()) {
-          throw;
-        }
-        co_return None{};
-      }
+      co_return None{};
     }
   }
 
@@ -236,54 +196,71 @@ public:
   }
 
 private:
-  auto enqueue_control(Atomic<bool>& queued) -> void {
-    queued.store(true, std::memory_order_release);
-  }
-
-  auto take_ready() -> Option<SourceMessage> {
-    if (auto control = take_control()) {
-      return control;
-    }
-    while (not deferred_.empty()) {
-      auto message = std::move(deferred_.front());
-      deferred_.pop_front();
-      return message;
-    }
-    return None{};
-  }
-
   auto take_control() -> Option<SourceMessage> {
     if (acknowledge_pending_queued_.exchange(false,
                                              std::memory_order_acq_rel)) {
       return SourceMessage{AcknowledgePending{}};
     }
-    if (emit_buffered_queued_.exchange(false, std::memory_order_acq_rel)) {
-      return SourceMessage{EmitBuffered{}};
-    }
     return None{};
   }
 
-  auto defer(SourceMessage message) -> void {
-    deferred_.push_front(std::move(message));
-  }
-
   static auto reject(natsMsg* msg) -> void {
-    natsMsg_Nak(msg, nullptr);
+    negative_acknowledge(msg);
     natsMsg_Destroy(msg);
   }
 
-  // NATS invokes callbacks from library-owned threads. This is the only shared
-  // boundary: it reserves one terminal slot and rejects late callbacks.
-  // FromNats schedules control flags between await_task() invocations; they
-  // take priority over deferred data so ACK and buffered-row handoffs happen
-  // before new NATS messages.
+  // NATS invokes callbacks from library-owned threads. The queue reserves one
+  // terminal slot in addition to the bounded message slots so that an error can
+  // still wake the operator when the data queue is full.
   SourceMessageQueue messages_;
   folly::fibers::Semaphore message_slots_;
-  std::deque<SourceMessage> deferred_;
   Atomic<bool> accepting_ = true;
   Atomic<bool> terminal_completion_queued_ = false;
   Atomic<bool> acknowledge_pending_queued_ = false;
-  Atomic<bool> emit_buffered_queued_ = false;
+};
+
+struct SourceBatch {
+  explicit SourceBatch(Arc<SourceQueue> source) : source_{std::move(source)} {
+  }
+
+  SourceBatch(SourceBatch const&) = delete;
+  auto operator=(SourceBatch const&) -> SourceBatch& = delete;
+  SourceBatch(SourceBatch&&) noexcept = default;
+  auto operator=(SourceBatch&& other) noexcept -> SourceBatch& {
+    if (this == &other) {
+      return *this;
+    }
+    return_messages();
+    source_ = std::move(other.source_);
+    messages = std::move(other.messages);
+    completion = std::move(other.completion);
+    acknowledge_pending = other.acknowledge_pending;
+    other.acknowledge_pending = false;
+    return *this;
+  }
+
+  ~SourceBatch() {
+    return_messages();
+  }
+
+  std::vector<nats_msg_ptr> messages;
+  Option<SubscriptionComplete> completion = None{};
+  bool acknowledge_pending = false;
+
+private:
+  auto return_messages() noexcept -> void {
+    for (auto& msg : messages) {
+      if (msg) {
+        negative_acknowledge(msg.get());
+        if (source_.not_moved_from()) {
+          source_->release_message_slot();
+        }
+      }
+    }
+    messages.clear();
+  }
+
+  Arc<SourceQueue> source_;
 };
 
 void message_callback(natsConnection*, natsSubscription*, natsMsg* msg,
@@ -502,13 +479,6 @@ public:
     subscription_ = nats_subscription_ptr{raw_subscription};
   }
 
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx&) -> Task<void> override {
-    // Defer ACKs for rows flushed into the checkpoint until post_commit().
-    while (not buffered_.empty()) {
-      co_await push_next_buffered(push);
-    }
-  }
-
   auto post_commit(OpCtx& ctx) -> Task<void> override {
     auto const acknowledged = acknowledge_pending(ctx.dh());
     if (acknowledged and connection_) {
@@ -523,9 +493,9 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    auto batch = SourceBatch{};
+    auto batch = SourceBatch{source_};
     auto first = co_await source_->dequeue();
-    if (try_as<EmitBuffered>(&first)) {
+    if (try_as<AcknowledgePending>(&first)) {
       co_await wait_for_downstream_stop();
     }
     if (not append_to_batch(batch, std::move(first))) {
@@ -536,7 +506,7 @@ public:
     auto const started = std::chrono::steady_clock::now();
     while (batch.messages.size() < max_messages) {
       if (auto next = source_->try_dequeue()) {
-        if (try_as<EmitBuffered>(&*next)) {
+        if (try_as<AcknowledgePending>(&*next)) {
           co_await wait_for_downstream_stop();
         }
         if (not append_to_batch(batch, std::move(*next))) {
@@ -554,7 +524,7 @@ public:
       if (not next) {
         break;
       }
-      if (try_as<EmitBuffered>(&*next)) {
+      if (try_as<AcknowledgePending>(&*next)) {
         co_await wait_for_downstream_stop();
       }
       if (not append_to_batch(batch, std::move(*next))) {
@@ -572,18 +542,6 @@ public:
     }
     if (batch->acknowledge_pending) {
       acknowledge_pending(ctx.dh());
-      if (not buffered_.empty()) {
-        source_->enqueue_emit_buffered();
-      }
-      co_return;
-    }
-    if (batch->emit_buffered) {
-      co_await push_buffered(push, ctx);
-      if (co_await maybe_stop_after_count(ctx)) {
-        co_return;
-      }
-      schedule_ack_handoff();
-      co_return;
     }
     if (batch->messages.empty() and not batch->completion) {
       co_return;
@@ -593,11 +551,15 @@ public:
     for (auto& msg : batch->messages) {
       source_->release_message_slot();
       if (done_) {
-        natsMsg_Nak(msg.get(), nullptr);
+        needs_shutdown_flush_
+          = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
+        msg.reset();
         continue;
       }
       if (args_.count and received_ >= args_.count->inner) {
-        natsMsg_Nak(msg.get(), nullptr);
+        needs_shutdown_flush_
+          = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
+        msg.reset();
         continue;
       }
       auto const size = natsMsg_GetDataLength(msg.get());
@@ -607,38 +569,26 @@ public:
       ++received_;
       accepted.push_back(std::move(msg));
     }
+    batch->messages.clear();
     if (not accepted.empty()) {
-      TENZIR_ASSERT(in_flight_.empty());
-      in_flight_ = std::move(accepted);
-      auto nak_guard = detail::scope_guard{[this]() noexcept {
-        for (auto& msg : in_flight_) {
+      auto nak_guard = detail::scope_guard{[this, &accepted]() noexcept {
+        for (auto& msg : accepted) {
           if (msg) {
             needs_shutdown_flush_
               = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
           }
         }
-        in_flight_.clear();
       }};
-      auto emitted = false;
       auto message_index = size_t{0};
-      for (auto const& slice : build_slices(in_flight_, ctx)) {
-        for (auto row = size_t{0}; row < slice.rows(); ++row) {
-          TENZIR_ASSERT(message_index < in_flight_.size());
-          auto item = BufferedMessage{
-            .msg = std::move(in_flight_[message_index]),
-            .slice = subslice(slice, row, row + 1),
-          };
-          if (emitted) {
-            buffered_.push_back(std::move(item));
-          } else {
-            co_await push_buffered(std::move(item), push);
-            emitted = true;
-          }
-          ++message_index;
-        }
+      for (auto& slice : build_slices(accepted, ctx)) {
+        auto const rows = detail::narrow_cast<size_t>(slice.rows());
+        TENZIR_ASSERT(message_index + rows <= accepted.size());
+        co_await push(std::move(slice));
+        mark_delivered(
+          std::span<nats_msg_ptr>{accepted.data() + message_index, rows});
+        message_index += rows;
       }
-      TENZIR_ASSERT(message_index == in_flight_.size());
-      in_flight_.clear();
+      TENZIR_ASSERT(message_index == accepted.size());
       nak_guard.disable();
       if (co_await maybe_stop_after_count(ctx)) {
         co_return;
@@ -679,39 +629,15 @@ private:
       batch.acknowledge_pending = true;
       return false;
     }
-    if (try_as<EmitBuffered>(&message)) {
-      batch.emit_buffered = true;
-      return false;
-    }
     TENZIR_UNREACHABLE();
   }
 
-  auto push_buffered(BufferedMessage item, Push<table_slice>& push)
-    -> Task<void> {
-    auto nak_guard = detail::scope_guard{[this, &item]() noexcept {
-      if (item.msg) {
-        needs_shutdown_flush_
-          = negative_acknowledge(item.msg.get()) or needs_shutdown_flush_;
+  auto mark_delivered(std::span<nats_msg_ptr> messages) -> void {
+    for (auto& msg : messages) {
+      if (msg) {
+        pending_acks_.push_back(std::move(msg));
       }
-    }};
-    co_await push(std::move(item.slice));
-    pending_acks_.push_back(std::move(item.msg));
-    nak_guard.disable();
-  }
-
-  auto push_next_buffered(Push<table_slice>& push) -> Task<void> {
-    TENZIR_ASSERT(not buffered_.empty());
-    auto item = std::move(buffered_.front());
-    buffered_.pop_front();
-    co_await push_buffered(std::move(item), push);
-  }
-
-  auto push_buffered(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {
-    TENZIR_UNUSED(ctx);
-    if (buffered_.empty()) {
-      co_return;
     }
-    co_await push_next_buffered(push);
   }
 
   auto wait_for_downstream_stop() const -> Task<void> {
@@ -726,12 +652,11 @@ private:
   }
 
   auto maybe_stop_after_count(OpCtx& ctx) -> Task<bool> {
-    if (not args_.count or received_ < args_.count->inner
-        or not buffered_.empty()) {
+    if (not args_.count or received_ < args_.count->inner) {
       co_return false;
     }
-    auto const acked = acknowledge_pending(ctx.dh());
-    if (acked) {
+    auto const acknowledged = acknowledge_pending(ctx.dh());
+    if (acknowledged and connection_) {
       co_await flush_acknowledgements(ctx);
     }
     done_ = true;
@@ -860,14 +785,6 @@ private:
     return true;
   }
 
-  static auto acknowledge(natsMsg* msg) -> bool {
-    return natsMsg_Ack(msg, nullptr) == NATS_OK;
-  }
-
-  static auto negative_acknowledge(natsMsg* msg) noexcept -> bool {
-    return natsMsg_Nak(msg, nullptr) == NATS_OK;
-  }
-
   auto acknowledge_pending(diagnostic_handler& dh) -> bool {
     if (pending_acks_.empty()) {
       return false;
@@ -933,28 +850,9 @@ private:
           source_->release_message_slot();
           needs_flush = negative_acknowledge(item.msg.get()) or needs_flush;
         },
-        [](SubscriptionComplete) {}, [](AcknowledgePending) {},
-        [](EmitBuffered) {});
+        [](SubscriptionComplete) {}, [](AcknowledgePending) {});
     }
-    for (auto& msg : pending_acks_) {
-      if (msg) {
-        needs_flush = acknowledge(msg.get(), ctx.dh()) or needs_flush;
-      }
-    }
-    pending_acks_.clear();
-    while (not buffered_.empty()) {
-      auto item = std::move(buffered_.front());
-      buffered_.pop_front();
-      if (item.msg) {
-        needs_flush = negative_acknowledge(item.msg.get()) or needs_flush;
-      }
-    }
-    for (auto& msg : in_flight_) {
-      if (msg) {
-        needs_flush = negative_acknowledge(msg.get()) or needs_flush;
-      }
-    }
-    in_flight_.clear();
+    needs_flush = acknowledge_pending(ctx.dh()) or needs_flush;
     if (needs_flush and connection_) {
       co_await flush_acknowledgements(ctx);
     }
@@ -969,8 +867,6 @@ private:
   mutable Arc<SourceQueue> source_;
   nats_subscription_ptr subscription_;
   std::vector<nats_msg_ptr> pending_acks_;
-  std::deque<BufferedMessage> buffered_;
-  std::vector<nats_msg_ptr> in_flight_;
   MetricsCounter read_bytes_counter_;
   uint64_t received_ = 0;
   bool needs_shutdown_flush_ = false;

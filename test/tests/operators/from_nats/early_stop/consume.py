@@ -1,5 +1,5 @@
 # runner: python
-"""Verify early downstream stop does not ACK unread NATS messages."""
+"""Verify early downstream stop does not ACK messages not emitted by from_nats."""
 
 from __future__ import annotations
 
@@ -34,12 +34,14 @@ def _run_nats_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def main() -> None:
+    # Use single-message batches to make the downstream stop boundary coincide
+    # with a NATS ACK boundary.
     pipeline = """
 from_nats env("NATS_SUBJECT"),
           url=env("NATS_URL"),
           durable=env("NATS_DURABLE"),
-          _batch_size=2,
-          _queue_capacity=2,
+          _batch_size=1,
+          _queue_capacity=1,
           _batch_timeout=5s
 head 1
 select line = string(message)
