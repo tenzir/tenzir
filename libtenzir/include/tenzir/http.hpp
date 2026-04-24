@@ -14,6 +14,7 @@
 #include "tenzir/http_pool.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/secret_resolution.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/tls_options.hpp"
 
 #include <arrow/util/compression.h>
@@ -128,5 +129,33 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       size_t max_output_size
                       = std::numeric_limits<size_t>::max())
   -> Result<blob, uint16_t>;
+
+enum class PaginationMode {
+  link,
+  odata,
+};
+
+auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode>;
+
+/// Scans all Link response headers and returns the first resolved `rel=next`
+/// URL, or None if no such link is present. Emits a warning on malformed
+/// headers.
+auto next_url_from_link_headers(
+  std::vector<std::pair<std::string, std::string>> const& response_headers,
+  std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
+  -> Option<std::string>;
+
+struct OdataPage {
+  Option<std::string> next_url;
+  std::vector<table_slice> events;
+};
+
+/// Extracts events and the opaque next URL from an OData collection envelope.
+///
+/// The input must represent a single top-level object with a `value` array.
+/// Each object in `value` becomes one output event. Top-level `@odata.*` fields
+/// on emitted objects are omitted while nested annotations are preserved.
+auto extract_odata_page(table_slice const& slice, location paginate_loc,
+                        diagnostic_handler& dh) -> failure_or<OdataPage>;
 
 } // namespace tenzir::http

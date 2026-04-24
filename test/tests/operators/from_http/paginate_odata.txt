@@ -1,0 +1,25 @@
+{
+  id: "user-1",
+  displayName: "Ada Lovelace",
+  accountEnabled: true,
+  manager: {
+    "@odata.type": "#microsoft.graph.user",
+    id: "manager-1",
+  },
+  mail: null,
+}
+{
+  id: "user-2",
+  displayName: "Grace Hopper",
+  accountEnabled: null,
+  manager: null,
+  mail: null,
+}
+{
+  id: "user-3",
+  displayName: "Katherine Johnson",
+  department: {
+    "@odata.type": "#microsoft.graph.department",
+    name: "Flight Research",
+  },
+}

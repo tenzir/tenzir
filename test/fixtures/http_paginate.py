@@ -14,10 +14,12 @@ Exports:
   HTTP_FIXTURE_LARGE_ERROR_URL       — HTTP 500 with large streaming response body
   HTTP_FIXTURE_META_LAMBDA_URL        — next URL carried in X-Next-Page header (tests
                                         that pagination lambdas can read metadata_field)
+  HTTP_FIXTURE_ODATA_USERS_URL        — Microsoft Graph-shaped OData collection pages
 """
 
 from __future__ import annotations
 
+import json
 import socket
 import threading
 from http import HTTPStatus
@@ -43,6 +45,9 @@ _LAMBDA_PAGE_2 = "/paginate/lambda/2"
 _LARGE_ERROR_PAGE = "/paginate/error/large"
 _META_LAMBDA_PAGE_1 = "/paginate/meta-lambda/1"
 _META_LAMBDA_PAGE_2 = "/paginate/meta-lambda/2"
+_ODATA_PAGE_1 = "/graph/v1.0/users"
+_ODATA_PAGE_2 = "/graph/v1.0/users/next"
+_ODATA_SKIPTOKEN = "RFNwdAIAAQAAAD8...AAAAAAAA"
 # Port 9 is IANA Discard Protocol — always refuses connections on most systems.
 _UNREACHABLE_NEXT = "http://127.0.0.1:9/paginate/unreachable/next"
 
@@ -72,9 +77,10 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
-        from urllib.parse import urlsplit
+        from urllib.parse import parse_qs, urlsplit
 
-        path = urlsplit(self.path).path
+        parts = urlsplit(self.path)
+        path = parts.path
         # Chain pagination: /paginate/chain/<n>
         if path.startswith(_CHAIN_PREFIX):
             page_str = path.removeprefix(_CHAIN_PREFIX)
@@ -178,6 +184,66 @@ class _Handler(BaseHTTPRequestHandler):
         if path == _META_LAMBDA_PAGE_2:
             self._reply(b'{"page":2}\n')
             return
+        # Microsoft Graph-shaped OData collection pagination.
+        if path == _ODATA_PAGE_1:
+            base = f"http://{self.headers['Host']}"
+            next_link = f"{base}{_ODATA_PAGE_2}?$skiptoken={_ODATA_SKIPTOKEN}"
+            body = {
+                "@odata.context": f"{base}/$metadata#users",
+                "@odata.count": 3,
+                "@odata.nextLink": next_link,
+                "value": [
+                    {
+                        "@odata.etag": 'W/"user-1"',
+                        "id": "user-1",
+                        "displayName": "Ada Lovelace",
+                        "accountEnabled": True,
+                        "manager": {
+                            "@odata.type": "#microsoft.graph.user",
+                            "id": "manager-1",
+                        },
+                    },
+                    {
+                        "@odata.type": "#microsoft.graph.user",
+                        "id": "user-2",
+                        "displayName": "Grace Hopper",
+                        "mail": None,
+                    },
+                ],
+            }
+            self._reply(json.dumps(body).encode())
+            return
+        if path == _ODATA_PAGE_2:
+            query = parse_qs(parts.query, keep_blank_values=True)
+            if query.get("$skiptoken") != [_ODATA_SKIPTOKEN]:
+                self._reply(
+                    b'{"error":"missing skiptoken"}\n',
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
+            if self.headers.get("ConsistencyLevel") != "eventual":
+                self._reply(
+                    b'{"error":"missing consistency header"}\n',
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
+            base = f"http://{self.headers['Host']}"
+            body = {
+                "@odata.context": f"{base}/$metadata#users",
+                "value": [
+                    {
+                        "@odata.etag": 'W/"user-3"',
+                        "id": "user-3",
+                        "displayName": "Katherine Johnson",
+                        "department": {
+                            "@odata.type": "#microsoft.graph.department",
+                            "name": "Flight Research",
+                        },
+                    }
+                ],
+            }
+            self._reply(json.dumps(body).encode())
+            return
         # Large error body for queue-draining regression tests.
         if path == _LARGE_ERROR_PAGE:
             chunk = b"x" * 1024
@@ -218,6 +284,7 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_LAMBDA_URL": f"{base}{_LAMBDA_PAGE_1}",
             "HTTP_FIXTURE_LARGE_ERROR_URL": f"{base}{_LARGE_ERROR_PAGE}",
             "HTTP_FIXTURE_META_LAMBDA_URL": f"{base}{_META_LAMBDA_PAGE_1}",
+            "HTTP_FIXTURE_ODATA_USERS_URL": f"{base}{_ODATA_PAGE_1}",
         }
     finally:
         server.shutdown()
