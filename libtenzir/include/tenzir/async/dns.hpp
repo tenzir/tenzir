@@ -20,7 +20,12 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
+
+namespace folly {
+class SocketAddress;
+} // namespace folly
 
 namespace tenzir {
 
@@ -92,6 +97,33 @@ using ForwardDnsResult = Result<ForwardDnsLookup, DnsError>;
 /// Result of a reverse DNS lookup.
 using ReverseDnsResult = Result<ReverseDnsLookup, DnsError>;
 
+/// The parsed host and port components of a socket address string.
+struct ParsedSocketAddress {
+  ParsedSocketAddress(std::string host, uint16_t port)
+    : host{std::move(host)}, port{port} {
+  }
+
+  std::string host;
+  uint16_t port;
+};
+
+/// The socket address form that a parser should accept.
+enum class SocketAddressKind {
+  remote,
+  bind,
+};
+
+/// Socket address parsing succeeded, but resolving the host failed.
+struct ResolveAddressError : variant<DnsError, DnsNotFound> {
+  using variant<DnsError, DnsNotFound>::variant;
+};
+
+/// Parse a socket address string of the form `<host>:<port>`.
+///
+/// Bind addresses additionally accept `:<port>` when `kind` is `bind`.
+auto parse_socket_address(std::string_view endpoint, SocketAddressKind kind)
+  -> Option<ParsedSocketAddress>;
+
 namespace detail {
 
 /// Test-only access for injecting deterministic DNS query implementations.
@@ -128,6 +160,14 @@ public:
 
   /// Return the resolver startup error when c-ares initialization failed.
   [[nodiscard]] auto startup_error() const -> Option<DnsError>;
+
+  /// Resolve a previously parsed remote socket address.
+  auto resolve_socket_address(ParsedSocketAddress endpoint)
+    -> Task<Result<folly::SocketAddress, ResolveAddressError>>;
+
+  /// Resolve a previously parsed bind address.
+  auto resolve_bind_address(ParsedSocketAddress endpoint)
+    -> Task<Result<folly::SocketAddress, ResolveAddressError>>;
 
 private:
   friend struct detail::DnsResolverTestAccess;
@@ -184,3 +224,40 @@ inline auto detail::DnsResolverTestAccess::make_reverse(
 }
 
 } // namespace tenzir
+
+namespace fmt {
+
+template <>
+struct formatter<tenzir::DnsError> : formatter<std::string_view> {
+  auto format(tenzir::DnsError const& x, format_context& ctx) const
+    -> format_context::iterator {
+    return formatter<std::string_view>::format(x.error, ctx);
+  }
+};
+
+template <>
+struct formatter<tenzir::DnsNotFound> : formatter<std::string_view> {
+  auto format(tenzir::DnsNotFound, format_context& ctx) const
+    -> format_context::iterator {
+    return formatter<std::string_view>::format(
+      "no matching A or AAAA records", ctx);
+  }
+};
+
+template <>
+struct formatter<tenzir::ResolveAddressError>
+  : formatter<std::string_view> {
+  auto format(tenzir::ResolveAddressError const& x,
+              format_context& ctx) const -> format_context::iterator {
+    return tenzir::match(
+      x,
+      [&](tenzir::DnsError const& error) {
+        return formatter<tenzir::DnsError>{}.format(error, ctx);
+      },
+      [&](tenzir::DnsNotFound not_found) {
+        return formatter<tenzir::DnsNotFound>{}.format(not_found, ctx);
+      });
+  }
+};
+
+} // namespace fmt
