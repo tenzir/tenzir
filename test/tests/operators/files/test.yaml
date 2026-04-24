@@ -1,0 +1,6 @@
+suite: files
+runner: tenzir
+fixtures: [files_permission_tree]
+timeout: 30
+skip:
+  on: fixture-unavailable

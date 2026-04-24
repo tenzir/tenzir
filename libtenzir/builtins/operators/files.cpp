@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <grp.h>
 #include <pwd.h>
+#include <vector>
 #include <unistd.h>
 
 namespace tenzir::plugins::files {
@@ -38,6 +39,128 @@ struct files_args {
       f.field("skip_permission_denied", x.skip_permission_denied));
   }
 };
+
+auto is_permission_error(std::error_code ec) -> bool {
+  return ec == std::errc::permission_denied
+         or ec == std::errc::operation_not_permitted;
+}
+
+auto directory_options(files_args const& args)
+  -> std::filesystem::directory_options {
+  auto result = std::filesystem::directory_options::none;
+  if (args.follow_directory_symlink) {
+    result |= std::filesystem::directory_options::follow_directory_symlink;
+  }
+  return result;
+}
+
+auto emit_filesystem_error(const std::filesystem::path& path,
+                           std::error_code ec, diagnostic_handler& dh) -> void {
+  diagnostic::error("{}",
+                    std::filesystem::filesystem_error{
+                      "failed to list directory", path, ec}.what())
+    .emit(dh);
+}
+
+auto emit_skipped_directory_warning(const std::filesystem::path& path,
+                                    std::error_code ec,
+                                    diagnostic_handler& dh) -> void {
+  diagnostic::warning("skipping unreadable directory `{}`: {}", path,
+                      ec.message())
+    .emit(dh);
+}
+
+auto should_recurse_into(const std::filesystem::directory_entry& entry,
+                         std::filesystem::directory_options options,
+                         diagnostic_handler& dh) -> bool {
+  auto ec = std::error_code{};
+  const auto follow_symlinks
+    = (options & std::filesystem::directory_options::follow_directory_symlink)
+      != std::filesystem::directory_options::none;
+  const auto status
+    = follow_symlinks ? entry.status(ec) : entry.symlink_status(ec);
+  if (ec) {
+    diagnostic::warning("failed to inspect `{}`: {}", entry.path(),
+                        ec.message())
+      .emit(dh);
+    return false;
+  }
+  return status.type() == std::filesystem::file_type::directory;
+}
+
+auto list_directory(const std::filesystem::path& path,
+                    std::filesystem::directory_options options,
+                    bool skip_permission_denied,
+                    diagnostic_handler& dh)
+  -> generator<std::filesystem::directory_entry> {
+  auto ec = std::error_code{};
+  auto iterator = std::filesystem::directory_iterator{path, options, ec};
+  if (ec) {
+    if (skip_permission_denied and is_permission_error(ec)) {
+      co_return;
+    }
+    emit_filesystem_error(path, ec, dh);
+    co_return;
+  }
+  const auto end = std::filesystem::directory_iterator{};
+  while (iterator != end) {
+    co_yield *iterator;
+    ec.clear();
+    iterator.increment(ec);
+    if (ec) {
+      emit_filesystem_error(path, ec, dh);
+      co_return;
+    }
+  }
+}
+
+auto list_directory_recursive(const std::filesystem::path& path,
+                              std::filesystem::directory_options options,
+                              bool skip_permission_denied,
+                              diagnostic_handler& dh)
+  -> generator<std::filesystem::directory_entry> {
+  auto ec = std::error_code{};
+  auto stack = std::vector<std::filesystem::directory_iterator>{};
+  auto root = std::filesystem::directory_iterator{path, options, ec};
+  if (ec) {
+    if (skip_permission_denied and is_permission_error(ec)) {
+      co_return;
+    }
+    emit_filesystem_error(path, ec, dh);
+    co_return;
+  }
+  stack.push_back(std::move(root));
+  const auto end = std::filesystem::directory_iterator{};
+  while (not stack.empty()) {
+    auto& current = stack.back();
+    if (current == end) {
+      stack.pop_back();
+      continue;
+    }
+    auto entry = *current;
+    ec.clear();
+    current.increment(ec);
+    if (ec) {
+      emit_filesystem_error(entry.path(), ec, dh);
+      co_return;
+    }
+    co_yield entry;
+    if (not should_recurse_into(entry, options, dh)) {
+      continue;
+    }
+    ec.clear();
+    auto child = std::filesystem::directory_iterator{entry.path(), options, ec};
+    if (ec) {
+      if (is_permission_error(ec)) {
+        emit_skipped_directory_warning(entry.path(), ec, dh);
+        continue;
+      }
+      emit_filesystem_error(entry.path(), ec, dh);
+      co_return;
+    }
+    stack.push_back(std::move(child));
+  }
+}
 
 class files_operator final : public crtp_operator<files_operator> {
 public:
@@ -84,11 +207,16 @@ public:
     };
     auto builder = series_builder{schema};
     for (const auto& entry : std::move(listing)) {
+      auto status_ec = std::error_code{};
+      const auto status = entry.status(status_ec);
       auto event = builder.record();
       event.field("path", entry.path().string());
       event.field("type", [&]() -> data_view2 {
+        if (status_ec) {
+          return {};
+        }
         using std::filesystem::file_type;
-        switch (entry.status().type()) {
+        switch (status.type()) {
           case file_type::regular:
             return "regular";
           case file_type::directory:
@@ -114,7 +242,7 @@ public:
       {
         using std::filesystem::perms;
         auto permissions = event.field("permissions").record();
-        auto has_perm = [perms = entry.status().permissions()](auto perm) {
+        auto has_perm = [perms = status.permissions()](auto perm) {
           return perms::none != (perms & perm);
         };
 #define X(name)                                                                \
@@ -166,27 +294,19 @@ public:
     try {
       const auto path = args_.path ? std::filesystem::path{*args_.path}
                                    : std::filesystem::current_path();
-      const auto options = [&] {
-        auto result = std::filesystem::directory_options::none;
-        if (args_.follow_directory_symlink) {
-          result
-            |= std::filesystem::directory_options::follow_directory_symlink;
-        }
-        if (args_.skip_permission_denied) {
-          result |= std::filesystem::directory_options::skip_permission_denied;
-        }
-        return result;
-      }();
-      auto builder = series_builder{};
+      const auto options = directory_options(args_);
       if (args_.recurse_directories) {
-        auto gen = make_generator(
-          std::filesystem::recursive_directory_iterator{path, options});
+        auto gen
+          = make_generator(list_directory_recursive(path, options,
+                                                    args_.skip_permission_denied,
+                                                    ctrl.diagnostics()));
         for (auto&& result : std::move(gen)) {
           co_yield std::move(result);
         }
       } else {
-        auto gen
-          = make_generator(std::filesystem::directory_iterator{path, options});
+        auto gen = make_generator(
+          list_directory(path, options, args_.skip_permission_denied,
+                         ctrl.diagnostics()));
         for (auto&& result : std::move(gen)) {
           co_yield std::move(result);
         }
