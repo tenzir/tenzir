@@ -1,0 +1,14 @@
+warning: `fields.nested` must be a string or list of strings; omitting field
+ --> tests/operators/to_splunk_validation/fields_wrong_type.tql:4:18
+  |
+4 |           fields={tenant: tenant, nested: {value: "unsupported"}},
+  |                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+warning: event too large for given `max_content_length`
+ --> tests/operators/to_splunk_validation/fields_wrong_type.tql:5:30
+  |
+5 |           max_content_length=1
+  |                              ~ 
+  |
+  = note: serialized event size was `111`

@@ -18,6 +18,8 @@ Assertions payload accepted under ``assertions.fixtures.splunk``:
 - source: optional source filter.
 - sourcetype: optional sourcetype filter.
 - host: optional host filter.
+- earliest_time: optional search lower bound, defaults to -10m.
+- latest_time: optional search upper bound, defaults to now.
 - search: optional full Splunk search query, overriding generated filters.
 """
 
@@ -72,6 +74,8 @@ class SplunkAssertions:
     source: str | None = None
     sourcetype: str | None = None
     host: str | None = None
+    earliest_time: str = "-10m"
+    latest_time: str = "now"
     search: str | None = None
 
     def __post_init__(self) -> None:
@@ -211,14 +215,20 @@ def _make_search(assertions: SplunkAssertions) -> str:
     return "search " + " ".join(terms)
 
 
-def _run_search(mgmt_port: int, search: str) -> list[dict[str, Any]]:
+def _run_search(
+    mgmt_port: int,
+    search: str,
+    *,
+    earliest_time: str,
+    latest_time: str,
+) -> list[dict[str, Any]]:
     url = f"https://127.0.0.1:{mgmt_port}/services/search/jobs/export"
     payload = urllib.parse.urlencode(
         {
             "search": search,
             "output_mode": "json",
-            "earliest_time": "-10m",
-            "latest_time": "now",
+            "earliest_time": earliest_time,
+            "latest_time": latest_time,
         }
     ).encode()
     request = urllib.request.Request(
@@ -265,7 +275,12 @@ def _verify_search(
     while True:
         search_failed = False
         try:
-            results = _run_search(mgmt_port, search)
+            results = _run_search(
+                mgmt_port,
+                search,
+                earliest_time=assertions.earliest_time,
+                latest_time=assertions.latest_time,
+            )
             last_results = results
             last_error = None
             result_texts = [_result_text(result) for result in results]
