@@ -1,0 +1,11 @@
+suite: to-nats-default-message
+fixtures:
+  - nats:
+      subject: to_nats_default_message_test
+      stream: TO_NATS_DEFAULT_MESSAGE_TEST
+      durable: to_nats_default_message_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

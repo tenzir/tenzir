@@ -219,6 +219,7 @@ RUN apt-get update && \
       libcap2-bin \
       libdouble-conversion3 \
       libevent-2.1-7 \
+      libevent-pthreads-2.1-7 \
       libflatbuffers23.5.26 \
       libfmt10 \
       libgoogle-glog0v6 \
@@ -226,6 +227,7 @@ RUN apt-get update && \
       libhttp-parser2.9 \
       libmaxminddb0 \
       libmimalloc3 \
+      libnats3.10 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \

@@ -1,0 +1,6 @@
+// Verify that to_nats serialized the whole event by default.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1
+select line = string(message)

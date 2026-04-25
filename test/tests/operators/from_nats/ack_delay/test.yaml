@@ -1,0 +1,12 @@
+suite: from-nats-ack-delay
+fixtures:
+  - nats:
+      subject: from_nats_ack_delay_test
+      stream: FROM_NATS_ACK_DELAY_TEST
+      durable: from_nats_ack_delay_test
+      messages: 1
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable
