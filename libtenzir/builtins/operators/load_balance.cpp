@@ -188,15 +188,13 @@ auto get_or_compute(Map& map, Key&& key, F&& f) -> decltype(auto) {
 }
 
 auto as_constant_kind(data const& value) -> ast::constant::kind {
-  return match(
-    value,
-    []<class T>(T const& x) -> ast::constant::kind {
-      if constexpr (std::same_as<T, pattern>) {
-        TENZIR_UNREACHABLE();
-      } else {
-        return x;
-      }
-    });
+  return match(value, []<class T>(T const& x) -> ast::constant::kind {
+    if constexpr (std::same_as<T, pattern>) {
+      TENZIR_UNREACHABLE();
+    } else {
+      return x;
+    }
+  });
 }
 
 struct LoadBalanceArgs {
@@ -216,8 +214,8 @@ public:
     workers_.assign(args_.pipes.size(), Worker{});
     active_workers_ = workers_.size();
     for (auto i = size_t{0}; i < args_.pipes.size(); ++i) {
-      co_await ctx.spawn_sub<table_slice>(
-        data{detail::narrow<int64_t>(i)}, std::move(args_.pipes[i]));
+      co_await ctx.spawn_sub<table_slice>(data{detail::narrow<int64_t>(i)},
+                                          std::move(args_.pipes[i]));
     }
   }
 
@@ -348,9 +346,7 @@ public:
     }
     auto original = ctx.get(var_.let);
     if (not original) {
-      diagnostic::error("expected a constant list")
-        .primary(var_)
-        .emit(ctx);
+      diagnostic::error("expected a constant list").primary(var_).emit(ctx);
       return failure::promise();
     }
     auto* entries = try_as<list>(*original);
@@ -364,9 +360,7 @@ public:
       return failure::promise();
     }
     if (entries->empty()) {
-      diagnostic::error("expected list to not be empty")
-        .primary(var_)
-        .emit(ctx);
+      diagnostic::error("expected list to not be empty").primary(var_).emit(ctx);
       return failure::promise();
     }
     auto pipes = std::vector<ir::pipeline>{};
@@ -423,13 +417,11 @@ public:
   }
 
   friend auto inspect(auto& f, LoadBalanceIr& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_),
-                              f.field("var", x.var_),
-                              f.field("pipe_location", x.pipe_location_),
-                              f.field("pipe", x.pipe_),
-                              f.field("pipes", x.pipes_),
-                              f.field("pipes_instantiated",
-                                      x.pipes_instantiated_));
+    return f.object(x).fields(
+      f.field("self", x.self_), f.field("var", x.var_),
+      f.field("pipe_location", x.pipe_location_), f.field("pipe", x.pipe_),
+      f.field("pipes", x.pipes_),
+      f.field("pipes_instantiated", x.pipes_instantiated_));
   }
 
 private:
@@ -662,8 +654,8 @@ public:
       std::move(d).docs(docs).usage(usage).emit(ctx);
     };
     if (inv.args.empty()) {
-      emit(diagnostic::error("expected two positional arguments")
-             .primary(inv.op));
+      emit(
+        diagnostic::error("expected two positional arguments").primary(inv.op));
       return failure::promise();
     }
     auto* var = try_as<ast::dollar_var>(inv.args[0]);
@@ -697,8 +689,7 @@ public:
   }
 };
 
-using load_balance_ir_plugin
-  = inspection_plugin<ir::Operator, LoadBalanceIr>;
+using load_balance_ir_plugin = inspection_plugin<ir::Operator, LoadBalanceIr>;
 
 } // namespace
 
