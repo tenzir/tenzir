@@ -15,11 +15,14 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/channel.hpp>
+#include <tenzir/async/executor.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/atomic.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
@@ -612,6 +615,18 @@ private:
     return false;
   }
 
+public:
+  auto restart(std::chrono::milliseconds wait_time)
+    -> std::optional<diagnostic> {
+    max_wait_before_stop(wait_time);
+    if (not stop()) {
+      return diagnostic::error("failed to stop fluentbit engine for restart")
+        .done();
+    }
+    return start();
+  }
+
+private:
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
   bool running_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
@@ -976,17 +991,20 @@ constexpr auto snapshot_stop_wait = std::chrono::seconds{5};
 
 struct FluentBitArgs {
   located<std::string> plugin;
-  located<record> service_properties;
+  located<record> service_properties = located{record{}, location::unknown};
   Option<located<data>> tls;
-  located<record> args;
+  located<record> args = located{record{}, location::unknown};
   multi_series_builder::options builder_options;
   event_order order = event_order::ordered;
+  record config;
 };
 
-struct FluentBitSourceMessage {
-  std::vector<chunk_ptr> chunks;
-  bool done = false;
-};
+struct FluentBitSourceDone {};
+struct FluentBitSourceTimeout {};
+using FluentBitSourceMessage
+  = variant<std::vector<chunk_ptr>, FluentBitSourceDone>;
+using FluentBitSourceTaskResult
+  = variant<Option<FluentBitSourceMessage>, FluentBitSourceTimeout>;
 
 struct SourceBridgeLifetime {
   Arc<Atomic<bool>> alive{std::in_place, true};
@@ -1065,17 +1083,21 @@ auto poll_fluent_bit_source(Sender<FluentBitSourceMessage> sender,
       std::this_thread::sleep_for(args.poll_interval);
       continue;
     }
-    if (not send_blocking(sender, {.chunks = std::move(chunks)}, stop_requested,
-                          bridge_alive, args.poll_interval)) {
+    if (not send_blocking(sender, FluentBitSourceMessage{std::move(chunks)},
+                          stop_requested, bridge_alive, args.poll_interval)) {
       return;
     }
+  }
+  if (not stop_requested->load(std::memory_order_acquire)
+      and bridge_alive->load(std::memory_order_acquire)) {
+    std::ignore = send_blocking(sender, FluentBitSourceDone{}, stop_requested,
+                                bridge_alive, args.poll_interval);
   }
 }
 
 class FromFluentBit final : public Operator<void, table_slice> {
 public:
-  explicit FromFluentBit(FluentBitArgs args, record config)
-    : args_{std::move(args)}, config_{std::move(config)} {
+  explicit FromFluentBit(FluentBitArgs args) : args_{std::move(args)} {
     args_.builder_options.settings.default_schema_name
       = fmt::format("fluent_bit.{}", args_.plugin.inner);
     args_.builder_options.settings.ordered
@@ -1089,9 +1111,12 @@ public:
         "from_fluent_bit",
       },
       MetricsDirection::read, MetricsVisibility::external_);
+    builder_.emplace(args_.builder_options, ctx.dh());
+    auto [sender, receiver]
+      = channel<FluentBitSourceMessage>(source_channel_capacity);
+    receiver_ = std::move(receiver);
     auto operator_args = make_operator_args(args_, ctx);
     if (not operator_args) {
-      done_ = true;
       co_return;
     }
     auto args = std::move(operator_args).unwrap();
@@ -1100,17 +1125,12 @@ public:
     auto requests = collect_fluent_bit_properties(args, fluent_bit_args,
                                                   plugin_args, ctx.dh());
     if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      done_ = true;
       co_return;
     }
-    builder_.emplace(args_.builder_options, ctx.dh());
-    auto [sender, receiver]
-      = channel<FluentBitSourceMessage>(source_channel_capacity);
-    receiver_ = std::move(receiver);
     auto stop_requested = stop_requested_;
     auto bridge_alive = bridge_lifetime_.alive;
     ctx.spawn_task([sender = std::move(sender), args = std::move(args),
-                    config = config_,
+                    config = args_.config,
                     fluent_bit_args = std::move(fluent_bit_args),
                     plugin_args = std::move(plugin_args),
                     stop_requested = std::move(stop_requested),
@@ -1134,44 +1154,42 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (done_) {
+    if (source_exhausted_) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
     TENZIR_ASSERT(receiver_);
-    auto message = co_await receiver_->recv();
-    if (not message) {
-      co_return FluentBitSourceMessage{.chunks = {}, .done = true};
-    }
-    co_return std::move(*message);
+    co_return co_await select_into_variant(
+      receiver_->recv(), [this]() -> Task<FluentBitSourceTimeout> {
+        co_await pusher_.wait();
+        co_return FluentBitSourceTimeout{};
+      }());
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(builder_);
-    auto message = std::move(result).as<FluentBitSourceMessage>();
-    for (auto& chunk : message.chunks) {
-      parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
-    }
-    for (auto& slice : builder_->yield_ready_as_table_slice()) {
-      read_bytes_counter_.add(slice.approx_bytes());
-      co_await push(std::move(slice));
-    }
-    if (message.done) {
-      for (auto& slice : builder_->finalize_as_table_slice()) {
-        read_bytes_counter_.add(slice.approx_bytes());
-        co_await push(std::move(slice));
+    auto task_result = std::move(result).as<FluentBitSourceTaskResult>();
+    if (auto* message = try_as<Option<FluentBitSourceMessage>>(&task_result)) {
+      if (not *message or is<FluentBitSourceDone>(**message)) {
+        for (auto& slice : builder_->finalize_as_table_slice()) {
+          read_bytes_counter_.add(slice.approx_bytes());
+          co_await push(std::move(slice));
+        }
+        source_exhausted_ = true;
+        co_return;
       }
-      done_ = true;
+      for (auto& chunk : as<std::vector<chunk_ptr>>(**message)) {
+        parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
+      }
     }
+    co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
   }
 
   auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not builder_) {
-      co_return;
-    }
+    TENZIR_ASSERT(builder_);
     for (auto& slice : builder_->finalize_as_table_slice()) {
       read_bytes_counter_.add(slice.approx_bytes());
       co_await push(std::move(slice));
@@ -1186,24 +1204,23 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return source_exhausted_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
   FluentBitArgs args_;
-  record config_;
   mutable Option<Receiver<FluentBitSourceMessage>> receiver_;
   Option<multi_series_builder> builder_;
+  SeriesPusher pusher_;
   SourceBridgeLifetime bridge_lifetime_;
   Arc<Atomic<bool>> stop_requested_{std::in_place, false};
   MetricsCounter read_bytes_counter_;
-  bool done_ = false;
+  bool source_exhausted_ = false;
 };
 
 class ToFluentBit final : public Operator<table_slice, void> {
 public:
-  explicit ToFluentBit(FluentBitArgs args, record config)
-    : args_{std::move(args)}, config_{std::move(config)} {
+  explicit ToFluentBit(FluentBitArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -1218,43 +1235,48 @@ public:
       done_ = true;
       co_return;
     }
-    runtime_args_ = std::move(operator_args).unwrap();
+    auto runtime_args = std::move(operator_args).unwrap();
     auto requests = collect_fluent_bit_properties(
-      *runtime_args_, fluent_bit_args_, plugin_args_, ctx.dh());
+      runtime_args, fluent_bit_args_, plugin_args_, ctx.dh());
     if (not co_await ctx.resolve_secrets(std::move(requests))) {
       done_ = true;
       co_return;
     }
-    if (not recreate_engine(ctx.dh())) {
+    engine_ = engine::make_sink(runtime_args, args_.config, fluent_bit_args_,
+                                plugin_args_, ctx.dh());
+    if (not engine_) {
       done_ = true;
       co_return;
     }
+    engine_->max_wait_before_stop(sink_stop_wait);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     if (done_ or not engine_) {
       co_return;
     }
-    auto event = std::string{};
     auto resolved_slice = resolve_enumerations(input);
     auto array = check(to_record_batch(resolved_slice)->ToStructArray());
     auto failed = false;
     auto bytes = uint64_t{0};
+    auto printer = json_printer2{json_printer_options{
+      .style = no_style(),
+      .oneline = true,
+    }};
     for (auto const& row : values3(*array)) {
-      auto it = std::back_inserter(event);
       TENZIR_ASSERT(row);
-      auto printer = json_printer{{
-        .oneline = true,
-      }};
-      auto const ok = printer.print(it, *row);
-      TENZIR_ASSERT(ok);
-      auto message = fmt::format("[{}, {}]", flb_time_now(), event);
+      printer.load_new(*row);
+      auto const event = printer.bytes();
+      auto message = fmt::format("[{}, {}]", flb_time_now(),
+                                 std::string_view{
+                                   reinterpret_cast<char const*>(event.data()),
+                                   event.size(),
+                                 });
       if (engine_->push(message).is_error()) {
         failed = true;
       } else {
         bytes += message.size();
       }
-      event.clear();
     }
     if (failed) {
       diagnostic::warning("failed to push data into Fluent Bit Engine")
@@ -1264,12 +1286,11 @@ public:
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
-    if (done_ or not engine_ or not runtime_args_) {
+    if (done_ or not engine_) {
       co_return;
     }
-    engine_->max_wait_before_stop(snapshot_stop_wait);
-    engine_.reset();
-    if (not recreate_engine(ctx.dh())) {
+    if (auto error = engine_->restart(snapshot_stop_wait)) {
+      ctx.dh().emit(std::move(*error));
       done_ = true;
     }
   }
@@ -1286,20 +1307,7 @@ public:
   }
 
 private:
-  auto recreate_engine(diagnostic_handler& dh) -> bool {
-    TENZIR_ASSERT(runtime_args_);
-    engine_ = engine::make_sink(*runtime_args_, config_, fluent_bit_args_,
-                                plugin_args_, dh);
-    if (not engine_) {
-      return false;
-    }
-    engine_->max_wait_before_stop(sink_stop_wait);
-    return true;
-  }
-
   FluentBitArgs args_;
-  record config_;
-  Option<operator_args> runtime_args_;
   property_map fluent_bit_args_;
   property_map plugin_args_;
   std::unique_ptr<engine> engine_;

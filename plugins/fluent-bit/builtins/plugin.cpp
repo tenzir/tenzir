@@ -61,12 +61,12 @@ public:
 
   auto describe() const -> Description override {
     auto initial = FluentBitArgs{};
-    initial.service_properties = located{record{}, location::unknown};
-    initial.args = located{record{}, location::unknown};
-    auto d = Describer<FluentBitArgs>{std::move(initial)};
+    initial.config = config_;
+    auto d = Describer<FluentBitArgs, FromFluentBit>{std::move(initial)};
     d.positional("plugin", &FluentBitArgs::plugin);
     d.named_optional("options", &FluentBitArgs::args);
     d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
+    d.named_optional("_config", &FluentBitArgs::config);
     auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
     auto msb_validator
       = add_msb_to_describer(d, &FluentBitArgs::builder_options);
@@ -78,18 +78,6 @@ public:
       }
       msb_validator(ctx);
       return {};
-    });
-    d.spawner([config = config_]<class Input>(DescribeCtx&)
-                -> failure_or<Option<SpawnWith<FluentBitArgs, Input>>> {
-      if constexpr (std::same_as<Input, void>) {
-        return SpawnWith<FluentBitArgs, void>{
-          [config](FluentBitArgs args) -> Box<Operator<void, table_slice>> {
-            return Box<Operator<void, table_slice>>{
-              FromFluentBit{std::move(args), config}};
-          }};
-      } else {
-        return None{};
-      }
     });
     return d.without_optimize();
   }
@@ -146,12 +134,12 @@ public:
 
   auto describe() const -> Description override {
     auto initial = FluentBitArgs{};
-    initial.service_properties = located{record{}, location::unknown};
-    initial.args = located{record{}, location::unknown};
-    auto d = Describer<FluentBitArgs>{std::move(initial)};
+    initial.config = config_;
+    auto d = Describer<FluentBitArgs, ToFluentBit>{std::move(initial)};
     d.positional("plugin", &FluentBitArgs::plugin);
     d.named_optional("options", &FluentBitArgs::args);
     d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
+    d.named_optional("_config", &FluentBitArgs::config);
     auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
     d.validate([tls_arg](DescribeCtx& ctx) -> Empty {
       if (auto tls = ctx.get(tls_arg)) {
@@ -159,18 +147,6 @@ public:
         std::ignore = tls_opts.validate(ctx);
       }
       return {};
-    });
-    d.spawner([config = config_]<class Input>(DescribeCtx&)
-                -> failure_or<Option<SpawnWith<FluentBitArgs, Input>>> {
-      if constexpr (std::same_as<Input, table_slice>) {
-        return SpawnWith<FluentBitArgs, table_slice>{
-          [config](FluentBitArgs args) -> Box<Operator<table_slice, void>> {
-            return Box<Operator<table_slice, void>>{
-              ToFluentBit{std::move(args), config}};
-          }};
-      } else {
-        return None{};
-      }
     });
     return d.without_optimize();
   }
