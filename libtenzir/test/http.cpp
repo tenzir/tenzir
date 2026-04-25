@@ -177,9 +177,10 @@ TEST("compress request body") {
   };
   auto decompressed = http::decompress_chunk(**decompressor, input, dh);
   REQUIRE(decompressed);
+  auto body = std::move(decompressed).unwrap();
   auto result = std::string{
-    reinterpret_cast<char const*>(decompressed->data()),
-    decompressed->size(),
+    reinterpret_cast<char const*>(body.data()),
+    body.size(),
   };
   CHECK_EQUAL(result, "hello");
 }
