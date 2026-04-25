@@ -1,0 +1,9 @@
+let $worker = ["alpha"]
+from {x: 1}, {x: 2}
+parallel 1 {
+  load_balance $worker {
+    worker = $worker
+    write_tql
+    save_stdout
+  }
+}

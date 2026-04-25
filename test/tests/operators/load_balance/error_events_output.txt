@@ -1,0 +1,6 @@
+error: pipeline must currently end with a sink
+ --> tests/operators/load_balance/error_events_output.tql:7:22
+  |
+7 | load_balance $worker {
+  |                      ^^^^^^^^^^ 
+  |

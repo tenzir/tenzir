@@ -147,8 +147,8 @@ class from_ir final : public ir::Operator {
 public:
   from_ir() = default;
 
-  explicit from_ir(std::vector<ast::expression> events)
-    : events_{std::move(events)} {
+  from_ir(std::vector<ast::expression> events, location self)
+    : events_{std::move(events)}, self_{self} {
   }
 
   auto name() const -> std::string override {
@@ -171,18 +171,21 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    TENZIR_UNUSED(dh);
-    // FIXME
-    TENZIR_ASSERT(input.is<void>());
+    if (input.is_not<void>()) {
+      diagnostic::error("expected void, got {}", input).primary(self_).emit(dh);
+      return failure::promise();
+    }
     return tag_v<table_slice>;
   }
 
   friend auto inspect(auto& f, from_ir& x) -> bool {
-    return f.apply(x.events_);
+    return f.object(x).fields(f.field("events", x.events_),
+                              f.field("self", x.self_));
   }
 
 private:
   std::vector<ast::expression> events_;
+  location self_;
 };
 
 class from_plugin2 final : public virtual operator_factory_plugin,
@@ -258,7 +261,7 @@ public:
     for (auto& arg : inv.args) {
       TRY(arg.bind(ctx));
     }
-    return from_ir{std::move(inv.args)};
+    return from_ir{std::move(inv.args), inv.op.get_location()};
   }
 };
 
