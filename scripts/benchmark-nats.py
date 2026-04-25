@@ -357,9 +357,8 @@ def run_native_once(
     url: str,
     container_id: str,
     native_batch: int,
-    subject_prefix: str,
+    subject: str,
 ) -> NativeMeasurement:
-    subject = f"{subject_prefix}.native.{run_index}"
     pub_output = run_nats_cli(
         [
             "bench",
@@ -413,13 +412,13 @@ def run_native_once(
 def benchmark_native(
     *,
     case: Case,
-    case_index: int,
     args: argparse.Namespace,
     url: str,
     container_id: str,
 ) -> NativeBaseline | None:
     if args.no_native:
         return None
+    subject = f"{args.native_subject_prefix}.native"
     measurements = [
         run_native_once(
             case=case,
@@ -427,7 +426,7 @@ def benchmark_native(
             url=url,
             container_id=container_id,
             native_batch=args.native_batch,
-            subject_prefix=f"{args.native_subject_prefix}.case{case_index}",
+            subject=subject,
         )
         for run_index in range(1, args.native_runs + 1)
     ]
@@ -553,7 +552,6 @@ def benchmark_case(
     )
     native = benchmark_native(
         case=case,
-        case_index=case_index,
         args=args,
         url=url,
         container_id=container_id,
