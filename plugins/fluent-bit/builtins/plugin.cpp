@@ -9,6 +9,8 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tls_options.hpp"
 
+#include <tuple>
+
 #include "fluent-bit/fluent-bit_operator.hpp"
 
 namespace tenzir::plugins::fluentbit {
@@ -16,7 +18,8 @@ namespace tenzir::plugins::fluentbit {
 namespace {
 
 class from_fluent_bit_plugin final
-  : public operator_plugin2<fluent_bit_source_operator> {
+  : public virtual operator_plugin2<fluent_bit_source_operator>,
+    public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
@@ -56,6 +59,29 @@ public:
       std::move(args), std::move(builder_options), config_);
   }
 
+  auto describe() const -> Description override {
+    auto initial = FluentBitArgs{};
+    initial.config = config_;
+    auto d = Describer<FluentBitArgs, FromFluentBit>{std::move(initial)};
+    d.positional("plugin", &FluentBitArgs::plugin);
+    d.named_optional("options", &FluentBitArgs::args);
+    d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
+    d.named_optional("_config", &FluentBitArgs::config);
+    auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
+    auto msb_validator
+      = add_msb_to_describer(d, &FluentBitArgs::builder_options);
+    d.optimization_order(&FluentBitArgs::order);
+    d.validate([tls_arg, msb_validator](DescribeCtx& ctx) -> Empty {
+      if (auto tls = ctx.get(tls_arg)) {
+        auto tls_opts = tls_options{*tls, {.tls_default = false}};
+        std::ignore = tls_opts.validate(ctx);
+      }
+      msb_validator(ctx);
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   virtual auto load_properties() const -> load_properties_t override {
     return {
       .schemes = {"fluent-bit"},
@@ -71,7 +97,8 @@ private:
 };
 
 class to_fluent_bit_plugin final
-  : public operator_plugin2<fluent_bit_sink_operator> {
+  : public virtual operator_plugin2<fluent_bit_sink_operator>,
+    public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
@@ -103,6 +130,25 @@ public:
     args.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     return std::make_unique<fluent_bit_sink_operator>(std::move(args), config_);
+  }
+
+  auto describe() const -> Description override {
+    auto initial = FluentBitArgs{};
+    initial.config = config_;
+    auto d = Describer<FluentBitArgs, ToFluentBit>{std::move(initial)};
+    d.positional("plugin", &FluentBitArgs::plugin);
+    d.named_optional("options", &FluentBitArgs::args);
+    d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
+    d.named_optional("_config", &FluentBitArgs::config);
+    auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
+    d.validate([tls_arg](DescribeCtx& ctx) -> Empty {
+      if (auto tls = ctx.get(tls_arg)) {
+        auto tls_opts = tls_options{*tls, {.tls_default = false}};
+        std::ignore = tls_opts.validate(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 
   virtual auto save_properties() const -> save_properties_t override {

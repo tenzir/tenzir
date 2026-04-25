@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+to_fluent_bit "does-not-exist"
