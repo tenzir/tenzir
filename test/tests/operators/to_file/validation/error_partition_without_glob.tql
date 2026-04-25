@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {x: 1}
+to_file "/tmp/data.json", partition_by=[x] {
+  write_ndjson
+}

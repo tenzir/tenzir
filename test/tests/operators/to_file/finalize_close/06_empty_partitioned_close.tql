@@ -1,0 +1,8 @@
+// Partitioned variant: `process()` creates three partitions from the
+// three events, then input ends. `finalize()` closes all three subs at
+// once via `collectAllRange`.
+from {region: "a"}, {region: "b"}, {region: "c"}
+head 3
+to_file env("FILE_ROOT") + "/out/finalize/empty_part/**/data_{uuid}.json", partition_by=[region] {
+  write_ndjson
+}

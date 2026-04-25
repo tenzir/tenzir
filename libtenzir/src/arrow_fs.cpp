@@ -9,19 +9,32 @@
 #include "tenzir/arrow_fs.hpp"
 
 #include "tenzir/async/blocking_executor.hpp"
+#include "tenzir/async/task.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/fs_url_template.hpp"
 #include "tenzir/glob.hpp"
 #include "tenzir/substitute_ctx.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/view3.hpp"
 
+#include <arrow/array/array_primitive.h>
 #include <arrow/filesystem/filesystem.h>
+#include <arrow/io/interfaces.h>
+#include <arrow/util/bit_util.h>
+#include <folly/CancellationToken.h>
+#include <folly/coro/AsyncGenerator.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 #include <folly/futures/detail/Types.h>
+
+#include <filesystem>
+#include <ranges>
 
 namespace tenzir {
 
@@ -31,8 +44,10 @@ auto split_at_first_slash(std::string_view path)
   if (slash == std::string_view::npos) {
     return {std::string{path}, ""};
   }
-  return {std::string{path.substr(0, slash)},
-          std::string{path.substr(slash + 1)}};
+  return {
+    std::string{path.substr(0, slash)},
+    std::string{path.substr(slash + 1)},
+  };
 }
 
 namespace {
@@ -59,15 +74,15 @@ constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
 
 } // namespace
 
-auto ArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
+auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   co_await OperatorBase::start(ctx);
   auto resolved = co_await resolve_url(ctx);
-  if (resolved.is_error()) {
+  if (not resolved) {
     co_return;
   }
   auto& uri = *resolved;
   auto fs = co_await make_filesystem(uri, ctx.dh());
-  if (fs.is_error()) {
+  if (not fs) {
     co_return;
   }
   fs_ = std::move(fs->fs);
@@ -82,12 +97,12 @@ auto ArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ArrowFsOperator::await_task(diagnostic_handler&) const -> Task<Any> {
+auto FromArrowFsOperator::await_task(diagnostic_handler&) const -> Task<Any> {
   co_return co_await results_->dequeue();
 }
 
-auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
-  -> Task<void> {
+auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
+                                       OpCtx& ctx) -> Task<void> {
   auto msg = result.as<AwaitResult>();
   co_await co_match(
     msg,
@@ -193,7 +208,7 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
       }
       auto bytes = buffer->size();
       auto push_result = co_await pipe.push(chunk::make(std::move(buffer)));
-      if (push_result.is_err()) {
+      if (not push_result) {
         co_await pipe.close();
         co_return;
       }
@@ -222,18 +237,18 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
     });
 }
 
-auto ArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
+auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
   -> Task<void> {
   co_await results_->enqueue(SubFinished{as<uint64_t>(key)});
 }
 
-auto ArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
+auto FromArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
   -> Task<FinalizeBehavior> {
   co_await cleanup_files(ctx.dh());
   co_return FinalizeBehavior::done;
 }
 
-auto ArrowFsOperator::state() -> OperatorState {
+auto FromArrowFsOperator::state() -> OperatorState {
   if (base_args_.watch) {
     return OperatorState::unspecified;
   }
@@ -251,7 +266,7 @@ auto ArrowFsOperator::state() -> OperatorState {
   return OperatorState::done;
 }
 
-auto ArrowFsOperator::snapshot(Serde& serde) -> void {
+auto FromArrowFsOperator::snapshot(Serde& serde) -> void {
   serde("scan_complete_", scan_complete_);
   serde("pending_", pending_);
   serde("processing_", processing_);
@@ -260,8 +275,9 @@ auto ArrowFsOperator::snapshot(Serde& serde) -> void {
   serde("previous_", previous_);
 }
 
-auto ArrowFsOperator::cleanup_file(std::string path,
-                                   diagnostic_handler& dh) const -> Task<void> {
+auto FromArrowFsOperator::cleanup_file(std::string path,
+                                       diagnostic_handler& dh) const
+  -> Task<void> {
   if (base_args_.remove) {
     co_await remove_file(path, dh);
     co_return;
@@ -281,16 +297,17 @@ auto ArrowFsOperator::cleanup_file(std::string path,
       auto filename = std::filesystem::path{path}.filename();
       final_path /= filename;
     }
-    auto status = co_await spawn_blocking([&, src_path = path, final_path] {
-      auto parent_path = final_path.parent_path();
-      if (not parent_path.empty() and parent_path != ".") {
-        if (auto s = fs_->CreateDir(parent_path, true); not s.ok()) {
-          return s;
-        }
-      }
-      // TODO: Verify that below is equivalent to fs_->Move()
-      return fs_->CopyFile(src_path, final_path);
-    });
+    auto status
+      = co_await spawn_blocking([fs = fs_, src_path = path, final_path] {
+          auto parent_path = final_path.parent_path();
+          if (not parent_path.empty() and parent_path != ".") {
+            if (auto s = fs->CreateDir(parent_path, true); not s.ok()) {
+              return s;
+            }
+          }
+          // TODO: Verify that below is equivalent to fs->Move()
+          return fs->CopyFile(src_path, final_path);
+        });
     if (not status.ok()) {
       diagnostic::warning("failed to rename `{}` to `{}`", path, final_path)
         .primary(*base_args_.rename)
@@ -303,7 +320,7 @@ auto ArrowFsOperator::cleanup_file(std::string path,
   }
 }
 
-auto ArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
+auto FromArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
   // PERF: We could probably batch these calls.
   auto tasks = std::vector<Task<void>>{};
   for (auto& path : cleanup_pending_) {
@@ -313,11 +330,11 @@ auto ArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
   cleanup_pending_.clear();
 }
 
-auto ArrowFsOperator::post_commit(OpCtx& ctx) -> Task<void> {
+auto FromArrowFsOperator::post_commit(OpCtx& ctx) -> Task<void> {
   co_await cleanup_files(ctx.dh());
 }
 
-auto ArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
+auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
   // TODO: Parallelize this.
   for (const auto& [index, slot] : detail::enumerate(processing_)) {
     if (not slot) {
@@ -392,7 +409,7 @@ auto ArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
   pending_ = std::move(restored);
 }
 
-auto ArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
+auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
   ctx.spawn_task([this, &dh = ctx.dh()]() -> Task<void> {
     while (true) {
       auto start = std::chrono::steady_clock::now();
@@ -494,7 +511,7 @@ auto ArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
   });
 }
 
-auto ArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
+auto FromArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
   if (pending_.empty()) {
     return;
   }
@@ -510,7 +527,7 @@ auto ArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
                });
 }
 
-auto ArrowFsOperator::find_free_slot() const -> Option<size_t> {
+auto FromArrowFsOperator::find_free_slot() const -> Option<size_t> {
   for (auto i = size_t{0}; i < max_jobs; ++i) {
     if (not processing_[i]) {
       return i;
@@ -519,7 +536,7 @@ auto ArrowFsOperator::find_free_slot() const -> Option<size_t> {
   return std::nullopt;
 }
 
-auto ArrowFsOperator::find_slot_by_job(uint64_t job_id) const
+auto FromArrowFsOperator::find_slot_by_job(uint64_t job_id) const
   -> Option<size_t> {
   for (auto i = size_t{0}; i < max_jobs; ++i) {
     if (processing_[i] and processing_[i]->job_id == job_id) {
@@ -529,8 +546,331 @@ auto ArrowFsOperator::find_slot_by_job(uint64_t job_id) const
   return std::nullopt;
 }
 
-auto ArrowFsOperator::is_globbing() const -> bool {
+auto FromArrowFsOperator::is_globbing() const -> bool {
   return glob_.size() != 1 or not is<std::string>(glob_[0]);
+}
+
+// =============================================================================
+// ToArrowFsOperator
+// =============================================================================
+
+auto ToArrowFsOperator::setup_args(ToArrowFsArgs&, OpCtx&)
+  -> Task<failure_or<void>> {
+  co_return {};
+}
+
+auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
+  if (not co_await setup_args(base_args_, ctx)) {
+    co_return;
+  }
+  auto resolved = co_await resolve_url(ctx);
+  if (not resolved) {
+    co_return;
+  }
+  // Parse the URL template: extract partition fields, validate structure,
+  // and sanitize placeholders for URI parsing.
+  auto tmpl
+    = FsUrlTemplate::parse(std::move(*resolved), base_args_.partition_by,
+                           base_args_.url.source, ctx.dh());
+  if (not tmpl) {
+    co_return;
+  }
+  template_ = std::move(*tmpl);
+  // Create the filesystem from the sanitized URL (safe tokens in place of
+  // placeholders).  The returned path will contain those safe tokens.
+  auto fs = co_await make_filesystem(template_.sanitized_url(), ctx.dh());
+  if (not fs) {
+    co_return;
+  }
+  fs_ = std::move(fs->fs);
+  // Restore real placeholders in the path extracted by make_filesystem.
+  // `set_path` finalises `has_uuid()` based on the actual path portion and
+  // emits any `{uuid}`-placement diagnostics.
+  // TODO: Consider using separate types here to differentiate.
+  template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
+  bytes_written_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
+                       MetricsDirection::write, MetricsVisibility::external_);
+}
+
+auto ToArrowFsOperator::preprocess(table_slice input, OpCtx&)
+  -> Task<table_slice> {
+  co_return input;
+}
+
+auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
+  input = co_await preprocess(std::move(input), ctx);
+  if (input.rows() == 0) {
+    co_return;
+  }
+  auto const fields = template_.partition_fields();
+  auto by = std::vector<series>{};
+  by.reserve(fields.size());
+  for (auto const& field : fields) {
+    by.emplace_back(eval(field, input, ctx.dh()));
+  }
+  auto const rows = detail::narrow<int64_t>(input.rows());
+  auto boundaries = std::set<int64_t>{rows};
+  for (auto& s : by) {
+    for (auto i = int64_t{0}; i + 1 < rows; ++i) {
+      if (s.at(i) != s.at(i + 1)) {
+        boundaries.insert(i + 1);
+      }
+    }
+  }
+  // Hash-bucket runs into one boolean mask per distinct key. Within-partition
+  // row order is preserved; cross-partition order is unobservable (each
+  // partition writes to its own stream).
+  auto masks = std::unordered_map<data, std::shared_ptr<arrow::Buffer>>{};
+  auto run_start = int64_t{0};
+  for (auto boundary : boundaries) {
+    auto key = list{};
+    key.reserve(by.size());
+    for (auto& s : by) {
+      key.push_back(materialize(s.at(run_start)));
+    }
+    auto [it, inserted] = masks.try_emplace(std::move(key));
+    if (inserted) {
+      it->second = check(arrow::AllocateEmptyBitmap(rows, arrow_memory_pool()));
+    }
+    arrow::bit_util::SetBitsTo(it->second->mutable_data(), run_start,
+                               boundary - run_start, true);
+    run_start = boundary;
+  }
+  // One push per bucket. `process_sub` erases `key_to_sub` under the
+  // guard when rotation fires, so the next iteration's lookup naturally
+  // spawns a fresh sub without us having to drain anything in between.
+  for (auto& [key, bitmap] : masks) {
+    auto sub_key = int64_t{};
+    {
+      auto guard = co_await state_.lock();
+      auto& kts = guard->key_to_sub;
+      if (auto it = kts.find(key); it == kts.end()) {
+        sub_key = next_sub_key_++;
+        auto part = Partition{};
+        part.key = key;
+        guard->partitions.emplace(sub_key, std::move(part));
+        ++partition_count_;
+        kts.emplace(key, sub_key);
+        // Hold the lock across `spawn_sub` so concurrent `process_sub`
+        // callers see the partition in the map before the sub can emit.
+        co_await ctx.spawn_sub<table_slice>(sub_key, base_args_.pipe.inner);
+      } else {
+        sub_key = it->second;
+      }
+    }
+    auto sub = ctx.get_sub(sub_key);
+    if (not sub) {
+      diagnostic::error("subpipeline closed unexpectedly")
+        .primary(base_args_.pipe)
+        .emit(ctx.dh());
+      co_return;
+    }
+    auto slice = filter(input, arrow::BooleanArray{rows, bitmap});
+    // `push` runs without the guard. If it suspends on a full input
+    // channel and we still hold the guard, `process_sub` on the draining
+    // side cannot acquire the guard to look up the partition, and
+    // nothing drains — deadlock.
+    auto result
+      = co_await as<SubHandle<table_slice>>(*sub).push(std::move(slice));
+    if (not result) {
+      diagnostic::error("subpipeline closed unexpectedly")
+        .primary(base_args_.pipe)
+        .emit(ctx.dh());
+      co_return;
+    }
+  }
+}
+
+auto ToArrowFsOperator::await_task(diagnostic_handler&) const -> Task<Any> {
+  co_return co_await control_queue_->dequeue();
+}
+
+auto ToArrowFsOperator::process_task(Any result, OpCtx& ctx) -> Task<void> {
+  auto msg = std::move(result).as<Message>();
+  co_await co_match(msg, [&](RotateRequested& r) -> Task<void> {
+    if (auto sub = ctx.get_sub(r.sub_key)) {
+      co_await as<SubHandle<table_slice>>(*sub).close();
+    }
+  });
+}
+
+auto ToArrowFsOperator::process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
+  -> Task<void> {
+  if (not chunk or chunk->size() == 0) {
+    co_return;
+  }
+  auto sk = as<int64_t>(key);
+  auto part = co_await find_partition(sk);
+  TENZIR_ASSERT(part, "partition must exist: inserted before spawn_sub, "
+                      "erased only in finish_sub");
+  if (not part->stream) {
+    if (not co_await open_stream(*part, ctx.dh())) {
+      co_return;
+    }
+  }
+  auto status = co_await spawn_blocking(
+    [stream = part->stream, buf = as_arrow_buffer(chunk)] {
+      return stream->Write(buf);
+    });
+  if (not status.ok()) {
+    diagnostic::error("failed to write to output stream: {}", status.ToString())
+      .primary(base_args_.url)
+      .emit(ctx.dh());
+    co_return;
+  }
+  bytes_written_counter_.add(chunk->size());
+  part->stream_bytes += chunk->size();
+  // Rotation touches `key_to_sub`, which is shared state — reacquire the
+  // guard for that alone.
+  if (template_.has_uuid() and not part->is_rotating
+      and (part->stream_bytes >= base_args_.max_size
+           or (time::clock::now() - part->created) >= base_args_.timeout)) {
+    part->is_rotating = true;
+    auto guard = co_await state_.lock();
+    if (auto kit = guard->key_to_sub.find(part->key);
+        kit != guard->key_to_sub.end() and kit->second == sk) {
+      guard->key_to_sub.erase(kit);
+    }
+    control_queue_->enqueue(RotateRequested{sk});
+  }
+}
+
+auto ToArrowFsOperator::finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
+  auto sk = as<int64_t>(key);
+  auto part = co_await find_partition(sk);
+  TENZIR_ASSERT(part, "partition must exist: finish_sub is the sole eraser");
+  co_await close_stream(*part, ctx.dh());
+  auto guard = co_await state_.lock();
+  // Drop the mapping if it still points at this sub (rotation may have
+  // cleared it already).
+  if (auto kit = guard->key_to_sub.find(part->key);
+      kit != guard->key_to_sub.end() and kit->second == sk) {
+    guard->key_to_sub.erase(kit);
+  }
+  guard->partitions.erase(sk);
+  --partition_count_;
+}
+
+auto ToArrowFsOperator::state() -> OperatorState {
+  if (finalized_ and partition_count_ == 0) {
+    return OperatorState::done;
+  }
+  return OperatorState::unspecified;
+}
+
+auto ToArrowFsOperator::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+  finalized_ = true;
+  auto subs = std::vector<int64_t>{};
+  {
+    auto guard = co_await state_.lock();
+    subs.reserve(guard->key_to_sub.size());
+    for (auto& [_, sub_key] : guard->key_to_sub) {
+      subs.push_back(sub_key);
+    }
+    guard->key_to_sub.clear();
+  }
+  auto close_tasks = std::vector<Task<void>>{};
+  close_tasks.reserve(subs.size());
+  for (auto sub_key : subs) {
+    if (auto sub = ctx.get_sub(sub_key)) {
+      close_tasks.push_back(as<SubHandle<table_slice>>(*sub).close());
+    }
+  }
+  co_await folly::coro::collectAllRange(std::move(close_tasks));
+  if (partition_count_ == 0) {
+    co_return FinalizeBehavior::done;
+  }
+  co_return FinalizeBehavior::continue_;
+}
+
+auto ToArrowFsOperator::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+  auto tasks = std::vector<Task<void>>{};
+  {
+    auto guard = co_await state_.lock();
+    tasks.reserve(guard->partitions.size());
+    for (auto& [sub_key, part] : guard->partitions) {
+      if (not part.stream) {
+        continue;
+      }
+      tasks.push_back(folly::coro::co_invoke(
+        [this, &ctx, stream = part.stream]() mutable -> Task<void> {
+          auto status = co_await spawn_blocking([stream = std::move(stream)] {
+            return stream->Flush();
+          });
+          if (not status.ok()) {
+            diagnostic::error("failed to flush output stream: {}",
+                              status.ToString())
+              .primary(base_args_.url)
+              .emit(ctx.dh());
+          }
+        }));
+    }
+  }
+  co_await folly::coro::collectAllRange(std::move(tasks));
+}
+
+auto ToArrowFsOperator::find_partition(int64_t sk) -> Task<Option<Partition&>> {
+  auto guard = co_await state_.lock();
+  auto it = guard->partitions.find(sk);
+  if (it == guard->partitions.end()) {
+    co_return std::nullopt;
+  }
+  co_return it->second;
+}
+
+auto ToArrowFsOperator::open_stream(Partition& part,
+                                    diagnostic_handler& dh) const
+  -> Task<failure_or<void>> {
+  auto path = template_.fill_path(part.key);
+  // Only create a parent directory when the path actually has one. If
+  // `rfind` returns `npos`, the path is a single segment (a root-level
+  // object key) and there is nothing to create — calling `CreateDir` on
+  // the object key itself can fail or materialise an unwanted marker.
+  if (auto slash = path.rfind('/'); slash != std::string::npos) {
+    auto parent = path.substr(0, slash);
+    auto dir_status = co_await spawn_blocking([fs = fs_, parent] {
+      return fs->CreateDir(parent, /*recursive=*/true);
+    });
+    if (not dir_status.ok()) {
+      diagnostic::error("failed to create directory `{}`: {}", parent,
+                        dir_status.ToString())
+        .primary(base_args_.url)
+        .emit(dh);
+      co_return failure::promise();
+    }
+  }
+  auto result = co_await spawn_blocking([fs = fs_, path] {
+    return fs->OpenOutputStream(path);
+  });
+  if (not result.ok()) {
+    diagnostic::error("failed to open output stream `{}`: {}", path,
+                      result.status().ToString())
+      .primary(base_args_.url)
+      .emit(dh);
+    co_return failure::promise();
+  }
+  part.stream = result.MoveValueUnsafe();
+  part.stream_bytes = 0;
+  part.created = time::clock::now();
+  co_return {};
+}
+
+auto ToArrowFsOperator::close_stream(Partition& part,
+                                     diagnostic_handler& dh) const
+  -> Task<void> {
+  if (not part.stream) {
+    co_return;
+  }
+  auto status
+    = co_await spawn_blocking([stream = std::exchange(part.stream, nullptr)] {
+        return stream->Close();
+      });
+  if (not status.ok()) {
+    diagnostic::warning("failed to close output stream: {}", status.ToString())
+      .primary(base_args_.url)
+      .emit(dh);
+  }
 }
 
 } // namespace tenzir

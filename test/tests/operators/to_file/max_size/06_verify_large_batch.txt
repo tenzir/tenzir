@@ -1,0 +1,3 @@
+total_rows: 5000
+all_seqs_present: True
+no_duplicates: True

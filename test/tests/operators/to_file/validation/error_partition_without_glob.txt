@@ -1,0 +1,6 @@
+error: URL must contain `**` when using `partition_by`
+ --> tests/operators/to_file/validation/error_partition_without_glob.tql:6:9
+  |
+6 | to_file "/tmp/data.json", partition_by=[x] {
+  |         ^^^^^^^^^^^^^^^^ 
+  |

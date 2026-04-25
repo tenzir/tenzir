@@ -1,0 +1,9 @@
+error: using the default role requires providing an `external_id`
+ --> tests/operators/to_amazon_security_lake/validation/error_default_role_no_external_id.tql:6:25
+  |
+6 | to_amazon_security_lake "s3://aws-security-data-lake-x/ext/src",
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: `role` defaults to the automatically generated AWS role for the custom source, which requires an `external_id` to assume
+  = hint: provide an explicit `role` or provide an `external_id`
+  = hint: use `role=null` to disable role-based authorization

@@ -1,0 +1,6 @@
+suite: to-s3-uuid-in-query-warning
+fixtures: [mock_s3]
+timeout: 60
+skip:
+  on:
+    - fixture-unavailable

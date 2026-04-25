@@ -1,0 +1,8 @@
+from {}
+repeat 1000000
+batch
+enumerate id
+x = int(random() * 10)
+to_file env("FILE_ROOT") + "/out/stress/**/file.json", partition_by=[x] {
+  write_ndjson
+}

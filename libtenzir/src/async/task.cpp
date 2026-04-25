@@ -8,6 +8,8 @@
 
 #include "tenzir/async/task.hpp"
 
+#include "tenzir/detail/assert.hpp"
+
 #include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
 #include <folly/coro/Error.h>

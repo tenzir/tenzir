@@ -1,0 +1,9 @@
+error: cannot specify `external_id` when explicitly disabling `role`
+  --> tests/operators/to_amazon_security_lake/validation/error_null_role_with_external_id.tql:9:8
+   |
+ 9 |   role=null,
+   |        ^^^^ explicitly disabled
+   ⋮
+10 |   external_id="ext"
+   |               ^^^^^ 
+   |
