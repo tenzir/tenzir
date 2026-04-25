@@ -7,17 +7,7 @@
   forceClang ? false,
 }:
 rec {
-  integration-test-tree =
-    lib.fileset.difference
-      (lib.fileset.unions [
-        ../test-legacy
-      ])
-      (
-        lib.fileset.unions [
-          # to_sentinelone_data_lake is not supported in the nix build.
-          ../test-legacy/tests/operators/to_sentinelone_data_lake
-        ]
-      );
+  integration-test-tree = ../test-legacy;
   tenzir-tree = lib.fileset.unions [
     ../changelog
     ../cmake

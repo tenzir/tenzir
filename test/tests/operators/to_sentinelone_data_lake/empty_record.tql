@@ -1,0 +1,2 @@
+from {}
+to_sentinelone_data_lake "https://example.com", token="TOKEN", _dry_run=true
