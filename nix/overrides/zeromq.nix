@@ -1,8 +1,7 @@
 {
-  asciidoc,
+  buildPackages,
   lib,
   stdenv,
-  xmlto,
   zeromq,
 }:
 let
@@ -13,10 +12,10 @@ zeromq.overrideAttrs (orig: {
     if buildDocs then
       orig.nativeBuildInputs
     else
-      lib.subtractLists [
-        asciidoc
-        xmlto
-      ] orig.nativeBuildInputs;
+      [
+        buildPackages.cmake
+        buildPackages.pkg-config
+      ];
 
   cmakeFlags =
     orig.cmakeFlags
