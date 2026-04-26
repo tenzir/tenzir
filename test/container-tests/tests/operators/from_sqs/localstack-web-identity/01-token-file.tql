@@ -1,13 +1,13 @@
-// Test load_sqs with web identity using token_file.
+// Test from_sqs with web identity using token_file.
 // Uses AssumeRoleWithWebIdentity with a token read from a file.
 // Each test uses its own queue to avoid message consumption conflicts.
-load_sqs env("LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE"), aws_iam={
+from_sqs env("LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE"), aws_iam={
   region: "us-east-1",
   assume_role: env("LOCALSTACK_WEB_IDENTITY_ROLE_ARN"),
   web_identity: {
     token_file: env("LOCALSTACK_WEB_IDENTITY_TOKEN_FILE")
   }
 }
-read_json
 head 3
+this = message.parse_json()
 sort id
