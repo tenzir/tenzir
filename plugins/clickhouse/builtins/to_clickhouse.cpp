@@ -79,23 +79,44 @@ public:
       .host = "",
       .port = args_.port ? *args_.port
                          : located<uint64_t>{default_port, location::unknown},
-      .user = "",
+      .user = "default",
       .password = "",
+      .default_database = None{},
+      .set_client_default_database = false,
       .ssl = args_.ssl,
       .table = args_.table,
       .mode = args_.mode,
       .primary = args_.primary,
       .operator_location = args_.operator_location,
     };
+    auto uri = std::string{};
+    auto requests = std::vector<secret_request>{};
+    auto has_uri = args_.uri && args_.uri->inner != secret::make_literal("");
+    if (has_uri) {
+      requests.push_back(make_secret_request("uri", *args_.uri, uri, dh));
+    } else {
+      requests.push_back(
+        make_secret_request("host", args_.host, args.host, dh));
+      requests.push_back(
+        make_secret_request("user", args_.user, args.user, dh));
+      requests.push_back(
+        make_secret_request("password", args_.password, args.password, dh));
+    }
     /// GCC 14.2 erroneously warns that the first temporary here may used as a
     /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
     /// name somehow circumvents this warning.
-    auto x = ctrl.resolve_secrets_must_yield({
-      make_secret_request("host", args_.host, args.host, dh),
-      make_secret_request("user", args_.user, args.user, dh),
-      make_secret_request("password", args_.password, args.password, dh),
-    });
+    auto x = ctrl.resolve_secrets_must_yield(std::move(requests));
     co_yield std::move(x);
+    if (has_uri) {
+      auto parsed = parse_connection_uri(uri, args_.uri->source, dh);
+      if (not parsed) {
+        co_return;
+      }
+      apply_connection_uri(args, *parsed);
+      if (not parsed->has_port()) {
+        args.port = located<uint64_t>{default_port, location::unknown};
+      }
+    }
     auto client = easy_client::make(args, ctrl.self().system().config(),
                                     ctrl.diagnostics());
     if (not client) {
@@ -132,8 +153,12 @@ public:
   } catch (const panic_exception& e) {
     throw;
   } catch (const std::exception& e) {
-    diagnostic::error("ClickHouse error: {}", e.what())
-      .primary(args_.operator_location)
+    auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                  .primary(args_.operator_location);
+    add_tls_client_diagnostic_hints(std::move(diag),
+                                    args_.ssl.get_tls(&ctrl).inner,
+                                    "ClickHouse", clickhouse_plaintext_port,
+                                    clickhouse_tls_port)
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -143,6 +168,7 @@ private:
 };
 
 struct ToClickhouseArgs {
+  located<secret> uri = {secret::make_literal(""), location::unknown};
   located<secret> host = {secret::make_literal("localhost"), location::unknown};
   Option<located<uint64_t>> port = None{};
   located<secret> user = {secret::make_literal("default"), location::unknown};
@@ -182,7 +208,7 @@ public:
     auto& dh = ctx.dh();
     auto mode_val = from_string<enum clickhouse::mode>(args_.mode.inner);
     TENZIR_ASSERT(mode_val);
-    auto primary = std::optional<located<std::string>>{};
+    auto primary = Option<located<std::string>>{};
     if (args_.primary) {
       // We know that primary is a top level field, as it was validated.
       primary = {args_.primary->path().front().id.name,
@@ -196,23 +222,44 @@ public:
       .host = "", // resolved as secret below.
       .port = args_.port ? *args_.port
                          : located<uint64_t>{default_port, location::unknown},
-      .user = "",     // resolved as secret below.
-      .password = "", // resolved as secret below.
+      .user = "default", // resolved as secret below.
+      .password = "",    // resolved as secret below.
+      .default_database = None{},
+      .set_client_default_database = false,
       .ssl = std::move(ssl),
       .table = args_.table,
       .mode = {*mode_val, args_.mode.source},
       .primary = std::move(primary),
       .operator_location = args_.operator_location,
     };
-    auto requests = std::vector<secret_request>{
-      make_secret_request("host", args_.host, client_args.host, dh),
-      make_secret_request("user", args_.user, client_args.user, dh),
-      make_secret_request("password", args_.password, client_args.password, dh),
-    };
+    auto uri = std::string{};
+    auto requests = std::vector<secret_request>{};
+    auto has_uri = args_.uri.inner != secret::make_literal("");
+    if (has_uri) {
+      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
+    } else {
+      requests.push_back(
+        make_secret_request("host", args_.host, client_args.host, dh));
+      requests.push_back(
+        make_secret_request("user", args_.user, client_args.user, dh));
+      requests.push_back(make_secret_request("password", args_.password,
+                                             client_args.password, dh));
+    }
     auto ok = co_await ctx.resolve_secrets(std::move(requests));
     if (not ok) {
       state_->done.store(true, std::memory_order_release);
       co_return;
+    }
+    if (has_uri) {
+      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
+      if (not parsed) {
+        state_->done.store(true, std::memory_order_release);
+        co_return;
+      }
+      apply_connection_uri(client_args, *parsed);
+      if (not parsed->has_port()) {
+        client_args.port = located<uint64_t>{default_port, location::unknown};
+      }
     }
     state_->worker_handles.reserve(args_.jobs);
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
@@ -223,8 +270,11 @@ public:
       } catch (const panic_exception&) {
         throw;
       } catch (const std::exception& e) {
-        diagnostic::error("ClickHouse error: {}", e.what())
-          .primary(args_.operator_location)
+        auto diag = diagnostic::error("ClickHouse error: {}", e.what())
+                      .primary(args_.operator_location);
+        add_tls_client_diagnostic_hints(std::move(diag), tls_enabled,
+                                        "ClickHouse", clickhouse_plaintext_port,
+                                        clickhouse_tls_port)
           .emit(dh);
         state_->done.store(true, std::memory_order_release);
         co_return;
@@ -364,10 +414,12 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToClickhouseArgs, ToClickhouse>{};
-    d.named_optional("host", &ToClickhouseArgs::host);
+    auto uri_arg = d.named_optional("uri", &ToClickhouseArgs::uri);
+    auto host_arg = d.named_optional("host", &ToClickhouseArgs::host);
     auto port_arg = d.named("port", &ToClickhouseArgs::port);
-    d.named_optional("user", &ToClickhouseArgs::user);
-    d.named_optional("password", &ToClickhouseArgs::password);
+    auto user_arg = d.named_optional("user", &ToClickhouseArgs::user);
+    auto password_arg
+      = d.named_optional("password", &ToClickhouseArgs::password);
     auto table_arg = d.named("table", &ToClickhouseArgs::table, "string");
     auto mode_arg = d.named_optional("mode", &ToClickhouseArgs::mode);
 
@@ -377,9 +429,22 @@ public:
       = tls_options{}.add_to_describer(d, &ToClickhouseArgs::tls);
     d.operator_location(&ToClickhouseArgs::operator_location);
     d.validate(
-      [table_arg, mode_arg, port_arg, primary_arg, jobs_arg,
+      [uri_arg, host_arg, table_arg, mode_arg, port_arg, user_arg, password_arg,
+       primary_arg, jobs_arg,
        tls_validate = std::move(tls_validate)](DescribeCtx& ctx) -> Empty {
         tls_validate(ctx);
+        auto has_uri = ctx.get(uri_arg).has_value();
+        auto has_host = ctx.get(host_arg).has_value();
+        auto has_port = ctx.get(port_arg).has_value();
+        auto has_user = ctx.get(user_arg).has_value();
+        auto has_password = ctx.get(password_arg).has_value();
+        if (has_uri and (has_host or has_port or has_user or has_password)) {
+          diagnostic::error(
+            "`uri` and explicit connection arguments are mutually exclusive")
+            .primary(ctx.get_location(uri_arg).value_or(location::unknown))
+            .emit(ctx);
+          return {};
+        }
         if (auto port = ctx.get(port_arg)) {
           if (port->inner == 0 or port->inner > 65535) {
             diagnostic::error("`port` must be between 1 and 65535")
@@ -387,7 +452,7 @@ public:
               .emit(ctx);
           }
         }
-        auto mode_enum = std::optional<enum mode>{};
+        auto mode_enum = Option<enum mode>{};
         if (auto mode_opt = ctx.get(mode_arg)) {
           if (auto x = from_string<enum mode>(mode_opt->inner)) {
             mode_enum = x;

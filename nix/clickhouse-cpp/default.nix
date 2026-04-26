@@ -15,7 +15,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "clickhouse-cpp";
-  version = "2.5.1-unstable-2025-02-26";
+  version = "2.6.1-unstable-2026-04-21";
 
   outputs = [
     "out"
@@ -23,13 +23,11 @@ stdenv.mkDerivation {
     #"dev"
   ];
 
-  # https://github.com/ClickHouse/clickhouse-cpp/pull/411 for easier
-  # integration.
   src = fetchFromGitHub {
-    owner = "ClickHouse";
+    owner = "IyeOnline";
     repo = "clickhouse-cpp";
-    rev = "6b5109cf8d12525bc7d9ae6ba423ec3e23de2b33";
-    hash = "sha256-DAvJNaSKFS2HYHtJh4Q7x91fdmonFt3KITLeZKaOayw=";
+    rev = "5863942447ddb2698648335a179230f84a7e3cae";
+    hash = "sha256-2mwr49z7Dyl25gGPsq+uHM0atnGaRwyqxLe0/ecOLD0=";
   };
 
   nativeBuildInputs = [
@@ -63,7 +61,7 @@ stdenv.mkDerivation {
 
   meta = {
     description = "C++ client library for ClickHouse";
-    homepage = "https://github.com/ClickHouse/clickhouse-cpp";
+    homepage = "https://github.com/IyeOnline/clickhouse-cpp/tree/topic/tuple-names-and-bool";
     license = lib.licenses.asl20;
     maintainers = with lib.maintainers; [ tobim ];
     platforms = lib.platforms.all;

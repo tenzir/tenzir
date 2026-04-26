@@ -1,0 +1,18 @@
+from {
+  id: 1,
+  meta: {
+    source: "sensor_a",
+    location: {
+      building: "HQ",
+      floor: 3,
+    },
+  },
+  tags: ["alpha", "beta"],
+}
+to_clickhouse table="fc_nested",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

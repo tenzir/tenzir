@@ -1,0 +1,8 @@
+{
+  id: 1,
+  label: "alpha",
+}
+{
+  id: 2,
+  label: "beta",
+}
