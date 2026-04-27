@@ -5,15 +5,29 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import shutil
+import ssl
+import subprocess
 import tempfile
 import threading
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import fixture
+from tenzir_test.fixtures import FixtureUnavailable, current_options
+
+from ._utils import generate_self_signed_cert
 
 _HOST = "127.0.0.1"
 _EXPECTED_TOKEN = "test-token-s1-12345"
+
+
+@dataclass(frozen=True)
+class SentinelOneOptions:
+    tls: bool = False
+
 
 # Predefined columnar responses keyed by the `query` field in the POST body.
 #
@@ -248,29 +262,58 @@ def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
     return SentinelOneHandler
 
 
-@fixture()
+@fixture(name="sentinelone", options=SentinelOneOptions)
 def sentinelone() -> Iterator[dict[str, str]]:
     """Start a mock SentinelOne Data Lake API server on a random port.
 
     Exports:
-      S1_FIXTURE_URL   - base URL of the mock server (http://127.0.0.1:<port>)
+      S1_FIXTURE_URL   - base URL of the mock server
       S1_FIXTURE_TOKEN - bearer token expected by the server
       S1_FIXTURE_CAPTURE_FILE - JSONL file containing captured addEvents calls
+      S1_FIXTURE_CAFILE - CA certificate path when tls=true
     """
+    opts = current_options("sentinelone")
     fd, capture_path = tempfile.mkstemp(prefix="sentinelone-capture-", suffix=".jsonl")
     os.close(fd)
+    temp_dir: Path | None = None
+    tls_env: dict[str, str] = {}
+    if opts.tls:
+        temp_dir = Path(tempfile.mkdtemp(prefix="sentinelone-tls-"))
+        try:
+            cert_path, key_path, ca_path, _ = generate_self_signed_cert(
+                temp_dir,
+                common_name=_HOST,
+                san_entries=[f"IP:{_HOST}"],
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            if os.path.exists(capture_path):
+                os.remove(capture_path)
+            raise FixtureUnavailable(f"openssl unavailable: {exc}") from exc
+        tls_env = {
+            "S1_FIXTURE_CAFILE": str(ca_path),
+        }
     server = HTTPServer((_HOST, 0), _make_handler(capture_path))
+    if opts.tls:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
     port = server.server_address[1]
+    scheme = "https" if opts.tls else "http"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield {
-            "S1_FIXTURE_URL": f"http://{_HOST}:{port}",
+        env = {
+            "S1_FIXTURE_URL": f"{scheme}://{_HOST}:{port}",
             "S1_FIXTURE_TOKEN": _EXPECTED_TOKEN,
             "S1_FIXTURE_CAPTURE_FILE": capture_path,
         }
+        env.update(tls_env)
+        yield env
     finally:
         server.shutdown()
         thread.join(timeout=2)
         if os.path.exists(capture_path):
             os.remove(capture_path)
+        if temp_dir is not None:
+            shutil.rmtree(temp_dir, ignore_errors=True)

@@ -1,6 +1,6 @@
-error: `url` must start with `https://` or `http://`
+error: `url` must start with `https://`
  --> tests/operators/to_sentinelone_data_lake/validate_url_scheme.tql:6:26
   |
-6 | to_sentinelone_data_lake "ftp://example.com", token="TOKEN", _dry_run=true
-  |                          ^^^^^^^^^^^^^^^^^^^ 
+6 | to_sentinelone_data_lake "http://example.com", token="TOKEN", _dry_run=true
+  |                          ^^^^^^^^^^^^^^^^^^^^ 
   |

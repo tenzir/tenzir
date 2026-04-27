@@ -1,6 +1,7 @@
 suite: basic
 fixtures:
-  - sentinelone
+  - sentinelone:
+      tls: true
 timeout: 60
 skip:
   on:
