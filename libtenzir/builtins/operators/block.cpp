@@ -28,22 +28,18 @@ public:
   explicit Block(BlockArgs args) : args_{std::move(args)} {
   }
 
-  auto process(T input, Push<T>& push, OpCtx& ctx) -> Task<void> override {
+  auto start(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not did_block_) {
-      did_block_ = true;
-      co_await sleep_for(args_.duration);
-    }
-    co_await push(std::move(input));
+    co_await sleep_for(args_.duration);
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    serde("did_block", did_block_);
+  auto process(T input, Push<T>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await push(std::move(input));
   }
 
 private:
   BlockArgs args_;
-  bool did_block_ = false;
 };
 
 class block_operator final : public crtp_operator<block_operator> {
