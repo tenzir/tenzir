@@ -19,6 +19,7 @@
 
 #include <arrow/compute/api.h>
 
+#include <unordered_set>
 #include <unordered_map>
 
 namespace tenzir::plugins::group {
@@ -84,13 +85,22 @@ public:
   }
 
 protected:
+  auto snapshot_impl(Serde& serde) -> void {
+    serde("seen_keys", seen_keys_);
+  }
+
   auto process_impl(table_slice input, OpCtx& ctx) -> Task<void> {
     auto keys = eval(args_.over, input, ctx);
     auto groups = make_row_groups(keys);
     for (auto& group : groups) {
       auto sub_slice = take_rows(input, group.rows);
-      auto sub = ctx.get_sub(make_view(group.key));
-      if (not sub) {
+      auto sub = Option<AnySubHandle&>{};
+      if (seen_keys_.contains(group.key)) {
+        sub = ctx.get_sub(make_view(group.key));
+        if (not sub) {
+          continue;
+        }
+      } else {
         auto key_kind = constant_from_key(group.key);
         auto env = substitute_ctx::env_t{};
         env[args_.let] = std::move(key_kind);
@@ -99,6 +109,7 @@ protected:
         if (not copy.substitute(sub_ctx, true)) {
           continue;
         }
+        seen_keys_.emplace(group.key);
         sub = co_await ctx.spawn_sub(group.key, std::move(copy),
                                      tag_v<table_slice>);
       }
@@ -109,6 +120,7 @@ protected:
   }
 
   GroupArgs args_;
+  std::unordered_set<data> seen_keys_;
 };
 
 template <class Output>
@@ -126,6 +138,10 @@ public:
     TENZIR_UNUSED(push);
     co_await process_impl(std::move(input), ctx);
   }
+
+  auto snapshot(Serde& serde) -> void override {
+    snapshot_impl(serde);
+  }
 };
 
 template <>
@@ -137,6 +153,10 @@ public:
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     co_await process_impl(std::move(input), ctx);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    snapshot_impl(serde);
   }
 };
 
