@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -15,6 +16,8 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/view3.hpp>
+
+#include <arrow/compute/api.h>
 
 #include <unordered_map>
 
@@ -28,6 +31,53 @@ struct GroupArgs {
   let_id let;
 };
 
+struct RowGroup {
+  data key;
+  std::vector<int64_t> rows;
+};
+
+auto make_row_groups(multi_series const& keys) -> std::vector<RowGroup> {
+  auto result = std::vector<RowGroup>{};
+  auto group_lookup = std::unordered_map<data, size_t>{};
+  for (auto row = int64_t{0}; row < keys.length(); ++row) {
+    auto key = materialize(keys.view3_at(row));
+    auto [it, inserted] = group_lookup.try_emplace(key, result.size());
+    if (inserted) {
+      result.push_back(RowGroup{std::move(key), {}});
+    }
+    result[it->second].rows.push_back(row);
+  }
+  return result;
+}
+
+auto take_rows(table_slice const& input, std::vector<int64_t> const& rows)
+  -> table_slice {
+  TENZIR_ASSERT(not rows.empty());
+  auto builder = arrow::Int64Builder{arrow_memory_pool()};
+  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
+  for (auto row : rows) {
+    check(builder.Append(row));
+  }
+  auto indices = finish(builder);
+  auto datum = check(arrow::compute::Take(to_record_batch(input), indices));
+  TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
+  auto result = table_slice{datum.record_batch(), input.schema()};
+  result.offset(input.offset());
+  result.import_time(input.import_time());
+  return result;
+}
+
+auto constant_from_key(data const& key) -> ast::constant::kind {
+  return match(
+    key,
+    [](pattern const&) -> ast::constant::kind {
+      TENZIR_UNREACHABLE();
+    },
+    []<class T>(T const& value) -> ast::constant::kind {
+      return value;
+    });
+}
+
 class GroupBase {
 public:
   explicit GroupBase(GroupArgs args) : args_{std::move(args)} {
@@ -36,42 +86,12 @@ public:
 protected:
   auto process_impl(table_slice input, OpCtx& ctx) -> Task<void> {
     auto keys = eval(args_.over, input, ctx);
-    auto rows = input.rows();
-    // Build an ordered list of unique group keys and a boolean row-mask per
-    // group. We only materialize each key once on first encounter.
-    auto group_order = std::vector<data>{};
-    auto group_masks
-      = std::unordered_map<data, std::vector<bool>>{};
-    for (auto row = int64_t{0}; row < keys.length(); ++row) {
-      auto key = materialize(keys.view3_at(row));
-      auto [it, inserted]
-        = group_masks.try_emplace(key, std::vector<bool>(rows, false));
-      if (inserted) {
-        group_order.push_back(key);
-      }
-      it->second[static_cast<size_t>(row)] = true;
-    }
-    // For each group, extract a sub-slice via Arrow filter and route it.
-    for (auto& key : group_order) {
-      auto& mask = group_masks.at(key);
-      // Build the BooleanArray mask at the Arrow level — no series_builder.
-      auto builder = arrow::BooleanBuilder{arrow_memory_pool()};
-      check(builder.Reserve(static_cast<int64_t>(rows)));
-      for (auto v : mask) {
-        check(builder.Append(v));
-      }
-      auto arr = finish(builder);
-      auto sub_slice = filter(input, *arr);
-      auto sub = ctx.get_sub(make_view(key));
+    auto groups = make_row_groups(keys);
+    for (auto& group : groups) {
+      auto sub_slice = take_rows(input, group.rows);
+      auto sub = ctx.get_sub(make_view(group.key));
       if (not sub) {
-        auto key_kind = match(
-          key,
-          [](const pattern&) -> ast::constant::kind {
-            TENZIR_UNREACHABLE();
-          },
-          []<class T>(const T& v) -> ast::constant::kind {
-            return v;
-          });
+        auto key_kind = constant_from_key(group.key);
         auto env = substitute_ctx::env_t{};
         env[args_.let] = std::move(key_kind);
         auto sub_ctx = substitute_ctx{ctx, &env};
@@ -79,7 +99,8 @@ protected:
         if (not copy.substitute(sub_ctx, true)) {
           continue;
         }
-        sub = co_await ctx.spawn_sub(key, std::move(copy), tag_v<table_slice>);
+        sub = co_await ctx.spawn_sub(group.key, std::move(copy),
+                                     tag_v<table_slice>);
       }
       TENZIR_ASSERT(sub);
       std::ignore
