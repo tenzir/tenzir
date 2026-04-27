@@ -133,7 +133,7 @@ public:
       co_return Any{std::in_place_type<CurlDownloadEvent>, std::move(*event)};
     }
     co_return Any{std::in_place_type<CurlDownloadEvent>,
-                  CurlDownloadDone{CurlTransferStatus::local_abort}};
+                  CurlDownloadDone{.status = CurlTransferStatus::local_abort}};
   }
 
   auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
@@ -178,16 +178,12 @@ public:
         }
       },
       [&](CurlDownloadDone done) -> Task<void> {
-        if (done.status == CurlTransferStatus::finished) {
-          auto [code, response_code]
-            = session_->easy().get<curl::easy::info::response_code>();
-          if (code == curl::easy::code::ok
-              and (response_code < 200 or response_code > 299)) {
-            diagnostic::error("FTP download failed")
-              .primary(args_.url.source)
-              .note("FTP response code: {}", response_code)
-              .emit(ctx);
-          }
+        if (done.status == CurlTransferStatus::finished and done.response_code
+            and (*done.response_code < 200 or *done.response_code > 299)) {
+          diagnostic::error("FTP download failed")
+            .primary(args_.url.source)
+            .note("FTP response code: {}", *done.response_code)
+            .emit(ctx);
         }
         if (auto sub = ctx.get_sub(caf::none)) {
           lifecycle_ = Lifecycle::draining;

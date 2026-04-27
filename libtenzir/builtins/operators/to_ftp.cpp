@@ -297,17 +297,17 @@ private:
 
   auto emit_upload_result(OpCtx& ctx, CurlUploadResult& upload_result,
                           bool uploaded_anything, bool local_abort) -> void {
-    if (upload_result.is_ok()
-        and upload_result.unwrap() == CurlTransferStatus::finished
-        and uploaded_anything) {
-      auto [response_code_status, response_code]
-        = session_->easy().get<curl::easy::info::response_code>();
-      if (response_code_status == curl::easy::code::ok
-          and (response_code < 200 or response_code > 299)) {
-        diagnostic::error("FTP upload failed")
-          .primary(args_.url.source)
-          .note("FTP response code: {}", response_code)
-          .emit(ctx);
+    if (upload_result.is_ok()) {
+      auto const& done = upload_result.unwrap();
+      if (done.status == CurlTransferStatus::finished and done.response_code
+          and uploaded_anything) {
+        auto response_code = *done.response_code;
+        if (response_code < 200 or response_code > 299) {
+          diagnostic::error("FTP upload failed")
+            .primary(args_.url.source)
+            .note("FTP response code: {}", response_code)
+            .emit(ctx);
+        }
       }
     }
     if (upload_result.is_err() and not local_abort) {

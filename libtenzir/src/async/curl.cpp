@@ -58,6 +58,25 @@ auto curl_perform_failure(curl::multi::code code) -> CurlPerformResult {
   return Err{CurlError{CurlMultiError{code}}};
 }
 
+[[nodiscard]] auto response_code(curl::easy& easy) -> Option<long> {
+  auto [code, response_code] = easy.get<curl::easy::info::response_code>();
+  if (code != curl::easy::code::ok) {
+    return None{};
+  }
+  return response_code;
+}
+
+[[nodiscard]] auto curl_perform_result(CurlTransferStatus status)
+  -> CurlPerformResult {
+  return CurlTransferResult{.status = status};
+}
+
+[[nodiscard]] auto curl_perform_result(CurlTransferStatus status,
+                                       curl::easy& easy) -> CurlPerformResult {
+  return CurlTransferResult{.status = status,
+                            .response_code = response_code(easy)};
+}
+
 class UploadStream {
 public:
   explicit UploadStream(size_t capacity) : capacity_{capacity} {
@@ -596,7 +615,7 @@ private:
         complete(curl_perform_failure(result));
         return;
       }
-      complete(CurlTransferStatus::finished);
+      complete(curl_perform_result(CurlTransferStatus::finished, easy_));
       return;
     }
   }
@@ -612,7 +631,7 @@ private:
     if (download_) {
       download_->abort();
     }
-    complete(CurlTransferStatus::finished);
+    complete(curl_perform_result(CurlTransferStatus::finished, easy_));
   }
 
   auto cleanup() -> void {
@@ -825,7 +844,9 @@ struct CurlTransferState final
     if (result.is_err()) {
       co_return CurlDownloadFailed{std::move(result).unwrap_err()};
     }
-    co_return CurlDownloadDone{std::move(result).unwrap()};
+    auto done = std::move(result).unwrap();
+    co_return CurlDownloadDone{.status = done.status,
+                               .response_code = done.response_code};
   }
 
   auto abort() -> void {
@@ -908,12 +929,12 @@ struct CurlTransferState final
 private:
   static auto run_driver(std::shared_ptr<CurlTransferState> self)
     -> Task<void> {
-    auto result = CurlPerformResult{CurlTransferStatus::local_abort};
+    auto result = curl_perform_result(CurlTransferStatus::local_abort);
     try {
       result = co_await folly::coro::co_withCancellation(
         self->cancellation.getToken(), self->run());
     } catch (folly::OperationCancelled const&) {
-      result = CurlTransferStatus::local_abort;
+      result = curl_perform_result(CurlTransferStatus::local_abort);
     } catch (...) {
       std::terminate();
     }
@@ -922,7 +943,7 @@ private:
 
   auto take_result() -> Task<CurlUploadResult> {
     while (true) {
-      auto result = CurlPerformResult{CurlTransferStatus::local_abort};
+      auto result = curl_perform_result(CurlTransferStatus::local_abort);
       auto ready = false;
       {
         auto lock = std::lock_guard{mutex};
@@ -954,15 +975,15 @@ private:
       throw;
     }
     if (body.is_aborted()) {
-      co_return CurlTransferStatus::local_abort;
+      co_return curl_perform_result(CurlTransferStatus::local_abort);
     }
     if (not should_start_transfer) {
-      co_return CurlTransferStatus::finished;
+      co_return curl_perform_result(CurlTransferStatus::finished);
     }
     auto result
       = co_await perform_curl(session->executor, session->easy, &body, nullptr);
     if (body.is_aborted()) {
-      co_return CurlTransferStatus::local_abort;
+      co_return curl_perform_result(CurlTransferStatus::local_abort);
     }
     co_return result;
   }
@@ -970,12 +991,12 @@ private:
   auto run_download() -> Task<CurlPerformResult> {
     auto& body = **download;
     if (body.is_aborted()) {
-      co_return CurlTransferStatus::local_abort;
+      co_return curl_perform_result(CurlTransferStatus::local_abort);
     }
     auto result
       = co_await perform_curl(session->executor, session->easy, nullptr, &body);
     if (body.is_aborted()) {
-      co_return CurlTransferStatus::local_abort;
+      co_return curl_perform_result(CurlTransferStatus::local_abort);
     }
     co_return result;
   }
@@ -1105,6 +1126,9 @@ CurlSession::CurlSession(CurlSession&&) noexcept = default;
 auto CurlSession::operator=(CurlSession&&) noexcept -> CurlSession& = default;
 
 auto CurlSession::easy() -> curl::easy& {
+  if (impl_->state->is_busy()) {
+    panic("cannot access curl easy handle while a transfer is active");
+  }
   return impl_->state->easy;
 }
 

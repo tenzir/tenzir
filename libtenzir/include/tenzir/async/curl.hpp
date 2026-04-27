@@ -30,6 +30,11 @@ enum class CurlTransferStatus {
   local_abort,
 };
 
+struct CurlTransferResult {
+  CurlTransferStatus status;
+  Option<long> response_code = None{};
+};
+
 struct CurlEasyError {
   curl::easy::code code;
 };
@@ -42,7 +47,7 @@ using CurlError = variant<CurlEasyError, CurlMultiError>;
 
 auto to_string(CurlError const& error) -> std::string_view;
 
-using CurlUploadResult = Result<CurlTransferStatus, CurlError>;
+using CurlUploadResult = Result<CurlTransferResult, CurlError>;
 
 struct CurlDownloadChunk {
   chunk_ptr chunk;
@@ -50,6 +55,7 @@ struct CurlDownloadChunk {
 
 struct CurlDownloadDone {
   CurlTransferStatus status;
+  Option<long> response_code = None{};
 };
 
 struct CurlDownloadFailed {
@@ -122,8 +128,9 @@ private:
 
 /// Reusable async curl session.
 ///
-/// Configure `easy()` directly, then start one semantic transfer at a time. The
-/// transfer runs on the Folly IO executor provided to `make()`.
+/// Configure `easy()` directly while the session is idle, then start one
+/// semantic transfer at a time. The transfer runs on the Folly IO executor
+/// provided to `make()`.
 class CurlSession {
 public:
   static auto make(folly::Executor::KeepAlive<folly::IOExecutor> executor)
@@ -136,6 +143,8 @@ public:
   CurlSession(CurlSession&&) noexcept;
   auto operator=(CurlSession&&) noexcept -> CurlSession&;
 
+  /// Access the underlying easy handle for pre-transfer configuration.
+  /// Panics while a transfer is active.
   auto easy() -> curl::easy&;
 
   auto start_upload(size_t buffer_capacity = 16) -> CurlUploadTransfer;
