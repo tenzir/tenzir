@@ -19,8 +19,8 @@
 
 #include <arrow/compute/api.h>
 
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace tenzir::plugins::group {
 
@@ -194,8 +194,8 @@ public:
               return Group<void>{std::move(args)};
             };
           },
-          [&](tag<chunk_ptr>)
-            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+          [&](
+            tag<chunk_ptr>) -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
             diagnostic::error("subpipeline must not produce bytes")
               .primary(pipe.source)
               .emit(ctx);
