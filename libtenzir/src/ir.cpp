@@ -573,7 +573,7 @@ auto ast::pipeline::compile(compile_ctx ctx) and -> failure_or<ir::pipeline> {
         diagnostic::error("`match` is not implemented yet").primary(x).emit(ctx);
         return failure::promise();
       },
-      [&](ast::type_stmt& x) -> failure_or<void> {
+      [&](ast::type_stmt x) -> failure_or<void> {
         diagnostic::error(
           "type declarations are not yet supported within pipelines")
           .primary(x.type_location)

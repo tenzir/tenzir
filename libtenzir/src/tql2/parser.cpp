@@ -337,7 +337,8 @@ public:
 
   auto parse_type_def() -> ast::type_def {
     if (auto id = accept(tk::identifier)) {
-      return type_name{id.as_identifier()};
+      using tn = struct type_name;
+      return tn{id.as_identifier()};
     }
     if (auto lbracket = accept(tk::lbracket)) {
       auto scope = ignore_newlines(true);

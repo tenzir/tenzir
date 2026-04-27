@@ -279,6 +279,9 @@ auto expression::get_location() const -> location {
       },
       [&](format_expr const& x) {
         result = result.combine(x.get_location());
+      },
+      [&](type_expr const& x) {
+        result = result.combine(x.get_location());
       });
   }
   return result;
