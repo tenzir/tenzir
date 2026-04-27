@@ -38,11 +38,25 @@ auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   auto dh = null_diagnostic_handler{};
   auto reg = global_registry();
   auto ctx = compile_ctx::make_root(base_ctx{dh, *reg});
-  return where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
-    .unwrap();
+  auto compiled
+    = where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
+        .unwrap();
+  auto pipe = std::move(compiled).unwrap();
+  TENZIR_ASSERT(pipe.lets.empty());
+  TENZIR_ASSERT_EQ(pipe.operators.size(), 1);
+  return std::move(pipe.operators.front());
 }
 
 namespace {
+
+auto merge_compiled_pipeline(std::vector<ir::let>& lets,
+                             std::vector<Box<ir::Operator>>& operators,
+                             ir::pipeline pipe) -> void {
+  lets.insert(lets.end(), std::move_iterator{pipe.lets.begin()},
+              std::move_iterator{pipe.lets.end()});
+  operators.insert(operators.end(), std::move_iterator{pipe.operators.begin()},
+                   std::move_iterator{pipe.operators.end()});
+}
 
 class Set final : public Operator<table_slice, table_slice> {
 public:
@@ -451,6 +465,17 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
 
 } // namespace
 
+ir::CompileResult::CompileResult(Box<ir::Operator> op) {
+  pipeline_.operators.push_back(std::move(op));
+}
+
+ir::CompileResult::CompileResult(pipeline pipe) : pipeline_{std::move(pipe)} {
+}
+
+auto ir::CompileResult::unwrap() && -> pipeline {
+  return std::move(pipeline_);
+}
+
 auto ast::pipeline::compile(compile_ctx ctx) and -> failure_or<ir::pipeline> {
   // TODO: Or do we assume that entities are already resolved?
   TRY(resolve_entities(*this, ctx));
@@ -494,7 +519,8 @@ auto ast::pipeline::compile(compile_ctx ctx) and -> failure_or<ir::pipeline> {
             // were not defined, for example because it can then introduce those
             // bindings by itself.
             TRY(auto compiled, op.ir_plugin->compile(x, ctx));
-            operators.push_back(std::move(compiled));
+            merge_compiled_pipeline(lets, operators,
+                                    std::move(compiled).unwrap());
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
@@ -513,11 +539,7 @@ auto ast::pipeline::compile(compile_ctx ctx) and -> failure_or<ir::pipeline> {
             // non-constant arguments, if we want to use the same `let`
             // mechanism, then we could introduce a new constant that can store
             // expressions that will be evaluated later.
-            lets.insert(lets.end(), std::move_iterator{pipe.lets.begin()},
-                        std::move_iterator{pipe.lets.end()});
-            operators.insert(operators.end(),
-                             std::move_iterator{pipe.operators.begin()},
-                             std::move_iterator{pipe.operators.end()});
+            merge_compiled_pipeline(lets, operators, std::move(pipe));
             return {};
           });
       },

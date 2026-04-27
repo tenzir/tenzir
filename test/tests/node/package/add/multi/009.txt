@@ -1,0 +1,24 @@
+{
+  id: "test3",
+  name: "Test Package with inline config",
+  author: "Tenzir",
+  description: "A package used in integration tests.\nThis package uses overrides to enable certain fields.\n",
+  config: {
+    inputs: {},
+    overrides: {
+      contexts: {
+        "disabled-context-test3": {
+          type: "lookup-table",
+          disabled: false,
+        },
+      },
+      pipelines: {
+        nop: {
+          definition: "version\ndiscard\n",
+          disabled: false,
+        },
+      },
+    },
+    disabled: false,
+  },
+}

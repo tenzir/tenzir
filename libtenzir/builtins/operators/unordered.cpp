@@ -183,7 +183,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     auto loc = inv.op.get_location();
     if (inv.args.size() != 1) {
       diagnostic::error("`unordered` expects a single pipeline argument")

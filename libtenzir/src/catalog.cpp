@@ -15,9 +15,12 @@
 #include "tenzir/detail/set_operations.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
+#include "tenzir/double_synopsis.hpp"
+#include "tenzir/duration_synopsis.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/instrumentation.hpp"
+#include "tenzir/int64_synopsis.hpp"
 #include "tenzir/io/read.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
@@ -25,19 +28,264 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/query_context.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/time_synopsis.hpp"
+#include "tenzir/uint64_synopsis.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
 #include <ranges>
+#include <set>
 #include <string_view>
+#include <unordered_set>
 
 namespace tenzir {
+
+namespace {
+
+TENZIR_ENUM(catalog_slice_selector, fields, schemas, partitions);
+
+auto collect_synopses(const catalog_state& state)
+  -> std::vector<partition_synopsis_pair> {
+  auto result = std::vector<partition_synopsis_pair>{};
+  result.reserve(state.synopses_per_type.size());
+  for (const auto& [schema, id_synopsis_map] : state.synopses_per_type) {
+    for (const auto& [id, synopsis] : id_synopsis_map) {
+      result.push_back({id, synopsis});
+    }
+  }
+  return result;
+}
+
+auto collect_synopses(const catalog_state& state, const expression& filter)
+  -> caf::expected<std::vector<partition_synopsis_pair>> {
+  auto result = std::vector<partition_synopsis_pair>{};
+  const auto candidates = state.lookup(filter);
+  if (not candidates) {
+    return candidates.error();
+  }
+  for (const auto& [schema, candidate] : candidates->candidate_infos) {
+    const auto& partition_synopses = state.synopses_per_type.find(schema);
+    TENZIR_ASSERT(partition_synopses != state.synopses_per_type.end());
+    for (const auto& partition : candidate.partition_infos) {
+      const auto& synopsis = partition_synopses->second.find(partition.uuid);
+      if (synopsis == partition_synopses->second.end()) {
+        continue;
+      }
+      result.push_back({synopsis->first, synopsis->second});
+    }
+  }
+  return result;
+}
+
+auto field_type() -> type {
+  return type{
+    "tenzir.field",
+    record_type{
+      {"schema", string_type{}},
+      {"schema_id", string_type{}},
+      {"field", string_type{}},
+      {"path", list_type{string_type{}}},
+      {"index", list_type{uint64_type{}}},
+      {"type",
+       record_type{
+         {"kind", string_type{}},
+         {"category", string_type{}},
+         {"lists", uint64_type()},
+         {"name", string_type{}},
+         {"attributes", list_type{record_type{
+                          {"key", string_type{}},
+                          {"value", string_type{}},
+                        }}},
+       }},
+    },
+  };
+}
+
+struct field_context {
+  std::string name{};
+  std::vector<std::string> path{};
+  offset index{};
+};
+
+struct type_context {
+  type_kind kind{};
+  std::string category;
+  size_t lists{0};
+  std::string name{};
+  std::vector<std::pair<std::string, std::string>> attributes{};
+};
+
+struct schema_context {
+  field_context field;
+  type_context type;
+};
+
+auto traverse(type t) -> generator<schema_context> {
+  schema_context result;
+  while (const auto* list = try_as<list_type>(&t)) {
+    ++result.type.lists;
+    t = list->value_type();
+  }
+  result.type.name = t.name();
+  for (auto [key, value] : t.attributes()) {
+    result.type.attributes.emplace_back(key, value);
+  }
+  result.type.kind = t.kind();
+  if (result.type.kind.is<record_type>()) {
+    result.type.category = "container";
+  } else {
+    result.type.category = "atomic";
+  }
+  TENZIR_ASSERT(not is<list_type>(t));
+  TENZIR_ASSERT(not is<map_type>(t));
+  if (const auto* record = try_as<record_type>(&t)) {
+    auto i = size_t{0};
+    for (const auto& field : record->fields()) {
+      result.field.name = field.name;
+      result.field.path.emplace_back(field.name);
+      result.field.index.emplace_back(i);
+      for (const auto& inner : traverse(field.type)) {
+        result.type = inner.type;
+        auto nested = not inner.field.name.empty();
+        if (nested) {
+          result.field.name = inner.field.name;
+          for (const auto& path : inner.field.path) {
+            result.field.path.push_back(path);
+          }
+          for (const auto& index : inner.field.index) {
+            result.field.index.push_back(index);
+          }
+        }
+        co_yield result;
+        if (nested) {
+          auto delta = inner.field.path.size();
+          result.field.path.resize(result.field.path.size() - delta);
+          delta = inner.field.index.size();
+          result.field.index.resize(result.field.index.size() - delta);
+        }
+      }
+      result.field.index.pop_back();
+      result.field.path.pop_back();
+      ++i;
+    }
+  } else {
+    co_yield result;
+  }
+}
+
+auto add_field(builder_ref builder, const type& t) -> void {
+  for (const auto& ctx : traverse(t)) {
+    auto row = builder.record();
+    row.field("schema").data(t.name());
+    row.field("schema_id").data(t.make_fingerprint());
+    row.field("field").data(ctx.field.name);
+    auto path = row.field("path").list();
+    for (const auto& part : ctx.field.path) {
+      path.data(part);
+    }
+    auto index = row.field("index").list();
+    for (auto i : ctx.field.index) {
+      index.data(uint64_t{i});
+    }
+    auto type = row.field("type").record();
+    type.field("kind").data(to_string(ctx.type.kind));
+    type.field("category").data(ctx.type.category);
+    type.field("lists").data(ctx.type.lists);
+    type.field("name").data(ctx.type.name);
+    auto attrs = type.field("attributes").list();
+    for (const auto& [key, value] : ctx.type.attributes) {
+      auto attr = attrs.record();
+      attr.field("key").data(key);
+      attr.field("value").data(value);
+    }
+  }
+}
+
+auto build_field_slices(const std::vector<partition_synopsis_pair>& synopses)
+  -> std::vector<table_slice> {
+  auto fields = std::set<type>{};
+  for (const auto& synopsis : synopses) {
+    fields.insert(synopsis.synopsis->schema);
+  }
+  auto builder = series_builder{field_type()};
+  for (const auto& schema : fields) {
+    add_field(builder, schema);
+  }
+  return builder.finish_as_table_slice();
+}
+
+auto build_schema_slices(const std::vector<partition_synopsis_pair>& synopses)
+  -> std::vector<table_slice> {
+  auto schemas = std::unordered_set<type>{};
+  for (const auto& [id, synopsis] : synopses) {
+    TENZIR_UNUSED(id);
+    TENZIR_ASSERT(synopsis);
+    TENZIR_ASSERT(synopsis->schema);
+    schemas.insert(synopsis->schema);
+  }
+  auto builder = series_builder{};
+  auto result = std::vector<table_slice>{};
+  result.reserve(schemas.size());
+  for (const auto& schema : schemas) {
+    builder.data(schema.to_definition());
+    result.push_back(builder.finish_assert_one_slice(
+      fmt::format("tenzir.schema.{}", schema.make_fingerprint())));
+  }
+  return result;
+}
+
+auto build_partition_slices(const std::vector<partition_synopsis_pair>& synopses)
+  -> std::vector<table_slice> {
+  auto builder = series_builder{};
+  for (const auto& synopsis : synopses) {
+    auto event = builder.record();
+    event.field("uuid").data(fmt::to_string(synopsis.uuid));
+    event.field("memusage").data(synopsis.synopsis->memusage());
+    event.field("diskusage")
+      .data(synopsis.synopsis->store_file.size
+            + synopsis.synopsis->indexes_file.size
+            + synopsis.synopsis->sketches_file.size);
+    event.field("events").data(synopsis.synopsis->events);
+    event.field("min_import_time").data(synopsis.synopsis->min_import_time);
+    event.field("max_import_time").data(synopsis.synopsis->max_import_time);
+    event.field("version").data(synopsis.synopsis->version);
+    event.field("schema").data(synopsis.synopsis->schema.name());
+    event.field("schema_id").data(synopsis.synopsis->schema.make_fingerprint());
+    event.field("internal")
+      .data(synopsis.synopsis->schema.attribute("internal").has_value());
+    auto add_resource = [&](std::string_view key, const resource& value) {
+      auto x = event.field(key).record();
+      x.field("url").data(value.url);
+      x.field("size").data(value.size);
+    };
+    add_resource("store", synopsis.synopsis->store_file);
+    add_resource("indexes", synopsis.synopsis->indexes_file);
+    add_resource("sketches", synopsis.synopsis->sketches_file);
+  }
+  return builder.finish_as_table_slice("tenzir.partition");
+}
+
+auto build_catalog_slices(catalog_slice_selector selector,
+                          const std::vector<partition_synopsis_pair>& synopses)
+  -> std::vector<table_slice> {
+  switch (selector) {
+    case catalog_slice_selector::fields:
+      return build_field_slices(synopses);
+    case catalog_slice_selector::schemas:
+      return build_schema_slices(synopses);
+    case catalog_slice_selector::partitions:
+      return build_partition_slices(synopses);
+  }
+  TENZIR_UNREACHABLE();
+}
+
+} // namespace
 
 auto catalog_lookup_result::size() const noexcept -> size_t {
   return std::accumulate(candidate_infos.begin(), candidate_infos.end(),
@@ -486,41 +734,46 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
       // if (self->state().mail_cache) {
       //   return self->state().stash<std::vector<partition_synopsis_pair>>();
       // }
-      std::vector<partition_synopsis_pair> result;
-      result.reserve(self->state().synopses_per_type.size());
-      for (const auto& [type, id_synopsis_map] :
-           self->state().synopses_per_type) {
-        for (const auto& [id, synopsis] : id_synopsis_map) {
-          result.push_back({id, synopsis});
-        }
-      }
-      return result;
+      return collect_synopses(self->state());
     },
     [self](atom::get, const expression& filter)
       -> caf::result<std::vector<partition_synopsis_pair>> {
       // if (self->state().mail_cache) {
       //   return self->state().stash<std::vector<partition_synopsis_pair>>();
       // }
-      auto result = std::vector<partition_synopsis_pair>{};
-      const auto candidates = self->state().lookup(filter);
-      if (not candidates) {
-        return candidates.error();
+      return collect_synopses(self->state(), filter);
+    },
+    [self](atom::get, const std::string& selector)
+      -> caf::result<std::vector<table_slice>> {
+      const auto parsed = from_string<catalog_slice_selector>(selector);
+      if (not parsed) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("unsupported catalog get selector: "
+                                           "{}",
+                                           selector));
       }
-      for (const auto& [schema, candidate] : candidates->candidate_infos) {
-        const auto& partition_synopses
-          = self->state().synopses_per_type.find(schema);
-        TENZIR_ASSERT(partition_synopses
-                      != self->state().synopses_per_type.end());
-        for (const auto& partition : candidate.partition_infos) {
-          const auto& synopsis
-            = partition_synopses->second.find(partition.uuid);
-          if (synopsis == partition_synopses->second.end()) {
-            continue;
-          }
-          result.push_back({synopsis->first, synopsis->second});
-        }
+      return build_catalog_slices(*parsed, collect_synopses(self->state()));
+    },
+    [self](atom::get, const std::string& selector,
+           const expression& filter) -> caf::result<std::vector<table_slice>> {
+      const auto parsed = from_string<catalog_slice_selector>(selector);
+      if (not parsed) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("unsupported catalog get selector: "
+                                           "{}",
+                                           selector));
       }
-      return result;
+      if (*parsed != catalog_slice_selector::partitions) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("filtered catalog get is only "
+                                           "supported for partitions, got {}",
+                                           selector));
+      }
+      const auto synopses = collect_synopses(self->state(), filter);
+      if (not synopses) {
+        return synopses.error();
+      }
+      return build_catalog_slices(*parsed, *synopses);
     },
     [self](atom::erase, uuid partition) -> caf::result<atom::ok> {
       if (self->state().cache) {

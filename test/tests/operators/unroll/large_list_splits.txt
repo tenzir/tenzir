@@ -1,0 +1,5 @@
+{
+  rows: 65537,
+  split_batches: true,
+  bounded_batches: true,
+}

@@ -39,8 +39,7 @@ def find_free_port(sock_type: int = socket.SOCK_STREAM) -> int:
             if _is_port_available(port, sock_type):
                 return port
     raise RuntimeError(
-        "exhausted localhost fixture port range "
-        f"{_PORT_RANGE_START}-{_PORT_RANGE_END}"
+        f"exhausted localhost fixture port range {_PORT_RANGE_START}-{_PORT_RANGE_END}"
     )
 
 

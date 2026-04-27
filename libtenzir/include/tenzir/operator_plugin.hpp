@@ -165,7 +165,7 @@ public:
   auto describe_shared() const -> std::shared_ptr<const Description>;
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> final;
+    -> failure_or<ir::CompileResult> final;
 
 private:
   mutable std::once_flag desc_init_flag_;
@@ -953,6 +953,7 @@ using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
 using _::operator_plugin::Spawn;
+using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;
 
 } // namespace tenzir

@@ -1,0 +1,18 @@
+---
+fixtures:
+  - zmq:
+      role: subscriber
+      mode: connect
+skip:
+  on: fixture-unavailable
+assertions:
+  fixtures:
+    zmq:
+      received_contains: '"line":"hello-from-serve_zmq"'
+timeout: 60
+---
+
+from {
+  line: "hello-from-serve_zmq",
+}
+serve_zmq env("ZMQ_ENDPOINT"), encoding="ndjson", monitor=true

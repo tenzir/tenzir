@@ -9,6 +9,7 @@
 #include "tenzir/arc.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/oneshot.hpp"
+#include "tenzir/async/semaphore.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/co_match.hpp"
@@ -19,6 +20,7 @@
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -54,6 +56,17 @@ struct AcceptHttpArgs {
   Option<located<data>> tls;
   located<ir::pipeline> parser;
   let_id request;
+
+  auto get_max_request_size() const -> size_t {
+    if (not max_request_size) {
+      return static_cast<size_t>(10 * 1024 * 1024);
+    }
+    return detail::narrow<size_t>(max_request_size->inner);
+  }
+
+  auto get_max_connections() const -> uint64_t {
+    return max_connections ? max_connections->inner : uint64_t{10};
+  }
 };
 
 struct ParsedEndpoint {
@@ -244,6 +257,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
 }
 
 struct RequestMetadata {
+  std::string client_ip;
   std::vector<std::pair<std::string, std::string>> headers;
   std::vector<std::pair<std::string, std::string>> query;
   std::string path;
@@ -285,6 +299,7 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 auto make_request_metadata(proxygen::HTTPMessage const& request)
   -> RequestMetadata {
   auto result = RequestMetadata{};
+  result.client_ip = std::string{request.getClientIP()};
   request.getHeaders().forEach([&](std::string& k, std::string& v) {
     result.headers.emplace_back(k, v);
   });
@@ -374,26 +389,17 @@ class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
   RequestHandler(AcceptHttpArgs args, Arc<MessageQueue> queue,
                  Arc<Atomic<uint64_t>> request_id_gen,
-                 Arc<Atomic<uint64_t>> active_connections,
-                 size_t max_request_size, uint64_t max_connections)
+                 Arc<Semaphore> active_connections)
     : args_{std::move(args)},
       queue_{std::move(queue)},
       request_id_gen_{std::move(request_id_gen)},
-      active_connections_{std::move(active_connections)},
-      max_request_size_{max_request_size},
-      max_connections_{max_connections} {
+      active_connections_{std::move(active_connections)} {
   }
 
   auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
                      proxygen::coro::HTTPSourceHolder request_source)
     -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
-    auto previous
-      = active_connections_->fetch_add(1, std::memory_order_acq_rel);
-    if (previous >= max_connections_) {
-      active_connections_->fetch_sub(1, std::memory_order_acq_rel);
-      co_await queue_->enqueue(Noop{});
-      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(503);
-    }
+    auto permit = co_await active_connections_->acquire();
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
     std::string path;
     auto bytes_received = size_t{};
@@ -414,7 +420,7 @@ public:
         auto content_length_header = std::string_view{
           msg->getHeaders().getSingleOrEmpty("Content-Length")};
         if (auto content_length = parse_number<size_t>(content_length_header);
-            content_length and *content_length > max_request_size_) {
+            content_length and *content_length > args_.get_max_request_size()) {
           response_signal->send(413); // payload too large
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
@@ -436,7 +442,7 @@ public:
         if (not queue.empty()) {
           auto iobuf = queue.move();
           iobuf->coalesce();
-          if (bytes_received + iobuf->length() > max_request_size_) {
+          if (bytes_received + iobuf->length() > args_.get_max_request_size()) {
             response_signal->send(413); // payload too large
             co_return proxygen::coro::HTTPSourceReader::Cancel;
           }
@@ -454,14 +460,19 @@ public:
         response_signal->send(400);
       });
     // read request
-    co_await reader.read(detail::narrow<uint32_t>(max_request_size_));
+    co_await reader.read(
+      detail::narrow<uint32_t>(args_.get_max_request_size()));
     // notify request finished
     co_await queue_->enqueue(RequestFinished{request_id});
     // send response
     auto res_status = co_await response_signal->recv();
-    // Decrement before dismissing the guard so the operator sees the updated
-    // count, then wake it to re-evaluate maybe_finish_draining.
-    active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+    // The Baton inside Oneshot resumes us inline on whatever thread called
+    // send(), which is the executor fiber (via finish_sub).  We must
+    // reschedule back to the proxygen IO EventBase before touching the
+    // queue or returning the response, because proxygen writes the
+    // response on this coroutine's executor.
+    permit.release();
+    co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
     if (res_status != 200) {
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
@@ -474,14 +485,14 @@ private:
   AcceptHttpArgs args_;
   Arc<MessageQueue> queue_;
   Arc<Atomic<uint64_t>> request_id_gen_;
-  Arc<Atomic<uint64_t>> active_connections_;
-  size_t max_request_size_;
-  uint64_t max_connections_;
+  Arc<Semaphore> active_connections_;
 };
 
 class AcceptHttp final : public Operator<void, table_slice> {
 public:
-  explicit AcceptHttp(AcceptHttpArgs args) : args_{std::move(args)} {
+  explicit AcceptHttp(AcceptHttpArgs args)
+    : args_{std::move(args)},
+      active_connections_{std::in_place, args_.get_max_connections()} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -490,11 +501,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    active_connections_->store(0, std::memory_order_relaxed);
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
     auto request_handler = std::make_shared<RequestHandler>(
-      args_, message_queue_, request_id_gen, active_connections_,
-      get_max_request_size(), get_max_connections());
+      args_, message_queue_, request_id_gen, active_connections_);
     try {
       auto server = proxygen::coro::ScopedHTTPServer::start(
         std::move(config.unwrap()), std::move(request_handler));
@@ -576,12 +585,17 @@ public:
           decompressor = http::make_decompressor(msg.content_encoding, ctx);
         }
         auto request_id = msg.request_id;
+        auto bytes_read = ctx.make_counter(
+          MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
+                                      msg.metadata.client_ip)},
+          MetricsDirection::read, MetricsVisibility::external_);
         {
           auto active_requests = co_await active_requests_.lock();
           active_requests->emplace(
             request_id, ActiveRequest{.metadata = std::move(msg.metadata),
                                       .decompressor = std::move(decompressor),
-                                      .finished = msg.response_signal});
+                                      .finished = msg.response_signal,
+                                      .bytes_read = std::move(bytes_read)});
         }
         co_await ctx.spawn_sub(request_id, std::move(pipeline),
                                tag_v<chunk_ptr>);
@@ -600,7 +614,7 @@ public:
             co_return;
           }
           if (req.decompressor) {
-            auto remaining = get_max_request_size() - req.output_bytes;
+            auto remaining = args_.get_max_request_size() - req.output_bytes;
             auto input_span = std::span<std::byte const>{
               reinterpret_cast<std::byte const*>(chunk->data()), chunk->size()};
             auto decompressed = http::decompress_chunk(
@@ -612,7 +626,7 @@ public:
             }
             chunk = chunk::make(std::move(decompressed).unwrap());
           }
-          if (req.output_bytes + chunk->size() > get_max_request_size()) {
+          if (req.output_bytes + chunk->size() > args_.get_max_request_size()) {
             diagnostic::warning("request body exceeds `max_request_size`")
               .primary(args_.endpoint)
               .note("request path: {}", req.metadata.path)
@@ -622,6 +636,7 @@ public:
             req.finished->send(413); // payload too large
             co_return;
           }
+          req.bytes_read.add(chunk->size());
           req.output_bytes += chunk->size();
         }
         if (auto sub = ctx.get_sub(body.request_id)) {
@@ -712,6 +727,7 @@ private:
     size_t output_bytes = 0;
     bool drop_body = false;
     Arc<ResponseSignal> finished;
+    MetricsCounter bytes_read;
   };
 
   auto request_stop() -> Task<void> {
@@ -731,11 +747,12 @@ private:
     if (lifecycle_ != Lifecycle::draining) {
       co_return;
     }
-    // Wait until every handleRequest coroutine has decremented the counter.
+    // Wait until every handleRequest coroutine has returned its permit.
     // A handler that has been accepted but hasn't yet enqueued RequestStarted
     // is invisible to both active_requests_ and message_queue_, so checking
     // those alone is insufficient.
-    if (active_connections_->load(std::memory_order_acquire) != 0) {
+    if (active_connections_->available_permits()
+        != args_.get_max_connections()) {
       co_return;
     }
     auto active_requests = co_await active_requests_.lock();
@@ -792,8 +809,6 @@ private:
     // timeout ensures they close promptly after each response, allowing
     // the IO thread pool to drain during server shutdown.
     config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
-    config.socketConfig.maxNumPendingConnectionsPerWorker
-      = detail::narrow<uint32_t>(get_max_connections());
     if (tls_enabled) {
       auto tls_config = make_tls_config(args_, ctx.dh());
       if (not tls_config) {
@@ -805,24 +820,13 @@ private:
     co_return config;
   }
 
-  auto get_max_request_size() const -> size_t {
-    if (not args_.max_request_size) {
-      return static_cast<size_t>(10 * 1024 * 1024);
-    }
-    return detail::narrow<size_t>(args_.max_request_size->inner);
-  }
-
-  auto get_max_connections() const -> uint64_t {
-    return args_.max_connections ? args_.max_connections->inner : uint64_t{10};
-  }
-
   // --- config ---
   AcceptHttpArgs args_;
   // --- transient ---
-  mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{256}};
+  mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
   Mutex<std::unordered_map<uint64_t, ActiveRequest>> active_requests_{{}};
-  Arc<Atomic<uint64_t>> active_connections_{std::in_place, uint64_t{0}};
+  Arc<Semaphore> active_connections_;
   // --- state ---
   Lifecycle lifecycle_ = Lifecycle::running;
 };

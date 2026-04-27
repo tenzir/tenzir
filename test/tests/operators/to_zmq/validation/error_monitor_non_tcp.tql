@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+to_zmq "inproc://test", encoding="json", monitor=true

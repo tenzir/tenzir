@@ -1,0 +1,5 @@
+from {}
+repeat 100
+enumerate index
+@name = "count." + ("small" if index < 10 else "large")
+import

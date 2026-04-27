@@ -1,0 +1,23 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      host: tenzir-fixture-host
+      source: tenzir-test-metadata
+      sourcetype: tenzir:test:metadata
+      contains:
+        - alpha-metadata
+        - beta-metadata
+---
+
+from {message: "alpha-metadata", metadata: "ignored", seq: 1},
+     {message: "beta-metadata", metadata: "ignored", seq: 2}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          event={message: message, seq: seq},
+          host="tenzir-fixture-host",
+          source="tenzir-test-metadata",
+          sourcetype="tenzir:test:metadata",
+          index=env("SPLUNK_INDEX"),
+          compress=false

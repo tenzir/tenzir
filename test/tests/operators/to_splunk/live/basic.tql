@@ -1,0 +1,20 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      source: tenzir-test-basic
+      sourcetype: tenzir:test:basic
+      contains:
+        - hello-basic
+        - world-basic
+---
+
+from {message: "hello-basic", seq: 1},
+     {message: "world-basic", seq: 2}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          source="tenzir-test-basic",
+          sourcetype="tenzir:test:basic",
+          index=env("SPLUNK_INDEX"),
+          compress=false

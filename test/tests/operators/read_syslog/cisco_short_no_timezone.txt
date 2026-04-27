@@ -1,0 +1,9 @@
+{
+  facility: null,
+  severity: null,
+  timestamp: "Apr 14 08:45:52.113",
+  hostname: null,
+  app_name: "LINK-3-UPDOWN",
+  process_id: null,
+  content: "Interface GigabitEthernet0/1, changed state to up",
+}

@@ -293,6 +293,11 @@ default_active_store_actor::behavior_type default_active_store(
         {"store-type", self->state().store_type},
       };
     },
+    [self](const caf::exit_msg& msg) {
+      TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self,
+                   msg.source, msg.reason);
+      self->quit(msg.reason);
+    },
   };
 }
 

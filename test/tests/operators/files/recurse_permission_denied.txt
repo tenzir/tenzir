@@ -1,0 +1,25 @@
+{
+  path: "<ROOT>/after",
+  type: "directory",
+}
+{
+  path: "<ROOT>/after/data.json",
+  type: "regular",
+}
+{
+  path: "<ROOT>/blocked",
+  type: "directory",
+}
+{
+  path: "<ROOT>/dangling",
+  type: null,
+}
+{
+  path: "<ROOT>/ok",
+  type: "directory",
+}
+{
+  path: "<ROOT>/ok/data.json",
+  type: "regular",
+}
+warning: skipping unreadable directory `tests/operators/files/permission-root/blocked`: Permission denied

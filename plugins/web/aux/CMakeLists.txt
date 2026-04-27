@@ -58,7 +58,7 @@ set(BUILD_STATIC_LIBS ON)
 # Enable position-independent code for shared library compatibility
 set(CMAKE_POSITION_INDEPENDENT_CODE_BACKUP "${CMAKE_POSITION_INDEPENDENT_CODE}")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-add_subdirectory(llhttp)
+add_subdirectory(llhttp EXCLUDE_FROM_ALL)
 # Restore everything afterwards
 set(CMAKE_POSITION_INDEPENDENT_CODE "${CMAKE_POSITION_INDEPENDENT_CODE_BACKUP}")
 set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_BACKUP}")

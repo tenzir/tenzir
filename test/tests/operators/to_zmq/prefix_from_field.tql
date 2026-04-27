@@ -1,0 +1,27 @@
+---
+fixtures:
+  - zmq:
+      role: subscriber
+      mode: bind
+skip:
+  on: fixture-unavailable
+assertions:
+  fixtures:
+    zmq:
+      received_contains: "alerts/{\n  \"channel\": \"alerts/\",\n  \"line\": \"hello-from-to_zmq-prefix\"\n}"
+timeout: 60
+---
+
+from {
+  channel: "alerts/",
+  line: "hello-from-to_zmq-prefix",
+},
+{
+  channel: "alerts/",
+  line: "hello-from-to_zmq-prefix",
+},
+{
+  channel: "alerts/",
+  line: "hello-from-to_zmq-prefix",
+}
+to_zmq env("ZMQ_ENDPOINT"), encoding="json", prefix=channel, monitor=true

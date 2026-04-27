@@ -1,0 +1,19 @@
+let $xs = [1, 2, 3]
+let $r = {a: "zero", b: "one"}
+let $i = 1.uint()
+
+from (
+  {case: "zero", i: 0.uint(), xs: ["a", "b"], rec: {a: 10, b: 20}},
+  {case: "one", i: 1.uint(), xs: ["a", "b"], rec: {a: 10, b: 20}},
+  {case: "out-of-bounds", i: 2.uint(), xs: ["a", "b"], rec: {a: 10, b: 20}},
+)
+select \
+  case,
+  list_const = $xs[$i],
+  record_const = $r[$i],
+  list_dynamic = xs[i]?,
+  record_dynamic = rec[i]?,
+  list_get = xs.get(i, "fallback"),
+  record_get = rec.get(i, -1),
+  list_oob = $xs[99.uint()],
+  record_oob = $r[99.uint()]

@@ -186,7 +186,6 @@ private:
   auto parse_message(std::span<std::byte const> message,
                      Push<table_slice>& push, diagnostic_handler& dh) const
     -> Task<void> {
-    auto const expected_size = detail::narrow<int64_t>(message.size());
     auto input = std::make_shared<arrow::io::BufferReader>(
       arrow::Buffer::Wrap(message.data(), message.size()));
     auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(
@@ -222,25 +221,6 @@ private:
         co_return;
       }
       co_await push(table_slice{next->batch});
-    }
-    auto consumed_result = input->Tell();
-    if (not consumed_result.ok()) {
-      emit(diagnostic::error("failed to determine how many BITZ payload bytes "
-                             "were consumed")
-             .note("{}",
-                   consumed_result.status().ToStringWithoutContextLines()),
-           dh);
-      std::ignore = reader->Close();
-      co_return;
-    }
-    auto const trailing_bytes = expected_size - *consumed_result;
-    if (trailing_bytes != 0) {
-      emit(diagnostic::error("unexpected {} trailing bytes in BITZ payload",
-                             trailing_bytes)
-             .note("failed to consume the entire Feather stream"),
-           dh);
-      std::ignore = reader->Close();
-      co_return;
     }
     std::ignore = reader->Close();
   }

@@ -1,0 +1,18 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 1
+        method: PUT
+        path: /options/header
+        header_name: X-Test
+        header_value: from-to_http
+timeout: 60
+---
+
+from {
+  message: "hello",
+}
+to_http env("HTTP_FIXTURE_HEADER_URL"), method="PUT", headers={"X-Test": "from-to_http"} {
+  write_ndjson
+}

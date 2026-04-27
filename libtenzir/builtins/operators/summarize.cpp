@@ -6,11 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/task.hpp>
+#include <tenzir/atomic.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
@@ -22,6 +24,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -37,6 +40,8 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
+#include <folly/coro/BoundedQueue.h>
+#include <folly/coro/UnboundedQueue.h>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
@@ -214,6 +219,10 @@ public:
 
   auto cfg() const -> const config& {
     return cfg_;
+  }
+
+  auto saw_input() const noexcept -> bool {
+    return saw_input_;
   }
 
   auto make_bucket(session ctx) -> bucket2 {
@@ -733,37 +742,62 @@ public:
     auto& impl = *impl_;
 
     if (impl.cfg().frequency) {
-      // Periodic emission mode.
-      auto pending_flush = false;
-      detail::weak_run_delayed_loop(
-        &ctrl.self(), *impl.cfg().frequency,
-        [&] {
-          pending_flush = true;
-          ctrl.set_waiting(false);
-        },
-        false);
+      auto pending_flush = Atomic<bool>{false};
+      auto next_flush = Option<steady_clock::time_point>{};
       auto session = provider.as_session();
+      auto start_timer = [&] {
+        TENZIR_ASSERT(impl.cfg().frequency);
+        if (next_flush) {
+          return;
+        }
+        next_flush = steady_clock::now() + *impl.cfg().frequency;
+        detail::weak_run_delayed_loop(
+          &ctrl.self(), *impl.cfg().frequency,
+          [&] {
+            pending_flush.store(true, std::memory_order_release);
+            ctrl.set_waiting(false);
+          },
+          false);
+      };
+      if (impl.saw_input()) {
+        start_timer();
+      }
       for (const auto& slice : input) {
-        // Drain pending flushes that were scheduled while idle.
-        if (std::exchange(pending_flush, false)) {
-          for (auto result : impl.flush(session)) {
-            co_yield std::move(result);
+        auto now = steady_clock::now();
+        if (next_flush
+            and (pending_flush.load(std::memory_order_acquire)
+                 or *next_flush <= now)) {
+          TENZIR_ASSERT(impl.cfg().frequency);
+          while (*next_flush <= now) {
+            for (auto result : impl.flush(session)) {
+              co_yield std::move(result);
+            }
+            *next_flush += *impl.cfg().frequency;
           }
+          pending_flush.store(false, std::memory_order_release);
         }
         if (slice.rows() == 0) {
           co_yield {};
-        } else {
-          impl.add(slice, session);
+          continue;
         }
+        start_timer();
+        impl.add(slice, session);
       }
-      // Flush anything that may have been scheduled while consuming the last
-      // slices before producing the final result.
-      if (std::exchange(pending_flush, false)) {
-        for (auto result : impl.flush(session)) {
-          co_yield std::move(result);
+      auto now = steady_clock::now();
+      if (next_flush
+          and (pending_flush.load(std::memory_order_acquire)
+               or *next_flush <= now)) {
+        TENZIR_ASSERT(impl.cfg().frequency);
+        // Stream each overdue period immediately instead of buffering all
+        // catch-up slices in a temporary vector.
+        while (*next_flush <= now) {
+          for (auto result : impl.flush(session)) {
+            co_yield std::move(result);
+          }
+          *next_flush += *impl.cfg().frequency;
         }
+        pending_flush.store(false, std::memory_order_release);
       }
-      // Final emission when input ends.
       for (auto result : impl.finish(session)) {
         co_yield std::move(result);
       }
@@ -805,6 +839,24 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     provider_.emplace(session_provider::make(ctx.dh()));
+    if (impl_->cfg().frequency) {
+      auto frequency = *impl_->cfg().frequency;
+      ctx.spawn_task([frequency, frontier_queue = frontier_queue_,
+                      tick_queue = tick_queue_]() mutable -> Task<void> {
+        auto next_flush = co_await frontier_queue->dequeue();
+        while (true) {
+          while (auto frontier = frontier_queue->try_dequeue()) {
+            next_flush = std::max(next_flush, *frontier);
+          }
+          co_await sleep_until(next_flush);
+          co_await tick_queue->enqueue(TimerTick{next_flush});
+          next_flush += frequency;
+        }
+      });
+      if (impl_->saw_input()) {
+        arm_timer();
+      }
+    }
     co_return;
   }
 
@@ -816,9 +868,12 @@ public:
                           "from snapshot; restarting from empty state")
         .emit(provider_->as_session());
     }
-    co_await flush(push);
+    co_await flush_until(steady_clock::now(), push);
     if (input.rows() == 0) {
       co_return;
+    }
+    if (impl_->cfg().frequency and not next_flush_) {
+      arm_timer();
     }
     impl_->add(input, provider_->as_session());
     co_return;
@@ -827,38 +882,27 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
-    co_await flush(push);
     for (auto& slice : impl_->finish(provider_->as_session())) {
       co_await push(std::move(slice));
     }
     co_return FinalizeBehavior::done;
   }
 
-  /// Drives periodic flushing when `options={frequency: ...}` is set.
-  /// Sleeps until the next scheduled wall-clock deadline and marks a pending
-  /// flush. If process() runs before the scheduled task executes, it will flush
-  /// immediately and clear the pending flag so process_task() can skip it.
-  /// Without a frequency the default implementation waits forever.
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     if (not impl_->cfg().frequency) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    if (next_flush_ == steady_clock::time_point::min()) {
-      next_flush_ = steady_clock::now() + *impl_->cfg().frequency;
-    } else {
-      next_flush_ += *impl_->cfg().frequency;
-    }
-    co_await sleep_until(next_flush_);
-    pending_flush_ = true;
-    co_return {};
+    co_return co_await tick_queue_->dequeue();
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(result, ctx);
-    co_await flush(push);
+    TENZIR_UNUSED(ctx);
+    auto* tick = result.try_as<TimerTick>();
+    TENZIR_ASSERT(tick);
+    co_await flush_until(tick->deadline, push);
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -866,28 +910,47 @@ public:
   }
 
 private:
-  // Push a summary if a pending_flush_ is set.
-  // This only happens if frequency is set.
-  auto flush(Push<table_slice>& push) -> Task<void> {
-    if (not std::exchange(pending_flush_, false)) {
+  struct TimerTick {
+    steady_clock::time_point deadline;
+  };
+
+  // Carries the current flush frontier to the timer task. This is unbounded so
+  // catch-up updates never block the main operator path while the timer task is
+  // still waiting for an older tick to be consumed.
+  using FrontierQueue = folly::coro::UnboundedQueue<steady_clock::time_point>;
+  using TickQueue = folly::coro::BoundedQueue<TimerTick>;
+
+  auto arm_timer() -> void {
+    TENZIR_ASSERT(impl_->cfg().frequency);
+    TENZIR_ASSERT(not next_flush_);
+    next_flush_ = steady_clock::now() + *impl_->cfg().frequency;
+    frontier_queue_->enqueue(*next_flush_);
+  }
+
+  auto flush_until(steady_clock::time_point deadline, Push<table_slice>& push)
+    -> Task<void> {
+    if (not next_flush_) {
       co_return;
     }
-    for (auto& slice : impl_->flush(provider_->as_session())) {
-      co_await push(std::move(slice));
+    auto frontier_changed = false;
+    TENZIR_ASSERT(impl_->cfg().frequency);
+    while (*next_flush_ <= deadline) {
+      frontier_changed = true;
+      for (auto& slice : impl_->flush(provider_->as_session())) {
+        co_await push(std::move(slice));
+      }
+      *next_flush_ += *impl_->cfg().frequency;
+    }
+    if (frontier_changed) {
+      frontier_queue_->enqueue(*next_flush_);
     }
   }
 
   std::unique_ptr<implementation2> impl_;
-  // initialised in start() and reused across all calls
-  std::optional<session_provider> provider_;
-  /// Next wall-clock deadline for periodic flush. Mutable because await_task()
-  /// is const but advances the schedule each time it is awaited.
-  mutable steady_clock::time_point next_flush_
-    = steady_clock::time_point::min();
-  /// Set when await_task's sleep completes. If process() runs before
-  /// process_task(), it will perform the flush and clear this flag so the
-  /// scheduled task can skip its flush.
-  mutable bool pending_flush_ = false;
+  Option<session_provider> provider_;
+  Option<steady_clock::time_point> next_flush_;
+  Arc<FrontierQueue> frontier_queue_{std::in_place};
+  mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
 };
 
 class summarize_ir final : public ir::Operator {
@@ -969,7 +1032,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     // We use `operator_compiler_plugin` rather than
     // `OperatorPlugin`/`Describer` because `GenericIr` unconditionally routes
     // any `ast::assignment` arg to the named-argument path (look up LHS in a

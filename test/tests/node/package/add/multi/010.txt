@@ -1,0 +1,4 @@
+{
+  id: "test3/nop",
+  definition: "version\ndiscard\n",
+}

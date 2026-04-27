@@ -1,0 +1,15 @@
+---
+fixtures:
+  - zmq:
+      role: publisher
+      mode: bind
+      payload: '{"line":"hello-from-zmq"}'
+skip:
+  on: fixture-unavailable
+timeout: 60
+---
+
+from_zmq env("ZMQ_ENDPOINT") {
+  read_json
+}
+head 1

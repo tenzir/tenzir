@@ -1,0 +1,17 @@
+{
+  foo: 42,
+  bar: 7,
+}
+warning: `local` has no effect in the new executor
+ --> tests/operators/local_remote.tql:2:1
+  |
+2 | local {
+  | ~~~~~ 
+  |
+
+warning: `remote` has no effect in the new executor
+ --> tests/operators/local_remote.tql:6:1
+  |
+6 | remote {
+  | ~~~~~~ 
+  |
