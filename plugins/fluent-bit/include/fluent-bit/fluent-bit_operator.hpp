@@ -15,10 +15,10 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/channel.hpp>
-#include <tenzir/async/executor.hpp>
 #include <tenzir/async/pusher.hpp>
 #include <tenzir/atomic.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/concept/parseable/string.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -1004,7 +1004,7 @@ struct FluentBitSourceTimeout {};
 using FluentBitSourceMessage
   = variant<std::vector<chunk_ptr>, FluentBitSourceDone>;
 using FluentBitSourceTaskResult
-  = variant<Option<FluentBitSourceMessage>, FluentBitSourceTimeout>;
+  = variant<FluentBitSourceMessage, FluentBitSourceTimeout>;
 
 struct SourceBridgeLifetime {
   Arc<Atomic<bool>> alive{std::in_place, true};
@@ -1042,8 +1042,8 @@ auto collect_fluent_bit_properties(operator_args const& args,
   return requests;
 }
 
-auto send_blocking(Sender<FluentBitSourceMessage>& sender,
-                   FluentBitSourceMessage message,
+auto send_blocking(Sender<FluentBitSourceTaskResult>& sender,
+                   FluentBitSourceTaskResult message,
                    Arc<Atomic<bool>> const& stop_requested,
                    Arc<Atomic<bool>> const& bridge_alive,
                    std::chrono::milliseconds retry_interval) -> bool {
@@ -1059,7 +1059,7 @@ auto send_blocking(Sender<FluentBitSourceMessage>& sender,
   return false;
 }
 
-auto poll_fluent_bit_source(Sender<FluentBitSourceMessage> sender,
+auto poll_fluent_bit_source(Sender<FluentBitSourceTaskResult> sender,
                             operator_args args, record config,
                             property_map fluent_bit_args,
                             property_map plugin_args,
@@ -1069,6 +1069,11 @@ auto poll_fluent_bit_source(Sender<FluentBitSourceMessage> sender,
   auto engine
     = engine::make_source(args, config, fluent_bit_args, plugin_args, dh);
   if (not engine) {
+    if (not stop_requested->load(std::memory_order_acquire)
+        and bridge_alive->load(std::memory_order_acquire)) {
+      std::ignore = send_blocking(sender, FluentBitSourceDone{}, stop_requested,
+                                  bridge_alive, args.poll_interval);
+    }
     return;
   }
   while (not stop_requested->load(std::memory_order_acquire)
@@ -1113,8 +1118,8 @@ public:
       MetricsDirection::read, MetricsVisibility::external_);
     builder_.emplace(args_.builder_options, ctx.dh());
     auto [sender, receiver]
-      = channel<FluentBitSourceMessage>(source_channel_capacity);
-    receiver_ = std::move(receiver);
+      = channel<FluentBitSourceTaskResult>(source_channel_capacity);
+    events_ = std::move(receiver);
     auto operator_args = make_operator_args(args_, ctx);
     if (not operator_args) {
       co_return;
@@ -1129,6 +1134,12 @@ public:
     }
     auto stop_requested = stop_requested_;
     auto bridge_alive = bridge_lifetime_.alive;
+    ctx.spawn_task([sender, this]() mutable -> Task<void> {
+      while (true) {
+        co_await pusher_.wait();
+        co_await sender.send(FluentBitSourceTimeout{});
+      }
+    });
     ctx.spawn_task([sender = std::move(sender), args = std::move(args),
                     config = args_.config,
                     fluent_bit_args = std::move(fluent_bit_args),
@@ -1158,32 +1169,35 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    TENZIR_ASSERT(receiver_);
-    co_return co_await select_into_variant(
-      receiver_->recv(), [this]() -> Task<FluentBitSourceTimeout> {
-        co_await pusher_.wait();
-        co_return FluentBitSourceTimeout{};
-      }());
+    TENZIR_ASSERT(events_);
+    auto message = co_await events_->recv();
+    TENZIR_ASSERT(message);
+    co_return std::move(*message);
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(builder_);
     auto task_result = std::move(result).as<FluentBitSourceTaskResult>();
-    if (auto* message = try_as<Option<FluentBitSourceMessage>>(&task_result)) {
-      if (not *message or is<FluentBitSourceDone>(**message)) {
-        for (auto& slice : builder_->finalize_as_table_slice()) {
-          read_bytes_counter_.add(slice.approx_bytes());
-          co_await push(std::move(slice));
+    co_await co_match(
+      task_result,
+      [&](FluentBitSourceMessage& message) -> Task<void> {
+        if (is<FluentBitSourceDone>(message)) {
+          for (auto& slice : builder_->finalize_as_table_slice()) {
+            read_bytes_counter_.add(slice.approx_bytes());
+            co_await push(std::move(slice));
+          }
+          source_exhausted_ = true;
+          co_return;
         }
-        source_exhausted_ = true;
-        co_return;
-      }
-      for (auto& chunk : as<std::vector<chunk_ptr>>(**message)) {
-        parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
-      }
-    }
-    co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
+        for (auto& chunk : as<std::vector<chunk_ptr>>(message)) {
+          parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
+        }
+        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
+      },
+      [&](FluentBitSourceTimeout&) -> Task<void> {
+        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
+      });
   }
 
   auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
@@ -1209,7 +1223,7 @@ public:
 
 private:
   FluentBitArgs args_;
-  mutable Option<Receiver<FluentBitSourceMessage>> receiver_;
+  mutable Option<Receiver<FluentBitSourceTaskResult>> events_;
   Option<multi_series_builder> builder_;
   SeriesPusher pusher_;
   SourceBridgeLifetime bridge_lifetime_;
