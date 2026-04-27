@@ -1,0 +1,13 @@
+warning: timeout should be larger than 5 minutes
+  --> tests/operators/to_amazon_security_lake/validation/error_timeout_zero.tql:10:11
+   |
+10 |   timeout=0s
+   |           ~~ 
+   |
+
+error: timeout must be greater than 0s
+  --> tests/operators/to_amazon_security_lake/validation/error_timeout_zero.tql:10:11
+   |
+10 |   timeout=0s
+   |           ^^ 
+   |

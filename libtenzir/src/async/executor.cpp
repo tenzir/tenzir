@@ -1281,6 +1281,7 @@ private:
     if (b == FinalizeBehavior::continue_) {
       // The operator is still draining and will transition to `stopped` via
       // further `await_task()` calls. Re-arm so those calls keep flowing.
+      operator_draining_ = true;
       ensure_await_task();
       co_return;
     }
@@ -1307,6 +1308,11 @@ private:
     }
     if (not subpipelines_.empty()) {
       // We need to wait for all subpipelines to finish.
+      co_return;
+    }
+    if (operator_draining_ and base_op().state() != OperatorState::done) {
+      // The operator returned FinalizeBehavior::continue_ and has not
+      // transitioned to done yet.
       co_return;
     }
     // If we reach this point, then we are about to fully shut down. The only
@@ -1350,6 +1356,11 @@ private:
   /// framing is even kept alive after the operator itself finished in order to
   /// propagate checkpoints.
   AsyncScope* operator_scope_ = nullptr;
+
+  /// True when finalize() returned continue_ — the operator is still draining
+  /// and will transition to done via state(). check_done() must not cancel
+  /// operator_scope_ while this is set and the operator has not returned done.
+  bool operator_draining_ = false;
 
   /// Anything the main loop reacts to.
   using Event = variant<

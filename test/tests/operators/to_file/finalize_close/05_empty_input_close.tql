@@ -1,0 +1,9 @@
+// Zero events reach `to_file`: `where false` drops every row, so
+// `process()` never creates a partition. `finalize()` sees
+// `partition_count_ == 0` and returns `done` immediately. Exercises the
+// no-partition shutdown path.
+from {x: 1}
+where false
+to_file env("FILE_ROOT") + "/out/finalize/empty.json" {
+  write_ndjson
+}

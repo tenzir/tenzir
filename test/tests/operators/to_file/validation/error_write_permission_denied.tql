@@ -1,0 +1,9 @@
+---
+error: true
+skip: relies on Linux permission semantics for /root (macOS SIP reports read-only filesystem)
+---
+
+from {x: 1}
+to_file "/root/forbidden.json" {
+  write_ndjson
+}
