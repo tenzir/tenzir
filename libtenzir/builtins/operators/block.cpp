@@ -19,20 +19,20 @@ namespace tenzir::plugins::block {
 namespace {
 
 struct BlockArgs {
-  duration duration = {};
+  tenzir::duration duration = {};
 };
 
 template <class T>
 class Block final : public Operator<T, T> {
 public:
-  explicit Block(BlockArgs args) : duration_{args.duration} {
+  explicit Block(BlockArgs args) : args_{std::move(args)} {
   }
 
   auto process(T input, Push<T>& push, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (not did_block_) {
       did_block_ = true;
-      co_await sleep_for(duration_);
+      co_await sleep_for(args_.duration);
     }
     co_await push(std::move(input));
   }
@@ -42,7 +42,7 @@ public:
   }
 
 private:
-  duration duration_;
+  BlockArgs args_;
   bool did_block_ = false;
 };
 
