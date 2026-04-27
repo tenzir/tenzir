@@ -121,10 +121,11 @@ TEST("forward dns resolves remote socket addresses") {
         }},
       }};
     });
-  auto endpoint = parse_socket_address("dns.test:9000", SocketAddressKind::remote);
+  auto endpoint
+    = parse_socket_address("dns.test:9000", SocketAddressKind::remote);
   require(static_cast<bool>(endpoint));
-  auto result
-    = folly::coro::blockingWait(resolver.resolve_socket_address(std::move(*endpoint)));
+  auto result = folly::coro::blockingWait(
+    resolver.resolve_socket_address(std::move(*endpoint)));
   require(not result.is_err());
   check_eq(result.unwrap().describe(), std::string{"127.0.0.42:9000"});
 }
@@ -133,8 +134,8 @@ TEST("forward dns resolves bind socket addresses with empty host") {
   auto resolver = ForwardDnsResolver{};
   auto endpoint = parse_socket_address(":4242", SocketAddressKind::bind);
   require(static_cast<bool>(endpoint));
-  auto result
-    = folly::coro::blockingWait(resolver.resolve_bind_address(std::move(*endpoint)));
+  auto result = folly::coro::blockingWait(
+    resolver.resolve_bind_address(std::move(*endpoint)));
   require(not result.is_err());
   check(result.unwrap().getIPAddress().isZero());
   check_eq(result.unwrap().getPort(), uint16_t{4242});
