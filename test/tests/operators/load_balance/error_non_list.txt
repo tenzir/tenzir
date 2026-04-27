@@ -1,6 +1,6 @@
-error: expected a list, got `string`
+error: expected argument of type `list`, but got `string`
  --> tests/operators/load_balance/error_non_list.tql:7:14
   |
-7 | load_balance $worker {
-  |              ^^^^^^^ 
+7 | load_balance $over {
+  |              ^^^^^ 
   |

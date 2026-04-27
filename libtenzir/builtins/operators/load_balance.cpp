@@ -7,15 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
-#include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/ir.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/substitute_ctx.hpp"
-#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/view.hpp"
 
@@ -198,7 +196,9 @@ auto as_constant_kind(data const& value) -> ast::constant::kind {
 }
 
 struct LoadBalanceArgs {
-  std::vector<ir::pipeline> pipes;
+  located<list> over;
+  located<ir::pipeline> pipe;
+  let_id over_id;
 };
 
 class LoadBalance final : public Operator<table_slice, void> {
@@ -211,11 +211,18 @@ public:
       co_return;
     }
     started_ = true;
-    workers_.assign(args_.pipes.size(), Worker{});
+    workers_.assign(args_.over.inner.size(), Worker{});
     active_workers_ = workers_.size();
-    for (auto i = size_t{0}; i < args_.pipes.size(); ++i) {
+    for (auto i = size_t{0}; i < args_.over.inner.size(); ++i) {
+      auto pipe = args_.pipe.inner;
+      auto env = substitute_ctx::env_t{};
+      env[args_.over_id] = as_constant_kind(args_.over.inner[i]);
+      if (not pipe.substitute(substitute_ctx{ctx, &env}, true)) {
+        done_ = true;
+        co_return;
+      }
       co_await ctx.spawn_sub<table_slice>(data{detail::narrow<int64_t>(i)},
-                                          std::move(args_.pipes[i]));
+                                          std::move(pipe));
     }
   }
 
@@ -310,127 +317,6 @@ private:
   size_t active_workers_ = 0;
   bool started_ = false;
   bool done_ = false;
-};
-
-class LoadBalanceIr final : public ir::Operator {
-public:
-  LoadBalanceIr() = default;
-
-  LoadBalanceIr(location self, ast::dollar_var var, location pipe_location,
-                ir::pipeline pipe)
-    : self_{self},
-      var_{std::move(var)},
-      pipe_location_{pipe_location},
-      pipe_{std::move(pipe)} {
-  }
-
-  auto name() const -> std::string override {
-    return "load_balance-ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    if (not instantiate) {
-      if (not ctx.get(var_.let)) {
-        return {};
-      }
-    }
-    if (not pipes_.empty()) {
-      if (instantiate and not pipes_instantiated_) {
-        for (auto& pipe : pipes_) {
-          TRY(pipe.substitute(ctx, true));
-        }
-        pipes_instantiated_ = true;
-      }
-      return {};
-    }
-    auto original = ctx.get(var_.let);
-    if (not original) {
-      diagnostic::error("expected a constant list").primary(var_).emit(ctx);
-      return failure::promise();
-    }
-    auto* entries = try_as<list>(*original);
-    if (not entries) {
-      auto got = original->match([]<class T>(T const&) {
-        return type_kind::of<data_to_type_t<T>>;
-      });
-      diagnostic::error("expected a list, got `{}`", got)
-        .primary(var_)
-        .emit(ctx);
-      return failure::promise();
-    }
-    if (entries->empty()) {
-      diagnostic::error("expected list to not be empty").primary(var_).emit(ctx);
-      return failure::promise();
-    }
-    auto pipes = std::vector<ir::pipeline>{};
-    pipes.reserve(entries->size());
-    for (auto const& entry : *entries) {
-      auto env = ctx.env();
-      env.insert_or_assign(var_.let, as_constant_kind(entry));
-      auto pipe = pipe_;
-      TRY(pipe.substitute(ctx.with_env(&env), instantiate));
-      pipes.push_back(std::move(pipe));
-    }
-    pipes_ = std::move(pipes);
-    pipes_instantiated_ = instantiate;
-    return {};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    if (input.is_not<table_slice>()) {
-      diagnostic::error("operator expects events").primary(self_).emit(dh);
-      return failure::promise();
-    }
-    for (auto const& pipe : pipes_) {
-      TRY(auto output, pipe.infer_type(input, dh));
-      if (not output) {
-        return std::nullopt;
-      }
-      if (output->is_not<void>()) {
-        diagnostic::error("pipeline must currently end with a sink")
-          .primary(pipe_location_)
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    return tag_v<void>;
-  }
-
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
-    TENZIR_UNUSED(filter, order);
-    auto replacement = ir::pipeline{};
-    replacement.operators.push_back(LoadBalanceIr{std::move(*this)});
-    return {ir::optimize_filter{}, event_order::unordered,
-            std::move(replacement)};
-  }
-
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return LoadBalance{LoadBalanceArgs{std::move(pipes_)}};
-  }
-
-  auto main_location() const -> location override {
-    return self_;
-  }
-
-  friend auto inspect(auto& f, LoadBalanceIr& x) -> bool {
-    return f.object(x).fields(
-      f.field("self", x.self_), f.field("var", x.var_),
-      f.field("pipe_location", x.pipe_location_), f.field("pipe", x.pipe_),
-      f.field("pipes", x.pipes_),
-      f.field("pipes_instantiated", x.pipes_instantiated_));
-  }
-
-private:
-  location self_;
-  ast::dollar_var var_;
-  location pipe_location_;
-  ir::pipeline pipe_;
-  std::vector<ir::pipeline> pipes_;
-  bool pipes_instantiated_ = false;
 };
 
 auto make_load_balancer(
@@ -619,7 +505,7 @@ private:
 };
 
 class plugin final : public virtual operator_plugin2<load_balance>,
-                     public virtual operator_compiler_plugin {
+                     public virtual OperatorPlugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -646,56 +532,37 @@ public:
     return std::make_unique<load_balance>(std::move(pipes));
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::CompileResult> override {
-    auto const* docs = "https://docs.tenzir.com/tql2/operators/load_balance";
-    auto const* usage = "load_balance over:list { … }";
-    auto emit = [&](diagnostic_builder d) {
-      std::move(d).docs(docs).usage(usage).emit(ctx);
-    };
-    if (inv.args.empty()) {
-      emit(
-        diagnostic::error("expected two positional arguments").primary(inv.op));
-      return failure::promise();
-    }
-    auto* var = try_as<ast::dollar_var>(inv.args[0]);
-    if (not var) {
-      emit(diagnostic::error("expected a `$`-variable").primary(inv.args[0]));
-      return failure::promise();
-    }
-    TRY(inv.args[0].bind(ctx));
-    var = try_as<ast::dollar_var>(inv.args[0]);
-    TENZIR_ASSERT(var);
-    if (inv.args.size() < 2) {
-      emit(diagnostic::error("expected a pipeline afterwards").primary(*var));
-      return failure::promise();
-    }
-    auto* pipe = try_as<ast::pipeline_expr>(inv.args[1]);
-    if (not pipe) {
-      emit(diagnostic::error("expected a pipeline expression")
-             .primary(inv.args[1]));
-      return failure::promise();
-    }
-    if (inv.args.size() > 2) {
-      emit(diagnostic::error("expected exactly two arguments, got {}",
-                             inv.args.size())
-             .primary(inv.args[2]));
-      return failure::promise();
-    }
-    auto self = inv.op.get_location();
-    auto pipe_location = pipe->get_location();
-    TRY(auto pipe_ir, std::move(pipe->inner).compile(ctx));
-    return LoadBalanceIr{self, *var, pipe_location, std::move(pipe_ir)};
+  auto describe() const -> Description override {
+    auto d = Describer<LoadBalanceArgs, LoadBalance>{};
+    auto over = d.positional("over", &LoadBalanceArgs::over, "list");
+    auto pipe = d.pipeline(&LoadBalanceArgs::pipe,
+                           {{"over", &LoadBalanceArgs::over_id}});
+    d.validate([over, pipe](DescribeCtx& ctx) -> Empty {
+      if (auto entries = ctx.get(over); entries and entries->inner.empty()) {
+        diagnostic::error("expected list to not be empty")
+          .primary(entries->source)
+          .emit(ctx);
+      }
+      TRY(auto p, ctx.get(pipe));
+      auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
+      if (output.is_error() or not output->has_value()) {
+        return {};
+      }
+      if (output->value().is_not<void>()) {
+        diagnostic::error("pipeline must currently end with a sink")
+          .primary(p.source)
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 };
-
-using load_balance_ir_plugin = inspection_plugin<ir::Operator, LoadBalanceIr>;
 
 } // namespace
 
 } // namespace tenzir::plugins::load_balance
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_balance::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_balance::load_balance_ir_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::operator_inspection_plugin<
                        tenzir::plugins::load_balance::load_balance_source>)

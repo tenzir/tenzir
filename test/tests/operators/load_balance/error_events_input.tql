@@ -2,9 +2,9 @@
 error: true
 ---
 
-let $worker = ["alpha"]
+let $over = ["alpha"]
 from {x: 1}
-load_balance $worker {
+load_balance $over {
   from {y: 1}
   discard
 }

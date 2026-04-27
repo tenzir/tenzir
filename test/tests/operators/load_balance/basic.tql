@@ -1,7 +1,8 @@
-let $worker = ["alpha"]
+let $over = ["alpha"]
 from {x: 1}, {x: 2}
-load_balance $worker {
-  worker = $worker
-  write_tql
-  save_stdout
+load_balance $over {
+  worker = $over
+  to_stdout {
+    write_tql
+  }
 }

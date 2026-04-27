@@ -2,8 +2,8 @@
 error: true
 ---
 
-let $worker = []
+let $over = []
 from {x: 1}
-load_balance $worker {
+load_balance $over {
   discard
 }
