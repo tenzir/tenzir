@@ -1,0 +1,6 @@
+error: subpipeline must not produce bytes
+ --> tests/operators/group/error_bytes_output.tql:6:11
+  |
+6 | group cat {
+  |           ^^^^^^^^^^^^^^^^ 
+  |

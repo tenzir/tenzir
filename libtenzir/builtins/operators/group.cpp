@@ -28,14 +28,13 @@ struct GroupArgs {
   let_id let;
 };
 
-class Group final : public Operator<table_slice, table_slice> {
+class GroupBase {
 public:
-  explicit Group(GroupArgs args) : args_{std::move(args)} {
+  explicit GroupBase(GroupArgs args) : args_{std::move(args)} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(push);
+protected:
+  auto process_impl(table_slice input, OpCtx& ctx) -> Task<void> {
     auto keys = eval(args_.over, input, ctx);
     auto rows = input.rows();
     // Build an ordered list of unique group keys and a boolean row-mask per
@@ -88,12 +87,36 @@ public:
     }
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    TENZIR_UNUSED(serde);
+  GroupArgs args_;
+};
+
+template <class Output>
+class Group;
+
+template <>
+class Group<table_slice> final : public Operator<table_slice, table_slice>,
+                                 private GroupBase {
+public:
+  explicit Group(GroupArgs args) : GroupBase{std::move(args)} {
   }
 
-private:
-  GroupArgs args_;
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    co_await process_impl(std::move(input), ctx);
+  }
+};
+
+template <>
+class Group<void> final : public Operator<table_slice, void>,
+                          private GroupBase {
+public:
+  explicit Group(GroupArgs args) : GroupBase{std::move(args)} {
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    co_await process_impl(std::move(input), ctx);
+  }
 };
 
 class group_plugin final : public virtual OperatorPlugin {
@@ -103,9 +126,44 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<GroupArgs, Group>{};
+    auto d = Describer<GroupArgs>{};
     d.positional("over", &GroupArgs::over, "expr");
-    d.pipeline(&GroupArgs::pipe, {{"group", &GroupArgs::let}});
+    auto pipe = d.pipeline(&GroupArgs::pipe, {{"group", &GroupArgs::let}});
+    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>) {
+        TRY(auto pipe, ctx.get(pipe));
+        TRY(auto output, pipe.inner.infer_type(tag_v<table_slice>, ctx));
+        if (not output) {
+          diagnostic::error("subpipeline must not produce bytes")
+            .primary(pipe.source)
+            .emit(ctx);
+          return failure::promise();
+        }
+        return match(
+          *output,
+          [](tag<table_slice>)
+            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            return [](GroupArgs args) {
+              return Group<table_slice>{std::move(args)};
+            };
+          },
+          [](tag<void>) -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            return [](GroupArgs args) {
+              return Group<void>{std::move(args)};
+            };
+          },
+          [&](tag<chunk_ptr>)
+            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce bytes")
+              .primary(pipe.source)
+              .emit(ctx);
+            return failure::promise();
+          });
+      } else {
+        return {};
+      }
+    });
     return d.without_optimize();
   }
 };
