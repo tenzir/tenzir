@@ -140,14 +140,15 @@ private:
   event_order order_{event_order::ordered};
 };
 
-struct FromAbsArgs : ArrowFsArgs {
+struct FromAzureBlobStorageArgs : FromArrowFsArgs {
   Option<located<secret>> account_key;
 };
 
-class FromAbsOperator final : public ArrowFsOperator {
+class FromAzureBlobStorageOperator final : public FromArrowFsOperator {
 public:
-  explicit FromAbsOperator(FromAbsArgs args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+  explicit FromAzureBlobStorageOperator(FromAzureBlobStorageArgs args)
+    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+      args_{std::move(args)} {
   }
 
 protected:
@@ -235,7 +236,7 @@ protected:
   }
 
 private:
-  FromAbsArgs args_;
+  FromAzureBlobStorageArgs args_;
   std::string resolved_account_key_;
 };
 
@@ -254,9 +255,10 @@ class from_abs final : public operator_plugin2<from_abs_operator>,
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromAbsArgs, FromAbsOperator>{};
-    d.named("account_key", &FromAbsArgs::account_key);
-    ArrowFsArgs::describe_to(d);
+    auto d
+      = Describer<FromAzureBlobStorageArgs, FromAzureBlobStorageOperator>{};
+    d.named("account_key", &FromAzureBlobStorageArgs::account_key);
+    FromArrowFsArgs::describe_to(d);
     return d.without_optimize();
   }
 };

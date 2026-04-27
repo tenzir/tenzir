@@ -1,0 +1,6 @@
+error: invalid URI
+ --> tests/operators/to_amazon_security_lake/validation/error_bad_source_name.tql:6:25
+  |
+6 | to_amazon_security_lake "s3://aws-security-data-lake-x/ext/invalid source name",
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

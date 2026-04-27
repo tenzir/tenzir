@@ -1,0 +1,6 @@
+suite: to-s3-flood-queue-close
+fixtures: [s3]
+timeout: 240
+skip:
+  on:
+    - fixture-unavailable

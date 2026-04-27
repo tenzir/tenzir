@@ -1,0 +1,6 @@
+suite: to-file-finalize-close
+fixtures: [local_files]
+# Tight timeout: if the last stream close gets cancelled and
+# `partition_count_` never reaches 0, the operator hangs in `finalize()`
+# returning `continue_` forever.
+timeout: 15

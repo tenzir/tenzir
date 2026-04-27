@@ -1,0 +1,2 @@
+committed_blobs=2048
+ok

@@ -1,0 +1,6 @@
+error: expected `s3://` scheme in URI
+ --> tests/operators/to_amazon_security_lake/validation/error_bad_scheme.tql:6:25
+  |
+6 | to_amazon_security_lake "http://not-s3",
+  |                         ^^^^^^^^^^^^^^^ 
+  |

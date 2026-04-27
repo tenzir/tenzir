@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+let $over = ["alpha"]
+from {x: 1}
+load_balance $over {
+  from {y: 1}
+  discard
+}

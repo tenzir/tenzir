@@ -12,6 +12,8 @@ find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(
   TARGET from_velociraptor
   ENTRYPOINT src/plugin.cpp
+  INCLUDE_DIRECTORIES include
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 find_package(protobuf CONFIG)
