@@ -93,14 +93,13 @@ auto make_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
 }
 
 auto with_target(proxygen::URL const& base, std::optional<std::string> target)
-  -> proxygen::URL {
+  -> Result<proxygen::URL, std::string> {
   if (not target) {
     return base;
   }
   if (target->empty() or target->front() != '/'
       or target->find('#') != std::string::npos) {
-    throw std::runtime_error(
-      fmt::format("invalid request target: {}", *target));
+    return Err{fmt::format("invalid request target: {}", *target)};
   }
   auto path = std::string_view{*target};
   auto query = std::string_view{};
@@ -214,11 +213,14 @@ auto HttpPool::request(std::string method, std::optional<std::string> target,
       if (not method_parsed) {
         co_return Err{fmt::format("invalid http method: {}", method)};
       }
+      auto url = with_target(impl->url, std::move(target));
+      if (url.is_err()) {
+        co_return Err{std::move(url).unwrap_err()};
+      }
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
-        auto url = with_target(impl->url, std::move(target));
         auto sr = co_await impl->pool->getSessionWithReservation();
         TENZIR_ASSERT_ALWAYS(sr.session);
-        auto* source = make_request_source(url, *method_parsed,
+        auto* source = make_request_source(url.unwrap(), *method_parsed,
                                            std::move(headers), std::move(body));
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
