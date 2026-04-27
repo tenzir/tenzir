@@ -36,6 +36,12 @@ TEST("HTTP header values can contain colons") {
   CHECK_EQUAL(value, "Bearer abc: def");
 }
 
+TEST("try_set") {
+  auto easy = curl::easy{};
+  check(curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp").is_success());
+  check(curl::try_set(easy, CURLOPT_HTTPGET, 1L).is_success());
+}
+
 TEST("valid URL") {
   auto url = curl::url{};
   // Set URL.

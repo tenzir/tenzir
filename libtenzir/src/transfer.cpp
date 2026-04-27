@@ -209,6 +209,17 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
     multi_code = multi.remove(easy_);
     TENZIR_ASSERT(multi_code == curl::multi::code::ok);
   });
+  auto has_preliminary_response_code = [&](long response_code) {
+    auto [scheme_code, scheme] = easy_.get<curl::easy::info::scheme>();
+    if (scheme_code != curl::easy::code::ok or scheme == nullptr) {
+      return false;
+    }
+    auto scheme_view = std::string_view{scheme};
+    if (scheme_view == "ftp" or scheme_view == "ftps") {
+      return response_code == 125 or response_code == 150;
+    }
+    return false;
+  };
   while (true) {
     if (auto still_running = multi.run(options.poll_timeout)) {
       if (chunks.empty()) {
@@ -223,16 +234,18 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
       auto [code, response_code] = easy_.get<curl::easy::info::response_code>();
       // The code should only be checked if we actually got one. Curl will
       // return `unknown_option` if the scheme doesn't have a return code.
-      if (code == curl::easy::code::ok) {
-        // FTP, HTTP and SMTP, error codes in [200,299] are okay.
-        // Technically LDAP will also yield a response code, but we currently
-        // dont support LDAP.
+      if (code == curl::easy::code::ok
+          and not has_preliminary_response_code(response_code)) {
+        // HTTP error codes only become visible once body bytes already arrived,
+        // so we fail early here with a body snippet for debugging. FTP instead
+        // streams payload under a preliminary 125/150 response and only reports
+        // the final status after the data connection closes.
         if (response_code < 200 or response_code > 299) {
           // Include response body in error for debugging (truncated to 1KB).
           auto body = std::string{};
-          for (const auto& chunk : chunks) {
+          for (auto const& chunk : chunks) {
             if (chunk) {
-              body.append(reinterpret_cast<const char*>(chunk->data()),
+              body.append(reinterpret_cast<char const*>(chunk->data()),
                           chunk->size());
               if (body.size() > 1024) {
                 body.resize(1024);

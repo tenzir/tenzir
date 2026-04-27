@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/data.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/generator.hpp"
 
 #include <caf/error.hpp>
@@ -18,6 +19,7 @@
 #include <curl/curl.h>
 
 #include <chrono>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -54,6 +56,9 @@ private:
 /// Function for `CURLOPT_WRITEFUNCTION`.
 using write_callback = std::function<void(std::span<const std::byte>)>;
 
+/// Write callback with explicit return codes, e.g., pause or abort.
+using write_result_callback = std::function<size_t(std::span<const std::byte>)>;
+
 /// Function for `CURLOPT_READFUNCTION`.
 /// The read callback gets called as soon as the handle needs to read data. It
 /// takes as argument a buffer that can be written to. The return value
@@ -61,7 +66,8 @@ using write_callback = std::function<void(std::span<const std::byte>)>;
 /// the library and causes it to stop the current transfer.
 using read_callback = std::function<size_t(std::span<std::byte>)>;
 
-/// Write callback that assumes `user_data` to be a `write_callback*`.
+/// Write callback that assumes `user_data` to be an internal write-callback
+/// wrapper.
 auto on_write(void* ptr, size_t size, size_t nmemb, void* user_data) -> size_t;
 
 /// Read callback that assumes `user_data` to be a `read_callback*`.
@@ -309,6 +315,9 @@ public:
   /// Sets a write callback.
   auto set(write_callback fun) -> code;
 
+  /// Sets a write callback with explicit return codes.
+  auto set_write_result_callback(write_result_callback fun) -> code;
+
   /// Sets a read callback.
   auto set(read_callback fun) -> code;
 
@@ -345,6 +354,14 @@ public:
   /// `curl_easy_reset`
   auto reset() -> void;
 
+  /// `curl_easy_pause`
+  auto pause(int bitmask) -> code;
+
+  struct write_callback_base {
+    virtual ~write_callback_base() = default;
+    virtual auto invoke(std::span<const std::byte> buffer) -> size_t = 0;
+  };
+
 private:
   struct curl_deleter {
     auto operator()(CURL* ptr) const noexcept -> void {
@@ -355,7 +372,7 @@ private:
   };
 
   std::unique_ptr<CURL, curl_deleter> easy_;
-  std::unique_ptr<write_callback> on_write_{};
+  std::unique_ptr<write_callback_base> on_write_{};
   std::unique_ptr<read_callback> on_read_{};
   std::unique_ptr<mime> mime_{};
   slist http_headers_;
@@ -447,6 +464,12 @@ inline void check(curl::easy::code ec) {
 /// @relates easy
 auto to_error(easy::code code) -> caf::error;
 
+[[nodiscard]] auto try_set(easy& handle, CURLoption option, long value)
+  -> failure_or<void>;
+
+[[nodiscard]] auto try_set(easy& handle, CURLoption option,
+                           std::string_view value) -> failure_or<void>;
+
 /// A group of transfers, corresponding to a cURL "multi" handle.
 class multi {
 public:
@@ -482,8 +505,20 @@ public:
   /// @returns `code::ok` iff the handle was removed successfully.
   auto remove(easy& handle) -> code;
 
+  /// `CURLMOPT_SOCKETFUNCTION`
+  auto set_socket_callback(curl_socket_callback callback, void* user_data)
+    -> code;
+
+  /// `CURLMOPT_TIMERFUNCTION`
+  auto set_timer_callback(curl_multi_timer_callback callback, void* user_data)
+    -> code;
+
   /// `curl_multi_poll`
   auto poll(std::chrono::milliseconds timeout) -> code;
+
+  /// `curl_multi_socket_action`
+  auto socket_action(curl_socket_t socket, int ev_bitmask)
+    -> std::pair<code, int>;
 
   /// `curl_multi_perform`
   auto perform() -> std::pair<code, int>;

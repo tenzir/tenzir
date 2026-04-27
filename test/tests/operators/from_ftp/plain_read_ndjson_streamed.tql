@@ -1,0 +1,16 @@
+---
+fixtures:
+  - ftp:
+      download_payload: |
+        {"message":"hello-stream-1"}
+        {"message":"hello-stream-2"}
+        {"message":"hello-stream-3"}
+      download_chunk_size: 5
+      download_chunk_delay: 0.05
+timeout: 60
+---
+
+from_ftp env("FTP_DOWNLOAD_URL_NO_SCHEME") {
+  read_ndjson
+}
+summarize rows=count()
