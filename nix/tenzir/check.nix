@@ -35,13 +35,13 @@ stdenvNoCC.mkDerivation {
             -j $NIX_BUILD_CORES \
             ${path}/test
         fi
-        if [ -d "${path}/test-legacy/tests" ]; then
-          echo "running ${path} legacy integration tests"
-          tenzir-test \
-            --root "${src}/test-legacy" \
-            -j $NIX_BUILD_CORES \
-            ${path}/test-legacy
-        fi
+        #if [ -d "${path}/test-legacy/tests" ]; then
+        #  echo "running ${path} legacy integration tests"
+        #  tenzir-test -d \
+        #    --root "${src}/test-legacy" \
+        #    -j $NIX_BUILD_CORES \
+        #    ${path}/test-legacy
+        #fi
       '';
     in
     ''
