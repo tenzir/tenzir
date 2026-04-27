@@ -251,16 +251,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto normalized = normalize_args(args_, ctx.dh());
-    if (not normalized) {
-      done_ = true;
-      co_return;
-    }
+    auto normalized = normalize_args(args_, ctx);
+    TENZIR_ASSERT(normalized);
     auto config = select_client_config(args_, ctx.dh());
-    if (not config) {
-      done_ = true;
-      co_return;
-    }
+    TENZIR_ASSERT(config);
     auto credentials = grpc::SslCredentials({
       .pem_root_certs = config->ca_certificate,
       .pem_private_key = config->client_private_key,
@@ -277,10 +271,6 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (done_) {
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
-    }
     TENZIR_ASSERT(reactor_);
     co_return co_await message_queue_->dequeue();
   }
@@ -289,15 +279,14 @@ public:
     -> Task<void> override {
     auto responses = std::vector<proto::VQLResponse>{};
     auto terminal_error = Option<std::string>{};
-    auto saw_terminal = false;
     auto collect_message = [&](Message message) -> void {
       if (auto* response = try_as<Response>(&message)) {
         responses.push_back(std::move(response->response));
         return;
       }
-      auto finished = as<StreamFinished>(std::move(message));
-      terminal_error = std::move(finished.error);
-      saw_terminal = true;
+      auto finish_message = as<StreamFinished>(std::move(message));
+      terminal_error = std::move(finish_message.error);
+      stream_finished_ = true;
     };
     collect_message(std::move(result).as<Message>());
     while (auto next = message_queue_->try_dequeue()) {
@@ -313,38 +302,23 @@ public:
                            args_.operator_location);
       }
     }
-    if (saw_terminal and message_queue_->empty()) {
-      if (terminal_error) {
-        diagnostic::error(grpc_request_failed_error)
-          .primary(args_.operator_location)
-          .note("{}", *terminal_error)
-          .emit(ctx);
-      }
-      done_ = true;
+    TENZIR_ASSERT(not stream_finished_ or message_queue_->empty());
+    if (terminal_error) {
+      diagnostic::error(grpc_request_failed_error)
+        .primary(args_.operator_location)
+        .note("{}", *terminal_error)
+        .emit(ctx);
     }
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push, ctx);
-    if (reactor_) {
-      (*reactor_)->request_shutdown();
-    }
-    done_ = true;
-    co_return FinalizeBehavior::done;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::stop(ctx);
-    if (reactor_) {
-      (*reactor_)->request_shutdown();
-    }
-    done_ = true;
+    TENZIR_ASSERT(reactor_);
+    (*reactor_)->request_shutdown();
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::unspecified;
+    return stream_finished_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
@@ -352,10 +326,10 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<Box<VelociraptorReadReactor>> reactor_;
-  bool done_ = false;
+  bool stream_finished_ = false;
 };
 
-class from_velociraptor_builtin_plugin final : public virtual OperatorPlugin {
+class FromVelociraptorPlugin final : public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
@@ -423,19 +397,7 @@ public:
       if (auto value = ctx.get(profile)) {
         args.profile = *value;
       }
-      if (auto wait = ctx.get(max_wait); wait and wait->inner < 1s) {
-        diagnostic::error("`max_wait` too low")
-          .primary(wait->source)
-          .hint("value must be great than 1s")
-          .emit(ctx);
-      }
-      if (not ctx.get(query) and not ctx.get(subscribe)) {
-        diagnostic::error("no artifact subscription or VQL expression provided")
-          .primary(ctx.operator_location())
-          .hint("specify `subscribe=<artifact>` for a subscription")
-          .hint("specify `query=<vql>` to run a VQL expression")
-          .emit(ctx);
-      }
+      std::ignore = normalize_args(args, ctx);
       std::ignore = select_client_config(args, ctx);
       return {};
     });
@@ -450,5 +412,4 @@ private:
 
 } // namespace tenzir::plugins::velociraptor
 
-TENZIR_REGISTER_PLUGIN(
-  tenzir::plugins::velociraptor::from_velociraptor_builtin_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::velociraptor::FromVelociraptorPlugin)
