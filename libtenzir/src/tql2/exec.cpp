@@ -1859,9 +1859,11 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     }
   }
   auto elapsed = now - start_time;
-  // FIXME: This doesn't work if a pipeline mixes internal and external ingress
-  // or egress. The diff that will be maintained in the pipeline manager will
-  // mix up the two values.
+  // FIXME: The pipeline manager maintains a per-`operator_index` diff and
+  // cannot disambiguate two metrics at the same index. As a workaround, emit
+  // external first and fall back to internal only if there is no external
+  // traffic for that direction. This loses visibility into pipelines that mix
+  // internal and external ingress or egress.
   if (external_read_bytes > 0) {
     auto m = operator_metric{};
     m.operator_index = 0;
@@ -1872,8 +1874,7 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_total = elapsed;
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
-  }
-  if (internal_read_bytes > 0) {
+  } else if (internal_read_bytes > 0) {
     auto m = operator_metric{};
     m.operator_index = 0;
     m.operator_name = "source";
@@ -1897,8 +1898,7 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     m.time_total = elapsed;
     m.time_running = elapsed;
     caf::anon_mail(std::move(m)).send(node.metrics);
-  }
-  if (internal_write_bytes > 0) {
+  } else if (internal_write_bytes > 0) {
     auto m = operator_metric{};
     m.operator_index = 1;
     m.operator_name = "sink";

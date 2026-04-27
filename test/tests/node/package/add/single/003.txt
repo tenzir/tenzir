@@ -1,0 +1,12 @@
+{
+  id: "test1/import-version",
+  definition: "from {\n  message: \"Hello WORLD!!11elf!\"\n}\nimport\n",
+}
+{
+  id: "test1/nop",
+  definition: "version\ndiscard\n",
+}
+{
+  id: "test1/unstoppable-pipeline",
+  definition: "version\ndiscard\n",
+}

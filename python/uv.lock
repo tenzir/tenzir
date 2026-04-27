@@ -623,7 +623,7 @@ wheels = [
 
 [[package]]
 name = "tenzir"
-version = "5.32.1"
+version = "5.33.0"
 source = { editable = "tenzir" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -641,7 +641,7 @@ requires-dist = [
 
 [[package]]
 name = "tenzir-common"
-version = "5.32.1"
+version = "5.33.0"
 source = { editable = "tenzir-common" }
 dependencies = [
     { name = "dynaconf" },
@@ -658,7 +658,7 @@ requires-dist = [
 
 [[package]]
 name = "tenzir-operator"
-version = "5.32.1"
+version = "5.33.0"
 source = { editable = "tenzir-operator" }
 dependencies = [
     { name = "python-box" },

@@ -1,0 +1,17 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 1
+      source: tenzir-test-compress
+      sourcetype: tenzir:test:compress
+      contains:
+        - compressed-event
+---
+
+from {message: "compressed-event", seq: 1}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          source="tenzir-test-compress",
+          sourcetype="tenzir:test:compress",
+          index=env("SPLUNK_INDEX")

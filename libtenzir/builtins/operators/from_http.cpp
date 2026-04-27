@@ -10,25 +10,25 @@
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
-#include <tenzir/plugin.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
-#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
+#include <tenzir/try.hpp>
 #include <tenzir/variant.hpp>
 
 #include <boost/url/parse.hpp>
@@ -49,6 +49,7 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <chrono>
+#include <iterator>
 #include <limits>
 #include <span>
 #include <string>
@@ -209,69 +210,37 @@ auto make_paginated_request_config(
   };
 }
 
-auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void {
-  if (not url.starts_with("http://") and not url.starts_with("https://")) {
-    url.insert(0, tls_enabled ? "https://" : "http://");
-  }
-}
-
-auto tls_enabled_from_args(FromHttpArgs const& args) -> bool {
-  if (not args.tls) {
-    return true;
-  }
-  // Mirror tls_options semantics for explicit `tls=...` arguments:
-  // - `tls=true` enables TLS
-  // - record values (e.g. `{skip_peer_verification: true}`) implicitly enable
-  //   TLS
-  // Keep the default false for absent `tls` args when normalizing schemeless
-  // URLs.
-  auto tls_opts
-    = tls_options{*args.tls, {.tls_default = true, .is_server = false}};
-  return tls_opts.get_tls(nullptr).inner;
-}
-
 auto resolve_http_secrets(
   OpCtx& ctx, FromHttpArgs const& args, std::string& resolved_url,
   std::vector<std::pair<std::string, std::string>>& resolved_headers)
-  -> Task<bool> {
+  -> Task<failure_or<void>> {
   resolved_url.clear();
-  resolved_headers.clear();
   auto requests = std::vector<secret_request>{};
   requests.emplace_back(
     make_secret_request("url", args.url, resolved_url, ctx.dh()));
-  if (args.headers) {
-    if (auto const* rec = try_as<record>(args.headers->inner)) {
-      for (auto const& [name, value] : *rec) {
-        match(
-          value,
-          [&](std::string const& literal) {
-            resolved_headers.emplace_back(name, literal);
-          },
-          [&](secret const& sec) {
-            auto& out
-              = resolved_headers.emplace_back(name, std::string{}).second;
-            requests.emplace_back(make_secret_request(
-              name, sec, args.headers->source, out, ctx.dh()));
-          },
-          [](auto const&) {
-            TENZIR_UNREACHABLE();
-          });
-      }
-    }
-  }
+  auto header_requests = http::make_header_secret_requests(
+    args.headers, resolved_headers, ctx.dh());
+  requests.insert(requests.end(),
+                  std::make_move_iterator(header_requests.begin()),
+                  std::make_move_iterator(header_requests.end()));
   if (auto result = co_await ctx.resolve_secrets(std::move(requests));
       result.is_error()) {
-    co_return false;
+    co_return failure::promise();
   }
   if (resolved_url.empty()) {
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
-    co_return false;
+    co_return failure::promise();
   }
-  add_default_url_scheme(resolved_url, tls_enabled_from_args(args));
-  co_return true;
+  CO_TRY(
+    http::normalize_url_and_tls(args.tls, resolved_url, args.url.source, ctx));
+  co_return {};
 }
 
-using pagination_spec = located<variant<ast::lambda_expr, std::string>>;
+using pagination_spec
+  = located<variant<ast::lambda_expr, http::PaginationMode>>;
+
+constexpr auto paginate_hint
+  = R"(`paginate` must be `"link"`, `"odata"`, or a lambda)";
 
 auto validate_paginate(Option<ast::expression> const& expr,
                        diagnostic_handler& dh)
@@ -288,7 +257,7 @@ auto validate_paginate(Option<ast::expression> const& expr,
       return failure::promise();
     }
     return Option<pagination_spec>{pagination_spec{
-      variant<ast::lambda_expr, std::string>{*lambda},
+      variant<ast::lambda_expr, http::PaginationMode>{*lambda},
       expr->get_location(),
     }};
   }
@@ -296,30 +265,36 @@ auto validate_paginate(Option<ast::expression> const& expr,
   return match(
     value,
     [&](std::string const& mode) -> failure_or<Option<pagination_spec>> {
-      if (mode != "link") {
+      auto pagination_mode = http::parse_pagination_mode(mode);
+      if (not pagination_mode) {
         diagnostic::error("unsupported pagination mode: `{}`", mode)
           .primary(*expr)
-          .hint("`paginate` must be `\"link\"` or a lambda")
+          .hint(paginate_hint)
           .emit(dh);
         return failure::promise();
       }
       return Option<pagination_spec>{pagination_spec{
-        variant<ast::lambda_expr, std::string>{mode},
+        variant<ast::lambda_expr, http::PaginationMode>{*pagination_mode},
         expr->get_location(),
       }};
     },
     [&](auto const&) -> failure_or<Option<pagination_spec>> {
       diagnostic::error("expected `paginate` to be `string` or `lambda`")
         .primary(*expr)
-        .hint("`paginate` must be `\"link\"` or a lambda")
+        .hint(paginate_hint)
         .emit(dh);
       return failure::promise();
     });
 }
 
-auto resolve_paginate_url(std::string_view next_url,
-                          std::string const& base_url, location paginate_loc,
-                          diagnostic_handler& dh) -> Option<std::string> {
+enum class NextUrlSource {
+  paginate_lambda,
+  odata_next_link,
+};
+
+auto resolve_next_url(std::string_view next_url, std::string const& base_url,
+                      location paginate_loc, diagnostic_handler& dh,
+                      NextUrlSource source) -> Option<std::string> {
   auto base = boost::urls::parse_uri_reference(base_url);
   if (not base) {
     diagnostic::warning("failed to parse request URI for pagination: {}",
@@ -331,20 +306,43 @@ auto resolve_paginate_url(std::string_view next_url,
   }
   auto ref = boost::urls::parse_uri_reference(next_url);
   if (not ref) {
-    diagnostic::warning("invalid next URL from `paginate` lambda: {}",
-                        ref.error().message())
-      .primary(paginate_loc)
-      .note("stopping pagination")
-      .emit(dh);
+    switch (source) {
+      case NextUrlSource::paginate_lambda:
+        diagnostic::warning("invalid next URL from `paginate` lambda: {}",
+                            ref.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+      case NextUrlSource::odata_next_link:
+        diagnostic::warning("invalid OData `@odata.nextLink` URL: {}",
+                            ref.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+    }
     return None{};
   }
   auto resolved = boost::urls::url{};
   if (auto r = boost::urls::resolve(*base, *ref, resolved); not r) {
-    diagnostic::warning("failed to resolve next URL from `paginate` lambda: {}",
-                        r.error().message())
-      .primary(paginate_loc)
-      .note("stopping pagination")
-      .emit(dh);
+    switch (source) {
+      case NextUrlSource::paginate_lambda:
+        diagnostic::warning("failed to resolve next URL from `paginate` "
+                            "lambda: {}",
+                            r.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+      case NextUrlSource::odata_next_link:
+        diagnostic::warning("failed to resolve OData `@odata.nextLink` URL: {}",
+                            r.error().message())
+          .primary(paginate_loc)
+          .note("stopping pagination")
+          .emit(dh);
+        break;
+    }
     return None{};
   }
   return Option<std::string>{std::string{resolved.buffer()}};
@@ -375,7 +373,8 @@ auto next_url_from_lambda(Option<pagination_spec> const& paginate,
       return None{};
     },
     [&](std::string_view url) -> Option<std::string> {
-      return resolve_paginate_url(url, base_url, paginate->source, dh);
+      return resolve_next_url(url, base_url, paginate->source, dh,
+                              NextUrlSource::paginate_lambda);
     },
     [&](auto const&) -> Option<std::string> {
       diagnostic::error("expected `paginate` to be `string`, got `{}`",
@@ -386,231 +385,16 @@ auto next_url_from_lambda(Option<pagination_spec> const& paginate,
     });
 }
 
-auto is_link_pagination(Option<pagination_spec> const& paginate) -> bool {
+auto builtin_pagination_mode(Option<pagination_spec> const& paginate)
+  -> Option<http::PaginationMode> {
   if (not paginate) {
-    return false;
+    return None{};
   }
-  auto const* mode = try_as<std::string>(&paginate->inner);
+  auto const* mode = try_as<http::PaginationMode>(&paginate->inner);
   if (not mode) {
-    return false;
-  }
-  TENZIR_ASSERT(*mode == "link");
-  return true;
-}
-
-// ---- RFC 8288 Link header parsing -----------------------------------------
-//
-// Ported from the legacy http.cpp implementation.
-
-// Splits a raw HTTP Link header value into individual link-value items at
-// top-level commas (not inside <...> or quoted strings).
-auto split_link_header(std::string_view value)
-  -> std::vector<std::string_view> {
-  auto result = std::vector<std::string_view>{};
-  auto start = size_t{0};
-  auto in_angle = false;
-  auto in_quotes = false;
-  auto escaped = false;
-  for (auto i = size_t{}; i < value.size(); ++i) {
-    const auto c = value[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (c == '\\' and in_quotes) {
-      escaped = true;
-      continue;
-    }
-    if (c == '"' and not in_angle) {
-      in_quotes = not in_quotes;
-      continue;
-    }
-    if (c == '<' and not in_quotes) {
-      in_angle = true;
-      continue;
-    }
-    if (c == '>' and not in_quotes) {
-      in_angle = false;
-      continue;
-    }
-    if (c == ',' and not in_quotes and not in_angle) {
-      auto item = detail::trim(value.substr(start, i - start));
-      if (not item.empty()) {
-        result.push_back(item);
-      }
-      start = i + 1;
-    }
-  }
-  auto item = detail::trim(value.substr(start));
-  if (not item.empty()) {
-    result.push_back(item);
-  }
-  return result;
-}
-
-// Splits link-value parameters at semicolons, honouring quoted-string escaping.
-auto split_link_params(std::string_view value)
-  -> std::pair<std::vector<std::string_view>, bool> {
-  auto result = std::vector<std::string_view>{};
-  auto start = size_t{0};
-  auto in_quotes = false;
-  auto escaped = false;
-  for (auto i = size_t{}; i < value.size(); ++i) {
-    const auto c = value[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (c == '\\' and in_quotes) {
-      escaped = true;
-      continue;
-    }
-    if (c == '"') {
-      in_quotes = not in_quotes;
-      continue;
-    }
-    if (c == ';' and not in_quotes) {
-      auto item = detail::trim(value.substr(start, i - start));
-      if (not item.empty()) {
-        result.push_back(item);
-      }
-      start = i + 1;
-    }
-  }
-  auto item = detail::trim(value.substr(start));
-  if (not item.empty()) {
-    result.push_back(item);
-  }
-  return {std::move(result), not in_quotes};
-}
-
-// Returns true when "next" appears as a token in a rel parameter value.
-auto rel_contains_next(std::string_view value) -> bool {
-  value = detail::trim(value);
-  if (value.size() >= 2 and value.front() == '"' and value.back() == '"') {
-    value.remove_prefix(1);
-    value.remove_suffix(1);
-  }
-  auto index = size_t{};
-  while (index < value.size()) {
-    while (index < value.size()
-           and std::isspace(static_cast<unsigned char>(value[index])) != 0) {
-      ++index;
-    }
-    const auto token_begin = index;
-    while (index < value.size()
-           and std::isspace(static_cast<unsigned char>(value[index])) == 0) {
-      ++index;
-    }
-    const auto token = value.substr(token_begin, index - token_begin);
-    if (not token.empty() and detail::ascii_icase_equal(token, "next")) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Parses a single RFC 8288 link-value and extracts its `rel=next` target URI.
-// Returns Err(Unit) for malformed link-values.
-auto next_link_target(std::string_view header)
-  -> Result<Option<std::string_view>, Unit> {
-  auto item = detail::trim(header);
-  if (item.empty()) {
     return None{};
   }
-  if (item.front() != '<') {
-    return Err{Unit{}};
-  }
-  const auto uri_end = item.find('>');
-  if (uri_end == std::string_view::npos) {
-    return Err{Unit{}};
-  }
-  auto target = item.substr(1, uri_end - 1);
-  auto params = item.substr(uri_end + 1);
-  auto [param_parts, ok] = split_link_params(params);
-  if (not ok) {
-    return Err{Unit{}};
-  }
-  auto has_next = false;
-  for (const auto part : param_parts) {
-    const auto eq = part.find('=');
-    auto name = detail::trim(part.substr(0, eq));
-    if (name.empty() or not detail::ascii_icase_equal(name, "rel")) {
-      continue;
-    }
-    if (eq == std::string_view::npos) {
-      continue;
-    }
-    if (rel_contains_next(detail::trim(part.substr(eq + 1)))) {
-      has_next = true;
-      break;
-    }
-  }
-  if (has_next) {
-    return Option<std::string_view>{target};
-  }
-  return None{};
-}
-
-// Scans all Link response headers and returns the first resolved `rel=next`
-// URL, or None if no such link is present. Emits a warning on malformed
-// headers.
-auto next_url_from_link_headers(
-  std::vector<std::pair<std::string, std::string>> const& response_headers,
-  std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
-  -> Option<std::string> {
-  auto base = boost::urls::parse_uri_reference(base_url);
-  if (not base) {
-    diagnostic::warning("failed to parse request URI for link pagination: {}",
-                        base.error().message())
-      .primary(paginate_loc)
-      .note("stopping pagination")
-      .emit(dh);
-    return None{};
-  }
-  auto malformed = false;
-  for (auto const& [name, value] : response_headers) {
-    if (not detail::ascii_icase_equal(name, "link")) {
-      continue;
-    }
-    for (auto header : split_link_header(value)) {
-      auto parsed = next_link_target(header);
-      if (parsed.is_err()) {
-        malformed = true;
-        continue;
-      }
-      auto target = parsed.unwrap();
-      if (not target) {
-        continue;
-      }
-      auto ref = boost::urls::parse_uri_reference(*target);
-      if (not ref) {
-        diagnostic::warning("invalid `rel=next` URL in Link header: {}",
-                            ref.error().message())
-          .primary(paginate_loc)
-          .note("stopping pagination")
-          .emit(dh);
-        return None{};
-      }
-      auto resolved = boost::urls::url{};
-      if (auto r = boost::urls::resolve(*base, *ref, resolved); not r) {
-        diagnostic::warning("failed to resolve `rel=next` URL: {}",
-                            r.error().message())
-          .primary(paginate_loc)
-          .note("stopping pagination")
-          .emit(dh);
-        return None{};
-      }
-      return Option<std::string>{std::string{resolved.buffer()}};
-    }
-  }
-  if (malformed) {
-    diagnostic::warning("failed to parse Link header for pagination")
-      .primary(paginate_loc)
-      .note("stopping pagination")
-      .emit(dh);
-  }
-  return None{};
+  return *mode;
 }
 
 // ---- Fetch task -----------------------------------------------------------
@@ -866,8 +650,9 @@ public:
     paginate_ = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
-    if (not co_await resolve_http_secrets(ctx, args_, resolved_url,
-                                          resolved_headers_)) {
+    auto sec_res = co_await resolve_http_secrets(ctx, args_, resolved_url,
+                                                 resolved_headers_);
+    if (sec_res.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
@@ -918,13 +703,14 @@ public:
           co_return;
         }
         if (response_->is_success()) {
-          if (is_link_pagination(paginate_)) {
+          if (auto mode = builtin_pagination_mode(paginate_);
+              mode and *mode == http::PaginationMode::link) {
             TENZIR_ASSERT(paginate_);
             // Extract the rel=next URL for link pagination.
             pagination_.next_url
-              = next_url_from_link_headers(response_->headers,
-                                           pagination_.current_url,
-                                           paginate_->source, ctx.dh());
+              = http::next_url_from_link_headers(response_->headers,
+                                                 pagination_.current_url,
+                                                 paginate_->source, ctx.dh());
           }
         } else {
           if (not args_.error_field) {
@@ -954,6 +740,7 @@ public:
         if (payload.empty()) {
           co_return;
         }
+        bytes_read_.add(payload.size());
         if (response_->is_success()) {
           // push to parser
           if (auto sub = ctx.get_sub(pagination_.page_count)) {
@@ -996,6 +783,26 @@ public:
 
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
+    if (auto mode = builtin_pagination_mode(paginate_);
+        mode and *mode == http::PaginationMode::odata) {
+      TENZIR_ASSERT(paginate_);
+      auto page = http::extract_odata_page(slice, paginate_->source, ctx.dh());
+      if (not page) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      odata_envelope_seen_ = true;
+      pagination_.next_url
+        = page->next_url
+            ? resolve_next_url(*page->next_url, pagination_.current_url,
+                               paginate_->source, ctx.dh(),
+                               NextUrlSource::odata_next_link)
+            : None{};
+      for (auto& event_slice : page->events) {
+        co_await push(std::move(event_slice));
+      }
+      co_return;
+    }
     if (not pagination_.next_url) {
       if (auto next = next_url_from_lambda(paginate_, slice,
                                            pagination_.current_url, ctx.dh())) {
@@ -1007,6 +814,18 @@ public:
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
+    if (auto mode = builtin_pagination_mode(paginate_);
+        mode and *mode == http::PaginationMode::odata
+        and not odata_envelope_seen_ and response_
+        and response_->is_success()) {
+      TENZIR_ASSERT(paginate_);
+      diagnostic::error(
+        "expected OData response body to contain a top-level `value` array")
+        .primary(paginate_->source)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
     if (pagination_.next_url) {
       // next page
       pagination_.current_url = std::move(*pagination_.next_url);
@@ -1031,8 +850,14 @@ private:
   // Requires pagination_.current_url and pagination_.page_count to be set.
   auto start_fetch(OpCtx& ctx, RequestConfig request) -> Task<void> {
     response_ = None{};
-    ctx.spawn_task(fetch(evb_, proxygen::URL{pagination_.current_url},
-                         std::move(request), fetch_config_, message_queue_));
+    odata_envelope_seen_ = false;
+    auto parsed_url = proxygen::URL{pagination_.current_url};
+    bytes_read_ = ctx.make_counter(
+      MetricsLabel{"host",
+                   MetricsLabel::FixedString::truncate(parsed_url.getHost())},
+      MetricsDirection::read, MetricsVisibility::external_);
+    ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
+                         fetch_config_, message_queue_));
     co_return;
   }
 
@@ -1071,6 +896,7 @@ private:
   // --- transient ---
   mutable Arc<MessageQueue> message_queue_;
   folly::EventBase* evb_{};
+  MetricsCounter bytes_read_;
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
@@ -1081,6 +907,7 @@ private:
   PaginationState pagination_;
   // State collected per response page; absent before first response header.
   Option<ResponseState> response_;
+  bool odata_envelope_seen_ = false;
 };
 
 class from_http_plugin final : public virtual OperatorPlugin {
@@ -1206,14 +1033,12 @@ public:
             .emit(ctx);
         }
       }
-      auto paginate = Option<pagination_spec>{None{}};
       if (auto paginate_expr = ctx.get(paginate_arg)) {
         auto validated
           = validate_paginate(Option<ast::expression>{*paginate_expr}, ctx);
         if (not validated) {
           return {};
         }
-        paginate = std::move(*validated);
       }
       // Validate that the parser pipeline is present and produces events.
       TRY(auto parser, ctx.get(parser_arg));

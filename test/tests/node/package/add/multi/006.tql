@@ -1,0 +1,4 @@
+context::list
+sort name
+write_tql
+save_stdout

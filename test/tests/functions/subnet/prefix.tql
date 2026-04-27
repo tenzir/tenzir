@@ -1,0 +1,20 @@
+from (
+  {
+    label: "v4-24",
+    from_ip: subnet(10.10.1.124, 24),
+    from_string: subnet("10.20.1.124", 24),
+    from_subnet: subnet(10.30.1.124/32, 24),
+  },
+  {
+    label: "v4-16",
+    from_ip: subnet(10.10.1.124, 16),
+    from_string: subnet("10.20.1.124", 16),
+    from_subnet: subnet(10.30.1.124/32, 16),
+  },
+  {
+    label: "v6-64",
+    from_ip: subnet(ip("2001:db8::1"), 64),
+    from_string: subnet("2001:db8::1", 64),
+    from_subnet: subnet(2001:db8::1/128, 64),
+  },
+)

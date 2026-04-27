@@ -1,0 +1,86 @@
+name: Test Package with inline config
+author: Tenzir
+id: test1
+
+description: |
+  A package used in integration tests.
+
+inputs:
+  hello:
+    name: The string "hello"
+    description: Note, this variable has a default.
+    type: string
+    default: Hello
+  world:
+    name: The string "world"
+    description: Note, this variable doesn't have a default.
+    type: string
+
+config:
+  inputs:
+    world: WORLD!!11elf!
+
+contexts:
+  test1-context:
+    type: lookup-table
+    description: A table that contains nothing.
+
+  disabled-test-context:
+    type: lookup-table
+    description: This context is disabled and should not influence the result.
+    disabled: true
+
+pipelines:
+  nop:
+    name: Do nothing at all.
+    description: This pipeline does nothing.
+    restart-on-error: 5m
+    definition: |
+      version
+      discard
+
+  import-version:
+    name: Import an event
+    description: Imports an event
+    definition: |
+      from {
+        message: "{{ inputs.hello }} {{ inputs.world }}"
+      }
+      import
+
+  disabled-pipeline:
+    name: Disabled pipeline
+    description: This pipeline would generate an error if it wasn't disabled.
+    definition: |
+      version
+      discard
+    disabled: true
+
+  unstoppable-pipeline:
+    name: Unstoppable pipeline
+    description: This pipeline is unstoppable.
+    definition: |
+        version
+        discard
+    unstoppable: true
+
+
+examples:
+  - name: Zeek log volume from the last hour
+    description: A line chart displaying how many Zeek events arrived in the last hour.
+    definition: |
+        metrics
+        | where timestamp > 3 hour ago
+        | where #schema == "tenzir.metrics.operator"
+        | where pipeline_id == "pkgs::zeek::onboard-from-interface"
+                || pipeline_id == "pkgs::zeek::onboard-from-file"
+        | where source == true
+        | summarize elements=sum(output.elements),
+            approx_bytes=sum(output.approx_bytes),
+            duration=sum(duration) by timestamp resolution 1min
+        | python '
+          self.elements /= self.duration.total_seconds()
+          self.approx_bytes /= self.duration.total_seconds()
+        '
+        | sort timestamp
+        | chart area -x timestamp -y elements

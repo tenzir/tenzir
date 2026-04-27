@@ -3,6 +3,6 @@
 // implementation anchored the schedule too early and emitted an extra periodic
 // result between the two delayed rows.
 from {ts: 400ms.from_epoch(), x: 1},
-     {ts: 650ms.from_epoch(), x: 1}
+     {ts: 900ms.from_epoch(), x: 1}
 delay ts, start=0ms.from_epoch()
-summarize count=count(), options={frequency: 300ms, mode: "cumulative"}
+summarize count=count(), options={frequency: 1000ms, mode: "cumulative"}

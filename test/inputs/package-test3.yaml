@@ -1,0 +1,34 @@
+name: Test Package with inline config
+author: Tenzir
+id: test3
+
+description: |
+  A package used in integration tests.
+  This package uses overrides to enable certain fields.
+
+config:
+  overrides:
+    contexts:
+      disabled-context-test3:
+        type: lookup-table
+        disabled: false
+    pipelines:
+      nop:
+        definition: |
+          version
+          discard
+        disabled: false
+
+contexts:
+  disabled-context-test3:
+    type: INVALID TYPE
+    description: This context is disabled and invalid.
+    disabled: true
+
+pipelines:
+  nop:
+    name: Do nothing at all.
+    description: This pipeline is disabled and invalid.
+    definition: |
+      INVALID DEFINITION
+    disabled: true

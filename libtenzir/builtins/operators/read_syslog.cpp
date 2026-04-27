@@ -279,6 +279,26 @@ private:
       }
     }
 
+    // Try Cisco legacy dialect, e.g. `<189>: 2026 Apr 14 08:45:52 UTC: ...`.
+    {
+      f = line.begin();
+      auto cisco_msg = syslog::legacy_message{};
+      if (syslog::cisco_legacy_message_parser{}.parse(f, l, cisco_msg)) {
+        constexpr auto tag = syslog::builder_tag::legacy_syslog_builder;
+        for (auto& s : flush_for_schema_change(tag)) {
+          co_await push(std::move(s));
+        }
+        last_ = tag;
+        if (args_.raw_message) {
+          legacy_builder_->add_new(
+            {std::move(cisco_msg), line_nr_, std::string{line}});
+        } else {
+          legacy_builder_->add_new({std::move(cisco_msg), line_nr_});
+        }
+        co_return;
+      }
+    }
+
     // Multiline continuation: try to append to the most recent message.
     if (last_ == syslog::builder_tag::syslog_builder
         and new_builder_->add_line_to_latest(line)) {

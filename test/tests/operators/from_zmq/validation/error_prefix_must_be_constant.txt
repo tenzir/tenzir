@@ -1,0 +1,6 @@
+error: `prefix` must be a constant string
+ --> tests/operators/from_zmq/validation/error_prefix_must_be_constant.tql:5:36
+  |
+5 | from_zmq "127.0.0.1:31337", prefix=message {
+  |                                    ^^^^^^^ 
+  |

@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+let $over = []
+from {x: 1}
+load_balance $over {
+  discard
+}

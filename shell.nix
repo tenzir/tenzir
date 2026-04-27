@@ -37,6 +37,7 @@ pkgs.mkShell (
           pandas
           pip
           pyarrow
+          pyzmq
           python-box
         ]
       ))

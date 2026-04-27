@@ -1,0 +1,50 @@
+{
+  id: "test1",
+  name: "Test Package with inline config",
+  author: "Tenzir",
+  description: "A package used in integration tests.\n",
+  config: {
+    inputs: {
+      world: "WORLD!!11elf!",
+    },
+    overrides: {},
+    disabled: false,
+  },
+}
+{
+  id: "test2",
+  name: "Test Package with inline config",
+  author: "Tenzir",
+  description: "A package used in integration tests.\nUnlike `test1`, this package has a missing input 'world' that needs\nto be specified when adding the package.\n",
+  config: {
+    inputs: {
+      world: "world",
+    },
+    overrides: {},
+    disabled: false,
+  },
+}
+{
+  id: "test3",
+  name: "Test Package with inline config",
+  author: "Tenzir",
+  description: "A package used in integration tests.\nThis package uses overrides to enable certain fields.\n",
+  config: {
+    inputs: {},
+    overrides: {
+      contexts: {
+        "disabled-context-test3": {
+          type: "lookup-table",
+          disabled: false,
+        },
+      },
+      pipelines: {
+        nop: {
+          definition: "version\ndiscard\n",
+          disabled: false,
+        },
+      },
+    },
+    disabled: false,
+  },
+}

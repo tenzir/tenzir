@@ -1,0 +1,3 @@
+{
+  line: "alerts/hello-from-accept-zmq-prefix\\n",
+}
