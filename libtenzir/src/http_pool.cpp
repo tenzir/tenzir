@@ -213,14 +213,11 @@ auto HttpPool::request(std::string method, std::optional<std::string> target,
       if (not method_parsed) {
         co_return Err{fmt::format("invalid http method: {}", method)};
       }
-      auto url = with_target(impl->url, std::move(target));
-      if (url.is_err()) {
-        co_return Err{std::move(url).unwrap_err()};
-      }
+      CO_TRY(auto url, with_target(impl->url, std::move(target)));
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
         auto sr = co_await impl->pool->getSessionWithReservation();
         TENZIR_ASSERT_ALWAYS(sr.session);
-        auto* source = make_request_source(url.unwrap(), *method_parsed,
+        auto* source = make_request_source(url, *method_parsed,
                                            std::move(headers), std::move(body));
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
