@@ -39,6 +39,8 @@ class Measurement:
     run: int
     sender_seconds: float
     receiver_seconds: float
+    startup_seconds: float | None
+    read_seconds: float | None
 
     @property
     def payload_bytes(self) -> int:
@@ -59,6 +61,42 @@ class Measurement:
     @property
     def receiver_mib_s(self) -> float:
         return self.payload_bytes / self.receiver_seconds / MEBIBYTE
+
+    @property
+    def sender_adjusted_seconds(self) -> float | None:
+        if self.startup_seconds is None:
+            return None
+        return max(self.sender_seconds - self.startup_seconds, sys.float_info.epsilon)
+
+    @property
+    def receiver_adjusted_seconds(self) -> float | None:
+        if self.startup_seconds is None:
+            return None
+        return max(self.receiver_seconds - self.startup_seconds, sys.float_info.epsilon)
+
+    @property
+    def sender_incremental_seconds(self) -> float | None:
+        if self.read_seconds is None:
+            return None
+        return max(self.sender_seconds - self.read_seconds, sys.float_info.epsilon)
+
+    @property
+    def sender_adjusted_eps(self) -> float | None:
+        if (seconds := self.sender_adjusted_seconds) is None:
+            return None
+        return self.case.events / seconds
+
+    @property
+    def receiver_adjusted_eps(self) -> float | None:
+        if (seconds := self.receiver_adjusted_seconds) is None:
+            return None
+        return self.case.events / seconds
+
+    @property
+    def sender_incremental_eps(self) -> float | None:
+        if (seconds := self.sender_incremental_seconds) is None:
+            return None
+        return self.case.events / seconds
 
 
 @dataclass(frozen=True)
@@ -292,6 +330,32 @@ def write_sender_tql(
     )
 
 
+def write_read_discard_tql(
+    *,
+    path: Path,
+    input_path: Path,
+    sender_input: str,
+) -> None:
+    if sender_input == "lines":
+        parser = ["  read_lines binary=true"]
+    elif sender_input == "ndjson":
+        parser = ["  read_ndjson"]
+    else:
+        raise ValueError(f"unsupported sender input: {sender_input}")
+    path.write_text(
+        "\n".join(
+            [
+                f"from_file {json.dumps(str(input_path))} {{",
+                *parser,
+                "}",
+                "discard",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def write_receiver_tql(
     *,
     path: Path,
@@ -486,6 +550,24 @@ def print_measurement(
             f" send_native={native.sender_percent(measurement.sender_eps):.1f}%"
             f" recv_native={native.receiver_percent(measurement.receiver_eps):.1f}%"
         )
+        if measurement.sender_adjusted_eps is not None:
+            native_suffix += (
+                " "
+                f"send_native_no_startup="
+                f"{native.sender_percent(measurement.sender_adjusted_eps):.1f}%"
+            )
+        if measurement.receiver_adjusted_eps is not None:
+            native_suffix += (
+                " "
+                f"recv_native_no_startup="
+                f"{native.receiver_percent(measurement.receiver_adjusted_eps):.1f}%"
+            )
+        if measurement.sender_incremental_eps is not None:
+            native_suffix += (
+                " "
+                f"send_native_nats_only="
+                f"{native.sender_percent(measurement.sender_incremental_eps):.1f}%"
+            )
     print(
         "  "
         f"run={measurement.run} "
@@ -510,12 +592,48 @@ def print_summary(
     sender_mib_s = statistics.median(item.sender_mib_s for item in measurements)
     receiver_eps = statistics.median(item.receiver_eps for item in measurements)
     receiver_mib_s = statistics.median(item.receiver_mib_s for item in measurements)
+    sender_adjusted = [
+        value
+        for item in measurements
+        if (value := item.sender_adjusted_eps) is not None
+    ]
+    receiver_adjusted = [
+        value
+        for item in measurements
+        if (value := item.receiver_adjusted_eps) is not None
+    ]
+    sender_incremental = [
+        value
+        for item in measurements
+        if (value := item.sender_incremental_eps) is not None
+    ]
     native_suffix = ""
     if native is not None:
         native_suffix = (
             f" send_native={native.sender_percent(sender_eps):.1f}%"
             f" recv_native={native.receiver_percent(receiver_eps):.1f}%"
         )
+        if sender_adjusted:
+            sender_adjusted_eps = statistics.median(sender_adjusted)
+            native_suffix += (
+                f" send_eps_no_startup={format_rate(sender_adjusted_eps)}"
+                f" send_native_no_startup="
+                f"{native.sender_percent(sender_adjusted_eps):.1f}%"
+            )
+        if receiver_adjusted:
+            receiver_adjusted_eps = statistics.median(receiver_adjusted)
+            native_suffix += (
+                f" recv_eps_no_startup={format_rate(receiver_adjusted_eps)}"
+                f" recv_native_no_startup="
+                f"{native.receiver_percent(receiver_adjusted_eps):.1f}%"
+            )
+        if sender_incremental:
+            sender_incremental_eps = statistics.median(sender_incremental)
+            native_suffix += (
+                f" send_eps_nats_only={format_rate(sender_incremental_eps)}"
+                f" send_native_nats_only="
+                f"{native.sender_percent(sender_incremental_eps):.1f}%"
+            )
     print(
         "summary "
         f"events={case.events:,} "
@@ -557,6 +675,43 @@ def benchmark_case(
         container_id=container_id,
     )
 
+    startup_seconds: float | None = None
+    read_seconds: float | None = None
+    if args.overhead_runs > 0:
+        empty_path = workdir / f"empty-{case_index}.{args.sender_input}"
+        empty_path.touch()
+        empty_tql = workdir / f"empty-{case_index}.tql"
+        read_tql = workdir / f"read-{case_index}.tql"
+        write_read_discard_tql(
+            path=empty_tql,
+            input_path=empty_path,
+            sender_input=args.sender_input,
+        )
+        write_read_discard_tql(
+            path=read_tql,
+            input_path=input_path,
+            sender_input=args.sender_input,
+        )
+        startup_samples = [
+            run_tenzir(args.tenzir, empty_tql) for _ in range(args.overhead_runs)
+        ]
+        read_samples = [
+            run_tenzir(args.tenzir, read_tql) for _ in range(args.overhead_runs)
+        ]
+        startup_seconds = statistics.median(startup_samples)
+        read_seconds = statistics.median(read_samples)
+        read_suffix = ""
+        if read_seconds > startup_seconds:
+            read_eps = case.events / (read_seconds - startup_seconds)
+            read_suffix = f" read_eps_no_startup={format_rate(read_eps)}"
+        print(
+            "  "
+            f"overhead startup={startup_seconds:.3f}s "
+            f"read={read_seconds:.3f}s"
+            f"{read_suffix}",
+            flush=True,
+        )
+
     measurements: list[Measurement] = []
     total_runs = args.warmups + args.runs
     for logical_run in range(total_runs):
@@ -590,6 +745,8 @@ def benchmark_case(
             run=run_number,
             sender_seconds=sender_seconds,
             receiver_seconds=receiver_seconds,
+            startup_seconds=startup_seconds,
+            read_seconds=read_seconds,
         )
         if measured:
             measurements.append(measurement)
@@ -646,6 +803,15 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="batch size for native nats bench JetStream commands",
     )
     parser.add_argument(
+        "--overhead-runs",
+        type=int,
+        default=1,
+        help=(
+            "number of startup and read/discard calibration runs per case; "
+            "set to 0 to disable adjusted no-startup/native-only metrics"
+        ),
+    )
+    parser.add_argument(
         "--no-native",
         action="store_true",
         help="skip native nats bench gold-standard runs",
@@ -665,6 +831,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         parser.error("--warmups must be non-negative")
     if args.native_runs <= 0:
         parser.error("--native-runs must be positive")
+    if args.overhead_runs < 0:
+        parser.error("--overhead-runs must be non-negative")
     if args.native_batch <= 0:
         parser.error("--native-batch must be positive")
     if not args.tenzir.exists():
