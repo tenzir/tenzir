@@ -382,6 +382,10 @@ public:
   FromNats(FromNats&&) noexcept = default;
   auto operator=(FromNats&&) noexcept -> FromNats& = default;
 
+  ~FromNats() override {
+    cleanup_sync();
+  }
+
   auto start(OpCtx& ctx) -> Task<void> override {
     read_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
@@ -549,16 +553,17 @@ public:
     auto accepted = std::vector<nats_msg_ptr>{};
     accepted.reserve(batch->messages.size());
     for (auto& msg : batch->messages) {
-      source_->release_message_slot();
       if (done_) {
         needs_shutdown_flush_
           = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
+        source_->release_message_slot();
         msg.reset();
         continue;
       }
       if (args_.count and received_ >= args_.count->inner) {
         needs_shutdown_flush_
           = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
+        source_->release_message_slot();
         msg.reset();
         continue;
       }
@@ -576,6 +581,7 @@ public:
           if (msg) {
             needs_shutdown_flush_
               = negative_acknowledge(msg.get()) or needs_shutdown_flush_;
+            source_->release_message_slot();
           }
         }
       }};
@@ -586,6 +592,9 @@ public:
         co_await push(std::move(slice));
         mark_delivered(
           std::span<nats_msg_ptr>{accepted.data() + message_index, rows});
+        for (auto i = size_t{0}; i < rows; ++i) {
+          source_->release_message_slot();
+        }
         message_index += rows;
       }
       TENZIR_ASSERT(message_index == accepted.size());
@@ -830,6 +839,41 @@ private:
                         .primary(args_.subject.source),
                       status, ctx.dh());
     }
+  }
+
+  auto cleanup_sync() noexcept -> void {
+    if (not source_.not_moved_from()) {
+      return;
+    }
+    source_->stop_accepting();
+    auto needs_flush = std::exchange(needs_shutdown_flush_, false);
+    if (subscription_) {
+      auto const unsubscribe_status
+        = natsSubscription_Unsubscribe(subscription_.get());
+      needs_flush = unsubscribe_status == NATS_OK or needs_flush;
+    }
+    while (auto message = source_->try_dequeue()) {
+      match(
+        std::move(*message),
+        [&](IncomingMessage item) {
+          source_->release_message_slot();
+          needs_flush = negative_acknowledge(item.msg.get()) or needs_flush;
+        },
+        [](SubscriptionComplete) {}, [](AcknowledgePending) {});
+    }
+    if (not pending_acks_.empty()) {
+      for (auto& msg : pending_acks_) {
+        if (msg) {
+          needs_flush
+            = natsMsg_Ack(msg.get(), nullptr) == NATS_OK or needs_flush;
+        }
+      }
+      pending_acks_.clear();
+    }
+    if (needs_flush and connection_) {
+      natsConnection_FlushTimeout(connection_.get(), shutdown_flush_timeout_ms);
+    }
+    subscription_.reset();
   }
 
   auto request_stop(OpCtx& ctx) -> Task<void> {
