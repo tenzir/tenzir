@@ -629,9 +629,10 @@ private:
     config.numIOThreads = 1;
     config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
     if (tls_enabled) {
-      auto tls_config = http::make_folly_tls_config(
-        args_.tls, args_.url.source, ctx.dh(),
-        {.tls_default = false, .is_server = true});
+      auto tls_opts = tls_options::from_optional(
+        args_.tls, {.tls_default = false, .is_server = true});
+      auto tls_config = http_server::make_ssl_context_config(
+        tls_opts, args_.url.source, ctx.dh());
       if (not tls_config) {
         co_return None{};
       }

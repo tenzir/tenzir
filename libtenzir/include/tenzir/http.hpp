@@ -53,9 +53,6 @@ auto make_header_secret_requests(
   std::vector<std::pair<std::string, std::string>>& resolved_headers,
   diagnostic_handler& dh) -> std::vector<secret_request>;
 
-auto parse_folly_tls_version(std::string_view input)
-  -> Option<folly::SSLContext::SSLVersion>;
-
 struct header {
   std::string name;
   std::string value;

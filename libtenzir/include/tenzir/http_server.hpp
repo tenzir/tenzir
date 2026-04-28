@@ -11,10 +11,9 @@
 // This header exposes the proxygen-dependent HTTP server utilities.
 // It is intentionally NOT included by http.hpp to avoid pulling in proxygen
 // headers everywhere. Only include this from operators that actually run an
-// HTTP server (accept_http, accept_opensearch) and from http.cpp.
+// HTTP server (accept_http, accept_opensearch) and from http_server.cpp.
 
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/http.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tls_options.hpp"
 
@@ -26,15 +25,11 @@
 #include <string>
 #include <string_view>
 
-namespace tenzir::http {
-
-auto make_folly_tls_config(Option<located<data>> const& tls, location primary,
-                           diagnostic_handler& dh, tls_options::options options)
-  -> failure_or<wangle::SSLContextConfig>;
-
-} // namespace tenzir::http
-
 namespace tenzir::http_server {
+
+auto make_ssl_context_config(tls_options const& tls_opts, location primary,
+                             diagnostic_handler& dh)
+  -> failure_or<wangle::SSLContextConfig>;
 
 template <class T>
 auto parse_number(std::string_view text) -> Option<T> {

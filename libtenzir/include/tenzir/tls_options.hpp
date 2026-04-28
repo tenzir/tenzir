@@ -59,6 +59,14 @@ public:
   explicit tls_options(located<data> tls_val, options opts);
   tls_options() = default;
 
+  static auto from_optional(Option<located<data>> const& tls,
+                            options opts = {.tls_default = true,
+                                            .uses_curl_http = false,
+                                            .is_server = false})
+    -> tls_options {
+    return tls ? tls_options{*tls, opts} : tls_options{opts};
+  }
+
   auto add_tls_options(argument_parser2&) -> void;
 
   /// Adds only the `tls` argument (deprecated individual options are omitted)
@@ -72,8 +80,7 @@ public:
     auto opts
       = options{.uses_curl_http = uses_curl_http_, .is_server = is_server_};
     return [tls_arg, opts](DescribeCtx& ctx) -> Empty {
-      auto tls_val = ctx.get(tls_arg);
-      auto tls_opt = tls_val ? tls_options{*tls_val, opts} : tls_options{opts};
+      auto tls_opt = from_optional(ctx.get(tls_arg), opts);
       (void)tls_opt.validate(ctx);
       return {};
     };

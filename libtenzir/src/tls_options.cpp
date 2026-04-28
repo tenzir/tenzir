@@ -75,6 +75,71 @@ auto parse_tls_version(std::string_view version) -> caf::expected<tls_version> {
                                      version));
 }
 
+constexpr auto to_openssl_tls_version(tls_version version) -> int {
+  switch (version) {
+    case tls_version::v1_0:
+      return TLS1_VERSION;
+    case tls_version::v1_1:
+      return TLS1_1_VERSION;
+    case tls_version::v1_2:
+      return TLS1_2_VERSION;
+    case tls_version::v1_3:
+      return TLS1_3_VERSION;
+  }
+  TENZIR_UNREACHABLE();
+}
+
+struct resolved_tls_settings {
+  Option<tls_version> min_version = None{};
+  std::optional<located<std::string>> cacert;
+  std::optional<located<std::string>> certfile;
+  std::optional<located<std::string>> keyfile;
+  std::optional<located<std::string>> password;
+  std::optional<located<std::string>> ciphers;
+  bool skip_peer_verification = false;
+
+  auto private_key_file() const -> std::optional<located<std::string>> {
+    return keyfile ? keyfile : certfile;
+  }
+};
+
+auto resolve_tls_settings(tls_options const& opts, diagnostic_handler& dh)
+  -> failure_or<resolved_tls_settings> {
+  auto result = resolved_tls_settings{
+    .cacert = opts.get_cacert(nullptr),
+    .certfile = opts.get_certfile(nullptr),
+    .keyfile = opts.get_keyfile(nullptr),
+    .password = opts.get_password(nullptr),
+    .ciphers = opts.get_tls_ciphers(nullptr),
+    .skip_peer_verification = opts.get_skip_peer_verification(nullptr).inner,
+  };
+  if (auto min = opts.get_tls_min_version(nullptr)) {
+    if (not min->inner.empty()) {
+      auto parsed = parse_tls_version(min->inner);
+      if (not parsed) {
+        diagnostic::error(parsed.error()).primary(*min).emit(dh);
+        return failure::promise();
+      }
+      result.min_version = *parsed;
+    }
+  }
+  return result;
+}
+
+auto resolve_regular_file(located<std::string> const& value,
+                          std::string_view key, diagnostic_handler& dh)
+  -> failure_or<std::filesystem::path> {
+  auto ec = std::error_code{};
+  auto path = std::filesystem::canonical(value.inner, ec);
+  if (ec or not std::filesystem::is_regular_file(path, ec)) {
+    diagnostic::error("`{}` path is not a valid file", key)
+      .primary(value)
+      .emit(dh);
+    return failure::promise();
+  }
+  return path;
+}
+
 template <typename T>
 auto query_config(std::string_view name, const caf::actor_system_config* cfg)
   -> const T* {
@@ -307,17 +372,7 @@ auto parse_curl_tls_version(std::string_view version) -> caf::expected<long> {
 
 auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int> {
   TRY(auto parsed, parse_tls_version(version));
-  switch (parsed) {
-    case tls_version::v1_0:
-      return TLS1_VERSION;
-    case tls_version::v1_1:
-      return TLS1_1_VERSION;
-    case tls_version::v1_2:
-      return TLS1_2_VERSION;
-    case tls_version::v1_3:
-      return TLS1_3_VERSION;
-  }
-  TENZIR_UNREACHABLE();
+  return to_openssl_tls_version(parsed);
 }
 
 auto parse_caf_tls_version(std::string_view version)
@@ -874,75 +929,45 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
   if (not get_tls(nullptr).inner) {
     return nullptr;
   }
+  TRY(auto settings, resolve_tls_settings(*this, dh));
   auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
   // Apply minimum TLS version.
-  if (auto min = get_tls_min_version(nullptr)) {
-    if (not min->inner.empty()) {
-      auto parsed = parse_openssl_tls_version(min->inner);
-      if (not parsed) {
-        diagnostic::error(parsed.error()).primary(*min).emit(dh);
-        return failure::promise();
-      }
-      SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
-    }
+  if (settings.min_version) {
+    SSL_CTX_set_min_proto_version(
+      ctx->getSSLCtx(), to_openssl_tls_version(*settings.min_version));
   }
   // Load CA certificate.
-  auto cacert = get_cacert(nullptr);
-  if (cacert) {
-    auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(cacert->inner, ec);
-    if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`cacert` path is not a valid file")
-        .primary(*cacert)
-        .emit(dh);
-      return failure::promise();
-    }
+  if (settings.cacert) {
+    TRY(auto path, resolve_regular_file(*settings.cacert, "cacert", dh));
     try {
       ctx->loadTrustedCertificates(path.c_str());
     } catch (std::exception const& ex) {
       diagnostic::error("failed to load CA certificate: {}", ex.what())
-        .primary(*cacert)
+        .primary(*settings.cacert)
         .emit(dh);
       return failure::promise();
     }
   }
-  auto certfile = get_certfile(nullptr);
   // Load certificate chain.
-  if (certfile) {
-    auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(certfile->inner, ec);
-    if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`certfile` path is not a valid file")
-        .primary(*certfile)
-        .emit(dh);
-      return failure::promise();
-    }
+  if (settings.certfile) {
+    TRY(auto path, resolve_regular_file(*settings.certfile, "certfile", dh));
     try {
       ctx->loadCertificate(path.c_str());
     } catch (std::exception const& ex) {
       diagnostic::error("failed to load client certificate: {}", ex.what())
-        .primary(*certfile)
+        .primary(*settings.certfile)
         .emit(dh);
       return failure::promise();
     }
   }
   // Load private key. If `keyfile` is omitted, try reading it from `certfile`.
-  auto keyfile = get_keyfile(nullptr);
-  auto private_key_file = keyfile ? keyfile : certfile;
-  if (private_key_file) {
-    auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(private_key_file->inner, ec);
-    if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`{}` path is not a valid file",
-                        keyfile ? "keyfile" : "certfile")
-        .primary(*private_key_file)
-        .emit(dh);
-      return failure::promise();
-    }
+  if (auto private_key_file = settings.private_key_file()) {
+    auto key_name = settings.keyfile ? "keyfile" : "certfile";
+    TRY(auto path, resolve_regular_file(*private_key_file, key_name, dh));
     try {
       ctx->loadPrivateKey(path.c_str());
     } catch (std::exception const& ex) {
-      if (not keyfile and certfile) {
+      if (not settings.keyfile and settings.certfile) {
         diagnostic::error("failed to load client private key: {}", ex.what())
           .primary(*private_key_file)
           .hint("set `tls.keyfile` or include a private key in `tls.certfile`")
@@ -955,14 +980,15 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  if (auto ciphers = get_tls_ciphers(nullptr)) {
-    auto cipher_loc = ciphers->source;
+  if (settings.ciphers) {
+    auto cipher_loc = settings.ciphers->source;
     if (tls_ and cipher_loc == tls_->source) {
       // `located<data>` for `tls={...}` only carries the whole record span.
       // Clamp to a tiny span to avoid misleading multi-line highlights.
       cipher_loc = cipher_loc.subloc(0, 1);
     }
-    if (SSL_CTX_set_cipher_list(ctx->getSSLCtx(), ciphers->inner.c_str())
+    if (SSL_CTX_set_cipher_list(ctx->getSSLCtx(),
+                                settings.ciphers->inner.c_str())
         != 1) {
       diagnostic::error("invalid TLS cipher list")
         .primary(cipher_loc, "`tls.ciphers`")
@@ -971,12 +997,11 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Set verification mode.
-  auto skip_verify = get_skip_peer_verification(nullptr).inner;
-  if (skip_verify) {
+  if (settings.skip_peer_verification) {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
-    if (not cacert
+    if (not settings.cacert
         and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
       diagnostic::error("failed to enable default verify paths").emit(dh);
       return failure::promise();

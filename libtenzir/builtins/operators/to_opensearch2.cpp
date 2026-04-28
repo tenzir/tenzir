@@ -280,8 +280,7 @@ public:
       .ssl_context = nullptr,
     };
     if (*tls_enabled) {
-      auto tls_opts = args_.tls ? tls_options{*args_.tls, {.is_server = false}}
-                                : tls_options{{.is_server = false}};
+      auto tls_opts = tls_options::from_optional(args_.tls);
       auto ssl_context = tls_opts.make_folly_ssl_context(ctx);
       if (ssl_context.is_error()) {
         lifecycle_ = Lifecycle::done;
