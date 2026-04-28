@@ -1020,8 +1020,6 @@ private:
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
       co_await main_loop();
-      // Give operators one async teardown pass after the runner drained.
-      co_await base_op().stop(*this);
     } catch (folly::OperationCancelled const&) {
       // Sanity check: We should only propagate this if we actually got cancelled.
       auto cancelled = cancellation_token.isCancellationRequested();
