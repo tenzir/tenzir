@@ -26,72 +26,10 @@ rec {
     # Closed-source plugin not shipped in the Nix build.
     # ../test-legacy/tests/operators/to_sentinelone_data_lake
 
-    # accept_http startup / TLS handshake failures
-    # ../test/tests/operators/accept_http/basic_ingest.tql
-    # ../test/tests/operators/accept_http/tls.tql
-    # ../test/tests/operators/accept_http/tls_min_version_supported.tql
-    # ../test/tests/operators/accept_http/request_variable.tql
-
     # dns lookup output mismatches in the sandboxed environment
-    # ../test/tests/operators/dns_lookup/batch_splitting.tql
-    # ../test/tests/operators/dns_lookup/forward_lookup.tql
-    # ../test/tests/operators/dns_lookup/localhost_test.tql
-
-    # broad timeout bucket
-    # ../test/tests/operators/bitz/error_invalid_magic.tql
-    # ../test/tests/operators/bitz/error_missing_header.tql
-    # ../test/tests/operators/bitz/error_truncated_header.tql
-    # ../test/tests/operators/bitz/round_trip.tql
-    # ../test/tests/operators/bitz/write_skips_empty_slices.tql
-    # ../test/tests/operators/compress_decompress/brotli_roundtrip.tql
-    # ../test/tests/operators/compress_decompress/bz2_roundtrip.tql
-    # ../test/tests/operators/compress_decompress/gzip_deflate_format.tql
-    # ../test/tests/operators/compress_decompress/gzip_roundtrip.tql
-    # ../test/tests/operators/compress_decompress/gzip_with_level.tql
-    # ../test/tests/operators/compress_decompress/lz4_roundtrip.tql
-    # ../test/tests/operators/compress_decompress/zstd_roundtrip.tql
-    ../test/tests/operators/from_stdin/basic.tql
-    # ../test/tests/operators/from_stdin/empty.tql
-    # ../test/tests/operators/from_stdin/unterminated_eof.tql
-    # ../test/tests/operators/read_gelf/basic.tql
-    # ../test/tests/operators/read_gelf/null_delimited.tql
-    # ../test/tests/operators/read_gelf/single_message.tql
-    # ../test/tests/operators/read_grok/basic.tql
-    # ../test/tests/operators/read_json/arrays_of_objects.tql
-    # ../test/tests/operators/read_json/basic.tql
-    # ../test/tests/operators/read_json/incomplete_object.tql
-    # ../test/tests/operators/read_json/record_list_different_fields.tql
-    # ../test/tests/operators/read_json/record_list_new_field.tql
-    # ../test/tests/operators/read_json/type_conflict.tql
-    # ../test/tests/operators/read_json/type_conflict_batching.tql
-    # ../test/tests/operators/read_ndjson/basic.tql
-    # ../test/tests/operators/read_ndjson/duplicate_keys_unparsed.tql
-    # ../test/tests/operators/read_ndjson/type_mismatch.tql
-    # ../test/tests/operators/read_suricata/basic.tql
-    # ../test/tests/operators/read_suricata/eve_fileinfo_sample.tql
-    # ../test/tests/operators/read_tql/basic_types.tql
-    # ../test/tests/operators/read_tql/compact.tql
-    # ../test/tests/operators/read_tql/empty_structures.tql
-    # ../test/tests/operators/read_tql/multiple_records.tql
-    # ../test/tests/operators/read_tql/native_types.tql
-    # ../test/tests/operators/read_tql/nested.tql
-    # ../test/tests/operators/read_tql/quoted_fields.tql
-    # ../test/tests/operators/read_tql/strings.tql
-    # ../test/tests/operators/read_tql/trailing_comma.tql
-    # ../test/tests/operators/read_tql/whitespace_between_records.tql
-    # ../test/tests/operators/read_tql/whitespace_excessive.tql
-    # ../test/tests/operators/read_tql/whitespace_list.tql
-    # ../test/tests/operators/read_tql/whitespace_minimal.tql
-    # ../test/tests/operators/read_tql/whitespace_mixed.tql
-    # ../test/tests/operators/read_tql/whitespace_multiline.tql
-    # ../test/tests/operators/read_yaml/basic.tql
-    # ../test/tests/operators/read_yaml/warning_prefix.tql
-    # ../test/tests/operators/read_zeek_json/basic.tql
-    # ../test/tests/operators/read_zeek_json/conn_sample.tql
-    # ../test/tests/operators/xsv/error_write_csv_heterogeneous_schemas.tql
-    # ../test/tests/operators/yara/basic.tql
-    # ../test/tests/operators/yara/basic_list.tql
-    # ../test/tests/operators/yara/empty.tql
+    ../test/tests/operators/dns_lookup/batch_splitting.tql
+    ../test/tests/operators/dns_lookup/forward_lookup.tql
+    ../test/tests/operators/dns_lookup/localhost_test.tql
 
     # from_http TLS CA lookup failures
     # ../test/tests/operators/from_http/tls_min_version_supported.tql
