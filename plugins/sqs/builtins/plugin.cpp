@@ -97,12 +97,6 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto args, parse_connector_args(name(), inv, ctx));
-    if (args.poll_time) {
-      diagnostic::warning("`poll_time` is deprecated for `save_sqs` and will "
-                          "be ignored")
-        .primary(args.poll_time->source)
-        .emit(ctx);
-    }
     return std::make_unique<sqs_saver>(std::move(args));
   }
 

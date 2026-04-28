@@ -10,13 +10,13 @@
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/aws_iam.hpp>
-#include <tenzir/detail/env.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/variant.hpp>
 
 #include <arrow/array/array_binary.h>
+#include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/utils/Outcome.h>
 #include <aws/sqs/model/Message.h>
 #include <aws/sqs/model/MessageSystemAttributeName.h>
@@ -45,19 +45,16 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   }
   auto resolved_creds = std::move(auth->credentials);
   // Resolve the effective region: explicit `aws_region` wins, then the region
-  // from resolved AWS IAM credentials, then the AWS_REGION / AWS_DEFAULT_REGION
-  // environment variables, and finally a default of "us-east-1".
+  // from resolved AWS IAM credentials, then the AWS SDK's default resolution
+  // (AWS_REGION / AWS_DEFAULT_REGION env vars, the configured profile in
+  // `~/.aws/config`, and finally the SDK default of "us-east-1").
   auto region = std::string{};
   if (args.aws_region) {
     region = args.aws_region->inner;
   } else if (resolved_creds and not resolved_creds->region.empty()) {
     region = resolved_creds->region;
-  } else if (auto env = detail::getenv("AWS_REGION")) {
-    region = *env;
-  } else if (auto env = detail::getenv("AWS_DEFAULT_REGION")) {
-    region = *env;
   } else {
-    region = "us-east-1";
+    region = Aws::Client::ClientConfiguration{}.region;
   }
   auto poll_time = default_poll_time;
   if constexpr (requires { args.poll_time; }) {
