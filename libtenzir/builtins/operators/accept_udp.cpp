@@ -33,7 +33,9 @@
 #include <sys/types.h>
 
 #include <array>
+#include <chrono>
 #include <deque>
+#include <string_view>
 #include <vector>
 
 namespace tenzir::plugins::accept_udp {
@@ -47,6 +49,9 @@ constexpr auto udp_buffer_size = size_t{65'536};
 // Allow short bursts of datagrams without forcing immediate backpressure on the
 // socket, while still keeping the queued working set bounded.
 constexpr auto message_queue_capacity = uint32_t{256};
+constexpr auto datagram_batch_size = size_t{1024};
+constexpr auto datagram_coalesce_delay = std::chrono::microseconds{100};
+constexpr auto socket_receive_buffer_size = int{16 * 1024 * 1024};
 
 struct AcceptUdpArgs {
   located<std::string> endpoint;
@@ -78,6 +83,14 @@ struct Error {
   std::string detail;
 };
 
+struct DatagramBatch {
+  explicit DatagramBatch(std::vector<Datagram> datagrams)
+    : datagrams{std::move(datagrams)} {
+  }
+
+  std::vector<Datagram> datagrams;
+};
+
 struct Flush {
   explicit Flush(uint64_t generation) : generation{generation} {
   }
@@ -85,7 +98,8 @@ struct Flush {
   uint64_t generation;
 };
 
-using Message = variant<Datagram, Error, Flush>;
+using PendingMessage = variant<Datagram, Error>;
+using Message = variant<DatagramBatch, Error, Flush>;
 
 // Callback and reader coroutine both run on the EventBase thread, so access
 // to the members below is unsynchronized by design.
@@ -96,7 +110,7 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
   static constexpr size_t pending_high_water = 1024;
   static constexpr size_t pending_low_water = 256;
 
-  std::deque<Message> pending;
+  std::deque<PendingMessage> pending;
   Notify notify;
   MetricsCounter bytes_read_counter;
   folly::AsyncUDPSocket* socket = nullptr;
@@ -224,55 +238,61 @@ public:
     auto message = std::move(result).as<Message>();
     co_await co_match(
       std::move(message),
-      [&](Datagram datagram) -> Task<void> {
-        auto hostname = Option<std::string>{};
-        if (args_.resolve_hostnames) {
-          auto reverse_dns = co_await reverse_dns_.resolve(datagram.peer_ip);
-          if (reverse_dns->is_err()) {
-            if (not peer_resolution_warning_emitted_) {
-              diagnostic::warning("{}", reverse_dns->unwrap_err().error)
-                .note("failed to resolve peer hostname for {}",
-                      datagram.peer_ip)
-                .note("set `resolve_hostnames=false` to disable hostname "
-                      "resolution")
-                .primary(args_.endpoint)
-                .emit(ctx);
-              peer_resolution_warning_emitted_ = true;
+      [&](DatagramBatch batch) -> Task<void> {
+        for (auto& datagram : batch.datagrams) {
+          auto hostname = Option<std::string>{};
+          if (args_.resolve_hostnames) {
+            auto reverse_dns = co_await reverse_dns_.resolve(datagram.peer_ip);
+            if (reverse_dns->is_err()) {
+              if (not peer_resolution_warning_emitted_) {
+                diagnostic::warning("{}", reverse_dns->unwrap_err().error)
+                  .note("failed to resolve peer hostname for {}",
+                        datagram.peer_ip)
+                  .note("set `resolve_hostnames=false` to disable hostname "
+                        "resolution")
+                  .primary(args_.endpoint)
+                  .emit(ctx);
+                peer_resolution_warning_emitted_ = true;
+              }
+            } else if (auto* resolved
+                       = try_as<ReverseDnsResolved>(&reverse_dns->unwrap())) {
+              hostname = resolved->hostname;
             }
-          } else if (auto* resolved
-                     = try_as<ReverseDnsResolved>(&reverse_dns->unwrap())) {
-            hostname = resolved->hostname;
           }
-        }
-        auto bytes = as_bytes(datagram.payload);
-        auto string = std::string_view{
-          reinterpret_cast<char const*>(bytes.data()), bytes.size()};
-        if (not args_.binary and not arrow::util::ValidateUTF8(string)) {
-          diagnostic::warning("message is not valid UTF-8")
-            .primary(args_.endpoint)
-            .note("peer: {}:{}", datagram.peer_ip, datagram.peer_port)
-            .hint("use `binary=true` to accept non-UTF8 data")
-            .emit(ctx);
-          co_return;
-        }
-        auto event = builder_.record();
-        if (args_.binary) {
-          event.field("data").data(bytes);
-        } else {
-          event.field("data").data(string);
-        }
-        auto peer = event.field("peer").record();
-        peer.field("ip").data(datagram.peer_ip);
-        peer.field("port").data(int64_t{datagram.peer_port});
-        if (hostname) {
-          peer.field("hostname").data(std::move(*hostname));
-        }
-        if (builder_.length() == 1) {
-          schedule_batch_flush(ctx);
-        }
-        if (builder_.length()
-            >= static_cast<int64_t>(defaults::import::table_slice_size)) {
-          co_await flush_builder(push);
+          auto bytes = as_bytes(datagram.payload);
+          auto string = std::string_view{
+            reinterpret_cast<char const*>(bytes.data()), bytes.size()};
+          auto utf8_valid = true;
+          if (not args_.binary) {
+            utf8_valid = arrow::util::ValidateUTF8(string);
+          }
+          if (not utf8_valid) {
+            diagnostic::warning("message is not valid UTF-8")
+              .primary(args_.endpoint)
+              .note("peer: {}:{}", datagram.peer_ip, datagram.peer_port)
+              .hint("use `binary=true` to accept non-UTF8 data")
+              .emit(ctx);
+            continue;
+          }
+          auto event = builder_.record();
+          if (args_.binary) {
+            event.field("data").data(bytes);
+          } else {
+            event.field("data").data(string);
+          }
+          auto peer = event.field("peer").record();
+          peer.field("ip").data(datagram.peer_ip);
+          peer.field("port").data(int64_t{datagram.peer_port});
+          if (hostname) {
+            peer.field("hostname").data(std::move(*hostname));
+          }
+          if (builder_.length() == 1) {
+            schedule_batch_flush(ctx);
+          }
+          if (builder_.length()
+              >= static_cast<int64_t>(defaults::import::table_slice_size)) {
+            co_await flush_builder(push);
+          }
         }
       },
       [&](Flush flush) -> Task<void> {
@@ -363,6 +383,7 @@ private:
     auto startup_error = Option<std::string>{};
     try {
       socket.setReuseAddr(true);
+      socket.setRcvBuf(socket_receive_buffer_size);
       socket.bind(bind_address);
       socket.resumeRead(&callback);
     } catch (std::exception const& ex) {
@@ -375,8 +396,25 @@ private:
     }
     while (true) {
       while (not callback.pending.empty()) {
-        auto message = std::move(callback.pending.front());
-        callback.pending.pop_front();
+        auto message = Message{DatagramBatch{std::vector<Datagram>{}}};
+        if (auto* error = try_as<Error>(&callback.pending.front())) {
+          message = std::move(*error);
+          callback.pending.pop_front();
+        } else {
+          auto datagrams = std::vector<Datagram>{};
+          datagrams.reserve(
+            std::min(datagram_batch_size, callback.pending.size()));
+          while (not callback.pending.empty()
+                 and datagrams.size() < datagram_batch_size) {
+            auto* datagram = try_as<Datagram>(&callback.pending.front());
+            if (not datagram) {
+              break;
+            }
+            datagrams.push_back(std::move(*datagram));
+            callback.pending.pop_front();
+          }
+          message = DatagramBatch{std::move(datagrams)};
+        }
         co_await message_sender.send(std::move(message));
         if (callback.paused and not callback.done
             and callback.pending.size()
@@ -389,6 +427,11 @@ private:
         break;
       }
       co_await callback.notify.wait();
+      if (not callback.pending.empty()
+          and not try_as<Error>(&callback.pending.front())
+          and callback.pending.size() < datagram_batch_size) {
+        co_await folly::coro::sleep(datagram_coalesce_delay);
+      }
     }
   }
 

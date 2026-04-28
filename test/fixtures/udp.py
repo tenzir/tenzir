@@ -14,6 +14,8 @@ from ._utils import find_free_port
 
 _HOST = "127.0.0.1"
 _CLIENT_RETRY_DELAY = 0.01
+_CLIENT_STOP_CHECK_INTERVAL = 1024
+_CLIENT_SEND_BUFFER_SIZE = 8 * 1024 * 1024
 _ASSERTION_WAIT_TIMEOUT = 2.0
 _ASSERTION_WAIT_INTERVAL = 0.01
 
@@ -44,15 +46,11 @@ class _UdpState:
 def udp() -> FixtureHandle:
     opts = current_options("udp")
     if opts.mode not in {"client", "server"}:
-        raise RuntimeError(
-            "udp fixture option `mode` must be one of: client, server"
-        )
+        raise RuntimeError("udp fixture option `mode` must be one of: client, server")
     if opts.interval < 0:
         raise RuntimeError("udp fixture option `interval` must be non-negative")
     if opts.initial_delay < 0:
-        raise RuntimeError(
-            "udp fixture option `initial_delay` must be non-negative"
-        )
+        raise RuntimeError("udp fixture option `initial_delay` must be non-negative")
     if opts.source_port < 0 or opts.source_port > 65535:
         raise RuntimeError("udp fixture option `source_port` must be in [0, 65535]")
     port = find_free_port(sock_type=socket.SOCK_DGRAM)
@@ -163,19 +161,45 @@ def _run_client_worker(
     if initial_delay > 0 and stop_event.wait(initial_delay):
         return
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, _CLIENT_SEND_BUFFER_SIZE)
         if source_port:
             sock.bind((_HOST, source_port))
+        sock.connect((_HOST, port))
+        if interval == 0:
+            _run_burst_client_worker(sock, stop_event, payloads)
+            return
         while not stop_event.is_set():
             for payload in payloads:
                 if stop_event.is_set():
                     return
-                try:
-                    if payload:
-                        sock.sendto(payload, (_HOST, port))
-                except OSError:
-                    pass
+                _send_payload(sock, payload)
                 if stop_event.wait(interval):
                     return
+
+
+def _run_burst_client_worker(
+    sock: socket.socket,
+    stop_event: threading.Event,
+    payloads: list[bytes],
+) -> None:
+    sent_since_stop_check = 0
+    while not stop_event.is_set():
+        for payload in payloads:
+            _send_payload(sock, payload)
+            sent_since_stop_check += 1
+            if sent_since_stop_check >= _CLIENT_STOP_CHECK_INTERVAL:
+                sent_since_stop_check = 0
+                if stop_event.is_set():
+                    return
+
+
+def _send_payload(sock: socket.socket, payload: bytes) -> None:
+    if not payload:
+        return
+    try:
+        sock.send(payload)
+    except OSError:
+        pass
 
 
 def _client_payloads(opts: UdpOptions) -> list[bytes]:
