@@ -136,7 +136,7 @@ public:
       element_text_.clear();
       return state::event_too_large;
     }
-    if (std::ssize(body_) + last_element_size_ < max_size_) {
+    if (std::ssize(body_) + last_element_size_ <= max_size_) {
       if (body_.empty()) {
         std::swap(body_, element_text_);
       } else {

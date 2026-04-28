@@ -1,0 +1,25 @@
+---
+fixtures:
+  - http_request_chunked:
+      initial_delay: 1.0
+      requests:
+        - path: /ingest
+          body_chunk_delay: 0.1
+          body_chunks_base64:
+            - H4sIACaO8GkC/0tMSk5JTUvPyMzKzsnNywcA32eRUQ8AAAA=
+            - H4sIACaO8GkC/ysoLCouKS0rr6isMjQyNuECABVQpFAQAAAA
+          headers:
+            Content-Type: text/plain
+            Content-Encoding: gzip
+          expected_status: 413
+        - path: /ingest
+          body: "ok\n"
+          expected_status: 200
+timeout: 10
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT"), max_request_size=30 {
+  read_lines
+  where line == "ok"
+}
+head 1

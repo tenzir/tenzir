@@ -293,6 +293,7 @@ private:
 struct InFlightRequest {
   Arc<ResponseSignal> response_signal;
   Option<std::shared_ptr<arrow::util::Decompressor>> decompressor;
+  size_t output_bytes = 0;
   json::streaming_ndjson_parser parser;
   bool is_action = true;
   bool failed = false;
@@ -415,17 +416,19 @@ public:
           if (it == requests->end() or it->second.response_signal->has_sent()) {
             co_return;
           }
-          response_signal = it->second.response_signal;
-          decompressor = it->second.decompressor;
-          is_action = it->second.is_action;
-          failed = it->second.failed;
+          auto& req = it->second;
+          response_signal = req.response_signal;
+          decompressor = req.decompressor;
+          is_action = req.is_action;
+          failed = req.failed;
           auto data = blob{std::span{msg.data}};
           auto failing_dh = failing_diagnostic_handler{ctx.dh(), failed};
           if (decompressor) {
+            auto remaining = args_.get_max_request_size() - req.output_bytes;
             auto decompressed = http::decompress_chunk(
               **decompressor,
               std::span<std::byte const>{msg.data.data(), msg.data.size()},
-              failing_dh, args_.get_max_request_size());
+              failing_dh, remaining);
             if (decompressed.is_err()) {
               (*response_signal)
                 ->send(Response{.status = std::move(decompressed).unwrap_err(),
@@ -435,10 +438,22 @@ public:
             }
             data = std::move(decompressed).unwrap();
           }
+          req.output_bytes += data.size();
+          if (req.output_bytes > args_.get_max_request_size()) {
+            diagnostic::warning("request body exceeds `max_request_size`")
+              .primary(args_.url)
+              .note("rejecting request body")
+              .emit(ctx);
+            (*response_signal)
+              ->send(Response{.status = 413,
+                              .content_type = std::string{bulk_content_type},
+                              .body = "{}"});
+            co_return;
+          }
           bytes_read_counter_.add(data.size());
-          slices = it->second.parser.parse_chunk(data, "accept_opensearch",
-                                                 failing_dh);
-          it->second.failed = failed;
+          slices
+            = req.parser.parse_chunk(data, "accept_opensearch", failing_dh);
+          req.failed = failed;
         }
         if (failed) {
           (*response_signal)
