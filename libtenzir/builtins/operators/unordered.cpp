@@ -49,7 +49,7 @@ public:
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order /*order*/) and -> ir::optimize_result override {
+                event_order /*order*/) && -> ir::optimize_result override {
     auto opt = std::move(pipeline_).optimize(std::move(filter),
                                              event_order::unordered);
     // Wrap each replacement operator in its own single-operator UnorderedIr
@@ -62,12 +62,12 @@ public:
     return opt;
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(pipeline_.operators.size() == 1);
     return std::move(*pipeline_.operators[0]).spawn(input);
   }
 
-  auto move() and -> Box<ir::Operator> override {
+  auto move() && -> Box<ir::Operator> override {
     return UnorderedIr{std::move(*this)};
   }
 

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
 
 from tenzir_test import FixtureHandle, fixture
-from tenzir_test.fixtures import FixtureUnavailable
-
-RELATIVE_ROOT = Path("tests/operators/files/permission-root")
+from tenzir_test.fixtures import FixtureUnavailable, current_context
 
 
 def _make_writable(path: Path) -> None:
@@ -22,8 +21,11 @@ def files_permission_tree() -> FixtureHandle:
     """Create a deterministic local tree for recursive `files` tests."""
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         raise FixtureUnavailable("root can traverse chmod 000 directories")
-    test_root = Path(__file__).resolve().parents[1]
-    root = test_root / RELATIVE_ROOT
+    context = current_context()
+    tmp_dir = context.env.get("TENZIR_TMP_DIR") if context is not None else None
+    if tmp_dir is None:
+        tmp_dir = tempfile.mkdtemp(prefix="tenzir-files-permission-")
+    root = Path(tmp_dir) / "files-permission-root"
     blocked = root / "blocked"
     _make_writable(blocked)
     shutil.rmtree(root, ignore_errors=True)
@@ -44,6 +46,6 @@ def files_permission_tree() -> FixtureHandle:
         shutil.rmtree(root, ignore_errors=True)
 
     return FixtureHandle(
-        env={"FILES_PERMISSION_ROOT": str(RELATIVE_ROOT)},
+        env={"FILES_PERMISSION_ROOT": str(root)},
         teardown=_teardown,
     )

@@ -22,4 +22,4 @@
   path: "<ROOT>/ok/data.json",
   type: "regular",
 }
-warning: skipping unreadable directory `tests/operators/files/permission-root/blocked`: Permission denied
+warning: skipping unreadable directory `<ROOT>/blocked`: Permission denied

@@ -993,7 +993,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Summarize{std::move(cfg_)};
   }

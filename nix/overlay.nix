@@ -66,6 +66,7 @@ in
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   mold-unwrapped = callFunction ./overrides/mold.nix { inherit (prevPkgs) mold-unwrapped; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
+  ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };

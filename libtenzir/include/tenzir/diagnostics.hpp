@@ -170,14 +170,14 @@ struct [[nodiscard]] diagnostic : std::exception {
                                       = std::source_location::current())
     -> diagnostic_builder;
 
-  auto modify() and -> diagnostic_builder;
+  auto modify() && -> diagnostic_builder;
 
   /// Wraps the diagnostic in an error object.
   auto to_error() const& -> caf::error {
     return caf::make_error(ec::diagnostic, *this);
   }
 
-  auto to_error() and -> caf::error {
+  auto to_error() && -> caf::error {
     return caf::make_error(ec::diagnostic, std::move(*this));
   }
 
@@ -233,7 +233,7 @@ public:
   // -- annotations -----------------------------------------------------------
 
   auto primary(into_location source, std::string text
-                                     = "") and -> diagnostic_builder {
+                                     = "") && -> diagnostic_builder {
     result_.annotations.push_back(
       diagnostic_annotation{true, std::move(text), source});
     return std::move(*this);
@@ -242,13 +242,13 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
   auto primary(into_location source, fmt::format_string<Ts...> str,
-               Ts&&... xs) and -> diagnostic_builder {
+               Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).primary(
       source, fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
   auto secondary(into_location source, std::string text
-                                       = "") and -> diagnostic_builder {
+                                       = "") && -> diagnostic_builder {
     result_.annotations.push_back(
       diagnostic_annotation{false, std::move(text), source});
     return std::move(*this);
@@ -257,19 +257,19 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
   auto secondary(into_location source, fmt::format_string<Ts...> str,
-                 Ts&&... xs) and -> diagnostic_builder {
+                 Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).secondary(
       source, fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
   // -- notes -----------------------------------------------------------------
 
-  auto severity(enum severity s) and -> diagnostic_builder {
+  auto severity(enum severity s) && -> diagnostic_builder {
     result_.severity = s;
     return std::move(*this);
   }
 
-  auto note(std::string str) and -> diagnostic_builder {
+  auto note(std::string str) && -> diagnostic_builder {
     if (not str.empty()) {
       result_.notes.push_back(
         diagnostic_note{diagnostic_note_kind::note, std::move(str)});
@@ -280,12 +280,12 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
   auto
-  note(fmt::format_string<Ts...> str, Ts&&... xs) and -> diagnostic_builder {
+  note(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).note(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
-  auto docs(std::string str) and -> diagnostic_builder {
+  auto docs(std::string str) && -> diagnostic_builder {
     if (not str.empty()) {
       result_.notes.push_back(
         diagnostic_note{diagnostic_note_kind::docs, std::move(str)});
@@ -296,12 +296,12 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
   auto
-  docs(fmt::format_string<Ts...> str, Ts&&... xs) and -> diagnostic_builder {
+  docs(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).docs(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
-  auto usage(std::string str) and -> diagnostic_builder {
+  auto usage(std::string str) && -> diagnostic_builder {
     if (not str.empty()) {
       result_.notes.push_back(
         diagnostic_note{diagnostic_note_kind::usage, std::move(str)});
@@ -312,12 +312,12 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
   auto
-  usage(fmt::format_string<Ts...> str, Ts&&... xs) and -> diagnostic_builder {
+  usage(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).usage(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
-  auto hint(std::string str) and -> diagnostic_builder {
+  auto hint(std::string str) && -> diagnostic_builder {
     if (not str.empty()) {
       result_.notes.push_back(
         diagnostic_note{diagnostic_note_kind::hint, std::move(str)});
@@ -328,7 +328,7 @@ public:
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
   auto
-  hint(fmt::format_string<Ts...> str, Ts&&... xs) and -> diagnostic_builder {
+  hint(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).hint(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -339,11 +339,11 @@ public:
 
   // -- finalizing ------------------------------------------------------------
 
-  auto done() and -> diagnostic {
+  auto done() && -> diagnostic {
     return std::move(result_);
   }
 
-  auto to_error() and -> caf::error {
+  auto to_error() && -> caf::error {
     return std::move(*this).done().to_error();
   }
 
@@ -394,7 +394,7 @@ inline auto diagnostic::warning(caf::error err, std::source_location location)
   return builder(severity::warning, std::move(err), location);
 }
 
-inline auto diagnostic::modify() and -> diagnostic_builder {
+inline auto diagnostic::modify() && -> diagnostic_builder {
   return diagnostic_builder{std::move(*this)};
 }
 
@@ -411,17 +411,17 @@ public:
     result.push_back(std::move(diag));
   }
 
-  auto collect() and -> std::vector<diagnostic> {
+  auto collect() && -> std::vector<diagnostic> {
     return std::move(result);
   }
 
-  auto forward_to(diagnostic_handler& other) and -> void {
+  auto forward_to(diagnostic_handler& other) && -> void {
     for (auto diag : std::move(result)) {
       std::move(diag).modify().emit(other);
     }
   }
 
-  auto to_error() and -> caf::error {
+  auto to_error() && -> caf::error {
     return caf::make_error(ec::diagnostic, std::move(result));
   }
 
@@ -532,7 +532,7 @@ public:
     return this->index() == 1;
   }
 
-  auto unwrap() and -> T {
+  auto unwrap() && -> T {
     TENZIR_ASSERT(is_success());
     if constexpr (not std::same_as<T, void>) {
       return std::get<0>(std::move(*this));
@@ -558,7 +558,7 @@ public:
     }
   }
 
-  auto to_expected() and -> caf::expected<T> {
+  auto to_expected() && -> caf::expected<T> {
     if (is_success()) {
       if constexpr (std::is_void_v<T>) {
         return {};
