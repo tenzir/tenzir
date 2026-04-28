@@ -14,6 +14,8 @@
 
 #include <folly/coro/BoundedQueue.h>
 
+#include <functional>
+
 namespace tenzir {
 
 /// Pushes results from series_builder and coordinates builder timeouts between
@@ -34,7 +36,14 @@ public:
   /// Pushes one ready slice and schedules the next timeout.
   auto push(series_builder::YieldReadyResult result,
             Push<table_slice>& push) const -> Task<void> {
+    co_await this->push(std::move(result), push, [](table_slice const&) {});
+  }
+
+  template <class OnSlice>
+  auto push(series_builder::YieldReadyResult result, Push<table_slice>& push,
+            OnSlice&& on_slice) const -> Task<void> {
     for (auto&& slice : result.slices) {
+      std::invoke(on_slice, slice);
       co_await push(std::move(slice));
     }
     if (result.wait_for) {

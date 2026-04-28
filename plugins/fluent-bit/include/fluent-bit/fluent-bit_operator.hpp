@@ -1193,10 +1193,16 @@ public:
         for (auto& chunk : as<std::vector<chunk_ptr>>(message)) {
           parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
         }
-        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
+        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push,
+                              [this](table_slice const& slice) {
+                                read_bytes_counter_.add(slice.approx_bytes());
+                              });
       },
       [&](FluentBitSourceTimeout&) -> Task<void> {
-        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push);
+        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push,
+                              [this](table_slice const& slice) {
+                                read_bytes_counter_.add(slice.approx_bytes());
+                              });
       });
   }
 
