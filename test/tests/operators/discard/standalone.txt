@@ -1,1 +1,7 @@
-error: `discard` cannot be used as a source
+error: operator does not accept void
+ --> tests/operators/discard/standalone.tql:5:1
+  |
+5 | discard
+  | ^^^^^^^ 
+  |
+  = docs: https://docs.tenzir.com/reference/operators/discard
