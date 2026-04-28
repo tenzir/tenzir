@@ -19,6 +19,13 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE
     LINKER:--wrap=free)
 endif ()
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER MATCHES "musl")
+  # musl uses the PT_GNU_STACK program header as the default stack size for
+  # newly created pthreads. Keep the tenzir binary aligned with the larger
+  # thread stacks commonly seen on glibc-based systems.
+  target_link_options(tenzir PRIVATE LINKER:-z,stack-size=8388608)
+endif ()
+
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
