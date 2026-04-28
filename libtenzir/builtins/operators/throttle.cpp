@@ -261,9 +261,7 @@ public:
       total_ = 0;
     }
     if (args_.drop) {
-      // Find the first cutoff, if any, and drop everything after it. The
-      // generator resets `total_` to 0 when yielding the cutoff, matching the
-      // semantics of the old implementation.
+      // Find the first cutoff, if any, and drop everything after it.
       auto first_cutoff = input.rows();
       for (auto cutoff : find_cutoffs(input, ctx.dh())) {
         first_cutoff = cutoff;
@@ -292,14 +290,6 @@ public:
     if (begin != input.rows()) {
       co_await push(subslice(input, begin, input.rows()));
     }
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    // `start_` is a `steady_clock::time_point` and is not portable across
-    // restarts. Leaving it out means a fresh window starts on restore, which
-    // can briefly admit more events than the configured rate. We accept this
-    // over the complexity of reconstructing wall-clock anchored windows.
-    serde("total_", total_);
   }
 
 private:
@@ -334,24 +324,25 @@ private:
       total_ = *sum;
       return total_ >= args_.rate.inner;
     };
+    const auto emit_cutoffs = [&](auto values) -> generator<size_t> {
+      for (const auto weight : values) {
+        offset += 1;
+        if (is_cutoff(weight)) {
+          co_yield offset;
+          total_ = 0;
+        }
+      }
+    };
     for (const auto& part : weights) {
       if (auto ints = part.as<int64_type>()) {
-        for (const auto weight : ints->values()) {
-          offset += 1;
-          if (is_cutoff(weight)) {
-            co_yield offset;
-            total_ = 0;
-          }
+        for (auto cutoff : emit_cutoffs(ints->values())) {
+          co_yield cutoff;
         }
         continue;
       }
       if (auto uints = part.as<uint64_type>()) {
-        for (const auto weight : uints->values()) {
-          offset += 1;
-          if (is_cutoff(weight)) {
-            co_yield offset;
-            total_ = 0;
-          }
+        for (auto cutoff : emit_cutoffs(uints->values())) {
+          co_yield cutoff;
         }
         continue;
       }
