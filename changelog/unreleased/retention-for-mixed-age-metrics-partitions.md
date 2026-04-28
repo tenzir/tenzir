@@ -1,6 +1,7 @@
 ---
 title: Retention for mixed-age metrics partitions
 type: bugfix
+pr: 6086
 authors:
   - tobim
   - codex
