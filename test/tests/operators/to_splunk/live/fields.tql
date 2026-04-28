@@ -1,0 +1,19 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 1
+      search: 'search index="main" source="tenzir-test-fields" tenant::acme wins::regionals'
+      contains:
+        - fields-event
+---
+
+from {message: "fields-event", tenant_id: "acme", win: "regionals"}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          event={message: message},
+          fields={tenant: tenant_id, wins: [win]},
+          source="tenzir-test-fields",
+          sourcetype="_json",
+          index=env("SPLUNK_INDEX"),
+          compress=false

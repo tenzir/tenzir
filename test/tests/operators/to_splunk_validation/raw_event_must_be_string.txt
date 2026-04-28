@@ -1,0 +1,6 @@
+warning: `raw` must be `string`, got `record`
+ --> tests/operators/to_splunk_validation/raw_event_must_be_string.tql:4:15
+  |
+4 |           raw=message
+  |               ~~~~~~~ 
+  |

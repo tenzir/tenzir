@@ -17,6 +17,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace folly {
@@ -67,13 +68,30 @@ public:
                std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
+  /// Request through the session pool with an origin-form target.
+  ///
+  /// The target must start with `/` and may contain a query string. The request
+  /// still uses the scheme, host, and port from the pool URL.
+  auto request(std::string method, std::string target, std::string body,
+               std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
+
   /// POST through the session pool.
   auto post(std::string body, std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
+
+  /// POST through the session pool with an origin-form target.
+  auto post(std::string target, std::string body,
+            std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
 private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config);
+
+  auto request(std::string method, std::optional<std::string> target,
+               std::string body, std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
 
   struct Impl;
   std::shared_ptr<Impl> impl_;

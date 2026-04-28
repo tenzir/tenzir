@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+to_splunk "https://127.0.0.1:8088",
+          hec_token="token",
+          event=this,
+          raw=message
