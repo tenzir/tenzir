@@ -269,7 +269,7 @@ public:
           if (not utf8_valid) {
             diagnostic::warning("message is not valid UTF-8")
               .primary(args_.endpoint)
-              .note("peer: {}:{}", datagram.peer_ip, datagram.peer_port)
+              .note("peer: {}", datagram.peer_ip)
               .hint("use `binary=true` to accept non-UTF8 data")
               .emit(ctx);
             continue;

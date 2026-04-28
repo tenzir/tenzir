@@ -7,7 +7,6 @@ fixtures:
         - "61667465722d696e76616c6964"
       interval: 0.2
       initial_delay: 1.0
-      source_port: 41001
 timeout: 60
 ---
 
