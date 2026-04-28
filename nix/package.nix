@@ -23,40 +23,19 @@ rec {
     # Keep suite metadata like `test.yaml` commented out unless a selected
     # test needs it.
 
-    # Closed-source plugin not shipped in the Nix build.
+    # plugins not available in the Nix build.
     # ../test-legacy/tests/operators/to_sentinelone_data_lake
+    # ../test/tests/operators/from_sentinelone_data_lake
 
     # dns lookup output mismatches in the sandboxed environment
-    ../test/tests/operators/dns_lookup/batch_splitting.tql
-    ../test/tests/operators/dns_lookup/forward_lookup.tql
-    ../test/tests/operators/dns_lookup/localhost_test.tql
+    # ../test/tests/operators/dns_lookup
 
     # from_http TLS CA lookup failures
     # ../test/tests/operators/from_http/tls_min_version_supported.tql
     # ../test/tests/operators/from_http/tls_skip_peer_verification.tql
     # ../test/tests/operators/from_http/url_without_scheme.tql
 
-    # plugin not available in the Nix build
-    # ../test/tests/operators/from_sentinelone_data_lake/all_types.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/basic.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/empty.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/http_error.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/start_end.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/many_rows.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/special_floats.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/nested_fields.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/typed_strings.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/typed_strings_raw.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/validate_empty_query.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/validate_empty_url.tql
-    # ../test/tests/operators/from_sentinelone_data_lake/validate_start_gt_end.tql
-
     # executor crashes
-    # ../test/tests/operators/load_balance/basic.tql
-    # ../test/tests/operators/load_balance/multi_worker_sink.tql
-    # ../test/tests/operators/load_balance/nested_parallel.tql
-    # ../test/tests/operators/to_stdout/basic.tql
-    # ../test/tests/operators/to_stdout/subpipeline.tql
     # ../test/tests/operators/where/deep_left_associated_no_crash.tql
 
     # ZMQ hangs
@@ -64,12 +43,6 @@ rec {
     # ../test/tests/operators/accept_zmq/plain_read_json.tql
     # ../test/tests/operators/from_zmq/plain_read_json.tql
     # ../test/tests/operators/from_zmq/prefix_read_json.tql
-
-    # Fixture writes into the read-only source tree in the Nix sandbox.
-    # ../test/tests/operators/files/dangling_symlink_permissions.tql
-    # ../test/tests/operators/files/recurse_permission_denied.tql
-    # ../test/tests/operators/files/recurse_permission_denied_skip.tql
-    # ../test/tests/operators/files/test.yaml
   ];
   integration-test-tree = lib.fileset.unions [
     integration-test-support-tree
