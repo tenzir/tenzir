@@ -7,47 +7,37 @@
   forceClang ? false,
 }:
 rec {
-  excluded-integration-test-files = lib.fileset.unions [
-    (lib.fileset.fileFilter (file: file.hasExt "tql" || file.hasExt "py" || file.hasExt "sh") ../test/tests)
-    (lib.fileset.fileFilter (file: file.hasExt "tql" || file.hasExt "py" || file.hasExt "sh") ../test-legacy/tests)
-  ];
-  integration-test-support-tree =
-    lib.fileset.difference
-      (lib.fileset.unions [
-        ../test
-        ../test-legacy
-      ])
-      excluded-integration-test-files;
-  included-integration-tests = lib.fileset.unions [
-    # Uncomment individual test paths while iterating on sandbox failures.
-    # Keep suite metadata like `test.yaml` commented out unless a selected
-    # test needs it.
-
+  excluded-integration-tests = lib.fileset.unions [
     # plugins not available in the Nix build.
-    # ../test-legacy/tests/operators/to_sentinelone_data_lake
-    # ../test/tests/operators/from_sentinelone_data_lake
+    ../test/tests/operators/from_sentinelone_data_lake
+    ../test/tests/operators/to_sentinelone_data_lake
 
     # dns lookup output mismatches in the sandboxed environment
-    # ../test/tests/operators/dns_lookup
+    ../test/tests/operators/dns_lookup
 
     # from_http TLS CA lookup failures
-    # ../test/tests/operators/from_http/tls_min_version_supported.tql
-    # ../test/tests/operators/from_http/tls_skip_peer_verification.tql
-    # ../test/tests/operators/from_http/url_without_scheme.tql
+    ../test/tests/operators/from_http/tls_min_version_supported.tql
+    ../test/tests/operators/from_http/tls_skip_peer_verification.tql
+    ../test/tests/operators/from_http/url_without_scheme.tql
 
     # executor crashes
-    # ../test/tests/operators/where/deep_left_associated_no_crash.tql
+    ../test/tests/operators/where/deep_left_associated_no_crash.tql
+
+    # accept_http is flaky in the sandbox.
+    ../test/tests/operators/accept_http
 
     # ZMQ hangs
-    # ../test/tests/operators/accept_zmq/keep_prefix_read_all.tql
-    # ../test/tests/operators/accept_zmq/plain_read_json.tql
-    # ../test/tests/operators/from_zmq/plain_read_json.tql
-    # ../test/tests/operators/from_zmq/prefix_read_json.tql
+    ../test/tests/operators/accept_zmq/keep_prefix_read_all.tql
+    ../test/tests/operators/accept_zmq/plain_read_json.tql
+    ../test/tests/operators/from_zmq/plain_read_json.tql
+    ../test/tests/operators/from_zmq/prefix_read_json.tql
   ];
-  integration-test-tree = lib.fileset.unions [
-    integration-test-support-tree
-    included-integration-tests
-  ];
+  integration-test-tree = lib.fileset.difference
+    (lib.fileset.unions [
+      ../test
+      ../test-legacy
+    ])
+    excluded-integration-tests;
   tenzir-tree = lib.fileset.unions [
     ../changelog
     ../cmake
