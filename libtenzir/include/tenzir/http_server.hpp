@@ -14,14 +14,25 @@
 // HTTP server (accept_http, accept_opensearch) and from http.cpp.
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include <proxygen/lib/http/coro/HTTPSourceHolder.h>
+#include <wangle/ssl/SSLContextConfig.h>
 
 #include <charconv>
 #include <cstdint>
 #include <string>
 #include <string_view>
+
+namespace tenzir::http {
+
+auto make_folly_tls_config(Option<located<data>> const& tls, location primary,
+                           diagnostic_handler& dh, tls_options::options options)
+  -> failure_or<wangle::SSLContextConfig>;
+
+} // namespace tenzir::http
 
 namespace tenzir::http_server {
 
