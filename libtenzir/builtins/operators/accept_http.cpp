@@ -43,6 +43,7 @@
 #include <charconv>
 #include <cstddef>
 #include <limits>
+#include <thread>
 #include <utility>
 
 namespace tenzir::plugins::accept_http {
@@ -336,33 +337,13 @@ public:
       co_return;
     }
     // When the operator is forcefully stopped (e.g., by `head 1` finishing),
-    // the executor skips `finish_sub` and just cancels the operator scope.
-    // This task catches that cancellation, unblocks any in-flight handlers
-    // by sending them a 200, then drains the server while the main EventBase
-    // is still running.  drain() only stops accepting new connections;
-    // existing keep-alive connections close via connIdleTimeout (200ms).
+    // the executor skips `finish_sub` and cancels the operator scope. Catch
+    // that cancellation, reply to already-accepted requests ourselves, then
+    // drain and destroy the server while the proxygen EventBase is still
+    // running.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      {
-        auto active_requests = co_await active_requests_.lock();
-        for (auto& it : *active_requests) {
-          it.second.finished->send(200); // ok
-        }
-      }
-      if (server_) {
-        (*server_)->getServer().drain();
-        // The operator is never destroyed by the executor, so we must
-        // destroy the server explicitly.  The ScopedHTTPServer destructor
-        // blocks on thread_.join(), so run it in a detached thread to
-        // avoid blocking the executor fiber.  We only call drain() here
-        // (not forceStop) because forceStop drops in-flight responses.
-        // The destructor will call forceStop after a brief delay.
-        auto srv = std::move(*server_);
-        server_ = None{};
-        std::thread([srv = std::move(srv)]() {
-          // srv destructor calls drain()+forceStop()+thread_.join()
-        }).detach();
-      }
+      co_await handle_forced_cancellation();
     });
     lifecycle_ = Lifecycle::running;
     co_return;
@@ -380,7 +361,7 @@ public:
     co_await co_match(
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
-        if (lifecycle_ != Lifecycle::running) {
+        if (lifecycle_ == Lifecycle::done) {
           msg.response_signal->send(503); // service unavailable
           co_return;
         }
@@ -559,6 +540,44 @@ private:
       (*server_)->getServer().drain();
     }
     co_await maybe_finish_draining();
+    co_return;
+  }
+
+  auto handle_forced_cancellation() -> Task<void> {
+    if (server_) {
+      (*server_)->getServer().drain();
+    }
+    for (;;) {
+      while (auto message = message_queue_->try_dequeue()) {
+        if (auto* msg = std::get_if<RequestStarted>(&*message)) {
+          if (not msg->response_signal->has_sent()) {
+            msg->response_signal->send(200); // ok
+          }
+        }
+      }
+      if (active_connections_->available_permits()
+          == args_.get_max_connections()) {
+        break;
+      }
+      {
+        auto active_requests = co_await active_requests_.lock();
+        for (auto& [_, req] : *active_requests) {
+          if (not req.finished->has_sent()) {
+            req.finished->send(200); // ok
+          }
+        }
+        active_requests->clear();
+      }
+      co_await sleep_for(std::chrono::milliseconds{10});
+    }
+    if (server_) {
+      auto srv = std::move(*server_);
+      server_ = None{};
+      std::thread([srv = std::move(srv)]() {
+        // srv destructor calls drain()+forceStop()+thread_.join()
+      }).detach();
+    }
+    lifecycle_ = Lifecycle::done;
     co_return;
   }
 

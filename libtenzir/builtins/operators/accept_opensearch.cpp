@@ -328,30 +328,13 @@ public:
       co_return;
     }
     // When the operator is forcefully stopped (e.g., by `head 1` finishing),
-    // the executor cancels the operator scope. This task catches that
-    // cancellation, unblocks any in-flight handlers, then drains the server
-    // while the main EventBase is still running.
+    // the executor skips `finish_sub` and cancels the operator scope. Catch
+    // that cancellation, reply to already-accepted requests ourselves, then
+    // drain and destroy the server while the proxygen EventBase is still
+    // running.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      {
-        auto active_requests = co_await active_requests_.lock();
-        for (auto& [_, req] : *active_requests) {
-          req.response_signal->send(
-            Response{.status = 503,
-                     .content_type = std::string{bulk_content_type},
-                     .body = "{}"});
-        }
-      }
-      if (server_) {
-        (*server_)->getServer().drain();
-        // The ScopedHTTPServer destructor blocks on thread_.join(), so
-        // run it in a detached thread to avoid blocking the executor fiber.
-        auto srv = std::move(*server_);
-        server_ = None{};
-        std::thread([srv = std::move(srv)]() {
-          // srv destructor calls drain()+forceStop()+thread_.join()
-        }).detach();
-      }
+      co_await handle_forced_cancellation();
     });
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
@@ -371,7 +354,7 @@ public:
     co_await co_match(
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
-        if (lifecycle_ != Lifecycle::running) {
+        if (lifecycle_ == Lifecycle::done) {
           msg.response_signal->send(
             Response{.status = 503,
                      .content_type = std::string{bulk_content_type},
@@ -580,6 +563,48 @@ private:
     co_await maybe_finish_draining();
   }
 
+  auto handle_forced_cancellation() -> Task<void> {
+    if (server_) {
+      (*server_)->getServer().drain();
+    }
+    for (;;) {
+      while (auto message = message_queue_->try_dequeue()) {
+        if (auto* msg = std::get_if<RequestStarted>(&*message)) {
+          if (not msg->response_signal->has_sent()) {
+            msg->response_signal->send(
+              Response{.status = 200,
+                       .content_type = std::string{bulk_content_type},
+                       .body = std::string{bulk_response}});
+          }
+        }
+      }
+      if (active_connections_->available_permits() == get_max_connections()) {
+        break;
+      }
+      {
+        auto active_requests = co_await active_requests_.lock();
+        for (auto& [_, req] : *active_requests) {
+          if (not req.response_signal->has_sent()) {
+            req.response_signal->send(
+              Response{.status = 200,
+                       .content_type = std::string{bulk_content_type},
+                       .body = std::string{bulk_response}});
+          }
+        }
+        active_requests->clear();
+      }
+      co_await sleep_for(std::chrono::milliseconds{10});
+    }
+    if (server_) {
+      auto srv = std::move(*server_);
+      server_ = None{};
+      std::thread([srv = std::move(srv)]() {
+        // srv destructor calls drain()+forceStop()+thread_.join()
+      }).detach();
+    }
+    lifecycle_ = Lifecycle::done;
+  }
+
   auto maybe_finish_draining() -> Task<void> {
     if (lifecycle_ != Lifecycle::draining) {
       co_return;
@@ -639,6 +664,7 @@ private:
       config.socketConfig.sslContextConfigs.emplace_back(
         std::move(*tls_config));
     }
+    config.shutdownOnSignals = {};
     co_return config;
   }
 
