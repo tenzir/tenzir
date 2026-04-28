@@ -1,0 +1,12 @@
+suite: from-nats-count-final-ack
+fixtures:
+  - nats:
+      subject: from_nats_count_final_ack_test
+      stream: FROM_NATS_COUNT_FINAL_ACK_TEST
+      durable: from_nats_count_final_ack_test
+      messages: 3
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

@@ -1,0 +1,15 @@
+// Consume seeded JetStream messages and expose NATS metadata as a record.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=2,
+          metadata_field=nats
+select line = string(message),
+       subject = nats.subject,
+       has_reply = nats.reply != null,
+       stream = nats.stream,
+       consumer = nats.consumer,
+       stream_sequence = nats.stream_sequence,
+       consumer_sequence = nats.consumer_sequence,
+       num_delivered = nats.num_delivered
+sort stream_sequence

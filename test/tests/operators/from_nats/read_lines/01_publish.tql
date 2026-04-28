@@ -1,0 +1,6 @@
+from {
+  message: "alpha\nbeta",
+}
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL"),
+        message=message

@@ -1,0 +1,8 @@
+// Publish one event through the default message expression.
+from {
+  severity: "high",
+  alert_type: "suspicious-login",
+  user: "alice",
+}
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL")

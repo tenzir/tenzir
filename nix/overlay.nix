@@ -59,6 +59,7 @@ in
     inherit (prevPkgs) google-cloud-cpp;
   };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
+  libnats-c = callFunction ./overrides/libnats-c.nix { inherit (prevPkgs) libnats-c; };
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };

@@ -1,0 +1,12 @@
+suite: from-nats-early-stop
+fixtures:
+  - nats:
+      subject: from_nats_early_stop_test
+      stream: FROM_NATS_EARLY_STOP_TEST
+      durable: from_nats_early_stop_test
+      messages: 2
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable
