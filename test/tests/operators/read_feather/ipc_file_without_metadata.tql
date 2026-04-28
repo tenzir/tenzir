@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/feather/ipc_file_without_metadata.feather" {
+  read_feather
+}
+measure
+drop timestamp
