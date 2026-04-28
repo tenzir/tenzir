@@ -49,7 +49,20 @@ constexpr auto udp_buffer_size = size_t{65'536};
 // Allow short bursts of datagrams without forcing immediate backpressure on the
 // socket, while still keeping the queued working set bounded.
 constexpr auto message_queue_capacity = uint32_t{256};
+
+// Pause read when the pending queue reaches the high-water mark; resume once
+// it drains back to the low-water mark. Hysteresis avoids `epoll_ctl` thrash
+// under routine scheduler jitter.
+constexpr auto pending_high_water = size_t{1024};
+constexpr auto pending_low_water = size_t{256};
+
+// Cap on datagrams packed into a single executor message. Must be at least
+// `pending_high_water` so that one batch send can fully drain the pending
+// queue after a pause; otherwise multiple sends per pause/resume cycle waste
+// channel slots and amplify per-message overhead.
 constexpr auto datagram_batch_size = size_t{1024};
+static_assert(datagram_batch_size >= pending_high_water);
+
 constexpr auto datagram_coalesce_delay = std::chrono::microseconds{100};
 constexpr auto socket_receive_buffer_size = int{16 * 1024 * 1024};
 
@@ -104,12 +117,6 @@ using Message = variant<DatagramBatch, Error, Flush>;
 // Callback and reader coroutine both run on the EventBase thread, so access
 // to the members below is unsynchronized by design.
 struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
-  // Pause when `pending` grows past the high-water mark; resume once it drains
-  // back to the low-water mark. Hysteresis avoids `epoll_ctl` thrash under
-  // routine scheduler jitter.
-  static constexpr size_t pending_high_water = 1024;
-  static constexpr size_t pending_low_water = 256;
-
   std::deque<PendingMessage> pending;
   Notify notify;
   MetricsCounter bytes_read_counter;
@@ -417,8 +424,7 @@ private:
         }
         co_await message_sender.send(std::move(message));
         if (callback.paused and not callback.done
-            and callback.pending.size()
-                  <= SocketReadCallback::pending_low_water) {
+            and callback.pending.size() <= pending_low_water) {
           callback.paused = false;
           socket.resumeRead(&callback);
         }
