@@ -42,7 +42,7 @@ public:
   virtual auto copy() const -> Box<Operator>;
 
   /// A virtual move constructor.
-  virtual auto move() and -> Box<Operator>;
+  virtual auto move() && -> Box<Operator>;
 
   /// Return the output type of this operator for a given input type.
   ///
@@ -67,14 +67,14 @@ public:
   ///
   /// TODO: Describe this in more detail.
   virtual auto
-  optimize(optimize_filter filter, event_order order) and -> optimize_result;
+  optimize(optimize_filter filter, event_order order) && -> optimize_result;
 
   /// Return the executable matching this operator.
   ///
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  virtual auto spawn(element_type_tag input) and -> AnyOperator = 0;
+  virtual auto spawn(element_type_tag input) && -> AnyOperator = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -125,7 +125,7 @@ struct pipeline {
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
   /// @see Operator
-  auto spawn(element_type_tag input) and -> std::vector<AnyOperator>;
+  auto spawn(element_type_tag input) && -> std::vector<AnyOperator>;
 
   /// @see Operator
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -135,7 +135,7 @@ struct pipeline {
   // where they will be defined?
   /// @see Operator
   auto
-  optimize(optimize_filter filter, event_order order) and -> optimize_result;
+  optimize(optimize_filter filter, event_order order) && -> optimize_result;
 };
 
 struct CompileResult {

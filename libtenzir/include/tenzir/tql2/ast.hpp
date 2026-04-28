@@ -222,7 +222,7 @@ struct expression {
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
   template <class Result = void, class... Fs>
-  auto match(Fs&&... fs) and -> decltype(auto);
+  auto match(Fs&&... fs) && -> decltype(auto);
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const& -> decltype(auto);
   template <class Result = void, class... Fs>
@@ -277,7 +277,7 @@ public:
     return expr_;
   };
 
-  auto unwrap() and -> ast::expression {
+  auto unwrap() && -> ast::expression {
     return std::move(expr_);
   }
 
@@ -676,7 +676,7 @@ struct pipeline {
     return f.apply(x.body);
   }
 
-  auto compile(compile_ctx ctx) and -> failure_or<ir::pipeline>;
+  auto compile(compile_ctx ctx) && -> failure_or<ir::pipeline>;
 };
 
 /// Substitute occurrences of named dollar variables with the given
@@ -966,7 +966,7 @@ auto expression::match(Fs&&... fs) & -> decltype(auto) {
 }
 
 template <class Result, class... Fs>
-auto expression::match(Fs&&... fs) and -> decltype(auto) {
+auto expression::match(Fs&&... fs) && -> decltype(auto) {
   TENZIR_ASSERT(kind);
   return kind->match<Result>(std::forward<Fs>(fs)...);
 }

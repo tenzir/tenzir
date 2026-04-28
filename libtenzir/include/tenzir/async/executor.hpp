@@ -88,7 +88,7 @@ public:
     return operators_[index];
   }
 
-  auto unwrap() and -> std::vector<AnyOperator> {
+  auto unwrap() && -> std::vector<AnyOperator> {
     return std::move(operators_);
   }
 
