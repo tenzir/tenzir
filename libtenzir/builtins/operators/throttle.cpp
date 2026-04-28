@@ -8,8 +8,12 @@
 
 #include "tenzir/detail/weak_run_delayed.hpp"
 
+#include <tenzir/async.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/checked_math.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -222,7 +226,141 @@ private:
   throttle_args args_;
 };
 
-class plugin final : public operator_plugin2<throttle_operator> {
+struct ThrottleArgs {
+  located<uint64_t> rate;
+  located<duration> window{std::chrono::seconds{1}, location::unknown};
+  ast::expression weight{ast::constant{uint64_t{1}, location::unknown}};
+  Option<location> drop;
+};
+
+class Throttle final : public Operator<table_slice, table_slice> {
+public:
+  explicit Throttle(ThrottleArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto now = std::chrono::steady_clock::now();
+    if (not start_) {
+      start_ = now;
+    }
+    if (now - *start_ >= args_.window.inner) {
+      start_ = now;
+      total_ = 0;
+    }
+    // Preemptive check: the previous slice already exhausted the window budget.
+    if (total_ >= args_.rate.inner) {
+      if (args_.drop) {
+        diagnostic::warning("dropping input due to rate limit")
+          .primary(*args_.drop)
+          .emit(ctx.dh());
+        co_return;
+      }
+      co_await sleep_until(*start_ + args_.window.inner);
+      start_ = std::chrono::steady_clock::now();
+      total_ = 0;
+    }
+    if (args_.drop) {
+      // Find the first cutoff, if any, and drop everything after it.
+      auto first_cutoff = input.rows();
+      for (auto cutoff : find_cutoffs(input, ctx.dh())) {
+        first_cutoff = cutoff;
+        break;
+      }
+      if (first_cutoff != input.rows()) {
+        diagnostic::warning("dropping input due to rate limit")
+          .primary(*args_.drop)
+          .emit(ctx.dh());
+        co_await push(subslice(input, 0, first_cutoff));
+      } else {
+        co_await push(std::move(input));
+      }
+      co_return;
+    }
+    // Wait path: push events up to each cutoff, then sleep until the window
+    // rolls over.
+    auto begin = size_t{0};
+    for (auto cutoff : find_cutoffs(input, ctx.dh())) {
+      co_await push(subslice(input, begin, cutoff));
+      begin = cutoff;
+      co_await sleep_until(*start_ + args_.window.inner);
+      start_ = std::chrono::steady_clock::now();
+      // `total_` was reset to 0 by `find_cutoffs` on yield.
+    }
+    if (begin != input.rows()) {
+      co_await push(subslice(input, begin, input.rows()));
+    }
+  }
+
+private:
+  auto find_cutoffs(const table_slice& slice, diagnostic_handler& dh)
+    -> generator<size_t> {
+    const auto weights = eval(args_.weight, slice, dh);
+    auto offset = size_t{};
+    const auto is_cutoff = [&](const auto& weight) {
+      if (not weight) {
+        diagnostic::warning("expected `int`, got `null`")
+          .primary(args_.weight)
+          .note("treating as `0`")
+          .emit(dh);
+        return false;
+      }
+      if (*weight < 0) {
+        diagnostic::warning("`weight` must not be negative")
+          .primary(args_.weight)
+          .note("treating as `0`")
+          .emit(dh);
+        return false;
+      }
+      auto sum = checked_add(total_, *weight);
+      if (not sum) {
+        diagnostic::warning("`weight` sum overflowed")
+          .primary(args_.weight)
+          .note("treating as hitting the rate limit")
+          .emit(dh);
+        total_ = args_.rate.inner;
+        return true;
+      }
+      total_ = *sum;
+      return total_ >= args_.rate.inner;
+    };
+    const auto emit_cutoffs = [&](auto values) -> generator<size_t> {
+      for (const auto weight : values) {
+        offset += 1;
+        if (is_cutoff(weight)) {
+          co_yield offset;
+          total_ = 0;
+        }
+      }
+    };
+    for (const auto& part : weights) {
+      if (auto ints = part.as<int64_type>()) {
+        for (auto cutoff : emit_cutoffs(ints->values())) {
+          co_yield cutoff;
+        }
+        continue;
+      }
+      if (auto uints = part.as<uint64_type>()) {
+        for (auto cutoff : emit_cutoffs(uints->values())) {
+          co_yield cutoff;
+        }
+        continue;
+      }
+      offset += part.length();
+      diagnostic::warning("expected `int`, got `{}`", part.type.kind())
+        .primary(args_.weight)
+        .note("treating as `0`")
+        .emit(dh);
+    }
+  }
+
+  ThrottleArgs args_;
+  Option<std::chrono::steady_clock::time_point> start_;
+  uint64_t total_ = 0;
+};
+
+class plugin final : public virtual operator_plugin2<throttle_operator>,
+                     public virtual OperatorPlugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -235,6 +373,32 @@ public:
           .parse(inv, ctx));
     TRY(args.validate(ctx));
     return std::make_unique<throttle_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ThrottleArgs, Throttle>{};
+    auto rate = d.named("rate", &ThrottleArgs::rate);
+    auto window = d.named_optional("window", &ThrottleArgs::window);
+    d.named_optional("weight", &ThrottleArgs::weight, "int");
+    d.named("drop", &ThrottleArgs::drop);
+    d.validate([rate, window](DescribeCtx& ctx) -> Empty {
+      if (auto value = ctx.get(rate)) {
+        if (value->inner == 0) {
+          diagnostic::error("`rate` must be a positive value")
+            .primary(*value)
+            .emit(ctx);
+        }
+      }
+      if (auto value = ctx.get(window)) {
+        if (value->inner <= duration::zero()) {
+          diagnostic::error("`window` must be a positive duration")
+            .primary(*value)
+            .emit(ctx);
+        }
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 };
 

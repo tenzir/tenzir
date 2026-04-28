@@ -1,0 +1,6 @@
+error: `rate` must be a positive value
+ --> tests/operators/throttle/invalid_rate.tql:6:15
+  |
+6 | throttle rate=0
+  |               ^ 
+  |
