@@ -20,9 +20,6 @@ rec {
     ../test/tests/operators/from_http/tls_skip_peer_verification.tql
     ../test/tests/operators/from_http/url_without_scheme.tql
 
-    # executor crashes
-    ../test/tests/operators/where/deep_left_associated_no_crash.tql
-
     # accept_http is flaky in the sandbox.
     ../test/tests/operators/accept_http
 
