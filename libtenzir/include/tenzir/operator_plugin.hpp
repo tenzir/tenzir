@@ -311,11 +311,13 @@ class DescribeCtx {
 public:
   DescribeCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               std::optional<const PipelineArg> pipeline,
-              const Description& desc, diagnostic_handler& dh)
+              const Description& desc, location operator_location,
+              diagnostic_handler& dh)
     : args_{args},
       named_args_{named_args},
       pipeline_{std::move(pipeline)},
       desc_{&desc},
+      operator_location_{operator_location},
       dh_{&dh} {
   }
 
@@ -461,6 +463,10 @@ public:
     return result;
   }
 
+  auto operator_location() const -> location {
+    return operator_location_;
+  }
+
   explicit(false) operator diagnostic_handler&() {
     return *dh_;
   }
@@ -512,6 +518,7 @@ private:
   std::span<const NamedArg> named_args_;
   std::optional<const PipelineArg> pipeline_;
   const Description* desc_;
+  location operator_location_;
   diagnostic_handler* dh_;
 };
 
@@ -953,6 +960,7 @@ using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
 using _::operator_plugin::Spawn;
+using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;
 
 } // namespace tenzir

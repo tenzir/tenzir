@@ -1,0 +1,5 @@
+{
+  path: "<ROOT>/dangling",
+  type: null,
+  permissions: null,
+}

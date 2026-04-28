@@ -30,8 +30,8 @@
 namespace tenzir {
 
 template <class Result, class Handle, class F, class... Ts>
-void mail_with_callback(Handle receiver, std::source_location location, F f,
-                        Ts&&... xs) {
+void mail_with_callback(Handle receiver, caf::timespan timeout,
+                        std::source_location location, F f, Ts&&... xs) {
   struct state_t {
     explicit state_t(F fn) : callback{std::move(fn)} {
     }
@@ -55,8 +55,8 @@ void mail_with_callback(Handle receiver, std::source_location location, F f,
   }
   auto state = std::make_shared<state_t>(std::move(f));
   receiver->home_system().template spawn<caf::hidden>(
-    [receiver = std::move(receiver), location, state = std::move(state),
-     args = std::make_tuple(std::forward<Ts>(xs)...)](
+    [receiver = std::move(receiver), timeout, location,
+     state = std::move(state), args = std::make_tuple(std::forward<Ts>(xs)...)](
       caf::event_based_actor* self) mutable -> caf::behavior {
       self->attach_functor([location, state] {
         state->finish(caf::expected<Result>{
@@ -67,10 +67,10 @@ void mail_with_callback(Handle receiver, std::source_location location, F f,
                                       location.file_name(), location.line()))});
       });
       std::apply(
-        [self, &receiver, &state](auto&&... ys) mutable {
+        [self, &receiver, &state, timeout](auto&&... ys) mutable {
           if constexpr (std::is_void_v<Result>) {
             self->mail(std::move(ys)...)
-              .request(receiver, caf::infinite)
+              .request(receiver, timeout)
               .then(
                 [self, state]() mutable {
                   state->finish(caf::expected<void>{});
@@ -82,7 +82,7 @@ void mail_with_callback(Handle receiver, std::source_location location, F f,
                 });
           } else {
             self->mail(std::move(ys)...)
-              .request(receiver, caf::infinite)
+              .request(receiver, timeout)
               .then(
                 [self, state](Result result) mutable {
                   state->finish(caf::expected<Result>{std::move(result)});
@@ -111,14 +111,14 @@ public:
 
   template <class Handle, class Result = AsyncMailResult<Handle, Args...>>
   auto
-  request(Handle receiver,
+  request(Handle receiver, caf::timespan timeout = caf::infinite,
           std::source_location location
           = std::source_location::current()) and -> folly::SemiFuture<Result> {
     auto [promise, future] = folly::makePromiseContract<Result>();
     std::apply(
       [&](auto&&... xs) mutable {
         mail_with_callback<typename Result::value_type>(
-          receiver, location,
+          receiver, timeout, location,
           [promise = std::move(promise)](Result result) mutable {
             promise.setValue(std::move(result));
           },

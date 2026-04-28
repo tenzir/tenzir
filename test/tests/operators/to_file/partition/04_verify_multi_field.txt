@@ -1,0 +1,2 @@
+region=eu/tier=paid: files=1 rows=200
+region=us/tier=free: files=1 rows=200

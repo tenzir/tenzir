@@ -289,7 +289,7 @@ public:
     if (not is_some()) [[unlikely]] {
       panic("called Option::operator-> on a None value");
     }
-    return &storage_.get();
+    return std::addressof(storage_.get());
   }
 
   /// Pointer-style access. Panics if empty.
@@ -297,7 +297,7 @@ public:
     if (not is_some()) [[unlikely]] {
       panic("called Option::operator-> on a None value");
     }
-    return &storage_.get();
+    return std::addressof(storage_.get());
   }
 
   /// Unwraps the contained value. Panics if empty.

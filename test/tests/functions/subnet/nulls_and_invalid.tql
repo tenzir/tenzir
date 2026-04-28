@@ -1,0 +1,32 @@
+from (
+  {
+    case: "bad-string",
+    result: subnet("not an ip", 24),
+    host: subnet("not an ip"),
+  },
+  {
+    case: "v4-too-wide",
+    result: subnet("10.1.2.3", 33),
+    host: subnet("10.1.2.3"),
+  },
+  {
+    case: "v6-too-wide",
+    result: subnet("2001:db8::1", 129),
+    host: subnet("2001:db8::1"),
+  },
+  {
+    case: "duplicate-prefix",
+    result: subnet("10.1.2.3/24", 16),
+    host: subnet("10.1.2.3/24"),
+  },
+  {
+    case: "null-input",
+    result: subnet(null.string(), 24),
+    host: subnet(null.string()),
+  },
+  {
+    case: "null-prefix",
+    result: subnet("10.1.2.3", null.int()),
+    host: subnet("10.1.2.3"),
+  },
+)

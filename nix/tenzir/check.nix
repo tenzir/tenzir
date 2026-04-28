@@ -23,6 +23,7 @@ stdenvNoCC.mkDerivation {
       py3 = pkgsBuildBuild.python3.withPackages (ps: [
         ps.datetime
         ps.pyarrow
+        ps.pyzmq
         ps.python-box
         ps.trustme
       ]);

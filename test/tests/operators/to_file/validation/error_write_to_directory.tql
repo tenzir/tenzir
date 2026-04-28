@@ -1,0 +1,9 @@
+---
+error: true
+skip: relies on /tmp not being a symlink (macOS resolves /tmp to /private/tmp)
+---
+
+from {x: 1}
+to_file "/tmp" {
+  write_ndjson
+}

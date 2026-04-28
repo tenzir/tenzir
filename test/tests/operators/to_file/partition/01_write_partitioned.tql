@@ -1,0 +1,9 @@
+// Write 600 events partitioned by region (3 distinct values, 200 each).
+from {region: "us"},
+     {region: "eu"},
+     {region: "ap"}
+repeat 200
+enumerate id
+to_file env("FILE_ROOT") + "/out/partitioned/**/events_{uuid}.json", partition_by=[region] {
+  write_ndjson
+}

@@ -1,0 +1,3 @@
+suite: to-file-max-size
+fixtures: [local_files]
+timeout: 60

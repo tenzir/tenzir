@@ -1,0 +1,9 @@
+created: 2026-04-24
+title: IP address support in subnet
+intro: >-
+  This release makes the subnet function work directly with typed and string IP addresses,
+  which removes boilerplate in TQL pipelines. It also fixes several stability issues
+  in where, unroll, files, context::enrich, and collection indexing.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.32.1

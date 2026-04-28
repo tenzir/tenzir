@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_ftp "ftp://127.0.0.1:21/download.ndjson" {
+  pass
+}

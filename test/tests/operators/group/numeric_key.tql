@@ -1,0 +1,5 @@
+from {x: 1, n: 10}, {x: 2, n: 20}, {x: 3, n: 10}
+group n {
+  where true
+}
+sort x

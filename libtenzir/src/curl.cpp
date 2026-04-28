@@ -41,9 +41,8 @@ auto on_write(void* ptr, size_t size, size_t nmemb, void* user_data) -> size_t {
   TENZIR_ASSERT(user_data != nullptr);
   const auto* data = reinterpret_cast<const std::byte*>(ptr);
   auto bytes = std::span<const std::byte>{data, nmemb};
-  auto* f = reinterpret_cast<write_callback*>(user_data);
-  (*f)(bytes);
-  return nmemb;
+  auto* f = reinterpret_cast<easy::write_callback_base*>(user_data);
+  return f->invoke(bytes);
 }
 
 auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
@@ -77,8 +76,40 @@ auto easy::set(CURLoption option, std::string_view parameter) -> code {
 }
 
 auto easy::set(write_callback fun) -> code {
+  struct WriteCallback final : write_callback_base {
+    explicit WriteCallback(write_callback fun) : fun_{std::move(fun)} {
+    }
+
+    auto invoke(std::span<const std::byte> buffer) -> size_t override {
+      fun_(buffer);
+      return buffer.size();
+    }
+
+    write_callback fun_;
+  };
   TENZIR_ASSERT(fun);
-  on_write_ = std::make_unique<write_callback>(std::move(fun));
+  on_write_ = std::make_unique<WriteCallback>(std::move(fun));
+  auto curl_code
+    = curl_easy_setopt(easy_.get(), CURLOPT_WRITEFUNCTION, on_write);
+  TENZIR_ASSERT(curl_code == CURLE_OK);
+  curl_code = curl_easy_setopt(easy_.get(), CURLOPT_WRITEDATA, on_write_.get());
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set_write_result_callback(write_result_callback fun) -> code {
+  struct WriteResultCallback final : write_callback_base {
+    explicit WriteResultCallback(write_result_callback fun)
+      : fun_{std::move(fun)} {
+    }
+
+    auto invoke(std::span<const std::byte> buffer) -> size_t override {
+      return fun_(buffer);
+    }
+
+    write_result_callback fun_;
+  };
+  TENZIR_ASSERT(fun);
+  on_write_ = std::make_unique<WriteResultCallback>(std::move(fun));
   auto curl_code
     = curl_easy_setopt(easy_.get(), CURLOPT_WRITEFUNCTION, on_write);
   TENZIR_ASSERT(curl_code == CURLE_OK);
@@ -178,6 +209,11 @@ auto easy::reset() -> void {
   curl_easy_reset(easy_.get());
 }
 
+auto easy::pause(int bitmask) -> code {
+  auto curl_code = curl_easy_pause(easy_.get(), bitmask);
+  return static_cast<code>(curl_code);
+}
+
 auto to_string(easy::code code) -> std::string_view {
   auto curl_code = static_cast<CURLcode>(code);
   return {curl_easy_strerror(curl_code)};
@@ -189,6 +225,21 @@ auto to_error(easy::code code) -> caf::error {
   }
   return caf::make_error(ec::unspecified,
                          fmt::format("curl: {}", to_string(code)));
+}
+
+auto try_set(easy& handle, CURLoption option, long value) -> failure_or<void> {
+  if (handle.set(option, value) == easy::code::ok) {
+    return {};
+  }
+  return failure::promise();
+}
+
+auto try_set(easy& handle, CURLoption option, std::string_view value)
+  -> failure_or<void> {
+  if (handle.set(option, value) == easy::code::ok) {
+    return {};
+  }
+  return failure::promise();
 }
 
 multi::multi() : multi_{curl_multi_init(), curlm_deleter{}} {
@@ -204,10 +255,40 @@ auto multi::remove(easy& handle) -> code {
   return static_cast<code>(curl_code);
 }
 
+auto multi::set_socket_callback(curl_socket_callback callback, void* user_data)
+  -> code {
+  auto curl_code
+    = curl_multi_setopt(multi_.get(), CURLMOPT_SOCKETFUNCTION, callback);
+  if (curl_code != CURLM_OK) {
+    return static_cast<code>(curl_code);
+  }
+  curl_code = curl_multi_setopt(multi_.get(), CURLMOPT_SOCKETDATA, user_data);
+  return static_cast<code>(curl_code);
+}
+
+auto multi::set_timer_callback(curl_multi_timer_callback callback,
+                               void* user_data) -> code {
+  auto curl_code
+    = curl_multi_setopt(multi_.get(), CURLMOPT_TIMERFUNCTION, callback);
+  if (curl_code != CURLM_OK) {
+    return static_cast<code>(curl_code);
+  }
+  curl_code = curl_multi_setopt(multi_.get(), CURLMOPT_TIMERDATA, user_data);
+  return static_cast<code>(curl_code);
+}
+
 auto multi::poll(std::chrono::milliseconds timeout) -> code {
   auto ms = detail::narrow_cast<int>(timeout.count());
   auto curl_code = curl_multi_poll(multi_.get(), nullptr, 0u, ms, nullptr);
   return static_cast<code>(curl_code);
+}
+
+auto multi::socket_action(curl_socket_t socket, int ev_bitmask)
+  -> std::pair<code, int> {
+  auto num_running = 0;
+  auto curl_code
+    = curl_multi_socket_action(multi_.get(), socket, ev_bitmask, &num_running);
+  return {static_cast<code>(curl_code), num_running};
 }
 
 auto multi::perform() -> std::pair<code, int> {

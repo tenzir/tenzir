@@ -160,6 +160,8 @@ using catalog_actor = typed_actor_fwd<
   // should instead be moved inside of the catalog itself.
   auto(atom::get)->caf::result<std::vector<partition_synopsis_pair>>,
   auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
+  auto(atom::get, std::string)->caf::result<std::vector<table_slice>>,
+  auto(atom::get, std::string, expression)->caf::result<std::vector<table_slice>>,
   // Erase a single partition synopsis.
   auto(atom::erase, uuid)->caf::result<atom::ok>,
   // Atomatically replace a set of partititon synopses with another.

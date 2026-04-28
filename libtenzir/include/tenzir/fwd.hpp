@@ -418,6 +418,8 @@ struct pipeline_expr;
 struct pipeline;
 struct record;
 struct selector_root;
+struct type_expr;
+struct type_stmt;
 struct unary_expr;
 struct underscore;
 struct unpack;
@@ -425,7 +427,7 @@ struct unpack;
 class field_path;
 
 using statement
-  = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
+  = variant<invocation, assignment, let_stmt, if_stmt, match_stmt, type_stmt>;
 
 } // namespace ast
 

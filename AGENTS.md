@@ -115,9 +115,9 @@ TQL surface or command line tools.
 
 ## C++ development
 
-Read the relevant references below before writing or planning any C++ code.
-Do not assume patterns from surrounding code—older code may deviate from
-current conventions.
+Read the relevant references below before writing, reviewing, or reasoning
+about C++ code. Do not assume patterns from surrounding code—older code may
+deviate from current conventions.
 
 ### Core principle
 

@@ -1,0 +1,8 @@
+from {
+  cidr: subnet("10.0.1.5/24"),
+  plain_v4: subnet("10.20.1.124"),
+  typed_v4: subnet(10.10.1.124),
+  plain_v6: subnet("2001:db8::1"),
+  typed_v6: subnet(ip("2001:db8::1")),
+  existing: subnet(172.16.4.5/16),
+}

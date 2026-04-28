@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(compile)",
+      "Bash(ls:*)",
+      "Bash(tenzir:*)",
+      "Bash(tenzir-node:*)",
+      "Bash(tenzir-unit-test:*)",
+      "Bash(uvx tenzir-test:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

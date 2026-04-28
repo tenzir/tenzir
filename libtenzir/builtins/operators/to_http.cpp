@@ -89,30 +89,14 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto tls_enabled
-      = http::normalize_url_and_tls(args_.tls, url_, args_.url.source, ctx);
-    if (tls_enabled.is_error()) {
+    auto config = http::make_http_pool_config(args_.tls, url_, args_.url.source,
+                                              ctx, get_timeout());
+    if (config.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    // init HTTP pool
-    auto config = HttpPoolConfig{
-      .tls = *tls_enabled,
-      .ssl_context = nullptr,
-      .request_timeout = get_timeout(),
-    };
-    if (*tls_enabled) {
-      auto tls_opts = args_.tls ? tls_options{*args_.tls, {.is_server = false}}
-                                : tls_options{{.is_server = false}};
-      auto ssl_context = tls_opts.make_folly_ssl_context(ctx);
-      if (ssl_context.is_error()) {
-        lifecycle_ = Lifecycle::done;
-        co_return;
-      }
-      config.ssl_context = std::move(*ssl_context);
-    }
     try {
-      http_pool_ = HttpPool::make(ctx.io_executor(), url_, config);
+      http_pool_ = HttpPool::make(ctx.io_executor(), url_, std::move(*config));
     } catch (std::exception const& e) {
       diagnostic::error("failed to initialize HTTP client: {}", e.what())
         .primary(args_.url)

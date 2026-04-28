@@ -1,0 +1,8 @@
+error: required subpipeline was not provided
+ --> tests/operators/from_ftp/validation/error_missing_parser_pipeline.tql:5:1
+  |
+5 | from_ftp "ftp://127.0.0.1:21/download.ndjson"
+  | ^^^^^^^^ 
+  |
+  = usage: from_ftp url:secret, [tls=record]
+  = docs: https://docs.tenzir.com/reference/operators/from_ftp

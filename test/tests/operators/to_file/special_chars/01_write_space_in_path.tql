@@ -1,0 +1,9 @@
+// Write events to a path containing a space. The local sink previously
+// built a `file://` URI via `fmt::format` and parsed it, which fails for
+// paths with space, `?`, `#`, `%`, etc.
+from {msg: "hello"}
+repeat 10
+enumerate x
+to_file env("FILE_ROOT") + "/out dir/spaced file.json" {
+  write_ndjson
+}
