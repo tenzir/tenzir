@@ -13,7 +13,7 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 
-#include "operators_neo.hpp"
+#include "operators.hpp"
 
 using namespace std::chrono_literals;
 

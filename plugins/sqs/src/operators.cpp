@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "operators_neo.hpp"
+#include "operators.hpp"
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/aws_iam.hpp>
