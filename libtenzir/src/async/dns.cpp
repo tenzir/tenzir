@@ -771,9 +771,21 @@ auto ForwardDnsResolver::resolve_socket_address(ParsedSocketAddress endpoint)
     }
     co_return Err{ResolveAddressError{DnsNotFound{}}};
   }
+  // Prefer the first IPv4 answer if present, otherwise fall back to the first
+  // answer (typically AAAA). Resolvers may return AAAA before A on dual-stack
+  // hostnames like `localhost`, but the legacy synchronous endpoint path
+  // explicitly preferred IPv4. Keeping that behavior here avoids cases where
+  // `accept_udp "localhost:..."` binds `::1` while clients send to `127.0.0.1`.
+  auto const& selected = [&] -> ForwardDnsAnswer const& {
+    for (auto const& answer : addresses->answers) {
+      if (answer.address.is_v4()) {
+        return answer;
+      }
+    }
+    return addresses->answers.front();
+  }();
   auto address = folly::SocketAddress{};
-  address.setFromIpAddrPort(to_folly_ip(addresses->answers.front().address),
-                            endpoint.port);
+  address.setFromIpAddrPort(to_folly_ip(selected.address), endpoint.port);
   co_return address;
 }
 

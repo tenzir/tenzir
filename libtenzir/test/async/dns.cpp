@@ -31,6 +31,13 @@ auto loopback_ip(uint8_t last_octet) -> ip {
   return ip::v4(std::span{bytes});
 }
 
+auto loopback_ipv6() -> ip {
+  auto bytes = std::array<uint8_t, 16>{
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+  };
+  return ip::v6(std::span{bytes});
+}
+
 struct DelayedForwardQueryState {
   DelayedForwardQueryState()
     : first_started{first_started_promise.get_future().share()},
@@ -128,6 +135,63 @@ TEST("forward dns resolves remote socket addresses") {
     resolver.resolve_socket_address(std::move(*endpoint)));
   require(not result.is_err());
   check_eq(result.unwrap().describe(), std::string{"127.0.0.42:9000"});
+}
+
+TEST("forward dns prefers ipv4 answer over preceding ipv6 answer") {
+  auto resolver = detail::DnsResolverTestAccess::make_forward(
+    ForwardDnsConfig{
+      .positive_ttl = std::chrono::hours{1},
+      .negative_ttl = std::chrono::hours{1},
+      .literal_ttl = std::chrono::hours{1},
+    },
+    [](std::string) -> Task<ForwardDnsResult> {
+      co_return ForwardDnsLookup{ForwardDnsResolved{
+        .answers = {
+          {
+            .address = loopback_ipv6(),
+            .type = "AAAA",
+            .ttl = std::chrono::seconds{60},
+          },
+          {
+            .address = loopback_ip(7),
+            .type = "A",
+            .ttl = std::chrono::seconds{60},
+          },
+        },
+      }};
+    });
+  auto endpoint
+    = parse_socket_address("dual.test:1234", SocketAddressKind::remote);
+  require(static_cast<bool>(endpoint));
+  auto result = folly::coro::blockingWait(
+    resolver.resolve_socket_address(std::move(*endpoint)));
+  require(not result.is_err());
+  check_eq(result.unwrap().describe(), std::string{"127.0.0.7:1234"});
+}
+
+TEST("forward dns falls back to ipv6 answer when no ipv4 is present") {
+  auto resolver = detail::DnsResolverTestAccess::make_forward(
+    ForwardDnsConfig{
+      .positive_ttl = std::chrono::hours{1},
+      .negative_ttl = std::chrono::hours{1},
+      .literal_ttl = std::chrono::hours{1},
+    },
+    [](std::string) -> Task<ForwardDnsResult> {
+      co_return ForwardDnsLookup{ForwardDnsResolved{
+        .answers = {{
+          .address = loopback_ipv6(),
+          .type = "AAAA",
+          .ttl = std::chrono::seconds{60},
+        }},
+      }};
+    });
+  auto endpoint
+    = parse_socket_address("v6only.test:5555", SocketAddressKind::remote);
+  require(static_cast<bool>(endpoint));
+  auto result = folly::coro::blockingWait(
+    resolver.resolve_socket_address(std::move(*endpoint)));
+  require(not result.is_err());
+  check_eq(result.unwrap().describe(), std::string{"[::1]:5555"});
 }
 
 TEST("forward dns resolves bind socket addresses with empty host") {
