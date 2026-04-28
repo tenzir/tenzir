@@ -230,7 +230,7 @@ public:
     return {};
   }
 
-  auto sorted() and -> generator<table_slice> {
+  auto sorted() && -> generator<table_slice> {
     // If there is nothing to sort, then we can just return early.
     if (cache_.empty()) {
       co_return;
@@ -638,19 +638,19 @@ public:
       expr_ = ast::expression{ast::this_{location::unknown}};
       return;
     }
-    std::move(*args.expr)
-      .match(
-        [&](ast::unary_expr&& unary) {
-          if (unary.op.inner == ast::unary_op::neg) {
-            expr_ = std::move(unary.expr);
-            reverse_ = true;
-          } else {
-            expr_ = std::move(unary);
-          }
-        },
-        [&](auto&& other) {
-          expr_ = std::move(other);
-        });
+    match(
+      std::move(*args.expr),
+      [&](ast::unary_expr&& unary) {
+        if (unary.op.inner == ast::unary_op::neg) {
+          expr_ = std::move(unary.expr);
+          reverse_ = true;
+        } else {
+          expr_ = std::move(unary);
+        }
+      },
+      [&](auto&& other) {
+        expr_ = std::forward<decltype(other)>(other);
+      });
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
