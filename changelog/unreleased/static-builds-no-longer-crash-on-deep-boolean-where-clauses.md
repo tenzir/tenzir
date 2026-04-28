@@ -1,5 +1,5 @@
 ---
-title: Static builds no longer crash on deep boolean where clauses
+title: Static musl builds no longer crash on deep TQL expressions
 type: bugfix
 authors:
   - tobim
@@ -8,8 +8,11 @@ pr: 6082
 created: 2026-04-27T13:26:45.949058Z
 ---
 
-Static `tenzir` builds no longer crash when evaluating very long boolean `where` clauses, such as generated detection rules with large `or` chains.
+Static musl builds of `tenzir` no longer crash on deeply nested generated TQL
+expressions.
 
-This affected large generated filters with dozens of boolean terms, for example detection rules that expand into a single `where` clause with many repeated `or` conditions.
+This affected generated pipelines with deeply nested expressions, for example
+rules or transformations that expand into long left-associated operator chains.
 
-These pipelines now behave consistently across static and non-static builds.
+The `tenzir` binary now links with a larger default thread stack size on musl,
+which brings its behavior in line with non-static builds for these pipelines.
