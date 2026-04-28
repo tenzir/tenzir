@@ -162,7 +162,7 @@ TEST("HTTP header") {
 
 TEST("compress request body") {
   auto dh = null_diagnostic_handler{};
-  auto encoded = http::compress_request_body("hello"s, "gzip", dh);
+  auto encoded = http::compress_request_body("hello"s, " GZip ", dh);
   CHECK(encoded.content_encoding);
   CHECK_EQUAL(*encoded.content_encoding, "gzip");
   auto headers = std::map<std::string, std::string>{};

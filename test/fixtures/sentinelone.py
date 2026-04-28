@@ -199,13 +199,14 @@ def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
             length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(length)
             encoding = self.headers.get("Content-Encoding", "")
-            if encoding == "gzip":
+            normalized_encoding = encoding.split(",", 1)[0].strip().lower()
+            if normalized_encoding == "gzip":
                 try:
                     raw_body = gzip.decompress(raw_body)
                 except Exception as exc:
                     self._respond(400, {"error": f"bad gzip: {exc}"})
                     return
-            elif encoding:
+            elif normalized_encoding:
                 self._respond(415, {"error": f"unsupported encoding: {encoding}"})
                 return
             try:
