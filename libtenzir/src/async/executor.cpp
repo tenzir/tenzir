@@ -1016,6 +1016,7 @@ private:
         }
       }
       co_await base_op().start(*this);
+      co_await folly::coro::co_safe_point;
       ensure_await_task();
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
