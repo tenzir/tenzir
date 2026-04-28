@@ -101,6 +101,22 @@ auto starts_with_arrow_magic(chunk_ptr const& chunk) -> bool {
                == 0;
 }
 
+auto is_store_envelope(std::shared_ptr<arrow::RecordBatch> const& batch)
+  -> bool {
+  TENZIR_ASSERT(batch);
+  auto const& schema = batch->schema();
+  if (schema->num_fields() != 2) {
+    return false;
+  }
+  auto const& import_time_field = schema->field(0);
+  auto const& event_field = schema->field(1);
+  return import_time_field->name() == "import_time"
+         and import_time_field->type()->Equals(time_type::to_arrow_type())
+         and event_field->name() == "event"
+         and event_field->type()->id() == arrow::Type::STRUCT
+         and has_tenzir_metadata(event_field->metadata());
+}
+
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
@@ -416,11 +432,7 @@ auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
   -> std::optional<table_slice> {
   auto validate_status = batch->Validate();
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-  const auto& event_field = batch->schema()->GetFieldByName("event");
-  const auto event_col = std::dynamic_pointer_cast<arrow::StructArray>(
-    batch->GetColumnByName("event"));
-  if (event_field and event_col
-      and has_tenzir_metadata(event_field->metadata())) {
+  if (is_store_envelope(batch)) {
     auto import_time_column = batch->GetColumnByName("import_time");
     auto unwrapped = ensure_tenzir_name_metadata(
       store::unwrap_record_batch(std::move(batch)));
@@ -728,6 +740,10 @@ public:
     if (done_ or not input or input->size() == 0) {
       co_return;
     }
+    if (mode_ == ReadFeatherMode::file) {
+      file_chunks_.push_back(std::move(input));
+      co_return;
+    }
     append(std::move(input));
     if (mode_ == ReadFeatherMode::undecided) {
       if (available() < arrow_magic_bytes.size()) {
@@ -737,6 +753,9 @@ public:
                                                : ReadFeatherMode::stream;
     }
     if (mode_ == ReadFeatherMode::file) {
+      file_chunks_.push_back(buffer_->slice(offset_, available()));
+      buffer_ = chunk::make_empty();
+      offset_ = 0;
       co_return;
     }
     co_await parse_available(push, ctx.dh());
@@ -852,7 +871,7 @@ private:
 
   auto parse_file(Push<table_slice>& push, diagnostic_handler& dh)
     -> Task<void> {
-    auto input = buffer_->slice(offset_, available());
+    auto input = join_chunks(std::move(file_chunks_));
     auto batches = store::decode_ipc_file(std::move(input));
     if (not batches) {
       emit_with_location(diagnostic::error("failed to decode Feather input")
@@ -883,6 +902,7 @@ private:
   bool decoded_once_ = false;
   bool done_ = false;
   ReadFeatherMode mode_ = ReadFeatherMode::undecided;
+  std::vector<chunk_ptr> file_chunks_;
   std::shared_ptr<callback_listener> listener_;
   Box<arrow::ipc::StreamDecoder> stream_decoder_;
 };
