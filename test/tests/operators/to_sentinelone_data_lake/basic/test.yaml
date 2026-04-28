@@ -1,0 +1,9 @@
+suite: basic
+fixtures:
+  - sentinelone:
+      tls: true
+timeout: 60
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

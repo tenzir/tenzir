@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+to_sentinelone_data_lake "https://example.com", token="TOKEN", session_info={parser:"json"}, _dry_run=true

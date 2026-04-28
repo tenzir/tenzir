@@ -26,6 +26,15 @@ namespace tenzir::http {
 
 namespace {
 
+auto normalize_content_encoding(std::string_view encoding) -> std::string {
+  auto result = std::string{detail::trim(encoding)};
+  std::transform(result.begin(), result.end(), result.begin(), [](char c) {
+    return static_cast<char>(
+      detail::ascii_tolower(static_cast<unsigned char>(c)));
+  });
+  return result;
+}
+
 // Splits a raw HTTP Link header value into individual link-value items at
 // top-level commas (not inside <...> or quoted strings).
 auto split_link_header(std::string_view value)
@@ -422,13 +431,71 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   return {};
 }
 
+auto compress_request_body(std::string body, std::string_view encoding,
+                           diagnostic_handler& dh, location loc)
+  -> encoded_request_body {
+  auto normalized_encoding = normalize_content_encoding(encoding);
+  if (normalized_encoding.empty()) {
+    return {.body = std::move(body)};
+  }
+  auto compression_type
+    = arrow::util::Codec::GetCompressionType(normalized_encoding);
+  if (not compression_type.ok()) {
+    diagnostic::warning("invalid Content-Encoding: `{}`", encoding)
+      .primary(loc)
+      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
+      .note("sending uncompressed body")
+      .emit(dh);
+    return {.body = std::move(body)};
+  }
+  auto codec = arrow::util::Codec::Create(
+    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
+  if (not codec.ok() or not codec.ValueUnsafe()) {
+    diagnostic::warning("failed to create codec for Content-Encoding: `{}`",
+                        normalized_encoding)
+      .primary(loc)
+      .note("sending uncompressed body")
+      .emit(dh);
+    return {.body = std::move(body)};
+  }
+  auto const* input = reinterpret_cast<uint8_t const*>(body.data());
+  auto const input_size = detail::narrow<int64_t>(body.size());
+  auto compressed = std::string{};
+  compressed.resize(codec.ValueUnsafe()->MaxCompressedLen(input_size, input));
+  auto* output = reinterpret_cast<uint8_t*>(compressed.data());
+  auto result = codec.ValueUnsafe()->Compress(
+    input_size, input, detail::narrow<int64_t>(compressed.size()), output);
+  if (not result.ok()) {
+    diagnostic::warning("failed to compress request body: {}",
+                        result.status().ToStringWithoutContextLines())
+      .primary(loc)
+      .note("sending uncompressed body")
+      .emit(dh);
+    return {.body = std::move(body)};
+  }
+  compressed.resize(detail::narrow<size_t>(result.ValueUnsafe()));
+  return {
+    .body = std::move(compressed),
+    .content_encoding = std::move(normalized_encoding),
+  };
+}
+
+auto add_request_body_headers(std::map<std::string, std::string>& headers,
+                              encoded_request_body const& body) -> void {
+  headers["Content-Length"] = fmt::to_string(body.body.size());
+  if (body.content_encoding) {
+    headers["Content-Encoding"] = *body.content_encoding;
+  }
+}
+
 auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
   -> Option<std::shared_ptr<arrow::util::Decompressor>> {
-  if (encoding.empty()) {
+  auto normalized_encoding = normalize_content_encoding(encoding);
+  if (normalized_encoding.empty()) {
     return None{};
   }
   auto compression_type
-    = arrow::util::Codec::GetCompressionType(std::string{encoding});
+    = arrow::util::Codec::GetCompressionType(normalized_encoding);
   if (not compression_type.ok()) {
     diagnostic::warning("invalid Content-Encoding: `{}`", encoding)
       .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
@@ -440,7 +507,7 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   if (not codec.ok() or not codec.ValueUnsafe()) {
     diagnostic::warning("failed to create codec for Content-Encoding: `{}`",
-                        encoding)
+                        normalized_encoding)
       .note("skipping decompression")
       .emit(dh);
     return None{};
@@ -449,7 +516,7 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
   if (not dec.ok()) {
     diagnostic::warning("failed to create decompressor for Content-Encoding: "
                         "`{}`",
-                        encoding)
+                        normalized_encoding)
       .note("skipping decompression")
       .emit(dh);
     return None{};

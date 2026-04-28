@@ -153,7 +153,7 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   auto secure = config.tls
                   ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
-  if (config.tls and not config.ssl_context) {
+  if (config.tls) {
     ensure_http_default_ca_paths();
   }
   auto conn_params
