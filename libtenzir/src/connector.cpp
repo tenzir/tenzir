@@ -116,6 +116,7 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::cannot_combine_empty_observables:
     case caf::sec::mail_cache_closed:
     case caf::sec::resource_destroyed:
+    case caf::sec::no_actor_handle_codec:
       return true;
     case caf::sec::incompatible_versions:
     case caf::sec::incompatible_application_ids:
