@@ -1,0 +1,8 @@
+---
+error: true
+---
+from {limit: -1}
+each {
+  from {x: 1}
+  head $this.limit
+}

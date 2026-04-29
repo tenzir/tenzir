@@ -58,7 +58,8 @@ struct EachImpl {
     TENZIR_ASSERT(running_subs_ > 0);
     running_subs_ -= 1;
     if (todo_.rows() > 0) {
-      auto input = view_at(*check(to_record_batch(todo_)->ToStructArray()), 0);
+      auto struct_array = check(to_record_batch(todo_)->ToStructArray());
+      auto input = view_at(*struct_array, 0);
       TENZIR_ASSERT(input);
       co_await spawn_for(*input, ctx);
       todo_ = tail(todo_, todo_.rows() - 1);
