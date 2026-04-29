@@ -596,7 +596,7 @@ public:
     }
     struct OffsetsForSource {
       std::vector<int32_t> partitions;
-      std::vector<RdKafka::TopicPartition*> offsets;
+      std::vector<std::unique_ptr<RdKafka::TopicPartition>> offsets;
     };
     auto offsets_by_source = std::unordered_map<size_t, OffsetsForSource>{};
     auto clear_pending = std::vector<int32_t>{};
@@ -620,17 +620,18 @@ public:
       }
       auto& source_offsets = offsets_by_source[source_it->second];
       source_offsets.partitions.push_back(partition);
-      source_offsets.offsets.push_back(
+      source_offsets.offsets.emplace_back(
         RdKafka::TopicPartition::create(args_.topic, partition, offset));
     }
     for (auto& [source_index, source_offsets] : offsets_by_source) {
-      auto& offsets = source_offsets.offsets;
-      auto cleanup_offsets = tenzir::detail::scope_guard{[&offsets]() noexcept {
-        RdKafka::TopicPartition::destroy(offsets);
-      }};
-      if (offsets.empty()
+      if (source_offsets.offsets.empty()
           or source_index >= runtime_.partition_sources.size()) {
         continue;
+      }
+      auto offsets = std::vector<RdKafka::TopicPartition*>{};
+      offsets.reserve(source_offsets.offsets.size());
+      for (auto const& offset : source_offsets.offsets) {
+        offsets.push_back(offset.get());
       }
       auto& source = runtime_.partition_sources[source_index];
       if (not source.source_consumer) {
@@ -655,16 +656,17 @@ public:
                              source_offsets.partitions.end());
         continue;
       }
+      auto const partitions
+        = tenzir::detail::join(source_offsets.partitions, ", ");
       if (dh) {
-        diagnostic::warning("from_kafka: failed to commit offsets for "
-                            "partition {}",
-                            source.partition)
+        diagnostic::warning("from_kafka: failed to commit offsets")
+          .note("partitions: {}", partitions)
           .note("librdkafka error: {}", RdKafka::err2str(err))
           .emit(*dh);
       } else {
-        TENZIR_WARN("from_kafka: failed to commit offsets for partition {}: "
-                    "{}",
-                    source.partition, RdKafka::err2str(err));
+        TENZIR_WARN("from_kafka: failed to commit offsets for partition(s) "
+                    "{}: {}",
+                    partitions, RdKafka::err2str(err));
       }
     }
     for (auto partition : clear_pending) {
