@@ -55,7 +55,7 @@ A build is configured when its directory contains `CMakeCache.txt`.
 
 ### Compile the project
 
-Compile a configured buid:
+Compile a configured build:
 
 ```sh
 scripts/build.sh
