@@ -465,15 +465,13 @@ public:
                             .body = "{}"});
           co_return;
         }
-        if (args_.keep_actions) {
-          for (auto& slice : slices) {
+        for (auto& slice : slices) {
+          auto filtered = handle_slice(is_action, slice);
+          if (args_.keep_actions) {
             if (slice.rows() > 0) {
               co_await push(std::move(slice));
             }
-          }
-        } else {
-          for (auto& slice : slices) {
-            auto filtered = handle_slice(is_action, slice);
+          } else {
             if (filtered.rows() > 0) {
               co_await push(std::move(filtered));
             }
@@ -508,20 +506,25 @@ public:
                      .body = "{}"});
           co_return;
         }
-        if (args_.keep_actions) {
-          for (auto& slice : slices) {
+        auto is_action = req->is_action;
+        for (auto& slice : slices) {
+          auto filtered = handle_slice(is_action, slice);
+          if (args_.keep_actions) {
             if (slice.rows() > 0) {
               co_await push(std::move(slice));
             }
-          }
-        } else {
-          auto is_action = req->is_action;
-          for (auto& slice : slices) {
-            auto filtered = handle_slice(is_action, slice);
+          } else {
             if (filtered.rows() > 0) {
               co_await push(std::move(filtered));
             }
           }
+        }
+        if (not is_action) {
+          req->response_signal->send(
+            Response{.status = 400,
+                     .content_type = std::string{bulk_content_type},
+                     .body = "{}"});
+          co_return;
         }
         req->response_signal->send(Response{
           .status = 200,

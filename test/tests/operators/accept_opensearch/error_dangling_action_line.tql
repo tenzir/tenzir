@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /_bulk
+          body: "{\"index\":{\"_index\":\"test\"}}\n"
+          expected_status: 400
+        - path: /_bulk
+          body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":1}\n"
+timeout: 10
+---
+
+accept_opensearch env("HTTP_REQUEST_ENDPOINT")
+head 1
