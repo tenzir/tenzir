@@ -266,20 +266,23 @@ unset(_TENZIR_ENABLE_X86_SIMD_DEFAULT)
 
 target_compile_options(
   libtenzir_internal
-  INTERFACE $<$<CONFIG:Release>:
-            -fno-omit-frame-pointer>
-            $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
-            $<$<CONFIG:Debug>:-O0>
-            $<$<CONFIG:CI>:-O2
-            -g1>
-            $<$<BOOL:${TENZIR_ENABLE_SSE_INSTRUCTIONS}>:-msse>
-            $<$<BOOL:${TENZIR_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
-            $<$<BOOL:${TENZIR_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
-            $<$<BOOL:${TENZIR_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
-            $<$<BOOL:${TENZIR_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
-            $<$<BOOL:${TENZIR_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
-            $<$<BOOL:${TENZIR_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
-            $<$<BOOL:${TENZIR_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
+  INTERFACE
+    $<$<CONFIG:Release>:
+    -fno-omit-frame-pointer>
+    $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
+    $<$<AND:$<CONFIG:RelWithDebInfo>,$<CXX_COMPILER_ID:Clang,AppleClang>>:-gline-tables-only>
+    $<$<AND:$<CONFIG:RelWithDebInfo>,$<CXX_COMPILER_ID:GNU>>:-g1>
+    $<$<CONFIG:Debug>:-O0>
+    $<$<CONFIG:CI>:-O2
+    -g1>
+    $<$<BOOL:${TENZIR_ENABLE_SSE_INSTRUCTIONS}>:-msse>
+    $<$<BOOL:${TENZIR_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
+    $<$<BOOL:${TENZIR_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
+    $<$<BOOL:${TENZIR_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
+    $<$<BOOL:${TENZIR_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
+    $<$<BOOL:${TENZIR_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
+    $<$<BOOL:${TENZIR_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
+    $<$<BOOL:${TENZIR_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
 
 # -- warnings ------------------------------------------------------------------
 
