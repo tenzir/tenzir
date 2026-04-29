@@ -448,6 +448,7 @@ RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \
     "${PREFIX}/libexec/uv" tool run \
     --python ">=3.12" \
+    --with-requirements test/requirements.txt \
     tenzir-test \
     --root test \
     -j $(nproc) && \
