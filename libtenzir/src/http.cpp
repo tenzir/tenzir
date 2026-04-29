@@ -225,7 +225,7 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
   };
   if (tls_enabled) {
     auto tls_opts = tls_options::from_optional(tls, options);
-    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh));
+    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh, nullptr));
     config.ssl_context = std::move(ssl_context);
   }
   return config;

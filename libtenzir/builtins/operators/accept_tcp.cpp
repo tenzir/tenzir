@@ -157,8 +157,9 @@ public:
   auto operator=(AcceptTcpListener&&) noexcept -> AcceptTcpListener& = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (tls_ and tls_->get_tls(nullptr).inner) {
-      auto context = tls_->make_folly_ssl_context(ctx);
+    auto const* cfg = std::addressof(ctx.actor_system().config());
+    if (tls_ and tls_->get_tls(cfg).inner) {
+      auto context = tls_->make_folly_ssl_context(ctx, cfg);
       if (not context) {
         request_abort();
         co_return;

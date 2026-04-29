@@ -269,19 +269,20 @@ public:
       final_url.segments().push_back("_bulk");
     }
     url_ = std::string{final_url.buffer()};
-    auto tls_enabled
+    auto tls_needed
       = http::normalize_url_and_tls(args_.tls, url_, args_.url.source, ctx);
-    if (tls_enabled.is_error()) {
+    if (tls_needed.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto config = HttpPoolConfig{
-      .tls = *tls_enabled,
+      .tls = *tls_needed,
       .ssl_context = nullptr,
     };
-    if (*tls_enabled) {
+    if (*tls_needed) {
       auto tls_opts = tls_options::from_optional(args_.tls);
-      auto ssl_context = tls_opts.make_folly_ssl_context(ctx);
+      auto ssl_context = tls_opts.make_folly_ssl_context(
+        ctx, std::addressof(ctx.actor_system().config()));
       if (ssl_context.is_error()) {
         lifecycle_ = Lifecycle::done;
         co_return;

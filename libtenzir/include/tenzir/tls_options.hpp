@@ -109,7 +109,8 @@ public:
   /// Creates a folly SSL context from the TLS options.
   /// Returns nullptr if TLS is disabled, a configured context on success,
   /// or failure on error (diagnostics emitted via dh).
-  auto make_folly_ssl_context(diagnostic_handler& dh) const
+  auto make_folly_ssl_context(diagnostic_handler& dh,
+                              const caf::actor_system_config* cfg) const
     -> failure_or<std::shared_ptr<folly::SSLContext>>;
 
   /// Updates values in *this using the config.

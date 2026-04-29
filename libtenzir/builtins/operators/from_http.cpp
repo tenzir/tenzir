@@ -408,7 +408,8 @@ struct FetchConfig {
   std::shared_ptr<folly::SSLContext> tls_context;
 };
 
-auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh)
+auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh,
+                       const caf::actor_system_config* cfg)
   -> Option<FetchConfig> {
   auto config = FetchConfig{};
   if (args.timeout) {
@@ -430,7 +431,7 @@ auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh)
       args.retry_delay->inner);
   }
   auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
-  auto result = tls_opts.make_folly_ssl_context(dh);
+  auto result = tls_opts.make_folly_ssl_context(dh, cfg);
   if (result.is_success()) {
     config.tls_context = std::move(*result);
   } else {
@@ -657,7 +658,8 @@ public:
     }
     pagination_.current_url = resolved_url;
     // prepare fetch config
-    auto fetch_config = make_fetch_config(args_, ctx);
+    auto fetch_config = make_fetch_config(
+      args_, ctx, std::addressof(ctx.actor_system().config()));
     if (not fetch_config) {
       lifecycle_ = Lifecycle::done;
       co_return;

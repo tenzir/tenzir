@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
+
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
@@ -85,8 +87,9 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (tls_ and tls_->get_tls(nullptr).inner) {
-      auto context = tls_->make_folly_ssl_context(ctx);
+    if (is_tls_enabled(ctx)) {
+      auto context = tls_->make_folly_ssl_context(
+        ctx, std::addressof(ctx.actor_system().config()));
       if (not context) {
         finish();
         co_return;
@@ -225,8 +228,8 @@ private:
                 .primary(args_.endpoint.source)
                 .note("reason: {}", ex.what())
                 .hint("ensure a TCP server is listening on this endpoint");
-          add_tls_client_diagnostic_hints(std::move(diag),
-                                          tls_ and tls_->get_tls(nullptr).inner)
+
+          add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
             .emit(ctx.dh());
           throw;
         }
@@ -275,6 +278,11 @@ private:
   auto finish() -> void {
     lifecycle_ = Lifecycle::done;
     close_current_transport();
+  }
+
+  auto is_tls_enabled(OpCtx& ctx) -> bool {
+    auto const* cfg = std::addressof(ctx.actor_system().config());
+    return tls_ and tls_->get_tls(cfg).inner;
   }
 
   ToTcpArgs args_;

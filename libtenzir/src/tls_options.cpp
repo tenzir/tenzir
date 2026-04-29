@@ -883,14 +883,15 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
   return ctx;
 }
 
-auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
+auto tls_options::make_folly_ssl_context(
+  diagnostic_handler& dh, const caf::actor_system_config* cfg) const
   -> failure_or<std::shared_ptr<folly::SSLContext>> {
-  if (not get_tls(nullptr).inner) {
+  if (not get_tls(cfg).inner) {
     return nullptr;
   }
   auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
   // Apply minimum TLS version.
-  if (auto min = get_tls_min_version(nullptr)) {
+  if (auto min = get_tls_min_version(cfg)) {
     if (not min->inner.empty()) {
       auto parsed = parse_openssl_tls_version(min->inner);
       if (not parsed) {
@@ -901,7 +902,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Load CA certificate.
-  auto cacert = get_cacert(nullptr);
+  auto cacert = get_cacert(cfg);
   if (cacert) {
     TRY(auto path, resolve_regular_file(*cacert, "cacert", dh));
     try {
@@ -913,7 +914,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  auto certfile = get_certfile(nullptr);
+  auto certfile = get_certfile(cfg);
   // Load certificate chain.
   if (certfile) {
     TRY(auto path, resolve_regular_file(*certfile, "certfile", dh));
@@ -927,9 +928,9 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Load private key. If `keyfile` is omitted, try reading it from `certfile`.
-  auto keyfile = get_keyfile(nullptr);
+  auto keyfile = get_keyfile(cfg);
   if (auto private_key_file = keyfile ? keyfile : certfile) {
-    const auto *key_name = keyfile ? "keyfile" : "certfile";
+    const auto* key_name = keyfile ? "keyfile" : "certfile";
     TRY(auto path, resolve_regular_file(*private_key_file, key_name, dh));
     try {
       ctx->loadPrivateKey(path.c_str());
@@ -947,7 +948,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  if (auto ciphers = get_tls_ciphers(nullptr)) {
+  if (auto ciphers = get_tls_ciphers(cfg)) {
     auto cipher_loc = ciphers->source;
     if (tls_ and cipher_loc == tls_->source) {
       // `located<data>` for `tls={...}` only carries the whole record span.
@@ -963,7 +964,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Set verification mode.
-  auto skip_verify = get_skip_peer_verification(nullptr).inner;
+  auto skip_verify = get_skip_peer_verification(cfg).inner;
   if (skip_verify) {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {

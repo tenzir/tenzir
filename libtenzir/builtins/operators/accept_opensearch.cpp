@@ -647,12 +647,13 @@ private:
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
+    auto const* cfg = std::addressof(ctx.actor_system().config());
     auto parsed = http_server::parse_endpoint(args_.url.inner, args_.url.source,
                                               ctx.dh(), "url");
     if (not parsed) {
       co_return None{};
     }
-    auto tls_enabled = http_server::is_tls_enabled(args_.tls);
+    auto tls_enabled = http_server::is_tls_enabled(args_.tls, cfg);
     if (parsed->scheme_tls) {
       if (*parsed->scheme_tls and not tls_enabled) {
         diagnostic::error("`https://` endpoint requires `tls=true`")
@@ -683,7 +684,7 @@ private:
       auto tls_opts = tls_options::from_optional(
         args_.tls, {.tls_default = false, .is_server = true});
       auto tls_config = http_server::make_ssl_context_config(
-        tls_opts, args_.url.source, ctx.dh());
+        tls_opts, args_.url.source, ctx, cfg);
       if (not tls_config) {
         co_return None{};
       }

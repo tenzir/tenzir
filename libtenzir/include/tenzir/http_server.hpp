@@ -28,7 +28,8 @@
 namespace tenzir::http_server {
 
 auto make_ssl_context_config(tls_options const& tls_opts, location primary,
-                             diagnostic_handler& dh)
+                             diagnostic_handler& dh,
+                             const caf::actor_system_config* cfg)
   -> failure_or<wangle::SSLContextConfig>;
 
 template <class T>
@@ -57,7 +58,8 @@ auto parse_endpoint(std::string_view endpoint, location loc,
                     std::string_view argument_name = "endpoint")
   -> Option<server_endpoint>;
 
-auto is_tls_enabled(Option<located<data>> const& tls) -> bool;
+auto is_tls_enabled(Option<located<data>> const& tls,
+                    const caf::actor_system_config* cfg = nullptr) -> bool;
 
 auto make_response(uint16_t status, const std::string& content_type,
                    std::string body) -> proxygen::coro::HTTPSourceHolder;

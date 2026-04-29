@@ -33,19 +33,20 @@ auto parse_server_folly_tls_version(std::string_view input)
 } // namespace
 
 auto make_ssl_context_config(tls_options const& tls_opts, location primary,
-                             diagnostic_handler& dh)
+                             diagnostic_handler& dh,
+                             const caf::actor_system_config* cfg)
   -> failure_or<wangle::SSLContextConfig> {
-  auto certfile = tls_opts.get_certfile(nullptr);
+  auto certfile = tls_opts.get_certfile(cfg);
   if (not certfile) {
     diagnostic::error("`tls.certfile` is required when TLS is enabled")
       .primary(primary)
       .emit(dh);
     return failure::promise();
   }
-  auto keyfile = tls_opts.get_keyfile(nullptr);
-  auto password = tls_opts.get_password(nullptr);
+  auto keyfile = tls_opts.get_keyfile(cfg);
+  auto password = tls_opts.get_password(cfg);
   auto config = proxygen::coro::HTTPServer::getDefaultTLSConfig();
-  if (auto min = tls_opts.get_tls_min_version(nullptr)) {
+  if (auto min = tls_opts.get_tls_min_version(cfg)) {
     if (not min->inner.empty()) {
       if (auto parsed = parse_server_folly_tls_version(min->inner)) {
         config.sslVersion = *parsed;
@@ -68,10 +69,8 @@ auto make_ssl_context_config(tls_options const& tls_opts, location primary,
       .emit(dh);
     return failure::promise();
   }
-  auto require_client_cert
-    = tls_opts.get_tls_require_client_cert(nullptr).inner;
-  auto skip_peer_verification
-    = tls_opts.get_skip_peer_verification(nullptr).inner;
+  auto require_client_cert = tls_opts.get_tls_require_client_cert(cfg).inner;
+  auto skip_peer_verification = tls_opts.get_skip_peer_verification(cfg).inner;
   if (require_client_cert) {
     config.clientVerification
       = folly::SSLContext::VerifyClientCertificate::ALWAYS;
@@ -82,13 +81,13 @@ auto make_ssl_context_config(tls_options const& tls_opts, location primary,
     config.clientVerification
       = folly::SSLContext::VerifyClientCertificate::IF_PRESENTED;
   }
-  if (auto ciphers = tls_opts.get_tls_ciphers(nullptr)) {
+  if (auto ciphers = tls_opts.get_tls_ciphers(cfg)) {
     config.sslCiphers = ciphers->inner;
   }
-  if (auto client_ca = tls_opts.get_tls_client_ca(nullptr)) {
+  if (auto client_ca = tls_opts.get_tls_client_ca(cfg)) {
     config.clientCAFiles.push_back(client_ca->inner);
   }
-  if (auto cacert = tls_opts.get_cacert(nullptr)) {
+  if (auto cacert = tls_opts.get_cacert(cfg)) {
     config.clientCAFiles.push_back(cacert->inner);
   }
   return config;
@@ -178,13 +177,14 @@ auto parse_endpoint(std::string_view endpoint, location loc,
   };
 }
 
-auto is_tls_enabled(Option<located<data>> const& tls) -> bool {
+auto is_tls_enabled(Option<located<data>> const& tls,
+                    const caf::actor_system_config* cfg) -> bool {
   if (not tls) {
     return false;
   }
   auto tls_opts = tls_options::from_optional(tls, {.tls_default = false,
                                                    .is_server = true});
-  return tls_opts.get_tls(nullptr).inner;
+  return tls_opts.get_tls(cfg).inner;
 }
 
 auto make_response(uint16_t status, const std::string& content_type,
