@@ -1,5 +1,6 @@
 #!/bin/sh
 # runner: shell
+# timeout: 120
 set -eu
 
 dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
