@@ -8,13 +8,30 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 
-# Use BUILD_DIR env var if set, otherwise auto-discover
+usage() {
+  cat <<'EOF'
+Usage: scripts/build.sh [target] [cmake-build-options...]
+       scripts/build.sh --print-build-dir
+
+Build a CMake target from the most recently used configured build directory.
+The default target is "tenzir". Set BUILD_DIR to choose a build directory.
+EOF
+}
+
+case ${1:-} in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+esac
+
+# Use BUILD_DIR env var if set, otherwise auto-discover.
 if [[ -n ${BUILD_DIR:-} ]]; then
-  build_dir="$BUILD_DIR"
+  build_dir=$BUILD_DIR
 else
   # Pick the configured build dir with the most recently modified CMakeCache.txt.
   # stat(1) has incompatible syntax between GNU and BSD (macOS); pick per platform.
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if [[ $(uname) == Darwin ]]; then
     stat_mtime_fmt=(-f '%m')
   else
     stat_mtime_fmt=(--format '%Y')
@@ -28,7 +45,7 @@ else
       latest_cache=$f
     fi
   done < <(find "$repo_root/build" -type f -name CMakeCache.txt -print0 2>/dev/null)
-  if [[ -n "$latest_cache" ]]; then
+  if [[ -n $latest_cache ]]; then
     build_dir=$(dirname "$latest_cache")
   else
     build_dir=""
@@ -38,6 +55,11 @@ fi
 if [[ -z $build_dir ]]; then
   echo "error: no build directory found (run cmake first or set BUILD_DIR)" >&2
   exit 1
+fi
+
+if [[ ${1:-} == --print-build-dir ]]; then
+  (cd "$build_dir" && pwd)
+  exit 0
 fi
 
 target=${1:-tenzir}

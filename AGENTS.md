@@ -7,8 +7,7 @@ building modular pipelines that process structured event data.
 
 ### Project structure
 
-- `.agents/` - Agent-specific configuration and reference material
-- `.claude/` - Claude Code configuration
+- `.agents/` - Agent-facing reference material
 - `.docs/` - Optional local clone of the `tenzir/docs` repository
 - `.github/` - GitHub configuration and CI/CD workflows
 - `changelog/` - Changelog entries and release metadata
@@ -45,24 +44,28 @@ building modular pipelines that process structured event data.
 
 ### Configure the build
 
-A build is configured when its directory contains `CMakeCache.txt`. A build
-directory may 3 levels down from the project root.
-
-Only when explicitly asked to configure a build, run:
+Configure a build by selecting a CMake prefix:
 
 ```sh
 cmake --list-presets
 cmake --preset <preset>
 ```
 
+A build is configured when its directory contains `CMakeCache.txt`.
+
 ### Compile the project
 
-Run `/compile` to compile the build. Fall back to `scripts/build.sh` if
-`/compile` is unavailable.
+Compile a configured buid:
 
-These commands auto-discover a configured build directory under `build/`.
-By default, discovery picks the directory with the most recently modified
-`CMakeCache.txt`. Set `BUILD_DIR` to override this default.
+```sh
+scripts/build.sh
+```
+
+Pass a target only when needed:
+
+```sh
+scripts/build.sh tenzir-unit-test
+```
 
 ### Run pipelines
 
@@ -76,15 +79,14 @@ Use the `tenzir` binary to execute a TQL program:
 
 ### Run integration tests
 
-> Prerequisite: ensure your build's `bin/` directory is in `$PATH`.
-
-Run integration tests from the repository root:
+Build `tenzir` first when testing local changes:
 
 ```sh
+scripts/build.sh
 uvx tenzir-test --root test
 ```
 
-Common options:
+Common `tenzir-test` options:
 
 - `--passthrough`: Stream output to the terminal (skips reference comparison)
 - `--update`: Update reference outputs (check correctness before or after)
