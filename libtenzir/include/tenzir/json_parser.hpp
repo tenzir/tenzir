@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
-
+#include "tenzir/chunk.hpp"
 #include "tenzir/detail/padded_buffer.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/si_literals.hpp"
+#include "tenzir/simdjson_buffer.hpp"
 
 #include <simdjson.h>
 
@@ -305,52 +305,20 @@ public:
   auto parse(simdjson::padded_string_view json_line) -> void;
   auto validate_completion() const -> void;
 
-  /// Parses all NDJSON lines from a chunk using this parser.
-  /// Allocates a single padded buffer instead of per-line copies.
-  auto parse_lines(const chunk_ptr& body) -> void;
-
 private:
   std::size_t lines_processed_ = 0u;
 };
 
 class streaming_ndjson_parser {
 public:
-  auto parse_chunk(const blob& data, std::string_view name,
-                   diagnostic_handler& dh) -> std::vector<table_slice> {
-    if (data.empty() and partial_.empty()) {
-      return {};
-    }
-    partial_ += data;
-    auto split = partial_.size();
-    while (split > 0 and partial_[split - 1] != std::byte{'\n'}) {
-      --split;
-    }
-    if (split == 0) {
-      return {};
-    }
-    auto complete = blob{};
-    complete.insert(complete.end(), partial_.begin(), partial_.begin() + split);
-    auto trailing = blob{};
-    trailing.insert(trailing.end(), partial_.begin() + split, partial_.end());
-    partial_ = std::move(trailing);
-    auto parser = ndjson_parser{std::string{name}, dh, {}};
-    parser.parse_lines(chunk::make(std::move(complete)));
-    return parser.builder.finalize_as_table_slice();
-  }
+  auto parse_chunk(SimdjsonPaddedBuffer const& data, std::string_view name,
+                   diagnostic_handler& dh) -> std::vector<table_slice>;
 
   auto finish(std::string_view name, diagnostic_handler& dh)
-    -> std::vector<table_slice> {
-    if (partial_.empty()) {
-      return {};
-    }
-    auto parser = ndjson_parser{std::string{name}, dh, {}};
-    parser.parse_lines(chunk::make(std::move(partial_)));
-    partial_.clear();
-    return parser.builder.finalize_as_table_slice();
-  }
+    -> std::vector<table_slice>;
 
 private:
-  blob partial_;
+  SimdjsonPaddedBuffer partial_;
 };
 
 class default_parser final : public parser_base {

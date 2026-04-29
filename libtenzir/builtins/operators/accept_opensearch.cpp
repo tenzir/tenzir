@@ -89,7 +89,7 @@ struct RequestStarted {
 
 struct RequestBody {
   uint64_t request_id;
-  std::vector<std::byte> data;
+  SimdjsonPaddedBuffer data;
 };
 
 struct RequestFinished {
@@ -275,7 +275,7 @@ public:
                        .body = "{}"});
             co_return proxygen::coro::HTTPSourceReader::Cancel;
           }
-          auto data = std::vector<std::byte>(iobuf->length());
+          auto data = SimdjsonPaddedBuffer{iobuf->length()};
           std::memcpy(data.data(), iobuf->data(), iobuf->length());
           co_await queue_->enqueue(
             RequestBody{.request_id = request_id, .data = std::move(data)});
@@ -424,14 +424,12 @@ public:
           decompressor = req.decompressor;
           is_action = req.is_action;
           failed = req.failed;
-          auto data = blob{std::span{msg.data}};
+          auto data = std::move(msg.data);
           auto failing_dh = failing_diagnostic_handler{ctx.dh(), failed};
           if (decompressor) {
             auto remaining = args_.get_max_request_size() - req.output_bytes;
-            auto decompressed = http::decompress_chunk(
-              **decompressor,
-              std::span<std::byte const>{msg.data.data(), msg.data.size()},
-              failing_dh, remaining);
+            auto decompressed = http::decompress_chunk_simdjson(
+              **decompressor, data.view(), failing_dh, remaining);
             if (decompressed.is_err()) {
               (*response_signal)
                 ->send(Response{.status = std::move(decompressed).unwrap_err(),

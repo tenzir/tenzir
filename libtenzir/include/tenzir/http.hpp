@@ -14,6 +14,7 @@
 #include "tenzir/http_pool.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/secret_resolution.hpp"
+#include "tenzir/simdjson_buffer.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tls_options.hpp"
 
@@ -130,6 +131,15 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       size_t max_output_size
                       = std::numeric_limits<size_t>::max())
   -> Result<blob, uint16_t>;
+
+/// Like `decompress_chunk`, but keeps simdjson padding available on the
+/// returned buffer so callers can parse directly without another full copy.
+auto decompress_chunk_simdjson(arrow::util::Decompressor& decompressor,
+                               std::span<std::byte const> input,
+                               diagnostic_handler& dh,
+                               size_t max_output_size
+                               = std::numeric_limits<size_t>::max())
+  -> Result<SimdjsonPaddedBuffer, uint16_t>;
 
 enum class PaginationMode {
   link,

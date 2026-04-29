@@ -457,10 +457,12 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
   return std::move(dec.ValueUnsafe());
 }
 
-auto decompress_chunk(arrow::util::Decompressor& decompressor,
-                      std::span<std::byte const> input, diagnostic_handler& dh,
-                      size_t max_output_size) -> Result<blob, uint16_t> {
-  auto out = blob{};
+template <class Buffer>
+auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
+                           std::span<std::byte const> input,
+                           diagnostic_handler& dh, size_t max_output_size)
+  -> Result<Buffer, uint16_t> {
+  auto out = Buffer{};
   auto initial_size
     = std::min(max_output_size, std::max<size_t>(input.size_bytes() * 2, 64));
   out.resize(initial_size);
@@ -508,6 +510,20 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
   }
   out.resize(written);
   return out;
+}
+
+auto decompress_chunk(arrow::util::Decompressor& decompressor,
+                      std::span<std::byte const> input, diagnostic_handler& dh,
+                      size_t max_output_size) -> Result<blob, uint16_t> {
+  return decompress_chunk_impl<blob>(decompressor, input, dh, max_output_size);
+}
+
+auto decompress_chunk_simdjson(arrow::util::Decompressor& decompressor,
+                               std::span<std::byte const> input,
+                               diagnostic_handler& dh, size_t max_output_size)
+  -> Result<SimdjsonPaddedBuffer, uint16_t> {
+  return decompress_chunk_impl<SimdjsonPaddedBuffer>(decompressor, input, dh,
+                                                     max_output_size);
 }
 
 auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {
