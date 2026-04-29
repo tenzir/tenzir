@@ -175,8 +175,8 @@ auto wrap_record_batch(const table_slice& slice)
 }
 
 /// Decode an Arrow IPC file.
-auto decode_ipc_file(chunk_ptr chunk)
-  -> caf::expected<generator<std::shared_ptr<arrow::RecordBatch>>> {
+auto decode_ipc_file(chunk_ptr chunk) -> caf::expected<
+  generator<caf::expected<std::shared_ptr<arrow::RecordBatch>>>> {
   if (not starts_with_arrow_magic(chunk)) {
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
                                              "Arrow IPC file");
@@ -196,24 +196,30 @@ auto decode_ipc_file(chunk_ptr chunk)
                                     get_generator_result.status().ToString()));
   }
   auto gen = get_generator_result.MoveValueUnsafe();
-  return
-    []([[maybe_unused]] auto reader,
-       decltype(gen) gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
-      while (true) {
-        auto next = gen();
-        if (not next.is_finished()) {
-          // TODO: We block the CAF worker thread here. Presumably we are okay
-          // with this since work is happening in an Arrow worker thread.
-          next.Wait();
-        }
-        TENZIR_ASSERT(next.is_finished());
-        auto result = check(next.MoveResult());
-        if (arrow::IsIterationEnd(result)) {
-          co_return;
-        }
-        co_yield std::move(result);
+  return []([[maybe_unused]] auto reader, decltype(gen) gen)
+           -> generator<caf::expected<std::shared_ptr<arrow::RecordBatch>>> {
+    while (true) {
+      auto next = gen();
+      if (not next.is_finished()) {
+        // TODO: We block the CAF worker thread here. Presumably we are okay
+        // with this since work is happening in an Arrow worker thread.
+        next.Wait();
       }
-    }(std::move(reader), std::move(gen));
+      TENZIR_ASSERT(next.is_finished());
+      auto result = next.MoveResult();
+      if (not result.ok()) {
+        co_yield caf::make_error(
+          ec::format_error,
+          fmt::format("failed to read record batch: {}",
+                      result.status().ToStringWithoutContextLines()));
+        co_return;
+      }
+      if (arrow::IsIterationEnd(result)) {
+        co_return;
+      }
+      co_yield result.MoveValueUnsafe();
+    }
+  }(std::move(reader), std::move(gen));
 }
 
 class passive_feather_store final : public passive_store {
@@ -244,7 +250,12 @@ class passive_feather_store final : public passive_store {
     auto offset = id{};
     auto schema = schema_;
     for (auto it = batches.begin(); it != batches.end(); ++it) {
-      auto batch = std::move(*it);
+      auto batch_result = std::move(*it);
+      if (not batch_result) {
+        TENZIR_ASSERT(false, "failed to decode feather store after load");
+        co_return;
+      }
+      auto batch = std::move(*batch_result);
       TENZIR_ASSERT(batch);
       auto import_time_column = batch->GetColumnByName("import_time");
       auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
@@ -880,7 +891,15 @@ private:
       done_ = true;
       co_return;
     }
-    for (auto&& batch : *batches) {
+    for (auto&& batch_result : *batches) {
+      if (not batch_result) {
+        emit_with_location(diagnostic::error("failed to decode Feather input")
+                             .note("{}", batch_result.error()),
+                           dh, args_.operator_location);
+        done_ = true;
+        co_return;
+      }
+      auto batch = std::move(*batch_result);
       auto slice
         = make_table_slice(std::move(batch), dh, args_.operator_location);
       if (not slice) {
