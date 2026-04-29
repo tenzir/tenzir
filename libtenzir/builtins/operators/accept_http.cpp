@@ -28,7 +28,6 @@
 #include "tenzir/tls_options.hpp"
 #include "tenzir/variant.hpp"
 
-#include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/SSLContext.h>
@@ -290,7 +289,6 @@ public:
     // reschedule back to the proxygen IO EventBase before touching the
     // queue or returning the response, because proxygen writes the
     // response on this coroutine's executor.
-    permit.release();
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
     if (res_status != 200) {
@@ -586,9 +584,8 @@ private:
       co_return;
     }
     // Wait until every handleRequest coroutine has returned its permit.
-    // A handler that has been accepted but hasn't yet enqueued RequestStarted
-    // is invisible to both active_requests_ and message_queue_, so checking
-    // those alone is insufficient.
+    // Since the permit now lives until handleRequest() returns, this also
+    // covers the reschedule/writeback tail after a response was signaled.
     if (active_connections_->available_permits()
         != args_.get_max_connections()) {
       co_return;

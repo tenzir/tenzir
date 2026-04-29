@@ -166,6 +166,20 @@ auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
   return subslice(slice, 0, 1);
 }
 
+auto is_bulk_ingest_path(std::string_view path) -> bool {
+  constexpr auto bulk_path = std::string_view{"/_bulk"};
+  if (path == bulk_path) {
+    return true;
+  }
+  if (not path.ends_with(bulk_path)) {
+    return false;
+  }
+  auto suffix_offset = path.size() - bulk_path.size();
+  auto second_slash = path.find('/', 1);
+  return second_slash != std::string_view::npos
+         and second_slash == suffix_offset;
+}
+
 auto get_static_opensearch_response(proxygen::HTTPMessage const& msg)
   -> Option<Response> {
   auto path = std::string_view{msg.getPathAsStringPiece()};
@@ -177,16 +191,23 @@ auto get_static_opensearch_response(proxygen::HTTPMessage const& msg)
       .body = std::string{info_response},
     };
   }
-  if (path != "/_bulk") {
+  if (is_bulk_ingest_path(path)) {
+    // These requests carry data we want to ingest.
+    // Respond only after the bulk payload was processed.
+    return None{};
+  }
+  if (method == proxygen::HTTPMethod::HEAD) {
     return Response{
       .status = 200,
-      .content_type = method == proxygen::HTTPMethod::HEAD
-                        ? ""
-                        : std::string{bulk_content_type},
-      .body = method == proxygen::HTTPMethod::HEAD ? "" : "{}",
+      .content_type = "",
+      .body = "",
     };
   }
-  return None{};
+  return Response{
+    .status = 200,
+    .content_type = std::string{bulk_content_type},
+    .body = "{}",
+  };
 }
 
 class RequestHandler final : public proxygen::coro::HTTPHandler {
@@ -276,7 +297,6 @@ public:
       co_await queue_->enqueue(RequestFinished{.request_id = request_id});
     }
     auto response = co_await response_signal->recv();
-    permit.release();
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
     co_return http_server::make_response(response.status, response.content_type,
@@ -609,6 +629,9 @@ private:
     if (lifecycle_ != Lifecycle::draining) {
       co_return;
     }
+    // Wait until every handleRequest coroutine has returned its permit.
+    // Since the permit now lives until handleRequest() returns, this also
+    // covers the reschedule/writeback tail after a response was signaled.
     if (active_connections_->available_permits() != get_max_connections()) {
       co_return;
     }
