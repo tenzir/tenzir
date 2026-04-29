@@ -1081,8 +1081,10 @@ private:
     auto error = std::string{};
     try {
       if (subprocess_) {
+        // Give the child a moment to finish writing diagnostics after closing
+        // stdout before falling back to termination.
         auto result
-          = co_await subprocess_->wait_timeout(std::chrono::milliseconds{0});
+          = co_await subprocess_->wait_timeout(std::chrono::seconds{1});
         if (result.running()) {
           static_cast<void>(
             co_await subprocess_->terminate_or_kill(std::chrono::seconds{1}));
