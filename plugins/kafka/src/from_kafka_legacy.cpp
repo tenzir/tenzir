@@ -19,6 +19,7 @@
 #include <caf/detail/set_thread_name.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -62,13 +63,22 @@ struct consume_synchronizer {
 // Per-thread worker that owns a consumer and runs the consume loop.
 class consume_worker {
 public:
-  static auto make(configuration config, from_kafka_args const& args,
-                   diagnostic_handler& dh, consume_synchronizer& sync)
-    -> std::optional<consume_worker> {
+  static auto
+  make(configuration config, from_kafka_args const& args,
+       diagnostic_handler& dh, consume_synchronizer& sync,
+       std::string_view pipeline_id) -> std::optional<consume_worker> {
     if (auto value = config.get("bootstrap.servers")) {
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
+    auto consumer_t0 = std::chrono::steady_clock::now();
     auto client = consumer::make(std::move(config));
+    TENZIR_WARN("[start-trace] from_kafka[{}]: worker consumer::make returned "
+                "in {}ms (ok={})",
+                pipeline_id,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - consumer_t0)
+                  .count(),
+                client.has_value());
     if (not client) {
       diagnostic::error("failed to create consumer: {}", client.error())
         .primary(args.operator_location)
@@ -76,12 +86,19 @@ public:
       return std::nullopt;
     }
     TENZIR_INFO("kafka subscribes to topic {}", args.topic);
+    auto subscribe_t0 = std::chrono::steady_clock::now();
     if (auto err = client->subscribe({args.topic}); err.valid()) {
       diagnostic::error("failed to subscribe to topic: {}", err)
         .primary(args.operator_location)
         .emit(dh);
       return std::nullopt;
     }
+    TENZIR_WARN("[start-trace] from_kafka[{}]: worker subscribe returned in "
+                "{}ms, entering consume loop",
+                pipeline_id,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - subscribe_t0)
+                  .count());
     return consume_worker{std::move(*client), args, dh, sync};
   }
   auto
@@ -250,12 +267,20 @@ from_kafka_operator::from_kafka_operator(from_kafka_args args, record config)
 auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
   -> generator<table_slice> {
   auto& dh = ctrl.diagnostics();
+  TENZIR_WARN("[start-trace] from_kafka[{}]: coroutine entered",
+              ctrl.pipeline_id());
   // Resolve all aws_iam fields; region/profile/session_name may be secrets.
   auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
   if (args_.aws) {
     resolved_creds.emplace();
     auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+    TENZIR_WARN("[start-trace] from_kafka[{}]: yielding for aws secret "
+                "resolution",
+                ctrl.pipeline_id());
     co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    TENZIR_WARN("[start-trace] from_kafka[{}]: resumed after aws secret "
+                "resolution",
+                ctrl.pipeline_id());
   }
   // Use top-level aws_region if provided, otherwise fall back to aws_iam.
   if (args_.aws_region) {
@@ -264,7 +289,11 @@ auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
     }
     resolved_creds->region = args_.aws_region->inner;
   }
+  TENZIR_WARN("[start-trace] from_kafka[{}]: yielding empty (pre-config)",
+              ctrl.pipeline_id());
   co_yield {};
+  TENZIR_WARN("[start-trace] from_kafka[{}]: resumed (pre-config)",
+              ctrl.pipeline_id());
   // Build a fully-configured configuration that workers will copy.
   auto tmp_cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
   if (not tmp_cfg) {
@@ -275,7 +304,13 @@ auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
   }
   {
     auto secrets = configure_or_request(args_.options, *tmp_cfg, dh);
+    TENZIR_WARN("[start-trace] from_kafka[{}]: yielding for option secret "
+                "resolution",
+                ctrl.pipeline_id());
     co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
+    TENZIR_WARN("[start-trace] from_kafka[{}]: resumed after option secret "
+                "resolution",
+                ctrl.pipeline_id());
   }
   // Configure per-consumer settings on tmp_cfg before spawning workers.
   if (args_.exit) {
@@ -305,6 +340,8 @@ auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
     co_return;
   }
   auto const num_workers = std::max(args_.jobs, uint64_t{1});
+  TENZIR_WARN("[start-trace] from_kafka[{}]: spawning {} consume workers",
+              ctrl.pipeline_id(), num_workers);
   auto sync = consume_synchronizer{};
   sync.active_workers.store(num_workers, std::memory_order_relaxed);
   auto threads = std::vector<std::thread>{};
@@ -316,16 +353,19 @@ auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
     }
   }};
   for (auto i = uint64_t{0}; i < num_workers; ++i) {
-    threads.emplace_back([&, sdh = ctrl.shared_diagnostics()]() mutable {
-      caf::detail::set_thread_name("kafka_consume");
-      auto worker = consume_worker::make(*tmp_cfg, args_, sdh, sync);
-      if (not worker) {
+    threads.emplace_back(
+      [&, sdh = ctrl.shared_diagnostics(),
+       pipeline_id = std::string{ctrl.pipeline_id()}]() mutable {
+        caf::detail::set_thread_name("kafka_consume");
+        auto worker
+          = consume_worker::make(*tmp_cfg, args_, sdh, sync, pipeline_id);
+        if (not worker) {
+          sync.active_workers.fetch_sub(1, std::memory_order_release);
+          return;
+        }
+        worker->run();
         sync.active_workers.fetch_sub(1, std::memory_order_release);
-        return;
-      }
-      worker->run();
-      sync.active_workers.fetch_sub(1, std::memory_order_release);
-    });
+      });
   }
   while (sync.active_workers.load(std::memory_order_acquire) > 0) {
     auto lock = std::unique_lock{sync.outputs_mutex};

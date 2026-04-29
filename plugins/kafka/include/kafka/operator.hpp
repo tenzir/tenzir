@@ -120,12 +120,20 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
+    TENZIR_WARN("[start-trace] kafka_loader[{}]: coroutine entered",
+                ctrl.pipeline_id());
     // Resolve all aws_iam fields; region/profile/session_name may be secrets.
     auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
     if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      TENZIR_WARN("[start-trace] kafka_loader[{}]: yielding for aws secret "
+                  "resolution",
+                  ctrl.pipeline_id());
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+      TENZIR_WARN("[start-trace] kafka_loader[{}]: resumed after aws secret "
+                  "resolution",
+                  ctrl.pipeline_id());
     }
     // Use top-level aws_region if provided, otherwise fall back to aws_iam.
     if (args_.aws_region) {
@@ -134,7 +142,11 @@ public:
       }
       resolved_creds->region = args_.aws_region->inner;
     }
+    TENZIR_WARN("[start-trace] kafka_loader[{}]: yielding empty (pre-config)",
+                ctrl.pipeline_id());
     co_yield {};
+    TENZIR_WARN("[start-trace] kafka_loader[{}]: resumed (pre-config)",
+                ctrl.pipeline_id());
     auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
@@ -176,24 +188,47 @@ public:
     // Override configuration with arguments.
     {
       auto secrets = configure_or_request(args_.options, *cfg, dh);
+      TENZIR_WARN("[start-trace] kafka_loader[{}]: yielding for option secret "
+                  "resolution",
+                  ctrl.pipeline_id());
       co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
+      TENZIR_WARN("[start-trace] kafka_loader[{}]: resumed after option "
+                  "secret resolution",
+                  ctrl.pipeline_id());
     }
     // Create the consumer.
     if (auto value = cfg->get("bootstrap.servers")) {
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
+    TENZIR_WARN("[start-trace] kafka_loader[{}]: calling consumer::make",
+                ctrl.pipeline_id());
+    auto consumer_t0 = std::chrono::steady_clock::now();
     auto client = consumer::make(*cfg);
+    TENZIR_WARN("[start-trace] kafka_loader[{}]: consumer::make returned in "
+                "{}ms (ok={})",
+                ctrl.pipeline_id(),
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - consumer_t0)
+                  .count(),
+                client.has_value());
     if (not client) {
       diagnostic::error("failed to create consumer: {}", client.error())
         .primary(args_.operator_location)
         .emit(dh);
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
+    auto subscribe_t0 = std::chrono::steady_clock::now();
     if (auto err = client->subscribe({args_.topic}); err.valid()) {
       diagnostic::error("failed to subscribe to topic: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
     }
+    TENZIR_WARN("[start-trace] kafka_loader[{}]: subscribe returned in {}ms, "
+                "entering consume loop",
+                ctrl.pipeline_id(),
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - subscribe_t0)
+                  .count());
     auto num_messages = size_t{0};
     auto last_commit_time = time::clock::now();
     auto last_good_message = std::shared_ptr<RdKafka::Message>{};
