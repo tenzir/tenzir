@@ -42,6 +42,9 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
   TENZIR_DEBUG("{} successfully spawned {} execution nodes", *self,
                untyped_exec_nodes.size());
   untyped_exec_nodes.pop_back();
+  TENZIR_WARN("[start-trace] pipeline_executor[{}]: mailing atom::start to "
+              "last exec_node ({} ops total)",
+              pipeline_id, exec_nodes.size());
   // The exec nodes delegate the `atom::start` message to the preceding exec
   // node. Thus, when we start the last node, all nodes before are started as
   // well, and the request is completed only afterwards.
@@ -49,9 +52,14 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
     .request(exec_nodes.back(), caf::infinite)
     .then(
       [this]() mutable {
+        TENZIR_WARN("[start-trace] pipeline_executor[{}]: chain ack received, "
+                    "calling finish_start",
+                    pipeline_id);
         finish_start();
       },
       [this](const caf::error& err) mutable {
+        TENZIR_WARN("[start-trace] pipeline_executor[{}]: chain ack ERROR ({})",
+                    pipeline_id, err);
         if (err.empty()) {
           // TODO: Is this even reachable?
           finish_start();
@@ -70,6 +78,10 @@ auto pipeline_executor_state::running_in_node() const -> bool {
 
 void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
   TENZIR_TRACE("{} spawns execution nodes", *self);
+  auto spawn_t0 = std::chrono::steady_clock::now();
+  TENZIR_WARN("[start-trace] pipeline_executor[{}]: spawn_execution_nodes "
+              "begin ({} ops)",
+              pipeline_id, pipe.operators().size());
   auto input_type = operator_type::make<void>();
   bool spawn_remote = false;
   // Spawn pipeline piece by piece.
@@ -195,6 +207,14 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     self->quit();
     return;
   }
+  TENZIR_WARN("[start-trace] pipeline_executor[{}]: spawn_execution_nodes done "
+              "in {}ms "
+              "({} nodes)",
+              pipeline_id,
+              std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - spawn_t0)
+                .count(),
+              exec_nodes.size());
   start_nodes_if_all_spawned();
 }
 
@@ -218,11 +238,15 @@ void pipeline_executor_state::abort_start(caf::error reason) {
 
 void pipeline_executor_state::finish_start() {
   TENZIR_TRACE("{} signals successful start", *self);
+  TENZIR_WARN("[start-trace] pipeline_executor[{}]: delivering start_rp",
+              pipeline_id);
   start_rp.deliver();
 }
 
 auto pipeline_executor_state::start() -> caf::result<void> {
   TENZIR_TRACE("{} got start request", *self);
+  TENZIR_WARN("[start-trace] pipeline_executor[{}]: atom::start received",
+              pipeline_id);
   if (not this->pipe) {
     return caf::make_error(ec::logic_error,
                            "pipeline exeuctor can only start once");

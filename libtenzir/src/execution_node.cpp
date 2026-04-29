@@ -753,6 +753,10 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
+    auto start_t0 = std::chrono::steady_clock::now();
+    TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: atom::start "
+                "received",
+                pipeline_id, op->name(), metrics.operator_index);
     detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
       emit_generic_op_metrics();
@@ -800,7 +804,18 @@ struct exec_node_state {
                                        operator_type_name(*output_generator)));
       }
       instance = std::get<generator<Output>>(std::move(*output_generator));
+      auto next_t0 = std::chrono::steady_clock::now();
       start_output = instance->next();
+      auto next_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - next_t0)
+                       .count();
+      TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: first "
+                  "instance->next() "
+                  "returned in {}ms (since atom::start: {}ms)",
+                  pipeline_id, op->name(), metrics.operator_index, next_ms,
+                  std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start_t0)
+                    .count());
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return {};
       }
@@ -820,11 +835,17 @@ struct exec_node_state {
       }
     }
     if constexpr (detail::are_same_v<std::monostate, Input, Output>) {
+      TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: void-pipeline "
+                  "start handler returning",
+                  pipeline_id, op->name(), metrics.operator_index);
       schedule_run(false);
       return {};
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       start_rp = self->make_response_promise<void>();
+      TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: sink mailing "
+                  "atom::start to previous",
+                  pipeline_id, op->name(), metrics.operator_index);
       self->mail(atom::start_v, std::move(all_previous))
         .request(previous, caf::infinite)
         .then(
@@ -834,6 +855,9 @@ struct exec_node_state {
             TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
+            TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: sink chain "
+                        "ack received, delivering start_rp",
+                        pipeline_id, op->name(), metrics.operator_index);
             schedule_run(false);
             start_rp.deliver();
           },
@@ -842,15 +866,24 @@ struct exec_node_state {
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
+            TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: sink chain "
+                        "ack ERROR ({}), delivering start_rp",
+                        pipeline_id, op->name(), metrics.operator_index, error);
             start_rp.deliver(error);
           });
       return start_rp;
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       TENZIR_DEBUG("{} {} delegates start to {}", *self, op->name(), previous);
+      TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: transform "
+                  "delegating atom::start to previous",
+                  pipeline_id, op->name(), metrics.operator_index);
       return self->mail(atom::start_v, std::move(all_previous))
         .delegate(previous);
     }
+    TENZIR_WARN("[start-trace] exec_node[{} op={} idx={}]: source start "
+                "handler returning {{}}",
+                pipeline_id, op->name(), metrics.operator_index);
     return {};
   }
 
