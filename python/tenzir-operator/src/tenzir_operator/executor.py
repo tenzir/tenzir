@@ -412,6 +412,11 @@ def execute_user_code(batch: pa.RecordBatch, compiled_code: CodeType) -> pa.Reco
     return buffer.finish()
 
 
+def close_output() -> None:
+    with suppress(Exception):
+        sys.stdout.close()
+
+
 def write_limited(file, limit: int):
     def limit_write(self, __s) -> int:
         nonlocal limit
@@ -461,6 +466,7 @@ def main() -> int:
         try:
             compiled_code = compile(code, source_name, "exec")
         except (SyntaxError, ValueError):
+            close_output()
             traceback.print_exc(limit=0, file=errpipe)
             return 1
         try:
@@ -482,6 +488,7 @@ def main() -> int:
             # by the parent process.
             pass
         except WrappedError as e:
+            close_output()
             inner = e.__cause__
             t = inner.__class__ if inner else None
             tb = inner.__traceback__ if inner else None
@@ -489,6 +496,7 @@ def main() -> int:
             print_stable_exception(t, inner, tb, errpipe)
             return 1
         except BaseException:
+            close_output()
             exc_type, exc, tb = sys.exc_info()
             print_stable_exception(exc_type, exc, tb, errpipe)
             return 1
