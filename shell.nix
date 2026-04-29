@@ -90,13 +90,13 @@ let
         pkgs.jq
         pkgs.lefthook
         pkgs.lsof
+        pkgs.parallel
         pkgs.perl
         pkgs.procps
         pkgs.socat
-        pkgs.yara
-        pkgs.parallel
         pkgs.openssl
         package.tenzir-test
+        pkgs.yara
       ]
       ++ clang-shims
       ++ lib.optionals pkgs.stdenv.isLinux [
