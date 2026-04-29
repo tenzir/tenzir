@@ -11,7 +11,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/connect_to_node.hpp"
-#include "tenzir/detail/base64.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/execution_node.hpp"
@@ -246,9 +245,8 @@ void pipeline_executor_state::finish_start() {
 
 auto pipeline_executor_state::start() -> caf::result<void> {
   TENZIR_TRACE("{} got start request", *self);
-  TENZIR_WARN("[start-trace] pipeline_executor[{}]: atom::start received "
-              "(fp={})",
-              pipeline_id, detail::base64::encode(definition));
+  TENZIR_WARN("[start-trace] pipeline_executor[{}]: atom::start received",
+              pipeline_id);
   if (not this->pipe) {
     return caf::make_error(ec::logic_error,
                            "pipeline exeuctor can only start once");
