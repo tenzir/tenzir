@@ -5,7 +5,7 @@
 -      expr: constant string "field" @ 32..39,
 -      id: 1
 -    }
-+
++    
    ],
    operators: [
      SetIr {
