@@ -1,0 +1,20 @@
+api "/serve-multi", {
+  requests: [
+    {serve_id: "serve_multi_1"},
+    {serve_id: "serve_multi_2"},
+  ],
+  timeout: 5s,
+  min_events: 8,
+  max_events: 8,
+  schema: "never",
+}
+responses = [
+  {id: "serve_multi_1", response: serve_multi_1},
+  {id: "serve_multi_2", response: serve_multi_2},
+]
+unroll responses
+this = responses
+unroll response.events
+data = response.events.data
+select id, data
+write_tql

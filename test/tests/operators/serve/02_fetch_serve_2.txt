@@ -1,0 +1,16 @@
+{
+  s: "Hello World 2",
+  i: null,
+}
+{
+  s: "Hiya 2",
+  i: null,
+}
+{
+  s: null,
+  i: 43,
+}
+{
+  s: "str 2",
+  i: 1,
+}
