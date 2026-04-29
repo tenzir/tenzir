@@ -1,0 +1,6 @@
+error: `_max_pending` must be greater than zero
+ --> tests/operators/to_nats/error_max_pending_zero.tql:6:22
+  |
+6 |         _max_pending=0
+  |                      ^ 
+  |

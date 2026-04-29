@@ -1,0 +1,10 @@
+suite: nats-fixture
+fixtures:
+  - nats:
+      subject: fixture_nats_test
+      stream: FIXTURE_NATS_TEST
+      durable: fixture_nats_test
+      messages: 1
+timeout: 180
+skip:
+  on: fixture-unavailable

@@ -1,0 +1,3 @@
+{
+  line: "{\"severity\":\"high\",\"alert_type\":\"suspicious-login\",\"user\":\"alice\"}",
+}

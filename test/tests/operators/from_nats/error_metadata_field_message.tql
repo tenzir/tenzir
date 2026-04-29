@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_nats "unused",
+          metadata_field=message

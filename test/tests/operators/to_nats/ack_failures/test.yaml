@@ -1,0 +1,11 @@
+suite: to-nats-ack-failures
+fixtures:
+  - nats:
+      subject: to_nats_ack_failures_test
+      stream: TO_NATS_ACK_FAILURES_TEST
+      durable: to_nats_ack_failures_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

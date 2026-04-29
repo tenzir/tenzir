@@ -364,7 +364,7 @@ public:
     return failure::promise();
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     // The spawner must be retrieved before filling args, because we move them
     // out and thus the passed `DescribeCtx` would be incomplete.
     auto spawner = std::optional<AnySpawn>{};

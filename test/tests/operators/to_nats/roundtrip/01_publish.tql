@@ -1,0 +1,12 @@
+// Publish one event to JetStream with NATS headers.
+from {
+  message: "hello-nats",
+  headers: {
+    source: "tenzir",
+    multi: ["a", "b"],
+  },
+}
+to_nats env("NATS_SUBJECT"),
+        message=this.message,
+        headers=this.headers,
+        url=env("NATS_URL")

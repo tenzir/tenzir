@@ -1,0 +1,14 @@
+---
+fixtures:
+  - udp: {}
+assertions:
+  fixtures:
+    udp:
+      server_received_contains: "hello-from-to_udp"
+timeout: 60
+---
+
+from {
+  message: "hello-from-to_udp"
+}
+to_udp env("UDP_ENDPOINT"), message=message

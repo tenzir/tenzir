@@ -1,0 +1,6 @@
+suite: from-nats-read-lines
+fixtures:
+  - nats:
+      subject: from_nats_read_lines_test
+      stream: FROM_NATS_READ_LINES_TEST
+      durable: from_nats_read_lines_test

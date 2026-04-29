@@ -1,0 +1,6 @@
+error: `metadata_field` must not overlap with `message`
+ --> tests/operators/from_nats/error_metadata_field_message.tql:6:26
+  |
+6 |           metadata_field=message
+  |                          ^^^^^^^ 
+  |

@@ -1,0 +1,9 @@
+// Verify the message published by the previous test.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1,
+          metadata_field=nats
+select line = string(message),
+       source = nats.headers.source,
+       multi = nats.headers.multi

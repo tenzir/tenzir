@@ -1,0 +1,11 @@
+suite: from-nats-idle
+fixtures:
+  - nats:
+      subject: from_nats_idle_test
+      stream: FROM_NATS_IDLE_TEST
+      durable: from_nats_idle_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

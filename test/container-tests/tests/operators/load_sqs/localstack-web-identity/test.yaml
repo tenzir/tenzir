@@ -1,3 +1,0 @@
-suite: localstack-sqs-web-identity
-fixtures: [localstack]
-timeout: 120

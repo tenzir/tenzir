@@ -10,17 +10,25 @@
 
 #include "tenzir/tls_options.hpp"
 
+#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/channel.hpp>
+#include <tenzir/async/pusher.hpp>
+#include <tenzir/atomic.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/co_match.hpp>
 #include <tenzir/concept/parseable/string.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -30,6 +38,8 @@
 #include <queue>
 #include <stdexcept>
 #include <string_view>
+#include <tuple>
+#include <vector>
 
 #include <fluent-bit/fluent-bit-minimal.h>
 
@@ -222,9 +232,10 @@ inline auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
 
 namespace {
 
-[[maybe_unused]] auto
-tls_to_fluentbit(const tls_options& ssl, record& properties,
-                 operator_control_plane& ctrl) -> failure_or<void> {
+template <class Config>
+auto tls_to_fluentbit_impl(const tls_options& ssl, record& properties,
+                           diagnostic_handler& dh, Config* config)
+  -> failure_or<void> {
   const auto set = [&](std::string key, std::string tenzir_option_name,
                        std::string value, location loc) -> failure_or<void> {
     auto [it, inserted] = properties.try_emplace(key, std::move(value));
@@ -235,26 +246,39 @@ tls_to_fluentbit(const tls_options& ssl, record& properties,
         .primary(loc)
         .note("tenzir option `{}` evaluates to `{}`, fluent-bit option is `{}`",
               tenzir_option_name, value, it->second)
-        .emit(ctrl.diagnostics());
+        .emit(dh);
       return failure::promise();
     }
     return {};
   };
-  auto tls = ssl.get_tls(&ctrl);
+  auto tls = ssl.get_tls(config);
   TRY(set("tls", "tls", tls.inner ? "On" : "Off", tls.source));
-  if (auto x = ssl.get_skip_peer_verification(&ctrl); x.inner) {
+  if (auto x = ssl.get_skip_peer_verification(config); x.inner) {
     TRY(set("tls.verify", "skip_peer_verification", "Off", x.source));
   }
-  if (auto x = ssl.get_cacert(&ctrl)) {
+  if (auto x = ssl.get_cacert(config)) {
     TRY(set("tls.ca_file", "cacert", x->inner, x->source));
   }
-  if (auto x = ssl.get_certfile(&ctrl)) {
+  if (auto x = ssl.get_certfile(config)) {
     TRY(set("tls.crt_file", "certfile", x->inner, x->source));
   }
-  if (auto x = ssl.get_keyfile(&ctrl)) {
+  if (auto x = ssl.get_keyfile(config)) {
     TRY(set("tls.key_file", "keyfile", x->inner, x->source));
   }
   return {};
+}
+
+[[maybe_unused]] auto
+tls_to_fluentbit(const tls_options& ssl, record& properties,
+                 operator_control_plane& ctrl) -> failure_or<void> {
+  return tls_to_fluentbit_impl(ssl, properties, ctrl.diagnostics(), &ctrl);
+}
+
+auto tls_to_fluentbit(const tls_options& ssl, record& properties,
+                      diagnostic_handler& dh,
+                      const caf::actor_system_config* config)
+  -> failure_or<void> {
+  return tls_to_fluentbit_impl(ssl, properties, dh, config);
 }
 
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
@@ -591,6 +615,18 @@ private:
     return false;
   }
 
+public:
+  auto restart(std::chrono::milliseconds wait_time)
+    -> std::optional<diagnostic> {
+    max_wait_before_stop(wait_time);
+    if (not stop()) {
+      return diagnostic::error("failed to stop fluentbit engine for restart")
+        .done();
+    }
+    return start();
+  }
+
+private:
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
   bool running_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
@@ -678,6 +714,104 @@ auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
   return msgpack::visit(f, object);
 }
 
+auto parse_fluent_bit_chunk(chunk_ptr const& chunk, multi_series_builder& msb,
+                            diagnostic_handler& dh) -> void {
+  // What we're getting here is the typical Fluent Bit array consisting of
+  // the following format, as described in
+  // https://docs.fluentbit.io/manual/concepts/key-concepts#event-format:
+  //
+  //     [[TIMESTAMP, METADATA], MESSAGE]
+  //
+  // where
+  //
+  // - TIMESTAMP is a timestamp in seconds as an integer or floating point
+  //   value (not a string);
+  // - METADATA is a possibly-empty object containing event metadata; and
+  // - MESSAGE is an object containing the event body.
+  //
+  // Fluent Bit versions prior to v2.1.0 instead used
+  //
+  //     [TIMESTAMP, MESSAGE]
+  //
+  // to represent events. This format is still supported for reading input
+  // event streams.
+  auto unpacked = msgpack::unpacked{};
+  auto object = unpacked.unpack(as_bytes(chunk));
+  // The unpacking operation cannot fail because we are calling this function
+  // with chunks produced by Fluent Bit's `out_lib_flush()`, which only invokes
+  // the callback after `msgpack_unpack_next` returned `MSGPACK_UNPACK_SUCCESS`.
+  TENZIR_ASSERT(object);
+  if (object->type != MSGPACK_OBJECT_ARRAY) {
+    diagnostic::warning("invalid Fluent Bit message")
+      .note("expected array as top-level object")
+      .note("got MsgPack type {}", object->type)
+      .emit(dh);
+    return;
+  }
+  auto const& outer = msgpack::to_array(*object);
+  if (outer.size() != 2) {
+    diagnostic::warning("invalid Fluent Bit message")
+      .note("expected two-element array at top-level object")
+      .note("got {} elements", outer.size())
+      .emit(dh);
+    return;
+  }
+  auto row = msb.record();
+  auto const& first = outer[0];
+  auto const& second = outer[1];
+  if (first.type == MSGPACK_OBJECT_ARRAY) {
+    auto xs = msgpack::to_array(first);
+    if (xs.size() != 2) {
+      diagnostic::warning("invalid Fluent Bit message")
+        .note("wrong number of array elements in first-level array")
+        .note("got {}, expected 2", xs.size())
+        .emit(dh);
+      msb.remove_last();
+      return;
+    }
+    auto timestamp = msgpack::to_flb_time(xs[0]);
+    if (not timestamp) {
+      diagnostic::warning("invalid Fluent Bit message")
+        .note("failed to parse timestamp in first-level array")
+        .note("got MsgPack type {}", xs[0].type)
+        .emit(dh);
+      msb.remove_last();
+      return;
+    }
+    row.exact_field("timestamp").data(*timestamp);
+    if (xs[1].type == MSGPACK_OBJECT_MAP) {
+      auto map = msgpack::to_map(xs[1]);
+      if (not map.empty()) {
+        auto metadata = row.exact_field("metadata");
+        if (not add(metadata, xs[1], dh)) {
+          msb.remove_last();
+          return;
+        }
+      }
+    } else {
+      diagnostic::warning("invalid Fluent Bit message")
+        .note("failed parse metadata in first-level array")
+        .note("got MsgPack type {}, expected map", xs[1].type)
+        .emit(dh);
+      msb.remove_last();
+      return;
+    }
+  } else if (auto timestamp = msgpack::to_flb_time(first)) {
+    row.exact_field("timestamp").data(*timestamp);
+  } else {
+    diagnostic::warning("invalid Fluent Bit message")
+      .note("failed to parse first-level array element")
+      .note("got MsgPack type {}, expected array or timestamp", first.type)
+      .emit(dh);
+    msb.remove_last();
+    return;
+  }
+  auto message = row.exact_field("message");
+  if (not add(message, second, dh)) {
+    msb.remove_last();
+  }
+}
+
 template <bool enable_source, bool enable_sink>
   requires(enable_source or enable_sink)
 class fluent_bit_operator_impl final
@@ -731,115 +865,8 @@ public:
       builder_options_,
       dh,
     };
-    auto parse = [&ctrl, &msb](chunk_ptr chunk) {
-      // What we're getting here is the typical Fluent Bit array consisting of
-      // the following format, as described in
-      // https://docs.fluentbit.io/manual/concepts/key-concepts#event-format:
-      //
-      //     [[TIMESTAMP, METADATA], MESSAGE]
-      //
-      // where
-      //
-      // - TIMESTAMP is a timestamp in seconds as an integer or floating point
-      //   value (not a string);
-      // - METADATA is a possibly-empty object containing event metadata; and
-      // - MESSAGE is an object containing the event body.
-      //
-      // Fluent Bit versions prior to v2.1.0 instead used
-      //
-      //     [TIMESTAMP, MESSAGE]
-      //
-      // to represent events. This format is still supported for reading input
-      // event streams.
-      //
-      // We are parsing this into a table with the following fields:
-      //
-      // 1. timestamp: time (timestamp alias type)
-      // 2. metadata: record (inferred)
-      // 3. message: record (inferred)
-      //
-      auto unpacked = msgpack::unpacked{};
-      auto object = unpacked.unpack(as_bytes(chunk));
-      // The unpacking operation cannot fail because we are calling this
-      // function within a while loop checking that msgpack_unpack_next
-      // returned MSGPACK_UNPACK_SUCCESS. See out_lib_flush() in
-      // plugins/out_lib/out_lib.c in the Fluent Bit code base for details.
-      TENZIR_ASSERT(object);
-      if (object->type != MSGPACK_OBJECT_ARRAY) {
-        diagnostic::warning("invalid Fluent Bit message")
-          .note("expected array as top-level object")
-          .note("got MsgPack type {}", object->type)
-          .emit(ctrl.diagnostics());
-        return;
-      }
-      const auto& outer = msgpack::to_array(*object);
-      if (outer.size() != 2) {
-        diagnostic::warning("invalid Fluent Bit message")
-          .note("expected two-element array at top-level object")
-          .note("got {} elements", outer.size())
-          .emit(ctrl.diagnostics());
-        return;
-      }
-      // The outer framing is established, now create a new table slice row.
-      auto row = msb.record();
-      const auto& first = outer[0];
-      const auto& second = outer[1];
-      // The first-level array element must be either:
-      // - [TIMESTAMP, METADATA] (array)
-      // - TIMESTAMP (extension)
-      if (first.type == MSGPACK_OBJECT_ARRAY) {
-        auto xs = msgpack::to_array(first);
-        if (xs.size() != 2) {
-          diagnostic::warning("invalid Fluent Bit message")
-            .note("wrong number of array elements in first-level array")
-            .note("got {}, expected 2", xs.size())
-            .emit(ctrl.diagnostics());
-          msb.remove_last();
-          return;
-        }
-        auto timestamp = msgpack::to_flb_time(xs[0]);
-        if (not timestamp) {
-          diagnostic::warning("invalid Fluent Bit message")
-            .note("failed to parse timestamp in first-level array")
-            .note("got MsgPack type {}", xs[0].type)
-            .emit(ctrl.diagnostics());
-          msb.remove_last();
-          return;
-        }
-        row.exact_field("timestamp").data(*timestamp);
-        if (xs[1].type == MSGPACK_OBJECT_MAP) {
-          auto map = msgpack::to_map(xs[1]);
-          if (not map.empty()) {
-            auto metadata = row.exact_field("metadata");
-            if (not add(metadata, xs[1], ctrl.diagnostics())) {
-              msb.remove_last();
-              return;
-            }
-          }
-        } else {
-          diagnostic::warning("invalid Fluent Bit message")
-            .note("failed parse metadata in first-level array")
-            .note("got MsgPack type {}, expected map", xs[1].type)
-            .emit(ctrl.diagnostics());
-          msb.remove_last();
-          return;
-        }
-      } else if (auto timestamp = msgpack::to_flb_time(first)) {
-        row.exact_field("timestamp").data(*timestamp);
-      } else {
-        diagnostic::warning("invalid Fluent Bit message")
-          .note("failed to parse first-level array element")
-          .note("got MsgPack type {}, expected array or timestamp", first.type)
-          .emit(ctrl.diagnostics());
-        msb.remove_last();
-        return;
-      }
-      // Process the MESSAGE, i.e., the second top-level array element.
-      auto message = row.exact_field("message");
-      if (not add(message, second, ctrl.diagnostics())) {
-        msb.remove_last();
-        return;
-      }
+    auto parse = [&ctrl, &msb](chunk_ptr const& chunk) {
+      parse_fluent_bit_chunk(chunk, msb, ctrl.diagnostics());
     };
     while (engine->running()) {
       for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -956,6 +983,356 @@ private:
   operator_args operator_args_;
   multi_series_builder::options builder_options_;
   record config_;
+};
+
+constexpr auto source_channel_capacity = size_t{16};
+constexpr auto sink_stop_wait = std::chrono::seconds{1};
+constexpr auto snapshot_stop_wait = std::chrono::seconds{5};
+
+struct FluentBitArgs {
+  located<std::string> plugin;
+  located<record> service_properties = located{record{}, location::unknown};
+  Option<located<data>> tls;
+  located<record> args = located{record{}, location::unknown};
+  multi_series_builder::options builder_options;
+  event_order order = event_order::ordered;
+  record config;
+};
+
+struct FluentBitSourceDone {};
+struct FluentBitSourceTimeout {};
+using FluentBitSourceMessage
+  = variant<std::vector<chunk_ptr>, FluentBitSourceDone>;
+using FluentBitSourceTaskResult
+  = variant<FluentBitSourceMessage, FluentBitSourceTimeout>;
+
+struct SourceBridgeLifetime {
+  Arc<Atomic<bool>> alive{std::in_place, true};
+
+  ~SourceBridgeLifetime() {
+    alive->store(false, std::memory_order_release);
+  }
+};
+
+auto make_operator_args(FluentBitArgs args, OpCtx& ctx)
+  -> failure_or<operator_args> {
+  auto result = operator_args{};
+  result.plugin = std::move(args.plugin);
+  result.service_properties = std::move(args.service_properties);
+  result.args = std::move(args.args);
+  result.ssl = args.tls ? tls_options{*args.tls, {.tls_default = false}}
+                        : tls_options{tls_options::options{
+                            .tls_default = false,
+                          }};
+  result.ssl.update_from_config(&ctx.actor_system().config());
+  TRY(tls_to_fluentbit(result.ssl, result.args.inner, ctx.dh(),
+                       &ctx.actor_system().config()));
+  return result;
+}
+
+auto collect_fluent_bit_properties(operator_args const& args,
+                                   property_map& fluent_bit_args,
+                                   property_map& plugin_args,
+                                   diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  auto requests = std::vector<secret_request>{};
+  to_property_map_or_request(args.service_properties, fluent_bit_args, requests,
+                             dh);
+  to_property_map_or_request(args.args, plugin_args, requests, dh);
+  return requests;
+}
+
+auto send_blocking(Sender<FluentBitSourceTaskResult>& sender,
+                   FluentBitSourceTaskResult message,
+                   Arc<Atomic<bool>> const& stop_requested,
+                   Arc<Atomic<bool>> const& bridge_alive,
+                   std::chrono::milliseconds retry_interval) -> bool {
+  while (not stop_requested->load(std::memory_order_acquire)
+         and bridge_alive->load(std::memory_order_acquire)) {
+    auto result = sender.try_send(std::move(message));
+    if (result.is_ok()) {
+      return true;
+    }
+    message = std::move(result).unwrap_err();
+    std::this_thread::sleep_for(retry_interval);
+  }
+  return false;
+}
+
+auto poll_fluent_bit_source(Sender<FluentBitSourceTaskResult> sender,
+                            operator_args args, record config,
+                            property_map fluent_bit_args,
+                            property_map plugin_args,
+                            Arc<Atomic<bool>> stop_requested,
+                            Arc<Atomic<bool>> bridge_alive,
+                            diagnostic_handler& dh) -> void {
+  auto engine
+    = engine::make_source(args, config, fluent_bit_args, plugin_args, dh);
+  if (not engine) {
+    if (not stop_requested->load(std::memory_order_acquire)
+        and bridge_alive->load(std::memory_order_acquire)) {
+      std::ignore = send_blocking(sender, FluentBitSourceDone{}, stop_requested,
+                                  bridge_alive, args.poll_interval);
+    }
+    return;
+  }
+  while (not stop_requested->load(std::memory_order_acquire)
+         and bridge_alive->load(std::memory_order_acquire)
+         and engine->running()) {
+    auto chunks = std::vector<chunk_ptr>{};
+    std::ignore = engine->try_consume([&](chunk_ptr& chunk) {
+      chunks.push_back(std::move(chunk));
+    });
+    if (chunks.empty()) {
+      TENZIR_DEBUG("sleeping for {}", args.poll_interval);
+      std::this_thread::sleep_for(args.poll_interval);
+      continue;
+    }
+    if (not send_blocking(sender, FluentBitSourceMessage{std::move(chunks)},
+                          stop_requested, bridge_alive, args.poll_interval)) {
+      return;
+    }
+  }
+  if (not stop_requested->load(std::memory_order_acquire)
+      and bridge_alive->load(std::memory_order_acquire)) {
+    std::ignore = send_blocking(sender, FluentBitSourceDone{}, stop_requested,
+                                bridge_alive, args.poll_interval);
+  }
+}
+
+class FromFluentBit final : public Operator<void, table_slice> {
+public:
+  explicit FromFluentBit(FluentBitArgs args) : args_{std::move(args)} {
+    args_.builder_options.settings.default_schema_name
+      = fmt::format("fluent_bit.{}", args_.plugin.inner);
+    args_.builder_options.settings.ordered
+      = args_.order == event_order::ordered;
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    read_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_fluent_bit",
+      },
+      MetricsDirection::read, MetricsVisibility::external_);
+    builder_.emplace(args_.builder_options, ctx.dh());
+    auto [sender, receiver]
+      = channel<FluentBitSourceTaskResult>(source_channel_capacity);
+    events_ = std::move(receiver);
+    auto operator_args = make_operator_args(args_, ctx);
+    if (not operator_args) {
+      co_return;
+    }
+    auto args = std::move(operator_args).unwrap();
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    auto requests = collect_fluent_bit_properties(args, fluent_bit_args,
+                                                  plugin_args, ctx.dh());
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      co_return;
+    }
+    auto stop_requested = stop_requested_;
+    auto bridge_alive = bridge_lifetime_.alive;
+    ctx.spawn_task([sender, this]() mutable -> Task<void> {
+      while (true) {
+        co_await pusher_.wait();
+        co_await sender.send(FluentBitSourceTimeout{});
+      }
+    });
+    ctx.spawn_task([sender = std::move(sender), args = std::move(args),
+                    config = args_.config,
+                    fluent_bit_args = std::move(fluent_bit_args),
+                    plugin_args = std::move(plugin_args),
+                    stop_requested = std::move(stop_requested),
+                    bridge_alive = std::move(bridge_alive),
+                    &dh = ctx.dh()]() mutable -> Task<void> {
+      co_await spawn_blocking(
+        [sender = std::move(sender), args = std::move(args),
+         config = std::move(config),
+         fluent_bit_args = std::move(fluent_bit_args),
+         plugin_args = std::move(plugin_args),
+         stop_requested = std::move(stop_requested),
+         bridge_alive = std::move(bridge_alive), &dh]() mutable {
+          poll_fluent_bit_source(std::move(sender), std::move(args),
+                                 std::move(config), std::move(fluent_bit_args),
+                                 std::move(plugin_args),
+                                 std::move(stop_requested),
+                                 std::move(bridge_alive), dh);
+        });
+    });
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (source_exhausted_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    TENZIR_ASSERT(events_);
+    auto message = co_await events_->recv();
+    TENZIR_ASSERT(message);
+    co_return std::move(*message);
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(builder_);
+    auto task_result = std::move(result).as<FluentBitSourceTaskResult>();
+    co_await co_match(
+      task_result,
+      [&](FluentBitSourceMessage& message) -> Task<void> {
+        if (is<FluentBitSourceDone>(message)) {
+          for (auto& slice : builder_->finalize_as_table_slice()) {
+            read_bytes_counter_.add(slice.approx_bytes());
+            co_await push(std::move(slice));
+          }
+          source_exhausted_ = true;
+          co_return;
+        }
+        for (auto& chunk : as<std::vector<chunk_ptr>>(message)) {
+          parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
+        }
+        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push,
+                              [this](table_slice const& slice) {
+                                read_bytes_counter_.add(slice.approx_bytes());
+                              });
+      },
+      [&](FluentBitSourceTimeout&) -> Task<void> {
+        co_await pusher_.push(builder_->yield_ready_as_table_slice(), push,
+                              [this](table_slice const& slice) {
+                                read_bytes_counter_.add(slice.approx_bytes());
+                              });
+      });
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(builder_);
+    for (auto& slice : builder_->finalize_as_table_slice()) {
+      read_bytes_counter_.add(slice.approx_bytes());
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    stop_requested_->store(true, std::memory_order_release);
+    bridge_lifetime_.alive->store(false, std::memory_order_release);
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return source_exhausted_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  FluentBitArgs args_;
+  mutable Option<Receiver<FluentBitSourceTaskResult>> events_;
+  Option<multi_series_builder> builder_;
+  SeriesPusher pusher_;
+  SourceBridgeLifetime bridge_lifetime_;
+  Arc<Atomic<bool>> stop_requested_{std::in_place, false};
+  MetricsCounter read_bytes_counter_;
+  bool source_exhausted_ = false;
+};
+
+class ToFluentBit final : public Operator<table_slice, void> {
+public:
+  explicit ToFluentBit(FluentBitArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    write_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_fluent_bit",
+      },
+      MetricsDirection::write, MetricsVisibility::external_);
+    auto operator_args = make_operator_args(args_, ctx);
+    if (not operator_args) {
+      done_ = true;
+      co_return;
+    }
+    auto runtime_args = std::move(operator_args).unwrap();
+    auto requests = collect_fluent_bit_properties(
+      runtime_args, fluent_bit_args_, plugin_args_, ctx.dh());
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      done_ = true;
+      co_return;
+    }
+    engine_ = engine::make_sink(runtime_args, args_.config, fluent_bit_args_,
+                                plugin_args_, ctx.dh());
+    if (not engine_) {
+      done_ = true;
+      co_return;
+    }
+    engine_->max_wait_before_stop(sink_stop_wait);
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (done_ or not engine_) {
+      co_return;
+    }
+    auto resolved_slice = resolve_enumerations(input);
+    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+    auto failed = false;
+    auto bytes = uint64_t{0};
+    auto printer = json_printer2{json_printer_options{
+      .style = no_style(),
+      .oneline = true,
+    }};
+    for (auto const& row : values3(*array)) {
+      TENZIR_ASSERT(row);
+      printer.load_new(*row);
+      auto const event = printer.bytes();
+      auto message = fmt::format("[{}, {}]", flb_time_now(),
+                                 std::string_view{
+                                   reinterpret_cast<char const*>(event.data()),
+                                   event.size(),
+                                 });
+      if (engine_->push(message).is_error()) {
+        failed = true;
+      } else {
+        bytes += message.size();
+      }
+    }
+    if (failed) {
+      diagnostic::warning("failed to push data into Fluent Bit Engine")
+        .emit(ctx.dh());
+    }
+    write_bytes_counter_.add(bytes);
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    if (done_ or not engine_) {
+      co_return;
+    }
+    if (auto error = engine_->restart(snapshot_stop_wait)) {
+      ctx.dh().emit(std::move(*error));
+      done_ = true;
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    engine_.reset();
+    done_ = true;
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  FluentBitArgs args_;
+  property_map fluent_bit_args_;
+  property_map plugin_args_;
+  std::unique_ptr<engine> engine_;
+  MetricsCounter write_bytes_counter_;
+  bool done_ = false;
 };
 
 using fluent_bit_operator = fluent_bit_operator_impl<true, true>;

@@ -1,0 +1,8 @@
+// Stop after two messages and ACK both before shutting down.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=2,
+          _batch_size=1,
+          _queue_capacity=1
+select line = string(message)

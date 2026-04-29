@@ -1,0 +1,12 @@
+{
+  data: "after-invalid",
+  ip: 127.0.0.1,
+}
+warning: message is not valid UTF-8
+  --> tests/operators/accept_udp/drop_invalid_utf8_then_read_valid.tql:13:12
+   |
+13 | accept_udp env("UDP_ENDPOINT")
+   |            ~~~~~~~~~~~~~~~~~~~ 
+   |
+   = note: peer: 127.0.0.1
+   = hint: use `binary=true` to accept non-UTF8 data

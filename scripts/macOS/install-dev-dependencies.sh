@@ -12,6 +12,7 @@ brew install --overwrite \
   boost \
   c-ares \
   ccache \
+  cnats \
   coreutils \
   cppzmq \
   double-conversion \

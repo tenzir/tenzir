@@ -876,7 +876,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Where{std::move(predicate_)};
   }
@@ -892,7 +892,7 @@ public:
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order order) and -> ir::optimize_result override {
+                event_order order) && -> ir::optimize_result override {
     // TODO: Shall we avoid optimizing if it doesn't make sense?
     filter.insert(filter.begin(), std::move(predicate_));
     return ir::optimize_result{std::move(filter), order, {}};

@@ -1,0 +1,12 @@
+suite: from-nats-count
+fixtures:
+  - nats:
+      subject: from_nats_count_test
+      stream: FROM_NATS_COUNT_TEST
+      durable: from_nats_count_test
+      messages: 2
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

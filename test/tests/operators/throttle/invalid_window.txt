@@ -1,0 +1,6 @@
+error: `window` must be a positive duration
+ --> tests/operators/throttle/invalid_window.tql:6:26
+  |
+6 | throttle rate=10, window=0s
+  |                          ^^ 
+  |
