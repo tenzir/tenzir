@@ -146,9 +146,8 @@ public:
   } catch (const panic_exception& e) {
     throw;
   } catch (const ::clickhouse::OpenSSLError& e) {
-    clickhouse_openssl_error_diagnostic(
-      e.what(), args_.operator_location,
-      args_.ssl.get_tls(&ctrl).inner)
+    clickhouse_openssl_error_diagnostic(e.what(), args_.operator_location,
+                                        args_.ssl.get_tls(&ctrl).inner)
       .emit(ctrl.diagnostics());
     co_return;
   } catch (const std::exception& e) {
