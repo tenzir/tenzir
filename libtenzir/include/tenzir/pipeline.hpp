@@ -156,6 +156,11 @@ enum class event_order {
   unordered,
 };
 
+/// Returns the event order that allows for more optimization than the other.
+inline auto weaker_event_order(event_order a, event_order b) -> event_order {
+  return std::max(a, b);
+}
+
 auto inspect(auto& f, event_order& x) -> bool {
   return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
 }

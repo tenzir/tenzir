@@ -602,7 +602,7 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
-    order_ = std::max(order_, order);
+    order_ = weaker_event_order(order_, order);
     // Only forward downstream order when the operator opted in via
     // `order_invariant()` or `unordered()`. Otherwise keep the safe
     // `ordered` barrier.

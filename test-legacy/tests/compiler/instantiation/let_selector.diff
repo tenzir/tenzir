@@ -8,14 +8,15 @@
 +    
    ],
    operators: [
-     set_ir {
+     SetIr {
        assignments: [
          {
            left: dollar_var `$foo` -> free @ 41..45,
            equals: 46..47,
            right: constant string "test" @ 48..54
          }
-       ]
+       ],
+       order: "ordered"
      }
    ]
  }
