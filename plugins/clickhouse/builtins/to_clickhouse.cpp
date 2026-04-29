@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "clickhouse/easy_client.hpp"
+#include "clickhouse/exceptions.h"
 #include "tenzir/async.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
@@ -37,6 +38,19 @@ constexpr auto clickhouse_tls_port = uint64_t{9440};
 constexpr auto clickhouse_ping_interval = std::chrono::minutes{3};
 static_assert(clickhouse_ping_interval < std::chrono::minutes{5},
               "clickhouse_ping_interval must stay below 5 minutes");
+
+auto clickhouse_error_diagnostic(std::string_view message, location loc)
+  -> diagnostic_builder {
+  return diagnostic::error("ClickHouse error: {}", message).primary(loc);
+}
+
+auto clickhouse_openssl_error_diagnostic(std::string_view message, location loc,
+                                         bool tls_enabled)
+  -> diagnostic_builder {
+  return add_tls_client_diagnostic_hints(
+    clickhouse_error_diagnostic(message, loc), tls_enabled, "ClickHouse",
+    clickhouse_plaintext_port, clickhouse_tls_port);
+}
 
 class clickhouse_sink_operator final
   : public crtp_operator<clickhouse_sink_operator> {
@@ -131,9 +145,14 @@ public:
     }
   } catch (const panic_exception& e) {
     throw;
+  } catch (const ::clickhouse::OpenSSLError& e) {
+    clickhouse_openssl_error_diagnostic(
+      e.what(), args_.operator_location,
+      args_.ssl.get_tls(&ctrl).inner)
+      .emit(ctrl.diagnostics());
+    co_return;
   } catch (const std::exception& e) {
-    diagnostic::error("ClickHouse error: {}", e.what())
-      .primary(args_.operator_location)
+    clickhouse_error_diagnostic(e.what(), args_.operator_location)
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -222,18 +241,22 @@ public:
           = easy_client::make(client_args, ctx.actor_system().config(), dh);
       } catch (const panic_exception&) {
         throw;
-      } catch (const std::exception& e) {
-        diagnostic::error("ClickHouse error: {}", e.what())
-          .primary(args_.operator_location)
+      } catch (const ::clickhouse::OpenSSLError& e) {
+        clickhouse_openssl_error_diagnostic(e.what(), args_.operator_location,
+                                            tls_enabled)
           .emit(dh);
+        state_->done.store(true, std::memory_order_release);
+        co_return;
+      } catch (const std::exception& e) {
+        clickhouse_error_diagnostic(e.what(), args_.operator_location).emit(dh);
         state_->done.store(true, std::memory_order_release);
         co_return;
       }
       TENZIR_ASSERT(client);
       /// We need to wait for our workers on shutdown, so need need to keep
       /// their handles.
-      state_->worker_handles.push_back(
-        ctx.spawn_task(worker_loop(state_.get(), client)));
+      state_->worker_handles.push_back(ctx.spawn_task(worker_loop(
+        state_.get(), client, tls_enabled, args_.operator_location)));
       /// We can rely on the operator's async scope cancelling our outstanding
       /// ping tasks.
       std::ignore = ctx.spawn_task(ping_loop(state_.get(), std::move(client)));
@@ -297,8 +320,9 @@ public:
   }
 
 private:
-  static auto worker_loop(runtime_state* shared_state,
-                          std::shared_ptr<easy_client> client) -> Task<void> {
+  static auto
+  worker_loop(runtime_state* shared_state, std::shared_ptr<easy_client> client,
+              bool tls_enabled, location operator_location) -> Task<void> {
     TENZIR_ASSERT(shared_state);
     while (true) {
       auto next = co_await shared_state->input_queue.dequeue();
@@ -323,8 +347,13 @@ private:
         success = client->insert_dynamic(slice, query_id).is_success();
       } catch (const panic_exception&) {
         throw;
+      } catch (const ::clickhouse::OpenSSLError& e) {
+        clickhouse_openssl_error_diagnostic(e.what(), operator_location,
+                                            tls_enabled)
+          .emit(client->dh());
       } catch (const std::exception& e) {
-        diagnostic::error("ClickHouse error: {}", e.what()).emit(client->dh());
+        clickhouse_error_diagnostic(e.what(), operator_location)
+          .emit(client->dh());
       } catch (...) {
         diagnostic::error("unexpected exception").emit(client->dh());
       }
