@@ -558,13 +558,17 @@ public:
       co_return;
     }
     try {
-      auto stdin_mode
-        = ctx.has_terminal() ? PipeMode::inherit : PipeMode::dev_null;
+      auto stdin_mode = ctx.has_terminal() ? PipeMode::inherit : PipeMode::pipe;
       // Interactive source-mode shells must stay in the foreground process
       // group when inheriting the controlling terminal.
       auto process_group_leader = stdin_mode != PipeMode::inherit;
       subprocess_ = co_await spawn_shell_subprocess(
         std::move(*command), stdin_mode, process_group_leader);
+      if (stdin_mode == PipeMode::pipe) {
+        auto stdin_pipe = subprocess_->stdin_pipe();
+        TENZIR_ASSERT(stdin_pipe.is_some());
+        co_await (*stdin_pipe).close();
+      }
       ctx.spawn_task(read_stdout(message_queue_, *subprocess_));
       ctx.spawn_task(wait_for_exit(message_queue_, *subprocess_));
       lifecycle_ = Lifecycle::running;
