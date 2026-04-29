@@ -1,0 +1,4 @@
+from {
+  message: "hello-from-to_udp-ipv6"
+}
+to_udp "[::1]:31337", message=message

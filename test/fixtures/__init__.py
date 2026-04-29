@@ -24,6 +24,7 @@ from . import http_paginate  # noqa: F401
 from . import http_server  # noqa: F401
 from . import s3_proxy  # noqa: F401
 from . import tcp  # noqa: F401
+from . import udp  # noqa: F401
 from . import zmq  # noqa: F401
 from . import mock_s3  # noqa: F401
 
@@ -50,5 +51,6 @@ __all__ = [
     "sentinelone",
     "splunk",
     "tcp",
+    "udp",
     "zmq",
 ]

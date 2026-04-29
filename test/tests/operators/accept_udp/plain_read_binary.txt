@@ -1,0 +1,4 @@
+{
+  data: b"hello-from-from_udp-binary",
+  ip: 127.0.0.1,
+}
