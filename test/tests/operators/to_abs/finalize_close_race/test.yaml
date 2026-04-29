@@ -1,6 +1,10 @@
 suite: to-abs-finalize-close-race
 fixtures: [abs_slow_proxy]
+requires:
+  operators:
+    - to_azure_blob_storage
 timeout: 240
 skip:
   on:
     - fixture-unavailable
+    - capability-unavailable
