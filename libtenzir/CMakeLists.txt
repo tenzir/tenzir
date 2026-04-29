@@ -63,10 +63,10 @@ TenzirCompileFlatBuffers(
 # -- arrow ---------------------------------------------------------------------
 
 find_package(Arrow REQUIRED CONFIG)
-if (Arrow_VERSION_MAJOR LESS 18)
+if (Arrow_VERSION_MAJOR LESS 24)
   message(
     FATAL_ERROR
-      "Tenzir requires at least Arrow version 18.0, but found ${ARROW_VERSION}")
+      "Tenzir requires at least Arrow version 24.0, but found ${ARROW_VERSION}")
 endif ()
 mark_as_advanced(
   BROTLI_COMMON_LIBRARY
