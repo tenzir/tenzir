@@ -1,0 +1,9 @@
+created: 2026-04-20
+title: HTTP proxy support for Platform connections
+intro: >-
+  Tenzir nodes now honor standard HTTP proxy environment variables when connecting
+  to the Tenzir Platform, and hash functions produce correct checksums for binary
+  values.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.31.0

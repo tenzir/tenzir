@@ -19,8 +19,7 @@ class maybe_printer : public printer_base<maybe_printer<Printer>> {
 public:
   using attribute = typename Printer::attribute;
 
-  explicit maybe_printer(Printer p)
-    : printer_{std::move(p)} {
+  explicit maybe_printer(Printer p) : printer_{std::move(p)} {
   }
 
   template <class Iterator, class Attribute>

@@ -57,7 +57,8 @@ public:
 
     /// Adds a config option to the category.
     template <class T>
-    opts_builder&& add(std::string_view name, std::string_view description) && {
+    opts_builder&&
+    add(std::string_view name, std::string_view description) and {
       static_assert(caf::detail::is_config_value_type_v<T>, "T is not a valid "
                                                             "config option");
       xs_.add<T>(category_, name, description);

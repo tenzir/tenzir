@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/dns.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -19,6 +20,7 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/socket.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -32,9 +34,9 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 
+#include <cstring>
 #include <limits>
 #include <memory>
-#include <stdexcept>
 
 namespace tenzir::plugins::from_tcp {
 
@@ -75,6 +77,26 @@ struct FromTcpArgs {
   let_id peer_info;
 };
 
+auto socket_address_to_ip(folly::SocketAddress const& address) -> ip {
+  auto storage = sockaddr_storage{};
+  auto length = address.getAddress(&storage);
+  TENZIR_ASSERT(length > 0);
+  auto result = ip{};
+  if (storage.ss_family == AF_INET) {
+    auto sockaddr = sockaddr_in{};
+    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
+    auto err = convert(sockaddr, result);
+    TENZIR_ASSERT(not err);
+  } else {
+    TENZIR_ASSERT(storage.ss_family == AF_INET6);
+    auto sockaddr = sockaddr_in6{};
+    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
+    auto err = convert(sockaddr, result);
+    TENZIR_ASSERT(not err);
+  }
+  return result;
+}
+
 class FromTcpConnector final : public Operator<void, table_slice> {
 public:
   using Connection = Arc<folly::coro::Transport>;
@@ -101,8 +123,8 @@ public:
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     TENZIR_ASSERT(not ep->host.empty());
-    address_.setFromHostPort(ep->host, ep->port->number());
     host_ = ep->host;
+    port_ = ep->port->number();
     if (args_.tls) {
       tls_ = tls_options{*args_.tls, {.is_server = false}};
     }
@@ -117,11 +139,31 @@ public:
     if (tls_ and tls_->get_tls(nullptr).inner) {
       auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
-        co_yield folly::coro::co_error(
-          std::runtime_error{"failed to create TLS context"});
+        startup_failed_ = true;
+        co_return;
       }
       tls_context_ = std::move(*context);
     }
+    auto resolved = co_await forward_dns_.resolve(host_);
+    auto* addresses = resolved->is_err()
+                        ? nullptr
+                        : try_as<ForwardDnsResolved>(&resolved->unwrap());
+    if (not addresses or addresses->answers.empty()) {
+      auto diag = diagnostic::error("failed to resolve remote endpoint")
+                    .primary(args_.endpoint.source)
+                    .note("host: {}", host_);
+      if (resolved->is_err()) {
+        std::move(diag)
+          .note("reason: {}", resolved->unwrap_err().error)
+          .emit(ctx);
+      } else {
+        std::move(diag).note("reason: no matching A or AAAA records").emit(ctx);
+      }
+      startup_failed_ = true;
+      co_return;
+    }
+    address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
+                           port_);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     co_return;
@@ -176,13 +218,14 @@ public:
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
         auto peer_addr = transport->getPeerAddress();
+        auto peer_ip = socket_address_to_ip(peer_addr);
         auto peer_record = record{
-          {"ip", peer_addr.getAddressStr()},
+          {"ip", peer_ip},
           {"port", int64_t{peer_addr.getPort()}},
         };
         auto bytes_read_counter = ctx.make_counter(
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    peer_addr.getAddressStr())},
+                                    fmt::to_string(peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;
@@ -252,6 +295,10 @@ public:
     co_return;
   }
 
+  auto state() -> OperatorState override {
+    return startup_failed_ ? OperatorState::done : OperatorState::normal;
+  }
+
 private:
   static auto close_transport(Connection connection) -> void {
     auto* evb = connection->getEventBase();
@@ -299,6 +346,8 @@ private:
   FromTcpArgs args_;
   folly::SocketAddress address_;
   std::string host_;
+  uint16_t port_ = 0;
+  ForwardDnsResolver forward_dns_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
@@ -307,6 +356,7 @@ private:
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
   uint64_t next_conn_id_{0};
+  bool startup_failed_ = false;
 };
 
 class from_tcp_plugin final : public virtual OperatorPlugin {

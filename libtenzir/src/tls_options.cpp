@@ -437,9 +437,13 @@ auto tls_options::validate(std::string_view url, location url_loc,
   // Determine if TLS is enabled from the tls_ option
   // - bool false means disabled
   // - bool true or record means enabled
+  // - location::unknown means default/config-derived, not explicitly user-set
   const auto tls_enabled = [&]() -> std::optional<bool> {
     if (not tls_) {
       return std::nullopt; // Not explicitly set
+    }
+    if (tls_->source == location::unknown) {
+      return std::nullopt; // Default or config-derived, not user-provided
     }
     if (const auto* b = try_as<bool>(&tls_->inner)) {
       return *b;

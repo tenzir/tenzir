@@ -128,13 +128,16 @@ function (TenzirConfigurePchReuse target)
   endif ()
   cmake_parse_arguments(PCH "" "BINARY_DIR;DONOR_TARGET;SOURCE_TARGET"
                         "LINK_LIBRARIES" ${ARGN})
+  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(_tenzir_clang_pch_timestamp_flag -Xclang -fno-pch-timestamp)
+  endif ()
   if (NOT PCH_BINARY_DIR)
     set(PCH_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
   endif ()
   if (NOT PCH_DONOR_TARGET)
     set(PCH_DONOR_TARGET "tenzir_common__pch")
   endif ()
-  tenzirgetcommonprecompileheaders(common_precompile_headers)
+  TenzirGetCommonPrecompileHeaders(common_precompile_headers)
   if (NOT TARGET ${PCH_DONOR_TARGET})
     file(WRITE "${PCH_BINARY_DIR}/${PCH_DONOR_TARGET}.cpp" "")
     add_library(${PCH_DONOR_TARGET} OBJECT
@@ -193,8 +196,16 @@ function (TenzirConfigurePchReuse target)
     if (PCH_LINK_LIBRARIES)
       target_link_libraries(${PCH_DONOR_TARGET} PRIVATE ${PCH_LINK_LIBRARIES})
     endif ()
+    if (_tenzir_clang_pch_timestamp_flag)
+      target_compile_options(${PCH_DONOR_TARGET}
+                             PRIVATE ${_tenzir_clang_pch_timestamp_flag})
+    endif ()
     target_precompile_headers(${PCH_DONOR_TARGET} PRIVATE
                               ${common_precompile_headers})
+  endif ()
+  if (_tenzir_clang_pch_timestamp_flag)
+    target_compile_options(${target}
+                           PRIVATE ${_tenzir_clang_pch_timestamp_flag})
   endif ()
   target_precompile_headers(${target} REUSE_FROM ${PCH_DONOR_TARGET})
 endfunction ()
@@ -480,6 +491,14 @@ function (TenzirExportCompileCommands)
       ON
       PARENT_SCOPE)
 
+  if (NOT "${CMAKE_GENERATOR}" MATCHES "(Ninja|Makefiles)")
+    message(
+      STATUS
+        "Skipping compilation database export for ${ARGV0}: generator ${CMAKE_GENERATOR} does not support CMAKE_EXPORT_COMPILE_COMMANDS"
+    )
+    return()
+  endif ()
+
   # Link once when configuring the build to make the compilation database
   # immediately available.
   execute_process(
@@ -488,9 +507,12 @@ function (TenzirExportCompileCommands)
       "${CMAKE_BINARY_DIR}/compile_commands.json"
       "${CMAKE_SOURCE_DIR}/compile_commands.json")
 
-  # Link again when building the specified target. This ensures the file is
-  # available even after the user ran `git-clean` or similar and triggered
-  # another build.
+  # Link again when building the specified target. Keep this as a custom target
+  # instead of an output-based command so each build directory can relink the
+  # shared source-tree symlink even when another build directory updated it.
+  # Do not depend on the build-tree compilation database directly: after a
+  # `git clean -fdx` or similar, the symlink recreation should still succeed
+  # without forcing an explicit reconfigure first.
   add_custom_target(
     compilation-database
     BYPRODUCTS "${CMAKE_SOURCE_DIR}/compile_commands.json"

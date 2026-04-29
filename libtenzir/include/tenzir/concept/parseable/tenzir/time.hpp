@@ -106,7 +106,7 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       constexpr double_duration m = Attribute::min();
       constexpr double_duration M = Attribute::max();
       double_duration s = x * scale;
-      if (s < m || s > M) {
+      if (s < m or s > M) {
         return false;
       }
       auto result = double_duration{s};
@@ -127,7 +127,7 @@ struct compound_duration_parser
       return x.has_value();
     });
     auto positive_duration
-      = ignore(&! parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
+      = ignore(&not parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
     auto compound_duration = negation >> (positive_duration % *parsers::space);
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return compound_duration(f, l, x);
@@ -207,19 +207,19 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
       return x >= 1900;
     });
     auto mon = integral_parser<int, 2, 2>{}.with([](auto x) {
-      return x >= 1 && x <= 12;
+      return x >= 1 and x <= 12;
     });
     auto day = integral_parser<int, 2, 2>{}.with([](auto x) {
-      return x >= 1 && x <= 31;
+      return x >= 1 and x <= 31;
     });
     auto hour = integral_parser<int, 2, 2>{}.with([](auto x) {
-      return x >= 0 && x <= 23;
+      return x >= 0 and x <= 23;
     });
     auto min = integral_parser<int, 2, 2>{}.with([](auto x) {
-      return x >= 0 && x <= 59;
+      return x >= 0 and x <= 59;
     });
     auto sec = parsers::real_detect_sep.with([](auto x) {
-      return x >= 0.0 && x <= 60.0;
+      return x >= 0.0 and x <= 60.0;
     });
     auto time_divider = '+'_p | 'T' | ' ';
     // clang-format off
@@ -250,7 +250,7 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
       auto ms = std::tie(mins, secs, zshift);
       auto hms = std::tie(hrs, ms);
       auto dhms = std::tie(dys, hms);
-      if (! p(f, l, yrs, mons, dhms)) {
+      if (not p(f, l, yrs, mons, dhms)) {
         return false;
       }
       sys_days ymd = to_days(yrs, mons, dys);

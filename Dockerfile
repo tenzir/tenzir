@@ -219,6 +219,7 @@ RUN apt-get update && \
       libcap2-bin \
       libdouble-conversion3 \
       libevent-2.1-7 \
+      libevent-pthreads-2.1-7 \
       libflatbuffers23.5.26 \
       libfmt10 \
       libgoogle-glog0v6 \
@@ -226,6 +227,7 @@ RUN apt-get update && \
       libhttp-parser2.9 \
       libmaxminddb0 \
       libmimalloc3 \
+      libnats3.10 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
@@ -291,6 +293,16 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake --build build-context --parallel && \
     DESTDIR=/plugin/context cmake --install build-context --component Runtime && \
     rm -rf build-context
+
+FROM plugins-source AS from_sentinelone_data_lake-plugin
+
+COPY contrib/tenzir-plugins/from_sentinelone_data_lake ./contrib/tenzir-plugins/from_sentinelone_data_lake
+RUN --mount=target=/ccache,type=cache,from=cache-context \
+    cmake -S contrib/tenzir-plugins/from_sentinelone_data_lake -B build-from_sentinelone_data_lake -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+    cmake --build build-from_sentinelone_data_lake --parallel && \
+    DESTDIR=/plugin/from_sentinelone_data_lake cmake --install build-from_sentinelone_data_lake --component Runtime && \
+    rm -rf build-from_sentinelone_data_lake
 
 FROM plugins-source AS pipeline-manager-plugin
 
@@ -411,6 +423,7 @@ FROM tenzir-de AS tenzir-ce-untested
 
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
+COPY --from=from_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/from_sentinelone_data_lake /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /

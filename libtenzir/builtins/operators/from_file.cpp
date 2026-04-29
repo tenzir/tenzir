@@ -19,12 +19,15 @@ namespace tenzir::plugins::from_file {
 
 namespace {
 
-struct FromFileArgs : ArrowFsArgs {};
+struct FromFileArgs : FromArrowFsArgs {
+  Option<location> mmap;
+};
 
-class FromFileOperator final : public ArrowFsOperator {
+class FromFileOperator final : public FromArrowFsOperator {
 public:
   explicit FromFileOperator(FromFileArgs args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+      args_{std::move(args)} {
   }
 
 protected:
@@ -38,6 +41,9 @@ protected:
       co_return failure::promise();
     }
     auto expanded = expand_home(std::move(resolved));
+    if (not std::filesystem::path{expanded}.is_absolute()) {
+      expanded = "./" + expanded;
+    }
     expanded = std::filesystem::weakly_canonical(expanded);
     auto uri = arrow::util::Uri{};
     auto status = uri.Parse(fmt::format("file://{}", expanded));
@@ -53,8 +59,10 @@ protected:
 
   auto make_filesystem(arrow::util::Uri const& uri, diagnostic_handler&)
     -> Task<failure_or<MakeFilesystemResult>> override {
+    auto opts = arrow::fs::LocalFileSystemOptions::Defaults();
+    opts.use_mmap = args_.mmap.is_some();
     co_return MakeFilesystemResult{
-      std::make_shared<arrow::fs::LocalFileSystem>(),
+      std::make_shared<arrow::fs::LocalFileSystem>(opts),
       uri.path(),
     };
   }
@@ -84,7 +92,8 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromFileArgs, FromFileOperator>{};
-    ArrowFsArgs::describe_to(d);
+    FromArrowFsArgs::describe_to(d);
+    d.named("mmap", &FromFileArgs::mmap);
     return d.without_optimize();
   }
 };

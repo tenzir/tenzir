@@ -21,8 +21,9 @@ bool convert(duration dur, double& d) {
 
 bool convert(duration dur, data& d) {
   double time_since_epoch;
-  if (!convert(dur, time_since_epoch))
+  if (not convert(dur, time_since_epoch)) {
     return false;
+  }
   d = time_since_epoch;
   return true;
 }

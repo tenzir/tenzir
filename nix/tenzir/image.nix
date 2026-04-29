@@ -66,7 +66,7 @@ let
     { deps = extraTools; }
     { deps = [ pkg ]; }
   ]
-  ++ builtins.map (pluginLayer: { deps = pluginLayer; }) plugins;
+  ++ map (pluginLayer: { deps = pluginLayer; }) plugins;
 
   layers = foldImageLayers layerDefs;
 

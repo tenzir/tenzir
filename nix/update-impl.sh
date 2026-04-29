@@ -1,6 +1,7 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p coreutils git jq nix-prefetch-github
 #!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/94035b482d181af0a0f8f77823a790b256b7c3cc.tar.gz
+# shellcheck shell=bash
 
 set -euo pipefail
 
@@ -22,7 +23,7 @@ update-source-github() {
   local _path="${toplevel}/${_submodule}"
   local _rev
   _rev="$(get-submodule-rev "${_submodule}")"
-  if [[ "${_version}" == "" ]]; then
+  if [[ ${_version} == "" ]]; then
     git -C "${toplevel}" submodule update --init "${_submodule}"
     local _upstream
     _upstream="$(curl https://api.github.com/repos/tenzir/actor-framework | jq -r .parent.html_url)"
@@ -46,12 +47,12 @@ update-source() {
 
   re="^((https?|ssh|git|ftps?):\/\/)?(([^\/@]+)@)?([^\/:]+)[\/:]([^\/:]+)\/(.+)\/?$"
 
-  if [[ "${_url}" =~ ${re} ]]; then
+  if [[ ${_url} =~ ${re} ]]; then
     local _hostname=${BASH_REMATCH[5]}
     local _user=${BASH_REMATCH[6]}
     local _repo=${BASH_REMATCH[7]}
 
-    if [[ "${_hostname}" == "github.com" ]]; then
+    if [[ ${_hostname} == "github.com" ]]; then
       update-source-github "${_name}" "${_submodule}" "${_version}" "${_user}" "${_repo}"
     else
       >&2 echo "Updating submodules from ${_hostname} is not implemented"
@@ -63,4 +64,4 @@ update-source() {
   fi
 }
 
-update-source caf "libtenzir/aux/caf" "1.1.0-123-ga21907539"
+update-source caf "libtenzir/aux/caf" "1.1.0-127-g7e34226a9"

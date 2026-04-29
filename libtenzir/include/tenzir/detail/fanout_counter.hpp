@@ -53,8 +53,9 @@ public:
 
   void receive_success() {
     ++success_count;
-    if (success_count + error_count == expected)
+    if (success_count + error_count == expected) {
       finish();
+    }
   }
 
   void receive_error(Error error) {
@@ -64,8 +65,9 @@ public:
     } else if constexpr (single_error_continuation) {
       last_error() = std::move(error);
     }
-    if (success_count + error_count == expected)
+    if (success_count + error_count == expected) {
       finish();
+    }
   }
 
   State& state() {

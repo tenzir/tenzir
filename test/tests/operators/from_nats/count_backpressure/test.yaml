@@ -1,0 +1,12 @@
+suite: from-nats-count-backpressure
+fixtures:
+  - nats:
+      subject: from_nats_count_backpressure_test
+      stream: FROM_NATS_COUNT_BACKPRESSURE_TEST
+      durable: from_nats_count_backpressure_test
+      messages: 50
+timeout: 90
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

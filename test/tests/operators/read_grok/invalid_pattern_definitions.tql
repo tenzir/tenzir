@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_stdin {
+  read_grok "%{WORD:x}", pattern_definitions=42
+}

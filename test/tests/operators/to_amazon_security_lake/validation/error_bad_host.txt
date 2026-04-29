@@ -1,0 +1,6 @@
+error: AWS security lake URL should start with `aws-security-data-lake`
+ --> tests/operators/to_amazon_security_lake/validation/error_bad_host.tql:6:25
+  |
+6 | to_amazon_security_lake "s3://wrong-host/ext/my-source",
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

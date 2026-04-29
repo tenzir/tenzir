@@ -1,0 +1,8 @@
+// Write events partitioned by two fields: region and tier.
+from {region: "us", tier: "free"},
+     {region: "eu", tier: "paid"}
+repeat 200
+enumerate id
+to_file env("FILE_ROOT") + "/out/multi/**/data_{uuid}.json", partition_by=[region, tier] {
+  write_ndjson
+}

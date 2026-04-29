@@ -11,11 +11,13 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/pusher.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
@@ -148,13 +150,13 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (document.empty()) {
         continue;
       }
-      load_document(msb, document, true, diag);
+      load_document(msb, document, true, dh);
       document.clear();
       continue;
     }
     if (*line == document_start_marker) {
       if (not document.empty()) {
-        load_document(msb, document, true, diag);
+        load_document(msb, document, true, dh);
         document.clear();
       }
       continue;
@@ -162,7 +164,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     fmt::format_to(std::back_inserter(document), "{}\n", *line);
   }
   if (not document.empty()) {
-    load_document(msb, document, true, diag);
+    load_document(msb, document, true, dh);
     document.clear();
   }
   for (auto& slice : msb.finalize_as_table_slice()) {
@@ -227,6 +229,41 @@ auto print_document(YAML::Emitter& out, const View& row) -> void {
   out << YAML::EndDoc;
 };
 
+auto render_yaml(table_slice slice, diagnostic_handler& diag) -> chunk_ptr {
+  if (slice.rows() == 0) {
+    return {};
+  }
+  auto resolved_slice = resolve_enumerations(std::move(slice));
+  auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+  auto out = std::make_unique<YAML::Emitter>();
+  out->SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
+  out->SetNullFormat(YAML::LowerNull);
+  out->SetIndent(2);
+  for (const auto& row :
+       values(type{as<record_type>(resolved_slice.schema())}, *array)) {
+    TENZIR_ASSERT(not is<caf::none_t>(row));
+    const auto* record_view = try_as<view<record>>(&row);
+    TENZIR_ASSERT(record_view);
+    print_document(*out, *record_view);
+  }
+  // If the output failed, then we either failed to allocate memory or had a
+  // mismatch between BeginSeq and EndSeq or BeginMap and EndMap; all of these
+  // we cannot recover from.
+  if (not out->good()) {
+    diagnostic::error("failed to format YAML document").emit(diag);
+    return {};
+  }
+  const auto* data = reinterpret_cast<const std::byte*>(out->c_str());
+  auto size = out->size();
+  auto meta = chunk_metadata{.content_type = "application/x-yaml"};
+  return chunk::make(
+    data, size,
+    [emitter = std::move(out)]() noexcept {
+      static_cast<void>(emitter);
+    },
+    std::move(meta));
+}
+
 class yaml_parser final : public plugin_parser {
 public:
   yaml_parser() = default;
@@ -269,38 +306,9 @@ public:
           co_yield {};
           co_return;
         }
-        auto input_type = as<record_type>(slice.schema());
-        auto resolved_slice = resolve_enumerations(slice);
-        auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-        auto out = std::make_unique<YAML::Emitter>();
-        out->SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
-        out->SetNullFormat(YAML::LowerNull);
-        out->SetIndent(2);
-        for (const auto& row :
-             values(type{as<record_type>(resolved_slice.schema())}, *array)) {
-          TENZIR_ASSERT(not is<caf::none_t>(row));
-          const auto* record_view = try_as<view<record>>(&row);
-          TENZIR_ASSERT(record_view);
-          print_document(*out, *record_view);
+        if (auto chunk = render_yaml(std::move(slice), ctrl.diagnostics())) {
+          co_yield std::move(chunk);
         }
-        // If the output failed, then we either failed to allocate memory or
-        // had a mismatch between BeginSeq and EndSeq or BeginMap and EndMap;
-        // all of these we cannot recover from.
-        if (not out->good()) {
-          diagnostic::error("failed to format YAML document")
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        const auto* data = reinterpret_cast<const std::byte*>(out->c_str());
-        auto size = out->size();
-        auto meta = chunk_metadata{.content_type = "application/x-yaml"};
-        auto chunk = chunk::make(
-          data, size,
-          [emitter = std::move(out)]() noexcept {
-            static_cast<void>(emitter);
-          },
-          std::move(meta));
-        co_yield chunk;
       });
   }
 
@@ -350,8 +358,151 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
   }
 };
 
+struct ReadYamlArgs {
+  multi_series_builder::options msb_options;
+};
+
+class ReadYaml final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadYaml(ReadYamlArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    dh_.emplace(std::in_place, ctx.dh(), [](diagnostic d) {
+      d.message = fmt::format("yaml parser: {}", d.message);
+      return d;
+    });
+    msb_.emplace(args_.msb_options, *dh_, modules::get_schema,
+                 detail::data_builder::non_number_parser);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(msb_);
+    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    TENZIR_ASSERT(dh_);
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    auto& dh = **dh_;
+    auto ready = series_builder::YieldReadyResult{};
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current}, dh);
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_, dh);
+        buffer_.clear();
+      }
+      ready.merge(msb_->yield_ready_as_table_slice());
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    ready.merge(msb_->yield_ready_as_table_slice());
+    co_await pusher_.push(std::move(ready), push);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_ASSERT(msb_);
+    TENZIR_ASSERT(dh_);
+    auto& dh = **dh_;
+    if (not buffer_.empty()) {
+      process_line(buffer_, dh);
+      buffer_.clear();
+    }
+    if (not document_.empty()) {
+      load_document(*msb_, document_, true, dh);
+      document_.clear();
+    }
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(msb_);
+    for (auto& slice : msb_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("document", document_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+  }
+
+private:
+  auto process_line(std::string_view line, diagnostic_handler& diag) -> void {
+    if (line == document_end_marker) {
+      if (document_.empty()) {
+        return;
+      }
+      load_document(*msb_, document_, true, diag);
+      document_.clear();
+      return;
+    }
+    if (line == document_start_marker) {
+      if (not document_.empty()) {
+        load_document(*msb_, document_, true, diag);
+        document_.clear();
+      }
+      return;
+    }
+    fmt::format_to(std::back_inserter(document_), "{}\n", line);
+  }
+
+  ReadYamlArgs args_;
+  std::string buffer_;
+  std::string document_;
+  bool ended_on_carriage_return_ = false;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<multi_series_builder> msb_;
+  SeriesPusher pusher_;
+};
+
 class read_yaml final
-  : public virtual operator_plugin2<parser_adapter<yaml_parser>> {
+  : public virtual operator_plugin2<parser_adapter<yaml_parser>>,
+    public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<ReadYamlArgs, ReadYaml>{};
+    d.validate(add_msb_to_describer(d, &ReadYamlArgs::msb_options));
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_yaml");
@@ -432,8 +583,31 @@ public:
   }
 };
 
+struct WriteYamlArgs {};
+
+class WriteYaml final : public Operator<table_slice, chunk_ptr> {
+public:
+  explicit WriteYaml(WriteYamlArgs args) {
+    TENZIR_UNUSED(args);
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (auto chunk = render_yaml(std::move(input), ctx.dh())) {
+      co_await push(std::move(chunk));
+    }
+  }
+};
+
 class write_yaml final
-  : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
+  : public virtual operator_plugin2<writer_adapter<yaml_printer>>,
+    public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<WriteYamlArgs, WriteYaml>{};
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));

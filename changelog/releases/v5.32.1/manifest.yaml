@@ -1,0 +1,9 @@
+created: 2026-04-21
+title: Fix stuck partition rebuilds
+intro: >-
+  This patch release fixes two correctness issues in stateful pipeline execution.
+  Partition rebuilds now complete after writing replacement partitions, and periodic
+  summarize output remains deterministic for delayed or sparse streams.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.32.0

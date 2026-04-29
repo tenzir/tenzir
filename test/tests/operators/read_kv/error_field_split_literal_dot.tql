@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_file f"{env("TENZIR_INPUTS")}/txt/key_value_pairs.txt" {
+  read_kv field_split="."
+}

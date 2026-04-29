@@ -116,6 +116,7 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::cannot_combine_empty_observables:
     case caf::sec::mail_cache_closed:
     case caf::sec::resource_destroyed:
+    case caf::sec::no_actor_handle_codec:
       return true;
     case caf::sec::incompatible_versions:
     case caf::sec::incompatible_application_ids:
@@ -155,7 +156,8 @@ std::optional<caf::timespan> calculate_remaining_time(
 bool should_retry(const caf::error& err,
                   const std::optional<caf::timespan>& remaining_time,
                   caf::timespan delay) {
-  return remaining_time && *remaining_time > delay && is_recoverable_error(err);
+  return remaining_time and *remaining_time > delay
+         and is_recoverable_error(err);
 }
 
 std::string format_time(caf::timespan timespan) {

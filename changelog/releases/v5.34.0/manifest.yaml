@@ -1,0 +1,8 @@
+created: 2026-04-27
+title: Tenzir Node v5.34.0
+intro: >-
+  This release adds OData pagination support to the from_http operator, enabling seamless
+  iteration over Microsoft Graph and other OData v4 collection responses.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.33.0

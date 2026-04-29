@@ -226,7 +226,7 @@ public:
   ///     diagnostic::error(…)
   ///       .emit(ctx);
   ///   }
-  auto compose(auto&& fn) && {
+  auto compose(auto&& fn) and {
     return std::forward<decltype(fn)>(fn)(std::move(*this));
   }
 
@@ -347,13 +347,13 @@ public:
     return std::move(*this).done().to_error();
   }
 
-  void emit(diagnostic_handler& diag) && {
+  void emit(diagnostic_handler& diag) and {
     diag.emit(std::move(result_));
   }
 
   void emit(const shared_diagnostic_handler& diag) &&;
 
-  [[noreturn]] void throw_() && {
+  [[noreturn]] void throw_() and {
     throw std::move(result_);
   }
 

@@ -1,6 +1,6 @@
 finalPkgs: prevPkgs:
 let
-  inherit (prevPkgs) lib config;
+  inherit (prevPkgs) lib;
   inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
@@ -59,12 +59,14 @@ in
     inherit (prevPkgs) google-cloud-cpp;
   };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
+  libnats-c = callFunction ./overrides/libnats-c.nix { inherit (prevPkgs) libnats-c; };
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   mold-unwrapped = callFunction ./overrides/mold.nix { inherit (prevPkgs) mold-unwrapped; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
+  ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };

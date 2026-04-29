@@ -1,0 +1,4 @@
+from {
+  message: "hello",
+}
+write_syslog

@@ -155,7 +155,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeInstallCheckInputs = lib.optionals (!stdenv.hostPlatform.isStatic) [ versionCheckHook ];
 
-  versionCheckProgram = "${builtins.placeholder "out"}/bin/fluent-bit";
+  versionCheckProgram = "${placeholder "out"}/bin/fluent-bit";
 
   versionCheckProgramArg = "--version";
 

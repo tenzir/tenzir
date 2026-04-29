@@ -1,0 +1,7 @@
+error: truncated Feather input
+ --> tests/operators/read_feather/invalid_format.tql:7:3
+  |
+7 |   read_feather
+  |   ^^^^^^^^^^^^ 
+  |
+  = note: discarded 1026730 trailing bytes

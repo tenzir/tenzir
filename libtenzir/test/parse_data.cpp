@@ -19,7 +19,7 @@ namespace {
 
 data to_data(std::string_view str) {
   data x;
-  if (! parsers::data(str, x)) {
+  if (not parsers::data(str, x)) {
     FAIL("failed to parse data from {}", str);
   }
   return x;

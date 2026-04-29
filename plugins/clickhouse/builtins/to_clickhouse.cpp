@@ -204,11 +204,12 @@ public:
       .primary = std::move(primary),
       .operator_location = args_.operator_location,
     };
-    auto ok = co_await ctx.resolve_secrets({
+    auto requests = std::vector<secret_request>{
       make_secret_request("host", args_.host, client_args.host, dh),
       make_secret_request("user", args_.user, client_args.user, dh),
       make_secret_request("password", args_.password, client_args.password, dh),
-    });
+    };
+    auto ok = co_await ctx.resolve_secrets(std::move(requests));
     if (not ok) {
       state_->done.store(true, std::memory_order_release);
       co_return;

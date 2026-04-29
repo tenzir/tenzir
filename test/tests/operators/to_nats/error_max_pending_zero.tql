@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+to_nats "unused",
+        _max_pending=0

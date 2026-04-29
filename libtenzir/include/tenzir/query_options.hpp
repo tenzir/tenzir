@@ -56,7 +56,7 @@ constexpr bool has_continuous_option(query_options opts) {
 
 constexpr bool has_unified_option(query_options opts) {
   return has_query_option(opts, historical)
-         && has_query_option(opts, continuous);
+         and has_query_option(opts, continuous);
 }
 
 constexpr bool has_low_priority_option(query_options opts) {

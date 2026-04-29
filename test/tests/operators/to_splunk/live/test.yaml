@@ -1,0 +1,6 @@
+suite: to-splunk
+fixtures: [splunk]
+timeout: 300
+skip:
+  on:
+    - fixture-unavailable

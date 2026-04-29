@@ -237,8 +237,8 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     // to the new expressions.
     if (op.name() == "where_assert_operator") {
       auto qualifies = std::ranges::all_of(it, operators_.rend(), [](auto& op) {
-        return op->name() == "where_assert_operator" || op->name() == "export"
-               || op->name() == "subscribe";
+        return op->name() == "where_assert_operator" or op->name() == "export"
+               or op->name() == "subscribe";
       });
       if (not qualifies) {
         opt = optimize_result::order_invariant(op, current_order);
@@ -418,7 +418,7 @@ auto pipeline::infer_location() const -> std::optional<operator_location> {
     if (result == operator_location::anywhere) {
       result = op->location();
     } else if (op->location() != operator_location::anywhere
-               && op->location() != result) {
+               and op->location() != result) {
       return std::nullopt;
     }
   }
@@ -430,7 +430,7 @@ auto pipeline::infer_type_impl(operator_type input) const
   auto current = input;
   for (const auto& op : operators_) {
     auto first = &op == &operators_.front();
-    if (not first && current.is<void>()) {
+    if (not first and current.is<void>()) {
       return caf::make_error(ec::type_clash, fmt::format("pipeline continues "
                                                          "with '{}' after sink",
                                                          op->name()));

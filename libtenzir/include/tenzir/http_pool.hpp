@@ -16,11 +16,14 @@
 
 #include <chrono>
 #include <map>
+#include <memory>
+#include <optional>
 #include <string>
 
 namespace folly {
 class EventBase;
 class IOExecutor;
+class SSLContext;
 } // namespace folly
 
 namespace tenzir {
@@ -33,6 +36,7 @@ struct HttpResponse {
 
 struct HttpPoolConfig {
   bool tls = true;
+  std::shared_ptr<folly::SSLContext> ssl_context;
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
 };
 
@@ -59,13 +63,35 @@ public:
   HttpPool(HttpPool&&) noexcept;
   auto operator=(HttpPool&&) noexcept -> HttpPool&;
 
+  /// Request through the session pool.
+  auto request(std::string method, std::string body,
+               std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
+
+  /// Request through the session pool with an origin-form target.
+  ///
+  /// The target must start with `/` and may contain a query string. The request
+  /// still uses the scheme, host, and port from the pool URL.
+  auto request(std::string method, std::string target, std::string body,
+               std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
+
   /// POST through the session pool.
   auto post(std::string body, std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
+
+  /// POST through the session pool with an origin-form target.
+  auto post(std::string target, std::string body,
+            std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
 private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config);
+
+  auto request(std::string method, std::optional<std::string> target,
+               std::string body, std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
 
   struct Impl;
   std::shared_ptr<Impl> impl_;

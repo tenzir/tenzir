@@ -1,0 +1,11 @@
+created: 2026-04-14
+title: Unified context lookups and pipeline observability
+intro: >-
+  Tenzir now unifies live and retrospective context matching with the new `context::lookup`
+  operator, and it adds pipeline names to diagnostics and metrics for easier operational
+  correlation. This release also improves export reliability under load and fixes
+  Azure transport errors, HTTP Host headers for non-standard ports, and rebuilt-partition
+  export correctness.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.30.0

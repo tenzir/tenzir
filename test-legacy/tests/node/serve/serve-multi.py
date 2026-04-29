@@ -13,9 +13,13 @@ class Executor:
     def __init__(self) -> None:
         self._binary = os.environ["TENZIR_PYTHON_FIXTURE_BINARY"]
         self._endpoint = os.environ.get("TENZIR_PYTHON_FIXTURE_ENDPOINT")
-        self._remaining_timeout = float(os.environ.get("TENZIR_PYTHON_FIXTURE_TIMEOUT", "30"))
+        self._remaining_timeout = float(
+            os.environ.get("TENZIR_PYTHON_FIXTURE_TIMEOUT", "30")
+        )
 
-    def run(self, pipeline: str, mirror: bool = False) -> subprocess.CompletedProcess[bytes]:
+    def run(
+        self, pipeline: str, mirror: bool = False
+    ) -> subprocess.CompletedProcess[bytes]:
         cmd = [
             self._binary,
             "--bare-mode",

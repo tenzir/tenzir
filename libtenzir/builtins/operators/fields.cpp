@@ -7,10 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/async/fetch_node.hpp>
+#include <tenzir/async/mail.hpp>
 #include <tenzir/catalog.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <caf/actor_registry.hpp>
@@ -18,138 +20,6 @@
 namespace tenzir::plugins::fields {
 
 namespace {
-
-auto field_type() -> type {
-  return type{
-    "tenzir.field",
-    record_type{
-      {"schema", string_type{}},
-      {"schema_id", string_type{}},
-      {"field", string_type{}},
-      {"path", list_type{string_type{}}},
-      {"index", list_type{uint64_type{}}},
-      {"type",
-       record_type{
-         {"kind", string_type{}},
-         {"category", string_type{}},
-         {"lists", uint64_type()},
-         {"name", string_type{}},
-         {"attributes", list_type{record_type{
-                          {"key", string_type{}},
-                          {"value", string_type{}},
-                        }}},
-       }},
-    },
-  };
-}
-
-struct field_context {
-  std::string name{};
-  std::vector<std::string> path{};
-  offset index{};
-};
-
-struct type_context {
-  type_kind kind{};
-  std::string category;
-  size_t lists{0};
-  std::string name{};
-  std::vector<std::pair<std::string, std::string>> attributes{};
-};
-
-struct schema_context {
-  field_context field;
-  type_context type;
-};
-
-/// Yields all fields from a record type, with listness being a separate
-/// attribute.
-auto traverse(type t) -> generator<schema_context> {
-  schema_context result;
-  // Unpack lists. Note that we lose type metadata of lists.
-  while (const auto* list = try_as<list_type>(&t)) {
-    ++result.type.lists;
-    t = list->value_type();
-  }
-  result.type.name = t.name();
-  for (auto [key, value] : t.attributes()) {
-    result.type.attributes.emplace_back(key, value);
-  }
-  result.type.kind = t.kind();
-  // TODO: This categorization is somewhat arbitrary, and we probably want to
-  // think about this more.
-  if (result.type.kind.is<record_type>()) {
-    result.type.category = "container";
-  } else {
-    result.type.category = "atomic";
-  }
-  TENZIR_ASSERT(not is<list_type>(t));
-  TENZIR_ASSERT(not is<map_type>(t));
-  if (const auto* record = try_as<record_type>(&t)) {
-    auto i = size_t{0};
-    for (const auto& field : record->fields()) {
-      result.field.name = field.name;
-      result.field.path.emplace_back(field.name);
-      result.field.index.emplace_back(i);
-      for (const auto& inner : traverse(field.type)) {
-        result.type = inner.type;
-        auto nested = not inner.field.name.empty();
-        if (nested) {
-          result.field.name = inner.field.name;
-          for (const auto& p : inner.field.path) {
-            result.field.path.push_back(p);
-          }
-          for (const auto& i : inner.field.index) {
-            result.field.index.push_back(i);
-          }
-        }
-        co_yield result;
-        if (nested) {
-          auto delta = inner.field.path.size();
-          result.field.path.resize(result.field.path.size() - delta);
-          delta = inner.field.index.size();
-          result.field.index.resize(result.field.index.size() - delta);
-        }
-      }
-      result.field.index.pop_back();
-      result.field.path.pop_back();
-      ++i;
-    }
-  } else {
-    co_yield result;
-  }
-}
-
-// TODO: this feels like it should be a generic function that works on any
-// inspectable type.
-/// Adds a schema (= named record type) to a builder, with one row per field.
-auto add_field(builder_ref builder, const type& t) {
-  for (const auto& ctx : traverse(t)) {
-    auto row = builder.record();
-    row.field("schema").data(t.name());
-    row.field("schema_id").data(t.make_fingerprint());
-    row.field("field").data(ctx.field.name);
-    auto path = row.field("path").list();
-    for (const auto& p : ctx.field.path) {
-      path.data(p);
-    }
-    auto index = row.field("index").list();
-    for (auto i : ctx.field.index) {
-      index.data(uint64_t{i});
-    }
-    auto type = row.field("type").record();
-    type.field("kind").data(to_string(ctx.type.kind));
-    type.field("category").data(ctx.type.category);
-    type.field("lists").data(ctx.type.lists);
-    type.field("name").data(ctx.type.name);
-    auto attrs = type.field("attributes").list();
-    for (const auto& [key, value] : ctx.type.attributes) {
-      auto attr = attrs.record();
-      attr.field("key").data(key);
-      attr.field("value").data(value);
-    }
-  }
-}
 
 class fields_operator final : public crtp_operator<fields_operator> {
 public:
@@ -161,30 +31,22 @@ public:
       = ctrl.self().system().registry().get<catalog_actor>("tenzir.catalog");
     TENZIR_ASSERT(catalog);
     ctrl.set_waiting(true);
-    auto synopses = std::vector<partition_synopsis_pair>{};
+    auto slices = std::vector<table_slice>{};
     ctrl.self()
-      .mail(atom::get_v)
+      .mail(atom::get_v, std::string{"fields"})
       .request(catalog, caf::infinite)
       .then(
-        [&](std::vector<partition_synopsis_pair>& result) {
-          synopses = std::move(result);
+        [&](std::vector<table_slice>& result) {
+          slices = std::move(result);
           ctrl.set_waiting(false);
         },
         [&ctrl](const caf::error& err) {
           diagnostic::error(err)
-            .note("failed to get partitions")
+            .note("failed to get fields")
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-    auto fields = std::set<type>{};
-    for (const auto& synopsis : synopses) {
-      fields.insert(synopsis.synopsis->schema);
-    }
-    auto builder = series_builder{field_type()};
-    for (const auto& schema : fields) {
-      add_field(builder, schema);
-    }
-    for (auto&& slice : builder.finish_as_table_slice()) {
+    for (auto&& slice : slices) {
       co_yield std::move(slice);
     }
   }
@@ -213,8 +75,66 @@ public:
   }
 };
 
+struct FieldsArgs {
+  location operator_location = location::unknown;
+};
+
+class Fields final : public Operator<void, table_slice> {
+public:
+  explicit Fields(FieldsArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto catalog_result = co_await fetch_actor_from_node<catalog_actor>(
+      "catalog", args_.operator_location, ctx.actor_system(), ctx);
+    if (not catalog_result) {
+      done_ = true;
+      co_return;
+    }
+    catalog_ = std::move(*catalog_result);
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    TENZIR_ASSERT(not done_);
+    co_return co_await async_mail(atom::get_v, std::string{"fields"})
+      .request(catalog_);
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    done_ = true;
+    auto& slices_result = result.as<caf::expected<std::vector<table_slice>>>();
+    if (not slices_result) {
+      diagnostic::error(slices_result.error())
+        .primary(args_.operator_location)
+        .note("failed to get fields")
+        .emit(ctx);
+      co_return;
+    }
+    for (auto&& slice : *slices_result) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+private:
+  FieldsArgs args_;
+  catalog_actor catalog_ = {};
+  bool done_ = false;
+};
+
 class plugin final : public virtual operator_plugin<fields_operator>,
-                     operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -231,6 +151,12 @@ public:
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("fields").parse(inv, ctx).ignore();
     return std::make_unique<fields_operator>();
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<FieldsArgs, Fields>{};
+    d.operator_location(&FieldsArgs::operator_location);
+    return d.without_optimize();
   }
 };
 

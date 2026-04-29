@@ -19,8 +19,9 @@ type annotate_parameters(const type& x, const bloom_filter_parameters& params) {
 
 std::optional<bloom_filter_parameters> parse_parameters(const type& x) {
   auto synopsis = x.attribute("synopsis");
-  if (!synopsis || synopsis->empty())
+  if (not synopsis or synopsis->empty()) {
     return {};
+  }
   return parse_parameters(*synopsis);
 }
 

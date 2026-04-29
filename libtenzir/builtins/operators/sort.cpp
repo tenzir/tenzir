@@ -451,7 +451,7 @@ public:
       = std::vector<std::tuple<std::string /*key*/, bool /*descending*/,
                                bool /*nulls_first*/>>{};
     bool stable = false;
-    if (! p(f, l, stable, sort_args)) {
+    if (not p(f, l, stable, sort_args)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -638,19 +638,19 @@ public:
       expr_ = ast::expression{ast::this_{location::unknown}};
       return;
     }
-    std::move(*args.expr)
-      .match(
-        [&](ast::unary_expr&& unary) {
-          if (unary.op.inner == ast::unary_op::neg) {
-            expr_ = std::move(unary.expr);
-            reverse_ = true;
-          } else {
-            expr_ = std::move(unary);
-          }
-        },
-        [&](auto&& other) {
-          expr_ = std::move(other);
-        });
+    match(
+      std::move(*args.expr),
+      [&](ast::unary_expr&& unary) {
+        if (unary.op.inner == ast::unary_op::neg) {
+          expr_ = std::move(unary.expr);
+          reverse_ = true;
+        } else {
+          expr_ = std::move(unary);
+        }
+      },
+      [&](auto&& other) {
+        expr_ = std::forward<decltype(other)>(other);
+      });
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)

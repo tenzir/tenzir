@@ -1,0 +1,5 @@
+// Read back and verify event count and range.
+from_file env("FILE_ROOT") + "/out/roundtrip.json" {
+  read_ndjson
+}
+summarize count=count(x), min_x=min(x), max_x=max(x)

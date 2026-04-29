@@ -37,9 +37,17 @@ void shutdown_spdlog() noexcept;
 /// Get a spdlog::logger handel
 std::shared_ptr<spdlog::logger>& logger();
 
+inline auto pretty_type_name(const char* n) -> std::string {
+  return caf::detail::pretty_type_name(n);
+}
+
+inline auto pretty_type_name(const std::type_info& i) -> std::string {
+  return pretty_type_name(i.name());
+}
+
 template <class T>
 auto pretty_type_name(const T&) {
-  return caf::detail::pretty_type_name(typeid(std::remove_pointer_t<T>));
+  return pretty_type_name(typeid(std::remove_pointer_t<T>));
 }
 
 template <class T>

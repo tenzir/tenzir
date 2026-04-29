@@ -9,16 +9,19 @@
 #include "tenzir/detail/assert.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/as_bytes.hpp>
+#include <tenzir/chunk.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try.hpp>
 #include <tenzir/view.hpp>
 
 #include <yara/libyara.h>
 #include <yara/types.h>
 
-#include <deque>
 #include <string_view>
 #include <yara.h>
 
@@ -28,7 +31,6 @@ namespace {
 
 /// Arguments to the operator.
 struct operator_args {
-  bool blockwise;
   bool compiled_rules;
   bool fast_scan;
   std::vector<std::string> rules;
@@ -36,8 +38,7 @@ struct operator_args {
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("blockwise", x.blockwise),
-              f.field("compiled_rules", x.compiled_rules),
+      .fields(f.field("compiled_rules", x.compiled_rules),
               f.field("fast_scan", x.fast_scan), f.field("rules", x.rules));
   }
 };
@@ -78,113 +79,52 @@ auto to_error(int status) -> caf::error {
       return caf::make_error(ec::unspecified, "callback error");
     case ERROR_TOO_MANY_MATCHES:
       return caf::make_error(ec::unspecified, "too many matches");
-    case ERROR_BLOCK_NOT_READY:
-      return caf::make_error(ec::incomplete);
   }
   return {};
 }
 
-/// Constructs a sequence of memory blocks that work with the incremental
-/// scanning functions that YARA provides.
-class memory_block_vector {
-public:
-  memory_block_vector() noexcept
-    : iterator_{
-        .context = this,
-        .first = first,
-        .next = next,
-        .file_size = nullptr,
-        .last_error = ERROR_SUCCESS,
-      } {
-  }
-
-  ~memory_block_vector() noexcept = default;
-
-  memory_block_vector(const memory_block_vector&) = delete;
-  auto operator=(const memory_block_vector&) -> memory_block_vector& = delete;
-  memory_block_vector(memory_block_vector&&) = delete;
-  auto operator=(memory_block_vector&&) -> memory_block_vector& = delete;
-
-  /// Adds a new block at the end.
-  auto push_back(chunk_ptr chunk) {
-    // The *base* of a chunk is its byte offset in the sequence of all chunks
-    // seen. This is similar to what YARA does for scanning process memory. See
-    // https://github.com/VirusTotal/yara/issues/1356 for a more detailed
-    // discussion.
-    auto base = uint64_t{0};
-    if (not blocks_.empty()) {
-      auto& last = blocks_.back().first;
-      base = last->base + last->size;
+template <class DiagnosticHandler>
+auto extract_rules(located<data> const& input, bool compiled_rules,
+                   DiagnosticHandler& dh) -> Option<std::vector<std::string>> {
+  auto result = std::vector<std::string>{};
+  auto add_list = [&](list const& values) -> bool {
+    result.reserve(values.size());
+    for (auto const& rule : values) {
+      if (not is<std::string>(rule)) {
+        diagnostic::error("expected type string for rule")
+          .primary(input)
+          .emit(dh);
+        return false;
+      }
+      result.push_back(as<std::string>(rule));
     }
-    auto block = std::make_unique<YR_MEMORY_BLOCK>(YR_MEMORY_BLOCK{
-      .size = chunk->size(),
-      .base = base,
-      // The const_cast is needed by the C API and safe because it is only
-      // passed through as user context and later casted back to a const
-      // uint8_t* in fetch().
-      .context = const_cast<std::byte*>(chunk->data()),
-      .fetch_data = fetch,
-    });
-    blocks_.emplace_back(std::move(block), std::move(chunk));
-  }
-
-  /// Relinquishes a block of memory from the beginning.
-  auto pop_front() -> bool {
-    if (blocks_.empty()) {
-      return false;
-    }
-    blocks_.pop_front();
-    --offset_;
     return true;
-  }
-
-  /// Signal that no further blocks are being added. This results in the block
-  /// iterator returning `ERROR_SUCCESS` instead of `ERROR_BLOCK_NOT_READY`, and
-  /// thereby triggering a scan.
-  auto done() -> void {
-    done_ = true;
-  }
-
-  /// Retrieve the underlying block iterator for the YARA API.
-  auto iterator() -> YR_MEMORY_BLOCK_ITERATOR* {
-    return &iterator_;
-  }
-
-private:
-  static auto fetch(YR_MEMORY_BLOCK* self) -> const uint8_t* {
-    return reinterpret_cast<const uint8_t*>(self->context);
-  }
-
-  static auto first(YR_MEMORY_BLOCK_ITERATOR* iterator) -> YR_MEMORY_BLOCK* {
-    auto* self = reinterpret_cast<memory_block_vector*>(iterator->context);
-    TENZIR_DEBUG("setting iterator to first block");
-    self->offset_ = 0;
-    return next(iterator);
-  }
-
-  static auto next(YR_MEMORY_BLOCK_ITERATOR* iterator) -> YR_MEMORY_BLOCK* {
-    auto* self = reinterpret_cast<memory_block_vector*>(iterator->context);
-    TENZIR_ASSERT(self->offset_ <= self->blocks_.size());
-    if (self->offset_ == self->blocks_.size()) {
-      // If we have returned all buffered blocks, we must decide whether we are
-      // truly done or whether more blocks are expected.
-      TENZIR_DEBUG("reached last block {} (done = {})", self->offset_,
-                   self->done_);
-      self->iterator_.last_error
-        = self->done_ ? ERROR_SUCCESS : ERROR_BLOCK_NOT_READY;
-      return nullptr;
+  };
+  if (is<std::string>(input.inner)) {
+    result.push_back(as<std::string>(input.inner));
+  } else if (is<list>(input.inner)) {
+    if (not add_list(as<list>(input.inner))) {
+      return {};
     }
-    TENZIR_DEBUG("returning next block {} (done = {})", self->offset_,
-                 self->done_);
-    self->iterator_.last_error = ERROR_SUCCESS;
-    return self->blocks_[self->offset_++].first.get();
+  } else {
+    diagnostic::error("expected type `string|list<string>` for rules")
+      .primary(input)
+      .emit(dh);
+    return {};
   }
-
-  YR_MEMORY_BLOCK_ITERATOR iterator_;
-  std::deque<std::pair<std::unique_ptr<YR_MEMORY_BLOCK>, chunk_ptr>> blocks_;
-  size_t offset_ = 0;
-  bool done_ = false;
-};
+  if (result.empty()) {
+    diagnostic::error("no rules provided").emit(dh);
+    return {};
+  }
+  if (compiled_rules and result.size() > 1) {
+    diagnostic::error("can't accept multiple rules in compiled form")
+      .primary(input)
+      .hint("provide exactly one rule argument")
+      .emit(dh);
+    return {};
+  }
+  return result;
+}
 
 /// A set of YARA rules.
 class rules {
@@ -276,18 +216,6 @@ public:
     auto builder = series_builder{};
     yr_scanner_set_callback(scanner_, callback, &builder);
     auto status = yr_scanner_scan_mem(scanner_, buffer, buffer_size);
-    if (auto err = to_error(status); err.valid()) {
-      return err;
-    }
-    return builder.finish_as_table_slice("yara.match");
-  }
-
-  /// Checks a sequence of memory blocks for rule matches.
-  auto scan(memory_block_vector& blocks)
-    -> caf::expected<std::vector<table_slice>> {
-    auto builder = series_builder{};
-    yr_scanner_set_callback(scanner_, callback, &builder);
-    auto status = yr_scanner_scan_mem_blocks(scanner_, blocks.iterator());
     if (auto err = to_error(status); err.valid()) {
       return err;
     }
@@ -542,54 +470,35 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    if (args_.blockwise) {
-      for (auto&& chunk : input) {
-        if (not chunk) {
-          co_yield {};
-          continue;
-        }
-        if (auto slices = scanner->scan(as_bytes(chunk))) {
-          for (auto&& slice : *slices) {
-            co_yield slice;
-          }
-        } else {
-          diagnostic::warning("failed to scan block with YARA rules")
-            .hint("{}", slices.error())
-            .emit(ctrl.diagnostics());
-          co_yield {};
-        }
+    // Small optimization: in case the entire input consists of a single
+    // chunk, we don't want to copy it at all. This actually may happen
+    // frequently when memory-mapping files, so it's worthwhile addressing.
+    auto first = chunk_ptr{};
+    std::vector<std::byte> buffer;
+    for (auto&& chunk : input) {
+      if (not chunk) {
+        co_yield {};
+        continue;
+      }
+      if (not buffer.empty()) {
+        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      } else if (not first) {
+        first = chunk;
+      } else {
+        buffer.reserve(first->size() + chunk->size());
+        buffer.insert(buffer.end(), first->begin(), first->end());
+        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      }
+    }
+    auto bytes = buffer.empty() ? as_bytes(first) : as_bytes(buffer);
+    if (auto slices = scanner->scan(bytes)) {
+      for (auto&& slice : *slices) {
+        co_yield slice;
       }
     } else {
-      // Small optimization: in case the entire input consists of a single
-      // chunk, we don't want to copy it at all. This actually may happen
-      // frequently when memory-mapping files, so it's worthwhile addressing.
-      auto first = chunk_ptr{};
-      std::vector<std::byte> buffer;
-      for (auto&& chunk : input) {
-        if (not chunk) {
-          co_yield {};
-          continue;
-        }
-        if (not buffer.empty()) {
-          buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-        } else if (not first) {
-          first = chunk;
-        } else {
-          buffer.reserve(first->size() + chunk->size());
-          buffer.insert(buffer.end(), first->begin(), first->end());
-          buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-        }
-      }
-      auto bytes = buffer.empty() ? as_bytes(first) : as_bytes(buffer);
-      if (auto slices = scanner->scan(bytes)) {
-        for (auto&& slice : *slices) {
-          co_yield slice;
-        }
-      } else {
-        diagnostic::error("failed to scan blocks with YARA rules")
-          .hint("{}", slices.error())
-          .emit(ctrl.diagnostics());
-      }
+      diagnostic::error("failed to scan input with YARA rules")
+        .hint("{}", slices.error())
+        .emit(ctrl.diagnostics());
     }
   }
 
@@ -614,9 +523,152 @@ private:
   operator_args args_ = {};
 };
 
+struct YaraArgs {
+  located<data> rules = {};
+  bool compiled_rules = false;
+  bool fast_scan = false;
+};
+
+class Yara final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit Yara(YaraArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    failed_ = not initialize(ctx.dh());
+    co_return;
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push, ctx);
+    if (failed_ or not scanner_ or not input or input->size() == 0) {
+      co_return;
+    }
+    if (not buffer_.empty()) {
+      buffer_.insert(buffer_.end(), input->begin(), input->end());
+    } else if (not first_chunk_) {
+      first_chunk_ = std::move(input);
+    } else {
+      buffer_.reserve(first_chunk_->size() + input->size());
+      buffer_.insert(buffer_.end(), first_chunk_->begin(), first_chunk_->end());
+      buffer_.insert(buffer_.end(), input->begin(), input->end());
+      first_chunk_ = {};
+    }
+    co_return;
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (failed_ or not scanner_) {
+      co_return FinalizeBehavior::done;
+    }
+    auto first_chunk = std::exchange(first_chunk_, {});
+    auto buffer = std::exchange(buffer_, std::vector<std::byte>{});
+    auto bytes = std::span<const std::byte>{};
+    if (not buffer.empty()) {
+      bytes = as_bytes(buffer);
+    } else if (first_chunk) {
+      bytes = as_bytes(first_chunk);
+    }
+    auto slices = scanner_->scan(bytes);
+    if (not slices) {
+      diagnostic::error("failed to scan input with YARA rules")
+        .hint("{}", slices.error())
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+    for (auto& slice : *slices) {
+      co_await push(std::move(slice));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // We intentionally serialize buffered input because the operator must see
+    // the entire byte stream before emitting matches.
+    serde("failed", failed_);
+    serde("first_chunk", first_chunk_);
+    serde("buffer", buffer_);
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto materialize_rules(diagnostic_handler& dh) const
+    -> Option<std::vector<std::string>> {
+    return extract_rules(args_.rules, args_.compiled_rules, dh);
+  }
+
+  auto initialize(diagnostic_handler& dh) -> bool {
+    auto rule_strings = materialize_rules(dh);
+    if (not rule_strings) {
+      return false;
+    }
+    auto compiler = compiler::make();
+    if (not compiler) {
+      diagnostic::error("insufficient memory to create YARA compiler").emit(dh);
+      return false;
+    }
+    if (args_.compiled_rules) {
+      TENZIR_ASSERT(rule_strings->size() == 1);
+      auto loaded = rules::load((*rule_strings)[0]);
+      if (not loaded) {
+        diagnostic::error("failed to load compiled YARA rules")
+          .note("{}", loaded.error())
+          .emit(dh);
+        return false;
+      }
+      rules_ = std::move(*loaded);
+    } else {
+      for (auto const& rule : *rule_strings) {
+        if (auto err = compiler->add(std::filesystem::path{rule});
+            err.valid()) {
+          diagnostic::error("failed to add YARA rule to compiler")
+            .note("rule: {}", rule)
+            .note("error: {}", err)
+            .emit(dh);
+          return false;
+        }
+      }
+      auto compiled = compiler->compile();
+      if (not compiled) {
+        diagnostic::error("failed to compile YARA rules")
+          .note("error: {}", compiled.error())
+          .emit(dh);
+        return false;
+      }
+      rules_ = std::move(*compiled);
+    }
+    auto opts = scan_options{
+      .fast_scan = args_.fast_scan,
+    };
+    auto scanner_instance = scanner::make(*rules_, opts);
+    if (not scanner_instance) {
+      diagnostic::warning("failed to construct YARA scanner").emit(dh);
+      return false;
+    }
+    scanner_ = std::move(*scanner_instance);
+    return true;
+  }
+
+  YaraArgs args_;
+  bool failed_ = false;
+  chunk_ptr first_chunk_;
+  std::vector<std::byte> buffer_;
+  Option<rules> rules_;
+  Option<scanner> scanner_;
+};
+
 /// The `yara` plugin.
 class plugin final : public virtual operator_plugin<yara_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   plugin() {
     const auto ok = yr_initialize();
@@ -631,37 +683,38 @@ public:
     return {.transformation = true};
   }
 
+  auto describe() const -> Description override {
+    auto d = Describer<YaraArgs, Yara>{};
+    auto rules = d.positional("rules", &YaraArgs::rules, "string|list<string>");
+    auto compiled_rules = d.named("compiled_rules", &YaraArgs::compiled_rules);
+    d.named("fast_scan", &YaraArgs::fast_scan);
+    d.validate([rules, compiled_rules](DescribeCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(rules));
+      auto rule_strings
+        = extract_rules(value, ctx.get(compiled_rules).value_or(false), ctx);
+      if (not rule_strings) {
+        return {};
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
-    auto rules = located<list>{};
+    auto rules = located<data>{};
     argument_parser2::operator_("yara")
-      .positional("rules", rules, "list<string>")
+      .positional("rules", rules, "string|list<string>")
       .named("compiled_rules", args.compiled_rules)
       .named("fast_scan", args.fast_scan)
-      .named("blockwise", args.blockwise)
       .parse(inv, ctx)
       .ignore();
-    for (const auto& rule : rules.inner) {
-      if (not is<std::string>(rule)) {
-        diagnostic::error("expected type string for rule")
-          .primary(rules)
-          .emit(ctx);
-        return failure::promise();
-      }
-      args.rules.push_back(std::move(as<std::string>(rule)));
-    }
-    if (args.rules.empty()) {
-      diagnostic::error("no rules provided").emit(ctx);
+    auto rule_strings = extract_rules(rules, args.compiled_rules, ctx);
+    if (not rule_strings) {
       return failure::promise();
     }
-    if (args.compiled_rules && args.rules.size() > 1) {
-      diagnostic::error("can't accept multiple rules in compiled form")
-        .primary(rules)
-        .hint("provide exactly one rule argument")
-        .emit(ctx);
-      return failure::promise();
-    }
+    args.rules = std::move(*rule_strings);
     return std::make_unique<yara_operator>(std::move(args));
   }
 
@@ -669,12 +722,10 @@ public:
     auto args = operator_args{};
     while (auto arg = p.accept_shell_arg()) {
       if (arg) {
-        if (arg->inner == "-C" || arg->inner == "--compiled-rules") {
+        if (arg->inner == "-C" or arg->inner == "--compiled-rules") {
           args.compiled_rules = true;
-        } else if (arg->inner == "-f" || arg->inner == "--fast-scan") {
+        } else if (arg->inner == "-f" or arg->inner == "--fast-scan") {
           args.fast_scan = true;
-        } else if (arg->inner == "-B" || arg->inner == "--blockwise") {
-          args.blockwise = true;
         } else {
           args.rules.push_back(std::move(arg->inner));
         }
@@ -683,7 +734,7 @@ public:
     if (args.rules.empty()) {
       diagnostic::error("no rules provided").throw_();
     }
-    if (args.compiled_rules && args.rules.size() != 1) {
+    if (args.compiled_rules and args.rules.size() != 1) {
       diagnostic::error("can't accept multiple rules in compiled form")
         .hint("provide exactly one rule argument")
         .throw_();

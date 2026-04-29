@@ -26,10 +26,11 @@ synopsis_ptr uint64_synopsis::clone() const {
 }
 
 bool uint64_synopsis::equals(const synopsis& other) const noexcept {
-  if (typeid(other) != typeid(uint64_synopsis))
+  if (typeid(other) != typeid(uint64_synopsis)) {
     return false;
+  }
   auto& dref = static_cast<const uint64_synopsis&>(other);
-  return type() == dref.type() && min() == dref.min() && max() == dref.max();
+  return type() == dref.type() and min() == dref.min() and max() == dref.max();
 }
 
 } // namespace tenzir

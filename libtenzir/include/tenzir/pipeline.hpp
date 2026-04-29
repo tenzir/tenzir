@@ -48,7 +48,7 @@ using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 /// Concept for pipeline operator input element types.
 template <class T>
 concept operator_input_batch
-  = std::is_same_v<T, table_slice> || std::is_same_v<T, chunk_ptr>;
+  = std::is_same_v<T, table_slice> or std::is_same_v<T, chunk_ptr>;
 
 inline auto to_operator_type(const operator_input& x) -> operator_type {
   return std::visit(
@@ -77,7 +77,7 @@ inline auto to_operator_type(const operator_output& x) -> operator_type {
 /// User-friendly name for the given pipeline batch type.
 template <class T>
 constexpr auto operator_type_name() -> std::string_view {
-  if constexpr (std::is_same_v<T, void> || std::is_same_v<T, std::monostate>) {
+  if constexpr (std::is_same_v<T, void> or std::is_same_v<T, std::monostate>) {
     return "void";
   } else if constexpr (std::is_same_v<T, table_slice>) {
     return "events";
@@ -523,7 +523,7 @@ public:
   /// Returns the sequence of operators that this pipeline was built from.
   auto unwrap() && -> std::vector<operator_ptr>;
   auto operators() const& -> std::span<const operator_ptr>;
-  auto operators() && = delete;
+  auto operators() and = delete;
 
   /// Optimizes the pipeline if it is closed. Otherwise, it is returned as-is.
   [[nodiscard]] auto optimize_if_closed() const -> pipeline;

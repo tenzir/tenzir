@@ -1,4 +1,10 @@
-// Copyright Tenzir GmbH. All rights reserved.
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/taxonomies.hpp"
 

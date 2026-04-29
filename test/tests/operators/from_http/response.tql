@@ -1,0 +1,16 @@
+---
+fixtures: [http_server]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_METHOD_URL"), method="put", tls=false {
+  read_json
+  response = $response
+}
+response.headers.Server = replace_regex(
+  response.headers.Server,
+  "Python/[0-9.]+",
+  "Python/*.*.*"
+)
+response.headers.Date = "*"
+| select method, response.code, response.headers

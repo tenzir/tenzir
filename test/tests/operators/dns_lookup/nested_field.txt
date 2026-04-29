@@ -1,0 +1,10 @@
+{
+  x: {
+    y: {
+      z: 127.0.0.3,
+    },
+  },
+  dns_lookup: {
+    hostname: "localhost",
+  },
+}

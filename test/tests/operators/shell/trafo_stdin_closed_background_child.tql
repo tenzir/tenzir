@@ -1,0 +1,13 @@
+---
+error: true
+timeout: 5
+---
+
+from {x: "payload", ts: 0ms.from_epoch()},
+     {x: "payload", ts: 100ms.from_epoch()},
+     {x: "payload", ts: 200ms.from_epoch()},
+     {x: "payload", ts: 300ms.from_epoch()}
+delay ts
+write_lines
+shell "read _; exec 0<&-; sleep 30 &"
+read_lines

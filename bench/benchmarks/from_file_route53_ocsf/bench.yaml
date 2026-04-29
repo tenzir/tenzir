@@ -10,7 +10,7 @@ tags:
 inputs:
   main:
     path: cloudwatch/route53.ndjson
-    repetitions: 10
+    repetitions: 30
     source:
       url: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
       num_events: 2586

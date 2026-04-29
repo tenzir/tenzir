@@ -6,22 +6,37 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/bitmap.hpp>
 #include <tenzir/collect.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try.hpp>
+
+#include <algorithm>
+#include <limits>
 
 namespace tenzir::plugins::unroll {
 
 namespace {
+
+using namespace tenzir::si_literals;
+
+constexpr auto max_unroll_slice_rows
+  = static_cast<int64_t>(defaults::import::table_slice_size);
+
+constexpr auto max_unroll_slice_bytes = uint64_t{512_Mi};
 
 auto unroll_type(const type& src, const offset& off, size_t index = 0) -> type {
   TENZIR_ASSERT(index <= off.size());
@@ -49,55 +64,53 @@ auto unroll_type(const type& src, const offset& off, size_t index = 0) -> type {
 class unroller {
 public:
   unroller(const offset& offset, const arrow::ListArray& list_array,
-           int64_t row)
+           int64_t row, int64_t list_begin, int64_t list_length)
     : offset_{offset},
       list_array_{list_array},
       row_{row},
-      list_begin_{list_array.value_offset(row)},
-      list_length_{list_array.value_offset(row + 1) - list_begin_} {
+      list_begin_{list_begin},
+      list_length_{list_length} {
   }
 
-  void run(arrow::StructBuilder& builder, const arrow::StructArray& source,
-           const record_type& ty) {
+  auto run(arrow::StructBuilder& builder, const arrow::StructArray& source,
+           const record_type& ty) -> arrow::Status {
     TENZIR_ASSERT(row_ < source.length());
-    process_struct(builder, source, ty, 0);
+    return process_struct(builder, source, ty, 0);
   }
 
 private:
-  void process_struct(arrow::StructBuilder& builder,
+  auto process_struct(arrow::StructBuilder& builder,
                       const arrow::StructArray& source, const record_type& ty,
-                      size_t index) {
+                      size_t index) -> arrow::Status {
     TENZIR_ASSERT(index < offset_.size());
+    TRY(builder.Reserve(list_length_));
     for (auto i = 0; i < list_length_; ++i) {
-      auto result = builder.Append();
-      TENZIR_ASSERT(result.ok());
+      TRY(builder.Append());
     }
     auto target = detail::narrow<int>(offset_[index]);
     for (auto current = 0; current < builder.num_fields(); ++current) {
       if (current == target) {
-        process(*builder.field_builder(target), *source.field(target),
-                ty.field(current).type, index + 1);
+        TRY(process(*builder.field_builder(target), *source.field(target),
+                    ty.field(current).type, index + 1));
       } else {
         for (auto i = int64_t{0}; i < list_length_; ++i) {
-          auto status = append_array_slice(*builder.field_builder(current),
-                                           ty.field(current).type,
-                                           *source.field(current), row_, 1);
-          TENZIR_ASSERT(status.ok(), status.ToString());
+          TRY(append_array_slice(*builder.field_builder(current),
+                                 ty.field(current).type, *source.field(current),
+                                 row_, 1));
         }
       }
     }
+    return arrow::Status::OK();
   }
 
-  void process(arrow::ArrayBuilder& builder, const arrow::Array& source,
-               const type& ty, size_t index) {
+  auto process(arrow::ArrayBuilder& builder, const arrow::Array& source,
+               const type& ty, size_t index) -> arrow::Status {
     TENZIR_ASSERT(index <= offset_.size());
     if (index == offset_.size()) {
       // We arrived at the offset where the list values shall be placed.
-      auto result
-        = append_array_slice(builder, as<list_type>(ty).value_type(),
-                             *list_array_.values(), list_begin_, list_length_);
-      TENZIR_ASSERT(result.ok());
-      return;
+      return append_array_slice(builder, as<list_type>(ty).value_type(),
+                                *list_array_.values(), list_begin_,
+                                list_length_);
     }
     auto fb = dynamic_cast<arrow::StructBuilder*>(&builder);
     TENZIR_ASSERT(fb);
@@ -105,7 +118,7 @@ private:
     TENZIR_ASSERT(fs);
     auto ty2 = try_as<record_type>(&ty);
     TENZIR_ASSERT(ty2);
-    process_struct(*fb, *fs, *ty2, index);
+    return process_struct(*fb, *fs, *ty2, index);
   }
 
   const offset& offset_;
@@ -115,10 +128,54 @@ private:
   int64_t list_length_;
 };
 
+auto make_unroll_builder(const type& ty) -> Arc<arrow::StructBuilder> {
+  auto result = std::dynamic_pointer_cast<arrow::StructBuilder>(
+    ty.make_arrow_builder(arrow_memory_pool()));
+  TENZIR_ASSERT(result);
+  return Arc<arrow::StructBuilder>::from_non_null(std::move(result));
+}
+
+auto emit_unroll_error(diagnostic_handler& dh, const arrow::Status& status)
+  -> void {
+  diagnostic::error("failed to unroll list: {}", status.ToString()).emit(dh);
+}
+
+struct finish_unroll_result {
+  Option<table_slice> slice = None{};
+  bool failed = {};
+};
+
+auto finish_unroll_builder(arrow::StructBuilder& builder, const type& result_ty,
+                           diagnostic_handler& dh, bool allow_empty = false)
+  -> finish_unroll_result {
+  if (builder.length() == 0 and not allow_empty) {
+    return {};
+  }
+  auto result = std::shared_ptr<arrow::StructArray>{};
+  auto status = builder.Finish(&result);
+  if (not status.ok()) {
+    emit_unroll_error(dh, status);
+    return {.failed = true};
+  }
+  auto batch = arrow::RecordBatch::Make(result_ty.to_arrow_schema(),
+                                        result->length(), result->fields());
+  return {.slice = table_slice{batch, result_ty}};
+}
+
+auto add_saturated(uint64_t current, uint64_t value, int64_t count)
+  -> uint64_t {
+  const auto max = std::numeric_limits<uint64_t>::max();
+  auto unsigned_count = detail::narrow<uint64_t>(count);
+  if (value != 0 and unsigned_count > (max - current) / value) {
+    return max;
+  }
+  return current + value * unsigned_count;
+}
+
 /// Unrolls the list located at `offset` by duplicating the surrounding data,
 /// once for each list item.
-auto unroll(const table_slice& slice, const offset& offset, bool unordered)
-  -> generator<table_slice> {
+auto unroll(const table_slice& slice, const offset& offset, bool unordered,
+            diagnostic_handler& dh) -> generator<table_slice> {
   auto resolved = offset.get(slice);
   if (const auto* rt = try_as<record_type>(resolved.first)) {
     const auto& sa = as<arrow::StructArray>(*resolved.second);
@@ -171,36 +228,94 @@ auto unroll(const table_slice& slice, const offset& offset, bool unordered)
   }
   auto list_array = dynamic_cast<arrow::ListArray*>(&*resolved.second);
   TENZIR_ASSERT(list_array);
-  auto list_offsets
-    = std::dynamic_pointer_cast<arrow::Int32Array>(list_array->offsets());
-  TENZIR_ASSERT(list_offsets);
   auto result_ty = unroll_type(slice.schema(), offset);
-  auto builder = std::dynamic_pointer_cast<arrow::StructBuilder>(
-    result_ty.make_arrow_builder(arrow_memory_pool()));
-  TENZIR_ASSERT(builder);
+  auto builder = make_unroll_builder(result_ty);
+  auto source = to_record_batch(slice)->ToStructArray();
+  if (not source.ok()) {
+    emit_unroll_error(dh, source.status());
+    co_return;
+  }
+  TENZIR_ASSERT(*source);
+  auto builder_bytes = uint64_t{};
+  auto emitted = false;
   for (auto row = int64_t{0}; row < list_array->length(); ++row) {
     if (list_array->IsNull(row)) {
       continue;
     }
-    TENZIR_ASSERT(row + 1 < list_offsets->length());
-    auto begin = list_offsets->Value(row);
-    auto end = list_offsets->Value(row + 1);
+    auto begin = int64_t{list_array->value_offset(row)};
+    auto end = int64_t{list_array->value_offset(row + 1)};
     TENZIR_ASSERT(begin <= end);
     if (begin == end) {
       continue;
     }
-    auto source = to_record_batch(slice)->ToStructArray();
-    TENZIR_ASSERT(source.ok());
-    TENZIR_ASSERT(*source);
-    unroller{offset, *list_array, row}.run(*builder, **source,
-                                           as<record_type>(slice.schema()));
+    auto remaining = end - begin;
+    auto current = begin;
+    // This deliberately overestimates when the unrolled field is a list with
+    // many values, because the input row still includes values that are spread
+    // across multiple output rows. The estimate keeps flushing conservative.
+    auto row_bytes
+      = std::max<uint64_t>(subslice(slice, row, row + 1).approx_bytes(), 1);
+    while (remaining > 0) {
+      if (builder->length() >= max_unroll_slice_rows
+          or (builder->length() > 0
+              and builder_bytes >= max_unroll_slice_bytes)) {
+        auto result = finish_unroll_builder(*builder, result_ty, dh);
+        if (result.failed) {
+          co_return;
+        }
+        if (result.slice) {
+          co_yield std::move(*result.slice);
+          emitted = true;
+        }
+        builder = make_unroll_builder(result_ty);
+        builder_bytes = 0;
+      }
+      auto rows_left = max_unroll_slice_rows - builder->length();
+      TENZIR_ASSERT(rows_left > 0);
+      auto bytes_left = builder_bytes >= max_unroll_slice_bytes
+                          ? uint64_t{0}
+                          : max_unroll_slice_bytes - builder_bytes;
+      auto rows_left_by_byte_budget
+        = row_bytes == 0 ? max_unroll_slice_rows
+                         : detail::narrow<int64_t>(bytes_left / row_bytes);
+      if (rows_left_by_byte_budget == 0) {
+        rows_left_by_byte_budget
+          = builder->length() == 0 ? int64_t{1} : int64_t{0};
+      }
+      if (rows_left_by_byte_budget == 0) {
+        auto result = finish_unroll_builder(*builder, result_ty, dh);
+        if (result.failed) {
+          co_return;
+        }
+        if (result.slice) {
+          co_yield std::move(*result.slice);
+          emitted = true;
+        }
+        builder = make_unroll_builder(result_ty);
+        builder_bytes = 0;
+        continue;
+      }
+      auto rows_to_append
+        = std::min({remaining, rows_left, rows_left_by_byte_budget});
+      auto status
+        = unroller{offset, *list_array, row, current, rows_to_append}.run(
+          *builder, **source, as<record_type>(slice.schema()));
+      if (not status.ok()) {
+        emit_unroll_error(dh, status);
+        co_return;
+      }
+      builder_bytes = add_saturated(builder_bytes, row_bytes, rows_to_append);
+      remaining -= rows_to_append;
+      current += rows_to_append;
+    }
   }
-  auto result = std::shared_ptr<arrow::StructArray>{};
-  auto status = builder->Finish(&result);
-  TENZIR_ASSERT(status.ok());
-  auto batch = arrow::RecordBatch::Make(result_ty.to_arrow_schema(),
-                                        result->length(), result->fields());
-  co_yield table_slice{batch, result_ty};
+  auto result = finish_unroll_builder(*builder, result_ty, dh, not emitted);
+  if (result.failed) {
+    co_return;
+  }
+  if (result.slice) {
+    co_yield std::move(*result.slice);
+  }
 }
 
 class unroll_operator final : public crtp_operator<unroll_operator> {
@@ -306,7 +421,8 @@ public:
         // Zero or multiple offsets; cannot proceed.
         continue;
       }
-      for (auto unrolled : unroll(slice, *offset, unordered_)) {
+      for (auto unrolled :
+           unroll(slice, *offset, unordered_, ctrl.diagnostics())) {
         co_yield std::move(unrolled);
       }
     }
@@ -336,6 +452,7 @@ private:
 
 struct UnrollArgs {
   ast::field_path field;
+  event_order order = event_order::ordered;
 };
 
 class Unroll final : public Operator<table_slice, table_slice> {
@@ -392,7 +509,8 @@ public:
     if (not off) {
       co_return;
     }
-    for (auto unrolled : unroll(input, *off, /*unordered=*/false)) {
+    for (auto unrolled :
+         unroll(input, *off, args_.order == event_order::unordered, ctx)) {
       co_await push(std::move(unrolled));
     }
   }
@@ -430,7 +548,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<UnrollArgs, Unroll>{};
     d.positional("field", &UnrollArgs::field);
-    // TODO: when we do sorting optimizations, pass `unroll(unordered)`
+    d.optimization_order(&UnrollArgs::order);
     return d.without_optimize();
   }
 };

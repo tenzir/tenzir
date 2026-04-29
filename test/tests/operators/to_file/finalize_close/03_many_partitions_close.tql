@@ -1,0 +1,14 @@
+// 20 partitions closing simultaneously during `finalize()`. Without the
+// executor's `operator_draining_` guard, `check_done()` could cancel the
+// operator scope the moment the last subpipeline finishes — before
+// `finish_sub` runs to close the stream and decrement `partition_count_`.
+// If that happens, `partition_count_` never reaches 0 and this pipeline
+// hangs until the test timeout fires.
+from {pk: "a"}, {pk: "b"}, {pk: "c"}, {pk: "d"}, {pk: "e"},
+     {pk: "f"}, {pk: "g"}, {pk: "h"}, {pk: "i"}, {pk: "j"},
+     {pk: "k"}, {pk: "l"}, {pk: "m"}, {pk: "n"}, {pk: "o"},
+     {pk: "p"}, {pk: "q"}, {pk: "r"}, {pk: "s"}, {pk: "t"}
+enumerate id
+to_file env("FILE_ROOT") + "/out/finalize/many/**/data_{uuid}.json", partition_by=[pk] {
+  write_ndjson
+}

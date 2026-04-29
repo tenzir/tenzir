@@ -10,6 +10,7 @@
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
@@ -18,6 +19,7 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/make_byte_reader.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
@@ -41,10 +43,29 @@ namespace tenzir::plugins::feather {
 
 namespace {
 
+auto has_location(diagnostic const& diag) -> bool {
+  for (auto const& annotation : diag.annotations) {
+    if (annotation.source != location::unknown) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <class DiagnosticBuilder, class DiagnosticHandler>
+auto emit_with_location(DiagnosticBuilder&& diag, DiagnosticHandler& dh,
+                        location operator_location) -> void {
+  if (operator_location and not has_location(diag.inner())) {
+    diag.inner().annotations.emplace_back(true, std::string{},
+                                          operator_location);
+  }
+  std::forward<DiagnosticBuilder>(diag).emit(dh);
+}
+
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
-  if (not time_col || time_col->length() == 0) {
+  if (not time_col or time_col->length() == 0) {
     return time{};
   }
   auto const row = time_col->length() - 1;
@@ -105,7 +126,7 @@ auto decode_ipc_stream(chunk_ptr chunk)
   // arrow/ipc/metadata_internal.h.
   static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
   if (chunk->size() < arrow_magic_bytes.length()
-      || std::memcmp(chunk->data(), arrow_magic_bytes.data(),
+      or std::memcmp(chunk->data(), arrow_magic_bytes.data(),
                      arrow_magic_bytes.size())
            != 0) {
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
@@ -322,7 +343,7 @@ private:
       // If current slice is exactly target size and we have no pending slices,
       // keep it as-is.
       if (pending.empty()
-          && slice.rows() == defaults::import::table_slice_size) {
+          and slice.rows() == defaults::import::table_slice_size) {
         result.push_back(std::move(slice));
         continue;
       }
@@ -558,7 +579,7 @@ public:
                  "{}",
                  result_compression_type.status().ToStringWithoutContextLines())
           .note("failed to parse compression type")
-          .note("must be `lz4` or `zstd`")
+          .note("must be `uncompressed`, `lz4`, or `zstd`")
           .primary(options_.compression_type->source)
           .to_error();
       }
@@ -572,7 +593,9 @@ public:
                  "{}", codec_result.status().ToStringWithoutContextLines())
           .note("failed to create codec")
           .primary(options_.compression_type->source)
-          .primary(options_.compression_level->source)
+          .primary(options_.compression_level
+                     ? options_.compression_level->source
+                     : location::unknown)
           .to_error();
       }
       ipc_write_options.codec = codec_result.MoveValueUnsafe();
@@ -611,6 +634,366 @@ public:
 
 private:
   feather_options options_;
+};
+
+struct ReadFeatherArgs {
+  location operator_location = location::unknown;
+};
+
+class ReadFeather final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadFeather(ReadFeatherArgs args)
+    : args_{std::move(args)},
+      listener_{std::make_shared<callback_listener>()},
+      stream_decoder_{std::in_place, listener_, arrow_ipc_read_options()} {
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (done_ or not input or input->size() == 0) {
+      co_return;
+    }
+    append(std::move(input));
+    co_await parse_available(push, ctx.dh());
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    auto trailing_bytes = truncated_bytes_ + available();
+    if (not done_ and trailing_bytes != 0) {
+      emit_with_location(diagnostic::warning("truncated Feather input")
+                           .note("discarded {} trailing bytes", trailing_bytes)
+                           .severity(decoded_once_ ? severity::warning
+                                                   : severity::error),
+                         ctx.dh(), args_.operator_location);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto available() const -> size_t {
+    TENZIR_ASSERT(buffer_);
+    return buffer_->size() - offset_;
+  }
+
+  auto append(chunk_ptr input) -> void {
+    TENZIR_ASSERT(buffer_);
+    TENZIR_ASSERT(input);
+    if (available() == 0) {
+      buffer_ = std::move(input);
+      offset_ = 0;
+      return;
+    }
+    auto merged_buffer
+      = std::make_unique<chunk::value_type[]>(available() + input->size());
+    std::memcpy(merged_buffer.get(), buffer_->data() + offset_, available());
+    std::memcpy(merged_buffer.get() + available(), input->data(),
+                input->size());
+    auto merged_buffer_view = std::span<const std::byte>{
+      merged_buffer.get(), available() + input->size()};
+    buffer_
+      = chunk::make(merged_buffer_view,
+                    [merged_buffer = std::move(merged_buffer)]() noexcept {
+                      static_cast<void>(merged_buffer);
+                    });
+    offset_ = 0;
+  }
+
+  auto take(size_t required_size) -> chunk_ptr {
+    if (available() < required_size) {
+      return {};
+    }
+    auto result = buffer_->slice(offset_, required_size);
+    offset_ += required_size;
+    if (offset_ == buffer_->size()) {
+      buffer_ = chunk::make_empty();
+      offset_ = 0;
+    }
+    return result;
+  }
+
+  auto parse_available(Push<table_slice>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    while (not done_) {
+      auto required_size
+        = detail::narrow_cast<size_t>(stream_decoder_->next_required_size());
+      if (required_size == 0) {
+        co_return;
+      }
+      auto payload = take(required_size);
+      if (not payload) {
+        co_return;
+      }
+      truncated_bytes_ += payload->size();
+      auto decode_result = stream_decoder_->Consume(as_arrow_buffer(payload));
+      if (not decode_result.ok()) {
+        emit_with_location(
+          diagnostic::error("failed to decode Feather input")
+            .note("{}", decode_result.ToStringWithoutContextLines())
+            .note("failed to decode the byte stream into a record batch"),
+          dh, args_.operator_location);
+        done_ = true;
+        co_return;
+      }
+      if (stream_decoder_->next_required_size() == 0) {
+        truncated_bytes_ = 0;
+      }
+      while (not listener_->record_batch_buffer.empty()) {
+        decoded_once_ = true;
+        truncated_bytes_ = 0;
+        auto batch = listener_->record_batch_buffer.front();
+        listener_->record_batch_buffer.pop();
+        auto validate_status = batch->Validate();
+        TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+        const auto& metadata = batch->schema()->metadata();
+        if (not metadata
+            or std::find(metadata->keys().begin(), metadata->keys().end(),
+                         "TENZIR:name:0")
+                 == metadata->keys().end()) {
+          emit_with_location(
+            diagnostic::error("missing Tenzir metadata in Feather input")
+              .note("cannot convert Feather without the `TENZIR:name:0` "
+                    "metadata entry"),
+            dh, args_.operator_location);
+          done_ = true;
+          co_return;
+        }
+        co_await push(table_slice{std::move(batch)});
+      }
+    }
+  }
+
+  ReadFeatherArgs args_;
+  chunk_ptr buffer_ = chunk::make_empty();
+  size_t offset_ = 0;
+  size_t truncated_bytes_ = 0;
+  bool decoded_once_ = false;
+  bool done_ = false;
+  std::shared_ptr<callback_listener> listener_;
+  Box<arrow::ipc::StreamDecoder> stream_decoder_;
+};
+
+struct WriteFeatherArgs {
+  location operator_location = location::unknown;
+  Option<located<int64_t>> compression_level;
+  Option<located<std::string>> compression_type;
+  Option<located<double>> min_space_savings;
+};
+
+template <class DiagnosticHandler>
+auto make_feather_write_options(WriteFeatherArgs const& args,
+                                DiagnosticHandler& dh)
+  -> failure_or<arrow::ipc::IpcWriteOptions> {
+  auto result = arrow::ipc::IpcWriteOptions::Defaults();
+  if (not args.compression_type) {
+    if (args.min_space_savings) {
+      diagnostic::warning("ignoring min space savings option")
+        .note("has no effect without `compression_type`")
+        .primary(args.min_space_savings->source)
+        .emit(dh);
+    }
+    if (args.compression_level) {
+      diagnostic::warning("ignoring compression level option")
+        .note("has no effect without `compression_type`")
+        .primary(args.compression_level->source)
+        .emit(dh);
+    }
+    return result;
+  }
+  if (args.min_space_savings
+      and (args.min_space_savings->inner < 0.0
+           or args.min_space_savings->inner > 1.0)) {
+    diagnostic::error("min space savings must be between 0 and 1")
+      .primary(args.min_space_savings->source)
+      .emit(dh);
+    return failure::promise();
+  }
+  auto const& compression_type = args.compression_type->inner;
+  if (compression_type != "uncompressed" and compression_type != "lz4"
+      and compression_type != "zstd") {
+    auto parse_result
+      = arrow::util::Codec::GetCompressionType(compression_type);
+    if (not parse_result.ok()) {
+      diagnostic::error("invalid Feather compression type")
+        .note("{}", parse_result.status().ToStringWithoutContextLines())
+        .note("must be `uncompressed`, `lz4`, or `zstd`")
+        .primary(args.compression_type->source)
+        .emit(dh);
+    } else {
+      diagnostic::error("unsupported Feather compression type `{}`",
+                        compression_type)
+        .note("must be `uncompressed`, `lz4`, or `zstd`")
+        .primary(args.compression_type->source)
+        .emit(dh);
+    }
+    return failure::promise();
+  }
+  auto compression_type_result
+    = arrow::util::Codec::GetCompressionType(compression_type);
+  TENZIR_ASSERT(compression_type_result.ok());
+  auto compression_level = args.compression_level
+                             ? args.compression_level->inner
+                             : arrow::util::kUseDefaultCompressionLevel;
+  auto codec_result = arrow::util::Codec::Create(
+    compression_type_result.MoveValueUnsafe(), compression_level);
+  if (not codec_result.ok()) {
+    auto diagnostic
+      = diagnostic::error("failed to create Feather codec")
+          .note("{}", codec_result.status().ToStringWithoutContextLines())
+          .primary(args.compression_type->source);
+    if (args.compression_level) {
+      diagnostic
+        = std::move(diagnostic).primary(args.compression_level->source);
+    }
+    std::move(diagnostic).emit(dh);
+    return failure::promise();
+  }
+  result.codec = codec_result.MoveValueUnsafe();
+  if (args.min_space_savings) {
+    result.min_space_savings = args.min_space_savings->inner;
+  }
+  return result;
+}
+
+class WriteFeather final : public Operator<table_slice, chunk_ptr> {
+public:
+  explicit WriteFeather(WriteFeatherArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (done_ or input.rows() == 0) {
+      co_return;
+    }
+    if (not writer_) {
+      if (not initialize(input.schema(), ctx.dh())) {
+        done_ = true;
+        co_return;
+      }
+    } else if (*schema_ != input.schema()) {
+      emit_with_location(
+        diagnostic::error("`feather` writer does not support heterogeneous "
+                          "outputs")
+          .note("cannot initialize for schema `{}` after schema `{}`",
+                input.schema(), *schema_),
+        ctx.dh(), args_.operator_location);
+      done_ = true;
+      co_return;
+    }
+    auto has_secrets = false;
+    std::tie(has_secrets, input) = replace_secrets(std::move(input));
+    if (has_secrets) {
+      emit_with_location(diagnostic::warning("`secret` is serialized as text")
+                           .note("fields will be `\"***\"`"),
+                         ctx.dh(), args_.operator_location);
+    }
+    auto batch = to_record_batch(input);
+    auto validate_status = batch->Validate();
+    TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+    auto write_status = writer_->WriteRecordBatch(*batch);
+    if (not write_status.ok()) {
+      emit_with_location(
+        diagnostic::error("failed to write Feather record batch")
+          .note("{}", write_status.ToStringWithoutContextLines()),
+        ctx.dh(), args_.operator_location);
+      done_ = true;
+      co_return;
+    }
+    co_await emit_buffer(push, ctx.dh(), true);
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (done_ or not writer_) {
+      co_return FinalizeBehavior::done;
+    }
+    auto close_status = writer_->Close();
+    if (not close_status.ok()) {
+      emit_with_location(
+        diagnostic::error("failed to close Feather output stream")
+          .note("{}", close_status.ToStringWithoutContextLines()),
+        ctx.dh(), args_.operator_location);
+      done_ = true;
+      co_return FinalizeBehavior::done;
+    }
+    co_await emit_buffer(push, ctx.dh(), false);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto initialize(type schema, diagnostic_handler& dh) -> bool {
+    auto sink_result
+      = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
+    if (not sink_result.ok()) {
+      emit_with_location(
+        diagnostic::error("failed to create Feather buffer output stream")
+          .note("{}", sink_result.status().ToStringWithoutContextLines()),
+        dh, args_.operator_location);
+      return false;
+    }
+    auto write_options = make_feather_write_options(args_, dh);
+    if (not write_options) {
+      return false;
+    }
+    auto stream_writer_result = arrow::ipc::MakeStreamWriter(
+      sink_result.ValueUnsafe(), schema.to_arrow_schema(), *write_options);
+    if (not stream_writer_result.ok()) {
+      emit_with_location(
+        diagnostic::error("failed to create Feather stream writer")
+          .note("{}",
+                stream_writer_result.status().ToStringWithoutContextLines()),
+        dh, args_.operator_location);
+      return false;
+    }
+    schema_ = std::move(schema);
+    sink_ = sink_result.MoveValueUnsafe();
+    writer_ = stream_writer_result.MoveValueUnsafe();
+    return true;
+  }
+
+  auto emit_buffer(Push<chunk_ptr>& push, diagnostic_handler& dh, bool reset)
+    -> Task<void> {
+    auto buffer_result = sink_->Finish();
+    if (not buffer_result.ok()) {
+      emit_with_location(
+        diagnostic::error("failed to finish Feather output stream")
+          .note("{}", buffer_result.status().ToStringWithoutContextLines()),
+        dh, args_.operator_location);
+      done_ = true;
+      co_return;
+    }
+    auto buffer = buffer_result.MoveValueUnsafe();
+    if (buffer->size() > 0) {
+      co_await push(chunk::make(std::move(buffer)));
+    }
+    if (not reset) {
+      sink_.reset();
+      co_return;
+    }
+    auto reset_result = sink_->Reset(1024, arrow_memory_pool());
+    if (not reset_result.ok()) {
+      emit_with_location(
+        diagnostic::error("failed to reset Feather output stream")
+          .note("{}", reset_result.ToStringWithoutContextLines()),
+        dh, args_.operator_location);
+      done_ = true;
+    }
+  }
+
+  WriteFeatherArgs args_;
+  Option<type> schema_;
+  std::shared_ptr<arrow::io::BufferOutputStream> sink_;
+  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer_;
+  bool done_ = false;
 };
 
 class plugin final : public virtual parser_plugin<feather_parser>,
@@ -665,8 +1048,15 @@ private:
 };
 
 class read_plugin final
-  : public virtual operator_plugin2<parser_adapter<feather_parser>> {
+  : public virtual operator_plugin2<parser_adapter<feather_parser>>,
+    public virtual OperatorPlugin {
 public:
+  auto describe() const -> Description override {
+    auto d = Describer<ReadFeatherArgs, ReadFeather>{};
+    d.operator_location(&ReadFeatherArgs::operator_location);
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
@@ -679,8 +1069,29 @@ public:
 };
 
 class write_plugin final
-  : public virtual operator_plugin2<writer_adapter<feather_printer>> {
+  : public virtual operator_plugin2<writer_adapter<feather_printer>>,
+    public virtual OperatorPlugin {
 public:
+  auto describe() const -> Description override {
+    auto d = Describer<WriteFeatherArgs, WriteFeather>{};
+    d.operator_location(&WriteFeatherArgs::operator_location);
+    auto compression_level
+      = d.named("compression_level", &WriteFeatherArgs::compression_level);
+    auto compression_type
+      = d.named("compression_type", &WriteFeatherArgs::compression_type);
+    auto min_space_savings
+      = d.named("min_space_savings", &WriteFeatherArgs::min_space_savings);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      auto args = WriteFeatherArgs{};
+      args.compression_level = ctx.get(compression_level);
+      args.compression_type = ctx.get(compression_type);
+      args.min_space_savings = ctx.get(min_space_savings);
+      std::ignore = make_feather_write_options(args, ctx);
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto options = feather_options{};

@@ -48,8 +48,8 @@ struct status_request_state_base {
 
   // Moving is still allowed.
   status_request_state_base(status_request_state_base&&) noexcept = default;
-  status_request_state_base&
-  operator=(status_request_state_base&&) noexcept = default;
+  status_request_state_base& operator=(status_request_state_base&&) noexcept
+    = default;
 
   ~status_request_state_base() = default;
 

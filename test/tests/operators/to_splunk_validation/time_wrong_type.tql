@@ -1,0 +1,5 @@
+from {message: "this event does not fit", ts: "not an epoch"}
+to_splunk "http://127.0.0.1:8088",
+          hec_token="token",
+          time=ts,
+          max_content_length=1

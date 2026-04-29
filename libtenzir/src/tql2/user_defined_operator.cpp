@@ -38,14 +38,14 @@ auto parameter_default_string(const ast::expression& expr)
 
 auto is_null_constant_expression(const ast::expression& expr) -> bool {
   const auto* constant = try_as<ast::constant>(expr);
-  return constant && is<caf::none_t>(constant->value);
+  return constant and is<caf::none_t>(constant->value);
 }
 
 auto make_usage_string(std::string_view op_name,
                        const user_defined_operator& udo) -> std::string {
   auto usage = std::string{op_name};
   auto has_parameters
-    = ! udo.positional_params.empty() || ! udo.named_params.empty();
+    = not udo.positional_params.empty() or not udo.named_params.empty();
   if (not has_parameters) {
     return usage;
   }
@@ -65,14 +65,14 @@ auto make_usage_string(std::string_view op_name,
     if (param.name.starts_with('_')) {
       return;
     }
-    if (not param.default_value.has_value() && in_brackets) {
+    if (not param.default_value.has_value() and in_brackets) {
       usage += ']';
       in_brackets = false;
     }
     if (std::exchange(has_previous, true)) {
       usage += ", ";
     }
-    if (param.default_value.has_value() && ! in_brackets) {
+    if (param.default_value.has_value() and not in_brackets) {
       usage += '[';
       in_brackets = true;
     }
@@ -115,7 +115,7 @@ auto make_parameter_note(const user_defined_operator& udo)
         }
       }
       auto description_lines = std::vector<std::string>{};
-      if (param.description && ! param.description->empty()) {
+      if (param.description and not param.description->empty()) {
         auto remaining = std::string_view{*param.description};
         while (true) {
           auto pos = remaining.find('\n');
@@ -178,7 +178,7 @@ auto make_parameter_note(const user_defined_operator& udo)
   auto default_width = size_t{7};
   update_widths(positional_rows, name_width, type_width, default_width);
   update_widths(named_rows, name_width, type_width, default_width);
-  if (positional_rows.empty() && named_rows.empty()) {
+  if (positional_rows.empty() and named_rows.empty()) {
     return std::nullopt;
   }
   auto note = std::string{"parameters:\n"};
@@ -186,7 +186,7 @@ auto make_parameter_note(const user_defined_operator& udo)
                          default_width);
   note += format_section("named", named_rows, name_width, type_width,
                          default_width);
-  if (not note.empty() && note.back() == '\n') {
+  if (not note.empty() and note.back() == '\n') {
     note.pop_back();
   }
   return note;
@@ -258,7 +258,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     -> std::optional<failure_or<ast::pipeline>> {
     const auto missing_argument
       = next_arg >= inv.args.size()
-        || try_as<ast::assignment>(inv.args[next_arg]);
+        or try_as<ast::assignment>(inv.args[next_arg]);
     if (not missing_argument) {
       positional_values.push_back({std::move(inv.args[next_arg]), false});
       ++next_arg;
@@ -290,8 +290,8 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       return failure::promise();
     }
     auto* left = try_as<ast::field_path>(assignment->left);
-    if ((left == nullptr) || left->has_this() || left->path().size() != 1
-        || left->path()[0].has_question_mark) {
+    if ((left == nullptr) or left->has_this() or left->path().size() != 1
+        or left->path()[0].has_question_mark) {
       diagnostic::error("invalid argument name")
         .primary(assignment->left)
         .emit(dh);
@@ -354,7 +354,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 
   auto coerce_const_string_to_secret =
     [&](const user_defined_operator::parameter& param, ast::expression& expr) {
-      if (not param.value_type || not is<secret_type>(*param.value_type)) {
+      if (not param.value_type or not is<secret_type>(*param.value_type)) {
         return;
       }
       auto value = try_const_eval(expr, ctx);
@@ -425,7 +425,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
     auto value = std::move(*named_values[i]);
     if (param.type_hint == "field") {
-      if (is_null_constant_expression(value) && named_value_locations[i]) {
+      if (is_null_constant_expression(value) and named_value_locations[i]) {
         diagnostic::error("expected a selector")
           .primary(*named_value_locations[i])
           .emit(dh);

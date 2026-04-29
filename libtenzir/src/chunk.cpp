@@ -220,7 +220,7 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter,
 
 chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
                       chunk_metadata metadata) noexcept {
-  if (! buffer) {
+  if (not buffer) {
     return nullptr;
   }
   const auto* data = buffer->data();
@@ -296,7 +296,7 @@ caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
   buffer.resize(max_length);
   auto length
     = codec->Compress(bytes_size, bytes_data, max_length, buffer.data());
-  if (! length.ok()) {
+  if (not length.ok()) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to compress chunk: {}",
                                        length.status().ToString()));
@@ -319,7 +319,7 @@ chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
   auto length = codec->Decompress(bytes_size, bytes_data,
                                   detail::narrow_cast<int64_t>(buffer.size()),
                                   buffer.data());
-  if (! length.ok()) {
+  if (not length.ok()) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to decompress chunk: {}",
                                        length.status().ToString()));
@@ -401,7 +401,7 @@ chunk_ptr chunk::slice(view_type view) const {
 
 auto as_arrow_buffer(chunk_ptr chunk) noexcept
   -> std::shared_ptr<arrow::Buffer> {
-  if (! chunk) {
+  if (not chunk) {
     return nullptr;
   }
   const auto* data = reinterpret_cast<const uint8_t*>(chunk->data());
@@ -516,6 +516,26 @@ auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
   };
 }
 
+auto join_chunks(std::vector<chunk_ptr> chunks) -> chunk_ptr {
+  auto total_size = size_t{0};
+  for (const auto& chunk : chunks) {
+    if (chunk) {
+      total_size += chunk->size();
+    }
+  }
+  if (total_size == 0) {
+    return chunk::make_empty();
+  }
+  auto bytes = std::vector<std::byte>{};
+  bytes.reserve(total_size);
+  for (auto& chunk : chunks) {
+    if (chunk) {
+      bytes.insert(bytes.end(), chunk->begin(), chunk->end());
+    }
+  }
+  return chunk::make(std::move(bytes));
+}
+
 auto size(const chunk_ptr& chunk) -> uint64_t {
   return chunk ? chunk->size() : 0;
 }
@@ -529,7 +549,7 @@ auto chunk_ptr::proxy::metadata() const noexcept -> const chunk_metadata& {
 }
 
 auto chunk_ptr::proxy::unique() const noexcept -> bool {
-  return ptr_ and ptr_->unique();
+  return ptr_ and ptr_->strong_reference_count() == 1;
 }
 
 } // namespace tenzir

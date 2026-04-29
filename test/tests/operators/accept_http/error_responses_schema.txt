@@ -1,0 +1,6 @@
+error: `responses./ingest.code` must be `int`
+ --> tests/operators/accept_http/error_responses_schema.tql:5:41
+  |
+5 | accept_http "127.0.0.1:8080", responses={"/ingest": {code: "201", content_type: "text/plain", body: "created"}} {
+  |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

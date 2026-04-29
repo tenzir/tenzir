@@ -1,0 +1,10 @@
+{
+  line: "hello-nats",
+  source: [
+    "tenzir",
+  ],
+  multi: [
+    "a",
+    "b",
+  ],
+}

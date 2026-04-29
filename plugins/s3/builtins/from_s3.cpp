@@ -237,15 +237,16 @@ private:
   event_order order_{event_order::ordered};
 };
 
-struct FromS3Args : ArrowFsArgs {
+struct FromS3Args : FromArrowFsArgs {
   bool anonymous = false;
   Option<located<record>> aws_iam;
 };
 
-class FromS3Operator final : public ArrowFsOperator {
+class FromS3Operator final : public FromArrowFsOperator {
 public:
   explicit FromS3Operator(FromS3Args args)
-    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+      args_{std::move(args)} {
   }
 
 protected:
@@ -453,12 +454,12 @@ class from_s3 final : public operator_plugin2<from_s3_operator>,
     auto d = Describer<FromS3Args, FromS3Operator>{};
     auto anon = d.named("anonymous", &FromS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &FromS3Args::aws_iam);
-    ArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
-      auto has_anon = ctx.get_location(anon).has_value();
+    FromArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
+      auto anon_value = ctx.get(anon).value_or(false);
       auto has_iam = ctx.get_location(aws_iam_arg).has_value();
-      if (has_anon and has_iam) {
+      if (anon_value and has_iam) {
         diagnostic::error("`anonymous` cannot be used with `aws_iam`")
-          .primary(ctx.get_location(anon).value_or(location::unknown))
+          .primary(*ctx.get_location(anon))
           .emit(ctx);
       }
       if (auto iam = ctx.get(aws_iam_arg); iam) {

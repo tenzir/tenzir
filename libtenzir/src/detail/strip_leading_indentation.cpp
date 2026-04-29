@@ -17,7 +17,7 @@ namespace tenzir::detail {
 auto strip_leading_indentation(std::string&& code) -> std::string {
   /// Yields each line, including the trailing newline.
   auto each_line = [](std::string_view code) -> generator<std::string_view> {
-    while (!code.empty()) {
+    while (not code.empty()) {
       auto right = code.find('\n');
       if (right == std::string_view::npos) {
         // Handle the no trailing newline case.
@@ -47,12 +47,14 @@ auto strip_leading_indentation(std::string&& code) -> std::string {
       }
     }
   }
-  if (indentation.empty())
+  if (indentation.empty()) {
     return code;
+  }
   auto stripped_code = std::string{};
   for (auto line : each_line(code)) {
-    if (line.starts_with(indentation))
+    if (line.starts_with(indentation)) {
       line.remove_prefix(indentation.size());
+    }
     stripped_code += line;
   }
   return stripped_code;

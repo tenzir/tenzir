@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_nats "unused",
+          _batch_size=0

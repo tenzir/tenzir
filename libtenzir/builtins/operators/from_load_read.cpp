@@ -243,9 +243,9 @@ public:
     } else {
       decompress = detail::resolve_decompressor(loader_path);
       auto read = p.accept_identifier();
-      TENZIR_DIAG_ASSERT(read && read->name == "read");
+      TENZIR_DIAG_ASSERT(read and read->name == "read");
       auto p_name = p.accept_shell_arg();
-      if (!p_name) {
+      if (not p_name) {
         diagnostic::error("expected parser name")
           .primary(p.current_span())
           .note(usage)
@@ -253,7 +253,7 @@ public:
           .throw_();
       }
       auto p_plugin = plugins::find<parser_parser_plugin>(p_name->inner);
-      if (!p_plugin) {
+      if (not p_plugin) {
         throw_parser_not_found(*p_name);
       }
       parser = p_plugin->parse_parser(p);
@@ -294,7 +294,7 @@ public:
     auto usage = "read <parser> <args>...";
     auto docs = "https://docs.tenzir.com/operators/read";
     auto name = p.accept_shell_arg();
-    if (!name) {
+    if (not name) {
       diagnostic::error("expected parser name")
         .primary(p.current_span())
         .usage(usage)
@@ -302,7 +302,7 @@ public:
         .throw_();
     }
     auto plugin = plugins::find<parser_parser_plugin>(name->inner);
-    if (!plugin) {
+    if (not plugin) {
       throw_parser_not_found(*name);
     }
     auto parser = plugin->parse_parser(p);

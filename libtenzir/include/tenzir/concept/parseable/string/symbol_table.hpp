@@ -38,7 +38,7 @@ struct symbol_table : parser_base<symbol_table<T>> {
     auto max_len = size_t{0};
     for (auto i = symbols.begin(); i != symbols.end(); ++i) {
       auto& [k, v] = *i;
-      TENZIR_ASSERT(!k.empty());
+      TENZIR_ASSERT(not k.empty());
       if (std::mismatch(k.begin(), k.end(), f, l).first == k.end()) {
         if (k.size() > max_len) {
           match = i;
@@ -46,8 +46,9 @@ struct symbol_table : parser_base<symbol_table<T>> {
         }
       }
     }
-    if (match == symbols.end())
+    if (match == symbols.end()) {
       return false;
+    }
     a = match->second;
     std::advance(f, max_len);
     return true;

@@ -15,7 +15,7 @@ TEST("return error when passed config value is not a list type") {
   const auto out
     = tenzir::detail::unpack_config_list_to_vector<caf::config_value::integer>(
       in);
-  CHECK(! out);
+  CHECK(not out);
 }
 
 TEST("return error when passed config value list has different type than "
@@ -27,7 +27,7 @@ TEST("return error when passed config value list has different type than "
   const auto out
     = tenzir::detail::unpack_config_list_to_vector<caf::config_value::integer>(
       in);
-  CHECK(! out);
+  CHECK(not out);
 }
 
 TEST("unpack list properly") {

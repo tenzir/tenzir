@@ -4,8 +4,6 @@
   fetchFromGitHub,
   cmake,
 }:
-let
-in
 stdenv.mkDerivation (finalAttrs: {
   pname = "pfs";
   version = "0.11.0";

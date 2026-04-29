@@ -92,7 +92,10 @@ def _shared_key_headers(
     # canonical resource includes the account name twice.
     canon_resource = f"/{ACCOUNT_NAME}/{ACCOUNT_NAME}{path}"
     if query:
-        params = urllib.parse.parse_qs(query)
+        # Azure's canonical resource must include every query param, including
+        # blank-value flags like `?comp=...`; default parse_qs drops them and
+        # yields a mismatched string-to-sign.
+        params = urllib.parse.parse_qs(query, keep_blank_values=True)
         for param_name in sorted(params):
             canon_resource += f"\n{param_name}:{','.join(sorted(params[param_name]))}"
 

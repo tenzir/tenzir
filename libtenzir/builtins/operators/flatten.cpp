@@ -39,7 +39,7 @@ public:
       auto result = tenzir::flatten(slice, separator_);
       // We only warn once per schema that we had to rename a set of fields.
       if (seen.insert(slice.schema()).second
-          && not result.renamed_fields.empty()) {
+          and not result.renamed_fields.empty()) {
         diagnostic::warning("renamed fields with conflicting names after "
                             "flattening: {}",
                             fmt::join(result.renamed_fields, ", "))

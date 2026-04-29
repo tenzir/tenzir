@@ -311,7 +311,7 @@ public:
     // Special case: allow "drop_null_fields this" to behave like no arguments
     if (inv.args.size() == 1) {
       auto selector = ast::field_path::try_from(inv.args[0]);
-      if (selector && selector->has_this() && selector->path().empty()) {
+      if (selector and selector->has_this() and selector->path().empty()) {
         // "this" with no path - treat as no arguments
         return std::make_unique<drop_null_fields_operator>(
           std::move(selectors));

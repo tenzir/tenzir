@@ -136,7 +136,7 @@ auto assign(const ast::meta& left, const series& right,
     auto begin = int64_t{0};
     auto begin_value = get_value(begin);
     for (auto i = int64_t{0}; i < array.length() + 1; ++i) {
-      auto emit = i == array.length() || get_value(i) != begin_value;
+      auto emit = i == array.length() or get_value(i) != begin_value;
       if (emit) {
         result.emplace_back(f(subslice(input, begin, i), begin_value));
         begin = i;

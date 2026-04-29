@@ -1,0 +1,9 @@
+---
+error: true
+skip: relies on Linux-specific errno for missing parent directory (macOS SIP reports read-only filesystem)
+---
+
+from {x: 1}
+to_file "/nonexistent/deeply/nested/path/out.json" {
+  write_ndjson
+}

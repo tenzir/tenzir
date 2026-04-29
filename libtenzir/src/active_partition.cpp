@@ -49,7 +49,7 @@ namespace {
 chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   flatbuffers::FlatBufferBuilder synopsis_builder;
   const auto ps = pack(synopsis_builder, synopsis);
-  if (! ps) {
+  if (not ps) {
     return {};
   }
   fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
@@ -76,11 +76,11 @@ void serialize(
     const auto qf = qualified_record_field{schema, offset};
     fields.emplace_back(std::string{qf.name()}, qf.type());
   }
-  TENZIR_ASSERT(! fields.empty());
+  TENZIR_ASSERT(not fields.empty());
   auto combined_schema = record_type{fields};
   // Create the partition flatbuffer.
   auto partition = pack_full(self->state().data, combined_schema);
-  if (! partition) {
+  if (not partition) {
     TENZIR_ERROR("{} failed to serialize {} with error: {}", *self, *self,
                  partition.error());
     self->state().persistence_promise.deliver(partition.error());
@@ -162,7 +162,7 @@ void active_partition_state::handle_slice(table_slice x) {
   auto first = x.offset();
   auto last = x.offset() + x.rows();
   const auto& schema = x.schema();
-  TENZIR_ASSERT(! schema.name().empty());
+  TENZIR_ASSERT(not schema.name().empty());
   auto it = data.type_ids.emplace(schema.name(), ids{}).first;
   auto& ids = it->second;
   TENZIR_ASSERT(first >= ids.size());
@@ -179,7 +179,7 @@ pack_full(const active_partition_state::serialization_data& x,
           const record_type& combined_schema) {
   flatbuffers::FlatBufferBuilder builder;
   auto uuid = pack(builder, x.id);
-  if (! uuid) {
+  if (not uuid) {
     return uuid.error();
   }
   // Serialize schema.
@@ -190,7 +190,7 @@ pack_full(const active_partition_state::serialization_data& x,
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
     auto ids = fbs::serialize_bytes(builder, kv.second);
-    if (! ids) {
+    if (not ids) {
       return ids.error();
     }
     fbs::partition::detail::LegacyTypeIDsBuilder tids_builder(builder);
@@ -201,7 +201,7 @@ pack_full(const active_partition_state::serialization_data& x,
   auto type_ids = builder.CreateVector(tids);
   // Serialize synopses.
   auto maybe_ps = pack(builder, *x.synopsis);
-  if (! maybe_ps) {
+  if (not maybe_ps) {
     return maybe_ps.error();
   }
   flatbuffers::Offset<fbs::partition::detail::StoreHeader> store_header = {};
@@ -256,7 +256,7 @@ active_partition_actor::behavior_type active_partition(
   self->state().data.store_id = self->state().store_plugin->name();
   auto builder_and_header = self->state().store_plugin->make_store_builder(
     self->state().filesystem, self->state().data.id, "ingest");
-  if (! builder_and_header) {
+  if (not builder_and_header) {
     TENZIR_ERROR("{} failed to create a store builder: {}", *self,
                  builder_and_header.error());
     return active_partition_actor::behavior_type::make_empty_behavior();
@@ -282,7 +282,7 @@ active_partition_actor::behavior_type active_partition(
       -> caf::result<partition_synopsis_ptr> {
       TENZIR_TRACE("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
-      TENZIR_ASSERT(! self->state().persistence_promise.source());
+      TENZIR_ASSERT(not self->state().persistence_promise.source());
       self->state().persist_path = part_path;
       self->state().synopsis_path = synopsis_path;
       self->state().persistence_promise
@@ -305,13 +305,13 @@ active_partition_actor::behavior_type active_partition(
       return self->state().persistence_promise;
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
-      if (! self->state().data.synopsis->schema) {
+      if (not self->state().data.synopsis->schema) {
         return caf::make_error(ec::logic_error,
                                "active partition must have a schema");
       }
       auto resolved = resolve(*self->state().taxonomies, query_context.expr,
                               self->state().data.synopsis->schema);
-      if (! resolved) {
+      if (not resolved) {
         return std::move(resolved.error());
       }
       query_context.expr = std::move(*resolved);

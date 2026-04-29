@@ -1,0 +1,3 @@
+from_stdin {
+  read_grok "%{IP:client} %{MY_WORD:method} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}", pattern_definitions="MY_WORD .*"
+}

@@ -53,7 +53,7 @@ public:
   friend bool operator==(const null_bitmap& x, const null_bitmap& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, null_bitmap& bm) {
+  friend auto inspect(Inspector& f, null_bitmap& bm) {
     return f.apply(bm.bitvector_);
   }
 

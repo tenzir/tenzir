@@ -25,7 +25,7 @@ command -v docker >/dev/null && {
       -v "${toplevel}:${toplevel}" \
       -e GIT_CONFIG_COUNT=1 \
       -e GIT_CONFIG_KEY_0=safe.directory \
-      -e GIT_CONFIG_VALUE_0=${toplevel} \
+      -e GIT_CONFIG_VALUE_0="${toplevel}" \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
@@ -35,7 +35,7 @@ command -v docker >/dev/null && {
       -v "${gitdir}:${gitdir}" \
       -e GIT_CONFIG_COUNT=1 \
       -e GIT_CONFIG_KEY_0=safe.directory \
-      -e GIT_CONFIG_VALUE_0=${toplevel} \
+      -e GIT_CONFIG_VALUE_0="${toplevel}" \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
@@ -50,7 +50,7 @@ command -v podman >/dev/null && {
       -v "${toplevel}:${toplevel}" \
       -e GIT_CONFIG_COUNT=1 \
       -e GIT_CONFIG_KEY_0=safe.directory \
-      -e GIT_CONFIG_VALUE_0=${toplevel} \
+      -e GIT_CONFIG_VALUE_0="${toplevel}" \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
@@ -60,7 +60,7 @@ command -v podman >/dev/null && {
       -v "${gitdir}:${gitdir}" \
       -e GIT_CONFIG_COUNT=1 \
       -e GIT_CONFIG_KEY_0=safe.directory \
-      -e GIT_CONFIG_VALUE_0=${toplevel} \
+      -e GIT_CONFIG_VALUE_0="${toplevel}" \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"

@@ -37,6 +37,7 @@ let
       libunwind,
       xxHash,
       rabbitmq-c,
+      libnats-c,
       yaml-cpp,
       yara,
       jansson,
@@ -79,7 +80,7 @@ let
       ...
     }:
     let
-      inherit (stdenv.hostPlatform) isMusl isStatic;
+      inherit (stdenv.hostPlatform) isStatic;
 
       version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
 
@@ -93,6 +94,7 @@ let
         "plugins/gcs"
         "plugins/google-cloud-pubsub"
         "plugins/kafka"
+        "plugins/nats"
         "plugins/nic"
         "plugins/parquet"
         "plugins/s3"
@@ -235,6 +237,7 @@ let
             fluent-bit
             libpcap
             libunwind
+            libnats-c
             rabbitmq-c
             rdkafka
             cyrus_sasl
@@ -286,7 +289,7 @@ let
             yaml-cpp
             xxHash
           ]
-          ++ lib.optionals stdenv.isLinux [
+          ++ lib.optionals (stdenv.isLinux && !(isStatic && stdenv.hostPlatform.isMusl)) [
             liburing
           ]
           ++ lib.optionals (!isStatic) [
@@ -371,7 +374,7 @@ let
           ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure = (
+          preConfigure =
             if isReleaseBuild then
               ''
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
@@ -380,8 +383,7 @@ let
               ''
                 version_build_metadata=$(basename $out | cut -d'-' -f 1)
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              ''
-          );
+              '';
 
           hardeningDisable = lib.optionals isStatic [
             "fortify"

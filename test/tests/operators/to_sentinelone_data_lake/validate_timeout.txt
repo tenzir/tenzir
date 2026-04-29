@@ -1,0 +1,6 @@
+error: `timeout` must be larger than zero
+ --> tests/operators/to_sentinelone_data_lake/validate_timeout.tql:6:87
+  |
+6 | to_sentinelone_data_lake "https://example.com", token="TOKEN", _dry_run=true, timeout=0s
+  |                                                                                       ^^ 
+  |

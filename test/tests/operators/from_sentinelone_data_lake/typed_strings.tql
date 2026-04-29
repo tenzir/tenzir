@@ -1,0 +1,12 @@
+---
+fixtures: [sentinelone]
+timeout: 60
+---
+
+// String values that the non_number_parser recognises as structured types:
+// IPv4 addresses become ip and CIDR blocks become subnet. Plain hostnames
+// stay as strings. Compare with typed_strings_raw.tql where raw=true
+// bypasses all inference and keeps every string as-is.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=secret("test-token-s1-12345", _literal=true),
+  query="select_typed_strings"

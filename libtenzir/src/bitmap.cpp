@@ -122,7 +122,7 @@ auto unpack(const fbs::Bitmap& from, bitmap& to) -> caf::error {
 bitmap_bit_range::bitmap_bit_range(const bitmap& bm) {
   auto visitor = [&](auto& b) {
     auto r = bit_range(b);
-    if (! r.done()) {
+    if (not r.done()) {
       bits_ = r.get();
     }
     range_ = std::move(r);

@@ -11,12 +11,14 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/dns.hpp>
 #include <tenzir/concept/parseable/string.hpp>
 #include <tenzir/concept/parseable/tenzir/ip.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
@@ -307,13 +309,183 @@ private:
   static auto callback(void* arg, int status, int /*timeouts*/,
                        struct hostent* host) -> void {
     auto* res = static_cast<forward_result*>(arg);
-    if (status == ARES_SUCCESS && host && host->h_name) {
+    if (status == ARES_SUCCESS and host and host->h_name) {
       res->hostname = host->h_name;
     }
     res->done();
   }
 
   std::vector<forward_result> results_;
+};
+
+auto default_result_field() -> ast::field_path {
+  auto result = ast::field_path::try_from(
+    ast::root_field{ast::identifier{"dns_lookup", location::unknown}});
+  TENZIR_ASSERT(result);
+  return std::move(*result);
+}
+
+auto append_forward_result(series_builder& builder,
+                           const ForwardDnsResult& result) -> void {
+  if (result.is_err()) {
+    builder.null();
+    return;
+  }
+  const auto* resolved = try_as<ForwardDnsResolved>(&result.unwrap());
+  if (not resolved or resolved->answers.empty()) {
+    builder.null();
+    return;
+  }
+  auto answers = builder.list();
+  for (const auto& answer : resolved->answers) {
+    auto row = answers.record();
+    row.field("address", answer.address);
+    row.field("type", answer.type);
+    row.field("ttl", std::chrono::duration_cast<duration>(answer.ttl));
+  }
+}
+
+auto append_reverse_result(series_builder& builder,
+                           const ReverseDnsResult& result) -> void {
+  if (result.is_err()) {
+    builder.null();
+    return;
+  }
+  const auto* resolved = try_as<ReverseDnsResolved>(&result.unwrap());
+  if (not resolved or resolved->hostname.empty()) {
+    builder.null();
+    return;
+  }
+  builder.record().field("hostname", resolved->hostname);
+}
+
+struct DnsLookupArgs {
+  ast::expression field;
+  ast::field_path result = default_result_field();
+  location operator_location = location::unknown;
+};
+
+class DnsLookup final : public Operator<table_slice, table_slice> {
+public:
+  explicit DnsLookup(DnsLookupArgs args) : args_{std::move(args)} {
+  }
+
+  DnsLookup(DnsLookup const&) = delete;
+  auto operator=(DnsLookup const&) -> DnsLookup& = delete;
+  DnsLookup(DnsLookup&&) noexcept = default;
+  auto operator=(DnsLookup&&) noexcept -> DnsLookup& = default;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto error = forward_dns_.startup_error();
+    if (not error) {
+      error = reverse_dns_.startup_error();
+    }
+    if (error) {
+      diagnostic::error("failed to initialize DNS resolver")
+        .primary(args_.operator_location, "reason: {}", error->error)
+        .emit(ctx);
+      startup_failed_ = true;
+    }
+    co_return;
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (startup_failed_) {
+      co_return;
+    }
+    auto fields = eval(args_.field, input, ctx.dh());
+    auto slice_start = int64_t{0};
+    for (auto& field : fields) {
+      auto result_series = series{};
+      if (is<ip_type>(field.type)) {
+        result_series = co_await resolve_reverse(field);
+      } else if (is<string_type>(field.type)) {
+        result_series = co_await resolve_forward(field);
+      } else {
+        if (auto kind = field.type.kind();
+            kind != type_kind{tag_v<null_type>}) {
+          diagnostic::warning("expected `ip` or `string`")
+            .primary(args_.field, "got {}", kind)
+            .emit(ctx.dh());
+        }
+        result_series = series::null(null_type{}, field.length());
+      }
+      const auto slice_end = slice_start + result_series.length();
+      auto output = assign(args_.result, std::move(result_series),
+                           subslice(input, slice_start, slice_end), ctx.dh());
+      slice_start = slice_end;
+      co_await push(std::move(output));
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return startup_failed_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto resolve_forward(const series& input) -> Task<series> {
+    auto results = std::vector<Option<Arc<ForwardDnsResult>>>{};
+    results.resize(detail::narrow<size_t>(input.length()));
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      auto row = size_t{0};
+      for (auto hostname : input.values3<string_type>()) {
+        const auto current_row = row++;
+        if (not hostname) {
+          continue;
+        }
+        scope.spawn(
+          [this, &results, current_row,
+           hostname = std::string{*hostname}]() mutable -> Task<void> {
+            results[current_row]
+              = co_await forward_dns_.resolve(std::move(hostname));
+          });
+      }
+      co_return;
+    });
+    auto builder = series_builder{};
+    for (const auto& result : results) {
+      if (not result) {
+        builder.null();
+        continue;
+      }
+      append_forward_result(builder, **result);
+    }
+    co_return builder.finish_assert_one_array();
+  }
+
+  auto resolve_reverse(const series& input) -> Task<series> {
+    auto results = std::vector<Option<Arc<ReverseDnsResult>>>{};
+    results.resize(detail::narrow<size_t>(input.length()));
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      auto row = size_t{0};
+      for (auto address : input.values3<ip_type>()) {
+        const auto current_row = row++;
+        if (not address) {
+          continue;
+        }
+        scope.spawn([this, &results, current_row,
+                     address = *address]() mutable -> Task<void> {
+          results[current_row] = co_await reverse_dns_.resolve(address);
+        });
+      }
+      co_return;
+    });
+    auto builder = series_builder{};
+    for (const auto& result : results) {
+      if (not result) {
+        builder.null();
+        continue;
+      }
+      append_reverse_result(builder, **result);
+    }
+    co_return builder.finish_assert_one_array();
+  }
+
+  DnsLookupArgs args_;
+  ForwardDnsResolver forward_dns_;
+  ReverseDnsResolver reverse_dns_;
+  bool startup_failed_ = false;
 };
 
 class dns_lookup_operator final : public crtp_operator<dns_lookup_operator> {
@@ -403,21 +575,27 @@ private:
   struct location operator_location_;
 };
 
-class plugin final : public virtual operator_plugin2<dns_lookup_operator> {
+class plugin final : public virtual operator_plugin2<dns_lookup_operator>,
+                     public virtual OperatorPlugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto field = ast::expression{};
-    auto result = ast::field_path::try_from(
-      ast::root_field{ast::identifier{"dns_lookup", location::unknown}});
-    TENZIR_ASSERT(result);
+    auto result = default_result_field();
     auto parser = argument_parser2::operator_(name());
     parser.positional("field", field, "string|ip");
-    parser.named("result", result);
+    parser.named_optional("result", result);
     TRY(parser.parse(inv, ctx));
-    TENZIR_ASSERT(result);
     return std::make_unique<dns_lookup_operator>(
-      std::move(field), std::move(*result), inv.self.get_location());
+      std::move(field), std::move(result), inv.self.get_location());
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<DnsLookupArgs, DnsLookup>{};
+    d.positional("field", &DnsLookupArgs::field, "string|ip");
+    d.named_optional("result", &DnsLookupArgs::result);
+    d.operator_location(&DnsLookupArgs::operator_location);
+    return d.without_optimize();
   }
 };
 

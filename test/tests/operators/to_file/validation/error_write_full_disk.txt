@@ -1,0 +1,6 @@
+error: failed to write to output stream: IOError: Error writing bytes to file. Detail: [errno 28] No space left on device
+ --> tests/operators/to_file/validation/error_write_full_disk.tql:7:9
+  |
+7 | to_file "/dev/full" {
+  |         ^^^^^^^^^^^ 
+  |

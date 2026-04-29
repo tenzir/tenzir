@@ -258,7 +258,7 @@ public:
         .on_load(callback)
         .fields(f.field("chunk", chunk), f.field("offset", offset));
     } else {
-      if (! x.is_serialized()) {
+      if (not x.is_serialized()) {
         auto serialized_x
           = table_slice{to_record_batch(x), x.schema(), serialize::yes};
         serialized_x.import_time(x.import_time());

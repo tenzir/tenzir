@@ -68,18 +68,18 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
-    if (! chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
     const auto* const end = begin + chunk->size();
-    if (ended_on_carriage_return && *begin == '\n') {
+    if (ended_on_carriage_return and *begin == '\n') {
       ++begin;
     };
     ended_on_carriage_return = false;
     for (const auto* current = begin; current != end; ++current) {
-      if (*current != '\n' && *current != '\r') {
+      if (*current != '\n' and *current != '\r') {
         continue;
       }
       const auto capacity = static_cast<size_t>(end - begin);
@@ -105,7 +105,7 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (! buffer.empty()) {
+  if (not buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
     co_yield simdjson::padded_string_view{buffer};
   }
@@ -114,7 +114,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
-    if (! chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
@@ -139,7 +139,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (! buffer.empty()) {
+  if (not buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
     co_yield simdjson::padded_string_view{buffer};
   }
@@ -1145,7 +1145,7 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
-  bool unordered = false;
+  event_order order = event_order::ordered;
   multi_series_builder::options msb_options;
 };
 
@@ -1156,12 +1156,15 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    args_.msb_options.settings.ordered = args_.order == event_order::ordered;
     parser_ = std::make_unique<default_parser>(
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
 
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
     co_await pusher_.wait();
+    co_return {};
   }
 
   auto process_task(Any, Push<table_slice>& push, OpCtx&)
@@ -1210,6 +1213,12 @@ public:
   }
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    if (args_.jobs > 0 and args_.order != event_order::unordered) {
+      diagnostic::error("`_jobs` requires unordered downstream")
+        .hint("wrap this operator in `unordered {{ ... }}`")
+        .emit(ctx.dh());
+      co_return;
+    }
     if (args_.jobs > 0 and finished_workers_ < args_.jobs) {
       // Parallel mode: workers have their own parsers.
       auto capacity = static_cast<uint32_t>(args_.jobs * 2);
@@ -1225,7 +1234,7 @@ public:
       co_return;
     }
     auto msb_options = args_.msb_options;
-    msb_options.settings.ordered = not args_.unordered;
+    msb_options.settings.ordered = args_.order == event_order::ordered;
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
                                               msb_options);
   }
@@ -1236,11 +1245,12 @@ public:
       co_return co_await read_output_queue_->dequeue();
     } else {
       co_await pusher_.wait();
+      co_return {};
     }
   }
 
   auto state() -> OperatorState override {
-    if (! draining_) {
+    if (not draining_) {
       return OperatorState::normal;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
@@ -1569,6 +1579,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadJson>{};
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
+    d.optimization_order(&ReadJsonArgs::order);
     d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
     return d.without_optimize();
   }
@@ -1612,17 +1623,11 @@ public:
                    .msb_options = {}}};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    // TODO: Integrate with the `unordered` operator instead.
-    auto unordered = d.named("_unordered", &ReadJsonArgs::unordered);
+    d.optimization_order(&ReadJsonArgs::order);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (auto j = ctx.get(jobs); j and *j == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
-          .primary(ctx.get_location(jobs).value_or(location::unknown))
-          .emit(ctx);
-      }
-      if (auto j = ctx.get(jobs); j and *j > 0 and not ctx.get(unordered)) {
-        diagnostic::error("`_jobs` requires `_unordered`")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
@@ -1669,6 +1674,7 @@ public:
     }};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    d.optimization_order(&ReadJsonArgs::order);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (ctx.get(jobs)) {
@@ -1731,6 +1737,7 @@ public:
                                      .schema_only_requires_schema_or_selector
                                      = false});
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    d.optimization_order(&ReadJsonArgs::order);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (ctx.get(jobs)) {
@@ -1983,7 +1990,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    if (! draining_) {
+    if (not draining_) {
       return OperatorState::normal;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
@@ -2072,9 +2079,9 @@ public:
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
     d.named("color", &WriteJsonArgs::color);
+    d.named("compact", &WriteJsonArgs::compact);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     if (not tql_) {
-      d.named("compact", &WriteJsonArgs::compact);
       d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
       d.validate([=](DescribeCtx& ctx) -> Empty {
         if (ctx.get(jobs_arg)) {

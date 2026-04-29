@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_server:
+      tls: true
+timeout: 60
+error: true
+---
+
+accept_http "127.0.0.1:0", tls={
+  certfile: env("HTTP_FIXTURE_TLS_CERTKEYFILE"),
+  min_version: "1.1",
+} {
+  read_json
+}
+head 0

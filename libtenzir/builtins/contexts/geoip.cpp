@@ -44,6 +44,12 @@ namespace {
 
 auto constexpr path_key = "db-path";
 
+struct GeoIpArgs {
+  located<std::string> name;
+  Option<located<std::string>> db_path;
+  location operator_location;
+};
+
 struct mmdb_deleter final {
   auto operator()(MMDB_s* ptr) noexcept -> void {
     if (ptr) {
@@ -58,7 +64,7 @@ using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
 using deleter_type = detail::unique_function<void() noexcept>;
 
 auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
-  if (!std::filesystem::exists(path)) {
+  if (not std::filesystem::exists(path)) {
     return diagnostic::error("")
       .note("failed to find path `{}`", path)
       .to_error();
@@ -128,7 +134,7 @@ public:
         auto size = entry_data_list->entry_data.data_size;
         auto sub_r = record{};
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
             *status = MMDB_INVALID_DATA_ERROR;
             return entry_data_list;
@@ -150,7 +156,7 @@ public:
         auto sub_l = list{};
         auto size = entry_data_list->entry_data.data_size;
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           entry_data_list
             = entry_data_list_to_list(entry_data_list, status, sub_l);
           if (*status != MMDB_SUCCESS) {
@@ -225,7 +231,7 @@ public:
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
             *status = MMDB_INVALID_DATA_ERROR;
             return entry_data_list;
@@ -255,7 +261,7 @@ public:
         auto size = entry_data_list->entry_data.data_size;
         auto sub_r = record{};
         for (entry_data_list = entry_data_list->next;
-             size > 0 && entry_data_list; size--) {
+             size > 0 and entry_data_list; size--) {
           entry_data_list = entry_data_list_to_list(entry_data_list, status, l);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
@@ -323,7 +329,7 @@ public:
   /// Emits context information for every event in `slice` in order.
   auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
-    if (!mmdb_) {
+    if (not mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
                                          "this context"));
@@ -657,7 +663,7 @@ struct v2_loader : public context_loader {
     std::string temp_file_name
       = dir_identifier + fmt::to_string(uuid::random());
     auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
-    if (!temp_file) {
+    if (not temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to open temp file on "
                                          "data load: {}",
@@ -666,7 +672,7 @@ struct v2_loader : public context_loader {
     temp_file.write(reinterpret_cast<const char*>(serialized->data()),
                     static_cast<std::streamsize>(serialized->size()));
     temp_file.flush();
-    if (!temp_file) {
+    if (not temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed write the temp file "
                                          "on data load: {}",
@@ -678,7 +684,7 @@ struct v2_loader : public context_loader {
     }
     auto mapped_mmdb = chunk::mmap(temp_file_name);
     temp_file.close();
-    if (!temp_file) {
+    if (not temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed close the temp file: {}",
                                          detail::describe_errno()));
@@ -692,7 +698,7 @@ private:
   const record global_config_;
 };
 
-class plugin : public virtual context_factory_plugin<"geoip"> {
+class plugin : public virtual ContextFactoryPluginCrtp<"geoip", plugin> {
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
@@ -722,7 +728,7 @@ class plugin : public virtual context_factory_plugin<"geoip"> {
     }
     auto mmdb = make_mmdb(db_path);
     auto mapped_mmdb = chunk::mmap(db_path);
-    if (!mapped_mmdb) {
+    if (not mapped_mmdb) {
       return diagnostic::error("unable to retrieve file contents into memory")
         .to_error();
     }
@@ -731,6 +737,67 @@ class plugin : public virtual context_factory_plugin<"geoip"> {
     }
     return std::make_unique<geoip_context>(std::move(*mmdb),
                                            std::move(mapped_mmdb.value()));
+  }
+
+public:
+  using Args = GeoIpArgs;
+
+  auto describe() const -> Description override {
+    auto d = Describer<GeoIpArgs, CreateOperator>{};
+    auto name_arg = d.positional("name", &GeoIpArgs::name);
+    auto db_path_arg = d.named("db_path", &GeoIpArgs::db_path);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto name, ctx.get(name_arg));
+      std::ignore = validate_name(name, ctx);
+      if (auto db_path = ctx.get(db_path_arg)) {
+        auto mapped_mmdb = chunk::mmap(db_path->inner);
+        if (not mapped_mmdb) {
+          diagnostic::error("unable to retrieve file contents into memory")
+            .primary(*db_path)
+            .emit(ctx);
+        }
+        auto mmdb = make_mmdb(db_path->inner);
+        if (not mmdb) {
+          diagnostic::error(mmdb.error())
+            .primary(*db_path)
+            .note("failed to open the GeoIP database")
+            .emit(ctx);
+        }
+      }
+      return {};
+    });
+    d.operator_location(&GeoIpArgs::operator_location);
+    return d.without_optimize();
+  }
+
+  static auto make_context(GeoIpArgs args, diagnostic_handler& dh)
+    -> failure_or<make_context_result> {
+    if (not args.db_path) {
+      return make_context_result{
+        std::move(args.name),
+        std::make_unique<geoip_context>(nullptr, nullptr),
+      };
+    }
+    auto mapped_mmdb = chunk::mmap(args.db_path->inner);
+    if (not mapped_mmdb) {
+      diagnostic::error("unable to retrieve file contents into memory")
+        .primary(*args.db_path)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto mmdb = make_mmdb(args.db_path->inner);
+    if (not mmdb) {
+      diagnostic::error(mmdb.error())
+        .primary(*args.db_path)
+        .note("failed to open the GeoIP database")
+        .emit(dh);
+      return failure::promise();
+    }
+    return make_context_result{
+      std::move(args.name),
+      std::make_unique<geoip_context>(std::move(*mmdb),
+                                      std::move(mapped_mmdb.value())),
+    };
   }
 
   auto make_context(operator_factory_invocation inv, session ctx) const

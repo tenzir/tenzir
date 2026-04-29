@@ -46,6 +46,11 @@ namespace tenzir::plugins::lookup_table {
 
 namespace {
 
+struct LookupTableArgs {
+  located<std::string> name;
+  location operator_location;
+};
+
 template <typename T>
 auto try_lossless_cast(T x) -> std::optional<T> {
   return x;
@@ -53,14 +58,14 @@ auto try_lossless_cast(T x) -> std::optional<T> {
 
 template <typename To, typename From>
 auto try_lossless_cast(From from) -> std::optional<To>
-  requires std::integral<From> && std::integral<To>
-           && (not std::same_as<From, To>)
+  requires std::integral<From> and std::integral<To>
+           and (not std::same_as<From, To>)
 {
   // Adapted from narrow.hpp
   auto to = detail::narrow_cast<To>(from);
   if (static_cast<From>(to) != from
-      && (detail::is_same_signedness<To, From>::value
-          || (to < To{}) != (from < From{}))) {
+      and (detail::is_same_signedness<To, From>::value
+           or (to < To{}) != (from < From{}))) {
     return std::nullopt;
   }
   return to;
@@ -68,11 +73,11 @@ auto try_lossless_cast(From from) -> std::optional<To>
 
 template <typename To, typename From>
 auto try_lossless_cast(From from) -> std::optional<To>
-  requires(std::floating_point<From> || std::floating_point<To>)
-          && (not std::same_as<From, To>)
+  requires(std::floating_point<From> or std::floating_point<To>)
+          and (not std::same_as<From, To>)
 {
   if constexpr (std::integral<To>) {
-    if (not std::is_signed_v<To> && from < From{}) {
+    if (not std::is_signed_v<To> and from < From{}) {
       return std::nullopt;
     }
   }
@@ -123,8 +128,8 @@ public:
       return data_;
     }
     auto visitor = [&]<typename T>(T&& x) -> data {
-      if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>
-                    || std::is_same_v<T, double>) {
+      if constexpr (std::is_same_v<T, int64_t> or std::is_same_v<T, uint64_t>
+                    or std::is_same_v<T, double>) {
         return to_original_data_impl<T>();
       } else {
         return x;
@@ -137,8 +142,8 @@ public:
   /// `*this` can be losslessly converted to.
   void populate_snapshot_data(auto& out) const {
     auto visitor = [&]<typename T>(const T& x) {
-      if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>
-                    || std::is_same_v<T, double>) {
+      if constexpr (std::is_same_v<T, int64_t> or std::is_same_v<T, uint64_t>
+                    or std::is_same_v<T, double>) {
         if (auto y = try_lossless_cast<int64_t>(x)) {
           out.emplace_back(data{*y});
         }
@@ -162,8 +167,8 @@ public:
 private:
   static auto from_data(data d) -> data {
     auto visitor = []<typename T>(T x) -> data {
-      if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>
-                    || std::is_same_v<T, double>) {
+      if constexpr (std::is_same_v<T, int64_t> or std::is_same_v<T, uint64_t>
+                    or std::is_same_v<T, double>) {
         // First try int64, then uint64, fall back to double
         if (auto y = try_lossless_cast<int64_t>(x)) {
           return data{*y};
@@ -885,7 +890,7 @@ struct v1_loader : public context_loader {
   }
 };
 
-class plugin : public virtual context_factory_plugin<"lookup-table"> {
+class plugin : public virtual ContextFactoryPluginCrtp<"lookup-table", plugin> {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     return caf::none;
@@ -894,6 +899,29 @@ class plugin : public virtual context_factory_plugin<"lookup-table"> {
   auto make_context(context_parameter_map) const
     -> caf::expected<std::unique_ptr<context>> override {
     return std::make_unique<lookup_table_context>();
+  }
+
+public:
+  using Args = LookupTableArgs;
+
+  auto describe() const -> Description override {
+    auto d = Describer<LookupTableArgs, CreateOperator>{};
+    auto name_arg = d.positional("name", &LookupTableArgs::name);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      TRY(auto name, ctx.get(name_arg));
+      std::ignore = validate_name(name, ctx);
+      return {};
+    });
+    d.operator_location(&LookupTableArgs::operator_location);
+    return d.without_optimize();
+  }
+
+  static auto make_context(LookupTableArgs args, diagnostic_handler&)
+    -> failure_or<make_context_result> {
+    return make_context_result{
+      std::move(args.name),
+      std::make_unique<lookup_table_context>(),
+    };
   }
 
   auto make_context(operator_factory_invocation inv, session ctx) const

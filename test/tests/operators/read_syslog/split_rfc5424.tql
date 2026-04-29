@@ -1,0 +1,6 @@
+from {
+  x: r#"<165>1 2023-01-01T00:00:00Z host app 123 - - Hello"#,
+}
+write_lines
+split_bytes 1
+read_syslog

@@ -38,7 +38,7 @@ public:
 
   template <class... Fields>
   constexpr bool fields(Fields&&... fs) {
-    return (fs(inspector_) && ...) && callback_();
+    return (fs(inspector_) and ...) and callback_();
   }
 
   constexpr inspection_object& pretty_name(std::string_view) noexcept {
@@ -57,7 +57,7 @@ public:
 
   template <class Callback>
   constexpr decltype(auto) on_save(Callback&& callback) {
-    if constexpr (!Inspector::is_loading) {
+    if constexpr (not Inspector::is_loading) {
       return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
         inspector_, std::forward<Callback>(callback)};
     } else {
@@ -96,7 +96,7 @@ private:
 
 template <class Inspector, class... Args>
 auto apply_all(Inspector& f, Args&&... args) {
-  return (f.apply(std::forward<Args>(args)) && ...);
+  return (f.apply(std::forward<Args>(args)) and ...);
 }
 
 template <class Inspector, class Enum>
@@ -105,8 +105,9 @@ bool inspect_enum(Inspector& f, Enum& x) {
   using underlying_type = std::underlying_type_t<Enum>;
   if constexpr (Inspector::is_loading) {
     underlying_type tmp;
-    if (!f.apply(tmp))
+    if (not f.apply(tmp)) {
       return false;
+    }
     x = static_cast<Enum>(tmp);
     return true;
   } else {

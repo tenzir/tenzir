@@ -21,8 +21,9 @@ public:
 
   template <class Iterator, class Attribute>
   static bool parse(Iterator& f, const Iterator& l, Attribute& x, char c) {
-    if (f == l || *f != c)
+    if (f == l or *f != c) {
       return false;
+    }
     detail::absorb(x, c);
     ++f;
     return true;

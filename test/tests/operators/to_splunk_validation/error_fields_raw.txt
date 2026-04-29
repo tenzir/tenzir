@@ -1,0 +1,9 @@
+error: `fields` is not supported with `raw`
+ --> tests/operators/to_splunk_validation/error_fields_raw.tql:8:18
+  |
+8 |           fields={tenant: "acme"}
+  |                  ^^^^^^^^^^^^^^^^ 
+  ⋮
+7 |           raw="message",
+  |               --------- 
+  |

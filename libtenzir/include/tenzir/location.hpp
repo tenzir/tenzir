@@ -16,6 +16,8 @@
 
 #include <fmt/format.h>
 
+#include <functional>
+
 namespace tenzir {
 
 struct into_location;
@@ -41,7 +43,7 @@ struct location {
   auto
   subloc(size_t pos, size_t count = std::numeric_limits<size_t>::max()) const
     -> location {
-    if (*this == unknown || pos > end) {
+    if (*this == unknown or pos > end) {
       return *this;
     }
     const auto first = begin + pos;
@@ -86,19 +88,20 @@ struct located {
 
   template <typename U>
     requires std::is_constructible_v<T, const U&>
-  explicit(!std::is_convertible_v<const U&, T>) located(const located<U>& other)
+  explicit(not std::is_convertible_v<const U&, T>)
+    located(const located<U>& other)
     : inner(other.inner), source(other.source) {
   }
 
   template <typename U>
     requires std::is_constructible_v<T, U&&>
-  explicit(!std::is_convertible_v<U&&, T>) located(located<U>&& other)
+  explicit(not std::is_convertible_v<U&&, T>) located(located<U>&& other)
     : inner(std::move(other.inner)), source(other.source) {
   }
 
   template <typename U>
     requires(std::is_constructible_v<T, const U&>
-             && std::is_assignable_v<T&, const U&>)
+             and std::is_assignable_v<T&, const U&>)
   auto operator=(const located<U>& other) -> located& {
     inner = other.inner;
     source = other.source;
@@ -106,7 +109,7 @@ struct located {
   }
 
   template <typename U>
-    requires(std::is_constructible_v<T, U> && std::is_assignable_v<T&, U>)
+    requires(std::is_constructible_v<T, U> and std::is_assignable_v<T&, U>)
   auto operator=(located<U&>& other) -> located& {
     inner = std::move(other.inner);
     source = other.source;
@@ -118,7 +121,7 @@ struct located {
   template <class Inspector>
   friend auto inspect(Inspector& f, located& x) {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->apply(x.inner) && dbg->append(" @ {:?}", x.source);
+      return dbg->apply(x.inner) and dbg->append(" @ {:?}", x.source);
     }
     return f.object(x).pretty_name("located").fields(
       f.field("inner", x.inner), f.field("source", x.source));
@@ -178,11 +181,12 @@ struct as_located {
 template <class T>
 struct is_located : detail::is_specialization_of<located, T> {};
 
-auto trace_panic(into_location trace, auto&& fun) -> decltype(auto) {
+template <class TraceFn, class Fun>
+auto trace_panic_impl(TraceFn&& trace_fn, Fun&& fun) -> decltype(auto) {
   try {
-    static_cast<void>(trace);
     return std::invoke(std::forward<decltype(fun)>(fun));
   } catch (panic_exception& panic) {
+    auto trace = into_location{std::invoke(std::forward<TraceFn>(trace_fn))};
     if (trace != location::unknown
         and panic.trace.begin == location::unknown.begin
         and panic.trace.end == location::unknown.end) {
@@ -191,6 +195,25 @@ auto trace_panic(into_location trace, auto&& fun) -> decltype(auto) {
     }
     throw std::move(panic);
   }
+}
+
+template <class Trace, class Fun>
+  requires(not std::is_invocable_v<Trace&>)
+auto trace_panic(Trace&& trace, Fun&& fun) -> decltype(auto) {
+  return trace_panic_impl(
+    [&]() -> decltype(auto) {
+      return std::forward<Trace>(trace);
+    },
+    std::forward<Fun>(fun));
+}
+
+template <class TraceFn, class Fun>
+  requires(
+    std::is_invocable_v<TraceFn&>
+    and std::is_constructible_v<into_location, std::invoke_result_t<TraceFn&>>)
+auto trace_panic(TraceFn&& trace_fn, Fun&& fun) -> decltype(auto) {
+  return trace_panic_impl(std::forward<TraceFn>(trace_fn),
+                          std::forward<Fun>(fun));
 }
 
 } // namespace tenzir

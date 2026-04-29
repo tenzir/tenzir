@@ -43,7 +43,8 @@ Checks: >
   -readability-redundant-inline-specifier,
   -readability-qualified-auto,
   -readability-uppercase-literal-suffix,
-WarningsAsErrors:      ''
+WarningsAsErrors: >
+  readability-operators-representation,
 HeaderFilterRegex:     '/tenzir/'
 CheckOptions:
   - key:             readability-implicit-bool-conversion.AllowPointerConditions
@@ -54,4 +55,6 @@ CheckOptions:
     value:           true
   - key:             cppcoreguidelines-avoid-do-while.IgnoreMacros
     value:           true
+  - key:             readability-operators-representation.BinaryOperators
+    value:           and;or;not
 ...

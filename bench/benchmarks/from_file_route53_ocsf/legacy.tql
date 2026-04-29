@@ -5,7 +5,7 @@ bench:
   min_version: "5.20.0"
 ---
 from_file env("BENCHMARK_INPUT_PATH") {
-  read_ndjson
+  read_ndjson raw=true
 }
 
 let $rcode_id = {

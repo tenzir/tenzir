@@ -47,6 +47,9 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="platform-client-cert-") as tmpdir:
         log_file = Path(tmpdir) / "output.log"
         env = os.environ.copy()
+        env.pop("TENZIR_NODE_BINARY", None)
+        for name in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+            env.pop(name, None)
         env.update(
             {
                 "TENZIR_TOKEN": "tnz_abcdefgh0123456789abcdef0123456789abcdef",

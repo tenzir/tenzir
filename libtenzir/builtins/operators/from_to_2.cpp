@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/compile_ctx.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/format_utils.hpp>
@@ -66,9 +66,9 @@ public:
       auto cast = slice.as<record_type>();
       TENZIR_ASSERT(cast);
       auto schema = tenzir::type{"tenzir.from", cast->type};
-      co_yield table_slice{record_batch_from_struct_array(
-                             schema.to_arrow_schema(), cast->array),
-                           schema};
+      co_yield table_slice{
+        record_batch_from_struct_array(schema.to_arrow_schema(), cast->array),
+        schema};
     }
   }
 
@@ -118,9 +118,9 @@ public:
     auto cast = std::move(result).unwrap().as<record_type>();
     TENZIR_ASSERT(cast);
     auto schema = tenzir::type{"tenzir.from", cast->type};
-    auto slice = table_slice{record_batch_from_struct_array(
-                               schema.to_arrow_schema(), cast->array),
-                             schema};
+    auto slice = table_slice{
+      record_batch_from_struct_array(schema.to_arrow_schema(), cast->array),
+      schema};
     read_bytes_counter_.add(slice.approx_bytes());
     co_await push(std::move(slice));
     next_ += 1;
@@ -147,8 +147,8 @@ class from_ir final : public ir::Operator {
 public:
   from_ir() = default;
 
-  explicit from_ir(std::vector<ast::expression> events)
-    : events_{std::move(events)} {
+  from_ir(std::vector<ast::expression> events, location self)
+    : events_{std::move(events)}, self_{self} {
   }
 
   auto name() const -> std::string override {
@@ -171,17 +171,21 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    // FIXME
-    TENZIR_ASSERT(input.is<void>());
+    if (input.is_not<void>()) {
+      diagnostic::error("expected void, got {}", input).primary(self_).emit(dh);
+      return failure::promise();
+    }
     return tag_v<table_slice>;
   }
 
   friend auto inspect(auto& f, from_ir& x) -> bool {
-    return f.apply(x.events_);
+    return f.object(x).fields(f.field("events", x.events_),
+                              f.field("self", x.self_));
   }
 
 private:
   std::vector<ast::expression> events_;
+  location self_;
 };
 
 class from_plugin2 final : public virtual operator_factory_plugin,
@@ -253,11 +257,11 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     for (auto& arg : inv.args) {
       TRY(arg.bind(ctx));
     }
-    return from_ir{std::move(inv.args)};
+    return from_ir{std::move(inv.args), inv.op.get_location()};
   }
 };
 

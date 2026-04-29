@@ -1,0 +1,11 @@
+suite: to-nats-roundtrip
+fixtures:
+  - nats:
+      subject: to_nats_test
+      stream: TO_NATS_TEST
+      durable: to_nats_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

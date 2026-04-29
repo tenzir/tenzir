@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+write_parquet compression_type="zstd", compression_level=99999999999999

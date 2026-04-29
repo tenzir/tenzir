@@ -3,11 +3,10 @@
 //    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
 //    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
-// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -20,6 +19,7 @@
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/concept/printable/std/chrono.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/detail/syslog.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
@@ -35,829 +35,6 @@ using namespace std::chrono_literals;
 namespace tenzir::plugins::syslog {
 
 namespace {
-
-/// Maximum allowed syslog message size for octet-counting (16MB).
-constexpr auto max_syslog_message_size = size_t{16 * 1024 * 1024};
-
-/// A parser that parses an optional value whose nullopt is presented as a dash.
-template <class Parser>
-struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
-  using attribute = typename std::decay_t<Parser>::attribute;
-
-  explicit maybe_null_parser(Parser parser) : parser_{std::move(parser)} {
-  }
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using namespace parser_literals;
-    // clang-format off
-    auto p = ('-'_p >> &(' '_p)) ->*[] {return Attribute{}; }
-             | parser_ ->*[](attribute in) { return Attribute{in}; };
-    // clang-format on
-    return p(f, l, x);
-  }
-
-  Parser parser_;
-};
-
-/// Wraps a parser and allows it to be null.
-/// @relates maybe_null_parser
-template <class Parser>
-auto maybe_null(Parser&& parser) {
-  return maybe_null_parser<Parser>{std::forward<Parser>(parser)};
-}
-
-/// A Syslog message header.
-struct header {
-  uint16_t facility;
-  uint16_t severity;
-  uint16_t version;
-  std::optional<time> ts;
-  std::optional<std::string> hostname;
-  std::optional<std::string> app_name;
-  std::optional<std::string> process_id;
-  std::optional<std::string> msg_id;
-};
-
-/// Parser for Syslog message headers.
-/// @relates header
-struct header_parser : parser_base<header_parser> {
-  using attribute = header;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using parsers::printable, parsers::rep;
-    auto is_prival = [](uint16_t in) {
-      return in <= 191;
-    };
-    auto to_facility_and_severity = [&](uint16_t in) {
-      // Retrieve facillity and severity from prival.
-      if constexpr (not std::is_same_v<Attribute, unused_type>) {
-        x.facility = in / 8;
-        x.severity = in % 8;
-      }
-    };
-    auto prival = ignore(
-      integral_parser<uint16_t, 3>{}.with(is_prival)->*to_facility_and_severity);
-    auto pri = '<' >> prival >> '>';
-    auto is_version = [](uint16_t in) {
-      return in > 0;
-    };
-    auto version = integral_parser<uint16_t, 3>{}.with(is_version);
-    auto hostname = maybe_null(rep(printable - ' ', 1, 255));
-    auto app_name = maybe_null(rep(printable - ' ', 1, 48));
-    auto process_id = maybe_null(rep(printable - ' ', 1, 128));
-    auto msg_id = maybe_null(rep(printable - ' ', 1, 32));
-    auto timestamp = maybe_null(parsers::time);
-    auto p = pri >> version >> ' ' >> timestamp >> ' ' >> hostname >> ' '
-             >> app_name >> ' ' >> process_id >> ' ' >> msg_id;
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.version, x.ts, x.hostname, x.app_name, x.process_id,
-               x.msg_id);
-    }
-  }
-};
-
-/// A parameter of a structured data element.
-using parameter = std::pair<std::string, std::string>;
-
-/// Parser for one structured data element parameter.
-/// @relates parameter
-struct parameter_parser : parser_base<parameter_parser> {
-  using attribute = parameter;
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::printable, parsers::rep, parsers::ch;
-    // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key = +(printable - '=' - ' ' - ']' - '"');
-    // \ is used to escape characters.
-    auto esc = ignore(ch<'\\'>);
-    // ], ", \ must be escaped.
-    auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
-    // We allow not escaping it in some situations to be more permissive.
-    auto can_come_after_closing_bracket = parsers::eoi | ' ' | '\n' | '[';
-    auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
-    auto not_escaped = printable - ('"' >> can_come_after_quote);
-    auto value = escaped | not_escaped;
-    auto quoted_value = '"' >> *value >> '"';
-    // Some emitters omit quotes around PARAM-VALUE entirely.
-    auto bare_value = ! ch<'"'> >> +(printable - ' ' - ';' - ']');
-    auto p = ' ' >> key >> '=' >> (quoted_value | bare_value);
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.first, x.second);
-    }
-  }
-};
-
-/// A structured data element.
-struct structured_data_element {
-  std::string id;
-  std::vector<parameter> params;
-};
-
-/// Parser for structured data elements.
-/// @relates structured_data_element
-struct structured_data_element_parser
-  : parser_base<structured_data_element_parser> {
-  using attribute = structured_data_element;
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    auto sd_id = +(parsers::printable - ' ' - '=' - ']' - '"');
-    auto p = '[' >> sd_id >> +parameter_parser{} >> ']';
-    return p(f, l, x.id, x.params);
-  }
-};
-
-/// Structured data of a Syslog message.
-/// Parser for structured data of a Syslog message.
-/// @relates structured_data
-struct structured_data_parser : parser_base<structured_data_parser> {
-  using attribute = std::vector<structured_data_element>;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parsers;
-    auto p = maybe_null(+structured_data_element_parser{});
-    return p(f, l, x);
-  }
-};
-
-// Check Point logs frequently omit the SD-ID and only emit parameters.
-// We normalize such payloads under a stable synthetic SD-ID.
-auto checkpoint_default_sdid = std::string{"checkpoint_2620"};
-
-/// Parser for one Check Point structured data element parameter.
-///
-/// Examples:
-/// - `action="Accept"`
-/// - `action:"Accept"`
-/// @relates parameter
-struct checkpoint_param : parser_base<checkpoint_param> {
-  using attribute = parameter;
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::printable, parsers::rep, parsers::ch;
-    using namespace parser_literals;
-    // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key_char = printable - '='_p - ' '_p - ']'_p - '"'_p;
-    auto key = +key_char;
-    auto checkpoint_key_char = key_char - ':'_p;
-    auto non_terminal_colon = ch<':'> >> ! '"'_p;
-    auto checkpoint_key
-      = rep(checkpoint_key_char | non_terminal_colon, 1, 31) >> ':'_p;
-    // \ is used to escape characters.
-    auto esc = '\\'_p;
-    // ], ", \ must be escaped.
-    auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
-    // We allow not escaping `"` in some situations to be more permissive.
-    auto can_come_after_closing_bracket
-      = parsers::eoi | ' '_p | '\n'_p | '['_p | ';'_p;
-    auto value_terminator
-      = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
-    auto value_char = escaped | (! value_terminator >> printable);
-    auto quoted_value = '"'_p >> *value_char >> '"'_p;
-    // Some emitters omit quotes around PARAM-VALUE entirely.
-    auto bare_value = ! '"'_p >> +(printable - ' '_p - ';'_p - ']'_p);
-    auto rfc_parameter = key >> '='_p >> (quoted_value | bare_value);
-    auto checkpoint_parameter = checkpoint_key >> (quoted_value | bare_value);
-    auto p = rfc_parameter | checkpoint_parameter;
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.first, x.second);
-    }
-  }
-};
-
-/// Parser for all Check Point structured data element parameters.
-///
-/// Example:
-/// - `action:"Accept"; conn_direction:"Incoming"; flags:"8667398"`
-struct checkpoint_params : parser_base<checkpoint_params> {
-  using attribute = std::vector<parameter>;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parser_literals;
-    auto sep = +' '_p | (';'_p >> *' '_p);
-    auto p = checkpoint_param{} % sep;
-    return p(f, l, x);
-  }
-};
-
-/// Parser for Check Point structured data elements.
-///
-/// Examples:
-/// - `[Fields@1 action:"Accept"; conn_direction:"Incoming"]`
-/// - `[action:"Accept"; conn_direction:"Incoming"]`
-/// @relates structured_data_element
-struct checkpoint_structured_data_element_parser
-  : parser_base<checkpoint_structured_data_element_parser> {
-  using attribute = structured_data_element;
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using namespace parser_literals;
-    using parsers::printable, parsers::rep, parsers::ch;
-    auto sd_id = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
-    auto opt_sd_id = -(sd_id >> +' '_p)->*[](std::optional<std::string> id) {
-      return id ? std::move(*id) : checkpoint_default_sdid;
-    };
-    auto params = checkpoint_params{};
-    auto p = '[' >> opt_sd_id >> params >> ']';
-    return p(f, l, x.id, x.params);
-  }
-};
-
-/// Parser for Check Point structured data of a Syslog message.
-///
-/// Example:
-/// - `[action:"Accept"; conn_direction:"Incoming"][origin="gw1"]`
-/// @relates structured_data
-struct checkpoint_structured_data_parser
-  : parser_base<checkpoint_structured_data_parser> {
-  using attribute = std::vector<structured_data_element>;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parsers;
-    auto p = maybe_null(+checkpoint_structured_data_element_parser{});
-    return p(f, l, x);
-  }
-};
-
-/// Content of a Syslog message.
-using message_content = std::string;
-
-/// Parser for Syslog message content.
-/// @relates message_content
-struct message_content_parser : parser_base<message_content_parser> {
-  using attribute = message_content;
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    if (f == l) {
-      return false;
-    }
-    auto remaining = std::string_view{&*f, static_cast<size_t>(l - f)};
-    auto bom = std::string_view{"\xEF\xBB\xBF"};
-    if (remaining.starts_with(bom)) {
-      remaining.remove_prefix(bom.size());
-    }
-    if (remaining.empty()) {
-      return false;
-    }
-    if constexpr (not std::is_same_v<Attribute, unused_type>) {
-      x = std::string{remaining};
-    }
-    f = l;
-    return true;
-  }
-};
-
-/// A Syslog message.
-struct message {
-  header hdr;
-  std::vector<structured_data_element> data;
-  std::optional<message_content> msg;
-};
-
-auto merge_duplicate_sd_ids(std::vector<structured_data_element>& data)
-  -> void {
-  // Combine duplicate SD element IDs. Deduplicate param keys (last value wins)
-  // to avoid writing the same field twice to the builder.
-  // Typically 0-3 elements, so linear scan is optimal.
-  for (size_t i = 1; i < data.size();) {
-    auto merged = false;
-    for (size_t j = 0; j < i; ++j) {
-      if (data[j].id == data[i].id) {
-        auto& target = data[j].params;
-        auto& source = data[i].params;
-        for (auto& [sk, sv] : source) {
-          auto found = false;
-          for (auto& [tk, tv] : target) {
-            if (tk == sk) {
-              tv = std::move(sv);
-              found = true;
-              break;
-            }
-          }
-          if (not found) {
-            target.emplace_back(std::move(sk), std::move(sv));
-          }
-        }
-        data.erase(data.begin() + detail::narrow_cast<ptrdiff_t>(i));
-        merged = true;
-        break;
-      }
-    }
-    if (not merged) {
-      ++i;
-    }
-  }
-}
-
-/// Parser for Syslog messages.
-/// @relates message
-struct message_parser : parser_base<message_parser> {
-  using attribute = message;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parsers;
-    auto p = header_parser{} >> ' '
-             >> (structured_data_parser{} | checkpoint_structured_data_parser{})
-             >> -(' ' >> message_content_parser{});
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      return p(f, l, x.hdr, x.data, x.msg);
-    }
-  }
-};
-
-/// A legacy (RFC 3164) Syslog message.
-struct legacy_message {
-  std::optional<uint16_t> facility;
-  std::optional<uint16_t> severity;
-  std::string timestamp;
-  std::optional<std::string> host;
-  std::optional<std::string> tag;
-  std::optional<std::string> process_id;
-  std::vector<structured_data_element> data;
-  std::string content;
-};
-
-// Timestamp as specified by RFC3164:
-// Mmm dd hh:mm:ss
-struct legacy_message_timestamp_parser
-  : parser_base<legacy_message_timestamp_parser> {
-  using attribute = std::string;
-
-  template <class Iterator, class Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    const auto word = +(parsers::printable - parsers::space);
-    const auto ws = +parsers::space;
-    const auto is_month = [](const std::string& mon) {
-      return mon == "Jan" || mon == "Feb" || mon == "Mar" || mon == "Apr"
-             || mon == "May" || mon == "Jun" || mon == "Jul" || mon == "Aug"
-             || mon == "Sep" || mon == "Oct" || mon == "Nov" || mon == "Dec";
-    };
-    const auto is_day = [&](const std::string& day) -> bool {
-      const auto p = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t day) {
-        return day <= 31;
-      });
-      return p(day, unused);
-    };
-    const auto is_year = [&](const std::string& year) -> bool {
-      const auto p = integral_parser<uint16_t, 4>{}.with([](uint16_t year) {
-        // Reasonable-ish assumption for a year
-        return year >= 1900 && year <= 2100;
-      });
-      return p(year, unused);
-    };
-    const auto is_time = [&](const std::string& time) -> bool {
-      const auto hour_parser
-        = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t hour) {
-            return hour <= 23;
-          });
-      const auto minsec_parser
-        = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t x) {
-            return x <= 59;
-          });
-      const auto p
-        = hour_parser >> ':' >> minsec_parser >> ':' >> minsec_parser;
-      auto sv = std::string_view{time};
-      const auto* f = sv.begin();
-      const auto* const l = sv.end();
-      return p(f, l, unused) && f == l;
-    };
-    auto p = word.with(is_month) >> ws >> word.with(is_day) >> ws
-             >> ~(word.with(is_year) >> ws) >> word.with(is_time);
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      return p(f, l, unused);
-    } else {
-      std::array<std::string, 6> elems{};
-      if (not p(f, l, elems[0], elems[1], elems[2], elems[3], elems[4],
-                elems[5])) {
-        return false;
-      }
-      x = fmt::to_string(fmt::join(elems, ""));
-      return true;
-    }
-  }
-};
-
-/// Parser for legacy Syslog messages.
-/// @relates legacy_message
-struct legacy_message_parser : parser_base<legacy_message_parser> {
-  using attribute = legacy_message;
-
-  template <typename Iterator, typename Attribute>
-  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
-    using namespace parser_literals;
-    const auto word = +(parsers::printable - (parsers::space | ':'));
-    const auto ws = +parsers::space;
-    const auto wsignore = ignore(ws);
-    const auto is_prival = [](uint16_t in) {
-      return in <= 191;
-    };
-    const auto to_facility_and_severity = [&](uint16_t in) {
-      if constexpr (not std::is_same_v<Attribute, unused_type>) {
-        x.facility = in / 8;
-        x.severity = in % 8;
-      }
-    };
-    // PRIORITY is delimited by <angle brackets>, and is optional
-    const auto prival = ignore(
-      integral_parser<uint16_t, 3>{}.with(is_prival)->*to_facility_and_severity);
-    const auto priority_parser = '<' >> prival >> '>';
-    // TIMESTAMP is as specified by RFC (see above)
-    // Alternatively, try anything that parsers::time would also accept
-    const auto timestamp_parser = legacy_message_timestamp_parser{}
-                                  | (parsers::time->*([](tenzir::time t) {
-                                      return tenzir::to_string(t);
-                                    }));
-    // HOST is just whitespace-delimited characters without colon, because the
-    // colon comes typically after the TAG.
-    const auto host_parser = word;
-    // Then, comes the MESSAGE itself.
-    //
-    // We're diverging from the RFC to produce potentially a little more
-    // user-friendly results.
-    //
-    // In the RFC, TAG is up to 32 alnum characters, and CONTENT is the rest.
-    // So, in a message like "foo[123]: bar", TAG is "foo", and CONTENT is
-    // "[123]: bar". Because the TAG is terminated by the first non-alnum
-    // character, in a message like "foo: bar", the RFC-behavior is even more
-    // odd: TAG is "foo", and CONTENT is ": bar".
-    //
-    // Instead, we try to detect a tag ("foo"), and process id ("123"), and
-    // include the content without any of these, and any preceding whitespace.
-    // Additionally, we include the MESSAGE in its entirety, for the case that
-    // there's really no app name and pid.
-    const auto p = ~(priority_parser >> ignore(*parsers::space))
-                   >> timestamp_parser >> wsignore
-                   >> -(host_parser >> wsignore);
-    std::string_view message;
-    if constexpr (std::is_same_v<Attribute, unused_type>) {
-      if (not p(f, l, unused)) {
-        return false;
-      }
-    } else {
-      if (not p(f, l, x.timestamp, x.host)) {
-        return false;
-      }
-      message = std::string_view{f, l};
-    }
-    // Parse MESSAGE into its constituent parts: TAG, PROCESS_ID, and CONTENT.
-    if constexpr (not std::is_same_v<Attribute, unused_type>) {
-      // Even though alnum characters are the only one that the RFC specifies,
-      // the reality is more diverse, e.g.,
-      // Microsoft-Windows-Security-Mitigations[4340] is a thing.
-      const auto tag_id_parser = +(parsers::alnum | parsers::ch<'-'>
-                                   | parsers::ch<'_'> | parsers::ch<'.'>);
-      const auto process_id_parser = '[' >> +(parsers::printable - ']') >> ']';
-      // To assess whether a TAG is present, we want at least one whitespace
-      // character after the ":". Otherwise we may end up in a situation where
-      // we eagerly grab characters from CONTENT when it has a prefix of alnum
-      // characters followed by a colon, e.g., as in the CEF and LEEF formats.
-      const auto tag_parser = -tag_id_parser >> -process_id_parser >> ':'
-                              >> (wsignore | parsers::eoi);
-      auto begin = message.begin();
-      const auto end = message.end();
-      if (not tag_parser(begin, end, x.tag, x.process_id)) {
-        x.tag = std::nullopt;
-        x.process_id = std::nullopt;
-      }
-      // Some RFC 3164 emitters prefix CONTENT with RFC 5424-style structured
-      // data.
-      const auto structured_data_prefix
-        = &'['_p
-          >> (structured_data_parser{} | checkpoint_structured_data_parser{})
-          >> -(' '_p >> message_content_parser{}) >> *' '_p >> parsers::eoi;
-      auto data = std::vector<structured_data_element>{};
-      auto msg = std::optional<message_content>{};
-      if (structured_data_prefix(begin, end, data, msg)) {
-        x.data = std::move(data);
-        x.content = std::move(msg).value_or("");
-      } else {
-        x.content.assign(begin, end);
-      }
-    }
-    return true;
-  }
-};
-
-template <typename Message>
-struct syslog_row {
-  syslog_row(Message msg, size_t line_no, std::string raw = {})
-    : parsed(std::move(msg)),
-      starting_line_no(line_no),
-      raw_message(std::move(raw)) {
-  }
-
-  void emit_diag(std::string_view parser_name, diagnostic_handler& diag) const {
-    if (line_count == 1) {
-      diagnostic::error("syslog parser ({}) failed", parser_name)
-        .note("input line number {}", starting_line_no)
-        .emit(diag);
-      return;
-    }
-    diagnostic::error("syslog parser ({}) failed", parser_name)
-      .note("input lines number {} to {}", starting_line_no,
-            starting_line_no + line_count - 1)
-      .emit(diag);
-  }
-
-  Message parsed;
-  size_t starting_line_no;
-  size_t line_count{1};
-  std::string raw_message;
-};
-
-struct syslog_builder {
-public:
-  using message_type = message;
-  using row_type = syslog_row<message_type>;
-
-  syslog_builder(multi_series_builder::options opts, diagnostic_handler& dh,
-                 std::optional<ast::field_path> raw_message_field
-                 = std::nullopt)
-    : timeout{opts.settings.timeout},
-      merge{opts.settings.merge},
-      builder{std::move(opts), dh},
-      raw_message_field_{std::move(raw_message_field)} {
-  }
-
-  auto add_new(row_type&& row) -> void {
-    if (last_message) {
-      finish_last();
-    }
-    last_message_time = time::clock::now();
-    last_message.emplace(std::move(row));
-  }
-
-  auto add_line_to_latest(std::string_view line) -> bool {
-    if (not last_message) {
-      return false;
-    }
-    auto& latest = *last_message;
-    // Check size limit before appending to prevent unbounded accumulation.
-    auto current_size = latest.parsed.msg.value_or("").size();
-    if (raw_message_field_) {
-      current_size = std::max(current_size, latest.raw_message.size());
-    }
-    if (current_size + line.size() + 1 > max_syslog_message_size) {
-      return false;
-    }
-    if (not latest.parsed.msg) {
-      latest.parsed.msg.emplace(line);
-    } else {
-      latest.parsed.msg->push_back('\n');
-      latest.parsed.msg->append(line);
-    }
-    if (raw_message_field_) {
-      latest.raw_message.push_back('\n');
-      latest.raw_message.append(line);
-    }
-    ++latest.line_count;
-    return true;
-  }
-
-  auto yield_ready() -> std::vector<table_slice> {
-    if (last_message and time::clock::now() - last_message_time > timeout) {
-      finish_last();
-    }
-    return builder.yield_ready_as_table_slice();
-  }
-
-  auto finalize_as_table_slice() -> std::vector<table_slice> {
-    if (last_message) {
-      finish_last();
-    }
-    return builder.finalize_as_table_slice();
-  }
-
-  auto finalize() -> std::vector<series> {
-    if (last_message) {
-      finish_last();
-    }
-    return builder.finalize();
-  }
-
-  auto finish_last() -> void {
-    TENZIR_ASSERT(last_message);
-    auto r = builder.record();
-    auto& row = last_message->parsed;
-    r.exact_field("facility").data(row.hdr.facility);
-    r.exact_field("severity").data(row.hdr.severity);
-    r.exact_field("version").data(row.hdr.version);
-    r.exact_field("timestamp").data(std::move(row.hdr.ts));
-    r.exact_field("hostname").data(std::move(row.hdr.hostname));
-    r.exact_field("app_name").data(std::move(row.hdr.app_name));
-    r.exact_field("process_id").data(std::move(row.hdr.process_id));
-    r.exact_field("message_id").data(std::move(row.hdr.msg_id));
-    if (merge) {
-      merge_duplicate_sd_ids(row.data);
-    }
-    auto sd = r.exact_field("structured_data").record();
-    for (auto& elem : row.data) {
-      auto elem_rec = sd.field(elem.id).record();
-      for (auto& [k, v] : elem.params) {
-        elem_rec.field(k).data_unparsed(std::move(v));
-      }
-    }
-    r.exact_field("message").data(std::move(row.msg));
-    if (raw_message_field_) {
-      r.field(*raw_message_field_).data(std::move(last_message->raw_message));
-    }
-    last_message.reset();
-  }
-
-  duration timeout;
-  bool merge;
-  multi_series_builder builder;
-  time last_message_time;
-  std::optional<row_type> last_message{};
-  std::optional<ast::field_path> raw_message_field_;
-};
-
-struct legacy_syslog_builder {
-public:
-  using message_type = legacy_message;
-  using row_type = syslog_row<message_type>;
-
-  legacy_syslog_builder(multi_series_builder::options opts,
-                        diagnostic_handler& dh,
-                        std::optional<ast::field_path> raw_message_field
-                        = std::nullopt,
-                        bool emit_structured_data = false)
-    : timeout{opts.settings.timeout},
-      builder{std::move(opts), dh},
-      raw_message_field_{std::move(raw_message_field)},
-      emit_structured_data_{emit_structured_data} {
-  }
-
-  auto add_new(row_type&& row) -> void {
-    if (last_message) {
-      finish_last();
-    }
-    last_message_time = time::clock::now();
-    last_message.emplace(std::move(row));
-  }
-
-  auto yield_ready() -> std::vector<table_slice> {
-    if (last_message and time::clock::now() - last_message_time > timeout) {
-      finish_last();
-    }
-    return builder.yield_ready_as_table_slice();
-  }
-
-  auto finalize_as_table_slice() -> std::vector<table_slice> {
-    if (last_message) {
-      finish_last();
-    }
-    return builder.finalize_as_table_slice();
-  }
-
-  auto finalize() -> std::vector<series> {
-    if (last_message) {
-      finish_last();
-    }
-    return builder.finalize();
-  }
-
-  auto add_line_to_latest(std::string_view line) -> bool {
-    if (not last_message) {
-      return false;
-    }
-    auto& latest = *last_message;
-    // Check size limit before appending to prevent unbounded accumulation.
-    auto current_size = latest.parsed.content.size();
-    if (raw_message_field_) {
-      current_size = std::max(current_size, latest.raw_message.size());
-    }
-    if (current_size + line.size() + 1 > max_syslog_message_size) {
-      return false;
-    }
-    latest.parsed.content.push_back('\n');
-    latest.parsed.content.append(line);
-    if (raw_message_field_) {
-      latest.raw_message.push_back('\n');
-      latest.raw_message.append(line);
-    }
-    ++latest.line_count;
-    return true;
-  }
-
-  auto finish_last() -> void {
-    TENZIR_ASSERT(last_message);
-    auto& msg = last_message->parsed;
-    TENZIR_ASSERT(emit_structured_data_ or msg.data.empty());
-    auto r = builder.record();
-    r.exact_field("facility").data(msg.facility);
-    r.exact_field("severity").data(msg.severity);
-    r.exact_field("timestamp").data_unparsed(std::move(msg.timestamp));
-    r.exact_field("hostname").data(std::move(msg.host));
-    r.exact_field("app_name").data(std::move(msg.tag));
-    r.exact_field("process_id").data(std::move(msg.process_id));
-    if (emit_structured_data_) {
-      merge_duplicate_sd_ids(msg.data);
-      auto sd = r.exact_field("structured_data").record();
-      for (auto& elem : msg.data) {
-        auto elem_rec = sd.field(elem.id).record();
-        for (auto& [k, v] : elem.params) {
-          elem_rec.field(k).data_unparsed(std::move(v));
-        }
-      }
-    }
-    r.exact_field("content").data(msg.content);
-    if (raw_message_field_) {
-      r.field(*raw_message_field_).data(std::move(last_message->raw_message));
-    }
-    last_message.reset();
-  }
-
-  duration timeout;
-  multi_series_builder builder;
-  time last_message_time;
-  std::optional<row_type> last_message{};
-  std::optional<ast::field_path> raw_message_field_;
-  bool emit_structured_data_;
-};
-
-struct unknown_syslog_builder {
-public:
-  using message_type = std::string;
-  using row_type = syslog_row<message_type>;
-
-  unknown_syslog_builder(multi_series_builder::options opts,
-                         diagnostic_handler& dh)
-    : builder{std::move(opts), dh} {
-  }
-
-  auto yield_ready() -> std::vector<table_slice> {
-    return builder.yield_ready_as_table_slice();
-  }
-
-  auto finalize_as_table_slice() -> std::vector<table_slice> {
-    return builder.finalize_as_table_slice();
-  }
-
-  auto finalize() -> std::vector<series> {
-    return builder.finalize();
-  }
-
-  auto add_new(row_type&& row) -> void {
-    builder.record().exact_field("syslog_message").data(std::move(row.parsed));
-  }
-
-  multi_series_builder builder;
-};
-
-enum class builder_tag {
-  syslog_builder,
-  legacy_syslog_builder,
-  legacy_structured_syslog_builder,
-  unknown_syslog_builder,
-};
-
-auto get_legacy_builder_tag(legacy_message const& msg) -> builder_tag {
-  return msg.data.empty() ? builder_tag::legacy_syslog_builder
-                          : builder_tag::legacy_structured_syslog_builder;
-}
-
-auto infuse_new_schema(multi_series_builder::options o)
-  -> multi_series_builder::options {
-  if (try_as<multi_series_builder::policy_default>(o.policy)) {
-    o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc5424");
-  }
-  return o;
-}
-
-auto infuse_legacy_schema(multi_series_builder::options o)
-  -> multi_series_builder::options {
-  if (try_as<multi_series_builder::policy_default>(o.policy)) {
-    o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc3164");
-  }
-  return o;
-}
-
-auto infuse_legacy_structured_schema(multi_series_builder::options o)
-  -> multi_series_builder::options {
-  if (try_as<multi_series_builder::policy_default>(o.policy)) {
-    o.policy.emplace<multi_series_builder::policy_schema>(
-      "syslog.rfc3164.structured");
-  }
-  return o;
-}
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
@@ -989,11 +166,6 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     co_yield std::move(s);
   }
 }
-
-/// RFC 6587 octet-counting length prefix parser.
-/// Parses: MSG-LEN SP
-/// where MSG-LEN is a positive decimal (NONZERO-DIGIT *DIGIT per RFC 6587).
-inline constexpr auto octet_length_parser = parsers::u32 >> ' ';
 
 inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
   -> generator<std::optional<std::string_view>> {
@@ -1473,232 +645,173 @@ public:
       parser, true, multi_series_builder_argument_parser::merge_option::hidden);
     TRY(parser.parse(inv, ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
-    return function_use::make(
-      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
-       octet_counting, expr = std::move(expr)](evaluator eval, session ctx) {
-        return map_series(eval(expr), [&](series arg) {
-          auto f = detail::overload{
-            [&](const arrow::NullArray&) -> multi_series {
-              return arg;
-            },
-            [&](const arrow::StringArray& arg) -> multi_series {
-              auto builder = syslog_builder{infuse_new_schema(msb_opts), ctx};
-              auto legacy_builder
-                = legacy_syslog_builder{infuse_legacy_schema(msb_opts), ctx};
-              auto legacy_structured_builder = legacy_syslog_builder{
-                infuse_legacy_structured_schema(msb_opts), ctx, std::nullopt,
-                true};
-              auto last = builder_tag::syslog_builder;
-              auto res = multi_series{};
-              /// flushes the current builder, if its not the same as
-              /// `new_builder`
-              const auto maybe_flush = [&](builder_tag new_builder) {
-                if (new_builder == last) {
-                  return;
+    return function_use::make([call = inv.call.get_location(),
+                               msb_opts = std::move(msb_opts), octet_counting,
+                               expr
+                               = std::move(expr)](evaluator eval, session ctx) {
+      return map_series(eval(expr), [&](series arg) {
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) -> multi_series {
+            return arg;
+          },
+          [&](const arrow::StringArray& arg) -> multi_series {
+            auto builder = syslog_builder{infuse_new_schema(msb_opts), ctx};
+            auto legacy_builder
+              = legacy_syslog_builder{infuse_legacy_schema(msb_opts), ctx};
+            auto legacy_structured_builder
+              = legacy_syslog_builder{infuse_legacy_structured_schema(msb_opts),
+                                      ctx, std::nullopt, true};
+            auto last = builder_tag::syslog_builder;
+            auto res = multi_series{};
+            /// flushes the current builder, if its not the same as
+            /// `new_builder`
+            const auto maybe_flush = [&](builder_tag new_builder) {
+              if (new_builder == last) {
+                return;
+              }
+              switch (last) {
+                using enum builder_tag;
+                case syslog_builder: {
+                  res.append(multi_series{builder.finalize()});
+                  break;
                 }
-                switch (last) {
-                  using enum builder_tag;
-                  case syslog_builder: {
-                    res.append(multi_series{builder.finalize()});
-                    break;
-                  }
-                  case legacy_syslog_builder: {
-                    res.append(multi_series{legacy_builder.finalize()});
-                    break;
-                  }
-                  case legacy_structured_syslog_builder: {
-                    res.append(
-                      multi_series{legacy_structured_builder.finalize()});
-                    break;
-                  }
-                  case unknown_syslog_builder:
-                    TENZIR_UNREACHABLE();
+                case legacy_syslog_builder: {
+                  res.append(multi_series{legacy_builder.finalize()});
+                  break;
                 }
-              };
-              /// adds a null to the current builder
-              const auto add_null = [&]() {
-                switch (last) {
-                  using enum builder_tag;
-                  case syslog_builder: {
-                    builder.builder.null();
-                    break;
-                  }
-                  case legacy_syslog_builder: {
-                    legacy_builder.builder.null();
-                    break;
-                  }
-                  case legacy_structured_syslog_builder: {
-                    legacy_structured_builder.builder.null();
-                    break;
-                  }
-                  case unknown_syslog_builder:
-                    TENZIR_UNREACHABLE();
+                case legacy_structured_syslog_builder: {
+                  res.append(
+                    multi_series{legacy_structured_builder.finalize()});
+                  break;
                 }
-              };
-              /// Tries to parse input as syslog; returns the builder_tag
-              /// indicating which parser succeeded, or unknown_syslog_builder
-              /// if parsing failed.
-              const auto try_parse
-                = [&](std::string_view input, message& msg,
-                      legacy_message& legacy_msg) -> builder_tag {
-                auto f = input.begin();
-                auto l = input.end();
-                if (message_parser{}.parse(f, l, msg)) {
-                  return builder_tag::syslog_builder;
+                case unknown_syslog_builder:
+                  TENZIR_UNREACHABLE();
+              }
+            };
+            /// adds a null to the current builder
+            const auto add_null = [&]() {
+              switch (last) {
+                using enum builder_tag;
+                case syslog_builder: {
+                  builder.builder.null();
+                  break;
                 }
-                f = input.begin();
-                if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
-                  return get_legacy_builder_tag(legacy_msg);
+                case legacy_syslog_builder: {
+                  legacy_builder.builder.null();
+                  break;
                 }
-                return builder_tag::unknown_syslog_builder;
-              };
-              /// Adds a parsed message to the appropriate builder based on tag.
-              const auto add_parsed = [&](builder_tag tag, message& msg,
-                                          legacy_message& legacy_msg) {
-                switch (tag) {
-                  using enum builder_tag;
-                  case syslog_builder:
-                    maybe_flush(syslog_builder);
-                    builder.add_new({std::move(msg), 0});
-                    last = syslog_builder;
-                    break;
-                  case legacy_syslog_builder:
-                    maybe_flush(legacy_syslog_builder);
-                    legacy_builder.add_new({std::move(legacy_msg), 0});
-                    last = legacy_syslog_builder;
-                    break;
-                  case legacy_structured_syslog_builder:
-                    maybe_flush(legacy_structured_syslog_builder);
-                    legacy_structured_builder.add_new(
-                      {std::move(legacy_msg), 0});
-                    last = legacy_structured_syslog_builder;
-                    break;
-                  case unknown_syslog_builder:
-                    TENZIR_UNREACHABLE();
+                case legacy_structured_syslog_builder: {
+                  legacy_structured_builder.builder.null();
+                  break;
                 }
-              };
-              // RFC 6587 octet-counting algorithm:
-              //
-              // 1. Try to parse octet count prefix if octet_counting != false.
-              // 2. If octet_counting=true (explicit) and prefix missing/invalid
-              //    → warn, null.
-              // 3. If prefix found:
-              //    a. actual < stated → warn "exceeds actual length", null.
-              //    b. actual == stated → parse content.
-              //    c. actual > stated:
-              //       - explicit mode → truncate to stated, parse, warn.
-              //       - auto mode → try full first; fall back to truncated.
-              // 4. If no prefix → parse full input.
-              // 5. If parse fails → warn "not valid syslog", null.
-              // 6. Emit parsed message.
-              //
-              // The key distinction: explicit mode trusts the octet count,
-              // while auto mode treats it as a hint (maximizing leniency).
-              for (int64_t i = 0; i < arg.length(); ++i) {
-                if (arg.IsNull(i)) {
+                case unknown_syslog_builder:
+                  TENZIR_UNREACHABLE();
+              }
+            };
+            /// Tries to parse input as syslog; returns the builder_tag
+            /// indicating which parser succeeded, or unknown_syslog_builder
+            /// if parsing failed.
+            const auto try_parse
+              = [&](std::string_view input, message& msg,
+                    legacy_message& legacy_msg) -> builder_tag {
+              auto f = input.begin();
+              auto l = input.end();
+              if (message_parser{}.parse(f, l, msg)) {
+                return builder_tag::syslog_builder;
+              }
+              f = input.begin();
+              if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
+                return get_legacy_builder_tag(legacy_msg);
+              }
+              return builder_tag::unknown_syslog_builder;
+            };
+            /// Adds a parsed message to the appropriate builder based on tag.
+            const auto add_parsed = [&](builder_tag tag, message& msg,
+                                        legacy_message& legacy_msg) {
+              switch (tag) {
+                using enum builder_tag;
+                case syslog_builder:
+                  maybe_flush(syslog_builder);
+                  builder.add_new({std::move(msg), 0});
+                  last = syslog_builder;
+                  break;
+                case legacy_syslog_builder:
+                  maybe_flush(legacy_syslog_builder);
+                  legacy_builder.add_new({std::move(legacy_msg), 0});
+                  last = legacy_syslog_builder;
+                  break;
+                case legacy_structured_syslog_builder:
+                  maybe_flush(legacy_structured_syslog_builder);
+                  legacy_structured_builder.add_new({std::move(legacy_msg), 0});
+                  last = legacy_structured_syslog_builder;
+                  break;
+                case unknown_syslog_builder:
+                  TENZIR_UNREACHABLE();
+              }
+            };
+            // RFC 6587 octet-counting algorithm:
+            //
+            // 1. Try to parse octet count prefix if octet_counting != false.
+            // 2. If octet_counting=true (explicit) and prefix missing/invalid
+            //    → warn, null.
+            // 3. If prefix found:
+            //    a. actual < stated → warn "exceeds actual length", null.
+            //    b. actual == stated → parse content.
+            //    c. actual > stated:
+            //       - explicit mode → truncate to stated, parse, warn.
+            //       - auto mode → try full first; fall back to truncated.
+            // 4. If no prefix → parse full input.
+            // 5. If parse fails → warn "not valid syslog", null.
+            // 6. Emit parsed message.
+            //
+            // The key distinction: explicit mode trusts the octet count,
+            // while auto mode treats it as a hint (maximizing leniency).
+            for (int64_t i = 0; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                add_null();
+                continue;
+              }
+              const auto input = arg.Value(i);
+              // Step 1: Try to parse octet count prefix (RFC 6587 framing).
+              auto has_prefix = false;
+              auto stated_length = uint32_t{};
+              auto content = input;
+              const auto is_explicit
+                = octet_counting.has_value() && *octet_counting;
+              if (octet_counting.value_or(true)) { // true or auto-detect
+                auto it = input.begin();
+                if (octet_length_parser(it, input.end(), stated_length)
+                    && stated_length <= max_syslog_message_size) {
+                  has_prefix = true;
+                  content = std::string_view{it, input.end()};
+                } else if (is_explicit) {
+                  // Step 2: Explicitly required but not found/invalid.
+                  diagnostic::warning("expected valid octet-counted input")
+                    .primary(expr.get_location())
+                    .emit(ctx);
                   add_null();
                   continue;
                 }
-                const auto input = arg.Value(i);
-                // Step 1: Try to parse octet count prefix (RFC 6587 framing).
-                auto has_prefix = false;
-                auto stated_length = uint32_t{};
-                auto content = input;
-                const auto is_explicit
-                  = octet_counting.has_value() && *octet_counting;
-                if (octet_counting.value_or(true)) { // true or auto-detect
-                  auto it = input.begin();
-                  if (octet_length_parser(it, input.end(), stated_length)
-                      && stated_length <= max_syslog_message_size) {
-                    has_prefix = true;
-                    content = std::string_view{it, input.end()};
-                  } else if (is_explicit) {
-                    // Step 2: Explicitly required but not found/invalid.
-                    diagnostic::warning("expected valid octet-counted input")
-                      .primary(expr.get_location())
-                      .emit(ctx);
-                    add_null();
-                    continue;
-                  }
+              }
+              // Step 3: Determine what to parse based on prefix and length.
+              auto msg = message{};
+              auto legacy_msg = legacy_message{};
+              if (has_prefix) {
+                const auto actual = content.size();
+                if (actual < stated_length) {
+                  // Step 3a: Message shorter than stated → incomplete.
+                  diagnostic::warning("octet count exceeds actual message "
+                                      "length")
+                    .note("expected {} bytes, got {}", stated_length, actual)
+                    .primary(expr.get_location())
+                    .emit(ctx);
+                  add_null();
+                  continue;
                 }
-                // Step 3: Determine what to parse based on prefix and length.
-                auto msg = message{};
-                auto legacy_msg = legacy_message{};
-                if (has_prefix) {
-                  const auto actual = content.size();
-                  if (actual < stated_length) {
-                    // Step 3a: Message shorter than stated → incomplete.
-                    diagnostic::warning("octet count exceeds actual message "
-                                        "length")
-                      .note("expected {} bytes, got {}", stated_length, actual)
-                      .primary(expr.get_location())
-                      .emit(ctx);
-                    add_null();
-                    continue;
-                  }
-                  auto parsed_tag = builder_tag::unknown_syslog_builder;
-                  if (actual == stated_length) {
-                    // Step 3b: Exact match → parse content.
-                    parsed_tag = try_parse(content, msg, legacy_msg);
-                    if (parsed_tag == builder_tag::unknown_syslog_builder) {
-                      diagnostic::warning("`input` is not valid syslog")
-                        .primary(expr.get_location())
-                        .emit(ctx);
-                      add_null();
-                      continue;
-                    }
-                  } else {
-                    // Step 3c: actual > stated_length.
-                    if (is_explicit) {
-                      // Explicit mode: trust the count, truncate, and parse.
-                      auto truncated
-                        = std::string_view{content.data(), stated_length};
-                      parsed_tag = try_parse(truncated, msg, legacy_msg);
-                      if (parsed_tag == builder_tag::unknown_syslog_builder) {
-                        diagnostic::warning("`input` is not valid syslog")
-                          .primary(expr.get_location())
-                          .emit(ctx);
-                        add_null();
-                        continue;
-                      }
-                      diagnostic::warning("octet count less than actual length")
-                        .note("parsed truncated message")
-                        .primary(expr.get_location())
-                        .emit(ctx);
-                    } else {
-                      // Auto mode: try full first, fall back to truncated.
-                      parsed_tag = try_parse(content, msg, legacy_msg);
-                      if (parsed_tag != builder_tag::unknown_syslog_builder) {
-                        // Full parse succeeded despite mismatched octet count.
-                        diagnostic::warning("octet count prefix ignored")
-                          .note("message parsed without framing")
-                          .primary(expr.get_location())
-                          .emit(ctx);
-                      } else {
-                        // Full failed; try truncated as recovery.
-                        auto truncated
-                          = std::string_view{content.data(), stated_length};
-                        parsed_tag = try_parse(truncated, msg, legacy_msg);
-                        if (parsed_tag != builder_tag::unknown_syslog_builder) {
-                          diagnostic::warning("octet count less than actual "
-                                              "length")
-                            .note("parsed truncated message")
-                            .primary(expr.get_location())
-                            .emit(ctx);
-                        } else {
-                          diagnostic::warning("`input` is not valid syslog")
-                            .primary(expr.get_location())
-                            .emit(ctx);
-                          add_null();
-                          continue;
-                        }
-                      }
-                    }
-                  }
-                  add_parsed(parsed_tag, msg, legacy_msg);
-                } else {
-                  // Step 4: No prefix → parse full input.
-                  auto parsed_tag = try_parse(input, msg, legacy_msg);
+                auto parsed_tag = builder_tag::unknown_syslog_builder;
+                if (actual == stated_length) {
+                  // Step 3b: Exact match → parse content.
+                  parsed_tag = try_parse(content, msg, legacy_msg);
                   if (parsed_tag == builder_tag::unknown_syslog_builder) {
                     diagnostic::warning("`input` is not valid syslog")
                       .primary(expr.get_location())
@@ -1706,25 +819,84 @@ public:
                     add_null();
                     continue;
                   }
-                  add_parsed(parsed_tag, msg, legacy_msg);
+                } else {
+                  // Step 3c: actual > stated_length.
+                  if (is_explicit) {
+                    // Explicit mode: trust the count, truncate, and parse.
+                    auto truncated
+                      = std::string_view{content.data(), stated_length};
+                    parsed_tag = try_parse(truncated, msg, legacy_msg);
+                    if (parsed_tag == builder_tag::unknown_syslog_builder) {
+                      diagnostic::warning("`input` is not valid syslog")
+                        .primary(expr.get_location())
+                        .emit(ctx);
+                      add_null();
+                      continue;
+                    }
+                    diagnostic::warning("octet count less than actual length")
+                      .note("parsed truncated message")
+                      .primary(expr.get_location())
+                      .emit(ctx);
+                  } else {
+                    // Auto mode: try full first, fall back to truncated.
+                    parsed_tag = try_parse(content, msg, legacy_msg);
+                    if (parsed_tag != builder_tag::unknown_syslog_builder) {
+                      // Full parse succeeded despite mismatched octet count.
+                      diagnostic::warning("octet count prefix ignored")
+                        .note("message parsed without framing")
+                        .primary(expr.get_location())
+                        .emit(ctx);
+                    } else {
+                      // Full failed; try truncated as recovery.
+                      auto truncated
+                        = std::string_view{content.data(), stated_length};
+                      parsed_tag = try_parse(truncated, msg, legacy_msg);
+                      if (parsed_tag != builder_tag::unknown_syslog_builder) {
+                        diagnostic::warning("octet count less than actual "
+                                            "length")
+                          .note("parsed truncated message")
+                          .primary(expr.get_location())
+                          .emit(ctx);
+                      } else {
+                        diagnostic::warning("`input` is not valid syslog")
+                          .primary(expr.get_location())
+                          .emit(ctx);
+                        add_null();
+                        continue;
+                      }
+                    }
+                  }
                 }
+                add_parsed(parsed_tag, msg, legacy_msg);
+              } else {
+                // Step 4: No prefix → parse full input.
+                auto parsed_tag = try_parse(input, msg, legacy_msg);
+                if (parsed_tag == builder_tag::unknown_syslog_builder) {
+                  diagnostic::warning("`input` is not valid syslog")
+                    .primary(expr.get_location())
+                    .emit(ctx);
+                  add_null();
+                  continue;
+                }
+                add_parsed(parsed_tag, msg, legacy_msg);
               }
-              /// We flush with a new builder tag of "unknown", as that is
-              /// guaranteed to flush the last builder
-              maybe_flush(builder_tag::unknown_syslog_builder);
-              return res;
-            },
-            [&](const auto&) -> multi_series {
-              diagnostic::warning("`parse_syslog` expected `string`, got `{}`",
-                                  arg.type.kind())
-                .primary(call)
-                .emit(ctx);
-              return series::null(null_type{}, arg.length());
-            },
-          };
-          return match(*arg.array, f);
-        });
+            }
+            /// We flush with a new builder tag of "unknown", as that is
+            /// guaranteed to flush the last builder
+            maybe_flush(builder_tag::unknown_syslog_builder);
+            return res;
+          },
+          [&](const auto&) -> multi_series {
+            diagnostic::warning("`parse_syslog` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return match(*arg.array, f);
       });
+    });
   }
 };
 

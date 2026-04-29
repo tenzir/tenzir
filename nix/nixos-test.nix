@@ -10,12 +10,11 @@
         name = "tenzir-systemd";
         machine =
           {
-            config,
             pkgs,
             ...
           }:
           {
-            environment.systemPackages = with pkgs; [
+            environment.systemPackages = [
               pkgs.tenzir
             ];
 

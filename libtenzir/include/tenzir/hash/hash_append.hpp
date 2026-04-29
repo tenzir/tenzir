@@ -76,12 +76,12 @@ struct hash_inspector;
 // -- Scalars -----------------------------------------------------------------
 
 template <class HashAlgorithm, class T>
-  requires(! uniquely_hashable<T, HashAlgorithm> && std::is_scalar_v<T>
-           && ! caf::detail::has_inspect_overload<
-              detail::hash_inspector<HashAlgorithm>, T>)
+  requires(not uniquely_hashable<T, HashAlgorithm> and std::is_scalar_v<T>
+           and not caf::detail::has_inspect_overload<
+               detail::hash_inspector<HashAlgorithm>, T>)
 void hash_append(HashAlgorithm& h, T x) noexcept {
-  if constexpr (std::is_integral_v<T> || std::is_pointer_v<T>
-                || std::is_enum_v<T>) {
+  if constexpr (std::is_integral_v<T> or std::is_pointer_v<T>
+                or std::is_enum_v<T>) {
     detail::reverse_bytes(x);
     h.add(as_bytes(std::addressof(x), sizeof(x)));
   } else if constexpr (std::is_floating_point_v<T>) {
@@ -123,8 +123,8 @@ void hash_append(HashAlgorithm& h, std::chrono::time_point<Clock, Duration> t) {
 
 template <class HashAlgorithm, class T>
   requires(std::is_empty_v<T>
-           && ! caf::detail::has_inspect_overload<
-              detail::hash_inspector<HashAlgorithm>, T>)
+           and not caf::detail::has_inspect_overload<
+               detail::hash_inspector<HashAlgorithm>, T>)
 void hash_append(HashAlgorithm& h, T) noexcept {
   hash_append(h, 0);
 }
@@ -132,7 +132,7 @@ void hash_append(HashAlgorithm& h, T) noexcept {
 // -- forward declarations to enable ADL --------------------------------------
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(! uniquely_hashable<T, HashAlgorithm>)
+  requires(not uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, T (&a)[N]) noexcept;
 
 template <class HashAlgorithm, class CharT, class Traits>
@@ -144,11 +144,11 @@ void hash_append(HashAlgorithm& h,
                  const std::basic_string<CharT, Traits, Alloc>& s) noexcept;
 
 template <class HashAlgorithm, class T, class U>
-  requires(! uniquely_hashable<std::pair<T, U>, HashAlgorithm>)
+  requires(not uniquely_hashable<std::pair<T, U>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::pair<T, U>& p) noexcept;
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(! uniquely_hashable<std::array<T, N>, HashAlgorithm>)
+  requires(not uniquely_hashable<std::array<T, N>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::array<T, N>& a) noexcept;
 
 template <class HashAlgorithm, class T, class Alloc>
@@ -175,7 +175,7 @@ void hash_append(HashAlgorithm& h,
                  const std::unordered_map<K, T, Hash, Eq, Alloc>& m) noexcept;
 
 template <class HashAlgorithm, class... T>
-  requires(! uniquely_hashable<std::tuple<T...>, HashAlgorithm>)
+  requires(not uniquely_hashable<std::tuple<T...>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::tuple<T...>& t) noexcept;
 
 template <class HashAlgorithm, class T0, class T1, class... T>
@@ -185,7 +185,7 @@ void hash_append(HashAlgorithm& h, const T0& t0, const T1& t1,
 // -- C array -----------------------------------------------------------------
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(! uniquely_hashable<T, HashAlgorithm>)
+  requires(not uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, T (&a)[N]) noexcept {
   for (const auto& x : a) {
     hash_append(h, x);
@@ -209,7 +209,7 @@ void hash_append(HashAlgorithm& h,
 // -- pair --------------------------------------------------------------------
 
 template <class HashAlgorithm, class T, class U>
-  requires(! uniquely_hashable<std::pair<T, U>, HashAlgorithm>)
+  requires(not uniquely_hashable<std::pair<T, U>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::pair<T, U>& p) noexcept {
   hash_append(h, p.first, p.second);
 }
@@ -217,7 +217,7 @@ void hash_append(HashAlgorithm& h, const std::pair<T, U>& p) noexcept {
 // -- array -------------------------------------------------------------------
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(! uniquely_hashable<std::array<T, N>, HashAlgorithm>)
+  requires(not uniquely_hashable<std::array<T, N>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::array<T, N>& a) noexcept {
   for (const auto& t : a) {
     hash_append(h, t);
@@ -299,7 +299,7 @@ void hash_append(HashAlgorithm& h,
 // -- tuple -------------------------------------------------------------------
 
 template <class HashAlgorithm, class... T>
-  requires(! uniquely_hashable<std::tuple<T...>, HashAlgorithm>)
+  requires(not uniquely_hashable<std::tuple<T...>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::tuple<T...>& t) noexcept {
   std::apply(
     [&h](auto&&... xs) {
@@ -375,7 +375,7 @@ struct hash_inspector {
 template <class HashAlgorithm, class T>
   requires(
     caf::detail::has_inspect_overload<detail::hash_inspector<HashAlgorithm>, T>
-    && ! uniquely_hashable<T, HashAlgorithm>)
+    and not uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const T& x) noexcept {
   detail::hash_inspector<HashAlgorithm> f{h};
   inspect(f, const_cast<T&>(x));

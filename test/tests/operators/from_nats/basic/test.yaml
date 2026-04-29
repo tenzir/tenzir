@@ -1,0 +1,12 @@
+suite: from-nats-basic
+fixtures:
+  - nats:
+      subject: from_nats_test
+      stream: FROM_NATS_TEST
+      durable: from_nats_test
+      messages: 2
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

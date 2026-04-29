@@ -52,7 +52,7 @@ struct expression_printer : printer_base<expression_printer> {
 
     bool operator()(const predicate& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
-      return match(p.lhs, *this) && op(out_, p.op) && match(p.rhs, *this);
+      return match(p.lhs, *this) and op(out_, p.op) and match(p.rhs, *this);
     }
 
     bool operator()(const operand& op) const {

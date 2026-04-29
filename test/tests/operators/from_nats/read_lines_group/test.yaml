@@ -1,0 +1,12 @@
+suite: from-nats-read-lines-group
+fixtures:
+  - nats:
+      subject: from_nats_read_lines_group_test
+      stream: FROM_NATS_READ_LINES_GROUP_TEST
+      durable: from_nats_read_lines_group_test
+      messages: 1
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

@@ -1,0 +1,52 @@
+---
+fixtures:
+  - ftp:
+      download_payload: |
+        {"message":"hello-parser-head-1"}
+        {"message":"hello-parser-head-2"}
+        {"message":"hello-parser-head-3"}
+        {"message":"hello-parser-head-4"}
+        {"message":"hello-parser-head-5"}
+        {"message":"hello-parser-head-6"}
+        {"message":"hello-parser-head-7"}
+        {"message":"hello-parser-head-8"}
+        {"message":"hello-parser-head-9"}
+        {"message":"hello-parser-head-10"}
+        {"message":"hello-parser-head-11"}
+        {"message":"hello-parser-head-12"}
+        {"message":"hello-parser-head-13"}
+        {"message":"hello-parser-head-14"}
+        {"message":"hello-parser-head-15"}
+        {"message":"hello-parser-head-16"}
+        {"message":"hello-parser-head-17"}
+        {"message":"hello-parser-head-18"}
+        {"message":"hello-parser-head-19"}
+        {"message":"hello-parser-head-20"}
+        {"message":"hello-parser-head-21"}
+        {"message":"hello-parser-head-22"}
+        {"message":"hello-parser-head-23"}
+        {"message":"hello-parser-head-24"}
+        {"message":"hello-parser-head-25"}
+        {"message":"hello-parser-head-26"}
+        {"message":"hello-parser-head-27"}
+        {"message":"hello-parser-head-28"}
+        {"message":"hello-parser-head-29"}
+        {"message":"hello-parser-head-30"}
+        {"message":"hello-parser-head-31"}
+        {"message":"hello-parser-head-32"}
+        {"message":"hello-parser-head-33"}
+        {"message":"hello-parser-head-34"}
+        {"message":"hello-parser-head-35"}
+        {"message":"hello-parser-head-36"}
+        {"message":"hello-parser-head-37"}
+        {"message":"hello-parser-head-38"}
+        {"message":"hello-parser-head-39"}
+        {"message":"hello-parser-head-40"}
+      download_chunk_size: 1
+timeout: 60
+---
+
+from_ftp env("FTP_DOWNLOAD_URL_NO_SCHEME") {
+  read_ndjson
+  head 1
+}

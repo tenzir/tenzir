@@ -43,7 +43,7 @@ public:
   auto operator=(value_ptr&&) noexcept -> value_ptr& = default;
 
   explicit operator bool() const {
-    return !!ptr_;
+    return ! ! ptr_;
   }
 
   auto operator*() const -> T& {
@@ -63,7 +63,7 @@ public:
       x.ptr_ = std::make_unique<T>();
       return f.apply(*x);
     } else {
-      if (!x.ptr_) {
+      if (not x.ptr_) {
         f.set_error(caf::make_error(ec::serialization_error,
                                     "inspecting a moved-from `value_ptr`"));
         return false;
@@ -74,8 +74,8 @@ public:
 
   auto operator==(const value_ptr& other) const -> bool {
     const auto& self = *this;
-    if (!self || !other) {
-      return !self && !other;
+    if (not self or not other) {
+      return not self and not other;
     }
     return *self == *other;
   }

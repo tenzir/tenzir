@@ -135,7 +135,7 @@ public:
     parser.add(expr, "<expr>");
     parser.parse(p);
     auto normalized_and_validated = normalize_and_validate(expr.inner);
-    if (! normalized_and_validated) {
+    if (not normalized_and_validated) {
       diagnostic::error("invalid expression")
         .primary(expr.source)
         .docs("https://tenzir.com/language/expressions")
@@ -224,7 +224,8 @@ public:
               }
             };
         for (auto i = int64_t{1}; i < length + 1; ++i) {
-          const auto next = i != length && array->IsValid(i) && array->Value(i);
+          const auto next
+            = i != length and array->IsValid(i) and array->Value(i);
           if (current_value == next) {
             continue;
           }
@@ -404,7 +405,7 @@ auto make_where_function(function_invocation inv, session ctx)
               return builder.finish_assert_one_array();
             }
             auto builder = series_builder{field.type};
-            match(list_values.type, [&](const auto& list_values_type) {
+            match(list_values.type, [&](const auto&) {
               for (int64_t i = 0; i < lists.length(); ++i) {
                 if (lists.array->IsNull(i)) {
                   builder.null();
@@ -928,7 +929,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     auto expr = ast::expression{};
     // TODO: We don't want to create a session here. This is just a test to see
     // how far we could go with the existing argument parser.

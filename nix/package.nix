@@ -7,19 +7,34 @@
   forceClang ? false,
 }:
 rec {
-  integration-test-tree =
-    lib.fileset.difference
-      (lib.fileset.unions [
-        ../test-legacy
-      ])
-      (
-        lib.fileset.unions [
-          # DNS lookup does not work in the nix sandbox.
-          ../test-legacy/tests/operators/dns_lookup
-          # to_sentinelone_data_lake is not supported in the nix build.
-          ../test-legacy/tests/operators/to_sentinelone_data_lake
-        ]
-      );
+  excluded-integration-tests = lib.fileset.unions [
+    # plugins not available in the Nix build.
+    ../test/tests/operators/from_sentinelone_data_lake
+    ../test/tests/operators/to_sentinelone_data_lake
+
+    # dns lookup output mismatches in the sandboxed environment
+    ../test/tests/operators/dns_lookup
+
+    # from_http TLS CA lookup failures
+    ../test/tests/operators/from_http/tls_min_version_supported.tql
+    ../test/tests/operators/from_http/tls_skip_peer_verification.tql
+    ../test/tests/operators/from_http/url_without_scheme.tql
+
+    # accept_http is flaky in the sandbox.
+    ../test/tests/operators/accept_http
+
+    # ZMQ hangs
+    ../test/tests/operators/accept_zmq/keep_prefix_read_all.tql
+    ../test/tests/operators/accept_zmq/plain_read_json.tql
+    ../test/tests/operators/from_zmq/plain_read_json.tql
+    ../test/tests/operators/from_zmq/prefix_read_json.tql
+  ];
+  integration-test-tree = lib.fileset.difference
+    (lib.fileset.unions [
+      ../test
+      ../test-legacy
+    ])
+    excluded-integration-tests;
   tenzir-tree = lib.fileset.unions [
     ../changelog
     ../cmake
@@ -44,14 +59,14 @@ rec {
 
   tenzir-test = pkgs.python3Packages.buildPythonPackage rec {
     pname = "tenzir-test";
-    version = "1.7.1";
+    version = "1.7.7";
     pyproject = true;
 
     src = pkgs.fetchFromGitHub {
       owner = "tenzir";
       repo = "test";
       tag = "v${version}";
-      hash = "sha256-kMH7vikx3mTU3pj1CM9JAjXbKwuliFZqIIsjRsiNJOk=";
+      hash = "sha256-/+7Og/6VFxbnW8RhtvOkn9EfrjbIMHnuVkLtgSjM/fQ=";
     };
 
     build-system = with pkgs.python3Packages; [ hatchling ];
@@ -79,6 +94,7 @@ rec {
     (pkgs.python3.withPackages (ps: [
       ps.trustme
       ps.pymysql
+      ps.pyzmq
     ]))
     tenzir-test
   ];

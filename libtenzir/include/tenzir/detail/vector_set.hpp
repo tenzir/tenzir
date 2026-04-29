@@ -41,8 +41,9 @@ public:
 
   vector_set(std::initializer_list<T> l) {
     reserve(l.size());
-    for (auto& x : l)
+    for (auto& x : l) {
       insert(x);
+    }
   }
 
   template <class InputIterator>
@@ -123,8 +124,9 @@ public:
 
   template <class InputIterator>
   void insert(InputIterator first, InputIterator last) {
-    while (first != last)
+    while (first != last) {
       insert(*first++);
+    }
   }
 
   template <class... Ts>
@@ -148,8 +150,9 @@ public:
 
   size_type erase(const value_type& x) {
     auto i = std::remove(begin(), end(), x);
-    if (i == end())
+    if (i == end()) {
       return 0;
+    }
     erase(i);
     return 1;
   }
@@ -191,7 +194,7 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, vector_set& xs) {
+  friend auto inspect(Inspector& f, vector_set& xs) {
     return f.apply(xs.xs_);
   }
 

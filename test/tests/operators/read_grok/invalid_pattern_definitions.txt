@@ -1,0 +1,6 @@
+error: `pattern_definitions` must be `string` or `record`
+ --> tests/operators/read_grok/invalid_pattern_definitions.tql:6:46
+  |
+6 |   read_grok "%{WORD:x}", pattern_definitions=42
+  |                                              ^^ got `int64`
+  |

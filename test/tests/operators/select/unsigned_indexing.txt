@@ -1,0 +1,48 @@
+{
+  case: "zero",
+  list_const: 2,
+  record_const: "one",
+  list_dynamic: "a",
+  record_dynamic: 10,
+  list_get: "a",
+  record_get: 10,
+  list_oob: null,
+  record_oob: null,
+}
+{
+  case: "one",
+  list_const: 2,
+  record_const: "one",
+  list_dynamic: "b",
+  record_dynamic: 20,
+  list_get: "b",
+  record_get: 20,
+  list_oob: null,
+  record_oob: null,
+}
+{
+  case: "out-of-bounds",
+  list_const: 2,
+  record_const: "one",
+  list_dynamic: null,
+  record_dynamic: null,
+  list_get: "fallback",
+  record_get: -1,
+  list_oob: null,
+  record_oob: null,
+}
+warning: list index out of bounds
+  --> tests/operators/select/unsigned_indexing.tql:18:18
+   |
+18 |   list_oob = $xs[99.uint()],
+   |                  ~~~~~~~~~ is out of bounds
+   |
+   = hint: use `[…]?` to suppress this warning
+
+warning: index out of bounds
+  --> tests/operators/select/unsigned_indexing.tql:19:19
+   |
+19 |   record_oob = $r[99.uint()]
+   |                   ~~~~~~~~~ is out of bounds
+   |
+   = hint: use `[…]?` to suppress this warning

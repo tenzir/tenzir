@@ -1,0 +1,5 @@
+from {
+  // IPv6 loopback reverse lookup works without network access
+  ip: ip("::1")
+}
+dns_lookup ip

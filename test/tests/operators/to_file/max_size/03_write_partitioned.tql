@@ -1,0 +1,10 @@
+// Partitioned by region with max_size rotation. Each region gets ~12KB,
+// max_size=4096 → each region should produce multiple files.
+from {region: "us"},
+     {region: "eu"},
+     {region: "ap"}
+repeat 300
+enumerate id
+to_file env("FILE_ROOT") + "/out/maxsize_part/**/data_{uuid}.json", partition_by=[region], max_size=4096 {
+  write_ndjson
+}

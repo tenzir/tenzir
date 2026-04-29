@@ -1,0 +1,17 @@
+---
+fixtures:
+  - udp: {}
+assertions:
+  fixtures:
+    udp:
+      server_received_contains: '{"kind":"record","value":"hello-from-to_udp-record"}'
+timeout: 60
+---
+
+from {
+  message: {
+    kind: "record",
+    value: "hello-from-to_udp-record",
+  },
+}
+to_udp env("UDP_ENDPOINT"), message=message

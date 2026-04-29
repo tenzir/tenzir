@@ -58,7 +58,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     | "ip"_p        ->* type_factory<legacy_address_type>
     | "subnet"_p    ->* type_factory<legacy_subnet_type>
     | "null"_p      ->* type_factory<legacy_none_type>
-    ) >> &(!parsers::identifier_char)
+    ) >> &(not parsers::identifier_char)
     ;
   // Enumeration
   static auto to_enum = [](std::vector<std::string> fields) -> legacy_type {

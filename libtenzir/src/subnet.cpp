@@ -19,7 +19,7 @@ subnet::subnet() : length_{0u} {
 }
 
 subnet::subnet(ip addr, uint8_t length) : network_{addr}, length_{length} {
-  if (!initialize()) {
+  if (not initialize()) {
     network_ = ip{};
     length_ = 0;
   }
@@ -30,7 +30,7 @@ bool subnet::contains(const ip& addr) const {
 }
 
 bool subnet::contains(const subnet& other) const {
-  return length_ <= other.length_ && contains(other.network_);
+  return length_ <= other.length_ and contains(other.network_);
 }
 
 const ip& subnet::network() const {

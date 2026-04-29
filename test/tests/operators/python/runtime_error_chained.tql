@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+python "try:\n    raise ValueError('inner')\nexcept ValueError as err:\n    raise RuntimeError('outer') from err"

@@ -4,6 +4,7 @@
   fetchpatch2,
   protobufc,
   buildPackages,
+  stdenv,
 }:
 (protobufc.override {
   protobuf_33 = protobuf;
@@ -16,5 +17,15 @@
         hash = "sha256-VMOmvpBVZFFkCgKCuJObnJp/tF1VaYls7nFugWp/YvI=";
       })
     ];
-    env.PROTOC = lib.getExe buildPackages.protobuf_34;
+    env =
+      let
+        baseEnv = base.env or { };
+      in
+      baseEnv
+      // {
+        PROTOC = lib.getExe buildPackages.protobuf_34;
+        NIX_LDFLAGS =
+          (baseEnv.NIX_LDFLAGS or "")
+          + lib.optionalString stdenv.hostPlatform.isDarwin " -framework CoreFoundation";
+      };
   })

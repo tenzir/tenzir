@@ -9,12 +9,12 @@ set -euxo pipefail
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
 
-TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression --entrypoint=tenzir-node -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
+TENZIR_RUN_FLAGS=(-d --pull=always --rm --name tenzir-regression --entrypoint=tenzir-node -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/)
 
 # Pull the old version to create a database.
 docker run \
-  $TENZIR_RUN_FLAGS \
-  docker.io/tenzir/tenzir:$OLD_VERSION
+  "${TENZIR_RUN_FLAGS[@]}" \
+  docker.io/tenzir/tenzir:"$OLD_VERSION"
 
 sleep 3
 
@@ -30,8 +30,8 @@ docker rm -f tenzir-regression
 
 # Pull the new version to verify database compatibility.
 docker run \
-  $TENZIR_RUN_FLAGS \
-  ghcr.io/tenzir/tenzir:$NEW_VERSION
+  "${TENZIR_RUN_FLAGS[@]}" \
+  ghcr.io/tenzir/tenzir:"$NEW_VERSION"
 
 sleep 3
 

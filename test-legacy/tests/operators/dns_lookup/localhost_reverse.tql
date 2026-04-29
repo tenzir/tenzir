@@ -1,5 +1,0 @@
-from {
-  // Root server A IP - very stable reverse lookup
-  ip: 198.41.0.4
-}
-dns_lookup ip

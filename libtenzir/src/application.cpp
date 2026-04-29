@@ -203,7 +203,7 @@ make_application(std::string_view path) {
   // Add additional commands from plugins.
   for (const auto* plugin : plugins::get<command_plugin>()) {
     auto [cmd, cmd_factory] = plugin->make_command();
-    if (! cmd || cmd_factory.empty()) {
+    if (not cmd or cmd_factory.empty()) {
       continue;
     }
     root->add_subcommand(std::move(cmd));
@@ -218,7 +218,7 @@ make_application(std::string_view path) {
 
 void render_error(const command& root, const caf::error& err,
                   std::ostream& os) {
-  if (err.empty() || err == ec::silent) {
+  if (err.empty() or err == ec::silent) {
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
   }

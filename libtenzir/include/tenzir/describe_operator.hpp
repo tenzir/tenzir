@@ -1,3 +1,11 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 // TODO: Delete me.
 
 #include "tenzir/compile_Ctx.hpp"
@@ -35,7 +43,7 @@ struct load_file_args {
 
 auto compile_described_operator(std::string name, ast::invocation inv,
                                 compile_ctx ctx)
-  -> failure_or<Box<ir::Operator>>;
+  -> failure_or<ir::CompileResult>;
 
 class describe_operator_plugin : public virtual operator_compiler_plugin {
 private:
@@ -65,7 +73,7 @@ public:
   static auto named(std::string name, T Args::*) -> arg<Args>;
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> final;
+    -> failure_or<ir::CompileResult> final;
 };
 
 class described_operator final : public ir::Operator {

@@ -12,6 +12,8 @@
 #include "tenzir/element_type.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <concepts>
+#include <type_traits>
 #include <vector>
 
 namespace tenzir {
@@ -134,6 +136,26 @@ struct pipeline {
   /// @see Operator
   auto
   optimize(optimize_filter filter, event_order order) && -> optimize_result;
+};
+
+struct CompileResult {
+  CompileResult() = default;
+
+  CompileResult(Box<Operator> op);
+
+  template <class Op>
+    requires(std::derived_from<std::remove_cvref_t<Op>, Operator>
+             and not std::same_as<std::remove_cvref_t<Op>, Operator>)
+  CompileResult(Op&& op) {
+    pipeline_.operators.push_back(std::forward<Op>(op));
+  }
+
+  CompileResult(pipeline pipe);
+
+  auto unwrap() && -> pipeline;
+
+private:
+  ir::pipeline pipeline_;
 };
 
 struct optimize_result {

@@ -245,7 +245,7 @@ std::string unescape(std::string_view str, Unescaper unescaper) {
   auto l = str.end();
   auto out = std::back_inserter(result);
   while (f != l) {
-    if (! unescaper(f, l, out)) {
+    if (not unescaper(f, l, out)) {
       return {};
     }
   }
@@ -408,7 +408,7 @@ std::string join(Iterator begin, Iterator end, std::string_view sep) {
 template <class T>
 std::string join(const std::vector<T>& v, std::string_view sep) {
   if constexpr (std::is_same_v<T, std::string>
-                || std::is_same_v<T, std::string_view>) {
+                or std::is_same_v<T, std::string_view>) {
     return join(v.begin(), v.end(), sep);
   } else {
     auto pred = [](const T& x) {

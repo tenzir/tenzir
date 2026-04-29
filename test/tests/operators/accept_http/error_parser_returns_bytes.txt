@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/accept_http/error_parser_returns_bytes.tql:5:30
+  |
+5 | accept_http "127.0.0.1:8080" {
+  |                              ^ 
+  |

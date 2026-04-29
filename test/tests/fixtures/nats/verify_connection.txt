@@ -1,0 +1,8 @@
+{
+  line: "message-0001",
+  subject: "fixture_nats_test",
+  stream: "FIXTURE_NATS_TEST",
+  consumer: "fixture_nats_test",
+  stream_sequence: 1,
+  num_delivered: 1,
+}

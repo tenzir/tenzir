@@ -36,7 +36,7 @@ TEST("copy construction") {
 TEST("size construction") {
   bitvector<uint8_t> x(42);
   CHECK_EQUAL(x.size(), 42u);
-  CHECK(! x[41]);
+  CHECK(not x[41]);
   bitvector<uint8_t> y(42, true);
   CHECK_EQUAL(y.size(), 42u);
   CHECK(y[3]);
@@ -48,11 +48,11 @@ TEST("initializer_list construction") {
   bitvector<uint8_t> x{false, false, false,
                        true,  false, true}; // implicitly tests assign(f, l).
   REQUIRE_EQUAL(x.size(), 6u);
-  CHECK(! x[0]);
-  CHECK(! x[1]);
-  CHECK(! x[2]);
+  CHECK(not x[0]);
+  CHECK(not x[1]);
+  CHECK(not x[2]);
   CHECK(x[3]);
-  CHECK(! x[4]);
+  CHECK(not x[4]);
   CHECK(x[5]);
 }
 
@@ -94,7 +94,7 @@ TEST("modifiers") {
   x.push_back(true);
   REQUIRE_EQUAL(x.size(), 3u);
   CHECK(x[0]);
-  CHECK(! x[1]);
+  CHECK(not x[1]);
   CHECK(x[2]);
   x.push_back(false);
   x.push_back(true);
@@ -105,10 +105,10 @@ TEST("modifiers") {
   CHECK(x[7]);
   x.push_back(false); // overflow into next word
   REQUIRE_EQUAL(x.size(), 9u);
-  CHECK(! x[8]);
+  CHECK(not x[8]);
   x.pop_back(); // previous word again
   CHECK_EQUAL(x.size(), 8u);
-  CHECK(! x.empty());
+  CHECK(not x.empty());
   x.clear();
   CHECK(x.empty());
 }

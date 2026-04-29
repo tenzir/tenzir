@@ -1,0 +1,17 @@
+---
+error: true
+fixtures: [ftp]
+assertions:
+  fixtures:
+    ftp:
+      upload_count: 0
+timeout: 60
+---
+
+from {
+  message: "hello-from-to_ftp-printer-error"
+}
+to_ftp env("FTP_UPLOAD_URL") {
+  write_ndjson
+  shell "read _; exec 1>&-; exec 0<&-; exit 7"
+}

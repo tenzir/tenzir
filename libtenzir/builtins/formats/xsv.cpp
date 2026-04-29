@@ -82,13 +82,13 @@ struct xsv_printer_options {
     parser.add(null_value, "<null-value>");
     parser.parse(p);
     auto field_sep = to_xsv_sep(field_sep_str.inner);
-    if (! field_sep) {
+    if (not field_sep) {
       diagnostic::error(field_sep.error())
         .primary(field_sep_str.source)
         .throw_();
     }
     auto list_sep = to_xsv_sep(list_sep_str.inner);
-    if (! list_sep) {
+    if (not list_sep) {
       diagnostic::error(list_sep.error()).primary(list_sep_str.source).throw_();
     }
     if (*field_sep == *list_sep) {
@@ -553,7 +553,7 @@ struct xsv_printer_impl {
   auto print_header(It& out, const view3<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [k, _] : x) {
-      if (! first) {
+      if (not first) {
         out = fmt::format_to(out, "{}", sep);
       } else {
         first = false;
@@ -567,7 +567,7 @@ struct xsv_printer_impl {
   auto print_values(It& out, const view3<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
-      if (! first) {
+      if (not first) {
         out = fmt::format_to(out, "{}", sep);
       } else {
         first = false;
@@ -584,7 +584,7 @@ struct xsv_printer_impl {
     }
 
     auto operator()(caf::none_t) noexcept -> bool {
-      if (! printer.null.empty()) {
+      if (not printer.null.empty()) {
         sequence_empty = false;
         out = std::copy(printer.null.begin(), printer.null.end(), out);
       }
@@ -660,10 +660,10 @@ struct xsv_printer_impl {
     auto operator()(const view3<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (! sequence_empty) {
+        if (not sequence_empty) {
           out = fmt::format_to(out, "{}", printer.list_sep);
         }
-        if (! match(v, *this)) {
+        if (not match(v, *this)) {
           return false;
         }
       }
@@ -793,7 +793,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (line->empty()) {
         continue;
       }
-      if (args.allow_comments && line->front() == '#') {
+      if (args.allow_comments and line->front() == '#') {
         continue;
       }
       auto parsed_header = parse_header(*line, location::unknown, args,
@@ -841,7 +841,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
-    if (args.allow_comments && line->front() == '#') {
+    if (args.allow_comments and line->front() == '#') {
       continue;
     }
     auto r = msb.record();
@@ -1116,7 +1116,7 @@ public:
     co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
     if (not msb_) {
       co_return FinalizeBehavior::done;
@@ -1244,7 +1244,7 @@ public:
         auto array = check(to_record_batch(resolved_slice)->ToStructArray());
         for (const auto& row : values3(*array)) {
           TENZIR_ASSERT(row);
-          if (first && not args.no_header) {
+          if (first and not args.no_header) {
             printer.print_header(out_iter, *row);
             first = false;
             out_iter = fmt::format_to(out_iter, "\n");

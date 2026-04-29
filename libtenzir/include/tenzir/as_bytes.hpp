@@ -75,8 +75,8 @@ constexpr auto as_writeable_bytes(std::array<T, N>& xs) noexcept
 }
 
 template <concepts::byte_container Buffer>
-constexpr auto
-as_bytes(const Buffer& xs) noexcept -> std::span<const std::byte> {
+constexpr auto as_bytes(const Buffer& xs) noexcept
+  -> std::span<const std::byte> {
   const auto* const data = reinterpret_cast<const std::byte*>(std::data(xs));
   return {data, std::size(xs)};
 }

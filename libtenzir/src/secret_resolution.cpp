@@ -256,7 +256,7 @@ struct secret_resolver {
     auto all_literal = true;
     for (auto* p : detail::secrets::deref(concat.secrets())) {
       TRY(auto part, match(detail::secrets::deref(p), *this));
-      all_literal = all_literal && part.all_literal();
+      all_literal = all_literal and part.all_literal();
       res.insert(res.end(), part.blob().begin(), part.blob().end());
     }
     return resolved_secret_value{std::move(res), all_literal};

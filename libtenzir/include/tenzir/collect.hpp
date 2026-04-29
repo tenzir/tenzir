@@ -24,10 +24,12 @@ template <class Container, class T>
   }
 Container collect(tenzir::generator<T> g, size_t size_hint = 0) {
   Container result = {};
-  if (size_hint)
+  if (size_hint) {
     result.reserve(size_hint);
-  for (auto&& x : g)
+  }
+  for (auto&& x : g) {
     result.emplace(result.end(), std::move(x));
+  }
   return result;
 }
 

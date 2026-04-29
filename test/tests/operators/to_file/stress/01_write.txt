@@ -1,0 +1,6 @@
+warning: URL has no `{uuid}` placeholder in its path; files for the same partition key will overwrite each other on rotation
+ --> tests/operators/to_file/stress/01_write.tql:6:9
+  |
+6 | to_file env("FILE_ROOT") + "/out/stress/**/file.json", partition_by=[x] {
+  |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+  |

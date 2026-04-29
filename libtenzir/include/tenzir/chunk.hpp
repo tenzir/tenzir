@@ -233,7 +233,7 @@ public:
   /// is intended to guard against accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-    requires(not std::is_lvalue_reference_v<Buffer> && //
+    requires(not std::is_lvalue_reference_v<Buffer> and //
              requires(const Buffer& buffer) {
                { as_bytes(buffer) } -> std::convertible_to<view_type>;
              })
@@ -566,6 +566,8 @@ auto split(const chunk_ptr& chunk, size_t partition_point)
 
 auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
   -> std::pair<std::vector<chunk_ptr>, std::vector<chunk_ptr>>;
+
+auto join_chunks(std::vector<chunk_ptr> chunks) -> chunk_ptr;
 
 auto size(const chunk_ptr& chunk) -> uint64_t;
 

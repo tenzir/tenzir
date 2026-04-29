@@ -28,11 +28,11 @@ TEST("range_map insertion") {
   REQUIRE(foo);
   CHECK(*foo == "foo");
   foo = rm.lookup(84);
-  CHECK(!foo);
-  CHECK(!rm.insert(42, 84, "bar"));
-  CHECK(!rm.insert(43, 100, "bar"));
-  CHECK(!rm.insert(10, 50, "bar"));
-  CHECK(!rm.insert(10, 85, "bar"));
+  CHECK(not foo);
+  CHECK(not rm.insert(42, 84, "bar"));
+  CHECK(not rm.insert(43, 100, "bar"));
+  CHECK(not rm.insert(10, 50, "bar"));
+  CHECK(not rm.insert(10, 85, "bar"));
   CHECK(rm.insert(100, 200, "bar"));
   auto bar = rm.lookup(100);
   REQUIRE(bar);
@@ -41,9 +41,9 @@ TEST("range_map insertion") {
   REQUIRE(bar);
   CHECK(*bar == "bar");
   bar = rm.lookup(200);
-  CHECK(!bar);
-  CHECK(!rm.insert(10, 300, "baz"));
-  CHECK(!rm.insert(90, 300, "baz"));
+  CHECK(not bar);
+  CHECK(not rm.insert(10, 300, "baz"));
+  CHECK(not rm.insert(90, 300, "baz"));
   CHECK(rm.insert(200, 300, "baz"));
   auto t = rm.find(80);
   CHECK(std::get<0>(t) == 42);
@@ -59,33 +59,33 @@ TEST("range_map injection") {
   CHECK(rm.inject(20, 30, 'c'));
 
   MESSAGE("checking contained intervals");
-  CHECK(!rm.inject(51, 59, 'a'));
-  CHECK(!rm.inject(50, 59, 'a'));
-  CHECK(!rm.inject(50, 60, 'a'));
-  CHECK(!rm.inject(81, 89, 'b'));
-  CHECK(!rm.inject(80, 89, 'b'));
-  CHECK(!rm.inject(80, 90, 'b'));
-  CHECK(!rm.inject(21, 29, 'c'));
-  CHECK(!rm.inject(20, 29, 'c'));
-  CHECK(!rm.inject(20, 30, 'c'));
+  CHECK(not rm.inject(51, 59, 'a'));
+  CHECK(not rm.inject(50, 59, 'a'));
+  CHECK(not rm.inject(50, 60, 'a'));
+  CHECK(not rm.inject(81, 89, 'b'));
+  CHECK(not rm.inject(80, 89, 'b'));
+  CHECK(not rm.inject(80, 90, 'b'));
+  CHECK(not rm.inject(21, 29, 'c'));
+  CHECK(not rm.inject(20, 29, 'c'));
+  CHECK(not rm.inject(20, 30, 'c'));
 
   MESSAGE("checking overlapping intervals");
-  CHECK(!rm.inject(15, 25, 'c'));
-  CHECK(!rm.inject(15, 31, 'c'));
-  CHECK(!rm.inject(25, 35, 'c'));
-  CHECK(!rm.inject(45, 55, 'a'));
-  CHECK(!rm.inject(45, 65, 'a'));
-  CHECK(!rm.inject(55, 65, 'a'));
-  CHECK(!rm.inject(75, 85, 'b'));
-  CHECK(!rm.inject(75, 95, 'b'));
-  CHECK(!rm.inject(85, 95, 'b'));
+  CHECK(not rm.inject(15, 25, 'c'));
+  CHECK(not rm.inject(15, 31, 'c'));
+  CHECK(not rm.inject(25, 35, 'c'));
+  CHECK(not rm.inject(45, 55, 'a'));
+  CHECK(not rm.inject(45, 65, 'a'));
+  CHECK(not rm.inject(55, 65, 'a'));
+  CHECK(not rm.inject(75, 85, 'b'));
+  CHECK(not rm.inject(75, 95, 'b'));
+  CHECK(not rm.inject(85, 95, 'b'));
 
   MESSAGE("checking wrong values");
-  CHECK(!rm.inject(0, 21, 'b'));
-  CHECK(!rm.inject(25, 33, 'b'));
-  CHECK(!rm.inject(25, 55, 'a'));
-  CHECK(!rm.inject(45, 55, 'b'));
-  CHECK(!rm.inject(85, 95, 'c'));
+  CHECK(not rm.inject(0, 21, 'b'));
+  CHECK(not rm.inject(25, 33, 'b'));
+  CHECK(not rm.inject(25, 55, 'a'));
+  CHECK(not rm.inject(45, 55, 'b'));
+  CHECK(not rm.inject(85, 95, 'c'));
 
   MESSAGE("inserting on very left");
   CHECK(rm.inject(18, 20, 'c'));
@@ -142,7 +142,7 @@ TEST("range_map erasure") {
   MESSAGE("adjusting left");
   rm.erase(40, 52);
   i = rm.lookup(51);
-  CHECK(!i);
+  CHECK(not i);
   i = rm.lookup(52);
   REQUIRE(i);
   CHECK(*i == 'a');
@@ -150,7 +150,7 @@ TEST("range_map erasure") {
   MESSAGE("adjusting right");
   rm.erase(58, 70);
   i = rm.lookup(58);
-  CHECK(!i);
+  CHECK(not i);
   i = rm.lookup(57);
   REQUIRE(i);
   CHECK(*i == 'a');
@@ -161,9 +161,9 @@ TEST("range_map erasure") {
   REQUIRE(i);
   CHECK(*i == 'a');
   i = rm.lookup(54);
-  CHECK(!i);
+  CHECK(not i);
   i = rm.lookup(55);
-  CHECK(!i);
+  CHECK(not i);
   i = rm.lookup(56);
   REQUIRE(i);
   CHECK(*i == 'a');
@@ -171,9 +171,9 @@ TEST("range_map erasure") {
   MESSAGE("erasing multiple entirely");
   rm.erase(45, 65);
   i = rm.lookup(53);
-  CHECK(!i);
+  CHECK(not i);
   i = rm.lookup(56);
-  CHECK(!i);
+  CHECK(not i);
 }
 
 TEST("range_map serialization") {

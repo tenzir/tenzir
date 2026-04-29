@@ -1,0 +1,7 @@
+error: missing `serverHost` field in `session_info`
+ --> tests/operators/to_sentinelone_data_lake/validate_session_info.tql:6:77
+  |
+6 | to_sentinelone_data_lake "https://example.com", token="TOKEN", session_info={parser:"json"}, _dry_run=true
+  |                                                                             ^^^^^^^^^^^^^^^ 
+  |
+  = hint: add a field `serverHost` that identifies this Node

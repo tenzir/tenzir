@@ -1,0 +1,6 @@
+error: `max_content_length` must be positive
+ --> tests/operators/to_splunk_validation/error_max_content_length_zero.tql:7:30
+  |
+7 |           max_content_length=0
+  |                              ^ 
+  |

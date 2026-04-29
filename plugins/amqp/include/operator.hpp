@@ -334,6 +334,46 @@ public:
     return to_error(status);
   }
 
+  /// Publishes a message from a byte span (zero-copy).
+  /// @param bytes The message payload.
+  /// @param opts The publishing options.
+  auto publish(std::span<const std::byte> bytes, const publish_options& opts)
+    -> caf::error {
+    TENZIR_DEBUG("publishing {}-byte message with routing key {}", bytes.size(),
+                 opts.routing_key);
+    auto properties = nullptr;
+    auto amqp_data
+      = bytes.empty()
+          ? amqp_empty_bytes
+          : amqp_bytes_t{.len = bytes.size(),
+                         .bytes = const_cast<void*>(
+                           reinterpret_cast<const void*>(bytes.data()))};
+    auto status = amqp_basic_publish(
+      conn_, amqp_channel_t{opts.channel}, as_amqp_bytes(opts.exchange),
+      as_amqp_bytes(opts.routing_key), as_amqp_bool(opts.mandatory),
+      as_amqp_bool(opts.immediate), properties, amqp_data);
+    return to_error(status);
+  }
+
+  /// Consumes frames from broker, simply for the side effect of processing
+  /// heartbeats implicitly. Required if otherwise no interaction with the
+  /// broker would occur.
+  auto process_heartbeat() -> caf::error {
+    if (conn_ == nullptr) {
+      return {};
+    }
+    amqp_frame_t frame;
+    struct timeval tv = {0, 0};
+    int status;
+    do {
+      status = amqp_simple_wait_frame_noblock(conn_, &frame, &tv);
+      if (AMQP_STATUS_TIMEOUT != status and AMQP_STATUS_OK != status) {
+        return to_error(status, "failed to process AMQP heartbeat");
+      }
+    } while (status == AMQP_STATUS_OK);
+    return {};
+  }
+
   /// Consumes frames from broker, simply for the side effect of processing
   /// heartbeats implicitly. Required if otherwise no interaction with the
   /// broker would occur.
@@ -348,7 +388,7 @@ public:
     }
     do {
       status = amqp_simple_wait_frame_noblock(conn_, &frame, &tv);
-      if (AMQP_STATUS_TIMEOUT != status && AMQP_STATUS_OK != status) {
+      if (AMQP_STATUS_TIMEOUT != status and AMQP_STATUS_OK != status) {
         diagnostic::warning("unexpected error while processing heartbeats")
           .note("{}", amqp_error_string2(status))
           .emit(ctrl.diagnostics());
@@ -847,7 +887,7 @@ public:
         });
     }
     for (auto chunk : input) {
-      if (not chunk || chunk->size() == 0) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }

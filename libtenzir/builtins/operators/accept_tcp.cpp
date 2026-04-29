@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/dns.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/async/tls.hpp>
@@ -23,21 +24,25 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/socket.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/CancellationToken.h>
+#include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/DetachOnCancel.h>
 #include <folly/coro/Retry.h>
+#include <folly/coro/WithCancellation.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/fibers/Semaphore.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <unordered_map>
@@ -67,16 +72,48 @@ struct AcceptTcpArgs {
   located<std::string> endpoint;
   Option<located<data>> tls;
   Option<located<uint64_t>> max_connections;
+  bool resolve_hostnames = false;
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
+
+struct PeerInfo {
+  ip address;
+  int64_t port;
+};
+
+auto make_peer_info(folly::SocketAddress const& address) -> PeerInfo {
+  auto storage = sockaddr_storage{};
+  auto length = address.getAddress(&storage);
+  TENZIR_ASSERT(length > 0);
+  auto result = ip{};
+  if (storage.ss_family == AF_INET) {
+    auto sockaddr = sockaddr_in{};
+    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
+    auto err = convert(sockaddr, result);
+    TENZIR_ASSERT(not err);
+  } else {
+    TENZIR_ASSERT(storage.ss_family == AF_INET6);
+    auto sockaddr = sockaddr_in6{};
+    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
+    auto err = convert(sockaddr, result);
+    TENZIR_ASSERT(not err);
+  }
+  return {
+    .address = result,
+    .port = int64_t{address.getPort()},
+  };
+}
 
 class AcceptTcpListener final : public Operator<void, table_slice> {
 public:
   using Connection = Arc<folly::coro::Transport>;
 
   struct Accepted {
-    Box<folly::coro::Transport> transport;
+    Connection transport;
+    ip peer_ip;
+    int64_t peer_port;
+    Arc<ReverseDnsResult> peer_reverse_dns;
   };
 
   struct Payload {
@@ -92,24 +129,23 @@ public:
   struct AcceptLoopFinished {};
 
   using Message
-    = variant<Accepted, Payload, ConnectionClosed, AcceptLoopFinished>;
+    = variant<AcceptLoopFinished, Accepted, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit AcceptTcpListener(AcceptTcpArgs args)
     : args_{std::move(args)},
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
+      reverse_dns_{std::in_place,
+                   ReverseDnsConfig{
+                     .max_in_flight = detail::narrow<size_t>(max_connections_),
+                   }},
       connection_slots_{detail::narrow<size_t>(max_connections_)} {
-    // Parse endpoint string to SocketAddress (validation already done in
-    // describe)
     auto ep = to<struct endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
-    if (ep->host.empty()) {
-      address_.setFromLocalPort(ep->port->number());
-    } else {
-      address_.setFromHostPort(ep->host, ep->port->number());
-    }
+    bind_host_ = ep->host;
+    bind_port_ = ep->port->number();
     if (args_.tls) {
       tls_ = tls_options{*args_.tls, {.is_server = true}};
     }
@@ -128,6 +164,32 @@ public:
         co_return;
       }
       tls_context_ = std::move(*context);
+    }
+    if (bind_host_.empty()) {
+      address_.setFromLocalPort(bind_port_);
+    } else {
+      auto resolved = co_await forward_dns_.resolve(bind_host_);
+      auto* addresses = resolved->is_err()
+                          ? nullptr
+                          : try_as<ForwardDnsResolved>(&resolved->unwrap());
+      if (not addresses or addresses->answers.empty()) {
+        auto diag = diagnostic::error("failed to resolve listen address")
+                      .primary(args_.endpoint.source)
+                      .note("host: {}", bind_host_);
+        if (resolved->is_err()) {
+          std::move(diag)
+            .note("reason: {}", resolved->unwrap_err().error)
+            .emit(ctx);
+        } else {
+          std::move(diag)
+            .note("reason: no matching A or AAAA records")
+            .emit(ctx);
+        }
+        request_abort();
+        co_return;
+      }
+      address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
+                             bind_port_);
     }
     TENZIR_DEBUG("starting listener on {}", address_.describe());
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
@@ -172,18 +234,38 @@ public:
         }
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
-        auto peer_addr = transport->getPeerAddress();
         auto peer_record = record{
-          {"ip", peer_addr.getAddressStr()},
-          {"port", int64_t{peer_addr.getPort()}},
+          {"ip", accepted.peer_ip},
+          {"port", accepted.peer_port},
         };
+        if (args_.resolve_hostnames) {
+          auto hostname = Option<std::string>{};
+          if (not accepted.peer_reverse_dns->is_err()) {
+            if (auto* resolved = try_as<ReverseDnsResolved>(
+                  &accepted.peer_reverse_dns->unwrap())) {
+              hostname = resolved->hostname;
+            }
+          }
+          peer_record.emplace("hostname", std::move(hostname));
+          if (accepted.peer_reverse_dns->is_err()
+              and not peer_resolution_warning_emitted_) {
+            diagnostic::warning("{}",
+                                accepted.peer_reverse_dns->unwrap_err().error)
+              .note("failed to resolve peer hostname for {}", accepted.peer_ip)
+              .note(
+                "set `resolve_hostnames=false` to disable hostname resolution")
+              .primary(args_.endpoint.source)
+              .emit(ctx);
+            peer_resolution_warning_emitted_ = true;
+          }
+        }
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;
         auto env = substitute_ctx::env_t{};
         env[args_.peer_info] = std::move(peer_record);
         auto bytes_read = ctx.make_counter(
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    peer_addr.getAddressStr())},
+                                    fmt::to_string(accepted.peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_);
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
@@ -198,9 +280,8 @@ public:
         auto key = sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy));
-        auto connection = Connection{std::move(*transport)};
         auto [_, inserted]
-          = connections_.emplace(conn_id, std::move(connection));
+          = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
@@ -383,6 +464,14 @@ private:
     auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
       release_connection_slot();
     }};
+    auto current_token = co_await folly::coro::co_current_cancellation_token;
+    auto cancel_token = folly::cancellation_token_merge(
+      current_token, accept_cancel_->getToken());
+    if (lifecycle_ != Lifecycle::running
+        or cancel_token.isCancellationRequested()) {
+      close_transport(std::move(transport));
+      co_return;
+    }
     if (tls_context_) {
       try {
         transport = Box<folly::coro::Transport>{
@@ -400,8 +489,39 @@ private:
         co_return;
       }
     }
+    if (lifecycle_ != Lifecycle::running
+        or cancel_token.isCancellationRequested()) {
+      close_transport(std::move(transport));
+      co_return;
+    }
+    auto peer_info = make_peer_info(peer);
+    auto peer_reverse_dns
+      = Arc<ReverseDnsResult>{ReverseDnsLookup{DnsNotFound{}}};
+    if (args_.resolve_hostnames) {
+      try {
+        peer_reverse_dns = co_await folly::coro::co_withCancellation(
+          cancel_token, reverse_dns_->resolve(peer_info.address));
+      } catch (folly::OperationCancelled const&) {
+        close_transport(std::move(transport));
+        if (current_token.isCancellationRequested()
+            and not accept_cancel_->getToken().isCancellationRequested()) {
+          throw;
+        }
+        co_return;
+      }
+    }
+    if (lifecycle_ != Lifecycle::running
+        or cancel_token.isCancellationRequested()) {
+      close_transport(std::move(transport));
+      co_return;
+    }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
-    co_await message_queue_->enqueue(Accepted{std::move(transport)});
+    co_await message_queue_->enqueue(Accepted{
+      .transport = Connection{std::move(*transport)},
+      .peer_ip = peer_info.address,
+      .peer_port = peer_info.port,
+      .peer_reverse_dns = std::move(peer_reverse_dns),
+    });
     release_connection_slot_guard.disable();
   }
 
@@ -477,12 +597,17 @@ private:
   folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
   uint64_t max_connections_ = 128;
+  std::string bind_host_;
+  uint16_t bind_port_ = 0;
+  ForwardDnsResolver forward_dns_;
+  Arc<ReverseDnsResolver> reverse_dns_;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Semaphore connection_slots_;
   std::unordered_map<uint64_t, Connection> connections_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   bool accept_loop_finished_ = true;
+  bool peer_resolution_warning_emitted_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
   mutable uint64_t next_conn_id_{0};
 };
@@ -499,6 +624,7 @@ public:
     auto tls_arg = d.named("tls", &AcceptTcpArgs::tls);
     auto max_connections_arg
       = d.named("max_connections", &AcceptTcpArgs::max_connections);
+    d.named("resolve_hostnames", &AcceptTcpArgs::resolve_hostnames);
     auto pipeline_arg = d.pipeline(&AcceptTcpArgs::user_pipeline,
                                    {{"peer", &AcceptTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {

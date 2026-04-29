@@ -22,7 +22,7 @@ public:
   explicit Head(HeadArgs args) : remaining_{args.count} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     // TODO: Do we want to guarantee this?
     TENZIR_ASSERT(remaining_ > 0);

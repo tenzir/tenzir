@@ -28,7 +28,7 @@ public:
     -> generator<chunk_ptr> {
     auto chunks = std::vector<chunk_ptr>{};
     for (auto&& chunk : input) {
-      if (chunk && chunk->size() != 0) {
+      if (chunk and chunk->size() != 0) {
         chunks.push_back(std::move(chunk));
       }
       co_yield {};

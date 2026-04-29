@@ -1,0 +1,5 @@
+{
+  _keep: 7,
+  other: 1,
+  keep_copy: 7,
+}

@@ -1,7 +1,7 @@
-//    _   _____   __________
-//   | | / / _ | / __/_  __/     Visibility
-//   | |/ / __ |_\ \  / /          Across
-//   |___/_/ |_/___/ /_/       Space and Time
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
@@ -23,6 +23,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/logger.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -85,9 +86,8 @@ auto plugin_serialize(Inspector& f, const Base& x) -> bool {
       return false;
     }
   }
-  TENZIR_ASSERT(p,
-                fmt::format("serialization plugin `{}` for `{}` not found",
-                            name, caf::detail::pretty_type_name(typeid(Base))));
+  TENZIR_ASSERT(p, fmt::format("serialization plugin `{}` for `{}` not found",
+                               name, detail::pretty_type_name(typeid(Base))));
   return p->serialize(std::ref(f), x);
 }
 
@@ -102,8 +102,7 @@ auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
     }
     auto const* p = plugins::find<serialization_plugin<Base>>(name);
     TENZIR_ASSERT(p, fmt::format("serialization plugin `{}` for `{}` not found",
-                                 name,
-                                 caf::detail::pretty_type_name(typeid(Base))));
+                                 name, detail::pretty_type_name(typeid(Base))));
     p->deserialize(f, x);
     return x != nullptr;
   } else {

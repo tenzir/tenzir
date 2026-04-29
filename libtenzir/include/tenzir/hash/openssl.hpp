@@ -162,14 +162,14 @@ public:
     if (bytes.empty()) {
       return;
     }
-    TENZIR_ASSERT_ALWAYS(! finished_);
+    TENZIR_ASSERT_ALWAYS(not finished_);
     const auto* ptr = reinterpret_cast<const unsigned char*>(bytes.data());
     const auto update_ok = EVP_DigestUpdate(ctx_.get(), ptr, bytes.size());
     TENZIR_ASSERT_ALWAYS(update_ok == 1);
   }
 
   auto finish() noexcept -> result_type {
-    if (! finished_) {
+    if (not finished_) {
       auto* out = reinterpret_cast<unsigned char*>(digest_.data());
       const auto final_ok = EVP_DigestFinal_ex(ctx_.get(), out, nullptr);
       TENZIR_ASSERT_ALWAYS(final_ok == 1);
@@ -232,14 +232,14 @@ public:
     if (bytes.empty()) {
       return;
     }
-    TENZIR_ASSERT_ALWAYS(! finished_);
+    TENZIR_ASSERT_ALWAYS(not finished_);
     const auto* ptr = reinterpret_cast<const unsigned char*>(bytes.data());
     const auto update_ok = EVP_MAC_update(ctx_.get(), ptr, bytes.size());
     TENZIR_ASSERT_ALWAYS(update_ok == 1);
   }
 
   auto finish() noexcept -> result_type {
-    if (! finished_) {
+    if (not finished_) {
       auto* out = reinterpret_cast<unsigned char*>(digest_.data());
       size_t len = 0;
       const auto final_ok = EVP_MAC_final(ctx_.get(), out, &len, digest_size);

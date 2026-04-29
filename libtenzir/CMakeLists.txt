@@ -27,13 +27,16 @@ if (NOT tsl-robin-map_FOUND)
     EXPORT tsl-robin-mapTargets
     FILE tsl-robin-mapTargets.cmake
     NAMESPACE tsl::)
-  add_custom_target(
-    tsl-robin-map-targets-link
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
     COMMAND
       ${CMAKE_COMMAND} -E create_symlink
       "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
       "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
     COMMENT "Linking tsl-robin-map targets")
+  add_custom_target(tsl-robin-map-targets-link
+                    DEPENDS "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake")
   install(
     EXPORT tsl-robin-mapTargets
     DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
@@ -332,7 +335,9 @@ else ()
   dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 endif ()
 
-# Link against c-ares.
+# Link against c-ares. The core async DNS utilities live in libtenzir, while
+# the legacy dns_lookup builtin still uses c-ares directly.
+target_link_libraries(libtenzir PRIVATE c-ares::cares)
 target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
@@ -447,14 +452,21 @@ if (NOT simdjson_FOUND)
       ON
       CACHE BOOL "")
   add_subdirectory(aux/simdjson)
+  export(
+    EXPORT simdjsonTargets
+    FILE simdjsonTargets.cmake
+    NAMESPACE simdjson::)
   set(_tenzir_bundled_simdjson "simdjson")
-  add_custom_target(
-    simdjson-targets-link
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
     COMMAND
       "${CMAKE_COMMAND}" -E create_symlink
       "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
       "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
     COMMENT "Linking simdjson targets")
+  add_custom_target(simdjson-targets-link
+                    DEPENDS "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake")
   TenzirSystemizeTarget(simdjson)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
@@ -546,6 +558,12 @@ elseif (TARGET proxygen::proxygen)
 else ()
   message(FATAL_ERROR "No supported proxygen target found")
 endif ()
+if (TARGET proxygen::proxygen_coro_server)
+  set(_tenzir_proxygen_server_target proxygen::proxygen_coro_server)
+elseif (TARGET proxygen::proxygen_http_coro_server_coro_httpserver)
+  set(_tenzir_proxygen_server_target
+      proxygen::proxygen_http_coro_server_coro_httpserver)
+endif ()
 # Ensure bundled proxygen headers win over Homebrew's proxygen headers. The
 # bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
 # requirements propagate directly places the proxygen include roots after
@@ -566,6 +584,9 @@ endif ()
 # archive regardless of whether proxygen comes from bundled or system packages.
 target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
                                         proxygen_utils_trace_event_types)
+if (_tenzir_proxygen_server_target)
+  target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_server_target})
+endif ()
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
 # prevents that; the proxygen symbols are resolved through libtenzir.so
@@ -574,8 +595,17 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
     PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_target}>)
+  if (_tenzir_proxygen_server_target)
+    target_link_libraries(
+      libtenzir_builtins
+      PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_server_target}>)
+  endif ()
 else ()
   target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
+  if (_tenzir_proxygen_server_target)
+    target_link_libraries(libtenzir_builtins
+                          PRIVATE ${_tenzir_proxygen_server_target})
+  endif ()
 endif ()
 target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
                                              nsel_CONFIG_SELECT_EXPECTED=1)
@@ -729,14 +759,17 @@ file(
 
 unset(set_tenzir_version_build_metadata)
 
-# We generate config.cpp as a byproduct of a custom target so we can re-generate
-# the version string and build tree hash on every build. Note that this must not
-# be added to the ALL target. The dependency is inferred from the byproduct
-# automatically.
+# Re-run the version generation script on every build so git-derived build
+# metadata, including the dirty suffix, stays current. The configure_file() in
+# update-config.cmake only updates config.cpp when the contents actually change.
 add_custom_target(
   libtenzir_update_config
   BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
-  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
+  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+          "${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in"
+          "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TenzirVersion.cmake"
+          "${CMAKE_CURRENT_SOURCE_DIR}/../version.json")
 
 target_sources(
   libtenzir
@@ -744,6 +777,7 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
+add_dependencies(libtenzir libtenzir_update_config)
 
 tenzirconfigurepchreuse(
   libtenzir

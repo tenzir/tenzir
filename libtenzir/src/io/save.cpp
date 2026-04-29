@@ -36,7 +36,7 @@ save(const std::filesystem::path& filename, std::span<const std::byte> xs) {
   tmp += ".tmp";
   if (auto err = write(tmp, xs); err.valid()) {
     if (const auto removed = std::filesystem::remove(tmp, ec);
-        ! removed || ec) {
+        not removed or ec) {
       TENZIR_WARN("failed to remove file {} : {}", tmp, ec.message());
     }
     return err;

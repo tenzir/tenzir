@@ -130,7 +130,7 @@ public:
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
     while (true) {
-      while (accept(tk::newline) || accept(tk::pipe)) {
+      while (accept(tk::newline) or accept(tk::pipe)) {
       }
       if (at_pipeline_end()) {
         break;
@@ -266,7 +266,7 @@ public:
       return parse_invocation(std::move(entity));
     }
     auto unary_expr = parse_unary_expression();
-    if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
+    if (auto* call = try_as<ast::function_call>(unary_expr)) {
       // TODO: We patch a top-level function call to be an operator invocation
       // instead. This could be done differently by slightly rewriting the
       // parser. Because this is not (yet) reflected in the AST, the optional
@@ -293,6 +293,20 @@ public:
       }
       return ast::invocation{std::move(call->fn), std::move(call->args)};
     }
+    if (auto* type_expr = try_as<ast::type_expr>(unary_expr)) {
+      auto* ident = try_as<ast::type_name>(type_expr->def);
+      if (not ident) {
+        diagnostic::error("expected identifier").primary(*type_expr).throw_();
+      }
+      auto equal = expect(tk::equal).location;
+      auto def = parse_type_def();
+      return ast::type_stmt{
+        type_expr->keyword,
+        ast::type_name{std::move(*ident)},
+        equal,
+        std::move(def),
+      };
+    }
     auto left = to_selector(std::move(unary_expr));
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
@@ -309,11 +323,51 @@ public:
                   : nullptr;
     if (root) {
       auto entity = parse_entity(std::move(root->id));
+      if (entity.path.size() == 1 and entity.path[0].name == "type") {
+        diagnostic::error("expected identifier after `type` declaration")
+          .primary(entity)
+          .throw_();
+      }
       return parse_invocation(std::move(entity));
     }
     diagnostic::error("{}", "expected `=` after selector")
       .primary(next_location())
       .throw_();
+  }
+
+  auto parse_type_def() -> ast::type_def {
+    if (auto id = accept(tk::identifier)) {
+      using tn = struct type_name;
+      return tn{id.as_identifier()};
+    }
+    if (auto lbracket = accept(tk::lbracket)) {
+      auto scope = ignore_newlines(true);
+      auto type = parse_type_def();
+      auto rbracket = expect(tk::rbracket);
+      return ast::list_def{
+        lbracket.location,
+        std::move(type),
+        rbracket.location,
+      };
+    }
+    auto start = expect(tk::lbrace).location;
+    auto scope = ignore_newlines(true);
+    auto fields = std::vector<ast::record_def::field>{};
+    while (not peek(tk::rbrace)) {
+      auto name = expect(tk::identifier).as_identifier();
+      expect(tk::colon);
+      auto def = parse_type_def();
+      fields.emplace_back(std::move(name), std::move(def));
+      if (not peek(tk::rbrace)) {
+        expect(tk::comma);
+      }
+    }
+    auto end = expect(tk::rbrace);
+    return ast::record_def{
+      start,
+      std::move(fields),
+      end.location,
+    };
   }
 
   auto parse_invocation(entity op, std::vector<ast::expression> args)
@@ -440,6 +494,8 @@ public:
     return parse_expression(parse_unary_expression(), min_prec);
   }
 
+  // TODO: Future us/ast problem with type expressions
+
   auto parse_entity() -> ast::entity {
     return parse_entity(expect(tk::identifier).as_identifier());
   }
@@ -454,6 +510,15 @@ public:
   }
 
   auto parse_unary_expression() -> ast::expression {
+    if (peek_identifier("type")
+        and (silent_peek_n(tk::identifier, 1) or silent_peek_n(tk::lbrace, 1)
+             or silent_peek_n(tk::rbrace, 1))) {
+      auto type_kw = expect(tk::identifier).location;
+      return ast::type_expr{
+        type_kw,
+        parse_type_def(),
+      };
+    }
     if (auto op = peek_unary_op()) {
       auto location = advance();
       auto expr = parse_expression(precedence(*op));
@@ -496,7 +561,7 @@ public:
       // parse it as an operator if there is whitespace after `foo`.
       // Alternatively, we could see whether we can determine what this has to
       // be from the surrounding context, but that seems a bit brittle.
-      if (not trivia_before_next() && peek(tk::lbracket)) {
+      if (not trivia_before_next() and peek(tk::lbracket)) {
         auto lbracket = expect(tk::lbracket);
         if (auto rbracket = accept(tk::rbracket)) {
           expr = ast::unpack{
@@ -697,9 +762,10 @@ public:
         .primary(next_location())
         .throw_();
     }
+    auto id = std::move(entity.path.front());
     auto question_mark = accept(tk::question_mark);
     return ast::root_field{
-      std::move(entity.path[0]),
+      std::move(id),
       static_cast<bool>(question_mark),
     };
   }
@@ -708,9 +774,9 @@ public:
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
     auto is_record
-      = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
-        || silent_peek(tk::string_begin) || silent_peek(tk::raw_string_begin)
-        || (silent_peek(tk::identifier) && silent_peek_n(tk::colon, 1));
+      = silent_peek(tk::rbrace) or silent_peek(tk::dot_dot_dot)
+        or silent_peek(tk::string_begin) or silent_peek(tk::raw_string_begin)
+        or (silent_peek(tk::identifier) and silent_peek_n(tk::colon, 1));
     if (is_record) {
       return parse_record(begin.location);
     }
@@ -1006,11 +1072,11 @@ public:
       return x;
     }
     if (static_cast<double>(min<int64_t>) <= integral
-        && integral <= static_cast<double>(max<int64_t>)) {
+        and integral <= static_cast<double>(max<int64_t>)) {
       return static_cast<int64_t>(x);
     }
     if (static_cast<double>(min<uint64_t>) <= integral
-        && integral <= static_cast<double>(max<uint64_t>)) {
+        and integral <= static_cast<double>(max<uint64_t>)) {
       return static_cast<uint64_t>(x);
     }
     return x;
@@ -1217,16 +1283,16 @@ public:
   }
 
   auto at_pipeline_end() -> bool {
-    return eoi() || silent_peek(tk::rbrace);
+    return eoi() or silent_peek(tk::rbrace);
   }
 
   auto at_statement_end() -> bool {
-    return eoi() || peek(tk::newline) || peek(tk::pipe)
-           || silent_peek(tk::rbrace);
+    return eoi() or peek(tk::newline) or peek(tk::pipe)
+           or silent_peek(tk::rbrace);
   }
 
   auto accept_stmt_sep() -> bool {
-    return accept(tk::newline) || accept(tk::pipe);
+    return accept(tk::newline) or accept(tk::pipe);
   }
 
   auto token_location(size_t idx) const -> location {
@@ -1277,13 +1343,17 @@ public:
   }
 
   auto silent_peek(token_kind kind) -> bool {
-    return next_ < tokens_.size() && tokens_[next_].kind == kind;
+    return next_ < tokens_.size() and tokens_[next_].kind == kind;
   }
 
   auto peek(token_kind kind) -> bool {
     // TODO: Does this count as trying the token?
     tries_.push_back(kind);
     return silent_peek(kind);
+  }
+
+  auto peek_identifier(std::string_view name) -> bool {
+    return peek(tk::identifier) && token_string(next_) == name;
   }
 
   // TODO: Can we get rid of this?
@@ -1381,7 +1451,7 @@ public:
 
   void consume_trivia_with_newlines() {
     consume_while([&](token_kind k) {
-      return is_trivia(k) || k == token_kind::newline;
+      return is_trivia(k) or k == token_kind::newline;
     });
   }
 

@@ -61,6 +61,8 @@ Run `/compile` to compile the build. Fall back to `scripts/build.sh` if
 `/compile` is unavailable.
 
 These commands auto-discover a configured build directory under `build/`.
+By default, discovery picks the directory with the most recently modified
+`CMakeCache.txt`. Set `BUILD_DIR` to override this default.
 
 ### Run pipelines
 
@@ -113,9 +115,9 @@ TQL surface or command line tools.
 
 ## C++ development
 
-Read the relevant references below before writing or planning any C++ code.
-Do not assume patterns from surrounding code—older code may deviate from
-current conventions.
+Read the relevant references below before writing, reviewing, or reasoning
+about C++ code. Do not assume patterns from surrounding code—older code may
+deviate from current conventions.
 
 ### Core principle
 
@@ -138,6 +140,7 @@ series or slice first, then iterate only when row-wise access is necessary.
 - [operators.md](.agents/references/operators.md): TQL operator plugins and secrets
 - [executor.md](.agents/references/executor.md): Executor and pipeline execution
 - [operator-porting.md](.agents/references/operator-porting.md): Porting operators from `crtp_operator` to `Operator<Input, Output>`
+- [operator-review.md](.agents/references/operator-review.md): Review questionnaire for ported operators
 
 ### Rust-inspired vocabulary and helpers
 

@@ -150,6 +150,9 @@ struct Description {
   std::optional<Validator> validator;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
+  std::optional<Setter<event_order>> set_order;
+  bool propagate_order = false;
+  event_order initial_order = event_order::ordered;
   // FIXME: Document.
   std::optional<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -162,7 +165,7 @@ public:
   auto describe_shared() const -> std::shared_ptr<const Description>;
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> final;
+    -> failure_or<ir::CompileResult> final;
 
 private:
   mutable std::once_flag desc_init_flag_;
@@ -308,14 +311,21 @@ class DescribeCtx {
 public:
   DescribeCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               std::optional<const PipelineArg> pipeline,
-              const Description& desc, diagnostic_handler& dh)
+              const Description& desc, location operator_location,
+              diagnostic_handler& dh)
     : args_{args},
       named_args_{named_args},
       pipeline_{std::move(pipeline)},
       desc_{&desc},
+      operator_location_{operator_location},
       dh_{&dh} {
   }
 
+  /// Returns the parsed argument value or `std::nullopt` if the caller omitted
+  /// the argument. This also applies to omitted `named_optional(...)`
+  /// arguments, even when the destination member in `Args` has a default
+  /// initializer. Validation callbacks must apply args-struct defaults
+  /// explicitly when they need an effective value.
   template <class Args, class T>
   auto get(Argument<Args, T> arg) -> std::optional<T> {
     const Arg* value = nullptr;
@@ -453,6 +463,10 @@ public:
     return result;
   }
 
+  auto operator_location() const -> location {
+    return operator_location_;
+  }
+
   explicit(false) operator diagnostic_handler&() {
     return *dh_;
   }
@@ -504,6 +518,7 @@ private:
   std::span<const NamedArg> named_args_;
   std::optional<const PipelineArg> pipeline_;
   const Description* desc_;
+  location operator_location_;
   diagnostic_handler* dh_;
 };
 
@@ -900,7 +915,6 @@ public:
   auto optimize(F&& f) -> Description;
 
   auto without_optimize() -> Description {
-    // TODO
     return std::move(desc_);
   }
 
@@ -915,8 +929,21 @@ public:
     desc_.set_operator_location = make_setter(ptr);
   }
 
+  /// Registers a member of `Args` to be populated with the optimization
+  /// order, i.e., the weakest ordering guarantee from downstream.
+  auto optimization_order(event_order Args::* ptr) {
+    TENZIR_ASSERT(not desc_.set_order);
+    desc_.set_order = make_setter(ptr);
+  }
+
   auto order_invariant() -> Description {
-    // TODO
+    desc_.propagate_order = true;
+    return std::move(desc_);
+  }
+
+  auto unordered() -> Description {
+    desc_.propagate_order = true;
+    desc_.initial_order = event_order::unordered;
     return std::move(desc_);
   }
 
@@ -933,6 +960,7 @@ using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
 using _::operator_plugin::Spawn;
+using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;
 
 } // namespace tenzir

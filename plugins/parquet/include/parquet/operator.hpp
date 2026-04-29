@@ -52,17 +52,15 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   try {
     auto input_buffer = ::parquet::ParquetFileReader::Open(
       std::move(input_file), parquet_reader_properties);
-    ::arrow::Status arrow_file_reader_status
-      = ::parquet::arrow::FileReader::Make(arrow_memory_pool(),
-                                           std::move(input_buffer),
-                                           arrow_reader_properties,
-                                           &out_buffer);
-    if (! arrow_file_reader_status.ok()) {
-      diagnostic::error("{}",
-                        arrow_file_reader_status.ToStringWithoutContextLines())
+    auto out_buffer_result = ::parquet::arrow::FileReader::Make(
+      arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
+    if (not out_buffer_result.ok()) {
+      diagnostic::error(
+        "{}", out_buffer_result.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
+    out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
   } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
     diagnostic::error("invalid or corrupted parquet file: {}", err.what())
       .emit(ctrl.diagnostics());
@@ -77,7 +75,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   }
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
        **rb_reader) {
-    if (! maybe_batch.ok()) {
+    if (not maybe_batch.ok()) {
       diagnostic::error("{}",
                         maybe_batch.status().ToStringWithoutContextLines())
         .note("failed read record batch")
@@ -290,7 +288,7 @@ public:
     if (options_.compression_type) {
       auto result_compression_type = arrow::util::Codec::GetCompressionType(
         options_.compression_type->inner);
-      if (! result_compression_type.ok()) {
+      if (not result_compression_type.ok()) {
         diagnostic::error(
           "{}", result_compression_type.status().ToStringWithoutContextLines())
           .note("failed to parse compression type")
@@ -301,16 +299,16 @@ public:
       parquet_writer_props_builder.compression(
         result_compression_type.MoveValueUnsafe());
       if (options_.compression_type->inner == "brotli"
-          && (options_.compression_level->inner < 1
-              || options_.compression_level->inner > 11)) {
+          and (options_.compression_level->inner < 1
+               or options_.compression_level->inner > 11)) {
         diagnostic::error("invalid compression level")
           .note("must be a value between 1 and 11")
           .primary(options_.compression_level->source)
           .emit(ctrl.diagnostics());
       }
       if (options_.compression_type->inner == "gzip"
-          && (options_.compression_level->inner < 1
-              || options_.compression_level->inner > 9)) {
+          and (options_.compression_level->inner < 1
+               or options_.compression_level->inner > 9)) {
         diagnostic::error("invalid compression level")
           .note("must be a value between 1 and 9")
           .primary(options_.compression_level->source)
@@ -371,7 +369,7 @@ public:
       auto record_batch = remove_empty_records(
         to_record_batch(input), options_.times_in_milliseconds.has_value());
       auto record_batch_status = writer->WriteRecordBatch(*record_batch);
-      if (! record_batch_status.ok()) {
+      if (not record_batch_status.ok()) {
         diagnostic::error("{}",
                           record_batch_status.ToStringWithoutContextLines())
           .note("failed to write record batch")
@@ -382,7 +380,7 @@ public:
       co_yield out_buffer->purge();
     }
     auto close_status = writer->Close();
-    if (! close_status.ok()) {
+    if (not close_status.ok()) {
       diagnostic::error("{}", close_status.ToStringWithoutContextLines())
         .note("failed to write metadata and close")
         .emit(ctrl.diagnostics());

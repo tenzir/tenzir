@@ -23,18 +23,18 @@ inline auto to_lines(generator<chunk_ptr> input)
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
-    if (!chunk || chunk->size() == 0) {
+    if (not chunk or chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
     const auto* const end = begin + chunk->size();
-    if (ended_on_carriage_return && *begin == '\n') {
+    if (ended_on_carriage_return and *begin == '\n') {
       ++begin;
     };
     ended_on_carriage_return = false;
     for (const auto* current = begin; current != end; ++current) {
-      if (*current != '\n' && *current != '\r') {
+      if (*current != '\n' and *current != '\r') {
         continue;
       }
       if (buffer.empty()) {
@@ -57,7 +57,7 @@ inline auto to_lines(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (!buffer.empty()) {
+  if (not buffer.empty()) {
     co_yield buffer;
   }
 }

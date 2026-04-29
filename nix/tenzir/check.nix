@@ -23,12 +23,20 @@ stdenvNoCC.mkDerivation {
       py3 = pkgsBuildBuild.python3.withPackages (ps: [
         ps.datetime
         ps.pyarrow
+        ps.pyzmq
         ps.python-box
         ps.trustme
       ]);
       template = path: ''
-        if [ -d "${path}/test-legacy/tests" ]; then
+        if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
+          tenzir-test \
+            --root "${src}/test" \
+            -j $NIX_BUILD_CORES \
+            ${path}/test
+        fi
+        if [ -d "${path}/test-legacy/tests" ]; then
+          echo "running ${path} legacy integration tests"
           tenzir-test \
             --root "${src}/test-legacy" \
             -j $NIX_BUILD_CORES \
@@ -44,7 +52,7 @@ stdenvNoCC.mkDerivation {
       export TENZIR_BINARY=${lib.getBin unchecked}/bin/tenzir
       export TENZIR_NODE_BINARY=${lib.getBin unchecked}/bin/tenzir-node
       export TENZIR_ALLOC_STATS=1
-      ${lib.optionalString (stdenvNoCC.buildPlatform.isx86_64) "export TENZIR_ALLOC_ACTOR_STATS=1"}
+      ${lib.optionalString stdenvNoCC.buildPlatform.isx86_64 "export TENZIR_ALLOC_ACTOR_STATS=1"}
       mkdir -p cache data state tmp
       export XDG_CACHE_HOME=$PWD/cache
       export XDG_DATA_HOME=$PWD/data
@@ -53,9 +61,7 @@ stdenvNoCC.mkDerivation {
       reqs=(--no-deps ${tenzirPythonPkgs.tenzir-wheels}/*.whl)
       export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="''${reqs[*]}"
       ${template "."}
-      ${lib.concatMapStrings template (
-        builtins.map (x: x.src or x) (builtins.concatLists unchecked.plugins)
-      )}
+      ${lib.concatMapStrings template (map (x: x.src or x) (builtins.concatLists unchecked.plugins))}
     '';
 
   # We just symlink all outputs of the unchecked derivation.

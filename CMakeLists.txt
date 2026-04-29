@@ -279,11 +279,7 @@ target_compile_options(
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libtenzir_internal
                          INTERFACE -Wno-unknown-warning-option)
-  target_compile_options(libtenzir_internal
-                         INTERFACE -Wno-unknown-warning-option)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 22)
-    add_compile_options(-Wno-c2y-extensions)
-  endif ()
+  target_compile_options(libtenzir_internal INTERFACE -Wno-c2y-extensions)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning)
 endif ()
@@ -681,17 +677,34 @@ option(TENZIR_ENABLE_BUNDLED_DEPENDENCIES
 
 # -- schemas -------------------------------------------------------------------
 
+file(GLOB_RECURSE tenzir_bundled_schema_files CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/schema/*")
+list(SORT tenzir_bundled_schema_files)
+set(_tenzir_schema_manifest
+    "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/tenzir-schema-manifest.txt")
+list(JOIN tenzir_bundled_schema_files "\n" _tenzir_schema_manifest_contents)
+file(CONFIGURE OUTPUT "${_tenzir_schema_manifest}" CONTENT
+     "${_tenzir_schema_manifest_contents}\n" @ONLY)
+
 option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
-  add_custom_target(
-    tenzir-schema
+  set(_tenzir_schema_stamp
+      "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/tenzir-schema.stamp")
+  add_custom_command(
+    OUTPUT "${_tenzir_schema_stamp}"
     COMMAND ${CMAKE_COMMAND} -E remove_directory
             "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
     COMMAND
       ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
       "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${_tenzir_schema_stamp}"
+    DEPENDS "${_tenzir_schema_manifest}" ${tenzir_bundled_schema_files}
     COMMENT "Copying schema directory")
+  add_custom_target(tenzir-schema DEPENDS "${_tenzir_schema_stamp}")
+  unset(_tenzir_schema_stamp)
 endif ()
+unset(_tenzir_schema_manifest)
+unset(_tenzir_schema_manifest_contents)
 
 if (TENZIR_ENABLE_BUNDLED_SCHEMAS)
   install(
@@ -895,6 +908,31 @@ if (NOT TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
 else ()
   add_definitions(-DGLOG_USE_GLOG_EXPORT)
   add_subdirectory(libtenzir/aux/facebook)
+  # Proxygen declares StatsWrapper.h as a generated file in the build tree, but
+  # the bundled generator writes it to the source tree. Materialize the build
+  # tree copy via a dedicated target so normal rebuilds refresh it when the
+  # tracked generator inputs change.
+  set(_tenzir_proxygen_generated_root
+      "${CMAKE_CURRENT_BINARY_DIR}/libtenzir/aux/facebook/proxygen/generated")
+  set(_tenzir_proxygen_stats_wrapper
+      "${_tenzir_proxygen_generated_root}/proxygen/lib/stats/StatsWrapper.h")
+  add_custom_target(
+    tenzir-proxygen-stats-wrapper
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${_tenzir_proxygen_generated_root}/proxygen/lib/stats"
+    COMMAND ${CMAKE_COMMAND} -E rm -f "${_tenzir_proxygen_stats_wrapper}"
+    COMMAND
+      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen/proxygen/lib/stats/gen_StatsWrapper.sh"
+      "${_tenzir_proxygen_generated_root}"
+    DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen/proxygen/lib/stats/gen_StatsWrapper.sh"
+      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen/proxygen/lib/stats/BaseStats.h"
+    COMMENT "Generating StatsWrapper.h in the Proxygen build tree")
+  if (TARGET proxygen-generated)
+    add_dependencies(proxygen-generated tenzir-proxygen-stats-wrapper)
+  endif ()
+  unset(_tenzir_proxygen_generated_root)
+  unset(_tenzir_proxygen_stats_wrapper)
 endif ()
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS

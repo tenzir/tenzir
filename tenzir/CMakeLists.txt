@@ -19,6 +19,13 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE
     LINKER:--wrap=free)
 endif ()
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER MATCHES "musl")
+  # musl uses the PT_GNU_STACK program header as the default stack size for
+  # newly created pthreads. Keep the tenzir binary aligned with the larger
+  # thread stacks commonly seen on glibc-based systems.
+  target_link_options(tenzir PRIVATE LINKER:-z,stack-size=8388608)
+endif ()
+
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
@@ -327,10 +334,13 @@ if (EXISTS "${_neo_tests_root}")
   endforeach ()
 endif ()
 
-# Discover contrib plugin test directories (associated with legacy tests)
-set(_contrib_test_dirs)
+# Discover contrib plugin test directories split by legacy/neo layout.
+set(_contrib_legacy_test_dirs)
+set(_contrib_neo_test_dirs)
 if (EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
-  file(GLOB _contrib_test_dirs
+  file(GLOB _contrib_legacy_test_dirs
+       "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test-legacy")
+  file(GLOB _contrib_neo_test_dirs
        "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
 endif ()
 
@@ -344,7 +354,7 @@ tenzir_build_test_command(
   WORKING_DIR
   "${CMAKE_SOURCE_DIR}/test-legacy"
   SELECTION
-  ${_contrib_test_dirs})
+  ${_contrib_legacy_test_dirs})
 add_custom_command(
   TARGET integration-legacy
   POST_BUILD
@@ -353,7 +363,8 @@ add_custom_command(
 
 add_custom_target(integration-neo DEPENDS tenzir)
 tenzir_build_test_command(_neo_cmd EXTRA_ARGS "--jobs" "4" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test")
+                          "${CMAKE_SOURCE_DIR}/test" SELECTION
+                          ${_contrib_neo_test_dirs})
 add_custom_command(
   TARGET integration-neo
   POST_BUILD
@@ -380,7 +391,7 @@ tenzir_build_test_command(
   WORKING_DIR
   "${CMAKE_SOURCE_DIR}/test-legacy"
   SELECTION
-  ${_contrib_test_dirs})
+  ${_contrib_legacy_test_dirs})
 add_custom_command(
   TARGET update-integration-legacy
   POST_BUILD
@@ -389,7 +400,8 @@ add_custom_command(
 
 add_custom_target(update-integration-neo DEPENDS tenzir)
 tenzir_build_test_command(_update_neo_cmd EXTRA_ARGS "--update" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test")
+                          "${CMAKE_SOURCE_DIR}/test" SELECTION
+                          ${_contrib_neo_test_dirs})
 add_custom_command(
   TARGET update-integration-neo
   POST_BUILD
@@ -478,16 +490,16 @@ target_compile_definitions(
 # deterministic builds.
 string(TIMESTAMP TENZIR_LAST_COMMIT_DATE)
 if (TENZIR_ENABLE_MANPAGES)
-  add_custom_target(
-    tenzir-manpage
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.1.md"
     COMMAND
       "${PANDOC}" -s -f gfm -t man -V date:${TENZIR_LAST_COMMIT_DATE}
       "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.1.md" -o
       "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
     COMMENT "Generating tenzir.1"
     VERBATIM)
+  add_custom_target(tenzir-manpage DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1")
   add_dependencies(tenzir tenzir-manpage)
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"

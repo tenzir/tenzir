@@ -16,8 +16,9 @@
 namespace tenzir {
 
 template <class From, class... Opts>
-auto to_string(From&& from, Opts&&... opts) requires(
-  printable<std::back_insert_iterator<std::string>, std::decay_t<From>>) {
+auto to_string(From&& from, Opts&&... opts)
+  requires(printable<std::back_insert_iterator<std::string>, std::decay_t<From>>)
+{
   std::string str;
   print(std::back_inserter(str), from, std::forward<Opts>(opts)...);
   return str;

@@ -1,3 +1,0 @@
-from f"{env("TENZIR_INPUTS")}/cef/cynet.log" {
-  read_cef
-}

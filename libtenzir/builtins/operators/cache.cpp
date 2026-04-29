@@ -1614,7 +1614,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+    -> failure_or<ir::CompileResult> override {
     auto id = ast::expression{};
     auto mode = std::optional<ast::expression>{};
     auto capacity = std::optional<ast::expression>{};

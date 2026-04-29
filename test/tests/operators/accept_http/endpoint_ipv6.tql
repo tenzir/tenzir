@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+accept_http "https://[::1]:8080" {
+  read_json
+}

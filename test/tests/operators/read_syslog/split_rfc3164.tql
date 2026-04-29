@@ -1,0 +1,6 @@
+from {
+  x: "<34>Oct 11 22:14:15 mymachine su: failed login",
+}
+write_lines
+split_bytes 1
+read_syslog

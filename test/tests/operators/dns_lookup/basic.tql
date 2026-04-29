@@ -1,0 +1,4 @@
+from {host: "127.0.0.1", addr: ip("127.0.0.1")},
+     {host: "127.0.0.1", addr: ip("127.0.0.1")}
+dns_lookup host
+dns_lookup addr, result=reverse

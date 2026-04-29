@@ -27,11 +27,13 @@ inline auto hex_escaper = [](auto& f, auto out) {
 
 inline auto hex_unescaper = [](auto& f, auto l, auto out) {
   auto hi = *f++;
-  if (f == l)
+  if (f == l) {
     return false;
+  }
   auto lo = *f++;
-  if (!std::isxdigit(hi) || !std::isxdigit(lo))
+  if (not std::isxdigit(hi) or not std::isxdigit(lo)) {
     return false;
+  }
   *out++ = hex_to_byte(hi, lo);
   return true;
 };
@@ -39,10 +41,11 @@ inline auto hex_unescaper = [](auto& f, auto l, auto out) {
 inline auto print_escaper = [](auto& f, auto out) {
   static_assert(std::same_as<std::remove_cvref_t<decltype(*f)>, char>);
   auto high = (*f & 0b1000'0000) != 0;
-  if (not high && std::isprint(*f))
+  if (not high and std::isprint(*f)) {
     *out++ = *f++;
-  else
+  } else {
     hex_escaper(f, out);
+  }
 };
 
 inline auto byte_unescaper = [](auto& f, auto l, auto out) {
@@ -50,8 +53,9 @@ inline auto byte_unescaper = [](auto& f, auto l, auto out) {
     *out++ = *f++;
     return true;
   }
-  if (l - f < 4)
+  if (l - f < 4) {
     return false; // Not enough input.
+  }
   if (*++f != 'x') {
     *out++ = *f++; // Remove escape backslashes that aren't \x.
     return true;
@@ -102,7 +106,7 @@ inline auto json_escaper = [](auto& f, auto out) {
     *out++ = c;
   };
   auto json_print_escaper = [](auto& f, auto out) {
-    if (!std::iscntrl(*f)) {
+    if (not std::iscntrl(*f)) {
       *out++ = *f++;
     } else {
       auto hex = byte_to_hex(*f++);
@@ -142,14 +146,16 @@ inline auto json_escaper = [](auto& f, auto out) {
 };
 
 inline auto json_unescaper = [](auto& f, auto l, auto out) {
-  if (*f == '"') // Unescaped double-quotes not allowed.
+  if (*f == '"') { // Unescaped double-quotes not allowed.
     return false;
+  }
   if (*f != '\\') { // Skip every non-escape character.
     *out++ = *f++;
     return true;
   }
-  if (l - f < 2)
+  if (l - f < 2) {
     return false; // Need at least one char after \.
+  }
   switch (auto c = *++f) {
     default:
       return false;
@@ -180,22 +186,24 @@ inline auto json_unescaper = [](auto& f, auto l, auto out) {
     case 'u': {
       // We currently only support single-byte escapings and any unicode escape
       // sequence other than \u00XX as is.
-      if (l - f < 4)
+      if (l - f < 4) {
         return false;
+      }
       std::array<char, 4> bytes{{0, 0, 0, 0}};
       bytes[0] = *++f;
       bytes[1] = *++f;
       bytes[2] = *++f;
       bytes[3] = *++f;
-      if (bytes[0] != '0' || bytes[1] != '0') {
+      if (bytes[0] != '0' or bytes[1] != '0') {
         // Leave input as is, we don't know how to handle it (yet).
         *out++ = '\\';
         *out++ = 'u';
         std::copy(bytes.begin(), bytes.end(), out);
       } else {
         // Hex-unescape the XX portion of \u00XX.
-        if (!std::isxdigit(bytes[2]) || !std::isxdigit(bytes[3]))
+        if (not std::isxdigit(bytes[2]) or not std::isxdigit(bytes[3])) {
           return false;
+        }
         *out++ = hex_to_byte(bytes[2], bytes[3]);
       }
       break;
@@ -207,7 +215,7 @@ inline auto json_unescaper = [](auto& f, auto l, auto out) {
 
 inline auto percent_escaper = [](auto& f, auto out) {
   auto is_unreserved = [](char c) {
-    return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~';
+    return std::isalnum(c) or c == '-' or c == '_' or c == '.' or c == '~';
   };
   if (is_unreserved(*f)) {
     *out++ = *f++;
@@ -224,8 +232,9 @@ inline auto percent_unescaper = [](auto& f, auto l, auto out) {
     *out++ = *f++;
     return true;
   }
-  if (l - f < 3) // Need %xx
+  if (l - f < 3) { // Need %xx
     return false;
+  }
   return hex_unescaper(++f, l, out);
 };
 
@@ -242,8 +251,9 @@ inline auto make_extra_print_escaper(std::string_view extra) {
 
 inline auto make_double_escaper(std::string_view esc) {
   return [=](auto& f, auto out) {
-    if (esc.find(*f) != std::string_view::npos)
+    if (esc.find(*f) != std::string_view::npos) {
       *out++ = *f;
+    }
     *out++ = *f++;
   };
 }
@@ -257,8 +267,9 @@ inline auto make_double_unescaper(std::string_view esc) {
     }
     *out++ = x;
     auto y = *f++;
-    if (x == y && esc.find(x) == std::string_view::npos)
+    if (x == y and esc.find(x) == std::string_view::npos) {
       *out++ = y;
+    }
     return true;
   };
 }

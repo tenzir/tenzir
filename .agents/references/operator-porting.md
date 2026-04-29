@@ -69,6 +69,9 @@ struct MyArgs {
 
 - `located<T>` — use when you need `.source` to point errors at the right token.
 - `Option<located<T>>` — maps to an optional named argument in `Describer`.
+- Put stable defaults directly in the args struct. Prefer a member initializer
+  over a `normalize_*_args()` helper when the default does not depend on
+  runtime context.
 
 ---
 
@@ -144,6 +147,17 @@ first buffer is created; `await_task()` sleeps on that `Notify` when idle and
 otherwise sleeps until the earliest deadline; `process_task()` flushes all
 expired buffers.
 
+When the operator batches rows in a `series_builder`, use `SeriesPusher` from
+`tenzir/async/pusher.hpp` together with `series_builder::yield_ready()`. Call
+`yield_ready()` from `process()` after appending rows and again from
+`process_task()` for timeout-driven flushes. Keep explicit flushes for
+semantic boundaries such as header transitions, document-close markers,
+snapshots, and finalization. The same applies to operators that use
+`multi_series_builder`.
+
+Do not perform timeout checks while processing some input. Only do one timeout
+check after processing input.
+
 **Duration overflow**: never compute `start + duration::max()`. Guard sentinel
 values before arithmetic:
 
@@ -163,6 +177,46 @@ Sources use `await_task()` to produce data and `process_task()` to push it.
 They use `start()` to initialize a parser state, `process()` to parse chunks,
 and `finalize()` to flush the last partial record.
 
+When `process()` scans a chunk incrementally, accumulate a local
+`series_builder::YieldReadyResult`, merge `yield_ready_as_table_slice(...)`
+into it as records become ready, and push once after the loop. Reference
+implementations: `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
+### Blocking operations
+
+File I/O, subprocess calls, and third-party synchronous SDKs must not run
+directly on an executor thread — they would stall every coroutine sharing
+that thread. Wrap such calls in `co_await spawn_blocking(...)` from
+`tenzir/async/blocking_executor.hpp`, which offloads the callable to a
+dedicated CPU thread pool (Tokio-aligned defaults: up to 512 threads, 10 s
+idle timeout) and resumes the coroutine with its return value:
+
+```cpp
+auto bytes = co_await spawn_blocking([path = path_] {
+  return blocking_file_read(path);
+});
+```
+
+`spawn_blocking` expects a synchronous callable. Passing a coroutine
+function returning `Task<T>` only constructs the coroutine handle on the
+pool thread without running its body — use folly's `co_withExecutor` /
+`scheduleOn` for that instead. Exceptions thrown by the callable are
+captured and rethrown at the await site. Reference implementations:
+`from_file.cpp`, `file.cpp`, `python.cpp`, and the cloud `from_*` operators
+under `plugins/s3`, `plugins/gcs`, and `plugins/azure-blob-storage`.
+
+### Diagnostics
+
+Some diagnostics in the old executor do not add a location via `primary`. Some
+operators also make use of a transforming diagnostic handler that modifies diagnostics.
+
+If a diagnostic does not contain a location, use the operators location. Capture
+this location in the `Describer` via `describer.operator_location(&MyArgs::operator_location)`.
+
+If a transforming diagnostic handler is used to modify the diagnostic to hint at
+the operator, such as prepending a hint at the operator to the diagnostic, instead
+add the operators location to these diagnostics.
+
 ---
 
 ## Step 5 — Member types
@@ -177,7 +231,6 @@ and `finalize()` to flush the last partial record.
 | `Atomic<T>`                                        | `std::atomic<T>`                                 |
 | `Ref<T>`                                           | `std::reference_wrapper<T>`                      |
 | `Mutex<T>`                                         | `std::mutex` + separate data                     |
-
 
 ### Lifecycle modeling for complex shutdown
 
@@ -233,6 +286,23 @@ emitting this data before yielding and allowing `snapshot()` to run.
 ---
 
 ## Step 7 — Plugin registration
+
+### `DescribeCtx::get()` and defaulted named arguments
+
+Inside `d.validate(...)`, `DescribeCtx::get()` returns `std::nullopt` when the
+caller omitted an argument. This also applies to `named_optional(...)`
+arguments whose target member in `Args` has a default initializer.
+
+Do not assume that `ctx.get(arg)` is engaged just because `Args` carries a
+member default. Apply the args-struct defaults explicitly:
+
+```cpp
+auto defaults = MyArgs{};
+auto timeout = ctx.get(timeout_arg);
+auto effective_timeout = timeout ? *timeout : defaults.timeout;
+```
+
+Use `.value()` only when the argument is truly required.
 
 ### Adding to an existing plugin
 
@@ -308,6 +378,8 @@ d.spawner([]<class Input>(DescribeCtx& ctx)
 
 Use `Describer<MyArgs>{}` (no Impl template args) when providing a full spawner.
 
+Only use a `spawner` if the intended behaviour cannot be modeled via a `Describer` alone.
+
 ### Validating a sub-pipeline's output type
 
 Check that the output is both present **and** of the right type. An absent
@@ -375,6 +447,7 @@ if (timeout_ != duration::max() and now - start > timeout_) { … }
 - [ ] `state()` returns `done` for early-terminating operators
 - [ ] `Box<T>` used instead of `std::unique_ptr<T>`
 - [ ] Duration overflow guarded when a `duration::max()` sentinel is possible
+- [ ] Blocking calls (file I/O, subprocess, sync SDKs) wrapped in `co_await spawn_blocking(...)`
 - [ ] Complex shutdown uses `enum class Lifecycle`; `stop()`/`finalize()` share a teardown helper
 - [ ] Sub-pipeline active key accessed via `ctx.get_sub(next_ - 1)`, guarded for `next_ == 0`
 - [ ] `OperatorPlugin` added to plugin base classes; `describe()` implemented

@@ -39,7 +39,7 @@ struct try_plugin_by_url_result {
     return plugin != nullptr;
   }
   [[nodiscard]] bool valid_url_parsed() const {
-    return !scheme.inner.empty();
+    return not scheme.inner.empty();
   }
 };
 
@@ -72,13 +72,15 @@ auto try_plugin_by_url(located<std::string_view> src)
   TENZIR_ASSERT(scheme_len != std::string::npos);
   result.scheme = make_located_string_view(src, 0, scheme_len);
   auto non_scheme_offset = scheme_len + 1;
-  if (src.inner.substr(non_scheme_offset).starts_with("//"))
+  if (src.inner.substr(non_scheme_offset).starts_with("//")) {
     // If the URI has an `authority` component, it starts with "//"
     // We need to skip that before forwarding it to the loader
     non_scheme_offset += 2;
+  }
   result.plugin = find_plugin_by_scheme<Plugin>(result.scheme.inner);
-  if (!result.plugin)
+  if (not result.plugin) {
     return result;
+  }
   result.non_scheme = make_located_string_view(src, non_scheme_offset);
   auto non_scheme_without_locator = make_located_string_view(
     result.non_scheme, 0, result.non_scheme.inner.rfind('#'));
@@ -163,8 +165,9 @@ auto map_file_path_to_plugin(const std::filesystem::path& path,
                              std::string_view default_plugin) -> const Plugin* {
   auto name
     = file_path_to_plugin_name(path).value_or(std::string{default_plugin});
-  if (const auto* plugin = plugins::find<Plugin>(name))
+  if (const auto* plugin = plugins::find<Plugin>(name)) {
     return plugin;
+  }
   return plugins::find<Plugin>(default_plugin);
 }
 
@@ -187,15 +190,17 @@ auto map_file_path_to_compression_type(std::string_view path)
                                   [](const auto& pair) {
                                     return pair.first;
                                   });
-      it != extension_to_compression_map.end())
+      it != extension_to_compression_map.end()) {
     return {it->second, fspath.replace_extension("")};
+  }
   return {"", fspath};
 }
 
 auto resolve_compression_operator(std::string_view op_name,
                                   std::string_view type) -> operator_ptr {
-  if (type.empty())
+  if (type.empty()) {
     return nullptr;
+  }
   auto plugin = plugins::find_operator(op_name);
   TENZIR_DIAG_ASSERT(plugin);
   auto diag = null_diagnostic_handler{};
