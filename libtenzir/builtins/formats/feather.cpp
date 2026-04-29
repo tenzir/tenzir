@@ -250,12 +250,7 @@ class passive_feather_store final : public passive_store {
     auto offset = id{};
     auto schema = schema_;
     for (auto it = batches.begin(); it != batches.end(); ++it) {
-      auto batch_result = std::move(*it);
-      if (not batch_result) {
-        TENZIR_ASSERT(false, "failed to decode feather store after load");
-        co_return;
-      }
-      auto batch = std::move(*batch_result);
+      auto batch = check(std::move(*it));
       TENZIR_ASSERT(batch);
       auto import_time_column = batch->GetColumnByName("import_time");
       auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
