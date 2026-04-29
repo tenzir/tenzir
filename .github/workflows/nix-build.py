@@ -629,8 +629,8 @@ def run_container_test(
 
         test_cmd = (
             'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" '
-            "&& uvx --with-requirements /src/tenzir/test/requirements.txt "
-            f"tenzir-test --root /src/tenzir/{test_root} {test_pattern}"
+            f"&& uvx --with trustme tenzir-test --root /src/tenzir/{test_root} "
+            f"{test_pattern}"
         )
         result = subprocess.run(
             ["docker", "exec"] + env_args + [container_name, "bash", "-c", test_cmd],
