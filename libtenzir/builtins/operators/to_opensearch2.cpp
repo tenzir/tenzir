@@ -372,6 +372,7 @@ public:
           if (builder_.has_contents()) {
             next_timeout_
               = std::chrono::steady_clock::now() + args_.buffer_timeout.inner;
+            buffer_ready_->notify_one();
           } else {
             next_timeout_ = None{};
           }
@@ -441,7 +442,6 @@ private:
     if (body.empty()) {
       co_return;
     }
-    bytes_write_counter_.add(body.size());
     auto headers = headers_;
     headers["Content-Length"] = fmt::to_string(body.size());
     auto result
@@ -455,8 +455,8 @@ private:
     }
     auto response = std::move(result).unwrap();
     if (response.status_code < 200 or response.status_code > 299) {
-      diagnostic::warning("issue sending data. HTTP response code `{}`",
-                          response.status_code)
+      diagnostic::error("issue sending data. HTTP response code `{}`",
+                        response.status_code)
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
@@ -475,11 +475,12 @@ private:
       co_return;
     }
     if (as<bool>(it->second)) {
-      diagnostic::warning("issue sending data")
+      diagnostic::error("issue sending data")
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
     }
+    bytes_write_counter_.add(body.size());
   }
 
   ToOpenSearchArgs args_;
