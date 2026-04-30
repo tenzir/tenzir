@@ -8,11 +8,21 @@ on:
     types:
       - checks_requested
 
+permissions:
+  contents: read
+
 env:
   DEBIAN_FRONTEND: noninteractive
+
 jobs:
   flake-check:
     name: nix flake check
+    if: >-
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -106,15 +116,19 @@ jobs:
   cmake-format:
     name: cmake-format
     runs-on: ubuntu-latest
+    env:
+      IS_UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 1
       - name: Configure ssh-agent
+        if: env.IS_UNTRUSTED_PR != 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Check out submodule
+        if: env.IS_UNTRUSTED_PR != 'true'
         run: |
           git submodule update --init --recommend-shallow contrib/tenzir-plugins
       - name: Set up uv
@@ -125,8 +139,12 @@ jobs:
           git add --intent-to-add --all
           git ls-files -z -- 'CMakeLists.txt' '*.cmake' |
             xargs -0 uvx --from cmakelang cmake-format --in-place
-          git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
-            xargs -0 uvx --from cmakelang cmake-format --in-place
+          if [[ "${IS_UNTRUSTED_PR}" != "true" ]]; then
+            git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
+              xargs -0 uvx --from cmakelang cmake-format --in-place
+          else
+            echo "::notice Skipping contrib/tenzir-plugins formatting for untrusted pull requests"
+          fi
           git diff --quiet --submodule=diff --exit-code || {
             echo '::error title=cmake-format::Please run `cmake-format --in-place path/to/file.cmake` or apply the following diff directly:'
             git diff --submodule=diff --exit-code

@@ -97,21 +97,8 @@ env:
   GCP_WORKLOAD_IDP: projects/1057156539039/locations/global/workloadIdentityPools/gh-actions-pool/providers/gh-actions-provider
   GCP_SERVICE_ACCOUNT: github-actions@crucial-kayak-261816.iam.gserviceaccount.com
 
-# TODO: cherry-pick permissions
 permissions:
-  actions: write
-  checks: write
-  contents: write
-  deployments: write
-  id-token: write
-  issues: write
-  discussions: write
-  packages: write
-  pages: write
-  pull-requests: write
-  repository-projects: write
-  security-events: write
-  statuses: write
+  contents: read
 
 jobs:
   configure:
@@ -121,6 +108,7 @@ jobs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
+      trusted-ci: ${{ steps.configure.outputs.trusted-ci }}
       ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
@@ -129,6 +117,7 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
+      run-public-validation: ${{ steps.configure.outputs.run-public-validation }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
@@ -160,13 +149,6 @@ jobs:
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v5
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Configure GCloud Credentials
-        uses: google-github-actions/setup-gcloud@v2
       - name: Configure
         id: configure
         env:
@@ -241,29 +223,45 @@ jobs:
           #################################
           ######## Decide what jobs to run.
           #################################
-          # TODO: Split this into two steps:
-          # * Set version variables (above)
-          # * Enable Jobs (below)
-          echo "::notice Disable all others so we can selectivly enable again"
-          echo "run-regression-tests=false" >> $GITHUB_OUTPUT
-          echo "run-python=false" >> $GITHUB_OUTPUT
-          echo "run-python-package=false" >> $GITHUB_OUTPUT
-          echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
-          echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
-          echo "run-tenzir=false" >> $GITHUB_OUTPUT
-          # A little helper to enable all checks.
-          shopt -s expand_aliases
-          alias run_all_checks=' \
-            echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
-            echo "run-python=true" >> $GITHUB_OUTPUT; \
-            echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir=true" >> $GITHUB_OUTPUT;'
+          trusted_ci=true
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && {
+             [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]] ||
+             [[ "${{ github.actor }}" == "dependabot[bot]" ]];
+          }; then
+            trusted_ci=false
+          fi
+          echo "trusted-ci=${trusted_ci}" >> "$GITHUB_OUTPUT"
+
+          set_run() {
+            local job="$1"
+            local value="$2"
+            local shellvar="run_${job//-/_}"
+            printf -v "$shellvar" '%s' "$value"
+            echo "run-${job}=${value}" >> "$GITHUB_OUTPUT"
+          }
+
+          echo "::notice Disabling all jobs so we can selectively enable them again"
+          set_run regression-tests false
+          set_run public-validation false
+          set_run python false
+          set_run python-package false
+          set_run docker-tenzir false
+          set_run tenzir-nix false
+          set_run tenzir false
+
+          run_all_checks() {
+            set_run regression-tests true
+            set_run python true
+            set_run docker-tenzir true
+            set_run tenzir-nix true
+            set_run tenzir true
+          }
+
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
-            echo "run-python-package=true" >> $GITHUB_OUTPUT
+            set_run python-package true
             exit 0
           fi
           # Run all checks if this is a push to master or a tag.
@@ -287,7 +285,7 @@ jobs:
                input_enabled sync-openapi-to-docs ||
                input_enabled regression-tests ||
                input_enabled python; then
-              echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT
+              set_run docker-tenzir true
             fi
             if input_enabled tenzir-static-aarch64-linux ||
                input_enabled tenzir-static-x86_64-linux ||
@@ -297,20 +295,25 @@ jobs:
                input_enabled python ||
                input_enabled python-package ||
                input_enabled update-homebrew-tap; then
-              echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
+              set_run tenzir-nix true
             fi
             if input_enabled regression-tests; then
-              echo "run-regression-tests=true" >> $GITHUB_OUTPUT
+              set_run regression-tests true
             fi
             if input_enabled tenzir; then
-              echo "run-tenzir=true" >> $GITHUB_OUTPUT
+              set_run tenzir true
             fi
             if input_enabled python; then
-              echo "run-python=true" >> $GITHUB_OUTPUT
+              set_run python true
             fi
             if input_enabled python-package; then
-              echo "run-python-package=true" >> $GITHUB_OUTPUT
+              set_run python-package true
             fi
+            exit 0
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "merge_group" ]]; then
+            echo "::notice Enabling merge group jobs"
+            run_all_checks
             exit 0
           fi
           # From here on we should be in a pull request.
@@ -320,38 +323,51 @@ jobs:
           fi
           echo "::notice Enabling pull request jobs"
           echo "::notice sourcing configure helpers"
-          # Set the comparison point for detecting changes in pull requests
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            base_ref="${GITHUB_BASE_REF:-main}"
-            before_sha=$(git merge-base "origin/$base_ref" HEAD)
-            export before_sha
-          fi
-          source ./.github/workflows/configure_helpers.bash
-          # Run all checks if this file changed.
-          if is_changed .github/workflows/tenzir.yaml; then
+          # Set the comparison point for detecting changes in pull requests.
+          base_ref="${GITHUB_BASE_REF:-main}"
+          before_sha=$(git merge-base "origin/$base_ref" HEAD)
+          export before_sha
+          # Pull request code may modify configure_helpers.bash. Source the
+          # trusted base version instead so an untrusted fork cannot influence
+          # job selection outputs that gate privileged jobs.
+          git show "origin/$base_ref:.github/workflows/configure_helpers.bash" > /tmp/configure_helpers.bash
+          source /tmp/configure_helpers.bash
+          # Run all checks if CI control files changed.
+          if is_changed .github/workflows/tenzir.yaml .github/workflows/public-validation.yaml .github/workflows/configure_helpers.bash; then
             run_all_checks
-            exit 0
+          else
+            run_if_changed python "python/"
+            TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
+            run_if_changed tenzir "${TENZIR_SOURCES[@]}"
+            run_docker_tenzir="$(any "$run_tenzir" "$run_python")"
+            run_if_changed_default docker-tenzir "$run_docker_tenzir" \
+              "Dockerfile" ".dockerignore" \
+              "scripts/debian/build-*.sh" \
+              "scripts/debian/install-dev-dependencies.sh" \
+              ".github/workflows/docker.yaml" \
+              ".github/workflows/push-manifest.yaml" \
+              ".github/workflows/docker-config-base.json"
+            run_if_changed_default regression-tests "$run_docker_tenzir"
+            run_if_changed tenzir-nix \
+              "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
+              ".github/workflows/nix.nu" \
+              ".github/workflows/nix.yaml" \
+              ".github/workflows/nix-config-base.json"
           fi
-          run_if_changed python "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
-          run_if_changed tenzir "${TENZIR_SOURCES[@]}"
-          run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
-          run_if_changed_default docker-tenzir $run_docker_tenzir \
-            "Dockerfile" ".dockerignore" \
-            "scripts/debian/build-*.sh" \
-            "scripts/debian/install-dev-dependencies.sh" \
-            ".github/workflows/docker.yaml" \
-            ".github/workflows/push-manifest.yaml" \
-            ".github/workflows/docker-config-base.json"
-          run_if_changed_default regression-tests $run_docker_tenzir
-          run_if_changed tenzir-nix \
-            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
-            ".github/workflows/nix.nu" \
-            ".github/workflows/nix.yaml" \
-            ".github/workflows/nix-config-base.json"
+
+          if [[ "${trusted_ci}" != "true" ]]; then
+            public_validation="$(any "$run_tenzir" "$run_python" "$run_docker_tenzir" "$run_regression_tests" "$run_tenzir_nix")"
+            set_run public-validation "$public_validation"
+            if [[ "$public_validation" == "true" ]]; then
+              echo "::notice External pull request detected; enabling fork-safe public validation"
+            else
+              echo "::notice External pull request detected; no public validation needed for changed paths"
+            fi
+          fi
+
       - name: Configure Docker
         id: docker
-        if: steps.configure.outputs.run-docker-tenzir == 'true'
+        if: steps.configure.outputs.run-docker-tenzir == 'true' && steps.configure.outputs.trusted-ci == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             source_tag="${{ steps.configure.outputs.head-ref-slug }}"
@@ -580,12 +596,33 @@ jobs:
             set_output run-update-homebrew-tap true
           fi
 
+  public-validation:
+    name: Public Validation
+    needs:
+      - configure
+    if: >-
+      needs.configure.outputs.run-public-validation == 'true' &&
+      needs.configure.outputs.trusted-ci != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/public-validation.yaml
+    with:
+      run-cmake: >-
+        ${{ needs.configure.outputs.run-tenzir == 'true' ||
+            needs.configure.outputs.run-docker-tenzir == 'true' ||
+            needs.configure.outputs.run-regression-tests == 'true' ||
+            needs.configure.outputs.run-tenzir-nix == 'true' }}
+      run-python: ${{ needs.configure.outputs.run-python == 'true' }}
+
   policy-enforcement:
     name: Policy Enforcement
     needs:
       - configure
-    if: needs.configure.outputs.run-policy-enforcement == 'true'
+    if: needs.configure.outputs.run-policy-enforcement == 'true' && needs.configure.outputs.trusted-ci == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -655,7 +692,12 @@ jobs:
     name: Docker
     needs:
       - configure
-    if: needs.configure.outputs.run-docker-tenzir-amd64 == 'true'
+    if: needs.configure.outputs.run-docker-tenzir-amd64 == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      actions: write
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
@@ -667,7 +709,12 @@ jobs:
     name: Docker
     needs:
       - configure
-    if: needs.configure.outputs.run-docker-tenzir-arm64 == 'true'
+    if: needs.configure.outputs.run-docker-tenzir-arm64 == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      actions: write
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
@@ -681,7 +728,15 @@ jobs:
       - configure
       - docker-tenzir-amd64
       - docker-tenzir-arm64
-    if: needs.configure.outputs.run-docker-tenzir-manifest == 'true'
+    if: >-
+      needs.configure.outputs.run-docker-tenzir-manifest == 'true' &&
+      needs.configure.outputs.trusted-ci == 'true' &&
+      needs.docker-tenzir-amd64.result == 'success' &&
+      needs.docker-tenzir-arm64.result == 'success'
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/push-manifest.yaml
     with:
       source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
@@ -694,8 +749,15 @@ jobs:
     needs:
       - configure
       - docker-tenzir-amd64
-    if: needs.configure.outputs.run-benchmark-reference-docker == 'true'
+    if: >-
+      needs.configure.outputs.run-benchmark-reference-docker == 'true' &&
+      needs.configure.outputs.trusted-ci == 'true' &&
+      needs.docker-tenzir-amd64.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
     env:
       BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
       BENCHMARK_S3_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
@@ -723,8 +785,10 @@ jobs:
   sync-openapi-to-docs:
     name: Sync OpenAPI to Docs
     needs: [docker-tenzir, configure]
-    if: needs.configure.outputs.run-sync-openapi-to-docs == 'true'
+    if: needs.configure.outputs.run-sync-openapi-to-docs == 'true' && needs.configure.outputs.trusted-ci == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Generate app token
         id: app-token
@@ -746,7 +810,10 @@ jobs:
     needs:
       - docker-tenzir
       - configure
-    if: needs.configure.outputs.run-regression-tests == 'true'
+    if: needs.configure.outputs.run-regression-tests == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -773,7 +840,11 @@ jobs:
   tenzir-static-aarch64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-static-aarch64-linux == 'true'
+    if: needs.configure.outputs.run-tenzir-static-aarch64-linux == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubicloud-standard-4-arm
@@ -786,7 +857,11 @@ jobs:
   tenzir-static-x86_64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-static-x86_64-linux == 'true'
+    if: needs.configure.outputs.run-tenzir-static-x86_64-linux == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubuntu-latest
@@ -799,7 +874,11 @@ jobs:
   tenzir-static-arm64-darwin:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-static-arm64-darwin == 'true'
+    if: needs.configure.outputs.run-tenzir-static-arm64-darwin == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: macos-15
@@ -813,7 +892,15 @@ jobs:
   docker-slim:
     name: Push tenzir-slim docker manifest
     needs: [configure, tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
-    if: needs.configure.outputs.run-docker-slim == 'true'
+    if: >-
+      needs.configure.outputs.run-docker-slim == 'true' &&
+      needs.configure.outputs.trusted-ci == 'true' &&
+      needs.tenzir-static-aarch64-linux.result == 'success' &&
+      needs.tenzir-static-x86_64-linux.result == 'success'
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/push-manifest.yaml
     with:
       source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
@@ -825,8 +912,14 @@ jobs:
     needs:
       - configure
       - tenzir-static-x86_64-linux
-    if: needs.configure.outputs.run-benchmark-reference-static == 'true'
+    if: >-
+      needs.configure.outputs.run-benchmark-reference-static == 'true' &&
+      needs.configure.outputs.trusted-ci == 'true' &&
+      needs.tenzir-static-x86_64-linux.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
       BENCHMARK_S3_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
@@ -853,7 +946,10 @@ jobs:
   tenzir:
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
+    if: ${{ needs.configure.outputs.run-tenzir == 'true' && needs.configure.outputs.trusted-ci == 'true' }}
+    permissions:
+      contents: read
+      id-token: write
     name: Tenzir (${{ matrix.tenzir.name }})
     runs-on: ${{ matrix.tenzir.os }}
     container: ${{ matrix.tenzir.container }}
@@ -1059,7 +1155,10 @@ jobs:
       - configure
       - docker-tenzir
       - tenzir-static-x86_64-linux
-    if: ${{ needs.configure.outputs.run-python == 'true' }}
+    if: ${{ needs.configure.outputs.run-python == 'true' && needs.configure.outputs.trusted-ci == 'true' }}
+    permissions:
+      contents: read
+      packages: read
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
@@ -1116,7 +1215,9 @@ jobs:
       - tenzir-static-arm64-darwin
       - tenzir-static-aarch64-linux
       - tenzir-static-x86_64-linux
-    if: ${{ needs.configure.outputs.run-python-package == 'true' }}
+    if: ${{ needs.configure.outputs.run-python-package == 'true' && needs.configure.outputs.trusted-ci == 'true' }}
+    permissions:
+      contents: read
     name: Python Package
     runs-on: ${{ matrix.os }}
     strategy:
@@ -1197,7 +1298,9 @@ jobs:
     needs:
       - configure
       - tenzir-static-arm64-darwin
-    if: needs.configure.outputs.run-update-homebrew-tap == 'true'
+    if: needs.configure.outputs.run-update-homebrew-tap == 'true' && needs.configure.outputs.trusted-ci == 'true'
+    permissions:
+      contents: read
     name: Update Homebrew Tap
     runs-on: ubuntu-latest
     steps:
@@ -1270,6 +1373,7 @@ jobs:
   pass-branch-protections:
     needs:
       - configure
+      - public-validation
       - docker-tenzir
       - docker-tenzir-amd64
       - docker-tenzir-arm64
@@ -1288,6 +1392,8 @@ jobs:
     if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Pass Branch Protections
+    permissions:
+      contents: read
     steps:
       - name: Failure
         if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')
