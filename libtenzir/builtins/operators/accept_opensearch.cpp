@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/oneshot.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/atomic.hpp>
@@ -42,7 +41,6 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
-#include <span>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -384,9 +382,8 @@ public:
             co_return;
           }
         }
-        auto requests = co_await active_requests_.lock();
-        requests->emplace(msg.request_id,
-                          InFlightRequest{
+        active_requests_.emplace(
+          msg.request_id, InFlightRequest{
                             .response_signal = std::move(msg.response_signal),
                             .decompressor = std::move(decompressor),
                             .parser = {},
@@ -401,49 +398,46 @@ public:
         auto is_action = true;
         auto failed = false;
         auto slices = std::vector<table_slice>{};
-        {
-          auto requests = co_await active_requests_.lock();
-          auto it = requests->find(msg.request_id);
-          if (it == requests->end() or it->second.response_signal->has_sent()) {
-            co_return;
-          }
-          auto& req = it->second;
-          response_signal = req.response_signal;
-          decompressor = req.decompressor;
-          is_action = req.is_action;
-          failed = req.failed;
-          auto data = std::move(msg.data);
-          auto failing_dh = failing_diagnostic_handler{ctx.dh(), failed};
-          if (decompressor) {
-            auto remaining = args_.get_max_request_size() - req.output_bytes;
-            auto decompressed = http::decompress_chunk_simdjson(
-              **decompressor, data.view(), failing_dh, remaining);
-            if (decompressed.is_err()) {
-              (*response_signal)
-                ->send(Response{.status = std::move(decompressed).unwrap_err(),
-                                .content_type = std::string{bulk_content_type},
-                                .body = "{}"});
-              co_return;
-            }
-            data = std::move(decompressed).unwrap();
-          }
-          req.output_bytes += data.size();
-          if (req.output_bytes > args_.get_max_request_size()) {
-            diagnostic::warning("request body exceeds `max_request_size`")
-              .primary(args_.url)
-              .note("rejecting request body")
-              .emit(ctx);
+        auto it = active_requests_.find(msg.request_id);
+        if (it == active_requests_.end()
+            or it->second.response_signal->has_sent()) {
+          co_return;
+        }
+        auto& req = it->second;
+        response_signal = req.response_signal;
+        decompressor = req.decompressor;
+        is_action = req.is_action;
+        failed = req.failed;
+        auto data = std::move(msg.data);
+        auto failing_dh = failing_diagnostic_handler{ctx.dh(), failed};
+        if (decompressor) {
+          auto remaining = args_.get_max_request_size() - req.output_bytes;
+          auto decompressed = http::decompress_chunk_simdjson(
+            **decompressor, data.view(), failing_dh, remaining);
+          if (decompressed.is_err()) {
             (*response_signal)
-              ->send(Response{.status = 413,
+              ->send(Response{.status = std::move(decompressed).unwrap_err(),
                               .content_type = std::string{bulk_content_type},
                               .body = "{}"});
             co_return;
           }
-          bytes_read_counter_.add(data.size());
-          slices
-            = req.parser.parse_chunk(data, "accept_opensearch", failing_dh);
-          req.failed = failed;
+          data = std::move(decompressed).unwrap();
         }
+        req.output_bytes += data.size();
+        if (req.output_bytes > args_.get_max_request_size()) {
+          diagnostic::warning("request body exceeds `max_request_size`")
+            .primary(args_.url)
+            .note("rejecting request body")
+            .emit(ctx);
+          (*response_signal)
+            ->send(Response{.status = 413,
+                            .content_type = std::string{bulk_content_type},
+                            .body = "{}"});
+          co_return;
+        }
+        bytes_read_counter_.add(data.size());
+        slices = req.parser.parse_chunk(data, "accept_opensearch", failing_dh);
+        req.failed = failed;
         if (failed) {
           (*response_signal)
             ->send(Response{.status = 400,
@@ -463,22 +457,17 @@ public:
             }
           }
         }
-        auto requests = co_await active_requests_.lock();
-        auto it = requests->find(msg.request_id);
-        if (it != requests->end()) {
-          it->second.is_action = is_action;
-        }
+        req.is_action = is_action;
       },
       [&](RequestFinished msg) -> Task<void> {
         auto req = Option<InFlightRequest>{None{}};
         {
-          auto requests = co_await active_requests_.lock();
-          auto it = requests->find(msg.request_id);
-          if (it == requests->end()) {
+          auto it = active_requests_.find(msg.request_id);
+          if (it == active_requests_.end()) {
             co_return;
           }
           req = std::move(it->second);
-          requests->erase(it);
+          active_requests_.erase(it);
         }
         if (req->response_signal->has_sent()) {
           co_return;
@@ -591,8 +580,7 @@ private:
         break;
       }
       {
-        auto active_requests = co_await active_requests_.lock();
-        for (auto& [_, req] : *active_requests) {
+        for (auto& [_, req] : active_requests_) {
           if (not req.response_signal->has_sent()) {
             req.response_signal->send(
               Response{.status = 503,
@@ -600,7 +588,7 @@ private:
                        .body = std::string{bulk_response}});
           }
         }
-        active_requests->clear();
+        active_requests_.clear();
       }
       co_await sleep_for(std::chrono::milliseconds{10});
     }
@@ -624,8 +612,7 @@ private:
     if (active_connections_->available_permits() != get_max_connections()) {
       co_return;
     }
-    auto active_requests = co_await active_requests_.lock();
-    if (active_requests->empty() and message_queue_->empty()) {
+    if (active_requests_.empty() and message_queue_->empty()) {
       server_ = None{};
       lifecycle_ = Lifecycle::done;
     }
@@ -686,7 +673,7 @@ private:
   // --- transient ---
   Arc<Semaphore> active_connections_;
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
-  Mutex<std::unordered_map<uint64_t, InFlightRequest>> active_requests_{{}};
+  std::unordered_map<uint64_t, InFlightRequest> active_requests_{{}};
   MetricsCounter bytes_read_counter_;
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
   // --- state ---
