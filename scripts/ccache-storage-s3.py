@@ -4,21 +4,28 @@
 from __future__ import annotations
 
 import argparse
+import collections
+import contextlib
 import errno
 import json
 import logging
 import os
 import queue
 import re
+import select
+import shutil
 import signal
 import socket
 import socketserver
 import stat
+import subprocess
 import sys
+import termios
 import threading
 import time
+import tty
 from dataclasses import dataclass
-from typing import BinaryIO, NoReturn, Protocol
+from typing import BinaryIO, Callable, Iterator, NoReturn, Protocol
 from urllib.parse import unquote, urlparse
 
 
@@ -37,6 +44,7 @@ RESPONSE_ERR = 0x02
 PUT_OVERWRITE = 0x01
 
 DEFAULT_REGION = "eu-central-1"
+DEFAULT_INFRASTRUCTURE_ACCOUNT_ID = "622024652768"
 GITHUB_OIDC_PROVIDER_URL = "https://token.actions.githubusercontent.com"
 GITHUB_OIDC_PROVIDER_HOST = "token.actions.githubusercontent.com"
 GITHUB_OIDC_AUDIENCE = "sts.amazonaws.com"
@@ -151,6 +159,13 @@ class S3Storage:
         ]
         for worker in self._upload_workers:
             worker.start()
+
+    def status(self) -> str:
+        return (
+            f"queue {self._upload_queue.qsize()}/{self._config.upload_queue_size} "
+            f"known {self._known_object_count()} "
+            f"bucket {self._config.bucket}/{self._config.prefix or '-'}"
+        )
 
     def get(self, key: bytes) -> bytes | None:
         object_key = self._object_key(key)
@@ -308,6 +323,10 @@ class S3Storage:
     def _forget_object(self, object_key: str) -> None:
         with self._known_objects_lock:
             self._known_objects.discard(object_key)
+
+    def _known_object_count(self) -> int:
+        with self._known_objects_lock:
+            return len(self._known_objects)
 
     def _mark_object_queued(self, object_key: str) -> bool:
         with self._queued_objects_lock:
@@ -488,6 +507,144 @@ class StorageHelperHandler(socketserver.StreamRequestHandler):
         self.wfile.flush()
 
 
+class TerminalLogHandler(logging.Handler):
+    def __init__(self, ui: ForegroundUi) -> None:
+        super().__init__()
+        self._ui = ui
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._ui.add_log(self.format(record))
+        except Exception:
+            self.handleError(record)
+
+
+class ForegroundUi:
+    def __init__(
+        self,
+        storage: S3Storage,
+        endpoint: str,
+        daemonize_event: threading.Event,
+        stop_callback: Callable[[], None],
+    ) -> None:
+        self._storage = storage
+        self._endpoint = endpoint
+        self._daemonize_event = daemonize_event
+        self._stop_callback = stop_callback
+        self._logs: collections.deque[str] = collections.deque(maxlen=10)
+        self._logs_lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._started_at = time.monotonic()
+        self._old_termios: list[int | bytes] | None = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self.handler = TerminalLogHandler(self)
+        self.handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+
+    def start(self) -> None:
+        self._enter_terminal_mode()
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self._thread.join(timeout=1)
+        self._draw(final=True)
+        self._leave_terminal_mode()
+
+    def add_log(self, message: str) -> None:
+        with self._logs_lock:
+            self._logs.append(message)
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(timeout=0.2):
+            self._read_input()
+            self._draw(final=False)
+
+    def _read_input(self) -> None:
+        if not sys.stdin.isatty():
+            return
+        try:
+            readable, _, _ = select.select([sys.stdin], [], [], 0)
+        except OSError:
+            return
+        if not readable:
+            return
+        try:
+            key = os.read(sys.stdin.fileno(), 1)
+        except OSError:
+            return
+        if key.lower() == b"d":
+            self._daemonize_event.set()
+            self._stop_callback()
+
+    def _draw(self, final: bool) -> None:
+        if not sys.stdout.isatty():
+            return
+        columns = shutil.get_terminal_size(fallback=(100, 24)).columns
+        with self._logs_lock:
+            logs = list(self._logs)
+        visible_logs = [_truncate(line, columns) for line in logs[-10:]]
+        lines = [""] * (10 - len(visible_logs)) + visible_logs
+        status = self._status_line(columns, final)
+        output = ["\x1b[s", "\x1b[?25l", "\x1b[11A"]
+        for index in range(10):
+            line = lines[index] if index < len(lines) else ""
+            output.append("\x1b[2K")
+            output.append(line)
+            output.append("\n")
+        output.append("\x1b[7m")
+        output.append(_pad(status, columns))
+        output.append("\x1b[0m")
+        output.append("\x1b[u")
+        if final:
+            output.append("\x1b[?25h")
+        sys.stdout.write("".join(output))
+        sys.stdout.flush()
+
+    def _status_line(self, columns: int, final: bool) -> str:
+        elapsed = int(time.monotonic() - self._started_at)
+        left = (
+            f"ccache S3 helper {'stopping' if final else 'running'} "
+            f"{elapsed // 60:02d}:{elapsed % 60:02d} "
+            f"{self._storage.status()} socket {self._endpoint}"
+        )
+        right = "press 'd' to daemonize"
+        if len(left) + len(right) + 1 >= columns:
+            return _truncate(f"{left} {right}", columns)
+        return f"{left}{' ' * (columns - len(left) - len(right))}{right}"
+
+    def _enter_terminal_mode(self) -> None:
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return
+        self._old_termios = termios.tcgetattr(sys.stdin.fileno())
+        tty.setcbreak(sys.stdin.fileno())
+        sys.stdout.write("\n" * 11)
+        sys.stdout.flush()
+
+    def _leave_terminal_mode(self) -> None:
+        if self._old_termios is not None:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._old_termios)
+            self._old_termios = None
+        if sys.stdout.isatty():
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+
+def _truncate(value: str, columns: int) -> str:
+    if columns <= 0:
+        return ""
+    value = value.replace("\n", " ")
+    if len(value) <= columns:
+        return value
+    if columns == 1:
+        return "."
+    return f"{value[: columns - 1]}."
+
+
+def _pad(value: str, columns: int) -> str:
+    value = _truncate(value, columns)
+    return value + " " * max(0, columns - len(value))
+
+
 def _read_exact(input_file: BinaryIO, size: int) -> bytes:
     data = input_file.read(size)
     if len(data) != size:
@@ -578,7 +735,11 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
     return S3Config(
         bucket=parsed.netloc,
         prefix=unquote(parsed.path.lstrip("/")),
-        region=attrs.get("region") or os.environ.get("AWS_REGION"),
+        region=(
+            attrs.get("region")
+            or os.environ.get("CCACHE_S3_REGION")
+            or os.environ.get("AWS_REGION")
+        ),
         endpoint_url=(
             attrs.get("endpoint-url")
             or os.environ.get("AWS_ENDPOINT_URL_S3")
@@ -607,6 +768,228 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
             or os.environ.get("CCACHE_S3_UPLOAD_DRAIN_TIMEOUT", "60"),
         ),
     )
+
+
+def _default_endpoint() -> str:
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    return os.path.join(runtime_dir, "tenzir-ccache", "s3.sock")
+
+
+def _default_state_dir() -> str:
+    return os.path.dirname(_default_endpoint())
+
+
+def _default_log_file() -> str:
+    return os.path.join(_default_state_dir(), "helper.log")
+
+
+def _default_url() -> str | None:
+    if url := os.environ.get("CRSH_URL"):
+        return url
+    bucket = os.environ.get("CCACHE_S3_BUCKET")
+    if not bucket:
+        return None
+    prefix = os.environ.get("CCACHE_S3_PREFIX", "tenzir").strip("/")
+    if not prefix:
+        return f"s3://{bucket}"
+    return f"s3://{bucket}/{prefix}"
+
+
+def _is_interactive() -> bool:
+    return sys.stdin.isatty() and sys.stderr.isatty()
+
+
+def _copy_file_if_present(source: str, destination: str) -> None:
+    if os.path.isfile(source):
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def _prepare_writable_aws_home() -> None:
+    original_home = os.environ.get("HOME")
+    if not original_home:
+        return
+    aws_dir = os.path.join(original_home, ".aws")
+    if not os.path.isdir(aws_dir):
+        return
+    writable_home = os.path.join(_default_state_dir(), "home")
+    writable_aws_dir = os.path.join(writable_home, ".aws")
+    os.makedirs(os.path.join(writable_aws_dir, "sso", "cache"), exist_ok=True)
+    for name in ("config", "credentials"):
+        _copy_file_if_present(
+            os.path.join(aws_dir, name),
+            os.path.join(writable_aws_dir, name),
+        )
+    source_cache = os.path.join(aws_dir, "sso", "cache")
+    destination_cache = os.path.join(writable_aws_dir, "sso", "cache")
+    if os.path.isdir(source_cache):
+        for name in os.listdir(source_cache):
+            _copy_file_if_present(
+                os.path.join(source_cache, name),
+                os.path.join(destination_cache, name),
+            )
+    os.environ["HOME"] = writable_home
+
+
+def _run_aws_sso_login(profile: str) -> None:
+    aws = shutil.which("aws")
+    if not aws:
+        raise StorageError(
+            f"AWS login is required. Install the AWS CLI and run: "
+            f"aws sso login --profile {profile}",
+        )
+    print(
+        f"AWS login is required for account {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}.",
+        file=sys.stderr,
+    )
+    answer = input("Run AWS SSO login now? [Y/n]: ").strip()
+    if answer.lower() in {"n", "no"}:
+        raise StorageError(
+            f"AWS login is required for account {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}",
+        )
+    subprocess.run([aws, "sso", "login", "--profile", profile], check=True)
+
+
+@contextlib.contextmanager
+def _quiet_botocore_credential_refresh() -> Iterator[None]:
+    loggers = [
+        logging.getLogger("botocore.credentials"),
+        logging.getLogger("botocore.tokens"),
+    ]
+    old_levels = [logger.level for logger in loggers]
+    try:
+        for logger in loggers:
+            logger.setLevel(logging.ERROR)
+        yield
+    finally:
+        for logger, old_level in zip(loggers, old_levels, strict=True):
+            logger.setLevel(old_level)
+
+
+def _matching_aws_profiles(account_id: str) -> list[str]:
+    try:
+        import botocore.session
+    except ImportError as error:
+        raise StorageError("botocore is required for AWS profile discovery") from error
+
+    session = botocore.session.Session()
+    profiles = session.full_config.get("profiles", {})
+    matches = [
+        name
+        for name, values in sorted(profiles.items())
+        if values.get("sso_account_id") == account_id
+    ]
+    return matches
+
+
+def _select_aws_profile(account_id: str) -> str:
+    matches = _matching_aws_profiles(account_id)
+    if not matches:
+        raise StorageError(
+            f"No AWS SSO profile is configured for account {account_id}. "
+            "Create one with 'aws configure sso'.",
+        )
+    if len(matches) == 1 or not _is_interactive():
+        return matches[0]
+
+    print(f"Select an AWS profile for account {account_id}:", file=sys.stderr)
+    for index, profile in enumerate(matches, start=1):
+        print(f"  {index}. {profile}", file=sys.stderr)
+    while True:
+        answer = input(f"Profile [1-{len(matches)}]: ").strip()
+        if not answer:
+            return matches[0]
+        try:
+            selected = int(answer)
+        except ValueError:
+            print("Enter a number from the list.", file=sys.stderr)
+            continue
+        if 1 <= selected <= len(matches):
+            return matches[selected - 1]
+        print("Enter a number from the list.", file=sys.stderr)
+
+
+def _resolve_aws_profile(config: S3Config) -> S3Config:
+    if config.profile:
+        return config
+    profile = _select_aws_profile(DEFAULT_INFRASTRUCTURE_ACCOUNT_ID)
+    return S3Config(
+        bucket=config.bucket,
+        prefix=config.prefix,
+        region=config.region,
+        endpoint_url=config.endpoint_url,
+        profile=profile,
+        layout=config.layout,
+        max_pool_connections=config.max_pool_connections,
+        object_list_min_interval=config.object_list_min_interval,
+        upload_queue_size=config.upload_queue_size,
+        upload_workers=config.upload_workers,
+        upload_drain_timeout=config.upload_drain_timeout,
+    )
+
+
+def _ensure_expected_aws_account(config: S3Config) -> S3Config:
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError as error:
+        raise StorageError("boto3 is required for S3 ccache storage") from error
+
+    resolved_config = _resolve_aws_profile(config)
+    session_args = {}
+    if resolved_config.profile:
+        session_args["profile_name"] = resolved_config.profile
+    if resolved_config.region:
+        session_args["region_name"] = resolved_config.region
+
+    def caller_account() -> str:
+        session = boto3.Session(**session_args)
+        with _quiet_botocore_credential_refresh():
+            return session.client("sts").get_caller_identity()["Account"]
+
+    try:
+        account_id = caller_account()
+    except (BotoCoreError, ClientError, OSError) as error:
+        if resolved_config.profile and _is_interactive():
+            _run_aws_sso_login(resolved_config.profile)
+            account_id = caller_account()
+        else:
+            raise StorageError(
+                f"AWS login is required for account {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}",
+            ) from error
+    if account_id != DEFAULT_INFRASTRUCTURE_ACCOUNT_ID:
+        raise StorageError(
+            f"AWS credentials are for account {account_id}, "
+            f"expected {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}",
+        )
+    return resolved_config
+
+
+def _daemonize(log_file: str) -> None:
+    if not hasattr(os, "fork"):
+        raise StorageError("--deamonize is only supported on Unix-like systems")
+
+    os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
+    pid = os.fork()
+    if pid > 0:
+        print(f"ccache S3 helper started in background; log: {log_file}", flush=True)
+        os._exit(0)
+
+    os.setsid()
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    pid = os.fork()
+    if pid > 0:
+        os._exit(0)
+
+    stdin_fd = os.open(os.devnull, os.O_RDONLY)
+    log_fd = os.open(log_file, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        os.dup2(stdin_fd, sys.stdin.fileno())
+        os.dup2(log_fd, sys.stdout.fileno())
+        os.dup2(log_fd, sys.stderr.fileno())
+    finally:
+        os.close(stdin_fd)
+        os.close(log_fd)
 
 
 def _remove_stale_socket(endpoint: str) -> None:
@@ -1153,18 +1536,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--endpoint",
-        default=os.environ.get("CRSH_IPC_ENDPOINT"),
-        help="Unix socket path to listen on; defaults to CRSH_IPC_ENDPOINT",
+        default=os.environ.get("CRSH_IPC_ENDPOINT") or _default_endpoint(),
+        help="Unix socket path to listen on; defaults to CRSH_IPC_ENDPOINT or the local Tenzir ccache socket",
     )
     parser.add_argument(
         "--url",
-        default=os.environ.get("CRSH_URL"),
-        help="S3 URL, for example s3://bucket/prefix; defaults to CRSH_URL",
+        default=_default_url(),
+        help="S3 URL, for example s3://bucket/prefix; defaults to CRSH_URL or CCACHE_S3_BUCKET/CCACHE_S3_PREFIX",
     )
     parser.add_argument(
         "--idle-timeout",
         type=_positive_float,
-        default=_positive_float(os.environ.get("CRSH_IDLE_TIMEOUT", "600")),
+        default=_positive_float(os.environ.get("CRSH_IDLE_TIMEOUT", "0")),
         help="exit after this many seconds without client activity; 0 disables",
     )
     parser.add_argument(
@@ -1178,6 +1561,18 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_log_level,
         default=_log_level(os.environ.get("CCACHE_S3_LOG_LEVEL", "INFO")),
         help="log level for cache activity; default: INFO",
+    )
+    parser.add_argument(
+        "--deamonize",
+        "--daemonize",
+        action="store_true",
+        dest="daemonize",
+        help="move into the background after interactive AWS initialization",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=os.environ.get("CCACHE_S3_LOG_FILE") or _default_log_file(),
+        help="log file used with --deamonize; defaults to the local Tenzir ccache helper log",
     )
     return parser
 
@@ -1200,9 +1595,28 @@ def _cmd_serve(argv: list[str]) -> int:
 
     attrs = _attrs_from_env()
     config = _parse_url(args.url, attrs)
-    storage = S3Storage(config)
+    _prepare_writable_aws_home()
+    config = _ensure_expected_aws_account(config)
+    if args.daemonize:
+        _daemonize(args.log_file)
+
+    daemonize_requested = threading.Event()
+    while True:
+        requested = _run_server(args, config, daemonize_requested)
+        if not requested:
+            return 0
+        daemonize_requested.clear()
+        _daemonize(args.log_file)
+
+
+def _run_server(
+    args: argparse.Namespace,
+    config: S3Config,
+    daemonize_requested: threading.Event,
+) -> bool:
     os.makedirs(os.path.dirname(args.endpoint) or ".", exist_ok=True)
     _remove_stale_socket(args.endpoint)
+    storage = S3Storage(config)
     old_umask = os.umask(0o077)
     try:
         server = StorageHelperServer(
@@ -1217,14 +1631,28 @@ def _cmd_serve(argv: list[str]) -> int:
     def stop(_signum: int, _frame: object) -> None:
         server.request_stop()
 
+    ui: ForegroundUi | None = None
+    root_logger = logging.getLogger()
+    old_handlers: list[logging.Handler] | None = None
+    if not args.daemonize and _is_interactive():
+        ui = ForegroundUi(storage, args.endpoint, daemonize_requested, server.request_stop)
+        old_handlers = root_logger.handlers[:]
+        root_logger.handlers = [ui.handler]
+        ui.start()
+
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
         server.serve_until_stopped()
+    except KeyboardInterrupt:
+        server.request_stop()
     finally:
+        if ui is not None:
+            ui.stop()
+            root_logger.handlers = old_handlers or []
         server.server_close()
         storage.close()
-    return 0
+    return daemonize_requested.is_set()
 
 
 def main() -> NoReturn:
@@ -1235,6 +1663,8 @@ def main() -> NoReturn:
             result = _cmd_serve(sys.argv[2:])
         else:
             result = _cmd_serve(sys.argv[1:])
+    except KeyboardInterrupt:
+        sys.exit(130)
     except Exception as error:
         print(f"ccache-storage-s3.py: {error}", file=sys.stderr)
         sys.exit(1)
