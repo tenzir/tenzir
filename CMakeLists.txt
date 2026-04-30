@@ -917,29 +917,34 @@ else ()
   add_subdirectory(libtenzir/aux/facebook)
   # Proxygen declares StatsWrapper.h as a generated file in the build tree, but
   # the bundled generator writes it to the source tree. Materialize the build
-  # tree copy via a dedicated target so normal rebuilds refresh it when the
-  # tracked generator inputs change.
+  # tree copy during configuration so Ninja does not run the incorrect
+  # Proxygen rule on every build. Track the generator inputs via
+  # configure_file so normal builds re-run CMake before the header can become
+  # stale.
   set(_tenzir_proxygen_generated_root
       "${CMAKE_CURRENT_BINARY_DIR}/libtenzir/aux/facebook/proxygen/generated")
-  set(_tenzir_proxygen_stats_wrapper
-      "${_tenzir_proxygen_generated_root}/proxygen/lib/stats/StatsWrapper.h")
-  add_custom_target(
-    tenzir-proxygen-stats-wrapper
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-            "${_tenzir_proxygen_generated_root}/proxygen/lib/stats"
-    COMMAND ${CMAKE_COMMAND} -E rm -f "${_tenzir_proxygen_stats_wrapper}"
-    COMMAND
+  set(_tenzir_proxygen_stats_wrapper_generator
       "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen/proxygen/lib/stats/gen_StatsWrapper.sh"
-      "${_tenzir_proxygen_generated_root}"
-    DEPENDS
-      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen/proxygen/lib/stats/gen_StatsWrapper.sh"
+  )
+  set(_tenzir_proxygen_base_stats
       "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen/proxygen/lib/stats/BaseStats.h"
-    COMMENT "Generating StatsWrapper.h in the Proxygen build tree")
-  if (TARGET proxygen-generated)
-    add_dependencies(proxygen-generated tenzir-proxygen-stats-wrapper)
-  endif ()
+  )
+  set(_tenzir_proxygen_stats_wrapper_deps
+      "${CMAKE_CURRENT_BINARY_DIR}/libtenzir/aux/facebook/proxygen/stats-wrapper-deps"
+  )
+  configure_file(
+    "${_tenzir_proxygen_stats_wrapper_generator}"
+    "${_tenzir_proxygen_stats_wrapper_deps}/gen_StatsWrapper.sh" COPYONLY)
+  configure_file("${_tenzir_proxygen_base_stats}"
+                 "${_tenzir_proxygen_stats_wrapper_deps}/BaseStats.h" COPYONLY)
+  file(MAKE_DIRECTORY "${_tenzir_proxygen_generated_root}/proxygen/lib/stats")
+  execute_process(
+    COMMAND "${_tenzir_proxygen_stats_wrapper_generator}"
+            "${_tenzir_proxygen_generated_root}" COMMAND_ERROR_IS_FATAL ANY)
   unset(_tenzir_proxygen_generated_root)
-  unset(_tenzir_proxygen_stats_wrapper)
+  unset(_tenzir_proxygen_stats_wrapper_generator)
+  unset(_tenzir_proxygen_base_stats)
+  unset(_tenzir_proxygen_stats_wrapper_deps)
 endif ()
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
