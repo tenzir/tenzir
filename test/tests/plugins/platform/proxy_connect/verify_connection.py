@@ -63,6 +63,10 @@ def main() -> None:
                 "HTTPS_PROXY": os.environ["PLATFORM_WS_PROXY"],
                 "NO_PROXY": "",
                 "no_proxy": "",
+                # The test only needs the platform client. Disable the
+                # node-to-node listener so parallel tests don't compete for the
+                # default endpoint port.
+                "TENZIR_ENDPOINT": "false",
                 "TENZIR_STATE_DIRECTORY": tmpdir,
                 "TENZIR_CACHE_DIRECTORY": tmpdir,
                 "TENZIR_LOG_FILE": "/dev/stderr",

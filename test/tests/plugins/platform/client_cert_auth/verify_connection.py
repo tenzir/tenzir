@@ -61,6 +61,10 @@ def main() -> None:
                     "PLATFORM_WS_CERTFILE"
                 ],
                 "TENZIR_PLUGINS__PLATFORM__KEYFILE": os.environ["PLATFORM_WS_KEYFILE"],
+                # The test only needs the platform client. Disable the
+                # node-to-node listener so parallel tests don't compete for the
+                # default endpoint port.
+                "TENZIR_ENDPOINT": "false",
                 # Use isolated directories so parallel tests don't conflict.
                 "TENZIR_STATE_DIRECTORY": tmpdir,
                 "TENZIR_CACHE_DIRECTORY": tmpdir,
