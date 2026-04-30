@@ -342,7 +342,6 @@ auto package_input::parse(const view<record>& data)
     return unknown_package_key_error("input", key);
   }
   REQUIRED_FIELD(name);
-  REQUIRED_FIELD(type);
   return result;
 }
 
@@ -675,6 +674,25 @@ auto package_context::parse(const view<record>& data)
     TRY_ASSIGN_BOOL_TO_RESULT(disabled);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
+    if (key == "args") {
+      const auto* x = try_as<view<record>>(&value);
+      if (not x) {
+        return diagnostic::error("args must be a record")
+          .note("invalid package definition")
+          .to_error();
+      }
+      for (auto const& [key, value] : *x) {
+        auto const* value_string = try_as<std::string_view>(&value);
+        if (not value_string) {
+          return diagnostic::error("args values must be strings")
+            .note("while parsing key {} for field args", key)
+            .note("invalid package definition")
+            .to_error();
+        }
+        result.arguments[std::string{key}] = std::string{*value_string};
+      }
+      continue;
+    }
     return unknown_package_key_error("context", key);
   }
   REQUIRED_FIELD(type)

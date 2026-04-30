@@ -65,7 +65,7 @@ struct package_config final {
 
 struct package_input final {
   std::string name; // required to be non-empty
-  std::string type; // required to be non-empty
+  std::string type; // optional type hint
   std::optional<std::string> description;
   std::optional<std::string> default_;
 

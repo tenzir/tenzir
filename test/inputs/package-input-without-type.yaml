@@ -1,6 +1,6 @@
-id: missing-input-type
-name: Missing Input Type
-description: Package with an input missing its required type.
+id: input-without-type
+name: Input Without Type
+description: Package with a documented input that omits the optional type.
 
 inputs:
   message:

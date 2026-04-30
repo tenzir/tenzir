@@ -1,9 +1,0 @@
-error: type must be provided
- --> tests/node/package/validation/missing-input-type.tql:6:1
-  |
-6 | package::add
-  | ^^^^^^^^^^^^ 
-  |
-  = note: invalid package definition
-  = note: while parsing key message for field inputs
-  = note: invalid package definition
