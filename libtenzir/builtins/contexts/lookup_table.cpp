@@ -37,10 +37,17 @@
 #include <caf/error.hpp>
 #include <tsl/robin_map.h>
 
+#include <array>
+#include <charconv>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <utility>
+#include <vector>
 
 namespace tenzir::plugins::lookup_table {
 
@@ -248,13 +255,427 @@ struct value_data {
 using map_type = tsl::robin_map<key_data, value_data>;
 using subnet_tree_type = detail::subnet_tree<value_data>;
 
+using record_subnet_entry_id = size_t;
+using record_subnet_entry_ids = std::vector<record_subnet_entry_id>;
+
+struct record_subnet_path {
+  std::string path;
+  subnet key;
+};
+
+struct record_subnet_search_path {
+  std::string path;
+  const data* key;
+};
+
+struct record_subnet_entry {
+  data key;
+  value_data value;
+  std::string shape;
+  std::vector<record_subnet_path> paths;
+  uint64_t sequence = 0;
+};
+
+struct record_subnet_candidate {
+  size_t prefix_length = 0;
+  size_t matched_paths = 0;
+};
+
+struct record_subnet_match {
+  record_subnet_entry_id id = 0;
+  value_data* value = nullptr;
+};
+
+struct record_subnet_shape_index {
+  tsl::robin_map<std::string, detail::subnet_tree<record_subnet_entry_ids>>
+    paths;
+};
+
+auto append_decimal(std::string& result, size_t value) -> void {
+  auto buffer = std::array<char, std::numeric_limits<size_t>::digits10 + 1>{};
+  const auto [ptr, err]
+    = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+  TENZIR_ASSERT(err == std::errc{});
+  result.append(buffer.data(), ptr);
+}
+
+auto append_field_path(std::string& path, std::string_view field) -> void {
+  append_decimal(path, field.size());
+  path.push_back(':');
+  path.append(field);
+  path.push_back(';');
+}
+
+auto append_record_shape(std::string& result, const record& value) -> void;
+
+auto append_data_shape(std::string& result, const data& value) -> void {
+  if (is<ip>(value) or is<subnet>(value)) {
+    result.append("A;");
+    return;
+  }
+  if (const auto* nested = try_as<record>(&value)) {
+    append_record_shape(result, *nested);
+    return;
+  }
+  const auto index = value.get_data().index();
+  append_decimal(result, index);
+  result.push_back(';');
+}
+
+auto append_record_shape(std::string& result, const record& value) -> void {
+  result.push_back('{');
+  auto emitted = size_t{0};
+  auto previous = std::optional<std::string_view>{};
+  while (emitted < value.size()) {
+    auto next = std::optional<std::string_view>{};
+    for (const auto& [field, _] : value) {
+      const auto field_name = std::string_view{field};
+      if (previous and field_name <= *previous) {
+        continue;
+      }
+      if (not next or field_name < *next) {
+        next = field_name;
+      }
+    }
+    TENZIR_ASSERT(next);
+    for (const auto& [field, field_value] : value) {
+      const auto field_name = std::string_view{field};
+      if (field_name != *next) {
+        continue;
+      }
+      result.push_back('f');
+      append_decimal(result, field.size());
+      result.push_back(':');
+      result.append(field);
+      result.push_back('=');
+      append_data_shape(result, field_value);
+      ++emitted;
+    }
+    previous = *next;
+  }
+  result.push_back('}');
+}
+
+auto make_record_shape(const record& value) -> std::string {
+  auto result = std::string{};
+  append_record_shape(result, value);
+  return result;
+}
+
+auto collect_record_subnet_paths(const record& value, std::string& path,
+                                 std::vector<record_subnet_path>& result)
+  -> void {
+  for (const auto& [field, field_value] : value) {
+    const auto path_size = path.size();
+    append_field_path(path, field);
+    if (const auto* key = try_as<subnet>(&field_value)) {
+      result.push_back({path, *key});
+    } else if (const auto* nested = try_as<record>(&field_value)) {
+      collect_record_subnet_paths(*nested, path, result);
+    }
+    path.resize(path_size);
+  }
+}
+
+auto collect_record_search_paths(const record& value, std::string& path,
+                                 std::vector<record_subnet_search_path>& result)
+  -> void {
+  for (const auto& [field, field_value] : value) {
+    const auto path_size = path.size();
+    append_field_path(path, field);
+    if (is<ip>(field_value) or is<subnet>(field_value)) {
+      result.push_back({path, &field_value});
+    } else if (const auto* nested = try_as<record>(&field_value)) {
+      collect_record_search_paths(*nested, path, result);
+    }
+    path.resize(path_size);
+  }
+}
+
+auto collect_record_subnet_paths(const record& value)
+  -> std::vector<record_subnet_path> {
+  auto result = std::vector<record_subnet_path>{};
+  auto path = std::string{};
+  collect_record_subnet_paths(value, path, result);
+  return result;
+}
+
+auto collect_record_search_paths(const record& value)
+  -> std::vector<record_subnet_search_path> {
+  auto result = std::vector<record_subnet_search_path>{};
+  auto path = std::string{};
+  collect_record_search_paths(value, path, result);
+  return result;
+}
+
+auto record_key_match_score(const data& stored, const data& value)
+  -> std::optional<record_subnet_candidate> {
+  if (const auto* stored_subnet = try_as<subnet>(&stored)) {
+    if (const auto* value_ip = try_as<ip>(&value)) {
+      if (stored_subnet->contains(*value_ip)) {
+        return record_subnet_candidate{
+          .prefix_length = stored_subnet->length(),
+          .matched_paths = 1,
+        };
+      }
+      return std::nullopt;
+    }
+    if (const auto* value_subnet = try_as<subnet>(&value)) {
+      if (stored_subnet->contains(*value_subnet)) {
+        return record_subnet_candidate{
+          .prefix_length = stored_subnet->length(),
+          .matched_paths = 1,
+        };
+      }
+      return std::nullopt;
+    }
+    return std::nullopt;
+  }
+  if (const auto* stored_record = try_as<record>(&stored)) {
+    const auto* value_record = try_as<record>(&value);
+    if (not value_record or stored_record->size() != value_record->size()) {
+      return std::nullopt;
+    }
+    auto result = record_subnet_candidate{};
+    for (const auto& [field, field_value] : *stored_record) {
+      auto value_it = value_record->find(field);
+      if (value_it == value_record->end()) {
+        return std::nullopt;
+      }
+      auto score = record_key_match_score(field_value, value_it->second);
+      if (not score) {
+        return std::nullopt;
+      }
+      result.prefix_length += score->prefix_length;
+      result.matched_paths += score->matched_paths;
+    }
+    return result;
+  }
+  if (const auto* stored_ip = try_as<ip>(&stored)) {
+    if (const auto* value_ip = try_as<ip>(&value);
+        value_ip and *stored_ip == *value_ip) {
+      return record_subnet_candidate{
+        .prefix_length = 128,
+        .matched_paths = 1,
+      };
+    }
+    return std::nullopt;
+  }
+  if (stored == value) {
+    return record_subnet_candidate{};
+  }
+  return std::nullopt;
+}
+
+class record_subnet_index {
+public:
+  auto upsert(data key) -> std::pair<bool, value_data*> {
+    auto key_for_lookup = key_data{key};
+    if (auto it = entries_by_key_.find(key_for_lookup);
+        it != entries_by_key_.end()) {
+      auto* entry = entry_at(it->second);
+      TENZIR_ASSERT(entry);
+      return {false, &entry->value};
+    }
+    const auto* record_key = try_as<record>(&key);
+    TENZIR_ASSERT(record_key);
+    auto paths = collect_record_subnet_paths(*record_key);
+    TENZIR_ASSERT(not paths.empty());
+    auto shape = make_record_shape(*record_key);
+    auto entry = record_subnet_entry{
+      .key = std::move(key),
+      .value = {},
+      .shape = std::move(shape),
+      .paths = std::move(paths),
+      .sequence = next_sequence_++,
+    };
+    const auto id = entries_.size();
+    entries_.push_back(std::move(entry));
+    entries_by_key_.emplace(std::move(key_for_lookup), id);
+    insert_into_indexes(id, *entries_.back());
+    return {true, &entries_.back()->value};
+  }
+
+  auto exact_lookup(const data& key) -> std::optional<record_subnet_match> {
+    auto it = entries_by_key_.find(key_data{key});
+    if (it == entries_by_key_.end()) {
+      return std::nullopt;
+    }
+    auto* entry = entry_at(it->second);
+    if (not entry) {
+      return std::nullopt;
+    }
+    return record_subnet_match{.id = it->second, .value = &entry->value};
+  }
+
+  auto lookup(const data& key) -> std::optional<record_subnet_match> {
+    const auto* key_record = try_as<record>(&key);
+    if (not key_record) {
+      return std::nullopt;
+    }
+    const auto search_paths = collect_record_search_paths(*key_record);
+    if (search_paths.empty()) {
+      return std::nullopt;
+    }
+    shape_buffer_.clear();
+    append_record_shape(shape_buffer_, *key_record);
+    auto shape_it = shapes_.find(shape_buffer_);
+    if (shape_it == shapes_.end()) {
+      return std::nullopt;
+    }
+    auto candidates
+      = tsl::robin_map<record_subnet_entry_id, record_subnet_candidate>{};
+    for (const auto& search_path : search_paths) {
+      auto path_it = shape_it.value().paths.find(search_path.path);
+      if (path_it == shape_it.value().paths.end()) {
+        continue;
+      }
+      auto add_candidates = [&](const subnet& matched_subnet,
+                                const record_subnet_entry_ids* ids) {
+        TENZIR_ASSERT(ids);
+        for (const auto id : *ids) {
+          auto& candidate = candidates[id];
+          candidate.prefix_length += matched_subnet.length();
+          ++candidate.matched_paths;
+        }
+      };
+      if (const auto* search_ip = try_as<ip>(search_path.key)) {
+        for (auto&& [matched_subnet, ids] :
+             path_it.value().search(*search_ip)) {
+          add_candidates(matched_subnet, ids);
+        }
+      } else if (const auto* search_subnet = try_as<subnet>(search_path.key)) {
+        for (auto&& [matched_subnet, ids] :
+             path_it.value().search(*search_subnet)) {
+          add_candidates(matched_subnet, ids);
+        }
+      }
+    }
+    auto best = std::optional<record_subnet_match>{};
+    auto best_score = record_subnet_candidate{};
+    auto best_sequence = uint64_t{};
+    for (const auto& [id, score] : candidates) {
+      auto* entry = entry_at(id);
+      if (not entry or score.matched_paths != entry->paths.size()) {
+        continue;
+      }
+      auto verified_score = record_key_match_score(entry->key, key);
+      if (not verified_score) {
+        continue;
+      }
+      const auto is_better
+        = not best or verified_score->prefix_length > best_score.prefix_length
+          or (verified_score->prefix_length == best_score.prefix_length
+              and verified_score->matched_paths > best_score.matched_paths)
+          or (verified_score->prefix_length == best_score.prefix_length
+              and verified_score->matched_paths == best_score.matched_paths
+              and entry->sequence < best_sequence);
+      if (is_better) {
+        best = record_subnet_match{.id = id, .value = &entry->value};
+        best_score = *verified_score;
+        best_sequence = entry->sequence;
+      }
+    }
+    return best;
+  }
+
+  auto erase(const data& key) -> bool {
+    auto it = entries_by_key_.find(key_data{key});
+    if (it == entries_by_key_.end()) {
+      return false;
+    }
+    erase(it->second);
+    return true;
+  }
+
+  auto erase(record_subnet_entry_id id) -> void {
+    auto* entry = entry_at(id);
+    if (not entry) {
+      return;
+    }
+    remove_from_indexes(id, *entry);
+    entries_by_key_.erase(key_data{entry->key});
+    entries_[id].reset();
+  }
+
+  auto clear() -> void {
+    entries_.clear();
+    entries_by_key_.clear();
+    shapes_.clear();
+    next_sequence_ = 0;
+  }
+
+  auto entries() const
+    -> const std::vector<std::optional<record_subnet_entry>>& {
+    return entries_;
+  }
+
+private:
+  auto entry_at(record_subnet_entry_id id) -> record_subnet_entry* {
+    if (id >= entries_.size() or not entries_[id]) {
+      return nullptr;
+    }
+    return &*entries_[id];
+  }
+
+  auto insert_into_indexes(record_subnet_entry_id id,
+                           const record_subnet_entry& entry) -> void {
+    auto& shape = shapes_[entry.shape];
+    for (const auto& path : entry.paths) {
+      auto& tree = shape.paths[path.path];
+      auto* ids = tree.lookup(path.key);
+      if (ids) {
+        ids->push_back(id);
+      } else {
+        std::ignore = tree.insert(path.key, record_subnet_entry_ids{id});
+      }
+    }
+  }
+
+  auto remove_from_indexes(record_subnet_entry_id id,
+                           const record_subnet_entry& entry) -> void {
+    auto shape_it = shapes_.find(entry.shape);
+    if (shape_it == shapes_.end()) {
+      return;
+    }
+    for (const auto& path : entry.paths) {
+      auto path_it = shape_it.value().paths.find(path.path);
+      if (path_it == shape_it.value().paths.end()) {
+        continue;
+      }
+      auto* ids = path_it.value().lookup(path.key);
+      if (not ids) {
+        continue;
+      }
+      for (auto it = ids->begin(); it != ids->end(); ++it) {
+        if (*it == id) {
+          ids->erase(it);
+          break;
+        }
+      }
+      if (ids->empty()) {
+        path_it.value().erase(path.key);
+      }
+    }
+  }
+
+  std::vector<std::optional<record_subnet_entry>> entries_;
+  tsl::robin_map<key_data, record_subnet_entry_id> entries_by_key_;
+  tsl::robin_map<std::string, record_subnet_shape_index> shapes_;
+  uint64_t next_sequence_ = 0;
+  std::string shape_buffer_;
+};
+
 class lookup_table_context final : public virtual context {
 public:
   lookup_table_context() noexcept = default;
   explicit lookup_table_context(map_type context_entries,
-                                subnet_tree_type subnet_entries) noexcept
+                                subnet_tree_type subnet_entries,
+                                record_subnet_index record_subnet_entries
+                                = {}) noexcept
     : context_entries{std::move(context_entries)},
-      subnet_entries{std::move(subnet_entries)} {
+      subnet_entries{std::move(subnet_entries)},
+      record_subnet_entries{std::move(record_subnet_entries)} {
     // nop
   }
 
@@ -282,11 +703,12 @@ public:
     auto builder = series_builder{};
     const auto now = time::clock::now();
     for (auto value : array.values()) {
+      auto materialized_value = materialize(value);
       // TODO: This should really be making use of heterogeneous map lookups
       // instead of materializing, but we're not using `data` and `data_view`
       // directly here, but rather a custom wrapper around them to make mixed
       // number types
-      if (auto it = context_entries.find(materialize(value));
+      if (auto it = context_entries.find(materialized_value);
           it != context_entries.end()) {
         if (it->second.is_expired(now)) {
           context_entries.erase(it);
@@ -299,6 +721,15 @@ public:
       // We need to retry the lookup if we had an expired hit, as a matched IP
       // address that was expired may very well be part of another subnet.
     retry:
+      if (auto match = record_subnet_entries.exact_lookup(materialized_value)) {
+        if (match->value->is_expired(now)) {
+          record_subnet_entries.erase(match->id);
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
+        }
+        match->value->refresh_read_timeout(now);
+        builder.data(match->value->raw_data);
+        continue;
+      }
       if (auto [subnet, entry] = subnet_lookup(value); entry) {
         if (entry->is_expired(now)) {
           subnet_entries.erase(subnet);
@@ -306,6 +737,15 @@ public:
         }
         entry->refresh_read_timeout(now);
         builder.data(entry->raw_data);
+        continue;
+      }
+      if (auto match = record_subnet_entries.lookup(materialized_value)) {
+        if (match->value->is_expired(now)) {
+          record_subnet_entries.erase(match->id);
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
+        }
+        match->value->refresh_read_timeout(now);
+        builder.data(match->value->raw_data);
         continue;
       }
       builder.null();
@@ -329,6 +769,12 @@ public:
     }
     for (const auto& entry : context_entries) {
       if (entry.second.is_expired(now)) {
+        continue;
+      }
+      ++num_context_entries;
+    }
+    for (const auto& entry : record_subnet_entries.entries()) {
+      if (not entry or entry->value.is_expired(now)) {
         continue;
       }
       ++num_context_entries;
@@ -371,6 +817,20 @@ public:
         }
       }
     }
+    for (const auto& entry : record_subnet_entries.entries()) {
+      if (not entry or entry->value.is_expired(now)) {
+        continue;
+      }
+      auto row = entry_builder.record();
+      row.field("key", entry->key);
+      row.field("value", entry->value.raw_data);
+      if (entry_builder.length() >= context::dump_batch_size_limit) {
+        for (auto&& slice : entry_builder.finish_as_table_slice(
+               fmt::format("tenzir.{}.info", context_type()))) {
+          co_yield std::move(slice);
+        }
+      }
+    }
     // Dump all remaining entries that did not reach the size limit.
     for (auto&& slice : entry_builder.finish_as_table_slice(
            fmt::format("tenzir.{}.info", context_type()))) {
@@ -406,6 +866,12 @@ public:
       if (const auto* sn = try_as<tenzir::subnet>(&materialized_key)) {
         const auto created = subnet_entries.insert(*sn, value_data{});
         auto* entry = subnet_entries.lookup(*sn);
+        TENZIR_ASSERT(entry);
+        update_entry(created, *entry, materialize(*context));
+      } else if (const auto* record_key = try_as<record>(&materialized_key);
+                 record_key
+                 and not collect_record_subnet_paths(*record_key).empty()) {
+        auto [created, entry] = record_subnet_entries.upsert(materialized_key);
         TENZIR_ASSERT(entry);
         update_entry(created, *entry, materialize(*context));
       } else {
@@ -458,7 +924,10 @@ public:
         if (is<caf::none_t>(x)) {
           continue;
         }
-        context_entries.erase(materialize(x));
+        auto materialized_key = materialize(x);
+        if (not record_subnet_entries.erase(materialized_key)) {
+          context_entries.erase(std::move(materialized_key));
+        }
       }
     }
     return {};
@@ -467,6 +936,7 @@ public:
   auto reset() -> caf::expected<void> override {
     context_entries.clear();
     subnet_entries.clear();
+    record_subnet_entries.clear();
     return {};
   }
 
@@ -515,6 +985,12 @@ public:
     for (const auto& [key, value] : context_entries) {
       pack_value_data(key.to_original_data(), value);
     }
+    for (const auto& entry : record_subnet_entries.entries()) {
+      if (not entry) {
+        continue;
+      }
+      pack_value_data(entry->key, entry->value);
+    }
     for (const auto& [key, value] : subnet_entries.nodes()) {
       TENZIR_ASSERT(value);
       pack_value_data(data{key}, *value);
@@ -531,6 +1007,7 @@ public:
 private:
   map_type context_entries;
   subnet_tree_type subnet_entries;
+  record_subnet_index record_subnet_entries;
 };
 
 struct v1_loader : public context_loader {
@@ -549,6 +1026,7 @@ struct v1_loader : public context_loader {
     }
     auto context_entries = map_type{};
     auto subnet_entries = subnet_tree_type{};
+    auto record_subnet_entries = record_subnet_index{};
     const auto* list = fb.value()->data_as_list();
     if (not list) {
       return caf::make_error(ec::serialization_error,
@@ -701,12 +1179,18 @@ struct v1_loader : public context_loader {
       }
       if (const auto* x = try_as<tenzir::subnet>(&key)) {
         subnet_entries.insert(*x, std::move(value));
+      } else if (const auto* x = try_as<tenzir::record>(&key);
+                 x and not collect_record_subnet_paths(*x).empty()) {
+        auto entry = record_subnet_entries.upsert(std::move(key)).second;
+        TENZIR_ASSERT(entry);
+        *entry = std::move(value);
       } else {
         context_entries.emplace(std::move(key), std::move(value));
       }
     }
-    return std::make_unique<lookup_table_context>(std::move(context_entries),
-                                                  std::move(subnet_entries));
+    return std::make_unique<lookup_table_context>(
+      std::move(context_entries), std::move(subnet_entries),
+      std::move(record_subnet_entries));
   }
 };
 
