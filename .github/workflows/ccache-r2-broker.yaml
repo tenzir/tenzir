@@ -23,7 +23,7 @@ jobs:
       - name: Configure Worker vars
         working-directory: workers/ccache-r2-broker
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.TENZIR_CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET: ${{ vars.CCACHE_R2_BUCKET }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SUBJECT: ${{ vars.CCACHE_R2_GITHUB_SUBJECT }}
@@ -60,7 +60,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ secrets.TENZIR_CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers/ccache-r2-broker
           command: deploy
           secrets: |

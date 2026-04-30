@@ -38,10 +38,10 @@ Use this bucket name for both:
 In the Cloudflare dashboard, copy the account ID for the account that owns the
 R2 bucket.
 
-Use it as GitHub variable:
+Use it as GitHub secret:
 
 ```text
-CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
+TENZIR_CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
 ```
 
 ### 3. Create an R2 parent access key
@@ -122,7 +122,6 @@ permissions.
 
 ```text
 CCACHE_R2_BROKER_ENABLED=true
-CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
 CCACHE_R2_BUCKET=<r2-bucket-name>
 CCACHE_S3_BUCKET=<r2-bucket-name>
 CCACHE_S3_AUTH=cloudflare-r2-oidc-broker
@@ -135,6 +134,7 @@ CCACHE_R2_OIDC_BROKER_URL=https://tenzir-ccache-r2-broker.<workers-subdomain>.wo
 CLOUDFLARE_WORKERS_API_TOKEN=<cloudflare-api-token-for-worker-deploys>
 CCACHE_R2_API_TOKEN=<cloudflare-api-token-for-r2-temp-credentials>
 CCACHE_R2_PARENT_ACCESS_KEY_ID=<r2-access-key-id>
+TENZIR_CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
 ```
 
 ### Optional repository variables
