@@ -113,7 +113,7 @@ auto normal_completion(natsStatus status) -> bool {
 class SourceQueue {
 public:
   explicit SourceQueue(uint64_t capacity)
-    : messages_{detail::narrow_cast<uint32_t>(capacity + 1)},
+    : messages_{detail::narrow_cast<uint32_t>(capacity + 2)},
       message_slots_{capacity} {
   }
 
@@ -151,39 +151,62 @@ public:
 
   auto enqueue_acknowledge_pending() -> void {
     acknowledge_pending_queued_.store(true, std::memory_order_release);
+    if (acknowledge_pending_wake_queued_.exchange(true,
+                                                  std::memory_order_acq_rel)) {
+      return;
+    }
+    [[maybe_unused]] auto enqueued
+      = messages_.try_enqueue(SourceMessage{AcknowledgePending{}});
+    TENZIR_ASSERT(enqueued);
   }
 
   auto dequeue() -> Task<SourceMessage> {
-    if (auto control = take_control()) {
-      co_return std::move(*control);
+    while (true) {
+      if (auto control = take_control()) {
+        co_return std::move(*control);
+      }
+      if (auto message = take(co_await messages_.dequeue())) {
+        co_return std::move(*message);
+      }
     }
-    co_return co_await messages_.dequeue();
   }
 
   auto try_dequeue() -> Option<SourceMessage> {
     if (auto control = take_control()) {
       return control;
     }
-    auto message = messages_.try_dequeue();
-    if (not message) {
-      return None{};
+    while (auto message = messages_.try_dequeue()) {
+      if (auto result = take(std::move(*message))) {
+        return result;
+      }
     }
-    return std::move(*message);
+    return None{};
   }
 
   auto try_dequeue_for(duration timeout) -> Task<Option<SourceMessage>> {
     if (auto control = take_control()) {
       co_return std::move(*control);
     }
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
     auto token = co_await folly::coro::co_current_cancellation_token;
-    try {
-      co_return co_await messages_.co_try_dequeue_for(
-        std::chrono::duration_cast<folly::Duration>(timeout));
-    } catch (folly::OperationCancelled const&) {
-      if (token.isCancellationRequested()) {
-        throw;
+    while (true) {
+      try {
+        auto message = co_await messages_.co_try_dequeue_for(
+          std::chrono::duration_cast<folly::Duration>(timeout));
+        if (auto result = take(std::move(message))) {
+          co_return std::move(*result);
+        }
+        auto const now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+          co_return None{};
+        }
+        timeout = std::chrono::duration_cast<duration>(deadline - now);
+      } catch (folly::OperationCancelled const&) {
+        if (token.isCancellationRequested()) {
+          throw;
+        }
+        co_return None{};
       }
-      co_return None{};
     }
   }
 
@@ -204,19 +227,28 @@ private:
     return None{};
   }
 
+  auto take(SourceMessage message) -> Option<SourceMessage> {
+    if (try_as<AcknowledgePending>(&message)) {
+      acknowledge_pending_wake_queued_.store(false, std::memory_order_release);
+      return take_control();
+    }
+    return message;
+  }
+
   static auto reject(natsMsg* msg) -> void {
     negative_acknowledge(msg);
     natsMsg_Destroy(msg);
   }
 
   // NATS invokes callbacks from library-owned threads. The queue reserves one
-  // terminal slot in addition to the bounded message slots so that an error can
-  // still wake the operator when the data queue is full.
+  // terminal and one ACK slot in addition to the bounded message slots so that
+  // control messages can still wake the operator when the data queue is full.
   SourceMessageQueue messages_;
   folly::fibers::Semaphore message_slots_;
   Atomic<bool> accepting_ = true;
   Atomic<bool> terminal_completion_queued_ = false;
   Atomic<bool> acknowledge_pending_queued_ = false;
+  Atomic<bool> acknowledge_pending_wake_queued_ = false;
 };
 
 struct SourceBatch {
@@ -523,8 +555,12 @@ public:
       if (elapsed >= args_.batch_timeout) {
         break;
       }
-      auto next
-        = co_await source_->try_dequeue_for(args_.batch_timeout - elapsed);
+      // Once we hold messages that will need an ACK after delivery, avoid
+      // lingering for the full batch timeout. Otherwise short JetStream ACK
+      // waits can redeliver messages before the batch reaches downstream.
+      auto const timeout
+        = std::min(args_.batch_timeout - elapsed, duration{ack_handoff_delay});
+      auto next = co_await source_->try_dequeue_for(timeout);
       if (not next) {
         break;
       }
@@ -545,7 +581,10 @@ public:
       co_return;
     }
     if (batch->acknowledge_pending) {
-      acknowledge_pending(ctx.dh());
+      auto const acknowledged = acknowledge_pending(ctx.dh());
+      if (acknowledged and connection_) {
+        co_await flush_acknowledgements(ctx);
+      }
     }
     if (batch->messages.empty() and not batch->completion) {
       co_return;
