@@ -147,7 +147,15 @@ pkgs.mkShell (
     env.CCACHE_SLOPPINESS = "pch_defines,time_macros,include_file_mtime,include_file_ctime";
 
     shellHook = ''
-      export CCACHE_REMOTE_STORAGE="crsh:''${XDG_RUNTIME_DIR:-/tmp}/tenzir-ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60"
+      ccache_s3_dir="''${XDG_RUNTIME_DIR:-/tmp}/tenzir-ccache"
+      ccache_s3_sock="$ccache_s3_dir/s3.sock"
+      mkdir -p "$ccache_s3_dir"
+      export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60"
+      if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
+        echo "ccache S3 helper: already running at $ccache_s3_sock."
+      else
+        echo "ccache S3 helper: run 'scripts/ccache-storage-s3.py --deamonize' to enable remote cache."
+      fi
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator
       # without needing to rebuild the wheel.
