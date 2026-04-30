@@ -1,0 +1,6 @@
+error: `auto_detect_tls` requires TLS to be enabled
+ --> tests/operators/accept_tcp/tls/error_tls_auto_detect_disabled.tql:7:28
+  |
+7 |            auto_detect_tls=true {
+  |                            ^^^^ 
+  |

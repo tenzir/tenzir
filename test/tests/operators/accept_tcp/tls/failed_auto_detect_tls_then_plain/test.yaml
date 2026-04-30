@@ -1,0 +1,7 @@
+suite: accept-tcp-failed-auto-detect-tls-then-plain
+fixtures:
+  - tcp:
+      mode: client
+      certs: true
+      invalid_tls_handshake_first: true
+timeout: 60
