@@ -1,7 +1,8 @@
 from_azure_blob_storage "abfs://" + env("ABS_ACCOUNT_NAME") + "@" + env("ABS_ENDPOINT") + "/" + env("ABS_CONTAINER") + "/race_*.json?enable_tls=false",
                         account_key=env("ABS_ACCOUNT_KEY") {
   read_ndjson
+  blob_path = $file
 }
-summarize committed_blobs=count(), partitions=distinct(pk)
+summarize committed_blobs=count_distinct(blob_path), partitions=distinct(pk)
 partitions = partitions.length()
 select committed_blobs, all_partitions_present=(partitions == 256)
