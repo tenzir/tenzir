@@ -6,15 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arrow_utils.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/detail/eval_as.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution.hpp>
@@ -68,11 +69,10 @@ public:
     event_too_large,
   };
 
-  auto create_metadata(std::string_view action,
-                       std::optional<std::optional<std::string_view>> idx,
-                       std::optional<std::optional<std::string_view>> id,
-                       const ToOpenSearchArgs& args)
-    -> std::optional<diagnostic> {
+  auto
+  create_metadata(std::string_view action, Option<Option<std::string_view>> idx,
+                  Option<Option<std::string_view>> id,
+                  const ToOpenSearchArgs& args) -> Option<diagnostic> {
     constexpr auto supported_actions
       = std::array{"create", "delete", "index", "update", "upsert"};
     const auto valid_action
@@ -84,8 +84,8 @@ public:
         .hint("supported actions: {}", fmt::join(supported_actions, ","))
         .done();
     }
-    const auto has_idx = idx and idx.value() and not idx.value()->empty();
-    const auto has_id = id and id.value() and not id.value()->empty();
+    const auto has_idx = idx and *idx and not(*idx)->empty();
+    const auto has_id = id and *id and not(*id)->empty();
     const auto needs_id = action == "delete" or action == "update";
     if (needs_id and not has_id) {
       return diagnostic::warning("action `{}` requires `id`, but got `null`",
@@ -100,17 +100,17 @@ public:
     element_text_ += ":{";
     if (has_idx) {
       element_text_ += "\"_index\":";
-      printer_.print(it, idx.value().value());
+      printer_.print(it, **idx);
     }
     if (has_id) {
       if (has_idx) {
         element_text_ += ',';
       }
       element_text_ += "\"_id\":";
-      printer_.print(it, id.value().value());
+      printer_.print(it, **id);
     }
     element_text_ += "}}\n";
-    return std::nullopt;
+    return None{};
   }
 
   auto create_doc(std::string_view action, view3<record> doc) {
@@ -191,33 +191,16 @@ private:
   uint64_t last_element_size_{};
 };
 
-auto resolve_str(std::string_view option_name,
-                 const std::optional<ast::expression>& expr,
-                 const table_slice& slice, diagnostic_handler& dh)
-  -> std::optional<series> {
-  if (not expr) {
-    return std::nullopt;
+auto to_option_string_view(
+  std::optional<std::optional<view3<std::string>>> value)
+  -> Option<Option<std::string_view>> {
+  if (not value) {
+    return None{};
   }
-  auto res = eval(*expr, slice, dh);
-  auto b = arrow::StringBuilder{};
-  for (auto& part : res.parts()) {
-    if (auto* str = try_as<arrow::StringArray>(*part.array)) {
-      if (res.parts().size() == 1) {
-        return std::move(part);
-      }
-      check(append_array(b, string_type{}, *str));
-    } else {
-      diagnostic::warning("`{}` did not evaluate to a `{}`", option_name,
-                          string_type{})
-        .primary(*expr)
-        .emit(dh);
-      if (res.parts().size() == 1) {
-        return std::nullopt;
-      }
-      check(b.AppendNulls(part.length()));
-    }
+  if (not *value) {
+    return Option<std::string_view>{None{}};
   }
-  return series{string_type{}, finish(b)};
+  return Option<std::string_view>{std::string_view{**value}};
 }
 
 class ToOpenSearch final : public Operator<table_slice, void> {
@@ -309,29 +292,21 @@ public:
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     input = resolve_enumerations(std::move(input));
     constexpr auto null_values
-      = []() -> generator<std::optional<std::string_view>> {
+      = []() -> generator<std::optional<view3<std::string>>> {
       co_yield std::nullopt;
     };
-    auto ids = resolve_str(
-      "id", args_.id ? std::optional<ast::expression>{*args_.id} : std::nullopt,
-      input, ctx.dh());
-    auto idxs = resolve_str(
-      "index",
-      args_.index ? std::optional<ast::expression>{*args_.index} : std::nullopt,
-      input, ctx.dh());
-    auto acts = resolve_str(
-      "action", std::optional<ast::expression>{args_.action}, input, ctx.dh());
+    auto id = args_.id
+                ? detail::eval_as<string_type>("id", *args_.id, input, ctx.dh())
+                : null_values();
+    auto idx = args_.index ? detail::eval_as<string_type>("index", *args_.index,
+                                                          input, ctx.dh())
+                           : null_values();
+    auto act
+      = detail::eval_as<string_type>("action", args_.action, input, ctx.dh());
     auto docs
       = eval(args_.doc ? *args_.doc
                        : ast::expression{ast::this_{args_.operator_location}},
              input, ctx.dh());
-    constexpr auto ty = string_type{};
-    auto id
-      = ids ? values(ty, as<arrow::StringArray>(*ids->array)) : null_values();
-    auto idx
-      = idxs ? values(ty, as<arrow::StringArray>(*idxs->array)) : null_values();
-    auto act
-      = acts ? values(ty, as<arrow::StringArray>(*acts->array)) : null_values();
     for (auto&& doc : docs.values3()) {
       auto* ptr = try_as<view3<record>>(doc);
       auto action = act.next();
@@ -351,8 +326,9 @@ public:
           .emit(ctx);
         continue;
       }
-      if (auto diag
-          = builder_.create_metadata(**action, actual_idx, actual_id, args_)) {
+      if (auto diag = builder_.create_metadata(
+            **action, to_option_string_view(actual_idx),
+            to_option_string_view(actual_id), args_)) {
         ctx.dh().emit(std::move(*diag));
         continue;
       }
