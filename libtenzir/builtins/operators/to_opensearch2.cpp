@@ -254,13 +254,11 @@ public:
     }
     if (auto result = co_await ctx.resolve_secrets(std::move(requests));
         result.is_error()) {
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto parsed_url = boost::urls::parse_uri_reference(resolved_url);
     if (not parsed_url) {
       diagnostic::error("failed to parse url").primary(args_.url).emit(ctx);
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto final_url = boost::urls::url{*parsed_url};
@@ -272,7 +270,6 @@ public:
     auto tls_needed
       = http::normalize_url_and_tls(args_.tls, url_, args_.url.source, ctx);
     if (tls_needed.is_error()) {
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto config = HttpPoolConfig{
@@ -284,7 +281,6 @@ public:
       auto ssl_context = tls_opts.make_folly_ssl_context(
         ctx, std::addressof(ctx.actor_system().config()));
       if (ssl_context.is_error()) {
-        lifecycle_ = Lifecycle::done;
         co_return;
       }
       config.ssl_context = std::move(*ssl_context);
@@ -295,7 +291,6 @@ public:
       diagnostic::error("failed to initialize HTTP client: {}", e.what())
         .primary(args_.url)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     if (args_.user or args_.passwd) {
@@ -312,9 +307,6 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ != Lifecycle::running) {
-      co_return;
-    }
     input = resolve_enumerations(std::move(input));
     constexpr auto null_values
       = []() -> generator<std::optional<std::string_view>> {
@@ -377,9 +369,6 @@ public:
         }
         case full: {
           co_await send_request(ctx);
-          if (lifecycle_ != Lifecycle::running) {
-            co_return;
-          }
           if (builder_.has_contents()) {
             next_timeout_
               = std::chrono::steady_clock::now() + args_.buffer_timeout.inner;
@@ -402,10 +391,6 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    if (lifecycle_ == Lifecycle::done) {
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
-    }
     if (not next_timeout_) {
       co_await buffer_ready_->wait();
     }
@@ -417,9 +402,6 @@ public:
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(result);
-    if (lifecycle_ != Lifecycle::running or not next_timeout_) {
-      co_return;
-    }
     if (std::chrono::steady_clock::now() < *next_timeout_) {
       co_return;
     }
@@ -430,27 +412,17 @@ public:
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    if (lifecycle_ == Lifecycle::running and builder_.has_contents()) {
+    if (builder_.has_contents()) {
       co_await send_request(ctx);
     }
-    lifecycle_ = Lifecycle::done;
     co_return FinalizeBehavior::done;
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::running and builder_.has_contents()) {
+    if (builder_.has_contents()) {
       co_await send_request(ctx);
     }
     next_timeout_ = None{};
-  }
-
-  auto state() -> OperatorState override {
-    return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    serde("lifecycle", lifecycle_);
   }
 
 private:
@@ -479,7 +451,6 @@ private:
                         std::move(result).unwrap_err())
         .primary(args_.operator_location)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto response = std::move(result).unwrap();
@@ -489,7 +460,6 @@ private:
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto json = from_json(response.body);
@@ -509,7 +479,6 @@ private:
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
     }
   }
 
@@ -519,7 +488,6 @@ private:
   std::string url_;
   std::map<std::string, std::string> headers_;
   MetricsCounter bytes_write_counter_;
-  Lifecycle lifecycle_ = Lifecycle::running;
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
   mutable Box<Notify> buffer_ready_{std::in_place};
 };
