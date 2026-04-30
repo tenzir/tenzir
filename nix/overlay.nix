@@ -10,6 +10,16 @@ let
     pyarrow = python-prevPkgs.pyarrow.overridePythonAttrs (baseAttrs: {
       doCheck = false;
       doInstallCheck = false;
+      nativeBuildInputs = baseAttrs.nativeBuildInputs ++ [
+        python-finalPkgs.libcst
+        python-finalPkgs.ninja
+        python-finalPkgs.scikit-build-core
+      ];
+      postPatch = (baseAttrs.postPatch or "") + ''
+        substituteInPlace pyproject.toml \
+          --replace-fail 'build-backend = "_build_backend"' 'build-backend = "scikit_build_core.build"' \
+          --replace-fail 'backend-path = ["."]' '# backend-path removed for nix build'
+      '';
       disabledTestPaths = baseAttrs.disabledTestPaths ++ [
         "pyarrow/tests/test_memory.py::test_env_var"
         "pyarrow/tests/test_memory.py::test_memory_pool_factories"
