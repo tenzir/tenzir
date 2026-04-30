@@ -204,6 +204,12 @@ def _start_azurite(runtime: RuntimeSpec, port: int) -> ManagedContainer:
         "-p",
         f"{port}:{BLOB_PORT}",
         AZURITE_IMAGE,
+        "azurite-blob",
+        "--blobHost",
+        "0.0.0.0",
+        "--blobPort",
+        str(BLOB_PORT),
+        "--skipApiVersionCheck",
     ]
     logger.info("Starting Azurite with %s", runtime.binary)
     container = start_detached(runtime, run_args)
