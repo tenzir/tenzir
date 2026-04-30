@@ -122,7 +122,6 @@ public:
     ip peer_ip;
     int64_t peer_port;
     Arc<ReverseDnsResult> peer_reverse_dns;
-    Option<chunk_ptr> initial_payload;
   };
 
   struct Payload {
@@ -139,7 +138,6 @@ public:
 
   struct TlsProbeResult {
     bool is_tls = false;
-    Option<chunk_ptr> initial_plaintext;
   };
 
   using Message
@@ -297,21 +295,6 @@ public:
         auto [_, inserted]
           = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
-        if (accepted.initial_payload) {
-          bytes_read.add((*accepted.initial_payload)->size());
-          auto sub_key = sub_key_for(conn_id);
-          if (auto sub = ctx.get_sub(make_view(sub_key))) {
-            auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
-            auto push_result
-              = co_await pipe.push(std::move(*accepted.initial_payload));
-            if (push_result.is_err()) {
-              if (auto it = connections_.find(conn_id);
-                  it != connections_.end()) {
-                close_transport(it->second);
-              }
-            }
-          }
-        }
         auto it = connections_.find(conn_id);
         if (it == connections_.end()) {
           co_return;
@@ -505,7 +488,6 @@ private:
       close_transport(std::move(transport));
       co_return;
     }
-    auto initial_payload = Option<chunk_ptr>{};
     if (tls_context_) {
       try {
         auto should_upgrade = true;
@@ -515,7 +497,6 @@ private:
           auto probe = co_await folly::coro::co_withExecutor(
             transport_evb, probe_tls_client_hello(*transport));
           should_upgrade = probe.is_tls;
-          initial_payload = std::move(probe.initial_plaintext);
         }
         if (should_upgrade) {
           transport = Box<folly::coro::Transport>{
@@ -566,7 +547,6 @@ private:
       .peer_ip = peer_info.address,
       .peer_port = peer_info.port,
       .peer_reverse_dns = std::move(peer_reverse_dns),
-      .initial_payload = std::move(initial_payload),
     });
     release_connection_slot_guard.disable();
   }
@@ -582,12 +562,27 @@ private:
   //          | type   |        |        | length   | Hello  |
   //
   // We only sniff enough to distinguish a plausible TLS ClientHello from
-  // plaintext. OpenSSL performs full validation after we put these bytes back.
+  // plaintext. This also covers ECH, where the visible outer ClientHello still
+  // uses the regular TLS record and handshake headers. OpenSSL performs full
+  // validation after we put these bytes back.
   static auto looks_like_tls_client_hello(std::span<std::byte const> bytes)
     -> bool {
     return bytes.size() >= 6 and bytes[0] == std::byte{0x16}
            and bytes[1] == std::byte{0x03} and bytes[2] <= std::byte{0x04}
            and bytes[5] == std::byte{0x01};
+  }
+
+  static auto set_pre_received_data(folly::coro::Transport& transport,
+                                    std::span<std::byte const> bytes) -> void {
+    auto* socket = dynamic_cast<folly::AsyncSocket*>(transport.getTransport());
+    if (not socket) {
+      throw folly::AsyncSocketException{
+        folly::AsyncSocketException::INTERNAL_ERROR,
+        "transport is not backed by AsyncSocket",
+      };
+    }
+    socket->setPreReceivedData(
+      folly::IOBuf::copyBuffer(bytes.data(), bytes.size()));
   }
 
   static auto probe_tls_client_hello(folly::coro::Transport& transport)
@@ -611,6 +606,10 @@ private:
       if (size == 0) {
         co_return {};
       }
+      // Read the full TLS record prefix only after seeing a TLS handshake
+      // record byte. Plaintext clients that send a short first line should not
+      // have to wait for the probe timeout before entering the normal read
+      // loop.
       if (prefix[0] == std::byte{0x16}) {
         co_await read_some(prefix.size());
       }
@@ -621,27 +620,14 @@ private:
       timed_out = true;
     }
     auto bytes = std::span{prefix.data(), size};
+    if (size > 0) {
+      set_pre_received_data(transport, bytes);
+    }
     if (looks_like_tls_client_hello(bytes)
         or (timed_out and size > 0 and prefix[0] == std::byte{0x16})) {
-      auto* socket
-        = dynamic_cast<folly::AsyncSocket*>(transport.getTransport());
-      if (not socket) {
-        throw folly::AsyncSocketException{
-          folly::AsyncSocketException::INTERNAL_ERROR,
-          "transport is not backed by AsyncSocket",
-        };
-      }
-      socket->setPreReceivedData(
-        folly::IOBuf::copyBuffer(bytes.data(), bytes.size()));
       co_return TlsProbeResult{.is_tls = true};
     }
-    if (size == 0) {
-      co_return {};
-    }
-    co_return TlsProbeResult{
-      .is_tls = false,
-      .initial_plaintext = chunk::copy(bytes.data(), bytes.size()),
-    };
+    co_return {};
   }
 
   auto accept_loop(OpCtx& ctx) -> Task<void> {
