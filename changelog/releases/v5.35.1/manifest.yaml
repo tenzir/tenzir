@@ -1,0 +1,9 @@
+created: 2026-04-30
+title: Mixed-age retention and ClickHouse TLS diagnostics
+intro: >-
+  This release restores correct retention for metrics and diagnostics in mixed-age
+  partitions and brings back actionable TLS hints when ClickHouse connections fail
+  due to a TLS/plaintext mismatch.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.35.0
