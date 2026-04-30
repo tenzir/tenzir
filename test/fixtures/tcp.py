@@ -29,6 +29,8 @@ class TcpOptions:
     certs: bool = False
     invalid_tls_handshake_first: bool = False
     client_send_delay: float = 0.0
+    client_split_payload_at: int | None = None
+    client_split_send_delay: float = 0.0
     mode: str = "client"  # "client" sends data; "server" receives data
     payload: str = "foo\n"
 
@@ -90,6 +92,8 @@ def tcp() -> FixtureHandle:
                 "capture_path": client_capture_path,
                 "invalid_tls_handshake_first": opts.invalid_tls_handshake_first,
                 "send_delay": opts.client_send_delay,
+                "split_payload_at": opts.client_split_payload_at,
+                "split_send_delay": opts.client_split_send_delay,
             },
             daemon=True,
         )
@@ -217,6 +221,8 @@ def _run_client_worker(
     capture_path: str | None,
     invalid_tls_handshake_first: bool,
     send_delay: float,
+    split_payload_at: int | None,
+    split_send_delay: float,
 ) -> None:
     context: ssl.SSLContext | None = None
     if tls:
@@ -244,7 +250,13 @@ def _run_client_worker(
                     if send_delay > 0:
                         stop_event.wait(send_delay)
                     if payload:
-                        sock.sendall(payload)
+                        if split_payload_at is None:
+                            sock.sendall(payload)
+                        else:
+                            sock.sendall(payload[:split_payload_at])
+                            if split_send_delay > 0:
+                                stop_event.wait(split_send_delay)
+                            sock.sendall(payload[split_payload_at:])
                     if context is None:
                         try:
                             sock.shutdown(socket.SHUT_WR)

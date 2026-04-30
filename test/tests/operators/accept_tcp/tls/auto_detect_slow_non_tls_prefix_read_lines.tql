@@ -1,0 +1,22 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+      certs: true
+      payload: "\u0016Xfoo\n"
+      client_split_payload_at: 2
+      client_split_send_delay: 1.0
+timeout: 30
+---
+
+let $tls = {
+  certfile: env("TCP_CERTFILE"),
+  keyfile: env("TCP_KEYFILE"),
+  skip_peer_verification: true,
+}
+
+accept_tcp env("TCP_ENDPOINT"), tls=$tls, auto_detect_tls=true {
+  read_lines
+  line = "ok"
+}
+head 1

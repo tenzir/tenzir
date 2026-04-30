@@ -565,11 +565,29 @@ private:
   // plaintext. This also covers ECH, where the visible outer ClientHello still
   // uses the regular TLS record and handshake headers. OpenSSL performs full
   // validation after we put these bytes back.
+  static auto could_be_tls_client_hello(std::span<std::byte const> bytes)
+    -> bool {
+    if (bytes.empty()) {
+      return false;
+    }
+    if (bytes[0] != std::byte{0x16}) {
+      return false;
+    }
+    if (bytes.size() >= 2 and bytes[1] != std::byte{0x03}) {
+      return false;
+    }
+    if (bytes.size() >= 3 and bytes[2] > std::byte{0x04}) {
+      return false;
+    }
+    if (bytes.size() >= 6 and bytes[5] != std::byte{0x01}) {
+      return false;
+    }
+    return true;
+  }
+
   static auto looks_like_tls_client_hello(std::span<std::byte const> bytes)
     -> bool {
-    return bytes.size() >= 6 and bytes[0] == std::byte{0x16}
-           and bytes[1] == std::byte{0x03} and bytes[2] <= std::byte{0x04}
-           and bytes[5] == std::byte{0x01};
+    return bytes.size() >= 6 and could_be_tls_client_hello(bytes);
   }
 
   static auto set_pre_received_data(folly::coro::Transport& transport,
@@ -592,12 +610,15 @@ private:
     auto read_some = [&](size_t min_size) -> Task<void> {
       while (size < min_size) {
         auto* data = reinterpret_cast<unsigned char*>(prefix.data() + size);
-        auto n = co_await transport.read(
-          folly::MutableByteRange{data, min_size - size}, tls_probe_timeout);
+        auto n = co_await transport.read(folly::MutableByteRange{data, 1},
+                                         tls_probe_timeout);
         if (n == 0) {
           co_return;
         }
         size += n;
+        if (not could_be_tls_client_hello(std::span{prefix.data(), size})) {
+          co_return;
+        }
       }
     };
     auto timed_out = false;
@@ -624,7 +645,7 @@ private:
       set_pre_received_data(transport, bytes);
     }
     if (looks_like_tls_client_hello(bytes)
-        or (timed_out and size > 0 and prefix[0] == std::byte{0x16})) {
+        or (timed_out and could_be_tls_client_hello(bytes))) {
       co_return TlsProbeResult{.is_tls = true};
     }
     co_return {};
