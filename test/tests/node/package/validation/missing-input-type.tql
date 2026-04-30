@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_file f"{env("TENZIR_INPUTS")}/package-missing-input-type.yaml" { read_yaml }
+package::add

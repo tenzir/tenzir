@@ -1,0 +1,25 @@
+id: ignored-known-keys
+name: Ignored Known Keys
+description: Package with known package-spec/legacy keys ignored by the engine.
+
+snippets:
+  - name: Legacy snippet field
+    definition: version
+
+inputs:
+  message:
+    name: Message
+    description: Text to emit.
+    type: string
+    default: hello
+
+pipelines:
+  demo:
+    name: Demo
+    description: Emits one event.
+    labels:
+      - example
+      - ignored-by-engine
+    definition: |
+      from {message: "{{ inputs.message }}"}
+      import

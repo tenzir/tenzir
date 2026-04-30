@@ -1,0 +1,16 @@
+id: missing-input-type
+name: Missing Input Type
+description: Package with an input missing its required type.
+
+inputs:
+  message:
+    name: Message
+    description: Text to emit.
+    default: hello
+
+pipelines:
+  demo:
+    name: Demo
+    description: Emits one event.
+    definition: |
+      from {message: "{{ inputs.message }}"}
