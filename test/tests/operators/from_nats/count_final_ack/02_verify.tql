@@ -1,0 +1,8 @@
+// Verify the final counted message was ACKed and is not redelivered.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=1,
+          _batch_size=1,
+          _queue_capacity=1
+select line = string(message)

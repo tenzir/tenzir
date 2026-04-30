@@ -425,7 +425,7 @@ public:
   Runner& operator=(const Runner&) = delete;
   ~Runner() override = default;
 
-  auto run_to_completion() and -> Task<void> {
+  auto run_to_completion() && -> Task<void> {
     auto cancellation_token
       = co_await folly::coro::co_current_cancellation_token;
     auto guard = detail::scope_guard{[&] noexcept {
@@ -1016,6 +1016,7 @@ private:
         }
       }
       co_await base_op().start(*this);
+      co_await folly::coro::co_safe_point;
       ensure_await_task();
       driver_.add(pull_upstream());
       driver_.add(from_control_.recv());
@@ -1451,7 +1452,7 @@ public:
     // TODO: Validate types, just to make sure.
   }
 
-  auto run_to_completion() and -> Task<void> {
+  auto run_to_completion() && -> Task<void> {
     auto guard = detail::scope_guard{[&] noexcept {
       LOGI("returning from chain runner {}", id_);
     }};

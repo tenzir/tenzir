@@ -1658,7 +1658,7 @@ public:
     d.named("null_fill", &CastArgs::null_fill);
     d.named("timestamp_to_ms", &CastArgs::timestamp_to_ms);
     d.operator_location(&CastArgs::operator_location);
-    return d.without_optimize();
+    return d.order_invariant();
   }
 };
 
@@ -1685,7 +1685,7 @@ public:
     d.named("drop_optional", &TrimArgs::drop_optional);
     d.named("drop_recommended", &TrimArgs::drop_recommended);
     d.operator_location(&TrimArgs::operator_location);
-    return d.without_optimize();
+    return d.order_invariant();
   }
 };
 
@@ -1701,7 +1701,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<DeriveArgs, Derive>{};
     d.operator_location(&DeriveArgs::operator_location);
-    return d.without_optimize();
+    return d.order_invariant();
   }
 };
 

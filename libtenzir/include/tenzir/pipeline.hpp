@@ -156,6 +156,11 @@ enum class event_order {
   unordered,
 };
 
+/// Returns the event order that allows for more optimization than the other.
+inline auto weaker_event_order(event_order a, event_order b) -> event_order {
+  return std::max(a, b);
+}
+
 auto inspect(auto& f, event_order& x) -> bool {
   return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
 }
@@ -521,7 +526,7 @@ public:
   void prepend(operator_ptr op);
 
   /// Returns the sequence of operators that this pipeline was built from.
-  auto unwrap() and -> std::vector<operator_ptr>;
+  auto unwrap() && -> std::vector<operator_ptr>;
   auto operators() const& -> std::span<const operator_ptr>;
   auto operators() and = delete;
 
@@ -547,7 +552,7 @@ public:
   auto is_closed() const -> bool;
 
   /// Splits a pipeline into multiple closed pipelines.
-  auto split_at_void() and -> caf::expected<std::vector<pipeline>>;
+  auto split_at_void() && -> caf::expected<std::vector<pipeline>>;
 
   /// Returns an operator location that is consistent with all operators of the
   /// pipeline or `std::nullopt` if there is none.
@@ -825,7 +830,7 @@ public:
 
   auto operator=(operator_box&& box) -> operator_box& = default;
 
-  auto unwrap() and -> operator_ptr {
+  auto unwrap() && -> operator_ptr {
     return std::move(*this);
   }
 

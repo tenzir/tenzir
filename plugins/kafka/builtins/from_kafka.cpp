@@ -26,6 +26,7 @@
 
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Sleep.h>
 #include <folly/coro/ViaIfAsync.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <librdkafka/rdkafkacpp.h>
@@ -54,6 +55,21 @@ namespace {
 using namespace std::chrono_literals;
 using namespace tenzir::si_literals;
 using tenzir::detail::ascii_icase_equal;
+
+constexpr auto max_offset_commit_retries = size_t{10};
+constexpr auto offset_commit_retry_delay = 100ms;
+
+auto is_transient_offset_commit_error(RdKafka::ErrorCode err) -> bool {
+  switch (err) {
+    case RdKafka::ERR__WAIT_COORD:
+    case RdKafka::ERR_COORDINATOR_LOAD_IN_PROGRESS:
+    case RdKafka::ERR_COORDINATOR_NOT_AVAILABLE:
+    case RdKafka::ERR_NOT_COORDINATOR:
+      return true;
+    default:
+      return false;
+  }
+}
 
 /// Diagnostic handler that buffers diagnostics for later retrieval.
 /// Unlike `collecting_diagnostic_handler`, this supports draining without
@@ -578,8 +594,12 @@ public:
     if (checkpoint_pending_offsets_.empty()) {
       co_return;
     }
-    auto offsets_by_source
-      = std::unordered_map<size_t, std::vector<RdKafka::TopicPartition*>>{};
+    struct OffsetsForSource {
+      std::vector<int32_t> partitions;
+      std::vector<std::unique_ptr<RdKafka::TopicPartition>> offsets;
+    };
+    auto offsets_by_source = std::unordered_map<size_t, OffsetsForSource>{};
+    auto clear_pending = std::vector<int32_t>{};
     for (auto const& [partition, offset] : checkpoint_pending_offsets_) {
       auto source_it = runtime_.partition_source_by_id.find(partition);
       if (source_it == runtime_.partition_source_by_id.end()) {
@@ -595,39 +615,63 @@ public:
           TENZIR_WARN("from_kafka: no source for partition {} while committing",
                       partition);
         }
+        clear_pending.push_back(partition);
         continue;
       }
-      offsets_by_source[source_it->second].push_back(
+      auto& source_offsets = offsets_by_source[source_it->second];
+      source_offsets.partitions.push_back(partition);
+      source_offsets.offsets.emplace_back(
         RdKafka::TopicPartition::create(args_.topic, partition, offset));
     }
-    for (auto& [source_index, offsets] : offsets_by_source) {
-      auto cleanup_offsets = tenzir::detail::scope_guard{[&offsets]() noexcept {
-        RdKafka::TopicPartition::destroy(offsets);
-      }};
-      if (offsets.empty()
+    for (auto& [source_index, source_offsets] : offsets_by_source) {
+      if (source_offsets.offsets.empty()
           or source_index >= runtime_.partition_sources.size()) {
         continue;
+      }
+      auto offsets = std::vector<RdKafka::TopicPartition*>{};
+      offsets.reserve(source_offsets.offsets.size());
+      for (auto const& offset : source_offsets.offsets) {
+        offsets.push_back(offset.get());
       }
       auto& source = runtime_.partition_sources[source_index];
       if (not source.source_consumer) {
         continue;
       }
-      if (auto err = source.source_consumer->consumer->commitSync(offsets);
-          err != RdKafka::ERR_NO_ERROR) {
-        if (dh) {
-          diagnostic::warning("from_kafka: failed to commit offsets for "
-                              "partition {}",
-                              source.partition)
-            .note("librdkafka error: {}", RdKafka::err2str(err))
-            .emit(*dh);
-        } else {
-          TENZIR_WARN("from_kafka: failed to commit offsets for partition {}: "
-                      "{}",
-                      source.partition, RdKafka::err2str(err));
+      auto err = RdKafka::ERR_NO_ERROR;
+      for (auto attempt = size_t{0}; attempt <= max_offset_commit_retries;
+           ++attempt) {
+        err = source.source_consumer->consumer->commitSync(offsets);
+        if (err == RdKafka::ERR_NO_ERROR) {
+          break;
         }
+        if (attempt == max_offset_commit_retries
+            or not is_transient_offset_commit_error(err)) {
+          break;
+        }
+        co_await folly::coro::sleep(offset_commit_retry_delay);
+      }
+      if (err == RdKafka::ERR_NO_ERROR) {
+        clear_pending.insert(clear_pending.end(),
+                             source_offsets.partitions.begin(),
+                             source_offsets.partitions.end());
+        continue;
+      }
+      auto const partitions
+        = tenzir::detail::join(source_offsets.partitions, ", ");
+      if (dh) {
+        diagnostic::warning("from_kafka: failed to commit offsets")
+          .note("partitions: {}", partitions)
+          .note("librdkafka error: {}", RdKafka::err2str(err))
+          .emit(*dh);
+      } else {
+        TENZIR_WARN("from_kafka: failed to commit offsets for partition(s) "
+                    "{}: {}",
+                    partitions, RdKafka::err2str(err));
       }
     }
-    checkpoint_pending_offsets_.clear();
+    for (auto partition : clear_pending) {
+      checkpoint_pending_offsets_.erase(partition);
+    }
   }
 
   auto snapshot(Serde& serde) -> void override {

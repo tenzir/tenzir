@@ -126,20 +126,20 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
+  event_order order_{};
   std::vector<ast::field_path> moved_fields_;
 };
 
-class set_ir final : public ir::Operator {
+class SetIr final : public ir::Operator {
 public:
-  set_ir() = default;
+  SetIr() = default;
 
-  explicit set_ir(std::vector<ast::assignment> assignments)
+  explicit SetIr(std::vector<ast::assignment> assignments)
     : assignments_(std::move(assignments)) {
   }
 
   auto name() const -> std::string override {
-    return "set_ir";
+    return "SetIr";
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -151,23 +151,25 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Set{std::move(assignments_), order_};
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order order) and -> ir::optimize_result override {
-    // Remember the order for potential rebatches.
-    order_ = order;
+                event_order order) && -> ir::optimize_result override {
+    order_ = weaker_event_order(order_, order);
     auto ops = std::vector<Box<ir::Operator>>{};
     ops.reserve(1 + filter.size());
-    ops.emplace_back(set_ir{std::move(*this)});
+    ops.emplace_back(SetIr{std::move(*this)});
     for (auto& expr : filter) {
       ops.push_back(make_where_ir(expr));
     }
-    auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
-    return {{}, order_, std::move(replacement)};
+    return {
+      ir::optimize_filter{},
+      order_,
+      ir::pipeline{{}, std::move(ops)},
+    };
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -179,8 +181,9 @@ public:
     return input;
   }
 
-  friend auto inspect(auto& f, set_ir& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_));
+  friend auto inspect(auto& f, SetIr& x) -> bool {
+    return f.object(x).fields(f.field("assignments", x.assignments_),
+                              f.field("order", x.order_));
   }
 
 private:
@@ -192,7 +195,7 @@ private:
 auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.push_back(std::move(x));
-  return set_ir{std::move(assignments)};
+  return SetIr{std::move(assignments)};
 }
 
 struct IfArgs {
@@ -356,7 +359,7 @@ private:
 
 auto make_set_ir(std::vector<ast::assignment> assignments)
   -> Box<ir::Operator> {
-  return set_ir{std::move(assignments)};
+  return SetIr{std::move(assignments)};
 }
 
 class IfIr final : public ir::Operator {
@@ -380,7 +383,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
@@ -449,7 +452,7 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
-    new inspection_plugin<ir::Operator, set_ir>{},
+    new inspection_plugin<ir::Operator, SetIr>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -476,7 +479,7 @@ auto ir::CompileResult::unwrap() && -> pipeline {
   return std::move(pipeline_);
 }
 
-auto ast::pipeline::compile(compile_ctx ctx) and -> failure_or<ir::pipeline> {
+auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   // TODO: Or do we assume that entities are already resolved?
   TRY(resolve_entities(*this, ctx));
   auto lets = std::vector<ir::let>{};
@@ -626,8 +629,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::spawn(
-  element_type_tag input) and -> std::vector<AnyOperator> {
+auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   // TODO: This is probably not the right place for optimizations.
@@ -665,7 +667,7 @@ auto ir::pipeline::infer_type(element_type_tag input,
 }
 
 auto ir::pipeline::optimize(optimize_filter filter,
-                            event_order order) and -> optimize_result {
+                            event_order order) && -> optimize_result {
   auto replacement = pipeline{std::move(lets), {}};
   for (auto& op : std::ranges::reverse_view(operators)) {
     auto opt = std::move(*op).optimize(std::move(filter), order);
@@ -680,15 +682,18 @@ auto ir::pipeline::optimize(optimize_filter filter,
 }
 
 auto ir::Operator::optimize(optimize_filter filter,
-                            event_order order) and -> optimize_result {
-  (void)order;
+                            event_order order) && -> optimize_result {
+  TENZIR_UNUSED(order);
   auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
   for (auto& expr : filter) {
-    replacement.push_back(make_where_ir(expr));
+    replacement.push_back(make_where_ir(std::move(expr)));
   }
-  return {optimize_filter{}, event_order::ordered,
-          pipeline{{}, std::move(replacement)}};
+  return {
+    optimize_filter{},
+    event_order::ordered,
+    pipeline{{}, std::move(replacement)},
+  };
 }
 
 auto ir::Operator::copy() const -> Box<Operator> {
@@ -716,7 +721,7 @@ auto ir::Operator::copy() const -> Box<Operator> {
   return Box<Operator>::from_non_null(std::move(copy));
 }
 
-auto ir::Operator::move() and -> Box<Operator> {
+auto ir::Operator::move() && -> Box<Operator> {
   // TODO: This should be overriden by something like CRTP.
   return copy();
 }

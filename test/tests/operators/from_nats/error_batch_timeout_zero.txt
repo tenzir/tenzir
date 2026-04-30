@@ -1,0 +1,6 @@
+error: `_batch_timeout` must be a positive duration
+ --> tests/operators/from_nats/error_batch_timeout_zero.tql:6:26
+  |
+6 |           _batch_timeout=0s
+  |                          ^^ 
+  |

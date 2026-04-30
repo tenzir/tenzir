@@ -92,6 +92,27 @@ auto make_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
   return source;
 }
 
+auto with_target(proxygen::URL const& base, std::optional<std::string> target)
+  -> Result<proxygen::URL, std::string> {
+  if (not target) {
+    return base;
+  }
+  if (target->empty() or target->front() != '/'
+      or target->find('#') != std::string::npos) {
+    return Err{fmt::format("invalid request target: {}", *target)};
+  }
+  auto path = std::string_view{*target};
+  auto query = std::string_view{};
+  if (auto pos = target->find('?'); pos != std::string::npos) {
+    path = std::string_view{*target}.substr(0, pos);
+    query = std::string_view{*target}.substr(pos + 1);
+  }
+  return proxygen::URL{
+    base.getScheme(),  base.getHost(),     base.getPort(),
+    std::string{path}, std::string{query},
+  };
+}
+
 /// Custom deleter that ensures the session pool is destroyed on its event base
 /// thread, which proxygen requires for safe cleanup.
 struct SessionPoolDeleter {
@@ -132,7 +153,7 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   auto secure = config.tls
                   ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
-  if (config.tls and not config.ssl_context) {
+  if (config.tls) {
     ensure_http_default_ca_paths();
   }
   auto conn_params
@@ -163,9 +184,26 @@ auto HttpPool::operator=(HttpPool&&) noexcept -> HttpPool& = default;
 auto HttpPool::request(std::string method, std::string body,
                        std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
+  co_return co_await request(std::move(method), std::nullopt, std::move(body),
+                             std::move(headers));
+}
+
+auto HttpPool::request(std::string method, std::string target, std::string body,
+                       std::map<std::string, std::string> headers)
+  -> Task<Result<HttpResponse, std::string>> {
+  co_return co_await request(std::move(method),
+                             std::optional<std::string>{std::move(target)},
+                             std::move(body), std::move(headers));
+}
+
+auto HttpPool::request(std::string method, std::optional<std::string> target,
+                       std::string body,
+                       std::map<std::string, std::string> headers)
+  -> Task<Result<HttpResponse, std::string>> {
   co_return co_await co_withExecutor(
     impl_->evb,
-    [](std::shared_ptr<Impl> impl, std::string method, std::string body,
+    [](std::shared_ptr<Impl> impl, std::string method,
+       std::optional<std::string> target, std::string body,
        std::map<std::string, std::string> headers)
       -> Task<Result<HttpResponse, std::string>> {
       std::ranges::transform(method, method.begin(), [](unsigned char c) {
@@ -175,10 +213,11 @@ auto HttpPool::request(std::string method, std::string body,
       if (not method_parsed) {
         co_return Err{fmt::format("invalid http method: {}", method)};
       }
+      CO_TRY(auto url, with_target(impl->url, std::move(target)));
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
         auto sr = co_await impl->pool->getSessionWithReservation();
         TENZIR_ASSERT_ALWAYS(sr.session);
-        auto* source = make_request_source(impl->url, *method_parsed,
+        auto* source = make_request_source(url, *method_parsed,
                                            std::move(headers), std::move(body));
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
@@ -191,13 +230,21 @@ auto HttpPool::request(std::string method, std::string body,
         co_return Err{std::move(result).unwrap_err().what().toStdString()};
       }
       co_return std::move(result).unwrap();
-    }(impl_, std::move(method), std::move(body), std::move(headers)));
+    }(impl_, std::move(method), std::move(target), std::move(body),
+      std::move(headers)));
 }
 
 auto HttpPool::post(std::string body,
                     std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
   co_return co_await request("POST", std::move(body), std::move(headers));
+}
+
+auto HttpPool::post(std::string target, std::string body,
+                    std::map<std::string, std::string> headers)
+  -> Task<Result<HttpResponse, std::string>> {
+  co_return co_await request("POST", std::move(target), std::move(body),
+                             std::move(headers));
 }
 
 namespace {

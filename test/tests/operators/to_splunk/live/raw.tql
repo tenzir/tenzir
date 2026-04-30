@@ -1,0 +1,23 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      source: tenzir-test-raw
+      sourcetype: tenzir:test:raw
+      contains:
+        - raw-alpha
+        - raw-beta
+---
+
+from {message: "raw-alpha"},
+     {message: "raw-beta"}
+timestamp = now().format_time("%Y-%m-%d %H:%M:%S")
+message = timestamp + " " + message
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          raw=message,
+          source="tenzir-test-raw",
+          sourcetype="tenzir:test:raw",
+          index=env("SPLUNK_INDEX"),
+          compress=false

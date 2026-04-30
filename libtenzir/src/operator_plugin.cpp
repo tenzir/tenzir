@@ -364,7 +364,7 @@ public:
     return failure::promise();
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     // The spawner must be retrieved before filling args, because we move them
     // out and thus the passed `DescribeCtx` would be incomplete.
     auto spawner = std::optional<AnySpawn>{};
@@ -602,7 +602,7 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
-    order_ = std::max(order_, order);
+    order_ = weaker_event_order(order_, order);
     // Only forward downstream order when the operator opted in via
     // `order_invariant()` or `unordered()`. Otherwise keep the safe
     // `ordered` barrier.

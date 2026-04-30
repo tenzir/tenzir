@@ -1,0 +1,14 @@
+warning: `time` did not evaluate to a `time` or numeric epoch timestamp
+ --> tests/operators/to_splunk_validation/time_wrong_type.tql:4:16
+  |
+4 |           time=ts,
+  |                ~~ 
+  |
+
+warning: event too large for given `max_content_length`
+ --> tests/operators/to_splunk_validation/time_wrong_type.tql:5:30
+  |
+5 |           max_content_length=1
+  |                              ~ 
+  |
+  = note: serialized event size was `88`

@@ -187,7 +187,7 @@ public:
     return (*this)(x);
   }
 
-  auto last_error() and -> caf::error {
+  auto last_error() && -> caf::error {
     return std::move(last_error_);
   }
 

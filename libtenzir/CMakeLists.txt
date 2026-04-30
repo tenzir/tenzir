@@ -620,7 +620,7 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(gflags QUIET)")
 # Link against reproc.
 target_link_libraries(libtenzir PUBLIC reproc++)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
-dependency_summary("reproc++" reproc+++ "Dependencies")
+dependency_summary("reproc++" reproc++ "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule"

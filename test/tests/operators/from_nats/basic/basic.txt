@@ -1,0 +1,20 @@
+{
+  line: "message-0001",
+  subject: "from_nats_test",
+  has_reply: true,
+  stream: "FROM_NATS_TEST",
+  consumer: "from_nats_test",
+  stream_sequence: 1,
+  consumer_sequence: 1,
+  num_delivered: 1,
+}
+{
+  line: "message-0002",
+  subject: "from_nats_test",
+  has_reply: true,
+  stream: "FROM_NATS_TEST",
+  consumer: "from_nats_test",
+  stream_sequence: 2,
+  consumer_sequence: 2,
+  num_delivered: 1,
+}

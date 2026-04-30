@@ -1,0 +1,15 @@
+---
+fixtures:
+  - udp:
+      mode: client
+      payload_sequence_hex:
+        - "ff"
+        - "61667465722d696e76616c6964"
+      interval: 0.2
+      initial_delay: 1.0
+timeout: 60
+---
+
+accept_udp env("UDP_ENDPOINT")
+head 1
+select data, ip = peer.ip

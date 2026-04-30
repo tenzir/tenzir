@@ -16,6 +16,8 @@
 
 #include <fmt/format.h>
 
+#include <functional>
+
 namespace tenzir {
 
 struct into_location;
@@ -179,11 +181,12 @@ struct as_located {
 template <class T>
 struct is_located : detail::is_specialization_of<located, T> {};
 
-auto trace_panic(into_location trace, auto&& fun) -> decltype(auto) {
+template <class TraceFn, class Fun>
+auto trace_panic_impl(TraceFn&& trace_fn, Fun&& fun) -> decltype(auto) {
   try {
-    static_cast<void>(trace);
     return std::invoke(std::forward<decltype(fun)>(fun));
   } catch (panic_exception& panic) {
+    auto trace = into_location{std::invoke(std::forward<TraceFn>(trace_fn))};
     if (trace != location::unknown
         and panic.trace.begin == location::unknown.begin
         and panic.trace.end == location::unknown.end) {
@@ -192,6 +195,25 @@ auto trace_panic(into_location trace, auto&& fun) -> decltype(auto) {
     }
     throw std::move(panic);
   }
+}
+
+template <class Trace, class Fun>
+  requires(not std::is_invocable_v<Trace&>)
+auto trace_panic(Trace&& trace, Fun&& fun) -> decltype(auto) {
+  return trace_panic_impl(
+    [&]() -> decltype(auto) {
+      return std::forward<Trace>(trace);
+    },
+    std::forward<Fun>(fun));
+}
+
+template <class TraceFn, class Fun>
+  requires(
+    std::is_invocable_v<TraceFn&>
+    and std::is_constructible_v<into_location, std::invoke_result_t<TraceFn&>>)
+auto trace_panic(TraceFn&& trace_fn, Fun&& fun) -> decltype(auto) {
+  return trace_panic_impl(std::forward<TraceFn>(trace_fn),
+                          std::forward<Fun>(fun));
 }
 
 } // namespace tenzir

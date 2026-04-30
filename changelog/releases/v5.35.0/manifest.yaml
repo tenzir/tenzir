@@ -1,0 +1,9 @@
+created: 2026-04-29
+title: NATS JetStream operators
+intro: >-
+  Tenzir can now consume from and publish to NATS JetStream subjects with from_nats
+  and to_nats. This release also fixes crashes in static musl builds when evaluating
+  deeply nested generated TQL expressions.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.34.0

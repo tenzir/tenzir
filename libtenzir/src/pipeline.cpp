@@ -171,7 +171,7 @@ void pipeline::prepend(operator_ptr op) {
   }
 }
 
-auto pipeline::unwrap() and -> std::vector<operator_ptr> {
+auto pipeline::unwrap() && -> std::vector<operator_ptr> {
   return std::move(operators_);
 }
 
@@ -385,7 +385,7 @@ auto pipeline::is_closed() const -> bool {
   return check_type<void, void>().has_value();
 }
 
-auto pipeline::split_at_void() and -> caf::expected<std::vector<pipeline>> {
+auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
   const auto guess_or_infer_type
     = [](std::optional<operator_type> input,
          const operator_ptr& op) -> caf::expected<operator_type> {

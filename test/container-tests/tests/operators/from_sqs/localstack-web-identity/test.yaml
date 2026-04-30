@@ -1,0 +1,4 @@
+suite: localstack-sqs-web-identity
+runner: neo
+fixtures: [localstack]
+timeout: 120

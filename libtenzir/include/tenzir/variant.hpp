@@ -199,7 +199,7 @@ public:
   }
 
   template <class Result = void, class... Fs>
-  auto match(Fs&&... fs) and -> decltype(auto) {
+  auto match(Fs&&... fs) && -> decltype(auto) {
     return detail::match<Result>(std::move(*this), std::forward<Fs>(fs)...);
   }
 

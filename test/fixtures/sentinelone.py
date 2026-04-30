@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
+import gzip
 import json
+import os
+import shutil
+import ssl
+import subprocess
+import tempfile
 import threading
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import fixture
+from tenzir_test.fixtures import FixtureUnavailable, current_options
+
+from ._utils import generate_self_signed_cert
 
 _HOST = "127.0.0.1"
 _EXPECTED_TOKEN = "test-token-s1-12345"
+
+
+@dataclass(frozen=True)
+class SentinelOneOptions:
+    tls: bool = False
+
 
 # Predefined columnar responses keyed by the `query` field in the POST body.
 #
@@ -133,14 +150,43 @@ _STATIC_RESPONSES: dict[str, object] = {
 }
 
 
-def _make_handler() -> type[BaseHTTPRequestHandler]:
+def _validate_add_events_payload(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return "payload must be a JSON object"
+    session = payload.get("session")
+    if not isinstance(session, str) or not session:
+        return "session must be a non-empty string"
+    events = payload.get("events")
+    if not isinstance(events, list) or not events:
+        return "events must be a non-empty array"
+    session_info = payload.get("sessionInfo")
+    if session_info is not None and not isinstance(session_info, dict):
+        return "sessionInfo must be an object"
+    for i, event in enumerate(events):
+        if not isinstance(event, dict):
+            return f"events[{i}] must be an object"
+        attrs = event.get("attrs")
+        if not isinstance(attrs, dict):
+            return f"events[{i}].attrs must be an object"
+        ts = event.get("ts")
+        if ts is not None and not isinstance(ts, str):
+            return f"events[{i}].ts must be a string"
+        sev = event.get("sev")
+        if sev is not None and not isinstance(sev, int):
+            return f"events[{i}].sev must be an integer"
+    return None
+
+
+def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
+    lock = threading.Lock()
+
     class SentinelOneHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: object) -> None:
             # Silence the default per-request log lines.
             pass
 
         def do_POST(self) -> None:
-            if self.path != "/api/powerQuery":
+            if self.path not in {"/api/powerQuery", "/api/addEvents"}:
                 self._respond(404, {"error": f"unknown path: {self.path}"})
                 return
 
@@ -151,11 +197,32 @@ def _make_handler() -> type[BaseHTTPRequestHandler]:
                 return
 
             length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode()
+            raw_body = self.rfile.read(length)
+            encoding = self.headers.get("Content-Encoding", "")
+            normalized_encoding = encoding.split(",", 1)[0].strip().lower()
+            if normalized_encoding == "gzip":
+                try:
+                    raw_body = gzip.decompress(raw_body)
+                except Exception as exc:
+                    self._respond(400, {"error": f"bad gzip: {exc}"})
+                    return
+            elif normalized_encoding:
+                self._respond(415, {"error": f"unsupported encoding: {encoding}"})
+                return
             try:
-                payload = json.loads(body)
+                payload = json.loads(raw_body.decode())
             except json.JSONDecodeError as exc:
                 self._respond(400, {"error": f"bad JSON: {exc}"})
+                return
+
+            if self.path == "/api/addEvents":
+                if err := _validate_add_events_payload(payload):
+                    self._respond(400, {"error": err})
+                    return
+                with lock:
+                    with open(capture_path, "a") as file:
+                        file.write(json.dumps(payload, sort_keys=True) + "\n")
+                self._respond(200, {})
                 return
 
             query = payload.get("query", "")
@@ -196,23 +263,58 @@ def _make_handler() -> type[BaseHTTPRequestHandler]:
     return SentinelOneHandler
 
 
-@fixture()
+@fixture(name="sentinelone", options=SentinelOneOptions)
 def sentinelone() -> Iterator[dict[str, str]]:
     """Start a mock SentinelOne Data Lake API server on a random port.
 
     Exports:
-      S1_FIXTURE_URL   - base URL of the mock server (http://127.0.0.1:<port>)
+      S1_FIXTURE_URL   - base URL of the mock server
       S1_FIXTURE_TOKEN - bearer token expected by the server
+      S1_FIXTURE_CAPTURE_FILE - JSONL file containing captured addEvents calls
+      S1_FIXTURE_CAFILE - CA certificate path when tls=true
     """
-    server = HTTPServer((_HOST, 0), _make_handler())
+    opts = current_options("sentinelone")
+    fd, capture_path = tempfile.mkstemp(prefix="sentinelone-capture-", suffix=".jsonl")
+    os.close(fd)
+    temp_dir: Path | None = None
+    tls_env: dict[str, str] = {}
+    if opts.tls:
+        temp_dir = Path(tempfile.mkdtemp(prefix="sentinelone-tls-"))
+        try:
+            cert_path, key_path, ca_path, _ = generate_self_signed_cert(
+                temp_dir,
+                common_name=_HOST,
+                san_entries=[f"IP:{_HOST}"],
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            if os.path.exists(capture_path):
+                os.remove(capture_path)
+            raise FixtureUnavailable(f"openssl unavailable: {exc}") from exc
+        tls_env = {
+            "S1_FIXTURE_CAFILE": str(ca_path),
+        }
+    server = HTTPServer((_HOST, 0), _make_handler(capture_path))
+    if opts.tls:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
     port = server.server_address[1]
+    scheme = "https" if opts.tls else "http"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield {
-            "S1_FIXTURE_URL": f"http://{_HOST}:{port}",
+        env = {
+            "S1_FIXTURE_URL": f"{scheme}://{_HOST}:{port}",
             "S1_FIXTURE_TOKEN": _EXPECTED_TOKEN,
+            "S1_FIXTURE_CAPTURE_FILE": capture_path,
         }
+        env.update(tls_env)
+        yield env
     finally:
         server.shutdown()
         thread.join(timeout=2)
+        if os.path.exists(capture_path):
+            os.remove(capture_path)
+        if temp_dir is not None:
+            shutil.rmtree(temp_dir, ignore_errors=True)

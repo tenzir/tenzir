@@ -88,7 +88,7 @@ caf::error& debug_writer::get_error() noexcept {
   return err_;
 }
 
-caf::actor_system* debug_writer::sys() const noexcept {
+caf::actor_handle_codec* debug_writer::actor_handle_codec() {
   return nullptr;
 }
 

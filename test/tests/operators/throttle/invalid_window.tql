@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+throttle rate=10, window=0s

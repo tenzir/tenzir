@@ -1,0 +1,22 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 1
+      source: tenzir-test-time
+      sourcetype: tenzir:test:time
+      earliest_time: "1735689599"
+      latest_time: "1735689601"
+      contains:
+        - time-event
+        - "2025-01-01"
+---
+
+from {message: "time-event", ts: 2025-01-01T00:00:00Z}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          time=ts,
+          source="tenzir-test-time",
+          sourcetype="tenzir:test:time",
+          index=env("SPLUNK_INDEX"),
+          compress=false

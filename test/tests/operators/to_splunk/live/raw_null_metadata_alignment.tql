@@ -1,0 +1,22 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 1
+      host: tenzir-raw-aligned
+      source: tenzir-test-raw-null-alignment
+      sourcetype: tenzir:test:raw-null-alignment
+      contains:
+        - raw-null-aligned
+---
+
+from {message: null.string(), h: "tenzir-raw-skipped"},
+     {message: "raw-null-aligned", h: "tenzir-raw-aligned"}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          raw=message,
+          host=h,
+          source="tenzir-test-raw-null-alignment",
+          sourcetype="tenzir:test:raw-null-alignment",
+          index=env("SPLUNK_INDEX"),
+          compress=false
