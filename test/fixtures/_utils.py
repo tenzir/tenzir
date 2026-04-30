@@ -26,6 +26,9 @@ def _is_port_available(port: int, sock_type: int) -> bool:
             sock.bind(("127.0.0.1", port))
         except OSError:
             return False
+    if sock_type == socket.SOCK_STREAM:
+        with socket.socket(socket.AF_INET, sock_type) as sock:
+            return sock.connect_ex(("127.0.0.1", port)) != 0
     return True
 
 

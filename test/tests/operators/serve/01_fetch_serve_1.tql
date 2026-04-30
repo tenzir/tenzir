@@ -1,0 +1,10 @@
+api "/serve", {
+  serve_id: "serve-1",
+  timeout: 5s,
+  min_events: 4,
+  max_events: 4,
+  schema: "never",
+}
+unroll events
+this = events.data
+write_tql

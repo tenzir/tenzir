@@ -236,26 +236,33 @@ endif ()
 option(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Release
        "Enable link time optimizations for the Release build" ON)
 
-option(TENZIR_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions" ON)
-if (TENZIR_ENABLE_AUTO_VECTORIZATION)
-  find_package(SSE QUIET)
-  option(TENZIR_ENABLE_SSE_INSTRUCTIONS "Enable SSE instructions"
-         "${SSE_FOUND}")
-  option(TENZIR_ENABLE_SSE2_INSTRUCTIONS "Enable SSE2 instructions"
-         "${SSE2_FOUND}")
-  option(TENZIR_ENABLE_SSE3_INSTRUCTIONS "Enable SSE3 instructions"
-         "${SSE3_FOUND}")
-  option(TENZIR_ENABLE_SSSE3_INSTRUCTIONS "Enable SSSE3 instructions"
-         "${SSSE3_FOUND}")
-  option(TENZIR_ENABLE_SSE4_1_INSTRUCTIONS "Enable SSE4.1 instructions"
-         "${SSE4_1_FOUND}")
-  option(TENZIR_ENABLE_SSE4_2_INSTRUCTIONS "Enable SSE4.2 instructions"
-         "${SSE4_2_FOUND}")
-  option(TENZIR_ENABLE_AVX_INSTRUCTIONS "Enable AVX instructions"
-         "${AVX_FOUND}")
-  option(TENZIR_ENABLE_AVX2_INSTRUCTIONS "Enable AVX2 instructions"
-         "${AVX2_FOUND}")
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i[3-6]86|x86)$")
+  set(_TENZIR_ENABLE_X86_SIMD_DEFAULT ON)
+else ()
+  set(_TENZIR_ENABLE_X86_SIMD_DEFAULT OFF)
 endif ()
+
+option(TENZIR_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions"
+       "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+if (TENZIR_ENABLE_AUTO_VECTORIZATION)
+  option(TENZIR_ENABLE_SSE_INSTRUCTIONS "Enable SSE instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_SSE2_INSTRUCTIONS "Enable SSE2 instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_SSE3_INSTRUCTIONS "Enable SSE3 instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_SSSE3_INSTRUCTIONS "Enable SSSE3 instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_SSE4_1_INSTRUCTIONS "Enable SSE4.1 instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_SSE4_2_INSTRUCTIONS "Enable SSE4.2 instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_AVX_INSTRUCTIONS "Enable AVX instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+  option(TENZIR_ENABLE_AVX2_INSTRUCTIONS "Enable AVX2 instructions"
+         "${_TENZIR_ENABLE_X86_SIMD_DEFAULT}")
+endif ()
+unset(_TENZIR_ENABLE_X86_SIMD_DEFAULT)
 
 target_compile_options(
   libtenzir_internal

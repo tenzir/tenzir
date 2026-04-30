@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import shutil
+import socket
 import ssl
 import tempfile
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -98,10 +100,25 @@ def http_request() -> FixtureHandle:
             tls_dir, common_name=endpoint, san_entries=[f"IP:{_HOST}"]
         )
     request_specs = _to_request_specs(opts)
+    first_request_at = time.monotonic() + opts.initial_delay
+
+    def _wait_until_ready() -> bool:
+        while not stop_event.is_set():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    if sock.connect_ex((_HOST, port)) == 0:
+                        return True
+            except OSError:
+                pass
+            stop_event.wait(opts.retry_delay)
+        return False
 
     def _worker() -> None:
-        if opts.initial_delay > 0:
-            stop_event.wait(opts.initial_delay)
+        if not _wait_until_ready():
+            return
+        remaining_initial_delay = first_request_at - time.monotonic()
+        if remaining_initial_delay > 0:
+            stop_event.wait(remaining_initial_delay)
         for req_idx, spec in enumerate(request_specs):
             if stop_event.is_set():
                 stopped_early[0] = True

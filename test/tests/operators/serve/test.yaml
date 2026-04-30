@@ -1,0 +1,4 @@
+suite: serve
+fixtures: [node]
+retry: 10
+timeout: 60

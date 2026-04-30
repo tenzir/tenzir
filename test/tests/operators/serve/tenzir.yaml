@@ -1,0 +1,34 @@
+tenzir:
+  pipelines:
+    serve-1:
+      name: serve 1
+      definition: |
+        from {s: "Hello World 1"},
+          {s: "Hiya 1"},
+          {i: 42},
+          {s: "str 1", i: 0}
+        serve "serve-1"
+    serve-2:
+      name: serve 2
+      definition: |
+        from {s: "Hello World 2"},
+          {s: "Hiya 2"},
+          {i: 43},
+          {s: "str 2", i: 1}
+        serve "serve-2"
+    serve_multi_1:
+      name: serve multi 1
+      definition: |
+        from {s: "Hello World 1"},
+          {s: "Hiya 1"},
+          {i: 42},
+          {s: "str 1", i: 0}
+        serve "serve_multi_1"
+    serve_multi_2:
+      name: serve multi 2
+      definition: |
+        from {s: "Hello World 2"},
+          {s: "Hiya 2"},
+          {i: 43},
+          {s: "str 2", i: 1}
+        serve "serve_multi_2"
