@@ -25,8 +25,10 @@ import threading
 import time
 import tty
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import BinaryIO, Callable, Iterator, NoReturn, Protocol
 from urllib.parse import unquote, urlparse
+from urllib.request import Request, urlopen
 
 
 PROTOCOL_VERSION = 0x01
@@ -77,6 +79,14 @@ class S3Config:
     region: str | None
     endpoint_url: str | None
     profile: str | None
+    auth: str
+    expected_account_id: str | None
+    access_key_id: str | None
+    secret_access_key: str | None
+    session_token: str | None
+    credential_expiration: str | None
+    oidc_broker_url: str | None
+    oidc_audience: str
     layout: str
     max_pool_connections: int
     object_list_min_interval: float
@@ -110,6 +120,7 @@ class S3Storage:
         try:
             import boto3
             from botocore.config import Config
+            from botocore.credentials import RefreshableCredentials
             from botocore.exceptions import BotoCoreError, ClientError
         except ImportError as error:
             raise StorageError("boto3 is required for S3 ccache storage") from error
@@ -124,6 +135,21 @@ class S3Storage:
         if config.region:
             session_args["region_name"] = config.region
         session = boto3.Session(**session_args)
+        if config.auth == "cloudflare-r2-oidc-broker":
+            if not config.credential_expiration:
+                raise StorageError("R2 broker credentials are missing an expiration time")
+            refreshable_credentials = RefreshableCredentials.create_from_metadata(
+                metadata={
+                    "access_key": config.access_key_id,
+                    "secret_key": config.secret_access_key,
+                    "token": config.session_token,
+                    "expiry_time": config.credential_expiration,
+                },
+                refresh_using=lambda: _cloudflare_r2_oidc_broker_metadata(config),
+                method="cloudflare-r2-oidc-broker",
+            )
+            session._session._credentials = refreshable_credentials
+            session._session.set_config_variable("region", config.region or "auto")
         credentials = session.get_credentials()
         if credentials is None:
             raise StorageError(
@@ -138,6 +164,12 @@ class S3Storage:
         client_args = {
             "config": Config(max_pool_connections=config.max_pool_connections),
         }
+        if config.access_key_id:
+            client_args["aws_access_key_id"] = config.access_key_id
+        if config.secret_access_key:
+            client_args["aws_secret_access_key"] = config.secret_access_key
+        if config.session_token:
+            client_args["aws_session_token"] = config.session_token
         if config.endpoint_url:
             client_args["endpoint_url"] = config.endpoint_url
         self._s3 = session.client("s3", **client_args)
@@ -739,6 +771,27 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
     if layout not in {"flat", "subdirs"}:
         raise StorageError("layout must be 'flat' or 'subdirs'")
 
+    endpoint_url = (
+        attrs.get("endpoint-url")
+        or os.environ.get("AWS_ENDPOINT_URL_S3")
+        or os.environ.get("AWS_ENDPOINT_URL")
+    )
+    auth = (
+        attrs.get("auth")
+        or os.environ.get("CCACHE_S3_AUTH")
+        or ("credentials" if endpoint_url else "aws-sso")
+    )
+    if auth not in {"aws-sso", "aws", "credentials", "cloudflare-r2-oidc-broker"}:
+        raise StorageError(
+            "auth must be one of 'aws-sso', 'aws', 'credentials', or "
+            "'cloudflare-r2-oidc-broker'",
+        )
+    expected_account_id = (
+        attrs.get("aws-account-id")
+        or os.environ.get("CCACHE_AWS_ACCOUNT_ID")
+        or (DEFAULT_INFRASTRUCTURE_ACCOUNT_ID if auth == "aws-sso" else None)
+    )
+
     return S3Config(
         bucket=parsed.netloc,
         prefix=unquote(parsed.path.lstrip("/")),
@@ -747,12 +800,22 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
             or os.environ.get("CCACHE_S3_REGION")
             or os.environ.get("AWS_REGION")
         ),
-        endpoint_url=(
-            attrs.get("endpoint-url")
-            or os.environ.get("AWS_ENDPOINT_URL_S3")
-            or os.environ.get("AWS_ENDPOINT_URL")
-        ),
+        endpoint_url=endpoint_url,
         profile=attrs.get("profile") or os.environ.get("AWS_PROFILE"),
+        auth=auth,
+        expected_account_id=expected_account_id,
+        access_key_id=None,
+        secret_access_key=None,
+        session_token=None,
+        credential_expiration=None,
+        oidc_broker_url=(
+            attrs.get("oidc-broker-url") or os.environ.get("CCACHE_R2_OIDC_BROKER_URL")
+        ),
+        oidc_audience=(
+            attrs.get("oidc-audience")
+            or os.environ.get("CCACHE_R2_OIDC_AUDIENCE")
+            or "ccache-r2-broker"
+        ),
         layout=layout,
         max_pool_connections=_positive_int(
             attrs.get("max-pool-connections")
@@ -838,22 +901,20 @@ def _prepare_writable_aws_home() -> None:
     os.environ["HOME"] = writable_home
 
 
-def _run_aws_sso_login(profile: str) -> None:
+def _run_aws_sso_login(profile: str, account_id: str) -> None:
     aws = shutil.which("aws")
     if not aws:
         raise StorageError(
-            f"AWS login is required. Install the AWS CLI and run: "
-            f"aws sso login --profile {profile}",
+            f"AWS login is required for account {account_id}. Install the AWS CLI "
+            "and log in to that account.",
         )
     print(
-        f"AWS login is required for account {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}.",
+        f"AWS login is required for account {account_id}.",
         file=sys.stderr,
     )
     answer = input("Run AWS SSO login now? [Y/n]: ").strip()
     if answer.lower() in {"n", "no"}:
-        raise StorageError(
-            f"AWS login is required for account {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}",
-        )
+        raise StorageError(f"AWS login is required for account {account_id}")
     subprocess.run([aws, "sso", "login", "--profile", profile], check=True)
 
 
@@ -917,15 +978,25 @@ def _select_aws_profile(account_id: str) -> str:
 
 
 def _resolve_aws_profile(config: S3Config) -> S3Config:
-    if config.profile:
+    if config.profile or config.auth != "aws-sso":
         return config
-    profile = _select_aws_profile(DEFAULT_INFRASTRUCTURE_ACCOUNT_ID)
+    if not config.expected_account_id:
+        raise StorageError("aws-sso auth requires an expected AWS account ID")
+    profile = _select_aws_profile(config.expected_account_id)
     return S3Config(
         bucket=config.bucket,
         prefix=config.prefix,
         region=config.region,
         endpoint_url=config.endpoint_url,
         profile=profile,
+        auth=config.auth,
+        expected_account_id=config.expected_account_id,
+        access_key_id=config.access_key_id,
+        secret_access_key=config.secret_access_key,
+        session_token=config.session_token,
+        credential_expiration=config.credential_expiration,
+        oidc_broker_url=config.oidc_broker_url,
+        oidc_audience=config.oidc_audience,
         layout=config.layout,
         max_pool_connections=config.max_pool_connections,
         object_list_min_interval=config.object_list_min_interval,
@@ -935,7 +1006,124 @@ def _resolve_aws_profile(config: S3Config) -> S3Config:
     )
 
 
-def _ensure_expected_aws_account(config: S3Config) -> S3Config:
+def _github_actions_oidc_token(audience: str) -> str:
+    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not request_url or not request_token:
+        raise StorageError(
+            "GitHub Actions OIDC is unavailable; expected "
+            "ACTIONS_ID_TOKEN_REQUEST_URL and ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        )
+    separator = "&" if "?" in request_url else "?"
+    url = f"{request_url}{separator}audience={audience}"
+    request = Request(url, headers={"Authorization": f"Bearer {request_token}"})
+    with urlopen(request, timeout=30) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    token = data.get("value")
+    if not isinstance(token, str) or not token:
+        raise StorageError("GitHub Actions OIDC response did not contain a token")
+    return token
+
+
+def _default_credential_expiration() -> str:
+    return (datetime.now(UTC) + timedelta(minutes=50)).isoformat()
+
+
+def _cloudflare_r2_oidc_broker_response(config: S3Config) -> dict[str, object]:
+    if not config.oidc_broker_url:
+        raise StorageError(
+            "cloudflare-r2-oidc-broker auth requires CCACHE_R2_OIDC_BROKER_URL "
+            "or @oidc-broker-url",
+        )
+    token = _github_actions_oidc_token(config.oidc_audience)
+    payload = json.dumps({"token": token}).encode("utf-8")
+    request = Request(
+        config.oidc_broker_url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    if not isinstance(data, dict):
+        raise StorageError("R2 OIDC broker response is not a JSON object")
+    return data
+
+
+def _cloudflare_r2_oidc_broker_metadata(config: S3Config) -> dict[str, str]:
+    data = _cloudflare_r2_oidc_broker_response(config)
+    return _cloudflare_r2_oidc_broker_metadata_from_response(config, data)
+
+
+def _cloudflare_r2_oidc_broker_metadata_from_response(
+    config: S3Config,
+    data: dict[str, object],
+) -> dict[str, str]:
+    try:
+        access_key_id = data["accessKeyId"]
+        secret_access_key = data["secretAccessKey"]
+        session_token = data["sessionToken"]
+        bucket = data["bucket"]
+    except KeyError as error:
+        raise StorageError(f"R2 OIDC broker response is missing {error.args[0]}") from error
+    if not all(
+        isinstance(value, str) and value
+        for value in (access_key_id, secret_access_key, session_token, bucket)
+    ):
+        raise StorageError("R2 OIDC broker response contains invalid credentials")
+    if bucket != config.bucket:
+        raise StorageError(f"R2 OIDC broker returned bucket {bucket}, expected {config.bucket}")
+    expires_at = data.get("expiresAt")
+    if not isinstance(expires_at, str) or not expires_at:
+        expires_at = _default_credential_expiration()
+    return {
+        "access_key": access_key_id,
+        "secret_key": secret_access_key,
+        "token": session_token,
+        "expiry_time": expires_at,
+    }
+
+
+def _cloudflare_r2_oidc_broker_credentials(config: S3Config) -> S3Config:
+    data = _cloudflare_r2_oidc_broker_response(config)
+    metadata = _cloudflare_r2_oidc_broker_metadata_from_response(config, data)
+    endpoint_url = data.get("endpointUrl")
+    region = data.get("region")
+    if not isinstance(endpoint_url, str) or not endpoint_url:
+        raise StorageError("R2 OIDC broker response is missing endpointUrl")
+    if not isinstance(region, str) or not region:
+        region = "auto"
+    return S3Config(
+        bucket=config.bucket,
+        prefix=config.prefix,
+        region=region,
+        endpoint_url=endpoint_url,
+        profile=None,
+        auth=config.auth,
+        expected_account_id=config.expected_account_id,
+        access_key_id=metadata["access_key"],
+        secret_access_key=metadata["secret_key"],
+        session_token=metadata["token"],
+        credential_expiration=metadata["expiry_time"],
+        oidc_broker_url=config.oidc_broker_url,
+        oidc_audience=config.oidc_audience,
+        layout=config.layout,
+        max_pool_connections=config.max_pool_connections,
+        object_list_min_interval=config.object_list_min_interval,
+        upload_queue_size=config.upload_queue_size,
+        upload_workers=config.upload_workers,
+        upload_drain_timeout=config.upload_drain_timeout,
+    )
+
+
+def _initialize_auth(config: S3Config) -> S3Config:
+    if config.auth == "cloudflare-r2-oidc-broker":
+        return _cloudflare_r2_oidc_broker_credentials(config)
+    if config.auth == "credentials" or (
+        config.auth == "aws" and not config.expected_account_id
+    ):
+        return config
+
     try:
         import boto3
         from botocore.exceptions import BotoCoreError, ClientError
@@ -957,17 +1145,24 @@ def _ensure_expected_aws_account(config: S3Config) -> S3Config:
     try:
         account_id = caller_account()
     except (BotoCoreError, ClientError, OSError) as error:
-        if resolved_config.profile and _is_interactive():
-            _run_aws_sso_login(resolved_config.profile)
+        if resolved_config.auth == "aws-sso" and resolved_config.profile and _is_interactive():
+            _run_aws_sso_login(
+                resolved_config.profile,
+                resolved_config.expected_account_id or DEFAULT_INFRASTRUCTURE_ACCOUNT_ID,
+            )
             account_id = caller_account()
         else:
+            if resolved_config.expected_account_id:
+                message = f"AWS login is required for account {resolved_config.expected_account_id}"
+            else:
+                message = "AWS credentials are required"
             raise StorageError(
-                f"AWS login is required for account {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}",
+                message,
             ) from error
-    if account_id != DEFAULT_INFRASTRUCTURE_ACCOUNT_ID:
+    if resolved_config.expected_account_id and account_id != resolved_config.expected_account_id:
         raise StorageError(
             f"AWS credentials are for account {account_id}, "
-            f"expected {DEFAULT_INFRASTRUCTURE_ACCOUNT_ID}",
+            f"expected {resolved_config.expected_account_id}",
         )
     return resolved_config
 
@@ -1611,7 +1806,7 @@ def _cmd_serve(argv: list[str]) -> int:
     attrs = _attrs_from_env()
     config = _parse_url(args.url, attrs)
     _prepare_writable_aws_home()
-    config = _ensure_expected_aws_account(config)
+    config = _initialize_auth(config)
     if args.daemonize:
         _daemonize(args.log_file)
 

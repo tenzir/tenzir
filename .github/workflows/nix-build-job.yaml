@@ -97,6 +97,10 @@ jobs:
           CCACHE_S3_BUCKET: ${{ vars.CCACHE_S3_BUCKET }}
           CCACHE_S3_PREFIX: ${{ vars.CCACHE_S3_PREFIX || 'tenzir' }}
           CCACHE_S3_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+          CCACHE_S3_AUTH: ${{ vars.CCACHE_S3_AUTH }}
+          CCACHE_R2_OIDC_BROKER_URL: ${{ vars.CCACHE_R2_OIDC_BROKER_URL }}
+          CCACHE_R2_OIDC_AUDIENCE: ${{ vars.CCACHE_R2_OIDC_AUDIENCE || 'ccache-r2-broker' }}
+          AWS_ENDPOINT_URL_S3: ${{ vars.CCACHE_S3_ENDPOINT_URL }}
           AWS_DEFAULT_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
           AWS_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
         run: |
