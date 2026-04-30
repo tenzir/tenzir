@@ -2039,7 +2039,7 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
     LOGW("blocking on pipeline done");
     scope.cancel();
   });
-  co_return {};
+  co_return dh.failure();
 }
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
