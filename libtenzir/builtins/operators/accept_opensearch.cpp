@@ -106,7 +106,7 @@ public:
   }
 
   void emit(diagnostic d) override {
-    if (d.severity == severity::warning or d.severity == severity::error) {
+    if (d.severity == severity::error) {
       failed_ = true;
     }
     inner_.emit(std::move(d));
