@@ -43,6 +43,29 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
   return package_identifier(value);
 }
 
+auto should_ignore_package_key(std::string_view section, std::string_view key)
+  -> bool {
+  // `labels` comes from configured pipelines, and `snippets` is a legacy
+  // library field superseded by `examples`.
+  return (section == "package" and key == "snippets")
+         or (section == "pipeline" and key == "labels");
+}
+
+auto unknown_package_key_error(std::string_view section, std::string_view key)
+  -> caf::error {
+  return diagnostic::error("unknown key `{}` in {} definition", key, section)
+    .note("invalid package definition")
+    .to_error();
+}
+
+auto check_unknown_package_key(std::string_view section, std::string_view key)
+  -> caf::expected<void> {
+  if (should_ignore_package_key(section, key)) {
+    return {};
+  }
+  return unknown_package_key_error(section, key);
+}
+
 } // namespace
 
 #define TRY_CONVERT_TO_STRING(name, field)                                     \
@@ -316,8 +339,10 @@ auto package_input::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(type)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
     TRY_CONVERT_TO_STRING(default, default_);
+    return unknown_package_key_error("input", key);
   }
   REQUIRED_FIELD(name);
+  REQUIRED_FIELD(type);
   return result;
 }
 
@@ -340,6 +365,7 @@ auto package_operator_parameter::parse(const view<record>& data)
       result.default_ = *maybe_string;
       continue;
     }
+    return unknown_package_key_error("operator parameter", key);
   }
   REQUIRED_FIELD(name);
   return result;
@@ -352,6 +378,7 @@ auto package_source::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(repository)
     TRY_ASSIGN_STRING_TO_RESULT(directory)
     TRY_ASSIGN_STRING_TO_RESULT(revision)
+    return unknown_package_key_error("source", key);
   }
   REQUIRED_FIELD(repository)
   REQUIRED_FIELD(directory)
@@ -369,6 +396,7 @@ auto package_config::parse(const view<record>& data)
     TRY_ASSIGN_RECORD_TO_RESULT(overrides);
     TRY_ASSIGN_RECORD_TO_RESULT(metadata);
     TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    return unknown_package_key_error("config", key);
   }
   return result;
 }
@@ -545,6 +573,7 @@ auto package_operator::parse(const view<record>& data)
             }
             continue;
           }
+          return unknown_package_key_error("operator args", subkey);
         }
         continue;
       }
@@ -560,6 +589,7 @@ auto package_operator::parse(const view<record>& data)
         .note("invalid package definition")
         .to_error();
     }
+    return unknown_package_key_error("operator", key);
   }
   REQUIRED_FIELD(definition)
   return result;
@@ -620,11 +650,7 @@ auto package_pipeline::parse(const view<record>& data)
       result.restart_on_error = *retry_delay;
       continue;
     }
-    // Hack: Ignore the `labels` key so we can reuse this function to
-    // parse configured pipelines as well.
-    if (key == "labels") {
-      continue;
-    }
+    TRY(check_unknown_package_key("pipeline", key));
   }
   REQUIRED_FIELD(definition)
   return result;
@@ -649,6 +675,7 @@ auto package_context::parse(const view<record>& data)
     TRY_ASSIGN_BOOL_TO_RESULT(disabled);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
+    return unknown_package_key_error("context", key);
   }
   REQUIRED_FIELD(type)
   return result;
@@ -661,6 +688,7 @@ auto package_example::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(definition);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
+    return unknown_package_key_error("example", key);
   }
   REQUIRED_FIELD(definition)
   return result;
@@ -688,6 +716,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
     TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
+    TRY(check_unknown_package_key("package", key));
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
