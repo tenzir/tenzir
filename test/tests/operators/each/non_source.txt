@@ -1,0 +1,6 @@
+error: pipeline inside `each` must be a source
+ --> tests/operators/each/non_source.tql:5:6
+  |
+5 | each {
+  |      ^^^^^^^^^^^^^^^^^^ 
+  |

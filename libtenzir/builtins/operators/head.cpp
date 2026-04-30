@@ -38,7 +38,7 @@ public:
       // that we are ready to shutdown.
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
   auto snapshot(Serde& serde) -> void override {

@@ -302,7 +302,7 @@ public:
     if (consequence_closed_ and alternative_closed_) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
 private:

@@ -318,7 +318,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return stream_finished_ ? OperatorState::done : OperatorState::unspecified;
+    return stream_finished_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:

@@ -596,7 +596,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return failed_ ? OperatorState::done : OperatorState::unspecified;
+    return failed_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:

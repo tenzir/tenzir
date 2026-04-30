@@ -296,7 +296,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return startup_failed_ ? OperatorState::done : OperatorState::unspecified;
+    return startup_failed_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:

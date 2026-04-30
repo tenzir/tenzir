@@ -975,7 +975,7 @@ public:
     if (done_) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
 private:
@@ -1038,7 +1038,7 @@ public:
     if (done_) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
 private:
@@ -1189,7 +1189,7 @@ public:
     if (done_) {
       return OperatorState::done;
     }
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
 
 private:

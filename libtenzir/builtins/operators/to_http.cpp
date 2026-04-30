@@ -212,7 +212,7 @@ public:
 
   auto state() -> OperatorState override {
     return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
+                                         : OperatorState::normal;
   }
 
 private:

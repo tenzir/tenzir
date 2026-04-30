@@ -1,0 +1,7 @@
+// $this is used to parametrize the subpipeline's filter threshold.
+from {threshold: 3}, {threshold: 7}
+each {
+  from {x: 1}, {x: 5}, {x: 10}
+  where x > $this.threshold
+}
+sort x

@@ -701,7 +701,7 @@ public:
 
   auto state() -> OperatorState override {
     return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
+                                         : OperatorState::normal;
   }
 
   auto snapshot(Serde& serde) -> void override {
