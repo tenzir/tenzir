@@ -215,7 +215,9 @@ class S3Storage:
         object_key = self._object_key(key)
         try:
             if not self._exists_object(object_key):
-                logging.info("cache remove skipped object=%s reason=missing", object_key)
+                logging.info(
+                    "cache remove skipped object=%s reason=missing", object_key
+                )
                 return False
             self._s3.delete_object(
                 Bucket=self._config.bucket,
@@ -242,7 +244,9 @@ class S3Storage:
             try:
                 self._upload_queue.put(None, timeout=1)
             except queue.Full:
-                logging.warning("could not stop cache upload worker because queue is full")
+                logging.warning(
+                    "could not stop cache upload worker because queue is full"
+                )
         join_timeout = max(0.0, deadline - time.monotonic())
         for worker in self._upload_workers:
             worker.join(timeout=join_timeout)
@@ -342,7 +346,10 @@ class S3Storage:
     def _refresh_known_objects_debounced(self) -> None:
         now = time.monotonic()
         with self._known_objects_lock:
-            if now - self._last_object_list_refresh < self._config.object_list_min_interval:
+            if (
+                now - self._last_object_list_refresh
+                < self._config.object_list_min_interval
+            ):
                 return
             self._last_object_list_refresh = now
         try:
@@ -998,7 +1005,9 @@ def _remove_stale_socket(endpoint: str) -> None:
     except FileNotFoundError:
         return
     if not stat.S_ISSOCK(mode):
-        raise StorageError(f"IPC endpoint already exists and is not a socket: {endpoint}")
+        raise StorageError(
+            f"IPC endpoint already exists and is not a socket: {endpoint}"
+        )
     probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         probe.connect(endpoint)
@@ -1018,7 +1027,9 @@ def _parse_mode(mode: str) -> int:
     try:
         return int(mode, 8)
     except ValueError as error:
-        raise argparse.ArgumentTypeError("socket mode must be an octal value") from error
+        raise argparse.ArgumentTypeError(
+            "socket mode must be an octal value"
+        ) from error
 
 
 def _positive_float(value: str) -> float:
@@ -1232,7 +1243,9 @@ def _build_setup_parser() -> argparse.ArgumentParser:
         "--role-name",
         default=_role_name_from_arn(os.environ.get("CCACHE_AWS_ROLE_ARN")),
     )
-    parser.add_argument("--policy-name", default=os.environ.get("CCACHE_AWS_POLICY_NAME"))
+    parser.add_argument(
+        "--policy-name", default=os.environ.get("CCACHE_AWS_POLICY_NAME")
+    )
     parser.add_argument("--github-repository", default=_default_github_repository())
     parser.add_argument("--github-subject", default=_default_github_subject())
     parser.add_argument(
@@ -1397,7 +1410,9 @@ def _ensure_oidc_provider(iam_client: object, account_id: str) -> None:
         OpenIDConnectProviderArn=provider_arn,
         ClientID=GITHUB_OIDC_AUDIENCE,
     )
-    logging.info("added audience %s to GitHub Actions OIDC provider", GITHUB_OIDC_AUDIENCE)
+    logging.info(
+        "added audience %s to GitHub Actions OIDC provider", GITHUB_OIDC_AUDIENCE
+    )
 
 
 def _ensure_role(iam_client: object, account_id: str, config: SetupConfig) -> str:
@@ -1635,7 +1650,9 @@ def _run_server(
     root_logger = logging.getLogger()
     old_handlers: list[logging.Handler] | None = None
     if not args.daemonize and _is_interactive():
-        ui = ForegroundUi(storage, args.endpoint, daemonize_requested, server.request_stop)
+        ui = ForegroundUi(
+            storage, args.endpoint, daemonize_requested, server.request_stop
+        )
         old_handlers = root_logger.handlers[:]
         root_logger.handlers = [ui.handler]
         ui.start()
