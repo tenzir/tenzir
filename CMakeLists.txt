@@ -207,7 +207,7 @@ install(
   EXPORT TenzirTargets
   COMPONENT Development)
 
-# Require standard C++26.
+# Require standard C++23.
 target_compile_features(libtenzir_internal INTERFACE cxx_std_23)
 
 # Enable coroutines for GCC < 11.

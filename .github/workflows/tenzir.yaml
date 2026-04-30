@@ -802,7 +802,7 @@ jobs:
     if: needs.configure.outputs.run-tenzir-static-arm64-darwin == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
-      runner: macos-15
+      runner: macos-26
       os: darwin
       arch: arm64
       attribute: tenzir-static
@@ -861,7 +861,7 @@ jobs:
       fail-fast: false
       matrix:
         tenzir:
-          - os: macos-15
+          - os: macos-26
             container: null
             name: macOS
             compiler: Clang
@@ -1124,7 +1124,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        os: ["macos-15", "ubuntu-latest", "ubicloud-standard-4-arm"]
+        os: ["macos-26", "ubuntu-latest", "ubicloud-standard-4-arm"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
