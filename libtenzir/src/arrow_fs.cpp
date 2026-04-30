@@ -712,10 +712,10 @@ auto ToArrowFsOperator::process_task(Any result, OpCtx& ctx) -> Task<void> {
 
 auto ToArrowFsOperator::process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
   -> Task<void> {
+  auto sk = as<int64_t>(key);
   if (not chunk or chunk->size() == 0) {
     co_return;
   }
-  auto sk = as<int64_t>(key);
   auto part = co_await find_partition(sk);
   TENZIR_ASSERT(part, "partition must exist: inserted before spawn_sub, "
                       "erased only in finish_sub");
@@ -846,7 +846,8 @@ auto ToArrowFsOperator::open_stream(Partition& part,
   -> Task<failure_or<void>> {
   auto path = template_.fill_path(part.key);
   auto [parent, _] = arrow::fs::internal::GetAbstractPathParent(path);
-  if (not parent.empty()) {
+  auto should_create_parent = not parent.empty() and fs_->type_name() != "abfs";
+  if (should_create_parent) {
     auto dir_status = co_await spawn_blocking([fs = fs_, parent] {
       return fs->CreateDir(parent, /*recursive=*/true);
     });
