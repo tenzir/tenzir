@@ -1,3 +1,12 @@
 {
   line: "foo",
 }
+warning: TLS handshake failed
+ --> tests/operators/accept_tcp/tls/failed_auto_detect_tls_then_plain/read_after_failed_handshake.tql:7:12
+  |
+7 | accept_tcp env("TCP_ENDPOINT"), tls=$tls, auto_detect_tls=true {
+  |            ~~~~~~~~~~~~~~~~~~~ 
+  |
+  = note: peer IP: 127.0.0.1
+  = note: reason: AsyncSocketException: Network error, type = Network error
+  = hint: verify TLS settings and certificates on both sides

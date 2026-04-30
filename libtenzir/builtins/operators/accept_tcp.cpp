@@ -508,7 +508,7 @@ private:
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
           .primary(args_.endpoint.source)
-          .note("TLS handshake with peer {} failed", peer.describe())
+          .note("peer IP: {}", make_peer_info(peer).address)
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
