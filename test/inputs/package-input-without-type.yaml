@@ -14,3 +14,4 @@ pipelines:
     description: Emits one event.
     definition: |
       from {message: "{{ inputs.message }}"}
+      import
