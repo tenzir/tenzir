@@ -1,4 +1,4 @@
-This release introduces the from_mysql operator for reading data directly from MySQL databases, with support for live streaming, custom SQL queries, and TLS connections. It also adds link-based HTTP pagination and optional field parameters for user-defined operators.
+This release adds link-based HTTP pagination for the `from_http` and `http` operators and introduces optional field parameters and secret-typed parameters for user-defined operators. It also performs recursive deep merging in the `merge()` function and improves `write_lines` performance.
 
 ## 🚀 Features
 
@@ -19,66 +19,6 @@ from_http "https://api.example.com/data", paginate="link"
 If an invalid pagination mode is provided (neither a lambda nor `"link"`), the operator now reports a clear error message.
 
 *By @mavam and @claude.*
-
-### MySQL source operator
-
-The `from_mysql` operator lets you read data directly from MySQL databases.
-
-Read a table:
-
-```tql
-from_mysql table="users", host="localhost", port=3306, user="admin", password="secret", database="mydb"
-```
-
-List tables:
-
-```tql
-from_mysql show="tables", host="localhost", port=3306, user="admin", password="secret", database="mydb"
-```
-
-Show columns:
-
-```tql
-from_mysql table="users", show="columns", host="localhost", port=3306, user="admin", password="secret", database="mydb"
-```
-
-And ultimately execute a custom SQL query:
-
-```tql
-from_mysql sql="SELECT id, name FROM users WHERE active = 1",
-           host="localhost",
-           port=3306,
-           user="admin",
-           password="secret",
-           database="mydb"
-```
-
-The operator supports TLS/SSL connections for secure communication with MySQL servers. Use `tls=true` for default TLS settings, or pass a record for fine-grained control:
-
-```tql
-from_mysql table="users", host="db.example.com", database="prod", tls={
-  cacert: "/path/to/ca.pem",
-  certfile: "/path/to/client-cert.pem",
-  keyfile: "/path/to/client-key.pem",
-}
-```
-
-The operator supports MySQL's `caching_sha2_password` authentication method and automatically maps MySQL data types to Tenzir types.
-
-Use `live=true` to continuously stream new rows from a table. The operator tracks progress using a watermark on an integer column, polling for rows above the last-seen value:
-
-```tql
-from_mysql table="events", live=true, host="localhost", database="mydb"
-```
-
-By default, the tracking column is auto-detected from the table's auto-increment primary key. To specify one explicitly:
-
-```tql
-from_mysql table="events", live=true, tracking_column="event_id",
-           host="localhost", database="mydb"
-```
-
-*By @mavam and @claude in #5721 and #5738.*
 
 ### Optional field parameters for user-defined operators
 
@@ -115,19 +55,7 @@ Only `null` is allowed as the default value for field parameters. Non-null defau
 
 *By @mavam and @claude in #5753.*
 
-## 🐞 Bug fixes
-
-### Improve write_lines operator performance
-
-We have significantly improved the performance of the `write_lines` operator.
-
-*By @IyeOnline.*
-
-### merge() function recursive deep merge for nested records
-
-The `merge()` function now performs a recursive deep merge when merging two records. Previously, nested fields were dropped when merging, so `merge({hw: {sn: "XYZ123"}}, {hw: {model: "foobar"}})` would incorrectly produce `{hw: {model: "foobar"}}` instead of recursively merging the nested fields. The function now correctly produces `{hw: {sn: "XYZ123", model: "foobar"}}` by materializing both input records and performing a deep merge on them.
-
-*By @mavam and @claude in #5728.*
+## 🔧 Changes
 
 ### Secret type support for user-defined operator parameters
 
@@ -142,3 +70,17 @@ args:
 ```
 
 *By @mavam and @claude in #5752.*
+
+## 🐞 Bug fixes
+
+### Improve write_lines operator performance
+
+We have significantly improved the performance of the `write_lines` operator.
+
+*By @IyeOnline.*
+
+### merge() function recursive deep merge for nested records
+
+The `merge()` function now performs a recursive deep merge when merging two records. Previously, nested fields were dropped when merging, so `merge({hw: {sn: "XYZ123"}}, {hw: {model: "foobar"}})` would incorrectly produce `{hw: {model: "foobar"}}` instead of recursively merging the nested fields. The function now correctly produces `{hw: {sn: "XYZ123", model: "foobar"}}` by materializing both input records and performing a deep merge on them.
+
+*By @mavam and @claude in #5728.*
