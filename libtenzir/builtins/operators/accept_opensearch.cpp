@@ -590,7 +590,7 @@ private:
     }
     for (;;) {
       while (auto message = message_queue_->try_dequeue()) {
-        if (auto* msg = std::get_if<RequestStarted>(&*message)) {
+        if (auto* msg = try_as<RequestStarted>(*message)) {
           if (not msg->response_signal->has_sent()) {
             msg->response_signal->send(
               Response{.status = 200,
