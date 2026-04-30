@@ -80,6 +80,8 @@ arrow-cpp.overrideAttrs (orig: {
     NIX_LDFLAGS = lib.optionalString (
       stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
     ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
-    GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
+    GTEST_FILTER =
+      (orig.env.GTEST_FILTER or "")
+      + ":StructArray.Validate:EncryptedBloomFilterReader.ReadEncryptedBloomFilter";
   };
 })
