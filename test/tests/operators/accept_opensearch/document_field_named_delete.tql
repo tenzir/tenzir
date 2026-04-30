@@ -1,0 +1,10 @@
+---
+fixtures:
+  - http_request:
+      path: /_bulk
+      body: "{\"index\":{\"_index\":\"test\"}}\n{\"delete\":\"not-an-action\",\"value\":1}\n{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
+timeout: 10
+---
+
+accept_opensearch env("HTTP_REQUEST_ENDPOINT")
+head 2

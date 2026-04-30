@@ -1,0 +1,7 @@
+{
+  delete: "not-an-action",
+  value: 1,
+}
+{
+  value: 42,
+}

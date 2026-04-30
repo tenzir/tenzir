@@ -119,51 +119,39 @@ private:
   bool& failed_;
 };
 
+auto is_delete_action(view3<record> row) -> bool {
+  auto found_delete = false;
+  for (auto const& [key, value] : row) {
+    if (is<caf::none_t>(value)) {
+      continue;
+    }
+    if (key != "delete") {
+      return false;
+    }
+    if (not try_as<view3<record>>(value)) {
+      return false;
+    }
+    found_delete = true;
+  }
+  return found_delete;
+}
+
 auto handle_slice(bool& is_action, table_slice const& slice) -> table_slice {
   if (slice.rows() == 0) {
     return {};
   }
-  auto ty = as<record_type>(slice.schema());
-  auto fields = std::vector<record_type::field_view>{};
-  for (auto const& field : ty.fields()) {
-    fields.push_back(field);
-  }
-  auto delete_ = std::ranges::any_of(
-    fields,
-    [](auto&& x) {
-      return x == "delete";
-    },
-    &record_type::field_view::name);
-  auto other_actions = std::ranges::any_of(
-    fields,
-    [](auto&& x) {
-      return x == "create" or x == "index" or x == "update";
-    },
-    &record_type::field_view::name);
-  if (delete_) {
-    return is_action ? table_slice{} : subslice(slice, 0, 1);
-  }
-  if (other_actions) {
-    auto filtered = std::vector<table_slice>{};
+  auto filtered = std::vector<table_slice>{};
+  auto row = size_t{0};
+  for (auto record : slice.values()) {
     if (is_action) {
-      is_action = slice.rows() % 2 == 0;
-      for (auto i = size_t{1}; i < slice.rows(); i += 2) {
-        filtered.push_back(subslice(slice, i, i + 1));
-      }
-      return concatenate(filtered);
+      is_action = is_delete_action(record);
+    } else {
+      filtered.push_back(subslice(slice, row, row + 1));
+      is_action = true;
     }
-    is_action = slice.rows() % 2 != 0;
-    for (auto i = size_t{}; i < slice.rows(); i += 2) {
-      filtered.push_back(subslice(slice, i, i + 1));
-    }
-    return concatenate(filtered);
+    ++row;
   }
-  if (is_action) {
-    is_action = slice.rows() % 2 == 0;
-    return {};
-  }
-  is_action = slice.rows() % 2 != 0;
-  return subslice(slice, 0, 1);
+  return concatenate(filtered);
 }
 
 auto is_bulk_ingest_path(std::string_view path) -> bool {
@@ -593,7 +581,7 @@ private:
         if (auto* msg = try_as<RequestStarted>(*message)) {
           if (not msg->response_signal->has_sent()) {
             msg->response_signal->send(
-              Response{.status = 200,
+              Response{.status = 503,
                        .content_type = std::string{bulk_content_type},
                        .body = std::string{bulk_response}});
           }
@@ -607,7 +595,7 @@ private:
         for (auto& [_, req] : *active_requests) {
           if (not req.response_signal->has_sent()) {
             req.response_signal->send(
-              Response{.status = 200,
+              Response{.status = 503,
                        .content_type = std::string{bulk_content_type},
                        .body = std::string{bulk_response}});
           }
