@@ -11,6 +11,7 @@ Environment variables yielded:
 Additional variables in `mode=plain`:
 - KAFKA_HOST: Broker hostname (127.0.0.1)
 - KAFKA_PORT: Broker port exposed on host (dynamically allocated)
+- KAFKA_GROUP_ID: Unique consumer group id for this fixture activation
 - KAFKA_CONTAINER_ID: Container ID for in-fixture helpers/scripts
 - KAFKA_CONTAINER_RUNTIME: Container runtime used (docker/podman)
 
@@ -606,6 +607,7 @@ def kafka() -> Iterator[dict[str, str]]:
                 "KAFKA_PORT": str(port),
                 "KAFKA_BOOTSTRAP_SERVERS": bootstrap,
                 "KAFKA_TOPIC": opts.topic,
+                "KAFKA_GROUP_ID": f"tenzir-test-{uuid.uuid4().hex[:12]}",
                 "KAFKA_CONTAINER_ID": container.container_id,
                 "KAFKA_CONTAINER_RUNTIME": runtime.binary,
             }
