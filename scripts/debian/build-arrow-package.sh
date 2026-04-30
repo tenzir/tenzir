@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${ARROW_TAG=apache-arrow-23.0.1}"
+: "${ARROW_TAG=apache-arrow-24.0.0}"
 : "${ARROW_VERSION=$(printf '%s' "$ARROW_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
