@@ -607,11 +607,27 @@ private:
     -> Task<TlsProbeResult> {
     auto prefix = std::array<std::byte, 6>{};
     auto size = size_t{0};
+    auto deadline = std::chrono::steady_clock::now() + tls_probe_timeout;
+    auto throw_timed_out = [] {
+      throw folly::AsyncSocketException{
+        folly::AsyncSocketException::TIMED_OUT,
+        "TLS auto-detect probe timed out",
+      };
+    };
     auto read_some = [&](size_t min_size) -> Task<void> {
       while (size < min_size) {
+        auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+          throw_timed_out();
+        }
+        auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+          deadline - now);
+        if (timeout <= std::chrono::milliseconds{0}) {
+          throw_timed_out();
+        }
         auto* data = reinterpret_cast<unsigned char*>(prefix.data() + size);
-        auto n = co_await transport.read(folly::MutableByteRange{data, 1},
-                                         tls_probe_timeout);
+        auto n
+          = co_await transport.read(folly::MutableByteRange{data, 1}, timeout);
         if (n == 0) {
           co_return;
         }
