@@ -326,83 +326,6 @@ public:
     return entry_data_list;
   }
 
-  /// Emits context information for every event in `slice` in order.
-  auto legacy_apply(series array, bool replace)
-    -> caf::expected<std::vector<series>> override {
-    if (not mmdb_) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("no GeoIP data currently exists for "
-                                         "this context"));
-    }
-    auto status = 0;
-    MMDB_entry_data_list_s* entry_data_list = nullptr;
-    auto builder = series_builder{};
-    if (not is<ip_type>(array.type) and not is<string_type>(array.type)) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("error looking up IP address in "
-                                         "GeoIP database: invalid column "
-                                         "type, only IP or string types are "
-                                         "allowed"));
-    }
-    const auto is_ip = is<ip_type>(array.type);
-    for (const auto& value : array.values()) {
-      if (is<caf::none_t>(value)) {
-        builder.null();
-        continue;
-      }
-      auto address_info_error = 0;
-      const auto ip_string = is_ip ? fmt::to_string(value)
-                                   : materialize(as<std::string_view>(value));
-      auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
-                                       &address_info_error, &status);
-      if (address_info_error != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error,
-          fmt::format("error looking up IP address '{}' in "
-                      "GeoIP database: {}",
-                      ip_string, gai_strerror(address_info_error)));
-      }
-      if (status != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, MMDB_strerror(status)));
-      }
-      if (not result.found_entry) {
-        if (replace and not is<caf::none_t>(value)) {
-          builder.data(value);
-        } else {
-          builder.null();
-        }
-        continue;
-      }
-      status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
-      auto free_entry_data_list = detail::scope_guard([&]() noexcept {
-        if (entry_data_list) {
-          MMDB_free_entry_data_list(entry_data_list);
-        }
-      });
-      if (status != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, MMDB_strerror(status)));
-      }
-      auto* entry_data_list_it = entry_data_list;
-      auto output = record{};
-      entry_data_list_it
-        = entry_data_list_to_record(entry_data_list_it, &status, output);
-      if (status != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, MMDB_strerror(status)));
-      }
-      builder.data(output);
-    }
-    return builder.finish();
-  }
-
   auto apply(const series& array, session ctx) -> std::vector<series> override {
     if (not mmdb_) {
       diagnostic::warning("geoip context has no database").emit(ctx);
@@ -571,13 +494,6 @@ public:
       TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
                    MMDB_strerror(current_dump.status));
     }
-  }
-
-  /// Updates the context.
-  auto legacy_update(table_slice, context_parameter_map)
-    -> caf::expected<context_update_result> override {
-    return caf::make_error(ec::unimplemented,
-                           "geoip context can not be updated with events");
   }
 
   auto update(const table_slice& events, const context_update_args& args,
