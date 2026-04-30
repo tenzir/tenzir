@@ -2,6 +2,7 @@
 title: OCSF enum list derivation
 type: feature
 authors:
+  - jachris
   - mavam
   - codex
 pr: 5354
