@@ -34,7 +34,7 @@ class HttpRequestOptions:
     )
     tls: bool = False
     repeat: int = 1
-    expected_status: int = 200
+    expected_status: int | None = None
     expected_body: str | None = None
 
     # Retry/dispatch behavior.
@@ -56,7 +56,7 @@ class _RequestSpec:
     body: str
     headers: dict[str, str]
     tls: bool
-    expected_status: int
+    expected_status: int | None
     expected_body: str | None
 
 
@@ -144,7 +144,7 @@ def http_request() -> FixtureHandle:
                             f"request {req_idx}: sent on attempt {attempt}, "
                             f"status={response.status}"
                         )
-                        if response.status != spec.expected_status:
+                        if spec.expected_status != None and response.status != spec.expected_status:
                             errors.append(
                                 "expected HTTP status "
                                 f"{spec.expected_status}, got {response.status}"
@@ -165,7 +165,7 @@ def http_request() -> FixtureHandle:
                         f"request {req_idx}: HTTP error on attempt {attempt}, "
                         f"status={exc.code}"
                     )
-                    if exc.code != spec.expected_status:
+                    if spec.expected_status != None and exc.code != spec.expected_status:
                         errors.append(
                             "expected HTTP status "
                             f"{spec.expected_status}, got {exc.code}"
