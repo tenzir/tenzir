@@ -536,7 +536,12 @@ private:
     auto const attrs = make_attributes(xpath, ynames, limits);
     auto result = std::vector<table_slice>{};
     for (auto&& slice : slices) {
-      auto schema = type{slice.schema(), std::vector{attrs}};
+      auto attr_views = std::vector<type::attribute_view>{};
+      attr_views.reserve(attrs.size());
+      for (const auto& [key, value] : attrs) {
+        attr_views.push_back({key, value});
+      }
+      auto schema = type{slice.schema(), std::move(attr_views)};
       result.push_back(cast(std::move(slice), schema));
     }
     return result;
@@ -697,9 +702,9 @@ private:
     std::string const& xpath,
     detail::stable_map<std::string, bool> const& ynames,
     detail::stable_map<std::string_view, std::string> const& limits) const
-    -> std::vector<type::attribute_view> {
-    auto attrs = std::vector<type::attribute_view>{
-      {"chart", to_string(Ty)},
+    -> std::vector<std::pair<std::string, std::string>> {
+    auto attrs = std::vector<std::pair<std::string, std::string>>{
+      {"chart", std::string{to_string(Ty)}},
       {"x", xpath},
     };
     // pie charts do not support position or axis-type options
