@@ -890,6 +890,8 @@ auto tls_options::make_folly_ssl_context(
     return nullptr;
   }
   auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
+  auto skip_verify = get_skip_peer_verification(cfg).inner;
+  auto require_client_cert = get_tls_require_client_cert(cfg).inner;
   // Apply minimum TLS version.
   if (auto min = get_tls_min_version(cfg)) {
     if (not min->inner.empty()) {
@@ -901,9 +903,10 @@ auto tls_options::make_folly_ssl_context(
       SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
     }
   }
-  // Load CA certificate.
+  auto should_verify_peer = not skip_verify or require_client_cert;
+  // Load CA certificate only when peer verification is enabled.
   auto cacert = get_cacert(cfg);
-  if (cacert) {
+  if (should_verify_peer and cacert) {
     TRY(auto path, resolve_regular_file(*cacert, "cacert", dh));
     try {
       ctx->loadTrustedCertificates(path.c_str());
@@ -964,7 +967,6 @@ auto tls_options::make_folly_ssl_context(
     }
   }
   // Set verification mode.
-  auto skip_verify = get_skip_peer_verification(cfg).inner;
   if (skip_verify) {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
