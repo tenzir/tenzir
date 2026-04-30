@@ -26,8 +26,6 @@ from .abs import (
     _wait_for_azurite,
 )
 
-logger = logging.getLogger(__name__)
-
 _HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
@@ -96,7 +94,7 @@ class _AbsProxyHandler(BaseHTTPRequestHandler):
         self._proxy()
 
     def log_message(self, format: str, *args: object) -> None:
-        logger.debug("abs proxy: " + format, *args)
+        pass
 
     def _send_empty_response(self, status: int, reason: str) -> None:
         self.close_connection = True
