@@ -54,9 +54,10 @@ In the Cloudflare dashboard:
 1. Open **R2 Object Storage**.
 2. Open **Manage API tokens**.
 3. Create an R2 token for the bucket.
-4. Grant at least object read/write permissions for the cache bucket.
-5. Restrict the token to the cache bucket if possible.
-6. Copy the **Access Key ID**.
+4. Select **Object Read & Write** permissions.
+5. Under bucket scope, select **Apply to specific buckets only** and choose the
+   cache bucket.
+6. Copy the **Access Key ID** from the S3 credentials section.
 
 Use the access key ID as GitHub secret:
 
@@ -76,18 +77,27 @@ In the Cloudflare dashboard:
 
 1. Open **Manage Account** -> **Account API Tokens**.
 2. Create a custom token.
-3. Scope it to the Cloudflare account that owns the R2 bucket.
-4. Grant R2 permissions sufficient to create temporary R2 credentials for the
-   bucket.
-5. Restrict the token to the cache bucket if the Cloudflare UI offers that
-   option.
-6. Copy the token value.
+3. Add this account permission:
+
+   ```text
+   Account -> Workers R2 Storage -> Write
+   ```
+
+4. Under account resources, select **Include** and choose the account that owns
+   the R2 bucket.
+5. Copy the token value.
 
 Use it as GitHub secret:
 
 ```text
 CCACHE_R2_API_TOKEN=<cloudflare-api-token-for-r2-temp-credentials>
 ```
+
+The temporary credentials themselves are restricted by the Worker request body:
+`R2_BUCKET`, `R2_ALLOWED_PREFIXES`, and
+`R2_TEMP_CREDENTIAL_PERMISSION=object-read-write`. Cloudflare does not expose a
+bucket selector for this account API token in the same way the R2 S3 token UI
+does, so keep this token dedicated to the broker.
 
 ### 5. Create a Cloudflare API token for deployment
 
