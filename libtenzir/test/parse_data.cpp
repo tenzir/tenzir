@@ -46,8 +46,6 @@ TEST("data") {
   CHECK_EQUAL(to_data("-0.1"), data{-0.1});
   MESSAGE("string");
   CHECK_EQUAL(to_data("\"foo\""), data{"foo"});
-  MESSAGE("pattern");
-  CHECK_EQUAL(to_data("/foo/"), unbox(to<pattern>("/foo/")));
   MESSAGE("IP address");
   CHECK_EQUAL(to_data("10.0.0.1"), unbox(to<ip>("10.0.0.1")));
   MESSAGE("list");
@@ -70,7 +68,7 @@ TEST("data") {
               record::make_unsafe(record::vector_type{{"", 1u}}));
   CHECK_EQUAL(to_data("<_>"),
               record::make_unsafe(record::vector_type{{"", caf::none}}));
-  CHECK_EQUAL(to_data("<_, /foo/>"),
-              record::make_unsafe(record::vector_type{
-                {"", caf::none}, {"", unbox(to<pattern>("/foo/"))}}));
+  CHECK_EQUAL(
+    to_data("<_, \"/foo/\">"),
+    record::make_unsafe(record::vector_type{{"", caf::none}, {"", "/foo/"}}));
 }
