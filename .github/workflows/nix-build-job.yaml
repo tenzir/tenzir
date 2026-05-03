@@ -75,7 +75,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "tenzir-ee"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
         if: runner.os == 'macOS'
@@ -188,7 +188,6 @@ jobs:
             --arch ${{ inputs.arch }} \
             --test-root test-legacy \
             --test-pattern "tests/functions/time"
-
       # =========================================================================
       # Sign Phase (macOS only)
       # =========================================================================
