@@ -43,6 +43,10 @@ folly.overrideAttrs (orig: {
     ++ lib.optional stdenv.hostPlatform.isMusl ./folly-musl-compat.patch
     ++ lib.optional stdenv.hostPlatform.isStatic ./folly-static-compat.patch;
 
+  postPatch = (orig.postPatch or "") + lib.optionalString stdenv.hostPlatform.isAarch64 ''
+    : > folly/external/aor/CMakeLists.txt
+  '';
+
   preConfigure = lib.optionalString stdenv.hostPlatform.isx86_64 ''
     cmakeFlagsArray+=("-DCMAKE_CXX_FLAGS=-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2")
   '';
