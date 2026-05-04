@@ -260,12 +260,17 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
 struct MatchArgs {
   struct Arm {
     location source;
+    // TODO: Introduce an explicit pattern representation once `match` grows
+    // beyond constant expressions and wildcards, e.g., for destructuring or
+    // bindings similar to Rust patterns.
+    std::vector<ast::expression> pattern_exprs;
     std::vector<data> patterns;
     ir::pipeline pipeline;
     bool wildcard = false;
 
     friend auto inspect(auto& f, Arm& x) -> bool {
       return f.object(x).fields(f.field("source", x.source),
+                                f.field("pattern_exprs", x.pattern_exprs),
                                 f.field("patterns", x.patterns),
                                 f.field("pipeline", x.pipeline),
                                 f.field("wildcard", x.wildcard));
@@ -608,6 +613,20 @@ auto make_set_ir(std::vector<ast::assignment> assignments)
   return ir::SetIr{std::move(assignments)};
 }
 
+auto const_eval_match_pattern(ast::expression const& pattern,
+                              diagnostic_handler& dh) -> failure_or<data> {
+  auto diagnostics = collecting_diagnostic_handler{};
+  auto value = const_eval(pattern, diagnostics);
+  if (value.is_error() or not diagnostics.empty()) {
+    diagnostic::error("match patterns must be constant expressions")
+      .primary(pattern)
+      .hint("use a literal, a constant `let` binding, or `_`")
+      .emit(dh);
+    return failure::promise();
+  }
+  return *value;
+}
+
 auto combine_branch_types(std::optional<element_type_tag> lhs,
                           std::optional<element_type_tag> rhs, location primary,
                           diagnostic_handler& dh)
@@ -649,6 +668,20 @@ public:
     -> failure_or<void> override {
     TRY(args_.scrutinee.substitute(ctx));
     for (auto& arm : args_.arms) {
+      arm.patterns.clear();
+      for (auto& pattern : arm.pattern_exprs) {
+        TRY(auto subst, pattern.substitute(ctx));
+        if (instantiate and subst == ast::substitute_result::some_remaining) {
+          diagnostic::error("match patterns must be constant expressions")
+            .primary(pattern)
+            .emit(ctx);
+          return failure::promise();
+        }
+        if (instantiate) {
+          TRY(auto value, const_eval_match_pattern(pattern, ctx));
+          arm.patterns.push_back(std::move(value));
+        }
+      }
       TRY(arm.pipeline.substitute(ctx, instantiate));
     }
     return {};
@@ -981,8 +1014,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           if (not arm.wildcard) {
             for (auto& pattern : ast_arm.patterns) {
               TRY(pattern.bind(ctx));
-              TRY(auto value, const_eval(pattern, ctx));
-              arm.patterns.push_back(std::move(value));
+              arm.pattern_exprs.push_back(std::move(pattern));
             }
           }
           TRY(arm.pipeline, std::move(ast_arm.pipe).compile(ctx));
