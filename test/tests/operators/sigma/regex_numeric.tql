@@ -1,0 +1,4 @@
+from {id: "match", event_id: "46"},
+     {id: "miss", event_id: "47"}
+sigma "tests/operators/sigma/inputs/regex-numeric.yaml"
+select event.id

@@ -1,0 +1,5 @@
+title: numeric regex sigma rule
+detection:
+  selection:
+    event_id|re: 46
+  condition: selection

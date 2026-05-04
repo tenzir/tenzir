@@ -1,0 +1,2 @@
+warning: sigma operator ignores rule 'tests/operators/sigma/inputs/invalid-wildcard.yaml'
+ = note: invalid Sigma condition syntax

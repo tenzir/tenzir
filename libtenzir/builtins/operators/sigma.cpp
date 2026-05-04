@@ -44,7 +44,6 @@
 #include <functional>
 #include <map>
 #include <ranges>
-#include <regex>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -130,16 +129,42 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
   }
 
   /// Performs *-wildcard search on all search identifiers.
-  [[nodiscard]] std::vector<ast::expression> search(std::string str) const {
-    auto rx_str = std::regex_replace(str, std::regex("\\*"), ".*");
-    auto rx = std::regex{rx_str};
-    std::vector<ast::expression> result;
+  [[nodiscard]] std::vector<ast::expression>
+  search(std::string_view pattern) const {
+    auto result = std::vector<ast::expression>{};
     for (auto& [sym, expr] : id.symbols) {
-      if (std::regex_search(sym.begin(), sym.end(), rx)) {
+      if (wildcard_match(pattern, sym)) {
         result.push_back(expr);
       }
     }
     return result;
+  }
+
+  static auto wildcard_match(std::string_view pattern, std::string_view str)
+    -> bool {
+    auto pattern_pos = size_t{0};
+    auto str_pos = size_t{0};
+    auto star_pos = std::string_view::npos;
+    auto backtrack_pos = size_t{0};
+    while (str_pos < str.size()) {
+      if (pattern_pos < pattern.size()
+          and pattern[pattern_pos] == str[str_pos]) {
+        ++pattern_pos;
+        ++str_pos;
+      } else if (pattern_pos < pattern.size() and pattern[pattern_pos] == '*') {
+        star_pos = pattern_pos++;
+        backtrack_pos = str_pos;
+      } else if (star_pos != std::string_view::npos) {
+        pattern_pos = star_pos + 1;
+        str_pos = ++backtrack_pos;
+      } else {
+        return false;
+      }
+    }
+    while (pattern_pos < pattern.size() and pattern[pattern_pos] == '*') {
+      ++pattern_pos;
+    }
+    return pattern_pos == pattern.size();
   }
 
   template <class Iterator, class Attribute>
@@ -349,6 +374,7 @@ ParseResult<ast::expression> parse_search_id(const data& yaml) {
       auto transform_regex = std::optional<std::string>{};
       auto raw_regex = false;
       auto stringify_for_regex = false;
+      auto contains = false;
       std::vector<std::function<ParseResult<data>(const data&)>> transforms;
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
@@ -364,6 +390,7 @@ ParseResult<ast::expression> parse_search_id(const data& yaml) {
         } else if (*i == "contains") {
           anchor_regex = false;
           transform_regex = ".*{}.*";
+          contains = true;
         } else if (*i == "base64") {
           auto encode = [](const data& x) -> ParseResult<data> {
             if (const auto* str = try_as<std::string>(&x)) {
@@ -459,16 +486,27 @@ ParseResult<ast::expression> parse_search_id(const data& yaml) {
                 disjuncts.emplace_back(
                   make_regex_expr(make_field_expr(field), std::move(pat)));
               }
-            } else {
+            } else if (raw_regex) {
+              auto regex = to_string(x);
+              TRY(auto valid, validate_regex(std::move(regex), key));
               disjuncts.emplace_back(
-                make_binary_expr(make_field_expr(field), op, make_constant(x)));
+                make_regex_expr(make_field_expr(field), std::move(valid)));
+            } else {
+              auto binary_op
+                = contains and is<subnet>(x) ? ast::binary_op::in : op;
+              disjuncts.emplace_back(make_binary_expr(
+                make_field_expr(field), binary_op, make_constant(x)));
             }
           }
           return search_id_symbol_table::join<ast::binary_op::or_>(
             std::move(disjuncts));
         }
-        if (stringify_for_regex) {
+        if (stringify_for_regex or raw_regex) {
           return make_string_predicate(to_string(value));
+        }
+        if (contains and is<subnet>(value)) {
+          return make_binary_expr(make_field_expr(field), ast::binary_op::in,
+                                  make_constant(value));
         }
         return make_binary_expr(make_field_expr(field), op,
                                 make_constant(value));
