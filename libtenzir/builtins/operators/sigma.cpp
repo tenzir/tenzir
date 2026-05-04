@@ -23,11 +23,11 @@
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
-#include <tenzir/error.hpp>
 #include <tenzir/io/read.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -35,10 +35,8 @@
 #include <tenzir/tql2/resolve.hpp>
 
 #include <arrow/record_batch.h>
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
-#include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
+#include <re2/re2.h>
 
 #include <array>
 #include <chrono>
@@ -62,8 +60,21 @@ namespace tenzir::plugins::sigma {
 
 namespace {
 
-caf::expected<std::string>
-transform_sigma_string(std::string_view str, std::string_view fmt);
+template <class T>
+using ParseResult = Result<T, diagnostic>;
+
+template <class... Ts>
+auto parse_failure(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> Err<diagnostic> {
+  return Err{diagnostic::error(str, std::forward<Ts>(xs)...).done()};
+}
+
+ParseResult<std::string>
+transform_sigma_string(std::string_view str, std::string_view fmt,
+                       std::string_view key);
+
+ParseResult<std::string>
+validate_regex(std::string regex, std::string_view key);
 
 using expression_map = std::map<std::string, ast::expression>;
 
@@ -211,8 +222,9 @@ struct detection_parser : parser_base<detection_parser> {
 /// Transforms a string that may contain Sigma glob wildcards into a regular
 /// expression with respective metacharacters. Sigma patterns are always
 /// case-insensitive.
-caf::expected<std::string>
-transform_sigma_string(std::string_view str, std::string_view fmt) {
+ParseResult<std::string>
+transform_sigma_string(std::string_view str, std::string_view fmt,
+                       std::string_view key) {
   // The following invariants apply according to the Sigma spec:
   // - All values are treated as case-insensitive strings
   // - You can use wildcard characters '*' and '?' in strings
@@ -262,19 +274,33 @@ transform_sigma_string(std::string_view str, std::string_view fmt) {
         break;
     }
   }
-  if (fmt.empty()) {
-    return fmt::format("(?i:{})", rx);
+  auto result
+    = fmt.empty()
+        ? fmt::format("(?i:{})", rx)
+        : fmt::format("(?i:{})", fmt::format(TENZIR_FMT_RUNTIME(fmt), rx));
+  return validate_regex(std::move(result), key);
+}
+
+ParseResult<std::string>
+validate_regex(std::string regex, std::string_view key) {
+  auto compiled = re2::RE2{regex, re2::RE2::CannedOptions::Quiet};
+  if (not compiled.ok()) {
+    return Err{
+      diagnostic::error("invalid regular expression for Sigma field `{}`", key)
+        .note("regex: {}", regex)
+        .note("error: {}", compiled.error())
+        .done()};
   }
-  return fmt::format("(?i:{})", fmt::format(TENZIR_FMT_RUNTIME(fmt), rx));
+  return regex;
 }
 
 auto make_field_expr(std::string_view name) -> ast::expression {
   auto parts = detail::split(name, ".");
   TENZIR_ASSERT(not parts.empty());
   auto result = ast::expression{ast::root_field{
-    ast::identifier{std::string{parts[0]}, location::unknown}, false}};
+    ast::identifier{std::string{parts[0]}, location::unknown}, true}};
   for (auto part : parts | std::views::drop(1)) {
-    result = ast::field_access{std::move(result), location::unknown, false,
+    result = ast::field_access{std::move(result), location::unknown, true,
                                ast::identifier{std::string{part},
                                                location::unknown}};
   }
@@ -311,7 +337,7 @@ auto make_binary_expr(ast::expression left, ast::binary_op op,
 
 } // namespace
 
-caf::expected<ast::expression> parse_search_id(const data& yaml) {
+ParseResult<ast::expression> parse_search_id(const data& yaml) {
   if (auto xs = try_as<record>(&yaml)) {
     auto result = std::vector<ast::expression>{};
     for (auto& [key, rhs] : *xs) {
@@ -322,7 +348,8 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
       auto anchor_regex = true;
       auto transform_regex = std::optional<std::string>{};
       auto raw_regex = false;
-      std::vector<std::function<caf::expected<data>(const data&)>> transforms;
+      auto stringify_for_regex = false;
+      std::vector<std::function<ParseResult<data>(const data&)>> transforms;
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
           all = true;
@@ -338,20 +365,20 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
           anchor_regex = false;
           transform_regex = ".*{}.*";
         } else if (*i == "base64") {
-          auto encode = [](const data& x) -> caf::expected<data> {
+          auto encode = [](const data& x) -> ParseResult<data> {
             if (const auto* str = try_as<std::string>(&x)) {
               return detail::base64::encode(*str);
             }
-            return caf::make_error(ec::type_clash,
-                                   "base64 only works with strings");
+            return parse_failure(
+              "Sigma modifier `base64` only works with strings");
           };
           transforms.emplace_back(encode);
         } else if (*i == "base64offset") {
-          auto encode = [](const data& x) -> caf::expected<data> {
+          auto encode = [](const data& x) -> ParseResult<data> {
             const auto* str = try_as<std::string>(&x);
             if (not str) {
-              return caf::make_error(ec::type_clash,
-                                     "base64offset only works with strings");
+              return parse_failure(
+                "Sigma modifier `base64offset` only works with strings");
             }
             static constexpr std::array<size_t, 3> start = {{0, 2, 3}};
             static constexpr std::array<size_t, 3> end = {{0, 3, 2}};
@@ -366,52 +393,54 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
           };
           transforms.emplace_back(encode);
         } else if (*i == "utf16le" or *i == "wide") {
-          return caf::make_error(ec::unimplemented,
-                                 "utf16le/wide not yet implemented");
+          return parse_failure(
+            "Sigma modifier `utf16le`/`wide` is not yet implemented");
         } else if (*i == "utf16be") {
-          return caf::make_error(ec::unimplemented,
-                                 "utf16be not yet implemented");
+          return parse_failure(
+            "Sigma modifier `utf16be` is not yet implemented");
         } else if (*i == "utf16") {
-          return caf::make_error(ec::unimplemented,
-                                 "utf16 not yet implemented");
+          return parse_failure("Sigma modifier `utf16` is not yet implemented");
         } else if (*i == "startswith") {
           anchor_regex = false;
           transform_regex = "^{}.*";
+          stringify_for_regex = true;
         } else if (*i == "endswith") {
           anchor_regex = false;
           transform_regex = ".*{}$";
+          stringify_for_regex = true;
         } else if (*i == "re") {
           anchor_regex = false;
           raw_regex = true;
         } else if (*i == "cidr") {
           op = ast::binary_op::in;
         } else if (*i == "expand") {
-          return caf::make_error(ec::unimplemented,
-                                 "expand modifier not yet implemented");
+          return parse_failure(
+            "Sigma modifier `expand` is not yet implemented");
         }
       }
-      auto modify = [&](const data& x) -> caf::expected<data> {
+      auto modify = [&](const data& x) -> ParseResult<data> {
         auto result = x;
         for (const auto& f : transforms) {
-          if (auto y = f(result)) {
-            result = std::move(*y);
-          } else {
-            return y.error();
-          }
+          TRY(auto y, f(result));
+          result = std::move(y);
         }
         return result;
       };
-      auto make_predicate_expr = [&](const data& value) -> ast::expression {
-        if (auto str = try_as<std::string>(&value)) {
+      auto make_predicate_expr
+        = [&](const data& value) -> ParseResult<ast::expression> {
+        auto make_string_predicate
+          = [&](std::string str) -> ParseResult<ast::expression> {
           auto fmt = transform_regex.value_or(anchor_regex ? "^{}$" : "{}");
           if (raw_regex) {
-            return make_regex_expr(make_field_expr(field),
-                                   fmt::format(TENZIR_FMT_RUNTIME(fmt),
-                                               std::move(*str)));
+            auto regex = fmt::format(TENZIR_FMT_RUNTIME(fmt), std::move(str));
+            TRY(auto valid, validate_regex(std::move(regex), key));
+            return make_regex_expr(make_field_expr(field), std::move(valid));
           }
-          if (auto pat = transform_sigma_string(*str, fmt)) {
-            return make_regex_expr(make_field_expr(field), std::move(*pat));
-          }
+          TRY(auto pat, transform_sigma_string(str, fmt, key));
+          return make_regex_expr(make_field_expr(field), std::move(pat));
+        };
+        if (auto str = try_as<std::string>(&value)) {
+          return make_string_predicate(*str);
         }
         if (auto values = try_as<list>(&value)) {
           TENZIR_ASSERT(values->size() == 3);
@@ -419,13 +448,16 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
           for (const auto& x : *values) {
             if (auto str = try_as<std::string>(&x); str and transform_regex) {
               if (raw_regex) {
-                disjuncts.emplace_back(make_regex_expr(
-                  make_field_expr(field),
-                  fmt::format(TENZIR_FMT_RUNTIME(*transform_regex), *str)));
-              } else if (auto pat
-                         = transform_sigma_string(*str, *transform_regex)) {
+                auto regex
+                  = fmt::format(TENZIR_FMT_RUNTIME(*transform_regex), *str);
+                TRY(auto valid, validate_regex(std::move(regex), key));
                 disjuncts.emplace_back(
-                  make_regex_expr(make_field_expr(field), std::move(*pat)));
+                  make_regex_expr(make_field_expr(field), std::move(valid)));
+              } else {
+                TRY(auto pat,
+                    transform_sigma_string(*str, *transform_regex, key));
+                disjuncts.emplace_back(
+                  make_regex_expr(make_field_expr(field), std::move(pat)));
               }
             } else {
               disjuncts.emplace_back(
@@ -435,26 +467,30 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
           return search_id_symbol_table::join<ast::binary_op::or_>(
             std::move(disjuncts));
         }
+        if (stringify_for_regex) {
+          return make_string_predicate(to_string(value));
+        }
         return make_binary_expr(make_field_expr(field), op,
                                 make_constant(value));
       };
       if (is<record>(rhs)) {
-        return caf::make_error(ec::type_clash, "nested records not allowed");
+        return parse_failure(
+          "nested records are not allowed in Sigma selections");
       }
       if (auto values = try_as<list>(&rhs)) {
         auto connective = std::vector<ast::expression>{};
         for (const auto& value : *values) {
           if (is<list>(value)) {
-            return caf::make_error(ec::type_clash, "nested lists disallowed");
+            return parse_failure(
+              "nested lists are not allowed in Sigma selections");
           }
           if (is<record>(value)) {
-            return caf::make_error(ec::type_clash, "nested records disallowed");
+            return parse_failure(
+              "nested records are not allowed in Sigma selections");
           }
-          if (auto x = modify(value)) {
-            connective.emplace_back(make_predicate_expr(*x));
-          } else {
-            return x.error();
-          }
+          TRY(auto x, modify(value));
+          TRY(auto expr, make_predicate_expr(x));
+          connective.emplace_back(std::move(expr));
         }
         result.emplace_back(
           all ? search_id_symbol_table::join<ast::binary_op::and_>(
@@ -462,11 +498,9 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
               : search_id_symbol_table::join<ast::binary_op::or_>(
                   std::move(connective)));
       } else {
-        if (auto x = modify(rhs)) {
-          result.emplace_back(make_predicate_expr(*x));
-        } else {
-          return x.error();
-        }
+        TRY(auto x, modify(rhs));
+        TRY(auto expr, make_predicate_expr(x));
+        result.emplace_back(std::move(expr));
       }
     }
     return search_id_symbol_table::join<ast::binary_op::and_>(
@@ -474,33 +508,30 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
   } else if (auto xs = try_as<list>(&yaml)) {
     auto result = std::vector<ast::expression>{};
     for (auto& search_id : *xs) {
-      if (auto expr = parse_search_id(search_id)) {
-        result.push_back(std::move(*expr));
-      } else {
-        return expr.error();
-      }
+      TRY(auto expr, parse_search_id(search_id));
+      result.push_back(std::move(expr));
     }
     return search_id_symbol_table::join<ast::binary_op::or_>(std::move(result));
   } else {
-    return caf::make_error(
-      ec::type_clash, fmt::format("search id '{}' not a list or record", yaml));
+    return parse_failure(
+      "Sigma search identifier must be a list or record, got `{}`", yaml);
   }
 }
 
-caf::expected<ast::expression> parse_rule(const data& yaml) {
+ParseResult<ast::expression> parse_rule(const data& yaml) {
   auto xs = try_as<record>(&yaml);
   if (not xs) {
-    return caf::make_error(ec::type_clash, "rule must be a record");
+    return parse_failure("Sigma rule must be a record");
   }
   // Extract detection attribute.
   const record* detection;
   if (auto i = xs->find("detection"); i == xs->end()) {
-    return caf::make_error(ec::invalid_query, "no detection attribute");
+    return parse_failure("Sigma rule has no `detection` attribute");
   } else {
     detection = try_as<record>(&i->second);
   }
   if (not detection) {
-    return caf::make_error(ec::type_clash, "detection not a record");
+    return parse_failure("Sigma rule attribute `detection` must be a record");
   }
   // Resolve all named sub-expression except for "condition".
   expression_map exprs;
@@ -508,27 +539,24 @@ caf::expected<ast::expression> parse_rule(const data& yaml) {
     if (key == "condition") {
       continue;
     }
-    if (auto expr = parse_search_id(value)) {
-      exprs[key] = std::move(*expr);
-    } else {
-      return expr.error();
-    }
+    TRY(auto expr, parse_search_id(value));
+    exprs[key] = std::move(expr);
   }
   // Extract condition.
   const std::string* condition;
   if (auto i = detection->find("condition"); i == detection->end()) {
-    return caf::make_error(ec::invalid_query, "no condition key");
+    return parse_failure("Sigma rule has no `condition` key");
   } else {
     condition = try_as<std::string>(&i->second);
   }
   if (not condition) {
-    return caf::make_error(ec::type_clash, "condition not a string");
+    return parse_failure("Sigma rule `condition` must be a string");
   }
   // Parse condition.
   ast::expression result;
   detection_parser p{exprs};
   if (not p(*condition, result)) {
-    return caf::make_error(ec::parse_error, "invalid condition syntax");
+    return parse_failure("invalid Sigma condition syntax");
   }
   return result;
 }
@@ -541,6 +569,30 @@ struct RuleEntry {
 };
 
 using RuleMap = std::unordered_map<std::string, RuleEntry>;
+
+auto emit_ignored_rule(const std::filesystem::path& path, diagnostic reason,
+                       diagnostic_handler& dh) -> void {
+  auto builder
+    = diagnostic::warning("sigma operator ignores rule '{}'", path.string())
+        .note("{}", reason.message);
+  for (const auto& note : reason.notes) {
+    switch (note.kind) {
+      case diagnostic_note_kind::note:
+        builder = std::move(builder).note("{}", note.message);
+        break;
+      case diagnostic_note_kind::usage:
+        builder = std::move(builder).usage("{}", note.message);
+        break;
+      case diagnostic_note_kind::hint:
+        builder = std::move(builder).hint("{}", note.message);
+        break;
+      case diagnostic_note_kind::docs:
+        builder = std::move(builder).docs("{}", note.message);
+        break;
+    }
+  }
+  std::move(builder).emit(dh);
+}
 
 auto load_rules(const std::filesystem::path& path, RuleMap& rules,
                 diagnostic_handler& dh) -> void {
@@ -577,21 +629,20 @@ auto load_rules(const std::filesystem::path& path, RuleMap& rules,
       .emit(dh);
     return;
   }
-  auto rule = parse_rule(*yaml);
-  if (not rule) {
-    diagnostic::warning("sigma operator ignores rule '{}'", path.string())
-      .note("failed to parse sigma rule: {}", rule.error())
-      .emit(dh);
+  auto parsed_rule = parse_rule(*yaml);
+  if (parsed_rule.is_err()) {
+    emit_ignored_rule(path, std::move(parsed_rule).unwrap_err(), dh);
     return;
   }
+  auto rule = std::move(parsed_rule).unwrap();
   auto provider = session_provider::make(dh);
-  if (not resolve_entities(*rule, provider.as_session())) {
+  if (not resolve_entities(rule, provider.as_session())) {
     diagnostic::warning("sigma operator ignores rule '{}'", path.string())
       .note("failed to resolve sigma rule")
       .emit(dh);
     return;
   }
-  rules[path.string()] = {std::move(*yaml), std::move(*rule)};
+  rules[path.string()] = {std::move(*yaml), std::move(rule)};
 }
 
 auto update_rules(const std::filesystem::path& path, RuleMap& rules,

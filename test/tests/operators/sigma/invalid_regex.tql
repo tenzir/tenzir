@@ -1,0 +1,3 @@
+from {id: "match", payload: "x"}
+sigma "tests/operators/sigma/inputs/invalid-regex.yaml"
+select event.id
