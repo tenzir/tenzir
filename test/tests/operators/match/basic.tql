@@ -1,9 +1,9 @@
 from {action: "accept"}, {action: "allow"}, {action: "deny"}, {action: "drop"}, {action: "other"}
 match action {
-  "accept", "allow" => {
+  "accept" | "allow" => {
     verdict = "allowed"
   }
-  "deny", "drop" => {
+  "deny" | "drop" => {
     verdict = "blocked"
   }
   _ => {

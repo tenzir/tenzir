@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {x: 1, y: 2}
+match this {
+  {.., x: 1} => {
+    verdict = "bad"
+  }
+}
