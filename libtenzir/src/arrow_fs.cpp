@@ -846,8 +846,7 @@ auto ToArrowFsOperator::open_stream(Partition& part,
   -> Task<failure_or<void>> {
   auto path = template_.fill_path(part.key);
   auto [parent, _] = arrow::fs::internal::GetAbstractPathParent(path);
-  auto should_create_parent = not parent.empty() and fs_->type_name() != "abfs";
-  if (should_create_parent) {
+  if (not parent.empty() and fs_->type_name() == "local") {
     auto dir_status = co_await spawn_blocking([fs = fs_, parent] {
       return fs->CreateDir(parent, /*recursive=*/true);
     });

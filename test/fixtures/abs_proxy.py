@@ -125,6 +125,11 @@ class _AbsProxyHandler(BaseHTTPRequestHandler):
         return self.rfile.read(length)
 
     def _proxy_chunked(self) -> None:
+        expect = self.headers.get("Expect", "")
+        if expect.lower() == "100-continue":
+            self.send_response_only(100)
+            self.end_headers()
+            self.wfile.flush()
         if self.server.config.delay_seconds > 0:
             time.sleep(self.server.config.delay_seconds)
         headers = {
