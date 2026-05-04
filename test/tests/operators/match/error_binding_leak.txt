@@ -1,0 +1,7 @@
+error: unknown variable
+  --> tests/operators/match/error_binding_leak.tql:11:10
+   |
+11 | leaked = $ip
+   |          ^^^ 
+   |
+   = hint: no variables are available here

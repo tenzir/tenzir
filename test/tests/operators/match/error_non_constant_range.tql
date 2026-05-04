@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {x: 1, upper: 10}
+match x {
+  1..upper => {
+    y = true
+  }
+}

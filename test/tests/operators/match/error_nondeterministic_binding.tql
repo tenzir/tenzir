@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {}
+match now() {
+  $timestamp => {
+    captured = $timestamp
+  }
+}

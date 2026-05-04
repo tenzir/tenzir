@@ -1,0 +1,6 @@
+error: record pattern cannot match non-record expression
+ --> tests/operators/match/error_non_record_scrutinee.tql:7:3
+  |
+7 |   {..} => {
+  |   ^ 
+  |

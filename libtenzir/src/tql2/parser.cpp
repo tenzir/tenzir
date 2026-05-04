@@ -318,6 +318,11 @@ public:
         }
         rest = dots.location;
         if (not peek(tk::rbrace)) {
+          if (silent_peek(tk::comma) and silent_peek_n(tk::dot_dot, 1)) {
+            diagnostic::error("record pattern rest appears more than once")
+              .primary(dots.location)
+              .throw_();
+          }
           diagnostic::error("record pattern rest must come after all fields")
             .primary(dots.location)
             .throw_();
