@@ -1,0 +1,20 @@
+{
+  x: 199,
+  class: "other",
+}
+{
+  x: 200,
+  class: "success",
+}
+{
+  x: 250,
+  class: "success",
+}
+{
+  x: 299,
+  class: "success",
+}
+{
+  x: 300,
+  class: "other",
+}

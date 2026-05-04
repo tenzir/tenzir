@@ -1,0 +1,25 @@
+{
+  verdict: "empty",
+}
+{
+  action: "deny",
+  dst_port: 443,
+  verdict: "exact deny",
+}
+{
+  action: "allow",
+  dst_port: 22,
+  extra: true,
+  verdict: "other record",
+}
+{
+  action: "deny",
+  extra: true,
+  verdict: "other record",
+}
+{
+  action: "allow",
+  dst_port: 443,
+  extra: true,
+  verdict: "web allow",
+}

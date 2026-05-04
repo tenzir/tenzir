@@ -752,35 +752,112 @@ struct if_stmt {
   }
 };
 
+struct match_pattern;
+
+struct wildcard_pattern {
+  location source;
+
+  friend auto inspect(auto& f, wildcard_pattern& x) -> bool {
+    return f.object(x).fields(f.field("source", x.source));
+  }
+
+  auto get_location() const -> location {
+    return source;
+  }
+};
+
+struct expression_pattern {
+  expression expr;
+
+  friend auto inspect(auto& f, expression_pattern& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr));
+  }
+
+  auto get_location() const -> location {
+    return expr.get_location();
+  }
+};
+
+struct binding_pattern {
+  identifier name;
+
+  friend auto inspect(auto& f, binding_pattern& x) -> bool {
+    return f.object(x).fields(f.field("name", x.name));
+  }
+
+  auto get_location() const -> location {
+    return name.location;
+  }
+};
+
+struct range_pattern {
+  expression lower;
+  expression upper;
+  location dots;
+
+  friend auto inspect(auto& f, range_pattern& x) -> bool {
+    return f.object(x).fields(f.field("lower", x.lower),
+                              f.field("upper", x.upper),
+                              f.field("dots", x.dots));
+  }
+
+  auto get_location() const -> location {
+    return lower.get_location();
+  }
+};
+
+struct record_pattern {
+  struct field {
+    identifier name;
+    Box<match_pattern> pattern;
+
+    friend auto inspect(auto& f, field& x) -> bool {
+      return f.object(x).fields(f.field("name", x.name),
+                                f.field("pattern", x.pattern));
+    }
+  };
+
+  location begin;
+  std::vector<field> fields;
+  Option<location> rest;
+  location end;
+
+  friend auto inspect(auto& f, record_pattern& x) -> bool {
+    return f.object(x).fields(f.field("begin", x.begin),
+                              f.field("fields", x.fields),
+                              f.field("rest", x.rest), f.field("end", x.end));
+  }
+
+  auto get_location() const -> location {
+    return begin;
+  }
+};
+
+using match_pattern_kind
+  = variant<wildcard_pattern, expression_pattern, binding_pattern,
+            range_pattern, record_pattern>;
+
 struct match_pattern {
   match_pattern();
-  explicit match_pattern(location source);
-  explicit match_pattern(expression expr);
+  explicit match_pattern(wildcard_pattern pattern);
+  explicit match_pattern(expression_pattern pattern);
+  explicit match_pattern(binding_pattern pattern);
+  explicit match_pattern(range_pattern pattern);
+  explicit match_pattern(record_pattern pattern);
   ~match_pattern();
   match_pattern(const match_pattern& other);
   match_pattern(match_pattern&& other) noexcept;
   auto operator=(const match_pattern& other) -> match_pattern&;
   auto operator=(match_pattern&& other) noexcept -> match_pattern&;
 
-  bool wildcard = true;
-  location source;
-  Option<Box<expression>> expr;
+  Box<match_pattern_kind> kind;
 
   friend auto inspect(auto& f, match_pattern& x) -> bool {
-    auto expr
-      = x.expr.is_some() ? **x.expr : expression{constant{caf::none, x.source}};
-    auto result
-      = f.object(x).fields(f.field("wildcard", x.wildcard),
-                           f.field("source", x.source), f.field("expr", expr));
-    if constexpr (std::decay_t<decltype(f)>::is_loading) {
-      x.expr = x.wildcard ? None{} : Option<Box<expression>>{std::move(expr)};
-    }
-    return result;
+    return f.object(x).fields(f.field("kind", x.kind));
   }
 
-  auto get_location() const -> location {
-    return source;
-  }
+  auto get_location() const -> location;
+  auto is_wildcard() const -> bool;
 };
 
 struct match_stmt {
@@ -988,14 +1065,28 @@ inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
   -> expression& = default;
 
-inline match_pattern::match_pattern() = default;
-
-inline match_pattern::match_pattern(location source)
-  : wildcard{true}, source{source} {
+inline match_pattern::match_pattern()
+  : kind{std::in_place, wildcard_pattern{}} {
 }
 
-inline match_pattern::match_pattern(expression expr)
-  : wildcard{false}, source{expr.get_location()}, expr{std::move(expr)} {
+inline match_pattern::match_pattern(wildcard_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::match_pattern(expression_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::match_pattern(binding_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::match_pattern(range_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::match_pattern(record_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
 }
 
 inline match_pattern::~match_pattern() = default;
@@ -1009,6 +1100,16 @@ inline auto match_pattern::operator=(const match_pattern& other)
 
 inline auto match_pattern::operator=(match_pattern&& other) noexcept
   -> match_pattern& = default;
+
+inline auto match_pattern::get_location() const -> location {
+  return kind->match([](auto const& pattern) {
+    return pattern.get_location();
+  });
+}
+
+inline auto match_pattern::is_wildcard() const -> bool {
+  return std::holds_alternative<wildcard_pattern>(*kind);
+}
 
 inline type_def::~type_def() = default;
 inline type_def::type_def(type_def&&) noexcept = default;
@@ -1215,10 +1316,25 @@ protected:
   }
 
   void enter(ast::match_pattern& x) {
-    if (not x.wildcard) {
-      TENZIR_ASSERT(x.expr.is_some());
-      go(**x.expr);
-    }
+    x.kind->match([&](ast::wildcard_pattern&) {},
+                  [&](ast::expression_pattern& pattern) {
+                    go(pattern.expr);
+                  },
+                  [&](ast::binding_pattern& pattern) {
+                    go(pattern.name);
+                  },
+                  [&](ast::range_pattern& pattern) {
+                    go(pattern.lower);
+                    go(pattern.upper);
+                  },
+                  [&](ast::record_pattern& pattern) {
+                    go(pattern.fields);
+                  });
+  }
+
+  void enter(ast::record_pattern::field& x) {
+    go(x.name);
+    go(*x.pattern);
   }
 
   void enter(ast::selector& x) {

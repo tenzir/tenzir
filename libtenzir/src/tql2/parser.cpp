@@ -222,7 +222,7 @@ public:
     while (not peek(tk::rbrace)) {
       auto arm = parse_match_stmt_arm();
       auto is_wildcard
-        = arm.patterns.size() == 1 and arm.patterns.front().wildcard;
+        = arm.patterns.size() == 1 and arm.patterns.front().is_wildcard();
       if (is_wildcard) {
         if (saw_wildcard) {
           diagnostic::error("wildcard match arm appears more than once")
@@ -257,7 +257,7 @@ public:
     while (true) {
       patterns.push_back(parse_match_pattern());
       auto& pattern = patterns.back();
-      if (pattern.wildcard
+      if (pattern.is_wildcard()
           and (patterns.size() != 1 or not peek(tk::fat_arrow))) {
         diagnostic::error("wildcard `_` must be the only pattern in an arm")
           .primary(pattern)
@@ -266,7 +266,13 @@ public:
       if (accept(tk::fat_arrow)) {
         break;
       }
-      expect(tk::comma);
+      if (accept(tk::comma)) {
+        diagnostic::error("use `|` to separate match arm alternatives")
+          .primary(pattern)
+          .hint("commas are only separators inside record and list patterns")
+          .throw_();
+      }
+      expect(tk::pipe);
     }
     expect(tk::lbrace);
     auto pipe = parse_pipeline();
@@ -278,11 +284,61 @@ public:
   }
 
   auto parse_match_pattern() -> ast::match_pattern {
-    auto expr = parse_expression(1);
-    if (auto* wildcard = std::get_if<ast::underscore>(&*expr.kind)) {
-      return ast::match_pattern{wildcard->get_location()};
+    if (auto wildcard = accept(tk::underscore)) {
+      return ast::match_pattern{ast::wildcard_pattern{wildcard.location}};
     }
-    return ast::match_pattern{std::move(expr)};
+    if (auto name = accept(tk::dollar_ident)) {
+      return ast::match_pattern{ast::binding_pattern{name.as_identifier()}};
+    }
+    if (peek(tk::lbrace)) {
+      return parse_record_pattern();
+    }
+    auto lower = parse_expression(1);
+    if (auto dots = accept(tk::dot_dot)) {
+      auto upper = parse_expression(1);
+      return ast::match_pattern{ast::range_pattern{
+        std::move(lower),
+        std::move(upper),
+        dots.location,
+      }};
+    }
+    return ast::match_pattern{ast::expression_pattern{std::move(lower)}};
+  }
+
+  auto parse_record_pattern() -> ast::match_pattern {
+    auto begin = expect(tk::lbrace);
+    auto fields = std::vector<ast::record_pattern::field>{};
+    auto rest = Option<location>{None{}};
+    while (not peek(tk::rbrace)) {
+      if (auto dots = accept(tk::dot_dot)) {
+        if (rest.is_some()) {
+          diagnostic::error("record pattern rest appears more than once")
+            .primary(dots.location)
+            .throw_();
+        }
+        rest = dots.location;
+        if (not peek(tk::rbrace)) {
+          diagnostic::error("record pattern rest must come after all fields")
+            .primary(dots.location)
+            .throw_();
+        }
+        break;
+      }
+      auto name = expect(tk::identifier).as_identifier();
+      expect(tk::colon);
+      fields.push_back(
+        ast::record_pattern::field{name, Box{parse_match_pattern()}});
+      if (not accept(tk::comma)) {
+        break;
+      }
+    }
+    auto end = expect(tk::rbrace);
+    return ast::match_pattern{ast::record_pattern{
+      begin.location,
+      std::move(fields),
+      rest,
+      end.location,
+    }};
   }
 
   auto parse_invocation_or_assignment() -> statement {
