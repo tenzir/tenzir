@@ -18,6 +18,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
+#include "tenzir/http_server.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
@@ -27,7 +28,6 @@
 #include "tenzir/tls_options.hpp"
 #include "tenzir/variant.hpp"
 
-#include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/SSLContext.h>
@@ -42,6 +42,7 @@
 #include <charconv>
 #include <cstddef>
 #include <limits>
+#include <thread>
 #include <utility>
 
 namespace tenzir::plugins::accept_http {
@@ -69,97 +70,6 @@ struct AcceptHttpArgs {
   }
 };
 
-struct ParsedEndpoint {
-  std::string host;
-  uint16_t port;
-  Option<bool> scheme_tls;
-};
-
-auto tls_enabled_from_args(AcceptHttpArgs const& args) -> bool {
-  if (not args.tls) {
-    return false;
-  }
-  auto tls_opts
-    = tls_options{*args.tls, {.tls_default = false, .is_server = true}};
-  return tls_opts.get_tls(nullptr).inner;
-}
-
-auto parse_folly_tls_version(std::string_view input)
-  -> Option<folly::SSLContext::SSLVersion> {
-  if (input == "" or input == "any" or input == "1.0") {
-    return folly::SSLContext::SSLVersion::TLSv1;
-  }
-  if (input == "1.2") {
-    return folly::SSLContext::SSLVersion::TLSv1_2;
-  }
-  if (input == "1.3") {
-    return folly::SSLContext::SSLVersion::TLSv1_3;
-  }
-  return None{};
-}
-
-auto make_tls_config(AcceptHttpArgs const& args, diagnostic_handler& dh)
-  -> failure_or<wangle::SSLContextConfig> {
-  auto tls_opts
-    = args.tls
-        ? tls_options{*args.tls, {.tls_default = false, .is_server = true}}
-        : tls_options{{.tls_default = false, .is_server = true}};
-  auto certfile = tls_opts.get_certfile(nullptr);
-  if (not certfile) {
-    diagnostic::error("`tls.certfile` is required when TLS is enabled")
-      .primary(args.endpoint)
-      .emit(dh);
-    return failure::promise();
-  }
-  auto keyfile = tls_opts.get_keyfile(nullptr);
-  auto password = tls_opts.get_password(nullptr);
-  auto config = proxygen::coro::HTTPServer::getDefaultTLSConfig();
-  if (auto min = tls_opts.get_tls_min_version(nullptr)) {
-    if (not min->inner.empty()) {
-      if (auto parsed = parse_folly_tls_version(min->inner)) {
-        config.sslVersion = *parsed;
-      } else {
-        diagnostic::error("invalid TLS minimum version: `{}`", min->inner)
-          .primary(*min)
-          .hint("supported values are `1.0`, `1.2`, and `1.3`")
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-  }
-  try {
-    config.setCertificate(certfile->inner,
-                          keyfile ? keyfile->inner : certfile->inner,
-                          password ? password->inner : "");
-  } catch (std::exception const& ex) {
-    diagnostic::error("failed to load TLS certificate: {}", ex.what())
-      .primary(*certfile)
-      .emit(dh);
-    return failure::promise();
-  }
-  auto require_client_cert
-    = tls_opts.get_tls_require_client_cert(nullptr).inner;
-  auto skip_peer_verification
-    = tls_opts.get_skip_peer_verification(nullptr).inner;
-  if (require_client_cert) {
-    config.clientVerification
-      = folly::SSLContext::VerifyClientCertificate::ALWAYS;
-  } else if (skip_peer_verification) {
-    config.clientVerification
-      = folly::SSLContext::VerifyClientCertificate::DO_NOT_REQUEST;
-  } else {
-    config.clientVerification
-      = folly::SSLContext::VerifyClientCertificate::IF_PRESENTED;
-  }
-  if (auto client_ca = tls_opts.get_tls_client_ca(nullptr)) {
-    config.clientCAFiles.push_back(client_ca->inner);
-  }
-  if (auto cacert = tls_opts.get_cacert(nullptr)) {
-    config.clientCAFiles.push_back(cacert->inner);
-  }
-  return config;
-}
-
 template <class T>
 auto parse_number(std::string_view text) -> Option<T> {
   if (text.empty()) {
@@ -173,87 +83,6 @@ auto parse_number(std::string_view text) -> Option<T> {
     return None{};
   }
   return value;
-}
-
-auto parse_endpoint(std::string_view endpoint, location loc,
-                    diagnostic_handler& dh) -> Option<ParsedEndpoint> {
-  if (endpoint.contains("://")) {
-    auto parsed = proxygen::URL{std::string{endpoint}};
-    if (not parsed.isValid() or not parsed.hasHost()) {
-      diagnostic::error("failed to parse endpoint URL").primary(loc).emit(dh);
-      return None{};
-    }
-    auto scheme = parsed.getScheme();
-    auto scheme_tls = Option<bool>{None{}};
-    if (scheme == "https") {
-      scheme_tls = true;
-    } else if (scheme == "http") {
-      scheme_tls = false;
-    } else {
-      diagnostic::error("unsupported endpoint URL scheme: `{}`", scheme)
-        .primary(loc)
-        .hint("use `http://` or `https://`")
-        .emit(dh);
-      return None{};
-    }
-    return ParsedEndpoint{
-      .host = parsed.getHost(),
-      .port = parsed.getPort(),
-      .scheme_tls = scheme_tls,
-    };
-  }
-  if (endpoint.empty()) {
-    diagnostic::error("`endpoint` must not be empty").primary(loc).emit(dh);
-    return None{};
-  }
-  if (endpoint.front() == '[') {
-    auto const close = endpoint.find(']');
-    if (close == std::string_view::npos) {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto const host = endpoint.substr(1, close - 1);
-    auto const rest = endpoint.substr(close + 1);
-    if (rest.empty() or rest.front() != ':') {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto port = parse_number<uint16_t>(rest.substr(1));
-    if (not port) {
-      diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-      return None{};
-    }
-    return ParsedEndpoint{
-      .host = std::string{host},
-      .port = *port,
-      .scheme_tls = None{},
-    };
-  }
-  auto const colon = endpoint.rfind(':');
-  if (colon == std::string_view::npos) {
-    diagnostic::error("failed to parse endpoint")
-      .primary(loc)
-      .hint("expected `host:port`, `[host]:port`, or URL")
-      .emit(dh);
-    return None{};
-  }
-  auto const host = endpoint.substr(0, colon);
-  auto port = parse_number<uint16_t>(endpoint.substr(colon + 1));
-  if (not port) {
-    diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-    return None{};
-  }
-  return ParsedEndpoint{
-    .host = std::string{host},
-    .port = *port,
-    .scheme_tls = None{},
-  };
 }
 
 struct RequestMetadata {
@@ -374,17 +203,6 @@ auto get_response_for_path(AcceptHttpArgs const& args, std::string_view path)
   return res;
 }
 
-auto make_fixed_response(Response const& response)
-  -> proxygen::coro::HTTPSourceHolder {
-  auto* source = proxygen::coro::HTTPFixedSource::makeFixedResponse(
-    response.status, std::string{response.body});
-  if (not response.content_type.empty()) {
-    source->msg_->getHeaders().set(proxygen::HTTP_HEADER_CONTENT_TYPE,
-                                   response.content_type);
-  }
-  return source;
-}
-
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
   RequestHandler(AcceptHttpArgs args, Arc<MessageQueue> queue,
@@ -471,14 +289,14 @@ public:
     // reschedule back to the proxygen IO EventBase before touching the
     // queue or returning the response, because proxygen writes the
     // response on this coroutine's executor.
-    permit.release();
     co_await folly::coro::co_reschedule_on_current_executor;
     co_await queue_->enqueue(Noop{});
     if (res_status != 200) {
       co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
     }
     auto response = get_response_for_path(args_, path);
-    co_return make_fixed_response(response);
+    co_return http_server::make_response(response.status, response.content_type,
+                                         response.body);
   }
 
 private:
@@ -498,7 +316,6 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     auto config = co_await make_config(ctx);
     if (not config) {
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
@@ -513,39 +330,17 @@ public:
       diagnostic::error("failed to start HTTP server: {}", ex.what())
         .primary(args_.endpoint)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     // When the operator is forcefully stopped (e.g., by `head 1` finishing),
-    // the executor skips `finish_sub` and just cancels the operator scope.
-    // This task catches that cancellation, unblocks any in-flight handlers
-    // by sending them a 200, then drains the server while the main EventBase
-    // is still running.  drain() only stops accepting new connections;
-    // existing keep-alive connections close via connIdleTimeout (200ms).
+    // the executor skips `finish_sub` and cancels the operator scope. Catch
+    // that cancellation, reply to already-accepted requests ourselves, then
+    // drain and destroy the server while the proxygen EventBase is still
+    // running.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      {
-        auto active_requests = co_await active_requests_.lock();
-        for (auto& it : *active_requests) {
-          it.second.finished->send(200); // ok
-        }
-      }
-      if (server_) {
-        (*server_)->getServer().drain();
-        // The operator is never destroyed by the executor, so we must
-        // destroy the server explicitly.  The ScopedHTTPServer destructor
-        // blocks on thread_.join(), so run it in a detached thread to
-        // avoid blocking the executor fiber.  We only call drain() here
-        // (not forceStop) because forceStop drops in-flight responses.
-        // The destructor will call forceStop after a brief delay.
-        auto srv = std::move(*server_);
-        server_ = None{};
-        std::thread([srv = std::move(srv)]() {
-          // srv destructor calls drain()+forceStop()+thread_.join()
-        }).detach();
-      }
+      force_stop();
     });
-    lifecycle_ = Lifecycle::running;
     co_return;
   }
 
@@ -561,11 +356,6 @@ public:
     co_await co_match(
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
-        if (lifecycle_ != Lifecycle::running) {
-          msg.response_signal->send(503); // service unavailable
-          co_return;
-        }
-
         auto pipeline = args_.parser.inner;
         auto env = substitute_ctx::env_t{};
         env[args_.request] = make_request_context(msg.metadata);
@@ -660,7 +450,6 @@ public:
       [&](Noop) -> Task<void> {
         co_return;
       });
-    co_await maybe_finish_draining();
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
@@ -682,44 +471,26 @@ public:
       it->second.finished->send(200);
       active_requests->erase(request_id);
     }
-    co_await maybe_finish_draining();
     co_return;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
-    // finalize will only be called when state() returns done
-    TENZIR_ASSERT(lifecycle_ == Lifecycle::done);
     co_return FinalizeBehavior::done;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_await request_stop();
+    force_stop();
+    co_return;
   }
 
   auto state() -> OperatorState override {
-    return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::normal;
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    serde("lifecycle", lifecycle_);
+    return not server_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:
-  enum class Lifecycle {
-    running,
-    draining,
-    done,
-  };
-
-  friend auto inspect(auto& f, Lifecycle& x) {
-    return tenzir::detail::inspect_enum_str(f, x,
-                                            {"running", "draining", "done"});
-  }
-
   struct ActiveRequest {
     RequestMetadata metadata;
     // Non-null only when the request carries a supported Content-Encoding.
@@ -730,41 +501,17 @@ private:
     MetricsCounter bytes_read;
   };
 
-  auto request_stop() -> Task<void> {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    lifecycle_ = Lifecycle::draining;
-    // stop listening for new connections
+  void force_stop() {
     if (server_) {
-      (*server_)->getServer().drain();
+      (*server_)->getServer().forceStop();
+      // move server to a new thread, where it can call thread join
+      std::thread([srv = std::exchange(server_, None{})] {}).detach();
     }
-    co_await maybe_finish_draining();
-    co_return;
   }
 
-  auto maybe_finish_draining() -> Task<void> {
-    if (lifecycle_ != Lifecycle::draining) {
-      co_return;
-    }
-    // Wait until every handleRequest coroutine has returned its permit.
-    // A handler that has been accepted but hasn't yet enqueued RequestStarted
-    // is invisible to both active_requests_ and message_queue_, so checking
-    // those alone is insufficient.
-    if (active_connections_->available_permits()
-        != args_.get_max_connections()) {
-      co_return;
-    }
-    auto active_requests = co_await active_requests_.lock();
-    if (active_requests->empty() and message_queue_->empty()) {
-      server_ = None{};
-      lifecycle_ = Lifecycle::done;
-    }
-    co_return;
-  }
-
-  auto make_config(OpCtx& ctx)
+  auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
+    auto const* cfg = std::addressof(ctx.actor_system().config());
     auto resolved_endpoint = std::string{};
     auto requests = std::vector<secret_request>{};
     requests.emplace_back(make_secret_request("endpoint", args_.endpoint,
@@ -773,12 +520,12 @@ private:
         result.is_error()) {
       co_return None{};
     }
-    auto parsed
-      = parse_endpoint(resolved_endpoint, args_.endpoint.source, ctx.dh());
+    auto parsed = http_server::parse_endpoint(resolved_endpoint,
+                                              args_.endpoint.source, ctx.dh());
     if (not parsed) {
       co_return None{};
     }
-    auto tls_enabled = tls_enabled_from_args(args_);
+    auto tls_enabled = http_server::is_tls_enabled(args_.tls, cfg);
     if (parsed->scheme_tls) {
       if (*parsed->scheme_tls and not tls_enabled) {
         diagnostic::error("`https://` endpoint requires `tls=true`")
@@ -810,13 +557,17 @@ private:
     // the IO thread pool to drain during server shutdown.
     config.sessionConfig.connIdleTimeout = std::chrono::milliseconds{200};
     if (tls_enabled) {
-      auto tls_config = make_tls_config(args_, ctx.dh());
+      auto tls_opts = tls_options::from_optional(
+        args_.tls, {.tls_default = false, .is_server = true});
+      auto tls_config = http_server::make_ssl_context_config(
+        tls_opts, args_.endpoint.source, ctx, cfg);
       if (not tls_config) {
         co_return None{};
       }
       config.socketConfig.sslContextConfigs.emplace_back(
         std::move(*tls_config));
     }
+    config.shutdownOnSignals = {};
     co_return config;
   }
 
@@ -827,8 +578,6 @@ private:
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
   Mutex<std::unordered_map<uint64_t, ActiveRequest>> active_requests_{{}};
   Arc<Semaphore> active_connections_;
-  // --- state ---
-  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 class AcceptHttpPlugin final : public virtual OperatorPlugin {

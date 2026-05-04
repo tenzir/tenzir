@@ -1,0 +1,6 @@
+error: `max_request_size` must be greater than 0
+ --> tests/operators/accept_opensearch/error_max_request_size_zero.tql:5:54
+  |
+5 | accept_opensearch "127.0.0.1:8080", max_request_size=0
+  |                                                      ^ 
+  |

@@ -75,6 +75,20 @@ auto parse_tls_version(std::string_view version) -> caf::expected<tls_version> {
                                      version));
 }
 
+auto resolve_regular_file(located<std::string> const& value,
+                          std::string_view key, diagnostic_handler& dh)
+  -> failure_or<std::filesystem::path> {
+  auto ec = std::error_code{};
+  auto path = std::filesystem::canonical(value.inner, ec);
+  if (ec or not std::filesystem::is_regular_file(path, ec)) {
+    diagnostic::error("`{}` path is not a valid file", key)
+      .primary(value)
+      .emit(dh);
+    return failure::promise();
+  }
+  return path;
+}
+
 template <typename T>
 auto query_config(std::string_view name, const caf::actor_system_config* cfg)
   -> const T* {
@@ -869,14 +883,17 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
   return ctx;
 }
 
-auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
+auto tls_options::make_folly_ssl_context(
+  diagnostic_handler& dh, const caf::actor_system_config* cfg) const
   -> failure_or<std::shared_ptr<folly::SSLContext>> {
-  if (not get_tls(nullptr).inner) {
+  if (not get_tls(cfg).inner) {
     return nullptr;
   }
   auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
+  auto skip_verify = get_skip_peer_verification(cfg).inner;
+  auto require_client_cert = get_tls_require_client_cert(cfg).inner;
   // Apply minimum TLS version.
-  if (auto min = get_tls_min_version(nullptr)) {
+  if (auto min = get_tls_min_version(cfg)) {
     if (not min->inner.empty()) {
       auto parsed = parse_openssl_tls_version(min->inner);
       if (not parsed) {
@@ -886,17 +903,11 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
     }
   }
-  // Load CA certificate.
-  auto cacert = get_cacert(nullptr);
-  if (cacert) {
-    auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(cacert->inner, ec);
-    if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`cacert` path is not a valid file")
-        .primary(*cacert)
-        .emit(dh);
-      return failure::promise();
-    }
+  auto should_verify_peer = not skip_verify or require_client_cert;
+  // Load CA certificate only when peer verification is enabled.
+  auto cacert = get_cacert(cfg);
+  if (should_verify_peer and cacert) {
+    TRY(auto path, resolve_regular_file(*cacert, "cacert", dh));
     try {
       ctx->loadTrustedCertificates(path.c_str());
     } catch (std::exception const& ex) {
@@ -906,17 +917,10 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  auto certfile = get_certfile(nullptr);
+  auto certfile = get_certfile(cfg);
   // Load certificate chain.
   if (certfile) {
-    auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(certfile->inner, ec);
-    if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`certfile` path is not a valid file")
-        .primary(*certfile)
-        .emit(dh);
-      return failure::promise();
-    }
+    TRY(auto path, resolve_regular_file(*certfile, "certfile", dh));
     try {
       ctx->loadCertificate(path.c_str());
     } catch (std::exception const& ex) {
@@ -927,18 +931,10 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Load private key. If `keyfile` is omitted, try reading it from `certfile`.
-  auto keyfile = get_keyfile(nullptr);
-  auto private_key_file = keyfile ? keyfile : certfile;
-  if (private_key_file) {
-    auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(private_key_file->inner, ec);
-    if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`{}` path is not a valid file",
-                        keyfile ? "keyfile" : "certfile")
-        .primary(*private_key_file)
-        .emit(dh);
-      return failure::promise();
-    }
+  auto keyfile = get_keyfile(cfg);
+  if (auto private_key_file = keyfile ? keyfile : certfile) {
+    const auto* key_name = keyfile ? "keyfile" : "certfile";
+    TRY(auto path, resolve_regular_file(*private_key_file, key_name, dh));
     try {
       ctx->loadPrivateKey(path.c_str());
     } catch (std::exception const& ex) {
@@ -955,7 +951,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  if (auto ciphers = get_tls_ciphers(nullptr)) {
+  if (auto ciphers = get_tls_ciphers(cfg)) {
     auto cipher_loc = ciphers->source;
     if (tls_ and cipher_loc == tls_->source) {
       // `located<data>` for `tls={...}` only carries the whole record span.
@@ -971,7 +967,6 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Set verification mode.
-  auto skip_verify = get_skip_peer_verification(nullptr).inner;
   if (skip_verify) {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {

@@ -8,10 +8,12 @@
 
 #pragma once
 
+#include "tenzir/chunk.hpp"
 #include "tenzir/detail/padded_buffer.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/si_literals.hpp"
+#include "tenzir/simdjson_buffer.hpp"
 
 #include <simdjson.h>
 
@@ -305,6 +307,18 @@ public:
 
 private:
   std::size_t lines_processed_ = 0u;
+};
+
+class streaming_ndjson_parser {
+public:
+  auto parse_chunk(SimdjsonPaddedBuffer const& data, std::string_view name,
+                   diagnostic_handler& dh) -> std::vector<table_slice>;
+
+  auto finish(std::string_view name, diagnostic_handler& dh)
+    -> std::vector<table_slice>;
+
+private:
+  SimdjsonPaddedBuffer partial_;
 };
 
 class default_parser final : public parser_base {

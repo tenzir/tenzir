@@ -1,0 +1,22 @@
+---
+fixtures:
+  - http_request_chunked:
+      requests:
+        - path: /_bulk
+          body_chunk_delay: 0.1
+          body_chunks_base64:
+            - H4sIAJmI8GkC/6tWysxLSa1QsqpWioeylEpSi0sAFvXLSxgAAAA=
+            - H4sIAJmI8GkC/1OqreWqVipLzClNVbIyMarlAgD0m8JIEQAAAA==
+          headers:
+            Content-Type: application/x-ndjson
+            Content-Encoding: gzip
+          expected_status: 413
+        - path: /_bulk
+          body: "{\"index\":{}}\n{\"a\":1}\n"
+          expected_status: 200
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_opensearch env("HTTP_REQUEST_ENDPOINT"), max_request_size=30
+head 1

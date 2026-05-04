@@ -215,7 +215,7 @@ auto is_tls_enabled(Option<located<data>> const& tls,
 auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
                            tls_options::options options) -> failure_or<bool> {
-  auto tls_opts = tls ? tls_options{*tls, options} : tls_options{options};
+  auto tls_opts = tls_options::from_optional(tls, options);
   TRY(tls_opts.validate(url, url_loc, dh));
   add_default_url_scheme(url, tls_opts.get_tls(nullptr).inner);
   return url.starts_with("https://");
@@ -233,8 +233,8 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
     .request_timeout = request_timeout,
   };
   if (tls_enabled) {
-    auto tls_opts = tls ? tls_options{*tls, options} : tls_options{options};
-    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh));
+    auto tls_opts = tls_options::from_optional(tls, options);
+    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh, nullptr));
     config.ssl_context = std::move(ssl_context);
   }
   return config;
@@ -524,10 +524,12 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
   return std::move(dec.ValueUnsafe());
 }
 
-auto decompress_chunk(arrow::util::Decompressor& decompressor,
-                      std::span<std::byte const> input, diagnostic_handler& dh,
-                      size_t max_output_size) -> Result<blob, uint16_t> {
-  auto out = blob{};
+template <class Buffer>
+auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
+                           std::span<std::byte const> input,
+                           diagnostic_handler& dh, size_t max_output_size)
+  -> Result<Buffer, uint16_t> {
+  auto out = Buffer{};
   auto initial_size
     = std::min(max_output_size, std::max<size_t>(input.size_bytes() * 2, 64));
   out.resize(initial_size);
@@ -575,6 +577,20 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
   }
   out.resize(written);
   return out;
+}
+
+auto decompress_chunk(arrow::util::Decompressor& decompressor,
+                      std::span<std::byte const> input, diagnostic_handler& dh,
+                      size_t max_output_size) -> Result<blob, uint16_t> {
+  return decompress_chunk_impl<blob>(decompressor, input, dh, max_output_size);
+}
+
+auto decompress_chunk_simdjson(arrow::util::Decompressor& decompressor,
+                               std::span<std::byte const> input,
+                               diagnostic_handler& dh, size_t max_output_size)
+  -> Result<SimdjsonPaddedBuffer, uint16_t> {
+  return decompress_chunk_impl<SimdjsonPaddedBuffer>(decompressor, input, dh,
+                                                     max_output_size);
 }
 
 auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {

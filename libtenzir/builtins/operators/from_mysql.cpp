@@ -2078,7 +2078,8 @@ public:
     }
     // Build SSL context from TLS options.
     if (args_.tls) {
-      auto result = tls_options{*args_.tls}.make_folly_ssl_context(ctx);
+      auto const* cfg = std::addressof(ctx.actor_system().config());
+      auto result = tls_options{*args_.tls}.make_folly_ssl_context(ctx, cfg);
       if (not result) {
         done_ = true;
         co_return;

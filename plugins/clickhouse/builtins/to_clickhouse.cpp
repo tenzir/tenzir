@@ -206,7 +206,7 @@ public:
       primary = {args_.primary->path().front().id.name,
                  args_.primary->get_location()};
     }
-    auto ssl = args_.tls ? tls_options{*args_.tls} : tls_options{};
+    auto ssl = tls_options::from_optional(args_.tls);
     auto const tls_enabled = ssl.get_tls(&ctx.actor_system().config()).inner;
     auto const default_port
       = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;

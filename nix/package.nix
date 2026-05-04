@@ -91,6 +91,7 @@ rec {
     pkgs.yara
     pkgs.uv
     pkgs.parallel
+    pkgs.openssl
     (pkgs.python3.withPackages (ps: [
       ps.trustme
       ps.pymysql

@@ -8,7 +8,10 @@
 
 #include "tenzir/json_parser.hpp"
 
+#include "tenzir/option.hpp"
 #include "tenzir/try_simdjson.hpp"
+
+#include <cstring>
 
 namespace tenzir::json {
 
@@ -36,6 +39,28 @@ auto count_trailing_partial_utf8(std::string_view view) -> size_t {
     return 3;
   }
   return 0;
+}
+
+auto parse_ndjson_lines(ndjson_parser& parser, SimdjsonPaddedBuffer const& buf,
+                        size_t begin, size_t end) -> void {
+  TENZIR_ASSERT(begin <= end);
+  TENZIR_ASSERT(end <= buf.size());
+  auto pos = begin;
+  while (pos < end) {
+    auto const* nl = static_cast<char const*>(std::memchr(
+      reinterpret_cast<char const*>(buf.data() + pos), '\n', end - pos));
+    auto line_end = nl ? static_cast<size_t>(
+                           nl - reinterpret_cast<char const*>(buf.data()) + 1)
+                       : end;
+    auto line_len = line_end - pos;
+    if (line_len > 1 or buf.data()[pos] != std::byte{'\n'}) {
+      parser.parse(buf.padded_view(pos, line_len));
+      if (parser.abort_requested) {
+        return;
+      }
+    }
+    pos = line_end;
+  }
 }
 
 } // namespace
@@ -171,6 +196,77 @@ auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
 
 auto ndjson_parser::validate_completion() const -> void {
   // noop, just exists for easy of implementation
+}
+
+auto streaming_ndjson_parser::parse_chunk(SimdjsonPaddedBuffer const& data,
+                                          std::string_view name,
+                                          diagnostic_handler& dh)
+  -> std::vector<table_slice> {
+  if (data.empty() and partial_.empty()) {
+    return {};
+  }
+  auto find_last_newline
+    = [](std::span<std::byte const> bytes) -> Option<size_t> {
+    for (auto i = bytes.size(); i > 0; --i) {
+      if (bytes[i - 1] == std::byte{'\n'}) {
+        return i - 1;
+      }
+    }
+    return None{};
+  };
+  auto find_first_newline
+    = [](std::span<std::byte const> bytes) -> Option<size_t> {
+    for (auto i = size_t{0}; i < bytes.size(); ++i) {
+      if (bytes[i] == std::byte{'\n'}) {
+        return i;
+      }
+    }
+    return None{};
+  };
+  auto parser = ndjson_parser{std::string{name}, dh, {}};
+  auto bytes = data.view();
+  if (not partial_.empty()) {
+    auto first_newline = find_first_newline(bytes);
+    if (not first_newline) {
+      partial_.append(bytes);
+      return {};
+    }
+    partial_.append(bytes.subspan(0, *first_newline + 1));
+    parse_ndjson_lines(parser, partial_, 0, partial_.size());
+    partial_.clear();
+    if (parser.abort_requested) {
+      return parser.builder.finalize_as_table_slice();
+    }
+    auto consumed = *first_newline + 1;
+    bytes = bytes.subspan(consumed);
+    if (bytes.empty()) {
+      return parser.builder.finalize_as_table_slice();
+    }
+  }
+  auto last_newline = find_last_newline(bytes);
+  if (not last_newline) {
+    partial_.append(bytes);
+    return parser.builder.finalize_as_table_slice();
+  }
+  auto complete_size = *last_newline + 1;
+  parse_ndjson_lines(parser, data, data.size() - bytes.size(),
+                     data.size() - bytes.size() + complete_size);
+  if (complete_size < bytes.size()) {
+    partial_.assign(bytes.subspan(complete_size));
+  }
+  return parser.builder.finalize_as_table_slice();
+}
+
+auto streaming_ndjson_parser::finish(std::string_view name,
+                                     diagnostic_handler& dh)
+  -> std::vector<table_slice> {
+  if (partial_.empty()) {
+    return {};
+  }
+  auto parser = ndjson_parser{std::string{name}, dh, {}};
+  parse_ndjson_lines(parser, partial_, 0, partial_.size());
+  partial_.clear();
+  return parser.builder.finalize_as_table_slice();
 }
 
 auto default_parser::parse(const chunk::view_type& json_chunk) -> void {

@@ -31,7 +31,7 @@ enum class MetricsType : std::uint8_t { counter, gauge };
 /// Key and value are bounded to `max_length` characters.
 class MetricsLabel {
 public:
-  static constexpr std::size_t max_length = 16;
+  static constexpr std::size_t max_length = 32;
 
   struct FixedString {
     std::array<char, max_length> data_{};

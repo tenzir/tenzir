@@ -6,6 +6,7 @@ from __future__ import annotations
 from . import abs  # noqa: F401
 from . import abs_proxy  # noqa: F401
 from . import clickhouse  # noqa: F401
+from . import http_request_chunked  # noqa: F401
 from . import files_permission_tree  # noqa: F401
 from . import ftp  # noqa: F401
 from . import gcs  # noqa: F401
@@ -32,6 +33,7 @@ __all__ = [
     "abs",
     "abs_proxy",
     "clickhouse",
+    "http_request_chunked",
     "files_permission_tree",
     "ftp",
     "gcs",

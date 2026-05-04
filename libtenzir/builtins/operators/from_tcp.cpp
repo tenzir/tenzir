@@ -136,8 +136,10 @@ public:
   auto operator=(FromTcpConnector&&) noexcept -> FromTcpConnector& = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (tls_ and tls_->get_tls(nullptr).inner) {
-      auto context = tls_->make_folly_ssl_context(ctx);
+    auto const* cfg = std::addressof(ctx.actor_system().config());
+    tls_enabled_ = tls_ and tls_->get_tls(cfg).inner;
+    if (tls_enabled_) {
+      auto context = tls_->make_folly_ssl_context(ctx, cfg);
       if (not context) {
         startup_failed_ = true;
         co_return;
@@ -193,8 +195,7 @@ public:
                 .primary(args_.endpoint.source)
                 .note("reason: {}", ex.what())
                 .hint("ensure a TCP server is listening on this endpoint");
-          add_tls_client_diagnostic_hints(std::move(diag),
-                                          tls_ and tls_->get_tls(nullptr).inner)
+          add_tls_client_diagnostic_hints(std::move(diag), tls_enabled_)
             .emit(dh);
           throw;
         }
@@ -350,6 +351,7 @@ private:
   ForwardDnsResolver forward_dns_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
+  bool tls_enabled_ = false;
   folly::EventBase* evb_ = nullptr;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};

@@ -1,6 +1,7 @@
 ---
 fixtures:
   - http_request:
+      stop_on_connection_drop: true
       path: /ingest
       body: '{"value":11}'
 ---

@@ -34,8 +34,9 @@ class HttpRequestOptions:
     )
     tls: bool = False
     repeat: int = 1
-    expected_status: int = 200
+    expected_status: int | None = None
     expected_body: str | None = None
+    stop_on_connection_drop: bool = False
 
     # Retry/dispatch behavior.
     initial_delay: float = 0.5
@@ -56,8 +57,9 @@ class _RequestSpec:
     body: str
     headers: dict[str, str]
     tls: bool
-    expected_status: int
+    expected_status: int | None
     expected_body: str | None
+    stop_on_connection_drop: bool
 
 
 def _to_request_specs(opts: HttpRequestOptions) -> list[_RequestSpec]:
@@ -75,6 +77,7 @@ def _to_request_specs(opts: HttpRequestOptions) -> list[_RequestSpec]:
             tls=opts.tls,
             expected_status=opts.expected_status,
             expected_body=opts.expected_body,
+            stop_on_connection_drop=opts.stop_on_connection_drop,
         )
         for _ in range(opts.repeat)
     ]
@@ -144,7 +147,10 @@ def http_request() -> FixtureHandle:
                         req, timeout=opts.request_timeout, context=ssl_context
                     ) as response:
                         body = response.read().decode("utf-8", errors="replace")
-                        if response.status != spec.expected_status:
+                        if (
+                            spec.expected_status != None
+                            and response.status != spec.expected_status
+                        ):
                             errors.append(
                                 f"request {req_idx}: expected HTTP status "
                                 f"{spec.expected_status}, got {response.status}"
@@ -162,7 +168,10 @@ def http_request() -> FixtureHandle:
                         break
                 except HTTPError as exc:
                     body = exc.read().decode("utf-8", errors="replace")
-                    if exc.code != spec.expected_status:
+                    if (
+                        spec.expected_status != None
+                        and exc.code != spec.expected_status
+                    ):
                         errors.append(
                             f"request {req_idx}: expected HTTP status "
                             f"{spec.expected_status}, got {exc.code}"
@@ -179,6 +188,9 @@ def http_request() -> FixtureHandle:
                     exc_str = str(exc)
                     if "connection refused" in exc_str.lower():
                         connection_refused_error = exc_str
+                    elif spec.stop_on_connection_drop:
+                        stopped_early[0] = True
+                        return
                     stop_event.wait(opts.retry_delay)
             if not sent:
                 attempts = max(opts.max_attempts_per_request, 1)

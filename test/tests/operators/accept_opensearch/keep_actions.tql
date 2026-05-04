@@ -1,0 +1,11 @@
+---
+fixtures:
+  - http_request:
+      stop_on_connection_drop: true
+      path: /_bulk
+      body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
+---
+
+accept_opensearch env("HTTP_REQUEST_ENDPOINT"), keep_actions=true
+head 2
+| summarize count=count()
