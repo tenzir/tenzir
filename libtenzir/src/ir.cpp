@@ -21,6 +21,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/user_defined_operator.hpp"
+#include "tenzir/view3.hpp"
 
 #include <ranges>
 
@@ -256,6 +257,32 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   return ir::SetIr{std::move(assignments)};
 }
 
+struct MatchArgs {
+  struct Arm {
+    location source;
+    std::vector<data> patterns;
+    ir::pipeline pipeline;
+    bool wildcard = false;
+
+    friend auto inspect(auto& f, Arm& x) -> bool {
+      return f.object(x).fields(f.field("source", x.source),
+                                f.field("patterns", x.patterns),
+                                f.field("pipeline", x.pipeline),
+                                f.field("wildcard", x.wildcard));
+    }
+  };
+
+  location match_keyword;
+  ast::expression scrutinee;
+  std::vector<Arm> arms;
+
+  friend auto inspect(auto& f, MatchArgs& x) -> bool {
+    return f.object(x).fields(f.field("match_keyword", x.match_keyword),
+                              f.field("scrutinee", x.scrutinee),
+                              f.field("arms", x.arms));
+  }
+};
+
 struct IfArgs {
   struct Else {
     location else_keyword;
@@ -369,6 +396,155 @@ private:
   bool alternative_closed_ = false;
 };
 
+class MatchImpl {
+public:
+  explicit MatchImpl(MatchArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> {
+    if (ctx.get_sub(int64_t{0}).is_some()) {
+      co_return;
+    }
+    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+      co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
+                                          args_.arms[i].pipeline);
+    }
+  }
+
+  auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
+    -> Task<void> {
+    auto arm_masks = std::vector<std::vector<bool>>(args_.arms.size());
+    for (auto& mask : arm_masks) {
+      mask.resize(input.rows(), false);
+    }
+    auto matched = std::vector<bool>(input.rows(), false);
+    auto scrutinee = eval(args_.scrutinee, input, ctx);
+    auto offset = int64_t{0};
+    for (auto& part : scrutinee) {
+      for (auto value : part.values3()) {
+        auto row = offset++;
+        for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
+             ++arm_index) {
+          if (matched[row]) {
+            break;
+          }
+          auto const& arm = args_.arms[arm_index];
+          auto matches = arm.wildcard;
+          for (auto const& pattern : arm.patterns) {
+            if (partial_order(value, pattern)
+                == std::partial_ordering::equivalent) {
+              matches = true;
+              break;
+            }
+          }
+          if (matches) {
+            arm_masks[arm_index][row] = true;
+            matched[row] = true;
+          }
+        }
+      }
+    }
+    TENZIR_ASSERT_EQ(offset, static_cast<int64_t>(input.rows()));
+    for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
+         ++arm_index) {
+      if (arm_closed_[arm_index]) {
+        continue;
+      }
+      auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+      check(builder.Reserve(input.rows()));
+      for (auto value : arm_masks[arm_index]) {
+        builder.UnsafeAppend(value);
+      }
+      auto filtered = filter(input, *finish(builder));
+      if (filtered.rows() == 0) {
+        continue;
+      }
+      auto sub = ctx.get_sub(static_cast<int64_t>(arm_index));
+      if (not sub) {
+        arm_closed_[arm_index] = true;
+        continue;
+      }
+      auto& handle = as<SubHandle<table_slice>>(*sub);
+      arm_closed_[arm_index]
+        = (co_await handle.push(std::move(filtered))).is_err();
+    }
+    if (not has_wildcard() and push) {
+      auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+      check(builder.Reserve(input.rows()));
+      for (auto value : matched) {
+        builder.UnsafeAppend(not value);
+      }
+      auto filtered = filter(input, *finish(builder));
+      if (filtered.rows() > 0) {
+        co_await (*push)(std::move(filtered));
+      }
+    }
+  }
+
+  auto state() -> OperatorState {
+    // Without a wildcard, unmatched rows pass through even after all explicit
+    // arms have closed, so upstream must continue.
+    if (not has_wildcard()) {
+      return OperatorState::normal;
+    }
+    if (std::ranges::all_of(arm_closed_, std::identity{})) {
+      return OperatorState::done;
+    }
+    return OperatorState::normal;
+  }
+
+private:
+  auto has_wildcard() const -> bool {
+    return std::ranges::any_of(args_.arms, &MatchArgs::Arm::wildcard);
+  }
+
+  MatchArgs args_;
+  std::vector<bool> arm_closed_ = std::vector<bool>(args_.arms.size(), false);
+};
+
+class Match final : public Operator<table_slice, table_slice> {
+public:
+  explicit Match(MatchArgs args) : impl_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return impl_.start(ctx);
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    return impl_.process(std::move(input), ctx, &push);
+  }
+
+  auto state() -> OperatorState override {
+    return impl_.state();
+  }
+
+private:
+  MatchImpl impl_;
+};
+
+class MatchSink final : public Operator<table_slice, void> {
+public:
+  explicit MatchSink(MatchArgs args) : impl_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return impl_.start(ctx);
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    return impl_.process(std::move(input), ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return impl_.state();
+  }
+
+private:
+  MatchImpl impl_;
+};
+
 class If final : public Operator<table_slice, table_slice> {
 public:
   explicit If(IfArgs args) : impl_{std::move(args)} {
@@ -419,6 +595,94 @@ auto make_set_ir(std::vector<ast::assignment> assignments)
   -> Box<ir::Operator> {
   return ir::SetIr{std::move(assignments)};
 }
+
+auto combine_branch_types(std::optional<element_type_tag> lhs,
+                          std::optional<element_type_tag> rhs, location primary,
+                          diagnostic_handler& dh)
+  -> failure_or<std::optional<element_type_tag>> {
+  if (not lhs) {
+    return rhs;
+  }
+  if (not rhs) {
+    return lhs;
+  }
+  if (*lhs == *rhs) {
+    return lhs;
+  }
+  if (lhs->is<void>()) {
+    return rhs;
+  }
+  if (rhs->is<void>()) {
+    return lhs;
+  }
+  diagnostic::error("incompatible branch output types: {} and {}",
+                    operator_type_name(*lhs), operator_type_name(*rhs))
+    .primary(primary)
+    .emit(dh);
+  return failure::promise();
+}
+
+class MatchIr final : public ir::Operator {
+public:
+  MatchIr() = default;
+
+  explicit MatchIr(MatchArgs args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "Match";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TRY(args_.scrutinee.substitute(ctx));
+    for (auto& arm : args_.arms) {
+      TRY(arm.pipeline.substitute(ctx, instantiate));
+    }
+    return {};
+  }
+
+  auto spawn(element_type_tag input) && -> AnyOperator override {
+    TENZIR_ASSERT(input.is<table_slice>());
+    auto dh = null_diagnostic_handler{};
+    auto output = infer_type(input, dh);
+    TENZIR_ASSERT(output and *output);
+    if ((**output).is<void>()) {
+      return MatchSink{std::move(args_)};
+    }
+    return Match{std::move(args_)};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    auto result = std::optional<element_type_tag>{};
+    auto has_wildcard = false;
+    for (auto const& arm : args_.arms) {
+      has_wildcard = has_wildcard or arm.wildcard;
+      TRY(auto branch_ty, arm.pipeline.infer_type(input, dh));
+      if (branch_ty and branch_ty->is<chunk_ptr>()) {
+        diagnostic::error("branches must not return bytes")
+          .primary(arm.source)
+          .emit(dh);
+        return failure::promise();
+      }
+      TRY(result,
+          combine_branch_types(result, branch_ty, args_.match_keyword, dh));
+    }
+    if (not has_wildcard) {
+      TRY(result, combine_branch_types(result, std::optional{input},
+                                       args_.match_keyword, dh));
+    }
+    return result;
+  }
+
+  friend auto inspect(auto& f, MatchIr& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  MatchArgs args_;
+};
 
 class IfIr final : public ir::Operator {
 public:
@@ -553,6 +817,7 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
+    new inspection_plugin<ir::Operator, MatchIr>{},
     new inspection_plugin<ir::Operator, ir::SetIr>{},
   };
   for (auto y : x) {
@@ -687,8 +952,28 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         return {};
       },
       [&](ast::match_stmt x) -> failure_or<void> {
-        diagnostic::error("`match` is not implemented yet").primary(x).emit(ctx);
-        return failure::promise();
+        TRY(x.expr.bind(ctx));
+        auto args = MatchArgs{};
+        args.match_keyword = x.begin;
+        args.scrutinee = std::move(x.expr);
+        for (auto& ast_arm : x.arms) {
+          auto arm = MatchArgs::Arm{};
+          arm.source = ast_arm.patterns.front().get_location();
+          arm.wildcard = ast_arm.patterns.size() == 1
+                         and std::holds_alternative<ast::underscore>(
+                           *ast_arm.patterns.front().kind);
+          if (not arm.wildcard) {
+            for (auto& pattern : ast_arm.patterns) {
+              TRY(pattern.bind(ctx));
+              TRY(auto value, const_eval(pattern, ctx));
+              arm.patterns.push_back(std::move(value));
+            }
+          }
+          TRY(arm.pipeline, std::move(ast_arm.pipe).compile(ctx));
+          args.arms.push_back(std::move(arm));
+        }
+        operators.emplace_back(MatchIr{std::move(args)});
+        return {};
       },
       [&](ast::type_stmt x) -> failure_or<void> {
         diagnostic::error(

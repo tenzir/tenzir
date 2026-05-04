@@ -208,21 +208,41 @@ public:
   }
 
   auto parse_match_stmt() -> match_stmt {
-    // TODO: Decide exact syntax, useable for both single-line and
-    // multi-line TQL, and for expressions and statements.
-    //    match foo {
-    //      "ok", 42 => { ... }
-    //    }
     auto begin = expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
     auto scope = ignore_newlines(true);
-    // TODO: Restrict this.
+    if (peek(tk::rbrace)) {
+      diagnostic::error("expected at least one match arm")
+        .primary(next_location())
+        .throw_();
+    }
+    auto saw_wildcard = false;
     while (not peek(tk::rbrace)) {
-      arms.push_back(parse_match_stmt_arm());
-      // TODO: require comma or newline?
+      auto arm = parse_match_stmt_arm();
+      auto is_wildcard = arm.patterns.size() == 1
+                         and std::holds_alternative<ast::underscore>(
+                           *arm.patterns.front().kind);
+      if (is_wildcard) {
+        if (saw_wildcard) {
+          diagnostic::error("wildcard match arm appears more than once")
+            .primary(arm.patterns.front())
+            .throw_();
+        }
+        saw_wildcard = true;
+      }
       (void)accept(tk::comma);
+      // `_` is the fallback for all remaining rows. Since `match` evaluates
+      // arms in source order and the first matching arm wins, any arm after a
+      // wildcard would be unreachable. Reject this in the parser instead of
+      // accepting Rust-like unreachable-arm diagnostics for the MVP.
+      if (saw_wildcard and not peek(tk::rbrace)) {
+        diagnostic::error("wildcard match arm must be last")
+          .primary(arm.patterns.front())
+          .throw_();
+      }
+      arms.push_back(std::move(arm));
     }
     auto end = expect(tk::rbrace);
     return match_stmt{
@@ -234,9 +254,30 @@ public:
   }
 
   auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto filter = std::vector<ast::expression>{};
+    auto patterns = std::vector<ast::expression>{};
     while (true) {
-      filter.push_back(parse_expression(1));
+      patterns.push_back(parse_expression(1));
+      auto& pattern = patterns.back();
+      if (std::holds_alternative<ast::underscore>(*pattern.kind)) {
+        if (patterns.size() != 1 or not peek(tk::fat_arrow)) {
+          diagnostic::error("wildcard `_` must be the only pattern in an arm")
+            .primary(pattern)
+            .throw_();
+        }
+      } else {
+        auto const* unary = std::get_if<ast::unary_expr>(&*pattern.kind);
+        auto const negative_constant
+          = unary and unary->op.inner == ast::unary_op::neg
+            and std::holds_alternative<ast::constant>(*unary->expr.kind);
+        if (not negative_constant
+            and not std::holds_alternative<ast::constant>(*pattern.kind)) {
+          diagnostic::error("match patterns must be literal constants")
+            .primary(pattern)
+            .hint("use a string, blob, number, boolean, null, duration, time, "
+                  "IP address, subnet, or `_`")
+            .throw_();
+        }
+      }
       if (accept(tk::fat_arrow)) {
         break;
       }
@@ -246,7 +287,7 @@ public:
     auto pipe = parse_pipeline();
     expect(tk::rbrace);
     return match_stmt::arm{
-      std::move(filter),
+      std::move(patterns),
       std::move(pipe),
     };
   }
