@@ -28,6 +28,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:

@@ -130,7 +130,10 @@ rec {
         let
           tenzir-plugins-source =
             if builtins.pathExists ./../contrib/tenzir-plugins/README.md then
-              ./../contrib/tenzir-plugins
+              builtins.path {
+                path = ./../contrib/tenzir-plugins;
+                name = "tenzir-plugins-source";
+              }
             else
               pkgs.callPackage ./tenzir/plugins/source.nix { };
           pkg = tenzir-de.override {
