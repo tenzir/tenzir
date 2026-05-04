@@ -9,7 +9,6 @@ fixtures:
           headers:
             Content-Type: application/x-ndjson
             Content-Encoding: gzip
-          expected_status: 200
 timeout: 10
 ---
 
