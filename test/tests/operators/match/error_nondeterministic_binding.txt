@@ -1,0 +1,6 @@
+error: binding `$timestamp` depends on a non-deterministic match expression
+ --> tests/operators/match/error_nondeterministic_binding.tql:7:3
+  |
+7 |   $timestamp => {
+  |   ^^^^^^^^^^ 
+  |

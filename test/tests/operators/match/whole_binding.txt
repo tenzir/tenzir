@@ -1,0 +1,8 @@
+{
+  x: 1,
+  captured: 1,
+}
+{
+  x: 2,
+  captured: 2,
+}

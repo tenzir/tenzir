@@ -1,0 +1,6 @@
+error: binding `$ip` cannot be derived from a non-addressable match expression
+ --> tests/operators/match/error_non_addressable_binding.tql:7:14
+  |
+7 |   {src: {ip: $ip, ..}, ..} => {
+  |              ^^^ 
+  |

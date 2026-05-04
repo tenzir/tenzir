@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {src: {ip: 1.2.3.4}}
+match this {
+  {src: {ip: $ip, ..}, ..} => {
+    captured = $ip
+  }
+}
+leaked = $ip

@@ -1,0 +1,7 @@
+from {x: 1}, {x: 2}
+match x {
+  $value => {
+    captured = $value
+  }
+}
+sort x

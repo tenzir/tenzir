@@ -15,6 +15,23 @@
 
 using namespace tenzir;
 
+TEST("tql2 tokenizer: ranges and spread dots") {
+  auto tokens = tokenize_permissive("200..299 ... ..");
+  REQUIRE_EQUAL(tokens.size(), size_t{7});
+  CHECK_EQUAL(tokens[0].kind, token_kind::scalar);
+  CHECK_EQUAL(tokens[0].end, size_t{3});
+  CHECK_EQUAL(tokens[1].kind, token_kind::dot_dot);
+  CHECK_EQUAL(tokens[1].end, size_t{5});
+  CHECK_EQUAL(tokens[2].kind, token_kind::scalar);
+  CHECK_EQUAL(tokens[2].end, size_t{8});
+  CHECK_EQUAL(tokens[3].kind, token_kind::whitespace);
+  CHECK_EQUAL(tokens[4].kind, token_kind::dot_dot_dot);
+  CHECK_EQUAL(tokens[4].end, size_t{12});
+  CHECK_EQUAL(tokens[5].kind, token_kind::whitespace);
+  CHECK_EQUAL(tokens[6].kind, token_kind::dot_dot);
+  CHECK_EQUAL(tokens[6].end, size_t{15});
+}
+
 TEST("tql2 parser: expression stream parses multiple records") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);

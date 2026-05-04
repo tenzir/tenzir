@@ -1,0 +1,20 @@
+{
+  elapsed: 999ms,
+  bucket: "outside",
+}
+{
+  elapsed: 1s,
+  bucket: "inside",
+}
+{
+  elapsed: 3s,
+  bucket: "inside",
+}
+{
+  elapsed: 5s,
+  bucket: "inside",
+}
+{
+  elapsed: 6s,
+  bucket: "outside",
+}

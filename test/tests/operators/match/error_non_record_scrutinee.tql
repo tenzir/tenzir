@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {}
+match 42 {
+  {..} => {
+    y = true
+  }
+}
