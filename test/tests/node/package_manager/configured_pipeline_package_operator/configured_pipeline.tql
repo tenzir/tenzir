@@ -1,0 +1,3 @@
+pipeline::list
+where id == "repro"
+select id, state, error
