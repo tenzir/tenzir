@@ -258,25 +258,11 @@ public:
     while (true) {
       patterns.push_back(parse_expression(1));
       auto& pattern = patterns.back();
-      if (std::holds_alternative<ast::underscore>(*pattern.kind)) {
-        if (patterns.size() != 1 or not peek(tk::fat_arrow)) {
-          diagnostic::error("wildcard `_` must be the only pattern in an arm")
-            .primary(pattern)
-            .throw_();
-        }
-      } else {
-        auto const* unary = std::get_if<ast::unary_expr>(&*pattern.kind);
-        auto const negative_constant
-          = unary and unary->op.inner == ast::unary_op::neg
-            and std::holds_alternative<ast::constant>(*unary->expr.kind);
-        if (not negative_constant
-            and not std::holds_alternative<ast::constant>(*pattern.kind)) {
-          diagnostic::error("match patterns must be literal constants")
-            .primary(pattern)
-            .hint("use a string, blob, number, boolean, null, duration, time, "
-                  "IP address, subnet, or `_`")
-            .throw_();
-        }
+      if (std::holds_alternative<ast::underscore>(*pattern.kind)
+          and (patterns.size() != 1 or not peek(tk::fat_arrow))) {
+        diagnostic::error("wildcard `_` must be the only pattern in an arm")
+          .primary(pattern)
+          .throw_();
       }
       if (accept(tk::fat_arrow)) {
         break;
