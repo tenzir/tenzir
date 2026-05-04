@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from {action: "accept"}
+match action {
+  $value => {
+    verdict = $value
+  }
+  "accept" => {
+    verdict = "allowed"
+  }
+}
