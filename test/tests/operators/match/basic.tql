@@ -1,0 +1,13 @@
+from {action: "accept"}, {action: "allow"}, {action: "deny"}, {action: "drop"}, {action: "other"}
+match action {
+  "accept", "allow" => {
+    verdict = "allowed"
+  }
+  "deny", "drop" => {
+    verdict = "blocked"
+  }
+  _ => {
+    verdict = "unknown"
+  }
+}
+sort action

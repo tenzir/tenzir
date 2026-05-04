@@ -752,11 +752,11 @@ struct if_stmt {
 
 struct match_stmt {
   struct arm {
-    std::vector<expression> filter;
+    std::vector<expression> patterns;
     pipeline pipe;
 
     friend auto inspect(auto& f, arm& x) -> bool {
-      return f.object(x).fields(f.field("filter", x.filter),
+      return f.object(x).fields(f.field("patterns", x.patterns),
                                 f.field("pipe", x.pipe));
     }
   };
@@ -1155,7 +1155,7 @@ protected:
   }
 
   void enter(ast::match_stmt::arm& x) {
-    go(x.filter);
+    go(x.patterns);
     go(x.pipe);
   }
 
