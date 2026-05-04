@@ -1,0 +1,5 @@
+title: missing selection sigma rule
+detection:
+  selection:
+    foo: alpha
+  condition: 1 of missing*

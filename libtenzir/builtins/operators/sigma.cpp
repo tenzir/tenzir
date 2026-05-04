@@ -88,7 +88,9 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
   /// Joins a set of sub-expressions into a conjunction or disjunction.
   template <ast::binary_op Op>
   static ast::expression join(std::vector<ast::expression> xs) {
-    TENZIR_ASSERT(not xs.empty());
+    if (xs.empty()) {
+      return ast::constant{false, location::unknown};
+    }
     auto result = std::move(xs[0]);
     for (auto i = size_t{1}; i < xs.size(); ++i) {
       result = ast::binary_expr{std::move(result), {Op, {}}, std::move(xs[i])};
@@ -96,9 +98,24 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
     return result;
   }
 
+  static void flatten(ast::expression x, ast::binary_op op,
+                      std::vector<ast::expression>& result) {
+    if (auto* binary = try_as<ast::binary_expr>(x);
+        binary and binary->op.inner == op) {
+      flatten(std::move(binary->left), op, result);
+      flatten(std::move(binary->right), op, result);
+      return;
+    }
+    result.push_back(std::move(x));
+  }
+
   template <ast::binary_op Op>
   static ast::expression force(ast::expression x) {
-    return x;
+    auto from
+      = Op == ast::binary_op::and_ ? ast::binary_op::or_ : ast::binary_op::and_;
+    auto xs = std::vector<ast::expression>{};
+    flatten(std::move(x), from, xs);
+    return join<Op>(std::move(xs));
   }
 
   /// Performs *-wildcard search on all search identifiers.

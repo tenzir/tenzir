@@ -1,0 +1,5 @@
+from {id: "alpha", foo: "alpha", bar: "x"},
+     {id: "bravo", foo: "x", bar: "bravo"},
+     {id: "both", foo: "alpha", bar: "bravo"}
+sigma "tests/operators/sigma/inputs/all-of.yaml"
+select event.id
