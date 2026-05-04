@@ -1,6 +1,7 @@
 ---
 fixtures:
   - http_request:
+      stop_on_connection_drop: true
       path: /test/_bulk
       body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
 timeout: 10

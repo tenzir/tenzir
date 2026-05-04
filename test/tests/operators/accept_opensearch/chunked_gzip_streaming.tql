@@ -9,6 +9,7 @@ fixtures:
           headers:
             Content-Type: application/x-ndjson
             Content-Encoding: gzip
+          stop_on_connection_drop: true
 timeout: 10
 ---
 

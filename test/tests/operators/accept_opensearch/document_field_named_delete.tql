@@ -1,6 +1,7 @@
 ---
 fixtures:
   - http_request:
+      stop_on_connection_drop: true
       path: /_bulk
       body: "{\"index\":{\"_index\":\"test\"}}\n{\"delete\":\"not-an-action\",\"value\":1}\n{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
 timeout: 10

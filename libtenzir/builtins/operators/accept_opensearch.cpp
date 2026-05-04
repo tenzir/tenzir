@@ -79,6 +79,9 @@ struct Response {
 
 using ResponseSignal = Oneshot<Response>;
 
+// needed to make Message default-constructable
+struct Noop {};
+
 struct RequestStarted {
   uint64_t request_id;
   std::string content_encoding;
@@ -94,7 +97,7 @@ struct RequestFinished {
   uint64_t request_id;
 };
 
-using Message = variant<RequestStarted, RequestBody, RequestFinished>;
+using Message = variant<Noop, RequestStarted, RequestBody, RequestFinished>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 class failing_diagnostic_handler final : public diagnostic_handler {
@@ -313,7 +316,7 @@ public:
     force_stop();
   }
   AcceptOpenSearch(const AcceptOpenSearch&) = default;
-  AcceptOpenSearch(AcceptOpenSearch&&) = delete;
+  AcceptOpenSearch(AcceptOpenSearch&&) = default;
   AcceptOpenSearch& operator=(const AcceptOpenSearch&) = default;
   AcceptOpenSearch& operator=(AcceptOpenSearch&&) = delete;
 
@@ -501,6 +504,9 @@ public:
           .content_type = std::string{bulk_content_type},
           .body = std::string{bulk_response},
         });
+      },
+      [&](Noop) -> Task<void> {
+        co_return;
       });
   }
 
@@ -516,7 +522,7 @@ public:
     co_return;
   }
 
-  auto state() -> OperatorState {
+  auto state() -> OperatorState override {
     return not server_ ? OperatorState::done : OperatorState::normal;
   }
 

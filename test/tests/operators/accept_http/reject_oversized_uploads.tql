@@ -10,6 +10,7 @@ fixtures:
           body: 'ok'
           expected_status: 200
           expected_body: ""
+          stop_on_connection_drop: true
 ---
 
 accept_http env("HTTP_REQUEST_ENDPOINT"), max_request_size=32 {

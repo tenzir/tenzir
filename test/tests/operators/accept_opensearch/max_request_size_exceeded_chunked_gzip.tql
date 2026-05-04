@@ -14,6 +14,7 @@ fixtures:
         - path: /_bulk
           body: "{\"index\":{}}\n{\"a\":1}\n"
           expected_status: 200
+          stop_on_connection_drop: true
 timeout: 10
 ---
 

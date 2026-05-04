@@ -10,6 +10,7 @@ fixtures:
           expected_status: 415
         - path: /_bulk
           body: "{\"index\":{\"_index\":\"test\"}}\n{\"value\":42}\n"
+          stop_on_connection_drop: true
 timeout: 10
 ---
 

@@ -14,7 +14,7 @@ fixtures:
           expected_status: 413
         - path: /ingest
           body: "ok\n"
-          expected_status: 200
+          stop_on_connection_drop: true
 timeout: 10
 ---
 

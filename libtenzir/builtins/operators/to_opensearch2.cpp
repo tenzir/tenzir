@@ -86,7 +86,8 @@ public:
     }
     const auto has_idx = idx and *idx and not(*idx)->empty();
     const auto has_id = id and *id and not(*id)->empty();
-    const auto needs_id = action == "delete" or action == "update";
+    const auto needs_id
+      = action == "delete" or action == "update" or action == "upsert";
     if (needs_id and not has_id) {
       return diagnostic::warning("action `{}` requires `id`, but got `null`",
                                  action)

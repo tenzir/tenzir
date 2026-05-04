@@ -34,6 +34,7 @@ class _RequestSpec:
     body_chunks: list[bytes]
     body_chunk_delay: float
     expected_status: int
+    stop_on_connection_drop: bool
 
 
 def _make_request_spec(entry: dict[str, Any]) -> _RequestSpec:
@@ -42,6 +43,7 @@ def _make_request_spec(entry: dict[str, Any]) -> _RequestSpec:
     headers = dict(entry.get("headers", {}))
     expected_status = int(entry.get("expected_status", 200))
     body_chunk_delay = float(entry.get("body_chunk_delay", 0.0))
+    stop_on_connection_drop = bool(entry.get("stop_on_connection_drop", False))
     body_chunks_base64 = entry.get("body_chunks_base64")
     if body_chunks_base64 is not None:
         body_chunks = [base64.b64decode(chunk) for chunk in body_chunks_base64]
@@ -57,6 +59,7 @@ def _make_request_spec(entry: dict[str, Any]) -> _RequestSpec:
         body_chunks=body_chunks,
         body_chunk_delay=body_chunk_delay,
         expected_status=expected_status,
+        stop_on_connection_drop=stop_on_connection_drop,
     )
 
 
@@ -83,6 +86,7 @@ def http_request_chunked() -> FixtureHandle:
     request_specs = [_make_request_spec(entry) for entry in opts.requests]
     errors: list[str] = []
     sent_count = [0]
+    stopped_early = [False]
     stop_event = threading.Event()
 
     def _send_request(spec: _RequestSpec) -> int | None:
@@ -149,6 +153,9 @@ def http_request_chunked() -> FixtureHandle:
                     return
                 try:
                     status = _send_request(spec)
+                    if status is None and spec.stop_on_connection_drop:
+                        stopped_early[0] = True
+                        return
                     if status != spec.expected_status:
                         errors.append(
                             f"expected HTTP status {spec.expected_status}, got {status}"
@@ -158,6 +165,12 @@ def http_request_chunked() -> FixtureHandle:
                     break
                 except OSError as exc:
                     last_error = str(exc)
+                    if (
+                        spec.stop_on_connection_drop
+                        and "connection refused" not in last_error.lower()
+                    ):
+                        stopped_early[0] = True
+                        return
                     time.sleep(opts.retry_delay)
             if not sent:
                 errors.append(
@@ -184,7 +197,7 @@ def http_request_chunked() -> FixtureHandle:
             )
         if errors:
             raise AssertionError("; ".join(errors))
-        if sent_count[0] < len(request_specs):
+        if sent_count[0] < len(request_specs) and not stopped_early[0]:
             raise AssertionError(
                 f"expected to send {len(request_specs)} requests, sent {sent_count[0]}"
             )

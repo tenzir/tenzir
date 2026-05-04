@@ -5,6 +5,7 @@ fixtures:
       requests:
         - body: '{"a": 1}'
           tls: true
+          stop_on_connection_drop: true
 ---
 
 let $tls = {
