@@ -1,0 +1,4 @@
+fixtures: [node]
+package-dirs:
+  - ../../../../inputs/configured-pipeline-package/acme
+timeout: 30

@@ -1,0 +1,7 @@
+tenzir:
+  pipelines:
+    repro:
+      definition: |
+        from {x: 1}
+        acme::mark
+        discard
