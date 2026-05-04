@@ -380,6 +380,9 @@ public:
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(result);
+    if (not next_timeout_) {
+      co_return;
+    }
     if (std::chrono::steady_clock::now() < *next_timeout_) {
       co_return;
     }
