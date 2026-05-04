@@ -669,7 +669,7 @@ auto record_batch_from_struct_array(
   TENZIR_ASSERT(schema);
   TENZIR_ASSERT(array);
   auto columns = arrow::ArrayVector{};
-  if (array->null_count() > 0) {
+  if (array->null_count() > 0 || array->offset() != 0) {
     columns = check(array->Flatten(tenzir::arrow_memory_pool()));
   } else {
     columns = array->fields();
