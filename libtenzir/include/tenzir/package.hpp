@@ -29,8 +29,7 @@ struct package_source final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
-    -> caf::expected<package_source>;
+  static auto parse(const view<record>& data) -> caf::expected<package_source>;
 
   friend auto inspect(auto& f, package_source& x) -> bool {
     return f.object(x)
@@ -52,8 +51,7 @@ struct package_config final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
-    -> caf::expected<package_config>;
+  static auto parse(const view<record>& data) -> caf::expected<package_config>;
 
   friend auto inspect(auto& f, package_config& x) -> bool {
     return f.object(x)
@@ -67,14 +65,13 @@ struct package_config final {
 
 struct package_input final {
   std::string name; // required to be non-empty
-  std::string type; // required to be non-empty
+  std::string type; // optional type hint
   std::optional<std::string> description;
   std::optional<std::string> default_;
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
-    -> caf::expected<package_input>;
+  static auto parse(const view<record>& data) -> caf::expected<package_input>;
 
   friend auto inspect(auto& f, package_input& x) -> bool {
     return f.object(x)
@@ -92,7 +89,7 @@ struct package_operator_parameter final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
+  static auto parse(const view<record>& data)
     -> caf::expected<package_operator_parameter>;
 
   friend auto inspect(auto& f, package_operator_parameter& x) -> bool {
@@ -122,10 +119,9 @@ struct package_operator final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
+  static auto parse(const view<record>& data)
     -> caf::expected<package_operator>;
-  static auto parse(std::string_view input, std::string_view package_path)
-    -> caf::expected<package_operator>;
+  static auto parse(std::string_view input) -> caf::expected<package_operator>;
 
   friend auto inspect(auto& f, package_operator& x) -> bool {
     return f.object(x)
@@ -145,11 +141,12 @@ struct package_pipeline final {
 
   auto to_record() const -> record;
 
+  static auto parse(const view<record>& data)
+    -> caf::expected<package_pipeline>;
   static auto parse(const view<record>& data, std::string_view package_path)
     -> caf::expected<package_pipeline>;
 
-  static auto parse(std::string_view input, std::string_view package_path)
-    -> caf::expected<package_pipeline>;
+  static auto parse(std::string_view input) -> caf::expected<package_pipeline>;
 
   friend auto inspect(auto& f, package_pipeline& x) -> bool {
     return f.object(x)
@@ -171,8 +168,7 @@ struct package_context final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
-    -> caf::expected<package_context>;
+  static auto parse(const view<record>& data) -> caf::expected<package_context>;
 
   friend auto inspect(auto& f, package_context& x) -> bool {
     return f.object(x)
@@ -190,10 +186,8 @@ struct package_example final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data, std::string_view package_path)
-    -> caf::expected<package_example>;
-  static auto parse(std::string_view input, std::string_view package_path)
-    -> caf::expected<package_example>;
+  static auto parse(const view<record>& data) -> caf::expected<package_example>;
+  static auto parse(std::string_view input) -> caf::expected<package_example>;
 
   friend auto inspect(auto& f, package_example& x) -> bool {
     return f.object(x)
@@ -252,6 +246,7 @@ struct package final {
   // the input.
   std::optional<package_config> config;
 
+  static auto parse(const view<record>& data) -> caf::expected<package>;
   static auto parse(const view<record>& data, std::string_view package_path)
     -> caf::expected<package>;
 

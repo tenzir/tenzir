@@ -1,0 +1,9 @@
+error: unknown key `schedule` in pipeline definition
+ --> tests/node/package/validation/unknown-pipeline-key.tql:6:1
+  |
+6 | package::add
+  | ^^^^^^^^^^^^ 
+  |
+  = note: invalid package definition
+  = note: while parsing key demo for field pipelines
+  = note: invalid package definition

@@ -1,0 +1,11 @@
+id: unknown-pipeline-key
+name: Unknown Pipeline Key
+description: Package with an unknown pipeline key.
+
+pipelines:
+  demo:
+    name: Demo
+    description: Emits one event.
+    schedule: hourly
+    definition: |
+      from {message: "hello"}

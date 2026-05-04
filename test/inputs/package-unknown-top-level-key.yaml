@@ -1,0 +1,12 @@
+id: unknown-top-level-key
+name: Unknown Top-level Key
+description: Package with an unknown top-level key.
+
+surprise: true
+
+pipelines:
+  demo:
+    name: Demo
+    description: Emits one event.
+    definition: |
+      from {message: "hello"}

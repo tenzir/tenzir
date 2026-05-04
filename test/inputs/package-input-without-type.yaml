@@ -1,0 +1,17 @@
+id: input-without-type
+name: Input Without Type
+description: Package with a documented input that omits the optional type.
+
+inputs:
+  message:
+    name: Message
+    description: Text to emit.
+    default: hello
+
+pipelines:
+  demo:
+    name: Demo
+    description: Emits one event.
+    definition: |
+      from {message: "{{ inputs.message }}"}
+      import

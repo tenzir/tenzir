@@ -1,0 +1,3 @@
+suite:
+  name: package-validation
+  mode: parallel

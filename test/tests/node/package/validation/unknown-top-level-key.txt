@@ -1,0 +1,7 @@
+error: unknown key `surprise` in package definition
+ --> tests/node/package/validation/unknown-top-level-key.tql:6:1
+  |
+6 | package::add
+  | ^^^^^^^^^^^^ 
+  |
+  = note: invalid package definition
