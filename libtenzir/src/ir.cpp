@@ -402,10 +402,16 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> {
-    if (ctx.get_sub(int64_t{0}).is_some()) {
-      co_return;
+    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+      if (not args_.arms[i].pipeline.operators.empty()
+          and ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
+        co_return;
+      }
     }
     for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+      if (args_.arms[i].pipeline.operators.empty()) {
+        continue;
+      }
       co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
                                           args_.arms[i].pipeline);
     }
@@ -461,7 +467,13 @@ public:
       }
       auto sub = ctx.get_sub(static_cast<int64_t>(arm_index));
       if (not sub) {
-        arm_closed_[arm_index] = true;
+        if (args_.arms[arm_index].pipeline.operators.empty()) {
+          if (push) {
+            co_await (*push)(std::move(filtered));
+          }
+        } else {
+          arm_closed_[arm_index] = true;
+        }
         continue;
       }
       auto& handle = as<SubHandle<table_slice>>(*sub);
@@ -655,6 +667,10 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("match operator expected events").emit(dh);
+      return failure::promise();
+    }
     auto result = std::optional<element_type_tag>{};
     auto has_wildcard = false;
     for (auto const& arm : args_.arms) {
