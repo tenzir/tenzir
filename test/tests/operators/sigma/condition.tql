@@ -1,0 +1,8 @@
+from {id: "alpha", foo: "alpha", bar: "x", baz: "x", skip: false},
+     {id: "bravo", foo: "x", bar: "bravo", baz: "x", skip: false},
+     {id: "filtered", foo: "alpha", bar: "x", baz: "x", skip: true},
+     {id: "ignored", foo: "x", bar: "x", baz: "charlie", skip: false},
+     {id: "miss", foo: "x", bar: "x", baz: "x", skip: false}
+sigma "tests/operators/sigma/inputs/condition.yaml"
+select event.id
+sort event.id

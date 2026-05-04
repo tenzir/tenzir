@@ -1,0 +1,20 @@
+{
+  event: {
+    id: "base64",
+  },
+}
+{
+  event: {
+    id: "cidr",
+  },
+}
+{
+  event: {
+    id: "numeric",
+  },
+}
+{
+  event: {
+    id: "offset",
+  },
+}

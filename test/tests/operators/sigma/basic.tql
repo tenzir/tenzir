@@ -1,2 +1,2 @@
 from {foo: "needle"}
-sigma f"{env("TENZIR_INPUTS")}/sigma/basic-rule.yaml"
+sigma f"{env("TENZIR_INPUTS")}/basic-rule.yaml"

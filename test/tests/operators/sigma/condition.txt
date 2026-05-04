@@ -1,0 +1,15 @@
+{
+  event: {
+    id: "alpha",
+  },
+}
+{
+  event: {
+    id: "bravo",
+  },
+}
+{
+  event: {
+    id: "ignored",
+  },
+}
