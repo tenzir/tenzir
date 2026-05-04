@@ -286,8 +286,8 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
     }
     for (auto field = 0; field < builder.num_fields(); ++field) {
       TRY(append_array_slice(*builder.field_builder(field),
-                             ty.field(field).type, *array.field(field), begin,
-                             count));
+                             ty.field(field).type, *array.field(field),
+                             begin + array.offset(), count));
     }
   } else if constexpr (std::same_as<Ty, list_type>) {
     for (auto row = begin; row < end; ++row) {
