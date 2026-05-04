@@ -1,0 +1,20 @@
+{
+  action: "accept",
+  verdict: "allowed",
+}
+{
+  action: "allow",
+  verdict: "allowed",
+}
+{
+  action: "deny",
+  verdict: "blocked",
+}
+{
+  action: "drop",
+  verdict: "blocked",
+}
+{
+  action: "other",
+  verdict: "unknown",
+}

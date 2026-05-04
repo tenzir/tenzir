@@ -1,0 +1,12 @@
+{
+  x: null,
+  y: "missing",
+}
+{
+  x: -1,
+  y: "negative",
+}
+{
+  x: 1,
+  y: "other",
+}

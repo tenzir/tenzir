@@ -1,0 +1,7 @@
+error: match patterns must be literal constants
+ --> tests/operators/match/error_non_literal.tql:7:3
+  |
+7 |   other => {
+  |   ^^^^^ 
+  |
+  = hint: use a string, blob, number, boolean, null, duration, time, IP address, subnet, or `_`
