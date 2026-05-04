@@ -1,0 +1,26 @@
+---
+fixtures: [http_server]
+timeout: 60
+---
+
+// Original (`reference/operators/http.mdx`):
+// from { ctx: {severity: "HIGH"}, domain: "tenzir.com", ip: 0.0.0.0 }
+// http "https://urlscan.io/api/v1/search?q=" + domain, response_field=scan
+// scan.results = scan.results[0]
+
+from {
+  ctx: {severity: "HIGH"},
+  domain: "tenzir.com",
+  ip: 0.0.0.0,
+}
+each {
+  from_http env("HTTP_FIXTURE_METHOD_URL"), method="put", tls=false {
+    read_json
+    this = {
+      ctx: $this.ctx,
+      domain: $this.domain,
+      ip: $this.ip,
+      scan: this,
+    }
+  }
+}

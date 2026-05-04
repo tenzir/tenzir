@@ -81,6 +81,7 @@ struct FromHttpArgs {
   Option<location> server;
   located<ir::pipeline> parser;
   let_id response;
+  location operator_location = location::unknown;
 };
 
 // Messages from the fetch task to the operator.
@@ -213,7 +214,7 @@ auto make_paginated_request_config(
 auto resolve_http_secrets(
   OpCtx& ctx, FromHttpArgs const& args, std::string& resolved_url,
   std::vector<std::pair<std::string, std::string>>& resolved_headers)
-  -> Task<failure_or<void>> {
+  -> Task<failure_or<bool>> {
   resolved_url.clear();
   auto requests = std::vector<secret_request>{};
   requests.emplace_back(
@@ -231,9 +232,9 @@ auto resolve_http_secrets(
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return failure::promise();
   }
-  CO_TRY(
-    http::normalize_url_and_tls(args.tls, resolved_url, args.url.source, ctx));
-  co_return {};
+  CO_TRY(auto tls_enabled, http::normalize_url_and_tls(args.tls, resolved_url,
+                                                       args.url.source, ctx));
+  co_return tls_enabled;
 }
 
 using pagination_spec
@@ -408,7 +409,8 @@ struct FetchConfig {
   std::shared_ptr<folly::SSLContext> tls_context;
 };
 
-auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh,
+auto make_fetch_config(FromHttpArgs const& args, bool tls_enabled,
+                       diagnostic_handler& dh,
                        const caf::actor_system_config* cfg)
   -> Option<FetchConfig> {
   auto config = FetchConfig{};
@@ -430,12 +432,14 @@ auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh,
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
-  auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
-  auto result = tls_opts.make_folly_ssl_context(dh, cfg);
-  if (result.is_success()) {
-    config.tls_context = std::move(*result);
-  } else {
-    return None{};
+  if (tls_enabled) {
+    auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
+    auto result = tls_opts.make_folly_ssl_context(dh, cfg);
+    if (result.is_success()) {
+      config.tls_context = std::move(*result);
+    } else {
+      return None{};
+    }
   }
   return Option<FetchConfig>{std::move(config)};
 }
@@ -650,16 +654,16 @@ public:
     paginate_ = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
-    auto sec_res = co_await resolve_http_secrets(ctx, args_, resolved_url,
-                                                 resolved_headers_);
-    if (sec_res.is_error()) {
+    auto tls_enabled = co_await resolve_http_secrets(ctx, args_, resolved_url,
+                                                     resolved_headers_);
+    if (tls_enabled.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     pagination_.current_url = resolved_url;
     // prepare fetch config
     auto fetch_config = make_fetch_config(
-      args_, ctx, std::addressof(ctx.actor_system().config()));
+      args_, *tls_enabled, ctx, std::addressof(ctx.actor_system().config()));
     if (not fetch_config) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -717,7 +721,7 @@ public:
           if (not args_.error_field) {
             diagnostic::error("received HTTP error status {}",
                               response_->status)
-              .primary(args_.url.source)
+              .primary(args_.operator_location)
               .emit(ctx);
           }
         }
@@ -762,7 +766,7 @@ public:
         diagnostic::error(
           "HTTP request to `{}` failed: {}", pagination_.current_url,
           strip_errno_from_error_message(std::move(err.message)))
-          .primary(args_.url.source)
+          .primary(args_.operator_location)
           .emit(ctx);
         pagination_.next_url = None{};
         lifecycle_ = Lifecycle::done;
@@ -937,6 +941,7 @@ public:
     auto server_arg = d.named("server", &FromHttpArgs::server);
     auto parser_arg = d.pipeline(&FromHttpArgs::parser,
                                  {{"response", &FromHttpArgs::response}});
+    d.operator_location(&FromHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Validate TLS options.
       tls_validator(ctx);
@@ -948,16 +953,19 @@ public:
           .emit(ctx);
       }
       // Validate encode: requires a body and must be "json" or "form".
-      if (auto encode = ctx.get(encode_arg)) {
-        if (not ctx.get(body_arg)) {
+      auto body_loc = ctx.get_location(body_arg);
+      if (auto encode_loc = ctx.get_location(encode_arg)) {
+        if (not body_loc) {
           diagnostic::error("`encode` requires a `body`")
-            .primary(encode->source)
+            .primary(*encode_loc)
             .emit(ctx);
-        } else if (encode->inner != "json" and encode->inner != "form") {
-          diagnostic::error("unsupported encoding: `{}`", encode->inner)
-            .hint(R"(`encode` must be `"json"` or `"form"`)")
-            .primary(encode->source)
-            .emit(ctx);
+        } else if (auto encode = ctx.get(encode_arg)) {
+          if (encode->inner != "json" and encode->inner != "form") {
+            diagnostic::error("unsupported encoding: `{}`", encode->inner)
+              .hint(R"(`encode` must be `"json"` or `"form"`)")
+              .primary(encode->source)
+              .emit(ctx);
+          }
         }
       }
       // Validate body type when explicitly provided.

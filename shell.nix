@@ -94,6 +94,7 @@ let
         pkgs.socat
         pkgs.yara
         pkgs.parallel
+        pkgs.openssl
         package.tenzir-test
       ]
       ++ clang-shims

@@ -1,0 +1,20 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        method: POST
+        path: /options/body
+        body: "{\n  \"x\": 42,\n  \"y\": \"foo\"\n}"
+timeout: 60
+---
+
+// Original (`guides/testing/create-fixtures.mdx`):
+// from {x: 42, y: "foo"}
+// http env("HTTP_FIXTURE_URL"), body=this
+
+from {x: 42, y: "foo"}
+each {
+  from_http env("HTTP_FIXTURE_BODY_URL"), body=$this, encode="json", tls=false {
+    read_json
+  }
+}

@@ -1,6 +1,6 @@
 error: received HTTP error status 500
- --> tests/operators/from_http/error_large_body_no_error_field.tql:7:11
+ --> tests/operators/from_http/error_large_body_no_error_field.tql:7:1
   |
 7 | from_http env("HTTP_FIXTURE_LARGE_ERROR_URL"), tls=false { read_json }
-  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  | ^^^^^^^^^ 
   |

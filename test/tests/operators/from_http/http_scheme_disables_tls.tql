@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        method: POST
+        path: /options/body
+        header_name: Content-Type
+        header_value: application/json
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_BODY_URL"),
+          method="post",
+          body={name: "John", email: "john@example.com"},
+          encode="json" {
+  read_json
+}

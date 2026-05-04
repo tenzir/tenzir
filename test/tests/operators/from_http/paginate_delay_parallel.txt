@@ -1,0 +1,20 @@
+{
+  page: 1,
+  next: "/paginate/lambda/2",
+  domain: "a-domain",
+}
+{
+  page: 2,
+  next: null,
+  domain: "a-domain",
+}
+{
+  page: 1,
+  next: "/paginate/lambda/2",
+  domain: "b-domain",
+}
+{
+  page: 2,
+  next: null,
+  domain: "b-domain",
+}
