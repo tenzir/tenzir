@@ -1,7 +1,7 @@
 error: match patterns must be constant expressions
- --> tests/operators/match/error_non_literal.tql:7:3
+ --> tests/operators/match/error_invalid_negative.tql:7:3
   |
-7 |   other => {
-  |   ^^^^^ 
+7 |   -"foo" => {
+  |   ^^^^^^ 
   |
   = hint: use a literal, a constant `let` binding, or `_`
