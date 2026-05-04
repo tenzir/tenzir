@@ -675,6 +675,9 @@ auto const_eval_match_expression(ast::expression const& expr, location source,
 using BindingMap = std::unordered_map<std::string, ast::expression>;
 using BindingPath = std::vector<ast::identifier>;
 
+auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
+                                  compile_ctx const& ctx) -> bool;
+
 auto validate_match_pattern_bindings(ast::match_pattern const& pattern,
                                      compile_ctx const& ctx,
                                      std::unordered_set<std::string>& names)
@@ -694,6 +697,28 @@ auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
 
 auto lower_match_pattern(ast::match_pattern const& pattern,
                          diagnostic_handler& dh) -> failure_or<MatchPattern>;
+
+auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
+                                  compile_ctx const& ctx) -> bool {
+  return pattern.kind->match<bool>(
+    [](ast::wildcard_pattern const&) {
+      return true;
+    },
+    [](ast::expression_pattern const&) {
+      return false;
+    },
+    [&](ast::binding_pattern const& binding) {
+      auto name = std::string_view{binding.name.name};
+      TENZIR_ASSERT(name.starts_with("$"));
+      return not ctx.get(name.substr(1));
+    },
+    [](ast::range_pattern const&) {
+      return false;
+    },
+    [](ast::record_pattern const&) {
+      return false;
+    });
+}
 
 auto validate_match_pattern_bindings(ast::match_pattern const& pattern,
                                      compile_ctx const& ctx,
@@ -1330,8 +1355,9 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         for (auto& ast_arm : x.arms) {
           auto arm = MatchArgs::Arm{};
           arm.source = ast_arm.patterns.front().get_location();
-          arm.wildcard = ast_arm.patterns.size() == 1
-                         and ast_arm.patterns.front().is_wildcard();
+          arm.wildcard
+            = ast_arm.patterns.size() == 1
+              and is_irrefutable_match_pattern(ast_arm.patterns.front(), ctx);
           if (not arm.wildcard) {
             auto bindings = std::unordered_set<std::string>{};
             for (auto const& pattern : ast_arm.patterns) {
