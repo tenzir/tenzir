@@ -1,0 +1,6 @@
+title: all-of sigma rule
+detection:
+  selection:
+    - foo: alpha
+    - bar: bravo
+  condition: all of selection

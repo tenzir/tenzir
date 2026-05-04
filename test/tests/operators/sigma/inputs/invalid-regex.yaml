@@ -1,0 +1,5 @@
+title: invalid regex sigma rule
+detection:
+  selection:
+    payload|re: '['
+  condition: selection

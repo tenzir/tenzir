@@ -99,7 +99,6 @@ private:
       | parsers::number
       | parsers::boolean
       | parsers::qqstr
-      | parsers::pattern
       | '[' >> ~(x % ',') >> trailing_comma >> ']'
       | '{' >> ~parse_as<map>(kvp % ',') >> trailing_comma >> '}'
       | record_parser

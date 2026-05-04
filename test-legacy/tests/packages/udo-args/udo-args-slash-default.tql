@@ -1,0 +1,3 @@
+// Use a default value that looks like a TQL pattern.
+// Should preserve the slash-delimited value as a string.
+argspkg::slash_default

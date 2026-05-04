@@ -276,7 +276,7 @@ WITH_FIXTURE(fixture) {
 
   TEST("labeler") {
     auto str
-      = "(x == 5 && :bool == true) || (foo == /foo/ && !(x == 5 || #schema == /bar/))"s;
+      = R"((x == 5 && :bool == true) || (foo == "foo" && !(x == 5 || #schema == "bar")))"s;
     auto expr = to_expr(str);
     // Create a visitor that records all offsets in order.
     detail::stable_map<expression, offset> offset_map;
@@ -289,26 +289,26 @@ WITH_FIXTURE(fixture) {
       {to_expr("x == 5 && :bool == true"), {0, 0}},
       {to_expr("x == 5"), {0, 0, 0}},
       {to_expr(":bool == true"), {0, 0, 1}},
-      {to_expr("foo == /foo/ && !(x == 5 || #schema == /bar/)"), {0, 1}},
-      {to_expr("foo == /foo/"), {0, 1, 0}},
-      {to_expr("!(x == 5 || #schema == /bar/)"), {0, 1, 1}},
-      {to_expr("x == 5 || #schema == /bar/"), {0, 1, 1, 0}},
+      {to_expr(R"(foo == "foo" && !(x == 5 || #schema == "bar"))"), {0, 1}},
+      {to_expr(R"(foo == "foo")"), {0, 1, 0}},
+      {to_expr(R"(!(x == 5 || #schema == "bar"))"), {0, 1, 1}},
+      {to_expr(R"(x == 5 || #schema == "bar")"), {0, 1, 1, 0}},
       {to_expr("x == 5"), {0, 1, 1, 0, 0}},
-      {to_expr("#schema == /bar/"), {0, 1, 1, 0, 1}},
+      {to_expr(R"(#schema == "bar")"), {0, 1, 1, 0, 1}},
     };
     CHECK_EQUAL(offset_map, expected_offset_map);
   }
 
   TEST("at") {
     auto str
-      = "(x == 5 && :bool == true) || (foo == /foo/ && !(x == 5 || #schema == /bar/))"s;
+      = R"((x == 5 && :bool == true) || (foo == "foo" && !(x == 5 || #schema == "bar")))"s;
     auto expr = to_expr(str);
     CHECK_EQUAL(at(expr, {}), nullptr);  // invalid offset
     CHECK_EQUAL(at(expr, {0}), &expr);   // root node
     CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
     CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == true"));
-    CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo == /foo/"));
-    CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("#schema == /bar/"));
+    CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr(R"(foo == "foo")"));
+    CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr(R"(#schema == "bar")"));
     CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
   }
 
@@ -351,21 +351,21 @@ WITH_FIXTURE(fixture) {
     MESSAGE("simple roundtrip");
     {
       auto str
-        = "((x == 5 and :bool == true) or (foo == /foo/ and not (x == 5 or #schema == /bar/)))"s;
+        = R"(((x == 5 and :bool == true) or (foo == "foo" and not (x == 5 or #schema == "bar"))))"s;
       auto expr = to_expr(str);
       CHECK_EQUAL(str, to_string(expr));
     }
   }
 
   TEST("expression parser composability") {
-    auto str = "x == 5 | :bool == true || #schema == /bar/ | +3"s;
+    auto str = R"(x == 5 | :bool == true || #schema == "bar" | +3)"s;
     std::vector<expression> result;
     auto p = (parsers::expr % (*parsers::space >> '|' >> *parsers::space))
              >> parsers::eoi;
     REQUIRE(p(str, result));
     REQUIRE_EQUAL(result.size(), 3u);
     CHECK_EQUAL(result[0], to_expr("x == 5"));
-    CHECK_EQUAL(result[1], to_expr(":bool == true || #schema == /bar/"));
+    CHECK_EQUAL(result[1], to_expr(R"(:bool == true || #schema == "bar")"));
     CHECK_EQUAL(result[2], to_expr("+3"));
   }
 }

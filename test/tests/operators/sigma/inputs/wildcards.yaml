@@ -1,0 +1,7 @@
+title: wildcard sigma rule
+detection:
+  selection:
+    command|contains: rundll32.exe
+    image|endswith: \\rundll32.exe
+    parent|startswith: C:\\Windows
+  condition: selection

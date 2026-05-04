@@ -1,0 +1,11 @@
+title: condition sigma rule
+detection:
+  selection_alpha:
+    foo: alpha
+  selection_bravo:
+    bar: bravo
+  selection_charlie:
+    baz: charlie
+  filter:
+    skip: true
+  condition: selection_alpha or selection_bravo and selection_charlie

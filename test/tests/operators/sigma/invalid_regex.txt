@@ -1,0 +1,4 @@
+warning: sigma operator ignores rule 'tests/operators/sigma/inputs/invalid-regex.yaml'
+ = note: invalid regular expression for Sigma field `payload|re`
+ = note: regex: [
+ = note: error: missing ]: [

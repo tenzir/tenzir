@@ -251,13 +251,13 @@ TEST("parseable") {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == data{std::string{"bar"}});
-  MESSAGE("pattern");
-  str = "/foo/"s;
+  MESSAGE("slash-delimited string");
+  str = R"("/foo/")"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == unbox(to<pattern>("/foo/")));
+  CHECK(d == data{std::string{"/foo/"}});
   MESSAGE("address");
   str = "10.0.0.1"s;
   f = str.begin();

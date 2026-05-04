@@ -1,0 +1,6 @@
+from {
+  command: "C:\\Windows\\System32\\rundll32.exe shell32.dll",
+  image: "C:\\Windows\\System32\\rundll32.exe",
+  parent: "C:\\Windows\\explorer.exe",
+}
+sigma "tests/operators/sigma/inputs/wildcards.yaml"

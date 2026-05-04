@@ -1,0 +1,5 @@
+title: contains cidr sigma rule
+detection:
+  selection:
+    ip|contains: 192.168.0.0/24
+  condition: selection

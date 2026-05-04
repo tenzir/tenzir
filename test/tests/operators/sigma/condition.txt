@@ -1,0 +1,10 @@
+{
+  event: {
+    id: "alpha",
+  },
+}
+{
+  event: {
+    id: "both",
+  },
+}

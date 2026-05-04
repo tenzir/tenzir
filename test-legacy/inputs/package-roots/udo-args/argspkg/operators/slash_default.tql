@@ -1,0 +1,10 @@
+---
+description: "Echo a slash-delimited string default"
+args:
+  positional:
+    - name: directory
+      type: string
+      default: "/tmp-data/"
+      description: "Directory path with leading and trailing slashes"
+---
+from {directory: $directory}

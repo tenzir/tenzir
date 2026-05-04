@@ -1,0 +1,3 @@
+from {id: "alpha", foo: "alpha"}
+sigma "tests/operators/sigma/inputs/invalid-wildcard.yaml"
+select event.id

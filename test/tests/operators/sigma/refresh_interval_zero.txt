@@ -1,6 +1,6 @@
 error: `refresh_interval` must be a positive duration
- --> tests/operators/sigma/refresh_interval_zero.tql:6:73
+ --> tests/operators/sigma/refresh_interval_zero.tql:6:67
   |
-6 | sigma f"{env("TENZIR_INPUTS")}/sigma/basic-rule.yaml", refresh_interval=0s
-  |                                                                         ^^ 
+6 | sigma f"{env("TENZIR_INPUTS")}/basic-rule.yaml", refresh_interval=0s
+  |                                                                   ^^ 
   |

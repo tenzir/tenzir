@@ -1,0 +1,16 @@
+title: modifier sigma rule
+detection:
+  numeric:
+    count|gte: 42
+    count|lt: 50
+  cidr:
+    ip|cidr: 192.168.0.0/24
+  encoded:
+    payload|base64: value
+  offset:
+    url|base64offset|contains: http://
+  regex:
+    payload|re: ^cmd.*\.exe$
+  prefix:
+    msg|startswith: 123
+  condition: numeric or cidr or encoded or offset or regex or prefix
