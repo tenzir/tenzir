@@ -1492,8 +1492,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           auto bindings = std::unordered_set<std::string>{};
           for (auto const& pattern : ast_arm.patterns) {
             TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
-            TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee,
-                                                  ctx));
+            TRY(
+              validate_record_pattern_scrutinee(pattern, args.scrutinee, ctx));
           }
           if (not arm.wildcard) {
             for (auto& pattern : ast_arm.patterns) {
