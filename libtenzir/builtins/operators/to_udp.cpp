@@ -163,7 +163,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return write_sender_ ? OperatorState::unspecified : OperatorState::done;
+    return write_sender_ ? OperatorState::normal : OperatorState::done;
   }
 
 private:

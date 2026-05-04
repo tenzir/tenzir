@@ -251,17 +251,17 @@ auto FromArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
 
 auto FromArrowFsOperator::state() -> OperatorState {
   if (base_args_.watch) {
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
   if (not scan_complete_) {
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
   if (not pending_.empty()) {
-    return OperatorState::unspecified;
+    return OperatorState::normal;
   }
   for (auto& slot : processing_) {
     if (slot) {
-      return OperatorState::unspecified;
+      return OperatorState::normal;
     }
   }
   return OperatorState::done;
@@ -778,7 +778,7 @@ auto ToArrowFsOperator::state() -> OperatorState {
   if (finalized_ and partition_count_ == 0) {
     return OperatorState::done;
   }
-  return OperatorState::unspecified;
+  return OperatorState::normal;
 }
 
 auto ToArrowFsOperator::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {

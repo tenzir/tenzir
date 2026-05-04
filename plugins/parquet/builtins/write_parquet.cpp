@@ -73,7 +73,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return failed_ ? OperatorState::done : OperatorState::unspecified;
+    return failed_ ? OperatorState::done : OperatorState::normal;
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)

@@ -1,5 +1,5 @@
 # runner: python
-"""Verify pending ACKs are not delayed by the NATS batch timeout."""
+"""Verify pending ACKs are prioritized over queued NATS messages."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def main() -> None:
             "--ack",
             "explicit",
             "--wait",
-            "100ms",
+            "50ms",
             "--max-deliver",
             "5",
             "--defaults",
@@ -79,10 +79,11 @@ def main() -> None:
 from_nats env("NATS_SUBJECT"),
           url=env("NATS_URL"),
           durable=env("NATS_DURABLE"),
-          _batch_size=10,
+          _batch_size=1,
           _queue_capacity=10,
           _batch_timeout=5s
 select line = string(message)
+throttle rate=1, window=200ms
 discard
 """.strip()
     proc = subprocess.Popen(
@@ -101,7 +102,7 @@ discard
     stdout = ""
     stderr = ""
     try:
-        time.sleep(2)
+        time.sleep(1)
         stdout, stderr = _terminate(proc)
     finally:
         if proc.poll() is None:

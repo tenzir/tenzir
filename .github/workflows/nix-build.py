@@ -627,7 +627,11 @@ def run_container_test(
         if arch == "x86_64":
             env_args += ["-e", "TENZIR_ALLOC_ACTOR_STATS=1"]
 
-        test_cmd = f'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/{test_root} {test_pattern}'
+        test_cmd = (
+            'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" '
+            f"&& uvx --with trustme tenzir-test --root /src/tenzir/{test_root} "
+            f"{test_pattern}"
+        )
         result = subprocess.run(
             ["docker", "exec"] + env_args + [container_name, "bash", "-c", test_cmd],
             capture_output=True,

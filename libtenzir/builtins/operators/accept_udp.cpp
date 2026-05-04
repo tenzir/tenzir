@@ -341,7 +341,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return message_sender_ ? OperatorState::unspecified : OperatorState::done;
+    return message_sender_ ? OperatorState::normal : OperatorState::done;
   }
 
   auto snapshot(Serde&) -> void override {

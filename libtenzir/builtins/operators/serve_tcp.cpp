@@ -220,7 +220,7 @@ public:
   auto state() -> OperatorState override {
     maybe_finish_draining();
     return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
+                                         : OperatorState::normal;
   }
 
 private:

@@ -1042,14 +1042,37 @@ private:
       co_await folly::coro::co_safe_point;
       ticks_ += 1;
       LOGI("tick {} in {} ({})", ticks_, id_, op_name());
-      if (phase_ == Phase::running
-          and base_op().state() == OperatorState::done) {
-        co_await handle_done(false);
+      auto accept_upstream = not active_checkpoint_;
+      switch (base_op().state()) {
+        case OperatorState::normal:
+          break;
+        case OperatorState::blocked:
+          if (phase_ == Phase::running
+              or phase_ == Phase::stopping_gracefully) {
+            accept_upstream = false;
+          }
+          break;
+        case OperatorState::done:
+          if (phase_ == Phase::running) {
+            co_await handle_done(false);
+          }
+          break;
       }
       auto message = co_await driver_.next([&](Event const& event) {
-        // When there is an active checkpoint, we only allow
-        // subpipeline messages.
-        return not active_checkpoint_ or is<SubMessage>(event);
+        return match(
+          event,
+          [&](Option<AnyOperatorMsg> const&) {
+            return accept_upstream;
+          },
+          [&](Option<FromControl> const&) {
+            return true;
+          },
+          [&](Option<ExplicitAny> const&) {
+            return not active_checkpoint_;
+          },
+          [&](SubMessage const&) {
+            return true;
+          });
       });
       if (not message) {
         break;

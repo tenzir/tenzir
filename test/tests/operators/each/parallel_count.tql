@@ -1,0 +1,10 @@
+// 15 events processed with parallel=4. Verifies no rows are dropped when
+// the queue drains across multiple finish_sub cycles.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5},
+     {x: 6}, {x: 7}, {x: 8}, {x: 9}, {x: 10},
+     {x: 11}, {x: 12}, {x: 13}, {x: 14}, {x: 15}
+each parallel=4 {
+  from $this
+}
+sort x
+summarize count()

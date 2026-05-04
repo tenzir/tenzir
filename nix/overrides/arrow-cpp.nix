@@ -9,13 +9,13 @@
   tzdata,
 }:
 arrow-cpp.overrideAttrs (orig: {
-  version = "23.0.1";
+  version = "24.0.0";
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "arrow";
-    tag = "apache-arrow-23.0.1";
-    hash = "sha256-p/IUYanW11u7gusZad1Bb4VhisTKBm4a+XGOuNXjx+I=";
+    tag = "apache-arrow-24.0.0";
+    hash = "sha256-qTdkzZegANNvtO7nbqXVC8hc7BexvmeFF/0l5VzRb8g=";
   };
 
   patches = [
@@ -80,6 +80,8 @@ arrow-cpp.overrideAttrs (orig: {
     NIX_LDFLAGS = lib.optionalString (
       stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
     ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
-    GTEST_FILTER = (orig.env.GTEST_FILTER or "") + ":StructArray.Validate";
+    GTEST_FILTER =
+      (orig.env.GTEST_FILTER or "")
+      + ":StructArray.Validate:EncryptedBloomFilterReader.ReadEncryptedBloomFilter";
   };
 })

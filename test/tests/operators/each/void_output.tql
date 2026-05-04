@@ -1,0 +1,6 @@
+// Subpipeline sinks its own output (void). Each itself becomes a sink.
+from {x: 1}, {x: 2}, {x: 3}
+each {
+  from $this
+  discard
+}

@@ -215,7 +215,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return is_done() ? OperatorState::done : OperatorState::unspecified;
+    return is_done() ? OperatorState::done : OperatorState::normal;
   }
 
 private:
