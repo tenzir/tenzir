@@ -18,3 +18,8 @@
     id: "offset",
   },
 }
+{
+  event: {
+    id: "regex",
+  },
+}

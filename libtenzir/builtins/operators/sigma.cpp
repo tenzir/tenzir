@@ -147,14 +147,13 @@ struct detection_parser : parser_base<detection_parser> {
   explicit detection_parser(const expression_map& exprs) : search_id{exprs} {
   }
 
+  template <ast::binary_op Op>
   static ast::expression
-  to_expr(std::tuple<ast::expression,
-                     std::vector<std::tuple<ast::binary_op, ast::expression>>>
-            expr) {
+  to_expr(std::tuple<ast::expression, std::vector<ast::expression>> expr) {
     auto& [x, xs] = expr;
     auto result = std::move(x);
-    for (auto& [op, expr] : xs) {
-      result = ast::binary_expr{std::move(result), {op, {}}, std::move(expr)};
+    for (auto& expr : xs) {
+      result = ast::binary_expr{std::move(result), {Op, {}}, std::move(expr)};
     }
     return result;
   };
@@ -167,6 +166,7 @@ struct detection_parser : parser_base<detection_parser> {
       return ast::unary_expr{{ast::unary_op::not_, {}}, std::move(x)};
     };
     rule<Iterator, ast::expression> expr;
+    rule<Iterator, ast::expression> term;
     rule<Iterator, ast::expression> group;
     // clang-format off
     group
@@ -175,14 +175,13 @@ struct detection_parser : parser_base<detection_parser> {
       | "not"_p >> ws >> search_id ->* negate
       | search_id
       ;
-    auto and_or
-      = "or"_p  ->* [] { return ast::binary_op::or_; }
-      | "and"_p  ->* [] { return ast::binary_op::and_; }
+    auto and_tail = ws >> "and"_p >> ws >> ref(group);
+    auto or_tail = ws >> "or"_p >> ws >> ref(term);
+    term
+      = (group >> *and_tail) ->* to_expr<ast::binary_op::and_>
       ;
-    auto tail = (ws >> and_or >> ws >> ref(group))
-      ->* [](std::tuple<ast::binary_op, ast::expression> x) { return x; };
     expr
-      = (group >> *tail >> ws) ->* to_expr
+      = (term >> *or_tail >> ws) ->* to_expr<ast::binary_op::or_>
       ;
     // clang-format on
     auto p = expr >> parsers::eoi;
@@ -305,6 +304,7 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
       auto all = false;
       auto anchor_regex = true;
       auto transform_regex = std::optional<std::string>{};
+      auto raw_regex = false;
       std::vector<std::function<caf::expected<data>(const data&)>> transforms;
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
@@ -365,6 +365,7 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
           transform_regex = ".*{}$";
         } else if (*i == "re") {
           anchor_regex = false;
+          raw_regex = true;
         } else if (*i == "cidr") {
           op = ast::binary_op::in;
         } else if (*i == "expand") {
@@ -386,6 +387,11 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
       auto make_predicate_expr = [&](const data& value) -> ast::expression {
         if (auto str = try_as<std::string>(&value)) {
           auto fmt = transform_regex.value_or(anchor_regex ? "^{}$" : "{}");
+          if (raw_regex) {
+            return make_regex_expr(make_field_expr(field),
+                                   fmt::format(TENZIR_FMT_RUNTIME(fmt),
+                                               std::move(*str)));
+          }
           if (auto pat = transform_sigma_string(*str, fmt)) {
             return make_regex_expr(make_field_expr(field), std::move(*pat));
           }
@@ -395,7 +401,12 @@ caf::expected<ast::expression> parse_search_id(const data& yaml) {
           auto disjuncts = std::vector<ast::expression>{};
           for (const auto& x : *values) {
             if (auto str = try_as<std::string>(&x); str and transform_regex) {
-              if (auto pat = transform_sigma_string(*str, *transform_regex)) {
+              if (raw_regex) {
+                disjuncts.emplace_back(make_regex_expr(
+                  make_field_expr(field),
+                  fmt::format(TENZIR_FMT_RUNTIME(*transform_regex), *str)));
+              } else if (auto pat
+                         = transform_sigma_string(*str, *transform_regex)) {
                 disjuncts.emplace_back(
                   make_regex_expr(make_field_expr(field), std::move(*pat)));
               }

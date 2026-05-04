@@ -9,4 +9,6 @@ detection:
     payload|base64: value
   offset:
     url|base64offset|contains: http://
-  condition: numeric or cidr or encoded or offset
+  regex:
+    payload|re: ^cmd.*\.exe$
+  condition: numeric or cidr or encoded or offset or regex

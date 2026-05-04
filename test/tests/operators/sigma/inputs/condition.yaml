@@ -8,4 +8,4 @@ detection:
     baz: charlie
   filter:
     skip: true
-  condition: 1 of selection_* and not filter
+  condition: selection_alpha or selection_bravo and selection_charlie

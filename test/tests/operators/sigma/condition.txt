@@ -5,11 +5,6 @@
 }
 {
   event: {
-    id: "bravo",
-  },
-}
-{
-  event: {
-    id: "ignored",
+    id: "both",
   },
 }

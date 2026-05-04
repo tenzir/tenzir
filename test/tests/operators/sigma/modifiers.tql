@@ -2,7 +2,8 @@ from {id: "numeric", count: 45, ip: 10.0.0.1, payload: "x", url: "x"},
      {id: "cidr", count: 1, ip: 192.168.0.1, payload: "x", url: "x"},
      {id: "base64", count: 1, ip: 10.0.0.1, payload: "dmFsdWU=", url: "x"},
      {id: "offset", count: 1, ip: 10.0.0.1, payload: "x", url: "prefix aHR0cDovL suffix"},
-     {id: "miss", count: 1, ip: 10.0.0.1, payload: "x", url: "x"}
+     {id: "regex", count: 1, ip: 10.0.0.1, payload: "cmd /c calc.exe", url: "x"},
+     {id: "miss", count: 1, ip: 10.0.0.1, payload: "cmd.exe.bak", url: "x"}
 sigma "tests/operators/sigma/inputs/modifiers.yaml"
 select event.id
 sort event.id
