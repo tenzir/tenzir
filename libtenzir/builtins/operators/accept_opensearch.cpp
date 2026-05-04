@@ -94,9 +94,7 @@ struct RequestFinished {
   uint64_t request_id;
 };
 
-struct Noop {};
-
-using Message = variant<Noop, RequestStarted, RequestBody, RequestFinished>;
+using Message = variant<RequestStarted, RequestBody, RequestFinished>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 class failing_diagnostic_handler final : public diagnostic_handler {
@@ -284,7 +282,6 @@ public:
     }
     auto response = co_await response_signal->recv();
     co_await folly::coro::co_reschedule_on_current_executor;
-    co_await queue_->enqueue(Noop{});
     co_return http_server::make_response(response.status, response.content_type,
                                          std::move(response.body));
   }
@@ -312,10 +309,17 @@ public:
       active_connections_{std::in_place, get_max_connections()} {
   }
 
+  ~AcceptOpenSearch() noexcept override {
+    force_stop();
+  }
+  AcceptOpenSearch(const AcceptOpenSearch&) = default;
+  AcceptOpenSearch(AcceptOpenSearch&&) = delete;
+  AcceptOpenSearch& operator=(const AcceptOpenSearch&) = default;
+  AcceptOpenSearch& operator=(AcceptOpenSearch&&) = delete;
+
   auto start(OpCtx& ctx) -> Task<void> override {
     auto config = co_await make_config(ctx);
     if (not config) {
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
@@ -330,7 +334,6 @@ public:
       diagnostic::error("failed to start HTTP server: {}", ex.what())
         .primary(args_.url)
         .emit(ctx);
-      lifecycle_ = Lifecycle::done;
       co_return;
     }
     // When the operator is forcefully stopped (e.g., by `head 1` finishing),
@@ -340,12 +343,11 @@ public:
     // running.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
-      co_await handle_forced_cancellation();
+      force_stop();
     });
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
                          MetricsDirection::read, MetricsVisibility::external_);
-    lifecycle_ = Lifecycle::running;
     co_return;
   }
 
@@ -360,13 +362,6 @@ public:
     co_await co_match(
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
-        if (lifecycle_ == Lifecycle::done) {
-          msg.response_signal->send(
-            Response{.status = 503,
-                     .content_type = std::string{bulk_content_type},
-                     .body = "{}"});
-          co_return;
-        }
         auto decompressor
           = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
         auto failed = false;
@@ -506,115 +501,35 @@ public:
           .content_type = std::string{bulk_content_type},
           .body = std::string{bulk_response},
         });
-      },
-      [&](Noop) -> Task<void> {
-        co_return;
       });
-    co_await maybe_finish_draining();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
-    TENZIR_ASSERT(lifecycle_ == Lifecycle::done);
     co_return FinalizeBehavior::done;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_await request_stop();
+    force_stop();
+    co_return;
   }
 
-  auto state() -> OperatorState override {
-    return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::unspecified;
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    serde("lifecycle", lifecycle_);
+  auto state() -> OperatorState {
+    return not server_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:
-  enum class Lifecycle {
-    running,
-    draining,
-    done,
-  };
-
-  friend auto inspect(auto& f, Lifecycle& x) {
-    return tenzir::detail::inspect_enum_str(f, x,
-                                            {"running", "draining", "done"});
-  }
-
   static auto get_max_connections() -> uint64_t {
     return 10;
   }
 
-  auto request_stop() -> Task<void> {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    lifecycle_ = Lifecycle::draining;
+  void force_stop() {
     if (server_) {
-      (*server_)->getServer().drain();
-    }
-    co_await maybe_finish_draining();
-  }
-
-  auto handle_forced_cancellation() -> Task<void> {
-    if (server_) {
-      (*server_)->getServer().drain();
-    }
-    for (;;) {
-      while (auto message = message_queue_->try_dequeue()) {
-        if (auto* msg = try_as<RequestStarted>(*message)) {
-          if (not msg->response_signal->has_sent()) {
-            msg->response_signal->send(
-              Response{.status = 503,
-                       .content_type = std::string{bulk_content_type},
-                       .body = std::string{bulk_response}});
-          }
-        }
-      }
-      if (active_connections_->available_permits() == get_max_connections()) {
-        break;
-      }
-      {
-        for (auto& [_, req] : active_requests_) {
-          if (not req.response_signal->has_sent()) {
-            req.response_signal->send(
-              Response{.status = 503,
-                       .content_type = std::string{bulk_content_type},
-                       .body = std::string{bulk_response}});
-          }
-        }
-        active_requests_.clear();
-      }
-      co_await sleep_for(std::chrono::milliseconds{10});
-    }
-    if (server_) {
-      auto srv = std::move(*server_);
-      server_ = None{};
-      std::thread([srv = std::move(srv)]() {
-        // srv destructor calls drain()+forceStop()+thread_.join()
-      }).detach();
-    }
-    lifecycle_ = Lifecycle::done;
-  }
-
-  auto maybe_finish_draining() -> Task<void> {
-    if (lifecycle_ != Lifecycle::draining) {
-      co_return;
-    }
-    // Wait until every handleRequest coroutine has returned its permit.
-    // Since the permit now lives until handleRequest() returns, this also
-    // covers the reschedule/writeback tail after a response was signaled.
-    if (active_connections_->available_permits() != get_max_connections()) {
-      co_return;
-    }
-    if (active_requests_.empty() and message_queue_->empty()) {
-      server_ = None{};
-      lifecycle_ = Lifecycle::done;
+      (*server_)->getServer().forceStop();
+      // move server to a new thread, where it can call thread join
+      std::thread([srv = std::exchange(server_, None{})] {}).detach();
     }
   }
 
@@ -676,8 +591,6 @@ private:
   std::unordered_map<uint64_t, InFlightRequest> active_requests_{{}};
   MetricsCounter bytes_read_counter_;
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
-  // --- state ---
-  Lifecycle lifecycle_ = Lifecycle::running;
 };
 
 class AcceptOpenSearchPlugin final : public virtual OperatorPlugin {
