@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+match x {
+  _ => {
+    discard
+  }
+}
