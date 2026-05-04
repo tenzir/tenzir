@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+accept_tcp "127.0.0.1:31337",
+           tls=false,
+           auto_detect_tls=true {
+  read_lines
+}

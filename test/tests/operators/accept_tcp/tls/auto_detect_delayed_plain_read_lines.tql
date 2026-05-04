@@ -1,0 +1,19 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+      certs: true
+      client_send_delay: 6.0
+timeout: 30
+---
+
+let $tls = {
+  certfile: env("TCP_CERTFILE"),
+  keyfile: env("TCP_KEYFILE"),
+  skip_peer_verification: true,
+}
+
+accept_tcp env("TCP_ENDPOINT"), tls=$tls, auto_detect_tls=true {
+  read_lines
+}
+head 1

@@ -38,10 +38,13 @@
 #include <folly/coro/Retry.h>
 #include <folly/coro/WithCancellation.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncServerSocket.h>
+#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
+#include <array>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -67,12 +70,17 @@ constexpr auto message_queue_capacity = uint32_t{1_Ki};
 // Retry accepts quickly after transient socket errors so the listener recovers
 // fast, while still backing off enough to avoid a tight warning loop.
 constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
+// Bound the time spent waiting for the first client byte when auto-detecting
+// TLS. Without this, idle clients could occupy connection slots before the
+// normal read loop starts.
+constexpr auto tls_probe_timeout = std::chrono::seconds{5};
 
 struct AcceptTcpArgs {
   located<std::string> endpoint;
   Option<located<data>> tls;
   Option<located<uint64_t>> max_connections;
   bool resolve_hostnames = false;
+  bool auto_detect_tls = false;
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
@@ -127,6 +135,10 @@ public:
   };
 
   struct AcceptLoopFinished {};
+
+  struct TlsProbeResult {
+    bool is_tls = false;
+  };
 
   using Message
     = variant<AcceptLoopFinished, Accepted, Payload, ConnectionClosed>;
@@ -283,10 +295,14 @@ public:
         auto [_, inserted]
           = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
+        auto it = connections_.find(conn_id);
+        if (it == connections_.end()) {
+          co_return;
+        }
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
-          read_loop(conn_id, connections_.at(conn_id), std::move(message_queue),
+          read_loop(conn_id, it->second, std::move(message_queue),
                     std::move(bytes_read))));
       },
       [&](Payload payload) -> Task<void> {
@@ -474,15 +490,25 @@ private:
     }
     if (tls_context_) {
       try {
-        transport = Box<folly::coro::Transport>{
-          co_await upgrade_transport_to_tls_server(std::move(*transport),
-                                                   tls_context_)};
+        auto should_upgrade = true;
+        if (args_.auto_detect_tls) {
+          auto* transport_evb = transport->getEventBase();
+          TENZIR_ASSERT(transport_evb);
+          auto probe = co_await folly::coro::co_withExecutor(
+            transport_evb, probe_tls_client_hello(*transport));
+          should_upgrade = probe.is_tls;
+        }
+        if (should_upgrade) {
+          transport = Box<folly::coro::Transport>{
+            co_await upgrade_transport_to_tls_server(std::move(*transport),
+                                                     tls_context_)};
+        }
       } catch (folly::AsyncSocketException const& ex) {
         // Peer-driven TLS failures are expected at runtime; keep serving other
         // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
           .primary(args_.endpoint.source)
-          .note("TLS handshake with peer {} failed", peer.describe())
+          .note("peer IP: {}", make_peer_info(peer).address)
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
@@ -523,6 +549,122 @@ private:
       .peer_reverse_dns = std::move(peer_reverse_dns),
     });
     release_connection_slot_guard.disable();
+  }
+
+  // TLS records start with a 5-byte header. A ClientHello record then begins
+  // with handshake type 0x01 as the first byte of the record payload:
+  //
+  //   byte:   0        1        2        3..4       5
+  //          +--------+--------+--------+----------+--------+
+  //          | 0x16   | 0x03   | ver    | length   | 0x01   |
+  //          +--------+--------+--------+----------+--------+
+  //          | record | major  | minor  | payload  | Client |
+  //          | type   |        |        | length   | Hello  |
+  //
+  // We only sniff enough to distinguish a plausible TLS ClientHello from
+  // plaintext. This also covers ECH, where the visible outer ClientHello still
+  // uses the regular TLS record and handshake headers. OpenSSL performs full
+  // validation after we put these bytes back.
+  static auto could_be_tls_client_hello(std::span<std::byte const> bytes)
+    -> bool {
+    if (bytes.empty()) {
+      return false;
+    }
+    if (bytes[0] != std::byte{0x16}) {
+      return false;
+    }
+    if (bytes.size() >= 2 and bytes[1] != std::byte{0x03}) {
+      return false;
+    }
+    if (bytes.size() >= 3 and bytes[2] > std::byte{0x04}) {
+      return false;
+    }
+    if (bytes.size() >= 6 and bytes[5] != std::byte{0x01}) {
+      return false;
+    }
+    return true;
+  }
+
+  static auto looks_like_tls_client_hello(std::span<std::byte const> bytes)
+    -> bool {
+    return bytes.size() >= 6 and could_be_tls_client_hello(bytes);
+  }
+
+  static auto set_pre_received_data(folly::coro::Transport& transport,
+                                    std::span<std::byte const> bytes) -> void {
+    auto* socket = dynamic_cast<folly::AsyncSocket*>(transport.getTransport());
+    if (not socket) {
+      throw folly::AsyncSocketException{
+        folly::AsyncSocketException::INTERNAL_ERROR,
+        "transport is not backed by AsyncSocket",
+      };
+    }
+    socket->setPreReceivedData(
+      folly::IOBuf::copyBuffer(bytes.data(), bytes.size()));
+  }
+
+  static auto probe_tls_client_hello(folly::coro::Transport& transport)
+    -> Task<TlsProbeResult> {
+    auto prefix = std::array<std::byte, 6>{};
+    auto size = size_t{0};
+    auto deadline = std::chrono::steady_clock::now() + tls_probe_timeout;
+    auto throw_timed_out = [] {
+      throw folly::AsyncSocketException{
+        folly::AsyncSocketException::TIMED_OUT,
+        "TLS auto-detect probe timed out",
+      };
+    };
+    auto read_some = [&](size_t min_size) -> Task<void> {
+      while (size < min_size) {
+        auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+          throw_timed_out();
+        }
+        auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+          deadline - now);
+        if (timeout <= std::chrono::milliseconds{0}) {
+          throw_timed_out();
+        }
+        auto* data = reinterpret_cast<unsigned char*>(prefix.data() + size);
+        auto n
+          = co_await transport.read(folly::MutableByteRange{data, 1}, timeout);
+        if (n == 0) {
+          co_return;
+        }
+        size += n;
+        if (not could_be_tls_client_hello(std::span{prefix.data(), size})) {
+          co_return;
+        }
+      }
+    };
+    auto timed_out = false;
+    try {
+      co_await read_some(1);
+      if (size == 0) {
+        co_return {};
+      }
+      // Read the full TLS record prefix only after seeing a TLS handshake
+      // record byte. Plaintext clients that send a short first line should not
+      // have to wait for the probe timeout before entering the normal read
+      // loop.
+      if (prefix[0] == std::byte{0x16}) {
+        co_await read_some(prefix.size());
+      }
+    } catch (folly::AsyncSocketException const& ex) {
+      if (ex.getType() != folly::AsyncSocketException::TIMED_OUT) {
+        throw;
+      }
+      timed_out = true;
+    }
+    auto bytes = std::span{prefix.data(), size};
+    if (size > 0) {
+      set_pre_received_data(transport, bytes);
+    }
+    if (looks_like_tls_client_hello(bytes)
+        or (timed_out and could_be_tls_client_hello(bytes))) {
+      co_return TlsProbeResult{.is_tls = true};
+    }
+    co_return {};
   }
 
   auto accept_loop(OpCtx& ctx) -> Task<void> {
@@ -625,6 +767,8 @@ public:
     auto max_connections_arg
       = d.named("max_connections", &AcceptTcpArgs::max_connections);
     d.named("resolve_hostnames", &AcceptTcpArgs::resolve_hostnames);
+    auto auto_detect_tls_arg
+      = d.named("auto_detect_tls", &AcceptTcpArgs::auto_detect_tls);
     auto pipeline_arg = d.pipeline(&AcceptTcpArgs::user_pipeline,
                                    {{"peer", &AcceptTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -636,11 +780,13 @@ public:
       } else if (not ep->port) {
         diagnostic::error("port number is required").primary(loc).emit(ctx);
       }
+      auto tls_enabled = false;
       if (auto tls_val = ctx.get(tls_arg)) {
         auto tls_opts = tls_options{*tls_val, {.is_server = true}};
         if (auto valid = tls_opts.validate(ctx); not valid) {
           return {};
         }
+        tls_enabled = tls_opts.get_tls(nullptr).inner;
       }
       if (auto max_connections = ctx.get(max_connections_arg);
           max_connections) {
@@ -658,6 +804,13 @@ public:
                   std::numeric_limits<size_t>::max())
             .emit(ctx);
         }
+      }
+      if (auto auto_detect_tls = ctx.get(auto_detect_tls_arg);
+          auto_detect_tls and *auto_detect_tls and not tls_enabled) {
+        diagnostic::error("`auto_detect_tls` requires TLS to be enabled")
+          .primary(
+            ctx.get_location(auto_detect_tls_arg).value_or(location::unknown))
+          .emit(ctx);
       }
       TRY(auto pipeline, ctx.get(pipeline_arg));
       auto output = pipeline.inner.infer_type(tag_v<chunk_ptr>, ctx);
