@@ -1476,19 +1476,26 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         auto args = MatchArgs{};
         args.match_keyword = x.begin;
         args.scrutinee = std::move(x.expr);
-        for (auto& ast_arm : x.arms) {
+        for (auto arm_index = size_t{0}; auto& ast_arm : x.arms) {
           auto arm = MatchArgs::Arm{};
           arm.source = ast_arm.patterns.front().get_location();
           arm.wildcard
-            = ast_arm.patterns.size() == 1
-              and is_irrefutable_match_pattern(ast_arm.patterns.front(), ctx);
+            = std::ranges::any_of(ast_arm.patterns, [&](auto& pattern) {
+                return is_irrefutable_match_pattern(pattern, ctx);
+              });
+          if (arm.wildcard and arm_index + 1 != x.arms.size()) {
+            diagnostic::error("irrefutable match arm must be last")
+              .primary(arm.source)
+              .emit(ctx);
+            return failure::promise();
+          }
+          auto bindings = std::unordered_set<std::string>{};
+          for (auto const& pattern : ast_arm.patterns) {
+            TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
+            TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee,
+                                                  ctx));
+          }
           if (not arm.wildcard) {
-            auto bindings = std::unordered_set<std::string>{};
-            for (auto const& pattern : ast_arm.patterns) {
-              TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
-              TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee,
-                                                    ctx));
-            }
             for (auto& pattern : ast_arm.patterns) {
               TRY(bind_match_pattern(pattern, ctx));
               arm.pattern_exprs.push_back(pattern);
@@ -1506,6 +1513,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           }
           TRY(arm.pipeline, std::move(ast_arm.pipe).compile(ctx));
           args.arms.push_back(std::move(arm));
+          ++arm_index;
         }
         operators.emplace_back(MatchIr{std::move(args)});
         return {};
