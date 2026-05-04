@@ -221,9 +221,8 @@ public:
     auto saw_wildcard = false;
     while (not peek(tk::rbrace)) {
       auto arm = parse_match_stmt_arm();
-      auto is_wildcard = arm.patterns.size() == 1
-                         and std::holds_alternative<ast::underscore>(
-                           *arm.patterns.front().kind);
+      auto is_wildcard
+        = arm.patterns.size() == 1 and arm.patterns.front().wildcard;
       if (is_wildcard) {
         if (saw_wildcard) {
           diagnostic::error("wildcard match arm appears more than once")
@@ -254,11 +253,11 @@ public:
   }
 
   auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto patterns = std::vector<ast::expression>{};
+    auto patterns = std::vector<ast::match_pattern>{};
     while (true) {
-      patterns.push_back(parse_expression(1));
+      patterns.push_back(parse_match_pattern());
       auto& pattern = patterns.back();
-      if (std::holds_alternative<ast::underscore>(*pattern.kind)
+      if (pattern.wildcard
           and (patterns.size() != 1 or not peek(tk::fat_arrow))) {
         diagnostic::error("wildcard `_` must be the only pattern in an arm")
           .primary(pattern)
@@ -276,6 +275,14 @@ public:
       std::move(patterns),
       std::move(pipe),
     };
+  }
+
+  auto parse_match_pattern() -> ast::match_pattern {
+    auto expr = parse_expression(1);
+    if (auto* wildcard = std::get_if<ast::underscore>(&*expr.kind)) {
+      return ast::match_pattern{wildcard->get_location()};
+    }
+    return ast::match_pattern{std::move(expr)};
   }
 
   auto parse_invocation_or_assignment() -> statement {
