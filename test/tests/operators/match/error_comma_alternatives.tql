@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {x: "a"}
+match x {
+  "a", "b" => {
+    y = 1
+  }
+}

@@ -1,0 +1,10 @@
+from {x: 199}, {x: 200}, {x: 250}, {x: 299}, {x: 300}
+match x {
+  200..299 => {
+    class = "success"
+  }
+  _ => {
+    class = "other"
+  }
+}
+sort x

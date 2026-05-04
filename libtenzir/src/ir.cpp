@@ -252,11 +252,61 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   return ir::SetIr{std::move(assignments)};
 }
 
+struct MatchPattern {
+  struct Wildcard {};
+  struct Constant {
+    data value;
+  };
+  struct Range {
+    data lower;
+    data upper;
+  };
+  struct Field {
+    std::string name;
+    Box<MatchPattern> pattern;
+  };
+  struct Record {
+    std::vector<Field> fields;
+    bool has_rest = false;
+  };
+  using kind_type = variant<Wildcard, Constant, Range, Record>;
+
+  kind_type kind;
+
+  friend auto inspect(auto& f, Wildcard& x) -> bool {
+    TENZIR_UNUSED(x);
+    return f.object(x).fields();
+  }
+
+  friend auto inspect(auto& f, Constant& x) -> bool {
+    return f.object(x).fields(f.field("value", x.value));
+  }
+
+  friend auto inspect(auto& f, Range& x) -> bool {
+    return f.object(x).fields(f.field("lower", x.lower),
+                              f.field("upper", x.upper));
+  }
+
+  friend auto inspect(auto& f, Field& x) -> bool {
+    return f.object(x).fields(f.field("name", x.name),
+                              f.field("pattern", x.pattern));
+  }
+
+  friend auto inspect(auto& f, Record& x) -> bool {
+    return f.object(x).fields(f.field("fields", x.fields),
+                              f.field("has_rest", x.has_rest));
+  }
+
+  friend auto inspect(auto& f, MatchPattern& x) -> bool {
+    return f.object(x).fields(f.field("kind", x.kind));
+  }
+};
+
 struct MatchArgs {
   struct Arm {
     location source;
     std::vector<ast::match_pattern> pattern_exprs;
-    std::vector<data> patterns;
+    std::vector<MatchPattern> patterns;
     ir::pipeline pipeline;
     bool wildcard = false;
 
@@ -279,6 +329,8 @@ struct MatchArgs {
                               f.field("arms", x.arms));
   }
 };
+
+auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool;
 
 struct IfArgs {
   struct Else {
@@ -434,8 +486,7 @@ public:
           auto const& arm = args_.arms[arm_index];
           auto matches = arm.wildcard;
           for (auto const& pattern : arm.patterns) {
-            if (partial_order(value, pattern)
-                == std::partial_ordering::equivalent) {
+            if (matches_pattern(value, pattern)) {
               matches = true;
               break;
             }
@@ -605,21 +656,297 @@ auto make_set_ir(std::vector<ast::assignment> assignments)
   return ir::SetIr{std::move(assignments)};
 }
 
-auto const_eval_match_pattern(ast::match_pattern const& pattern,
-                              diagnostic_handler& dh) -> failure_or<data> {
-  TENZIR_ASSERT(not pattern.wildcard);
-  TENZIR_ASSERT(pattern.expr.is_some());
+namespace {
+
+auto const_eval_match_expression(ast::expression const& expr, location source,
+                                 diagnostic_handler& dh) -> failure_or<data> {
   auto diagnostics = collecting_diagnostic_handler{};
-  auto value = const_eval(**pattern.expr, diagnostics);
+  auto value = const_eval(expr, diagnostics);
   if (value.is_error() or not diagnostics.empty()) {
     diagnostic::error("match patterns must be constant expressions")
-      .primary(pattern)
+      .primary(source)
       .hint("use a literal, a constant `let` binding, or `_`")
       .emit(dh);
     return failure::promise();
   }
   return *value;
 }
+
+using BindingMap = std::unordered_map<std::string, ast::expression>;
+using BindingPath = std::vector<ast::identifier>;
+
+auto validate_match_pattern_bindings(ast::match_pattern const& pattern,
+                                     compile_ctx const& ctx,
+                                     std::unordered_set<std::string>& names)
+  -> failure_or<void>;
+
+auto bind_match_pattern(ast::match_pattern& pattern, compile_ctx& ctx)
+  -> failure_or<void>;
+
+auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
+                                    ast::expression const& scrutinee,
+                                    BindingPath& path, compile_ctx const& ctx,
+                                    BindingMap& replacements)
+  -> failure_or<void>;
+
+auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
+                              bool instantiate) -> failure_or<void>;
+
+auto lower_match_pattern(ast::match_pattern const& pattern,
+                         diagnostic_handler& dh) -> failure_or<MatchPattern>;
+
+auto validate_match_pattern_bindings(ast::match_pattern const& pattern,
+                                     compile_ctx const& ctx,
+                                     std::unordered_set<std::string>& names)
+  -> failure_or<void> {
+  return pattern.kind->match<failure_or<void>>(
+    [](ast::wildcard_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [](ast::expression_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::binding_pattern const& binding) -> failure_or<void> {
+      auto name = std::string_view{binding.name.name};
+      TENZIR_ASSERT(name.starts_with("$"));
+      if (ctx.get(name.substr(1))) {
+        return {};
+      }
+      if (not names.emplace(binding.name.name).second) {
+        diagnostic::error("binding `{}` appears more than once in this match "
+                          "arm",
+                          binding.name.name)
+          .primary(binding)
+          .emit(ctx);
+        return failure::promise();
+      }
+      return {};
+    },
+    [&](ast::range_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::record_pattern const& record) -> failure_or<void> {
+      for (auto const& field : record.fields) {
+        TRY(validate_match_pattern_bindings(*field.pattern, ctx, names));
+      }
+      return {};
+    });
+}
+
+auto bind_match_pattern(ast::match_pattern& pattern, compile_ctx& ctx)
+  -> failure_or<void> {
+  return pattern.kind->match<failure_or<void>>(
+    [](ast::wildcard_pattern&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::expression_pattern& expr) -> failure_or<void> {
+      return expr.expr.bind(ctx);
+    },
+    [&](ast::binding_pattern& binding) -> failure_or<void> {
+      auto name = std::string_view{binding.name.name};
+      TENZIR_ASSERT(name.starts_with("$"));
+      if (ctx.get(name.substr(1))) {
+        auto expr = ast::expression{ast::dollar_var{binding.name}};
+        TRY(expr.bind(ctx));
+        pattern.kind = Box<ast::match_pattern_kind>{
+          std::in_place,
+          ast::expression_pattern{std::move(expr)},
+        };
+      }
+      return {};
+    },
+    [&](ast::range_pattern& range) -> failure_or<void> {
+      TRY(range.lower.bind(ctx));
+      TRY(range.upper.bind(ctx));
+      return {};
+    },
+    [&](ast::record_pattern& record) -> failure_or<void> {
+      for (auto& field : record.fields) {
+        TRY(bind_match_pattern(*field.pattern, ctx));
+      }
+      return {};
+    });
+}
+
+auto make_binding_expression(ast::expression const& scrutinee,
+                             BindingPath const& path) -> ast::expression {
+  auto result = scrutinee;
+  for (auto const& field : path) {
+    result = ast::expression{ast::field_access{
+      std::move(result),
+      field.location,
+      false,
+      field,
+    }};
+  }
+  return result;
+}
+
+auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
+                                    ast::expression const& scrutinee,
+                                    BindingPath& path, compile_ctx const& ctx,
+                                    BindingMap& replacements)
+  -> failure_or<void> {
+  return pattern.kind->match<failure_or<void>>(
+    [](ast::wildcard_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [](ast::expression_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::binding_pattern const& binding) -> failure_or<void> {
+      auto name = std::string_view{binding.name.name};
+      TENZIR_ASSERT(name.starts_with("$"));
+      if (ctx.get(name.substr(1))) {
+        return {};
+      }
+      replacements.emplace(std::string{name.substr(1)},
+                           make_binding_expression(scrutinee, path));
+      return {};
+    },
+    [](ast::range_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::record_pattern const& record) -> failure_or<void> {
+      for (auto const& field : record.fields) {
+        path.push_back(field.name);
+        TRY(collect_match_pattern_bindings(*field.pattern, scrutinee, path, ctx,
+                                           replacements));
+        path.pop_back();
+      }
+      return {};
+    });
+}
+
+auto substitute_match_expression(ast::expression& expr, location source,
+                                 substitute_ctx ctx, bool instantiate)
+  -> failure_or<void> {
+  TRY(auto subst, expr.substitute(ctx));
+  if (instantiate and subst == ast::substitute_result::some_remaining) {
+    diagnostic::error("match patterns must be constant expressions")
+      .primary(source)
+      .emit(ctx);
+    return failure::promise();
+  }
+  return {};
+}
+
+auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
+                              bool instantiate) -> failure_or<void> {
+  return pattern.kind->match<failure_or<void>>(
+    [](ast::wildcard_pattern&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::expression_pattern& expr) -> failure_or<void> {
+      return substitute_match_expression(expr.expr, expr.get_location(), ctx,
+                                         instantiate);
+    },
+    [](ast::binding_pattern&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::range_pattern& range) -> failure_or<void> {
+      TRY(substitute_match_expression(range.lower, range.lower.get_location(),
+                                      ctx, instantiate));
+      TRY(substitute_match_expression(range.upper, range.upper.get_location(),
+                                      ctx, instantiate));
+      return {};
+    },
+    [&](ast::record_pattern& record) -> failure_or<void> {
+      for (auto& field : record.fields) {
+        TRY(substitute_match_pattern(*field.pattern, ctx, instantiate));
+      }
+      return {};
+    });
+}
+
+auto lower_match_pattern(ast::record_pattern const& pattern,
+                         diagnostic_handler& dh) -> failure_or<MatchPattern> {
+  auto fields = std::vector<MatchPattern::Field>{};
+  for (auto const& field : pattern.fields) {
+    TRY(auto nested, lower_match_pattern(*field.pattern, dh));
+    fields.push_back(
+      MatchPattern::Field{field.name.name, Box{std::move(nested)}});
+  }
+  return MatchPattern{
+    MatchPattern::Record{std::move(fields), pattern.rest.is_some()}};
+}
+
+auto lower_match_pattern(ast::match_pattern const& pattern,
+                         diagnostic_handler& dh) -> failure_or<MatchPattern> {
+  return pattern.kind->match<failure_or<MatchPattern>>(
+    [](ast::wildcard_pattern const&) -> failure_or<MatchPattern> {
+      return MatchPattern{MatchPattern::Wildcard{}};
+    },
+    [&](ast::expression_pattern const& expr) -> failure_or<MatchPattern> {
+      TRY(auto value,
+          const_eval_match_expression(expr.expr, expr.get_location(), dh));
+      return MatchPattern{MatchPattern::Constant{std::move(value)}};
+    },
+    [](ast::binding_pattern const&) -> failure_or<MatchPattern> {
+      return MatchPattern{MatchPattern::Wildcard{}};
+    },
+    [&](ast::range_pattern const& range) -> failure_or<MatchPattern> {
+      TRY(auto lower, const_eval_match_expression(
+                        range.lower, range.lower.get_location(), dh));
+      TRY(auto upper, const_eval_match_expression(
+                        range.upper, range.upper.get_location(), dh));
+      return MatchPattern{
+        MatchPattern::Range{std::move(lower), std::move(upper)}};
+    },
+    [&](ast::record_pattern const& record) -> failure_or<MatchPattern> {
+      return lower_match_pattern(record, dh);
+    });
+}
+
+auto matches_record(data_view3 value, MatchPattern::Record const& pattern)
+  -> bool {
+  auto const* record = std::get_if<record_view3>(&value);
+  if (not record) {
+    return false;
+  }
+  auto matched_fields = size_t{0};
+  for (auto const& field : pattern.fields) {
+    auto found = false;
+    for (auto const& [name, nested] : *record) {
+      if (name == field.name) {
+        found = matches_pattern(nested, *field.pattern);
+        break;
+      }
+    }
+    if (not found) {
+      return false;
+    }
+    ++matched_fields;
+  }
+  auto field_count = size_t{0};
+  for ([[maybe_unused]] auto const& field : *record) {
+    ++field_count;
+  }
+  return pattern.has_rest or field_count == matched_fields;
+}
+
+auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool {
+  if (std::holds_alternative<MatchPattern::Wildcard>(pattern.kind)) {
+    return true;
+  }
+  if (auto constant = std::get_if<MatchPattern::Constant>(&pattern.kind)) {
+    return partial_order(value, constant->value)
+           == std::partial_ordering::equivalent;
+  }
+  if (auto range = std::get_if<MatchPattern::Range>(&pattern.kind)) {
+    auto lower = partial_order(value, range->lower);
+    auto upper = partial_order(value, range->upper);
+    return lower != std::partial_ordering::less
+           and lower != std::partial_ordering::unordered
+           and upper != std::partial_ordering::greater
+           and upper != std::partial_ordering::unordered;
+  }
+  auto const* record = std::get_if<MatchPattern::Record>(&pattern.kind);
+  TENZIR_ASSERT(record);
+  return matches_record(value, *record);
+}
+
+} // namespace
 
 auto combine_branch_types(std::optional<element_type_tag> lhs,
                           std::optional<element_type_tag> rhs, location primary,
@@ -672,18 +999,10 @@ public:
     for (auto& arm : args_.arms) {
       arm.patterns.clear();
       for (auto& pattern : arm.pattern_exprs) {
-        TENZIR_ASSERT(not pattern.wildcard);
-        TENZIR_ASSERT(pattern.expr.is_some());
-        TRY(auto subst, (*pattern.expr)->substitute(ctx));
-        if (instantiate and subst == ast::substitute_result::some_remaining) {
-          diagnostic::error("match patterns must be constant expressions")
-            .primary(pattern)
-            .emit(ctx);
-          return failure::promise();
-        }
+        TRY(substitute_match_pattern(pattern, ctx, instantiate));
         if (instantiate) {
-          TRY(auto value, const_eval_match_pattern(pattern, ctx));
-          arm.patterns.push_back(std::move(value));
+          TRY(auto lowered, lower_match_pattern(pattern, ctx));
+          arm.patterns.push_back(std::move(lowered));
         }
       }
       TRY(arm.pipeline.substitute(ctx, instantiate));
@@ -1012,14 +1331,26 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           auto arm = MatchArgs::Arm{};
           arm.source = ast_arm.patterns.front().get_location();
           arm.wildcard = ast_arm.patterns.size() == 1
-                         and ast_arm.patterns.front().wildcard;
+                         and ast_arm.patterns.front().is_wildcard();
           if (not arm.wildcard) {
+            auto bindings = std::unordered_set<std::string>{};
+            for (auto const& pattern : ast_arm.patterns) {
+              TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
+            }
             for (auto& pattern : ast_arm.patterns) {
-              TENZIR_ASSERT(not pattern.wildcard);
-              TENZIR_ASSERT(pattern.expr.is_some());
-              TRY((*pattern.expr)->bind(ctx));
+              TRY(bind_match_pattern(pattern, ctx));
               arm.pattern_exprs.push_back(pattern);
             }
+          }
+          auto replacements = BindingMap{};
+          auto path = BindingPath{};
+          for (auto const& pattern : ast_arm.patterns) {
+            TRY(collect_match_pattern_bindings(pattern, args.scrutinee, path,
+                                               ctx, replacements));
+          }
+          if (not replacements.empty()) {
+            TRY(ast_arm.pipe, substitute_named_expressions(
+                                std::move(ast_arm.pipe), replacements, ctx));
           }
           TRY(arm.pipeline, std::move(ast_arm.pipe).compile(ctx));
           args.arms.push_back(std::move(arm));
