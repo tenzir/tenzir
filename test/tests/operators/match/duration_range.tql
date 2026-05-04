@@ -1,0 +1,10 @@
+from {elapsed: 999ms}, {elapsed: 1s}, {elapsed: 3s}, {elapsed: 5s}, {elapsed: 6s}
+match elapsed {
+  1s..5s => {
+    bucket = "inside"
+  }
+  _ => {
+    bucket = "outside"
+  }
+}
+sort elapsed

@@ -697,6 +697,14 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
                                     BindingMap& replacements)
   -> failure_or<void>;
 
+auto compare_range_bounds(data const& lower, data const& upper)
+  -> std::partial_ordering;
+
+auto validate_record_pattern_scrutinee(ast::match_pattern const& pattern,
+                                       ast::expression const& scrutinee,
+                                       diagnostic_handler& dh)
+  -> failure_or<void>;
+
 auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
                               bool instantiate) -> failure_or<void>;
 
@@ -798,6 +806,14 @@ auto bind_match_pattern(ast::match_pattern& pattern, compile_ctx& ctx)
     });
 }
 
+auto is_addressable_scrutinee(ast::expression const& scrutinee) -> bool {
+  if (std::holds_alternative<ast::this_>(*scrutinee.kind)) {
+    return true;
+  }
+  auto copy = scrutinee;
+  return ast::field_path::try_from(std::move(copy)).has_value();
+}
+
 auto make_binding_expression(ast::expression const& scrutinee,
                              BindingPath const& path) -> ast::expression {
   auto result = scrutinee;
@@ -830,6 +846,24 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
       if (ctx.get(name.substr(1))) {
         return {};
       }
+      auto const addressable_scrutinee = is_addressable_scrutinee(scrutinee);
+      if (not path.empty() and not addressable_scrutinee) {
+        diagnostic::error("binding `{}` cannot be derived from a "
+                          "non-addressable match expression",
+                          binding.name.name)
+          .primary(binding)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (not addressable_scrutinee
+          and not scrutinee.is_deterministic(ctx.reg())) {
+        diagnostic::error("binding `{}` depends on a non-deterministic match "
+                          "expression",
+                          binding.name.name)
+          .primary(binding)
+          .emit(ctx);
+        return failure::promise();
+      }
       replacements.emplace(std::string{name.substr(1)},
                            make_binding_expression(scrutinee, path));
       return {};
@@ -846,6 +880,27 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
       }
       return {};
     });
+}
+
+auto validate_record_pattern_scrutinee(ast::match_pattern const& pattern,
+                                       ast::expression const& scrutinee,
+                                       diagnostic_handler& dh)
+  -> failure_or<void> {
+  if (not std::holds_alternative<ast::record_pattern>(*pattern.kind)) {
+    return {};
+  }
+  auto diagnostics = collecting_diagnostic_handler{};
+  auto value = const_eval(scrutinee, diagnostics);
+  if (value.is_error() or not diagnostics.empty()) {
+    return {};
+  }
+  if (not std::holds_alternative<record>(value->get_data())) {
+    diagnostic::error("record pattern cannot match non-record expression")
+      .primary(pattern)
+      .emit(dh);
+    return failure::promise();
+  }
+  return {};
 }
 
 auto substitute_match_expression(ast::expression& expr, location source,
@@ -889,6 +944,62 @@ auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
     });
 }
 
+auto compare_range_bounds(data const& lower, data const& upper)
+  -> std::partial_ordering {
+  return lower.get_data().match<std::partial_ordering>(
+    [&](caf::none_t value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](bool value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](int64_t value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](uint64_t value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](double value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](duration value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](time value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](std::string const& value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [](pattern const&) {
+      return std::partial_ordering::unordered;
+    },
+    [&](ip value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](subnet value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](enumeration value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [](list const&) {
+      return std::partial_ordering::unordered;
+    },
+    [](map const&) {
+      return std::partial_ordering::unordered;
+    },
+    [](record const&) {
+      return std::partial_ordering::unordered;
+    },
+    [&](blob const& value) {
+      return partial_order(data_view3{value}, upper);
+    },
+    [&](secret const& value) {
+      return partial_order(data_view3{value}, upper);
+    });
+}
+
 auto lower_match_pattern(ast::record_pattern const& pattern,
                          diagnostic_handler& dh) -> failure_or<MatchPattern> {
   auto fields = std::vector<MatchPattern::Field>{};
@@ -920,6 +1031,13 @@ auto lower_match_pattern(ast::match_pattern const& pattern,
                         range.lower, range.lower.get_location(), dh));
       TRY(auto upper, const_eval_match_expression(
                         range.upper, range.upper.get_location(), dh));
+      if (compare_range_bounds(lower, upper)
+          == std::partial_ordering::unordered) {
+        diagnostic::error("range pattern bounds are not comparable")
+          .primary(range.dots)
+          .emit(dh);
+        return failure::promise();
+      }
       return MatchPattern{
         MatchPattern::Range{std::move(lower), std::move(upper)}};
     },
@@ -1368,6 +1486,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             auto bindings = std::unordered_set<std::string>{};
             for (auto const& pattern : ast_arm.patterns) {
               TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
+              TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee,
+                                                    ctx));
             }
             for (auto& pattern : ast_arm.patterns) {
               TRY(bind_match_pattern(pattern, ctx));

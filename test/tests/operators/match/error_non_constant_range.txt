@@ -1,0 +1,7 @@
+error: match patterns must be constant expressions
+ --> tests/operators/match/error_non_constant_range.tql:7:6
+  |
+7 |   1..upper => {
+  |      ^^^^^ 
+  |
+  = hint: use a literal, a constant `let` binding, or `_`

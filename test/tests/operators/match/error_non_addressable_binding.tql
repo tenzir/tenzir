@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {}
+match {src: {ip: 1.2.3.4}} {
+  {src: {ip: $ip, ..}, ..} => {
+    captured = $ip
+  }
+}

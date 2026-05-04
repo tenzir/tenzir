@@ -1,0 +1,21 @@
+{
+  xs: [
+    1,
+  ],
+  matched: false,
+}
+{
+  xs: [
+    1,
+    2,
+  ],
+  matched: true,
+}
+{
+  xs: [
+    1,
+    2,
+    3,
+  ],
+  matched: false,
+}
