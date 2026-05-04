@@ -255,10 +255,7 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
 struct MatchArgs {
   struct Arm {
     location source;
-    // TODO: Introduce an explicit pattern representation once `match` grows
-    // beyond constant expressions and wildcards, e.g., for destructuring or
-    // bindings similar to Rust patterns.
-    std::vector<ast::expression> pattern_exprs;
+    std::vector<ast::match_pattern> pattern_exprs;
     std::vector<data> patterns;
     ir::pipeline pipeline;
     bool wildcard = false;
@@ -608,10 +605,12 @@ auto make_set_ir(std::vector<ast::assignment> assignments)
   return ir::SetIr{std::move(assignments)};
 }
 
-auto const_eval_match_pattern(ast::expression const& pattern,
+auto const_eval_match_pattern(ast::match_pattern const& pattern,
                               diagnostic_handler& dh) -> failure_or<data> {
+  TENZIR_ASSERT(not pattern.wildcard);
+  TENZIR_ASSERT(pattern.expr.is_some());
   auto diagnostics = collecting_diagnostic_handler{};
-  auto value = const_eval(pattern, diagnostics);
+  auto value = const_eval(**pattern.expr, diagnostics);
   if (value.is_error() or not diagnostics.empty()) {
     diagnostic::error("match patterns must be constant expressions")
       .primary(pattern)
@@ -659,13 +658,23 @@ public:
     return "Match";
   }
 
+  auto copy() const -> Box<ir::Operator> override {
+    return MatchIr{args_};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return MatchIr{std::move(args_)};
+  }
+
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
     TRY(args_.scrutinee.substitute(ctx));
     for (auto& arm : args_.arms) {
       arm.patterns.clear();
       for (auto& pattern : arm.pattern_exprs) {
-        TRY(auto subst, pattern.substitute(ctx));
+        TENZIR_ASSERT(not pattern.wildcard);
+        TENZIR_ASSERT(pattern.expr.is_some());
+        TRY(auto subst, (*pattern.expr)->substitute(ctx));
         if (instantiate and subst == ast::substitute_result::some_remaining) {
           diagnostic::error("match patterns must be constant expressions")
             .primary(pattern)
@@ -1003,12 +1012,13 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           auto arm = MatchArgs::Arm{};
           arm.source = ast_arm.patterns.front().get_location();
           arm.wildcard = ast_arm.patterns.size() == 1
-                         and std::holds_alternative<ast::underscore>(
-                           *ast_arm.patterns.front().kind);
+                         and ast_arm.patterns.front().wildcard;
           if (not arm.wildcard) {
             for (auto& pattern : ast_arm.patterns) {
-              TRY(pattern.bind(ctx));
-              arm.pattern_exprs.push_back(std::move(pattern));
+              TENZIR_ASSERT(not pattern.wildcard);
+              TENZIR_ASSERT(pattern.expr.is_some());
+              TRY((*pattern.expr)->bind(ctx));
+              arm.pattern_exprs.push_back(pattern);
             }
           }
           TRY(arm.pipeline, std::move(ast_arm.pipe).compile(ctx));

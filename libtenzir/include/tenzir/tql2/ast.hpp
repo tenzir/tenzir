@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/box.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
@@ -15,6 +16,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
@@ -750,9 +752,40 @@ struct if_stmt {
   }
 };
 
+struct match_pattern {
+  match_pattern();
+  explicit match_pattern(location source);
+  explicit match_pattern(expression expr);
+  ~match_pattern();
+  match_pattern(const match_pattern& other);
+  match_pattern(match_pattern&& other) noexcept;
+  auto operator=(const match_pattern& other) -> match_pattern&;
+  auto operator=(match_pattern&& other) noexcept -> match_pattern&;
+
+  bool wildcard = true;
+  location source;
+  Option<Box<expression>> expr;
+
+  friend auto inspect(auto& f, match_pattern& x) -> bool {
+    auto expr
+      = x.expr.is_some() ? **x.expr : expression{constant{caf::none, x.source}};
+    auto result
+      = f.object(x).fields(f.field("wildcard", x.wildcard),
+                           f.field("source", x.source), f.field("expr", expr));
+    if constexpr (std::decay_t<decltype(f)>::is_loading) {
+      x.expr = x.wildcard ? None{} : Option<Box<expression>>{std::move(expr)};
+    }
+    return result;
+  }
+
+  auto get_location() const -> location {
+    return source;
+  }
+};
+
 struct match_stmt {
   struct arm {
-    std::vector<expression> patterns;
+    std::vector<match_pattern> patterns;
     pipeline pipe;
 
     friend auto inspect(auto& f, arm& x) -> bool {
@@ -954,6 +987,28 @@ inline expression::~expression() = default;
 inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
   -> expression& = default;
+
+inline match_pattern::match_pattern() = default;
+
+inline match_pattern::match_pattern(location source)
+  : wildcard{true}, source{source} {
+}
+
+inline match_pattern::match_pattern(expression expr)
+  : wildcard{false}, source{expr.get_location()}, expr{std::move(expr)} {
+}
+
+inline match_pattern::~match_pattern() = default;
+
+inline match_pattern::match_pattern(const match_pattern& other) = default;
+
+inline match_pattern::match_pattern(match_pattern&& other) noexcept = default;
+
+inline auto match_pattern::operator=(const match_pattern& other)
+  -> match_pattern& = default;
+
+inline auto match_pattern::operator=(match_pattern&& other) noexcept
+  -> match_pattern& = default;
 
 inline type_def::~type_def() = default;
 inline type_def::type_def(type_def&&) noexcept = default;
@@ -1157,6 +1212,13 @@ protected:
   void enter(ast::match_stmt::arm& x) {
     go(x.patterns);
     go(x.pipe);
+  }
+
+  void enter(ast::match_pattern& x) {
+    if (not x.wildcard) {
+      TENZIR_ASSERT(x.expr.is_some());
+      go(**x.expr);
+    }
   }
 
   void enter(ast::selector& x) {
