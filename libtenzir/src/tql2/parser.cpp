@@ -266,6 +266,12 @@ public:
       auto entity = parse_entity(expect(tk::move).as_identifier());
       return parse_invocation(std::move(entity));
     }
+    if (silent_peek(tk::take) and not silent_peek_n(tk::equal, 1)
+        and not silent_peek_n(tk::dot, 1)
+        and not silent_peek_n(tk::question_mark, 1)) {
+      auto entity = parse_entity(expect(tk::take).as_identifier());
+      return parse_invocation(std::move(entity));
+    }
     auto unary_expr = parse_unary_expression();
     if (auto* call = try_as<ast::function_call>(unary_expr)) {
       // TODO: We patch a top-level function call to be an operator invocation
@@ -337,7 +343,7 @@ public:
   }
 
   auto parse_type_def() -> ast::type_def {
-    if (auto id = accept(tk::identifier)) {
+    if (auto id = accept_identifier()) {
       using tn = struct type_name;
       return tn{id.as_identifier()};
     }
@@ -355,7 +361,7 @@ public:
     auto scope = ignore_newlines(true);
     auto fields = std::vector<ast::record_def::field>{};
     while (not peek(tk::rbrace)) {
-      auto name = expect(tk::identifier).as_identifier();
+      auto name = expect_identifier().as_identifier();
       expect(tk::colon);
       auto def = parse_type_def();
       fields.emplace_back(std::move(name), std::move(def));
@@ -498,14 +504,14 @@ public:
   // TODO: Future us/ast problem with type expressions
 
   auto parse_entity() -> ast::entity {
-    return parse_entity(expect(tk::identifier).as_identifier());
+    return parse_entity(expect_identifier().as_identifier());
   }
 
   auto parse_entity(ast::identifier root) -> ast::entity {
     auto path = std::vector<ast::identifier>{};
     path.push_back(std::move(root));
     while (accept(tk::colon_colon)) {
-      path.push_back(expect(tk::identifier).as_identifier());
+      path.push_back(expect_identifier().as_identifier());
     }
     return ast::entity{std::move(path)};
   }
@@ -521,6 +527,11 @@ public:
       };
     }
     if (auto op = peek_unary_op()) {
+      if (*op == unary_op::take
+          and (silent_peek_n(tk::equal, 1) or silent_peek_n(tk::dot, 1)
+               or silent_peek_n(tk::question_mark, 1))) {
+        return parse_primary_expression();
+      }
       auto location = advance();
       if (*op == unary_op::move) {
         diagnostic::warning(
@@ -547,7 +558,7 @@ public:
         dot = accept(tk::dot);
       }
       if (dot) {
-        auto name = expect(tk::identifier);
+        auto name = expect_identifier();
         if (peek(tk::lpar) or peek(tk::colon_colon)) {
           auto entity = parse_entity(name.as_identifier());
           expr = parse_function_call(std::move(expr), std::move(entity));
@@ -675,11 +686,11 @@ public:
       auto next_stash = next_;
       auto last_stash = last_;
       auto tries_stash = tries_;
-      if (auto first_param = accept(tk::identifier)) {
+      if (auto first_param = accept_identifier()) {
         auto params = std::vector<ast::identifier>{};
         params.push_back(first_param.as_identifier());
         while (accept(tk::comma)) {
-          params.push_back(expect(tk::identifier).as_identifier());
+          params.push_back(expect_identifier().as_identifier());
         }
         if (accept(tk::rpar)) {
           if (auto arrow = accept(tk::fat_arrow)) {
@@ -727,7 +738,7 @@ public:
     }
     if (auto at = accept(tk::at)) {
       auto begin = at.location;
-      auto ident = expect(tk::identifier).as_identifier();
+      auto ident = expect_identifier().as_identifier();
       auto kind = ast::meta_kind{};
       if (ident.name == "name") {
         kind = ast::meta::name;
@@ -754,7 +765,7 @@ public:
     if (auto token = accept(tk::this_)) {
       return ast::this_{token.location};
     }
-    auto ident = accept(tk::identifier);
+    auto ident = accept_identifier();
     if (not ident) {
       diagnostic::error("expected expression, got {}", next_description())
         .primary(next_location(), "got {}", next_description())
@@ -1042,7 +1053,7 @@ public:
     // TODO: Use a different representation for field names that are strings or
     // format strings in the AST.
     auto ident = std::invoke([this]() {
-      if (auto result = accept(tk::identifier)) {
+      if (auto result = accept_identifier()) {
         return result.as_identifier();
       }
       auto string = parse_string();
@@ -1345,6 +1356,23 @@ public:
 
   auto expect(token_kind kind) -> accept_result {
     if (auto result = accept(kind)) {
+      return result;
+    }
+    throw_token();
+  }
+
+  auto accept_identifier() -> accept_result {
+    if (auto result = accept(tk::identifier)) {
+      return result;
+    }
+    if (auto result = accept(tk::take)) {
+      return result;
+    }
+    return {};
+  }
+
+  auto expect_identifier() -> accept_result {
+    if (auto result = accept_identifier()) {
       return result;
     }
     throw_token();
