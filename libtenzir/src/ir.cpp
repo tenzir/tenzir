@@ -383,6 +383,49 @@ public:
     return {};
   }
 
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    // We need to skip `-> void` pipelines, which are invalid to optimize with
+    // the downstream filter.
+    auto null_dh = null_diagnostic_handler{};
+    auto outputs_events = [&](ir::pipeline const& pipe) -> bool {
+      auto t = pipe.infer_type(tag_v<table_slice>, null_dh);
+      return t and *t and (**t).is<table_slice>();
+    };
+    auto optimize_branch
+      = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
+      auto opt = std::move(branch).optimize(std::move(f), order);
+      branch = std::move(opt.replacement);
+      branch.operators.insert_range(branch.operators.begin(),
+                                    opt.filter
+                                      | std::views::transform(make_where_ir));
+      return opt.order;
+    };
+    // Handle downstream filters when there is no explicit `else` branch.
+    if (not args_.alternative and not filter.empty()) {
+      args_.alternative.emplace(IfArgs::Else{location{}, ir::pipeline{}});
+    }
+    auto cons_filter
+      = outputs_events(args_.consequence) ? filter : ir::optimize_filter{};
+    auto cons_order
+      = optimize_branch(args_.consequence, std::move(cons_filter));
+    auto alt_order = order;
+    if (args_.alternative) {
+      auto alt_filter = outputs_events(args_.alternative->pipeline)
+                          ? std::move(filter)
+                          : ir::optimize_filter{};
+      alt_order
+        = optimize_branch(args_.alternative->pipeline, std::move(alt_filter));
+    }
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    return {
+      {},
+      stronger_event_order(cons_order, alt_order),
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
   auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};

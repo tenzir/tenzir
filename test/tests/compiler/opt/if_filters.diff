@@ -1,0 +1,164 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     If {
+       if_keyword: 7..9,
+       condition: constant bool true @ 10..14,
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           where_ir {
+-            self: 19..24,
++            self: 0..0,
+             predicate: root_field {
+               id: `a` @ 25..26,
+               has_question_mark: false
++            }
++          },
++          where_ir {
++            self: 0..0,
++            predicate: binary_expr {
++              left: root_field {
++                id: `foo` @ 92..95,
++                has_question_mark: false
++              },
++              op: "eq" @ 96..98,
++              right: constant int64 42 @ 99..101
+             }
+           }
+         ]
+       },
+       alternative: {
+         keyword: 29..33,
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             If {
+               if_keyword: 34..36,
+               condition: constant bool false @ 37..42,
+               consequence: {
+                 lets: [
+                   
+                 ],
+                 operators: [
+                   where_ir {
+-                    self: 47..52,
++                    self: 0..0,
+                     predicate: root_field {
+                       id: `b` @ 53..54,
+                       has_question_mark: false
++                    }
++                  },
++                  where_ir {
++                    self: 0..0,
++                    predicate: binary_expr {
++                      left: root_field {
++                        id: `foo` @ 92..95,
++                        has_question_mark: false
++                      },
++                      op: "eq" @ 96..98,
++                      right: constant int64 42 @ 99..101
+                     }
+                   }
+                 ]
+               },
+               alternative: {
+                 keyword: 57..61,
+                 pipeline: {
+                   lets: [
+                     
+                   ],
+                   operators: [
+                     where_ir {
+-                      self: 66..71,
++                      self: 0..0,
+                       predicate: root_field {
+                         id: `c` @ 72..73,
+                         has_question_mark: false
+                       }
+                     },
+                     where_ir {
+-                      self: 76..81,
++                      self: 0..0,
+                       predicate: root_field {
+                         id: `d` @ 82..83,
+                         has_question_mark: false
++                      }
++                    },
++                    where_ir {
++                      self: 0..0,
++                      predicate: binary_expr {
++                        left: root_field {
++                          id: `foo` @ 92..95,
++                          has_question_mark: false
++                        },
++                        op: "eq" @ 96..98,
++                        right: constant int64 42 @ 99..101
+                       }
+                     }
+                   ]
+                 }
+               }
+             }
+           ]
+         }
+-      }
+-    },
+-    where_ir {
+-      self: 86..91,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `foo` @ 92..95,
+-          has_question_mark: false
+-        },
+-        op: "eq" @ 96..98,
+-        right: constant int64 42 @ 99..101
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 102..109
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "unordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

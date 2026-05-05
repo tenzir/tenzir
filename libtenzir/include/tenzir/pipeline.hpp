@@ -161,6 +161,11 @@ inline auto weaker_event_order(event_order a, event_order b) -> event_order {
   return std::max(a, b);
 }
 
+/// Returns the event order that imposes the stricter requirement.
+inline auto stronger_event_order(event_order a, event_order b) -> event_order {
+  return std::min(a, b);
+}
+
 auto inspect(auto& f, event_order& x) -> bool {
   return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
 }

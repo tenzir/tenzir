@@ -1,0 +1,10 @@
+export
+if x == 1 {
+  where a == 1
+} else if y == 2 {
+  write_lines
+  read_ndjson
+} else {
+  head
+}
+discard

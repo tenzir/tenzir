@@ -1,0 +1,8 @@
+export
+if true {
+  head
+} else {
+  head
+}
+write_tql
+save_stdout
