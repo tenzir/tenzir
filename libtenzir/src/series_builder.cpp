@@ -632,6 +632,11 @@ public:
   }
 
   void append(view_type value) {
+    if constexpr (std::signed_integral<value_type>) {
+      if (value < 0) {
+        all_non_negative_ = false;
+      }
+    }
     check(append_builder(type_, *inner_, value));
   }
 
@@ -639,9 +644,16 @@ public:
     return inner_->null_count() == inner_->length();
   }
 
+  auto all_non_negative() const -> bool
+    requires std::signed_integral<value_type>
+  {
+    return all_non_negative_;
+  }
+
 private:
   std::shared_ptr<builder_type> inner_;
   T type_;
+  bool all_non_negative_ = true;
 };
 
 template <>
@@ -978,7 +990,19 @@ void dynamic_builder::atom(detail::atom_view value) {
                                "builder");
         }
       } else {
-        prepare<atom_view_to_type_t<decltype(value)>>()->append(value);
+        using atom_type = atom_view_to_type_t<decltype(value)>;
+        // Non-negative int64 values are compatible with an existing uint64
+        // builder: cast and append directly to avoid a pointless flush.
+        if constexpr (std::same_as<atom_type, int64_type>) {
+          if (value >= 0) {
+            if (auto* uint_b
+                = dynamic_cast<typed_builder<uint64_type>*>(builder_.get())) {
+              uint_b->append(static_cast<uint64_t>(value));
+              return;
+            }
+          }
+        }
+        prepare<atom_type>()->append(value);
       }
     },
     value);
@@ -1013,6 +1037,27 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
     // This builder is in conflict mode because the current event contains a
     // type conflict.
     return cast->prepare<Type>();
+  }
+  // Lossless int64 → uint64 upgrade: if all stored values are non-negative,
+  // migrate to a uint64 builder instead of flushing.
+  if constexpr (std::same_as<Type, uint64_type>) {
+    if (auto* int_b
+        = dynamic_cast<typed_builder<int64_type>*>(builder_.get())) {
+      if (int_b->all_non_negative()) {
+        auto array = int_b->finish(); // guaranteed no negatives
+        builder_ = std::make_unique<typed_builder<uint64_type>>(root_);
+        auto* tgt = static_cast<typed_builder<uint64_type>*>(builder_.get());
+        for (int64_t i = 0; i < array->length(); ++i) {
+          if (array->IsNull(i)) {
+            tgt->resize(tgt->length() + 1);
+          } else {
+            tgt->append(static_cast<uint64_t>(array->Value(i)));
+          }
+        }
+        return prepare<Type>(); // hits the "already correct type" branch
+      }
+      // all_non_negative_ == false: fall through to finish_previous_events
+    }
   }
   // Otherwise, there is a type conflict. There are three cases to consider:
   //
@@ -1099,6 +1144,20 @@ void detail::field_ref::atom(detail::atom_view value) {
         builder->resize(origin_->length_ - 1);
         builder->atom(value);
       } else {
+        using atom_type = atom_view_to_type_t<decltype(value)>;
+        // Non-negative int64 values are compatible with an existing uint64
+        // field: resize and append directly to avoid a pointless flush.
+        if constexpr (std::same_as<atom_type, int64_type>) {
+          if (value >= 0) {
+            if (auto* field = builder()) {
+              if (field->kind().template is<uint64_type>()) {
+                field->resize(origin_->length() - 1);
+                field->atom(detail::atom_view{static_cast<uint64_t>(value)});
+                return;
+              }
+            }
+          }
+        }
         origin_->prepare<atom_type>(name_)->append(value);
       }
     },

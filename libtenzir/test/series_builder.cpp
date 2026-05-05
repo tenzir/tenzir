@@ -474,6 +474,94 @@ TEST("playground") {
   ])"}});
 }
 
+TEST("uint64 record field accepts non-negative int64 without flush") {
+  auto b = series_builder{};
+  b.record().field("x").data(uint64_t{1});
+  b.record().field("x").data(uint64_t{2});
+  b.record().field("x").data(int64_t{3});
+  finish_and_check(b, {{3, R"(struct<x: uint64>)", R"(-- is_valid: all not null
+-- child 0 type: uint64
+  [
+    1,
+    2,
+    3
+  ])"}});
+}
+
+TEST("uint64 record field flushes on negative int64") {
+  auto b = series_builder{};
+  b.record().field("x").data(uint64_t{1});
+  b.record().field("x").data(uint64_t{2});
+  b.record().field("x").data(int64_t{-3});
+  finish_and_check(b, {{2, R"(struct<x: uint64>)", R"(-- is_valid: all not null
+-- child 0 type: uint64
+  [
+    1,
+    2
+  ])"},
+                       {1, R"(struct<x: int64>)", R"(-- is_valid: all not null
+-- child 0 type: int64
+  [
+    -3
+  ])"}});
+}
+
+TEST("uint64 builder accepts non-negative int64 without flush") {
+  auto b = series_builder{};
+  b.data(uint64_t{1});
+  b.data(uint64_t{2});
+  b.data(uint64_t{3});
+  b.data(int64_t{4});
+  finish_and_check(b, {{4, "uint64", R"([
+  1,
+  2,
+  3,
+  4
+])"}});
+}
+
+TEST("uint64 builder flushes on negative int64") {
+  auto b = series_builder{};
+  b.data(uint64_t{1});
+  b.data(uint64_t{2});
+  b.data(int64_t{-3});
+  finish_and_check(b, {{2, "uint64", R"([
+  1,
+  2
+])"},
+                       {1, "int64", R"([
+  -3
+])"}});
+}
+
+TEST("int64 to uint64 upgrade when all non-negative") {
+  auto b = series_builder{};
+  b.data(int64_t{1});
+  b.data(int64_t{2});
+  b.data(int64_t{3});
+  b.data(uint64_t{4});
+  finish_and_check(b, {{4, "uint64", R"([
+  1,
+  2,
+  3,
+  4
+])"}});
+}
+
+TEST("int64 to uint64 keeps int64 when negative values present") {
+  auto b = series_builder{};
+  b.data(int64_t{-1});
+  b.data(int64_t{2});
+  b.data(uint64_t{4});
+  finish_and_check(b, {{2, "int64", R"([
+  -1,
+  2
+])"},
+                       {1, "uint64", R"([
+  4
+])"}});
+}
+
 } // namespace
 
 } // namespace tenzir
