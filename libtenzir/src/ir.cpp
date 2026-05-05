@@ -23,6 +23,7 @@
 #include "tenzir/tql2/user_defined_operator.hpp"
 #include "tenzir/view3.hpp"
 
+#include <algorithm>
 #include <ranges>
 
 namespace tenzir {
@@ -877,16 +878,13 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
     });
 }
 
-auto same_or_nested_path(ast::field_path const& assigned,
-                         ast::field_path const& captured) -> bool {
+auto paths_overlap(ast::field_path const& assigned,
+                   ast::field_path const& captured) -> bool {
   auto assigned_path = assigned.path();
   auto captured_path = captured.path();
-  if (assigned_path.size() > captured_path.size()) {
-    return false;
-  }
-  for (auto [assigned_segment, captured_segment] :
-       std::views::zip(assigned_path, captured_path)) {
-    if (assigned_segment.id.name != captured_segment.id.name) {
+  auto common_size = std::min(assigned_path.size(), captured_path.size());
+  for (auto i = size_t{0}; i < common_size; ++i) {
+    if (assigned_path[i].id.name != captured_path[i].id.name) {
       return false;
     }
   }
@@ -914,7 +912,7 @@ public:
         return;
       }
       for (auto const& mutated : mutated_paths_) {
-        if (not same_or_nested_path(mutated, *captured)) {
+        if (not paths_overlap(mutated, *captured)) {
           continue;
         }
         diagnostic::error("match binding `${}` is used after its matched field "
