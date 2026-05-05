@@ -1,0 +1,8 @@
+from {labels: ["prod", "api"], event: {roles: ["frontend", "public"]}},
+     {labels: ["prod", "worker"], event: {roles: ["backend"]}}
+match this {
+  {event: {roles: ["frontend", ..], ..}, labels: ["prod", $service, ..], ..} => {
+    service = $service
+    exposure = "public"
+  }
+}

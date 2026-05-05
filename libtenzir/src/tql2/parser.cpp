@@ -296,6 +296,9 @@ public:
     if (peek(tk::lbrace)) {
       return parse_record_pattern();
     }
+    if (peek(tk::lbracket)) {
+      return parse_list_pattern();
+    }
     auto lower = parse_expression(1);
     if (auto dots = accept(tk::dot_dot)) {
       auto upper = parse_expression(1);
@@ -306,6 +309,44 @@ public:
       }};
     }
     return ast::match_pattern{ast::expression_pattern{std::move(lower)}};
+  }
+
+  auto parse_list_pattern() -> ast::match_pattern {
+    auto begin = expect(tk::lbracket);
+    auto elements = std::vector<Box<ast::match_pattern>>{};
+    auto rest = Option<location>{None{}};
+    while (not peek(tk::rbracket)) {
+      if (auto dots = accept(tk::dot_dot)) {
+        if (rest.is_some()) {
+          diagnostic::error("list pattern rest appears more than once")
+            .primary(dots.location)
+            .throw_();
+        }
+        rest = dots.location;
+        if (not peek(tk::rbracket)) {
+          if (silent_peek(tk::comma) and silent_peek_n(tk::dot_dot, 1)) {
+            diagnostic::error("list pattern rest appears more than once")
+              .primary(dots.location)
+              .throw_();
+          }
+          diagnostic::error("list pattern rest must come after all elements")
+            .primary(dots.location)
+            .throw_();
+        }
+        break;
+      }
+      elements.push_back(Box{parse_match_pattern()});
+      if (not accept(tk::comma)) {
+        break;
+      }
+    }
+    auto end = expect(tk::rbracket);
+    return ast::match_pattern{ast::list_pattern{
+      begin.location,
+      std::move(elements),
+      rest,
+      end.location,
+    }};
   }
 
   auto parse_record_pattern() -> ast::match_pattern {

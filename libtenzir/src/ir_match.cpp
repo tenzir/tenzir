@@ -44,11 +44,15 @@ struct MatchPattern {
     std::string name;
     Box<MatchPattern> pattern;
   };
+  struct List {
+    std::vector<Box<MatchPattern>> elements;
+    bool has_rest = false;
+  };
   struct Record {
     std::vector<Field> fields;
     bool has_rest = false;
   };
-  using kind_type = variant<Wildcard, Constant, Range, Record>;
+  using kind_type = variant<Wildcard, Constant, Range, List, Record>;
 
   kind_type kind;
 
@@ -69,6 +73,11 @@ struct MatchPattern {
   friend auto inspect(auto& f, Field& x) -> bool {
     return f.object(x).fields(f.field("name", x.name),
                               f.field("pattern", x.pattern));
+  }
+
+  friend auto inspect(auto& f, List& x) -> bool {
+    return f.object(x).fields(f.field("elements", x.elements),
+                              f.field("has_rest", x.has_rest));
   }
 
   friend auto inspect(auto& f, Record& x) -> bool {
@@ -344,7 +353,15 @@ auto const_eval_match_expression(ast::expression const& expr, location source,
 }
 
 using BindingMap = std::unordered_map<std::string, ast::expression>;
-using BindingPath = std::vector<ast::identifier>;
+struct BindingFieldPathSegment {
+  ast::identifier name;
+};
+struct BindingIndexPathSegment {
+  location source;
+  int64_t index = 0;
+};
+using BindingPath
+  = std::vector<variant<BindingFieldPathSegment, BindingIndexPathSegment>>;
 
 auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
                                   ast::expression const& scrutinee,
@@ -396,6 +413,9 @@ auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
     [](ast::range_pattern const&) {
       return false;
     },
+    [](ast::list_pattern const&) {
+      return false;
+    },
     [&](ast::record_pattern const& record) {
       return record.fields.empty() and record.rest.is_some()
              and std::holds_alternative<ast::this_>(*scrutinee.kind);
@@ -430,6 +450,12 @@ auto validate_match_pattern_bindings(ast::match_pattern const& pattern,
       return {};
     },
     [&](ast::range_pattern const&) -> failure_or<void> {
+      return {};
+    },
+    [&](ast::list_pattern const& list) -> failure_or<void> {
+      for (auto const& element : list.elements) {
+        TRY(validate_match_pattern_bindings(*element, ctx, names));
+      }
       return {};
     },
     [&](ast::record_pattern const& record) -> failure_or<void> {
@@ -467,6 +493,12 @@ auto bind_match_pattern(ast::match_pattern& pattern, compile_ctx& ctx)
       TRY(range.upper.bind(ctx));
       return {};
     },
+    [&](ast::list_pattern& list) -> failure_or<void> {
+      for (auto& element : list.elements) {
+        TRY(bind_match_pattern(*element, ctx));
+      }
+      return {};
+    },
     [&](ast::record_pattern& record) -> failure_or<void> {
       for (auto& field : record.fields) {
         TRY(bind_match_pattern(*field.pattern, ctx));
@@ -486,13 +518,25 @@ auto is_addressable_scrutinee(ast::expression const& scrutinee) -> bool {
 auto make_binding_expression(ast::expression const& scrutinee,
                              BindingPath const& path) -> ast::expression {
   auto result = scrutinee;
-  for (auto const& field : path) {
-    result = ast::expression{ast::field_access{
-      std::move(result),
-      field.location,
-      false,
-      field,
-    }};
+  for (auto const& segment : path) {
+    segment.match(
+      [&](BindingFieldPathSegment const& field) {
+        result = ast::expression{ast::field_access{
+          std::move(result),
+          field.name.location,
+          false,
+          field.name,
+        }};
+      },
+      [&](BindingIndexPathSegment const& index) {
+        result = ast::expression{ast::index_expr{
+          std::move(result),
+          index.source,
+          ast::expression{ast::constant{index.index, index.source}},
+          index.source,
+          false,
+        }};
+      });
   }
   return result;
 }
@@ -540,9 +584,19 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
     [](ast::range_pattern const&) -> failure_or<void> {
       return {};
     },
+    [&](ast::list_pattern const& list) -> failure_or<void> {
+      for (auto index = size_t{0}; index < list.elements.size(); ++index) {
+        path.push_back(
+          BindingIndexPathSegment{list.begin, static_cast<int64_t>(index)});
+        TRY(collect_match_pattern_bindings(*list.elements[index], scrutinee,
+                                           path, ctx, replacements));
+        path.pop_back();
+      }
+      return {};
+    },
     [&](ast::record_pattern const& record) -> failure_or<void> {
       for (auto const& field : record.fields) {
-        path.push_back(field.name);
+        path.push_back(BindingFieldPathSegment{field.name});
         TRY(collect_match_pattern_bindings(*field.pattern, scrutinee, path, ctx,
                                            replacements));
         path.pop_back();
@@ -796,6 +850,12 @@ auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
                                       ctx, instantiate));
       return {};
     },
+    [&](ast::list_pattern& list) -> failure_or<void> {
+      for (auto& element : list.elements) {
+        TRY(substitute_match_pattern(*element, ctx, instantiate));
+      }
+      return {};
+    },
     [&](ast::record_pattern& record) -> failure_or<void> {
       for (auto& field : record.fields) {
         TRY(substitute_match_pattern(*field.pattern, ctx, instantiate));
@@ -860,6 +920,17 @@ auto compare_range_bounds(data const& lower, data const& upper)
     });
 }
 
+auto lower_match_pattern(ast::list_pattern const& pattern,
+                         diagnostic_handler& dh) -> failure_or<MatchPattern> {
+  auto elements = std::vector<Box<MatchPattern>>{};
+  for (auto const& element : pattern.elements) {
+    TRY(auto nested, lower_match_pattern(*element, dh));
+    elements.push_back(Box{std::move(nested)});
+  }
+  return MatchPattern{
+    MatchPattern::List{std::move(elements), pattern.rest.is_some()}};
+}
+
 auto lower_match_pattern(ast::record_pattern const& pattern,
                          diagnostic_handler& dh) -> failure_or<MatchPattern> {
   auto fields = std::vector<MatchPattern::Field>{};
@@ -901,9 +972,32 @@ auto lower_match_pattern(ast::match_pattern const& pattern,
       return MatchPattern{
         MatchPattern::Range{std::move(lower), std::move(upper)}};
     },
+    [&](ast::list_pattern const& list) -> failure_or<MatchPattern> {
+      return lower_match_pattern(list, dh);
+    },
     [&](ast::record_pattern const& record) -> failure_or<MatchPattern> {
       return lower_match_pattern(record, dh);
     });
+}
+
+auto matches_list(data_view3 value, MatchPattern::List const& pattern) -> bool {
+  auto const* list = std::get_if<list_view3>(&value);
+  if (not list) {
+    return false;
+  }
+  if (list->size() < pattern.elements.size()) {
+    return false;
+  }
+  if (not pattern.has_rest and list->size() != pattern.elements.size()) {
+    return false;
+  }
+  for (auto index = size_t{0}; index < pattern.elements.size(); ++index) {
+    if (not matches_pattern(list->at(static_cast<int64_t>(index)),
+                            *pattern.elements[index])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 auto matches_record(data_view3 value, MatchPattern::Record const& pattern)
@@ -948,6 +1042,9 @@ auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool {
            and lower != std::partial_ordering::unordered
            and upper != std::partial_ordering::greater
            and upper != std::partial_ordering::unordered;
+  }
+  if (auto list = std::get_if<MatchPattern::List>(&pattern.kind)) {
+    return matches_list(value, *list);
   }
   auto const* record = std::get_if<MatchPattern::Record>(&pattern.kind);
   TENZIR_ASSERT(record);

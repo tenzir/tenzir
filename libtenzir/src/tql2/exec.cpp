@@ -418,6 +418,11 @@ public:
                     visit(pattern.lower);
                     visit(pattern.upper);
                   },
+                  [&](ast::list_pattern& pattern) {
+                    for (auto& element : pattern.elements) {
+                      visit(*element);
+                    }
+                  },
                   [&](ast::record_pattern& pattern) {
                     for (auto& field : pattern.fields) {
                       visit(*field.pattern);
