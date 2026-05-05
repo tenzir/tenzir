@@ -909,7 +909,28 @@ public:
   void visit(ast::expression& expr) {
     if (auto* var = try_as<ast::dollar_var>(expr)) {
       auto name = std::string{var->name_without_dollar()};
-      used_bindings_.insert(std::move(name));
+      auto replacement = replacements_.find(name);
+      if (replacement == replacements_.end()) {
+        return;
+      }
+      auto captured_expr = replacement->second;
+      auto captured = ast::field_path::try_from(std::move(captured_expr));
+      if (not captured) {
+        return;
+      }
+      for (auto const& mutated : mutated_paths_) {
+        if (not same_or_nested_path(mutated, *captured)) {
+          continue;
+        }
+        diagnostic::error("match binding `${}` is used after its matched field "
+                          "is assigned",
+                          name)
+          .primary(*var)
+          .hint("move the assignment after all uses of the binding")
+          .emit(dh_);
+        result_ = failure::promise();
+        return;
+      }
       return;
     }
     enter(expr);
@@ -917,27 +938,8 @@ public:
 
   void visit(ast::assignment& assignment) {
     visit(assignment.right);
-    auto const* assigned = std::get_if<ast::field_path>(&assignment.left);
-    if (not assigned) {
-      return;
-    }
-    for (auto const& name : used_bindings_) {
-      auto replacement = replacements_.find(name);
-      if (replacement == replacements_.end()) {
-        continue;
-      }
-      auto captured_expr = replacement->second;
-      auto captured = ast::field_path::try_from(std::move(captured_expr));
-      if (not captured or not same_or_nested_path(*assigned, *captured)) {
-        continue;
-      }
-      diagnostic::error("match binding `${}` is used after its matched field "
-                        "is assigned",
-                        name)
-        .primary(assignment.left)
-        .hint("move the assignment after all uses of the binding")
-        .emit(dh_);
-      result_ = failure::promise();
+    if (auto const* assigned = std::get_if<ast::field_path>(&assignment.left)) {
+      mutated_paths_.push_back(*assigned);
     }
   }
 
@@ -953,7 +955,7 @@ public:
 private:
   BindingMap const& replacements_;
   diagnostic_handler& dh_;
-  std::unordered_set<std::string> used_bindings_;
+  std::vector<ast::field_path> mutated_paths_;
   failure_or<void> result_;
 };
 
