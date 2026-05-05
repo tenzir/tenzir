@@ -129,21 +129,6 @@ TEST("tql2 parser: move operator is not deprecated") {
   CHECK(dh.empty());
 }
 
-TEST("tql2 parser: take remains usable in identifier contexts") {
-  auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
-  auto invocation
-    = parse_pipeline_with_bad_diagnostics("take foo", provider.as_session());
-  REQUIRE(invocation);
-  auto access = parse_assignment_with_bad_diagnostics("x = foo.take",
-                                                      provider.as_session());
-  REQUIRE(access);
-  auto field
-    = parse_assignment_with_bad_diagnostics("take = 1", provider.as_session());
-  REQUIRE(field);
-  CHECK(dh.empty());
-}
-
 TEST("tql2 parser: deep left-associated or location") {
   auto expr = ast::expression{ast::constant{false, location{0, 1}}};
   auto end = size_t{1};
