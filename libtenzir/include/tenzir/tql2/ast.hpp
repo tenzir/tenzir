@@ -697,6 +697,11 @@ auto substitute_named_expressions(
   const std::unordered_map<std::string, ast::expression>& replacements,
   diagnostic_handler& dh) -> failure_or<ast::pipeline>;
 
+auto substitute_named_expressions(
+  expression expr,
+  const std::unordered_map<std::string, ast::expression>& replacements,
+  diagnostic_handler& dh) -> failure_or<ast::expression>;
+
 struct let_stmt {
   let_stmt() = default;
 
@@ -872,10 +877,12 @@ struct match_pattern {
 struct match_stmt {
   struct arm {
     std::vector<match_pattern> patterns;
+    Option<expression> guard;
     pipeline pipe;
 
     friend auto inspect(auto& f, arm& x) -> bool {
       return f.object(x).fields(f.field("patterns", x.patterns),
+                                f.field("guard", x.guard),
                                 f.field("pipe", x.pipe));
     }
   };
@@ -1321,6 +1328,9 @@ protected:
 
   void enter(ast::match_stmt::arm& x) {
     go(x.patterns);
+    if (x.guard) {
+      go(*x.guard);
+    }
     go(x.pipe);
   }
 

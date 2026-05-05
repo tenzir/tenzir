@@ -18,6 +18,8 @@
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/view3.hpp"
 
+#include <caf/binary_serializer.hpp>
+
 #include <algorithm>
 
 namespace tenzir {
@@ -84,15 +86,15 @@ struct MatchArgs {
     location source;
     std::vector<ast::match_pattern> pattern_exprs;
     std::vector<MatchPattern> patterns;
+    Option<ast::expression> guard;
     ir::pipeline pipeline;
     bool wildcard = false;
 
     friend auto inspect(auto& f, Arm& x) -> bool {
-      return f.object(x).fields(f.field("source", x.source),
-                                f.field("pattern_exprs", x.pattern_exprs),
-                                f.field("patterns", x.patterns),
-                                f.field("pipeline", x.pipeline),
-                                f.field("wildcard", x.wildcard));
+      return f.object(x).fields(
+        f.field("source", x.source), f.field("pattern_exprs", x.pattern_exprs),
+        f.field("patterns", x.patterns), f.field("guard", x.guard),
+        f.field("pipeline", x.pipeline), f.field("wildcard", x.wildcard));
     }
   };
 
@@ -132,7 +134,11 @@ public:
 
   auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
     -> Task<void> {
+    auto candidate_masks = std::vector<std::vector<bool>>(args_.arms.size());
     auto arm_masks = std::vector<std::vector<bool>>(args_.arms.size());
+    for (auto& mask : candidate_masks) {
+      mask.resize(input.rows(), false);
+    }
     for (auto& mask : arm_masks) {
       mask.resize(input.rows(), false);
     }
@@ -144,9 +150,6 @@ public:
         auto row = offset++;
         for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
              ++arm_index) {
-          if (matched[row]) {
-            break;
-          }
           auto const& arm = args_.arms[arm_index];
           auto matches = arm.wildcard;
           for (auto const& pattern : arm.patterns) {
@@ -156,13 +159,51 @@ public:
             }
           }
           if (matches) {
-            arm_masks[arm_index][row] = true;
-            matched[row] = true;
+            candidate_masks[arm_index][row] = true;
           }
         }
       }
     }
     TENZIR_ASSERT_EQ(offset, static_cast<int64_t>(input.rows()));
+    for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
+         ++arm_index) {
+      auto guard_mask = std::vector<bool>(input.rows(), true);
+      auto const& arm = args_.arms[arm_index];
+      if (arm.guard) {
+        auto end = int64_t{0};
+        for (auto const& predicate : eval(*arm.guard, input, ctx)) {
+          auto const start = std::exchange(end, end + predicate.length());
+          auto const typed_predicate = predicate.as<bool_type>();
+          if (not typed_predicate) {
+            diagnostic::warning("expected `bool`, but got `{}`",
+                                predicate.type.kind())
+              .primary(*arm.guard)
+              .emit(ctx);
+            std::fill(guard_mask.begin() + start, guard_mask.begin() + end,
+                      false);
+            continue;
+          }
+          if (typed_predicate->array->null_count() > 0) {
+            diagnostic::warning("expected `bool`, but got `null`")
+              .primary(*arm.guard)
+              .emit(ctx);
+          }
+          auto const& array = *typed_predicate->array;
+          for (auto row = start; row < end; ++row) {
+            guard_mask[row]
+              = not array.IsNull(row - start) and array.GetView(row - start);
+          }
+        }
+        TENZIR_ASSERT_EQ(end, static_cast<int64_t>(input.rows()));
+      }
+      for (auto row = size_t{0}; row < input.rows(); ++row) {
+        if (not matched[row] and candidate_masks[arm_index][row]
+            and guard_mask[row]) {
+          arm_masks[arm_index][row] = true;
+          matched[row] = true;
+        }
+      }
+    }
     for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
          ++arm_index) {
       if (arm_closed_[arm_index]) {
@@ -287,6 +328,7 @@ using BindingMap = std::unordered_map<std::string, ast::expression>;
 using BindingPath = std::vector<ast::identifier>;
 
 auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
+                                  ast::expression const& scrutinee,
                                   compile_ctx const& ctx) -> bool;
 
 auto validate_match_pattern_bindings(ast::match_pattern const& pattern,
@@ -318,6 +360,7 @@ auto lower_match_pattern(ast::match_pattern const& pattern,
                          diagnostic_handler& dh) -> failure_or<MatchPattern>;
 
 auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
+                                  ast::expression const& scrutinee,
                                   compile_ctx const& ctx) -> bool {
   return pattern.kind->match<bool>(
     [](ast::wildcard_pattern const&) {
@@ -334,8 +377,9 @@ auto is_irrefutable_match_pattern(ast::match_pattern const& pattern,
     [](ast::range_pattern const&) {
       return false;
     },
-    [](ast::record_pattern const&) {
-      return false;
+    [&](ast::record_pattern const& record) {
+      return record.fields.empty() and record.rest.is_some()
+             and std::holds_alternative<ast::this_>(*scrutinee.kind);
     });
 }
 
@@ -486,6 +530,60 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
       }
       return {};
     });
+}
+
+auto serialized_expressions_equal(ast::expression const& lhs,
+                                  ast::expression const& rhs) -> bool {
+  auto lhs_buffer = caf::byte_buffer{};
+  auto lhs_serializer = caf::binary_serializer{lhs_buffer};
+  if (not lhs_serializer.apply(lhs)) {
+    return false;
+  }
+  auto rhs_buffer = caf::byte_buffer{};
+  auto rhs_serializer = caf::binary_serializer{rhs_buffer};
+  if (not rhs_serializer.apply(rhs)) {
+    return false;
+  }
+  return lhs_buffer == rhs_buffer;
+}
+
+auto binding_expressions_equal(ast::expression const& lhs,
+                               ast::expression const& rhs) -> bool {
+  auto lhs_path = ast::field_path::try_from(lhs);
+  auto rhs_path = ast::field_path::try_from(rhs);
+  if (not lhs_path or not rhs_path) {
+    return serialized_expressions_equal(lhs, rhs);
+  }
+  if (lhs_path->has_this() != rhs_path->has_this()) {
+    return false;
+  }
+  auto lhs_segments = lhs_path->path();
+  auto rhs_segments = rhs_path->path();
+  if (lhs_segments.size() != rhs_segments.size()) {
+    return false;
+  }
+  for (auto i = size_t{0}; i < lhs_segments.size(); ++i) {
+    if (lhs_segments[i].id.name != rhs_segments[i].id.name
+        or lhs_segments[i].has_question_mark
+             != rhs_segments[i].has_question_mark) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto binding_maps_equal(BindingMap const& lhs, BindingMap const& rhs) -> bool {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (auto const& [name, lhs_expr] : lhs) {
+    auto rhs_expr = rhs.find(name);
+    if (rhs_expr == rhs.end()
+        or not binding_expressions_equal(lhs_expr, rhs_expr->second)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 auto paths_overlap(ast::field_path const& assigned,
@@ -814,6 +912,9 @@ public:
           arm.patterns.push_back(std::move(lowered));
         }
       }
+      if (arm.guard) {
+        TRY(arm.guard->substitute(ctx));
+      }
       TRY(arm.pipeline.substitute(ctx, instantiate));
     }
     return {};
@@ -882,9 +983,11 @@ auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
   for (auto arm_index = size_t{0}; auto& ast_arm : x.arms) {
     auto arm = MatchArgs::Arm{};
     arm.source = ast_arm.patterns.front().get_location();
-    arm.wildcard = std::ranges::any_of(ast_arm.patterns, [&](auto& pattern) {
-      return is_irrefutable_match_pattern(pattern, ctx);
-    });
+    arm.wildcard
+      = not ast_arm.guard
+        and std::ranges::any_of(ast_arm.patterns, [&](auto& pattern) {
+              return is_irrefutable_match_pattern(pattern, args.scrutinee, ctx);
+            });
     if (arm.wildcard and arm_index + 1 != x.arms.size()) {
       diagnostic::error("irrefutable match arm must be last")
         .primary(arm.source)
@@ -892,9 +995,26 @@ auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
       return failure::promise();
     }
     auto bindings = std::unordered_set<std::string>{};
-    for (auto const& pattern : ast_arm.patterns) {
-      TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
-      TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee, ctx));
+    if (ast_arm.guard and ast_arm.patterns.size() > 1) {
+      auto expected_bindings = Option<std::unordered_set<std::string>>{None{}};
+      for (auto const& pattern : ast_arm.patterns) {
+        auto pattern_bindings = std::unordered_set<std::string>{};
+        TRY(validate_match_pattern_bindings(pattern, ctx, pattern_bindings));
+        if (expected_bindings and pattern_bindings != *expected_bindings) {
+          diagnostic::error("guarded alternatives must bind the same names")
+            .primary(pattern)
+            .hint("split this arm into multiple guarded arms")
+            .emit(ctx);
+          return failure::promise();
+        }
+        expected_bindings = std::move(pattern_bindings);
+        TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee, ctx));
+      }
+    } else {
+      for (auto const& pattern : ast_arm.patterns) {
+        TRY(validate_match_pattern_bindings(pattern, ctx, bindings));
+        TRY(validate_record_pattern_scrutinee(pattern, args.scrutinee, ctx));
+      }
     }
     if (not arm.wildcard) {
       for (auto& pattern : ast_arm.patterns) {
@@ -903,15 +1023,38 @@ auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
       }
     }
     auto replacements = BindingMap{};
-    auto path = BindingPath{};
     for (auto const& pattern : ast_arm.patterns) {
+      auto pattern_replacements = BindingMap{};
+      auto path = BindingPath{};
       TRY(collect_match_pattern_bindings(pattern, args.scrutinee, path, ctx,
-                                         replacements));
+                                         pattern_replacements));
+      if (replacements.empty()) {
+        replacements = std::move(pattern_replacements);
+      } else if (ast_arm.guard
+                 and not binding_maps_equal(replacements,
+                                            pattern_replacements)) {
+        diagnostic::error("guarded alternatives must bind the same names")
+          .primary(pattern)
+          .hint("split this arm into multiple guarded arms")
+          .emit(ctx);
+        return failure::promise();
+      } else {
+        replacements.insert(pattern_replacements.begin(),
+                            pattern_replacements.end());
+      }
     }
     if (not replacements.empty()) {
       TRY(validate_match_binding_mutations(ast_arm.pipe, replacements, ctx));
+      if (ast_arm.guard) {
+        TRY(*ast_arm.guard, substitute_named_expressions(
+                              std::move(*ast_arm.guard), replacements, ctx));
+      }
       TRY(ast_arm.pipe, substitute_named_expressions(std::move(ast_arm.pipe),
                                                      replacements, ctx));
+    }
+    if (ast_arm.guard) {
+      TRY(ast_arm.guard->bind(ctx));
+      arm.guard = std::move(ast_arm.guard);
     }
     TRY(arm.pipeline, std::move(ast_arm.pipe).compile(ctx));
     args.arms.push_back(std::move(arm));

@@ -137,6 +137,21 @@ auto substitute_named_expressions(
   return pipe;
 }
 
+auto substitute_named_expressions(
+  expression expr,
+  const std::unordered_map<std::string, ast::expression>& replacements,
+  diagnostic_handler& dh) -> failure_or<ast::expression> {
+  if (replacements.empty()) {
+    return expr;
+  }
+  auto substituter = named_expression_substituter{replacements, dh};
+  substituter.visit(expr);
+  if (substituter.has_failed()) {
+    return failure::promise();
+  }
+  return expr;
+}
+
 auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
   auto has_this = false;

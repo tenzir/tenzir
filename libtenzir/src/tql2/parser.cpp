@@ -21,6 +21,7 @@
 
 #include <ranges>
 #include <string_view>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -216,8 +217,8 @@ public:
     auto saw_wildcard = false;
     while (not peek(tk::rbrace)) {
       auto arm = parse_match_stmt_arm();
-      auto is_wildcard
-        = arm.patterns.size() == 1 and arm.patterns.front().is_wildcard();
+      auto is_wildcard = not arm.guard and arm.patterns.size() == 1
+                         and arm.patterns.front().is_wildcard();
       if (is_wildcard) {
         if (saw_wildcard) {
           diagnostic::error("wildcard match arm appears more than once")
@@ -253,12 +254,13 @@ public:
       patterns.push_back(parse_match_pattern());
       auto& pattern = patterns.back();
       if (pattern.is_wildcard()
-          and (patterns.size() != 1 or not peek(tk::fat_arrow))) {
+          and (patterns.size() != 1
+               or (not peek(tk::fat_arrow) and not peek(tk::if_)))) {
         diagnostic::error("wildcard `_` must be the only pattern in an arm")
           .primary(pattern)
           .throw_();
       }
-      if (accept(tk::fat_arrow)) {
+      if (peek(tk::fat_arrow) or peek(tk::if_)) {
         break;
       }
       if (accept(tk::comma)) {
@@ -269,11 +271,17 @@ public:
       }
       expect(tk::pipe);
     }
+    auto guard = Option<ast::expression>{None{}};
+    if (accept(tk::if_)) {
+      guard = parse_expression(1);
+    }
+    expect(tk::fat_arrow);
     expect(tk::lbrace);
     auto pipe = parse_pipeline();
     expect(tk::rbrace);
     return match_stmt::arm{
       std::move(patterns),
+      std::move(guard),
       std::move(pipe),
     };
   }
@@ -303,6 +311,7 @@ public:
   auto parse_record_pattern() -> ast::match_pattern {
     auto begin = expect(tk::lbrace);
     auto fields = std::vector<ast::record_pattern::field>{};
+    auto field_names = std::unordered_set<std::string>{};
     auto rest = Option<location>{None{}};
     while (not peek(tk::rbrace)) {
       if (auto dots = accept(tk::dot_dot)) {
@@ -325,6 +334,12 @@ public:
         break;
       }
       auto name = expect(tk::identifier).as_identifier();
+      if (not field_names.emplace(name.name).second) {
+        diagnostic::error("record pattern field `{}` appears more than once",
+                          name.name)
+          .primary(name)
+          .throw_();
+      }
       expect(tk::colon);
       fields.push_back(
         ast::record_pattern::field{name, Box{parse_match_pattern()}});
@@ -525,6 +540,10 @@ public:
   auto parse_expression(ast::expression expr, int min_prec = 0)
     -> ast::expression {
     while (true) {
+      if (min_prec > 0
+          and (peek(tk::if_) or peek(tk::fat_arrow) or peek(tk::pipe))) {
+        break;
+      }
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
           auto left = to_selector(expr);
