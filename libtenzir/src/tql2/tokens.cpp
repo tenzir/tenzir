@@ -157,6 +157,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("null", null)
     | X("or", or_)
     | X("move", move)
+    | X("take", take)
     | X("this", this_)
     | X("true", true_)
 #undef X
@@ -347,6 +348,7 @@ auto describe(token_kind k) -> std::string_view {
     X(reserved_keyword, "reserved keyword");
     X(rpar, "`)`");
     X(scalar, "scalar");
+    X(take, "`take`");
     X(single_quote, "`'`");
     X(slash, "`/`");
     X(star, "`*`");

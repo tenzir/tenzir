@@ -167,16 +167,18 @@ auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
     X(neg);
     X(not_);
 #undef X
-    case move: {
+    case move:
+    case take: {
+      auto keyword = x.op.inner == move ? "move" : "take";
       if (ast::field_path::try_from(x.expr)) {
-        diagnostic::warning("move is not supported here")
+        diagnostic::warning("{} is not supported here", keyword)
           .primary(x.op, "has no effect")
-          .hint("move only works on fields within assignments")
+          .hint("{} only works on fields within assignments", keyword)
           .emit(ctx_);
       } else {
-        diagnostic::warning("move has no effect")
+        diagnostic::warning("{} has no effect", keyword)
           .primary(x.expr, "is not a field")
-          .hint("move only works on fields within assignments")
+          .hint("{} only works on fields within assignments", keyword)
           .emit(ctx_);
       }
       return eval(x.expr, active);

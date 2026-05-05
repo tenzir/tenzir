@@ -92,6 +92,43 @@ TEST("tql2 parser: expression stream keeps parsed prefix on hard suffix "
   CHECK(not dh.empty());
 }
 
+TEST("tql2 parser: take expression keyword") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto parsed = parse_assignment_with_bad_diagnostics(
+    "new_field = take old_field", provider.as_session());
+  REQUIRE(parsed);
+  auto* unary = try_as<ast::unary_expr>(parsed->right);
+  REQUIRE(unary);
+  CHECK_EQUAL(unary->op.inner, ast::unary_op::take);
+  CHECK(dh.empty());
+}
+
+TEST("tql2 parser: move expression keyword is deprecated") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto parsed = parse_assignment_with_bad_diagnostics(
+    "new_field = move old_field", provider.as_session());
+  REQUIRE(parsed);
+  auto* unary = try_as<ast::unary_expr>(parsed->right);
+  REQUIRE(unary);
+  CHECK_EQUAL(unary->op.inner, ast::unary_op::move);
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), size_t{1});
+  CHECK_EQUAL(diags[0].severity, severity::warning);
+  CHECK_EQUAL(diags[0].message, "`move` as an expression keyword is "
+                                "deprecated; use `take` instead");
+}
+
+TEST("tql2 parser: move operator is not deprecated") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto parsed
+    = parse_pipeline_with_bad_diagnostics("move x=foo", provider.as_session());
+  REQUIRE(parsed);
+  CHECK(dh.empty());
+}
+
 TEST("tql2 parser: deep left-associated or location") {
   auto expr = ast::expression{ast::constant{false, location{0, 1}}};
   auto end = size_t{1};

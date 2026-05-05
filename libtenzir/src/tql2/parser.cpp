@@ -32,6 +32,7 @@ auto precedence(unary_op x) -> int {
   using enum unary_op;
   switch (x) {
     case move:
+    case take:
       return 10;
     case pos:
     case neg:
@@ -521,6 +522,12 @@ public:
     }
     if (auto op = peek_unary_op()) {
       auto location = advance();
+      if (*op == unary_op::move) {
+        diagnostic::warning(
+          "`move` as an expression keyword is deprecated; use `take` instead")
+          .primary(location)
+          .emit(diag_);
+      }
       auto expr = parse_expression(precedence(*op));
       return unary_expr{
         located{*op, location},
@@ -1252,6 +1259,7 @@ public:
     return unary_op::y;                                                        \
   }
     X(move, move);
+    X(take, take);
     X(not_, not_);
     X(minus, neg);
 #undef X

@@ -313,7 +313,8 @@ struct move_resolver final : ast::visitor<move_resolver> {
 
   auto visit(ast::expression& x) -> void {
     if (auto* unary = try_as<ast::unary_expr>(x)) {
-      if (unary->op.inner == ast::unary_op::move) {
+      if (unary->op.inner == ast::unary_op::move
+          or unary->op.inner == ast::unary_op::take) {
         if (auto field = ast::field_path::try_from(unary->expr)) {
           out.push_back(std::move(*field));
           x = std::move(unary->expr);

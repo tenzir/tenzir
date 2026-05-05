@@ -358,7 +358,7 @@ struct binary_expr {
   }
 };
 
-TENZIR_ENUM(unary_op, pos, neg, not_, move);
+TENZIR_ENUM(unary_op, pos, neg, not_, move, take);
 
 struct unary_expr {
   unary_expr() = default;
