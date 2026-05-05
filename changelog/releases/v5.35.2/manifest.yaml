@@ -1,0 +1,9 @@
+created: 2026-05-05
+title: Configured pipelines with package operators
+intro: >-
+  This release fixes two package-related bugs: startup pipelines can now reliably
+  reference operators from static packages, and UDOs with slash-delimited string defaults
+  (e.g. "/tmp-data/") load correctly without internal errors.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.35.1
