@@ -608,9 +608,25 @@ transform_columns(type schema,
   // is preserved structurally when reassembling the result (same-length path).
   // Callers that trigger the length-changing path must handle null bitmap
   // propagation themselves (see `flatten_record` in table_slice.cpp).
+  auto child_arrays = arrow::ArrayVector{};
+  child_arrays.reserve(struct_array->num_fields());
+  for (const auto& field : struct_array->fields()) {
+    if (struct_array->offset() == 0) {
+      child_arrays.push_back(field);
+    } else {
+      child_arrays.push_back(
+        field->Slice(struct_array->offset(), struct_array->length()));
+    }
+  }
+  auto null_bitmap = struct_array->null_bitmap();
+  if (struct_array->offset() != 0 and struct_array->null_bitmap_data()) {
+    null_bitmap = check(arrow::internal::CopyBitmap(
+      tenzir::arrow_memory_pool(), struct_array->null_bitmap_data(),
+      struct_array->offset(), struct_array->length()));
+  }
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = struct_array->fields(),
+    .arrays = std::move(child_arrays),
   };
   const auto num_columns
     = detail::narrow_cast<size_t>(struct_array->num_fields());
@@ -635,12 +651,11 @@ transform_columns(type schema,
     arrow_fields.push_back(field.type.to_arrow_field(field.name));
   }
   auto new_struct_array = std::shared_ptr<arrow::StructArray>{};
-  // TODO: Does it make sense to add `struct_array->offset()` here?
   if (layer.arrays.empty()
       or struct_array->length() == layer.arrays[0]->length()) {
     new_struct_array = std::make_shared<arrow::StructArray>(
       std::make_shared<arrow::StructType>(arrow_fields), struct_array->length(),
-      layer.arrays, struct_array->null_bitmap(), struct_array->null_count());
+      layer.arrays, std::move(null_bitmap), struct_array->null_count(), 0);
   } else {
     // FIXME: Callers should not rely on this hack. The signature of this
     // function does not really allow this, as it can change the behavior for
