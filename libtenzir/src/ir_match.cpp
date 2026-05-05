@@ -132,7 +132,9 @@ auto make_boolean_array(std::vector<bool> const& mask)
 
 class MatchImpl {
 public:
-  explicit MatchImpl(MatchArgs args) : args_{std::move(args)} {
+  explicit MatchImpl(MatchArgs args, bool passthrough_unmatched)
+    : args_{std::move(args)},
+      passthrough_unmatched_{passthrough_unmatched} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> {
@@ -262,7 +264,7 @@ public:
       arm_closed_[arm_index]
         = (co_await handle.push(std::move(filtered))).is_err();
     }
-    if (not has_wildcard() and push) {
+    if (not has_wildcard() and passthrough_unmatched_) {
       auto unmatched = std::vector<bool>(matched.size(), false);
       for (auto row = size_t{0}; row < matched.size(); ++row) {
         unmatched[row] = not matched[row];
@@ -275,9 +277,9 @@ public:
   }
 
   auto state() -> OperatorState {
-    // Without a wildcard, unmatched rows pass through even after all explicit
-    // arms have closed, so upstream must continue.
-    if (not has_wildcard()) {
+    // Without a wildcard, transform matches pass unmatched rows through even
+    // after all explicit arms have closed, so upstream must continue.
+    if (passthrough_unmatched_ and not has_wildcard()) {
       return OperatorState::normal;
     }
     if (std::ranges::all_of(arm_closed_, std::identity{})) {
@@ -292,12 +294,13 @@ private:
   }
 
   MatchArgs args_;
+  bool passthrough_unmatched_ = false;
   std::vector<bool> arm_closed_ = std::vector<bool>(args_.arms.size(), false);
 };
 
 class Match final : public Operator<table_slice, table_slice> {
 public:
-  explicit Match(MatchArgs args) : impl_{std::move(args)} {
+  explicit Match(MatchArgs args) : impl_{std::move(args), true} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -319,7 +322,7 @@ private:
 
 class MatchSink final : public Operator<table_slice, void> {
 public:
-  explicit MatchSink(MatchArgs args) : impl_{std::move(args)} {
+  explicit MatchSink(MatchArgs args) : impl_{std::move(args), false} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -1165,15 +1168,15 @@ auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
       return failure::promise();
     }
     auto bindings = std::unordered_set<std::string>{};
-    if (ast_arm.guard and ast_arm.patterns.size() > 1) {
+    if (ast_arm.patterns.size() > 1) {
       auto expected_bindings = Option<std::unordered_set<std::string>>{None{}};
       for (auto const& pattern : ast_arm.patterns) {
         auto pattern_bindings = std::unordered_set<std::string>{};
         TRY(validate_match_pattern_bindings(pattern, ctx, pattern_bindings));
         if (expected_bindings and pattern_bindings != *expected_bindings) {
-          diagnostic::error("guarded alternatives must bind the same names")
+          diagnostic::error("alternatives must bind the same names")
             .primary(pattern)
-            .hint("split this arm into multiple guarded arms")
+            .hint("split this arm into multiple arms")
             .emit(ctx);
           return failure::promise();
         }
@@ -1200,12 +1203,10 @@ auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
                                          pattern_replacements));
       if (replacements.empty()) {
         replacements = std::move(pattern_replacements);
-      } else if (ast_arm.guard
-                 and not binding_maps_equal(replacements,
-                                            pattern_replacements)) {
-        diagnostic::error("guarded alternatives must bind the same names")
+      } else if (not binding_maps_equal(replacements, pattern_replacements)) {
+        diagnostic::error("alternatives must bind the same names")
           .primary(pattern)
-          .hint("split this arm into multiple guarded arms")
+          .hint("split this arm into multiple arms")
           .emit(ctx);
         return failure::promise();
       } else {
