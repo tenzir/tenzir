@@ -9,20 +9,31 @@
   answers: [
     {
       rdata: "192.168.1.1",
+      flag_ids: null,
+      flags: [],
+      ttl: 300,
+    },
+    {
+      rdata: "192.168.1.2",
+      flag_ids: [],
+      flags: null,
+      ttl: 600,
+    },
+    {
+      rdata: "192.168.1.3",
       flag_ids: [
         1,
       ],
       flags: [
         "Authoritative Answer",
-        "Recursion Desired",
       ],
-      ttl: 300,
+      ttl: 900,
     },
   ],
 }
 warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
-  --> tests/operators/ocsf/derive/dns_activity_mismatched_flag_lists.tql:19:1
+  --> tests/operators/ocsf/derive/dns_activity_bidirectional_null_empty_flag_lists.tql:32:1
    |
-19 | ocsf::derive
+32 | ocsf::derive
    | ~~~~~~~~~~~~ 
    |

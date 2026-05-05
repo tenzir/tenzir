@@ -1216,19 +1216,21 @@ private:
     return int_from_string(string_field, enum_id, string_path);
   }
 
-  auto same_list_offsets(const arrow::ListArray& lhs,
-                         const arrow::ListArray& rhs) -> bool {
-    if (lhs.length() != rhs.length()) {
+  auto same_list_layout(const arrow::ListArray& lhs,
+                        const arrow::ListArray& rhs) -> bool {
+    if (lhs.length() != rhs.length() or lhs.null_count() != rhs.null_count()) {
       return false;
     }
     const auto lhs_base = lhs.value_offset(0);
     const auto rhs_base = rhs.value_offset(0);
-    for (auto i = int64_t{0}; i <= lhs.length(); ++i) {
-      if (lhs.value_offset(i) - lhs_base != rhs.value_offset(i) - rhs_base) {
+    for (auto i = int64_t{0}; i < lhs.length(); ++i) {
+      if (lhs.value_offset(i) - lhs_base != rhs.value_offset(i) - rhs_base
+          or lhs.IsValid(i) != rhs.IsValid(i)) {
         return false;
       }
     }
-    return true;
+    return lhs.value_offset(lhs.length()) - lhs_base
+           == rhs.value_offset(rhs.length()) - rhs_base;
   }
 
   auto string_list_from_int_list(const series& int_field,
@@ -1330,8 +1332,8 @@ private:
             .emit(dh_);
           return {int_field, string_field};
         }
-        if (not same_list_offsets(*int_list->array, *string_list->array)) {
-          diagnostic::warning("found inconsistent list lengths between `{}` "
+        if (not same_list_layout(*int_list->array, *string_list->array)) {
+          diagnostic::warning("found inconsistent list layout between `{}` "
                               "and `{}`",
                               int_path, string_path)
             .primary(self_)
