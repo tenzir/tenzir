@@ -299,9 +299,9 @@ public:
     if (peek(tk::lbracket)) {
       return parse_list_pattern();
     }
-    auto lower = parse_expression(1);
+    auto lower = parse_expression(1, true);
     if (auto dots = accept(tk::dot_dot)) {
-      auto upper = parse_expression(1);
+      auto upper = parse_expression(1, true);
       return ast::match_pattern{ast::range_pattern{
         std::move(lower),
         std::move(upper),
@@ -578,11 +578,12 @@ public:
       });
   }
 
-  auto parse_expression(ast::expression expr, int min_prec = 0)
-    -> ast::expression {
+  auto parse_expression(ast::expression expr, int min_prec = 0,
+                        bool stop_at_if = false) -> ast::expression {
     while (true) {
       if (min_prec > 0
-          and (peek(tk::if_) or peek(tk::fat_arrow) or peek(tk::pipe))) {
+          and ((stop_at_if and peek(tk::if_)) or peek(tk::fat_arrow)
+               or peek(tk::pipe))) {
         break;
       }
       if (min_prec == 0) {
@@ -621,7 +622,7 @@ public:
         if (new_prec >= min_prec) {
           auto location = advance();
           consume_trivia_with_newlines();
-          auto right = parse_expression(new_prec + 1);
+          auto right = parse_expression(new_prec + 1, stop_at_if);
           expr = binary_expr{
             std::move(expr),
             located{*bin_op, location},
@@ -640,8 +641,9 @@ public:
     return expr;
   }
 
-  auto parse_expression(int min_prec = 0) -> ast::expression {
-    return parse_expression(parse_unary_expression(), min_prec);
+  auto parse_expression(int min_prec = 0, bool stop_at_if = false)
+    -> ast::expression {
+    return parse_expression(parse_unary_expression(), min_prec, stop_at_if);
   }
 
   // TODO: Future us/ast problem with type expressions
