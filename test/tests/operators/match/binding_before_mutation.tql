@@ -1,0 +1,7 @@
+from {x: 1}
+match this {
+  {x: $v, ..} => {
+    y = $v
+    x = 0
+  }
+}
