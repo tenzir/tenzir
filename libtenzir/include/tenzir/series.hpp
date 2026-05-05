@@ -107,6 +107,10 @@ struct basic_series {
     }
   }
 
+  /// Returns the flattened values referenced by this list series.
+  auto list_values() const -> series
+    requires(std::same_as<Type, list_type>);
+
   auto field(std::string_view name) const -> std::optional<series>
     requires(std::same_as<Type, record_type>);
 
@@ -263,17 +267,26 @@ auto make_record_series(std::span<const series_field> fields,
 /// derived from an existing `arrow::ListArray`.
 /// BE CAREFUL WHEN USING THIS FUNCTION.
 /// `values` must be directly derived from `origin.values()` with no slicing.
-/// Otherwise this breaks for a sliced `origin`
-auto make_list_series(const series& values, const arrow::ListArray& origin)
+/// Otherwise this breaks for a sliced `origin`.
+auto dangerously_rejoin_list_series(const series& values,
+                                    const arrow::ListArray& origin)
   -> basic_series<list_type>;
 
 /// Buffers needed to construct a zero-based `arrow::ListArray` from a
-/// (possibly sliced) source `arrow::ListArray`.  Pass these with `offset=0`
-/// to the `ListArray` constructor together with the new values array.
+/// (possibly sliced) source `arrow::ListArray`.
 struct rebased_list_buffers {
   std::shared_ptr<arrow::Buffer> offsets;     // length+1 Int32 entries, [0]==0
   std::shared_ptr<arrow::Buffer> null_bitmap; // nullptr if source has no nulls
+  int64_t length = 0;
+  int64_t null_count = 0;
+  int64_t value_length = 0;
 };
+
+/// Returns a list series with the given inner values and a zero-based list
+/// structure, typically returned from `rebase_list_array_buffers`.
+auto make_list_series_with_offsets(const series& values,
+                                   rebased_list_buffers buffers)
+  -> basic_series<list_type>;
 
 /// Produces zero-based offset and null-bitmap buffers for `list`, suitable for
 /// constructing a new `arrow::ListArray` whose values array starts at index 0.

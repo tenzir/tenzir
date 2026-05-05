@@ -1,0 +1,28 @@
+{
+  metadata: {
+    version: "1.5.0",
+  },
+  class_name: "DNS Activity",
+  class_uid: 4003,
+  activity_id: 2,
+  activity_name: "Response",
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flag_ids: [
+        1,
+      ],
+      flags: [
+        "Authoritative Answer",
+        "Recursion Desired",
+      ],
+      ttl: 300,
+    },
+  ],
+}
+warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
+  --> tests/operators/ocsf/derive/dns_activity_mismatched_flag_lists.tql:19:1
+   |
+19 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |

@@ -1,0 +1,19 @@
+// Test ocsf::derive with DNS answer flag_ids and flags present.
+// This verifies element-wise derivation of null list elements in both directions.
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4003,  // DNS Activity
+  activity_id: 2,   // Response
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flag_ids: [1, null, 4],
+      flags: [null, "Truncated Response", "Recursion Available"],
+      ttl: 300,
+    },
+  ],
+}
+ocsf::derive

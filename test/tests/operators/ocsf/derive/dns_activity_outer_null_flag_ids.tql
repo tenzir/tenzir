@@ -1,0 +1,23 @@
+// Test ocsf::derive with a null outer DNS answer flag_ids list.
+// This verifies that deriving list enum siblings preserves null list slots.
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4003,  // DNS Activity
+  activity_id: 2,   // Response
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flag_ids: [1, 3],
+      ttl: 300,
+    },
+    {
+      rdata: "192.168.1.2",
+      flag_ids: null,
+      ttl: 600,
+    },
+  ],
+}
+ocsf::derive

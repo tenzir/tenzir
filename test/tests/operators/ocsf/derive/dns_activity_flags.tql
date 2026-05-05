@@ -1,0 +1,18 @@
+// Test ocsf::derive with dns_activity containing DNS answer flags.
+// This verifies reverse derivation from list<string> to list<int> enum fields.
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4003,  // DNS Activity
+  activity_id: 2,   // Response
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flags: ["Authoritative Answer", "Recursion Desired", "Recursion Available"],
+      ttl: 300,
+    },
+  ],
+}
+ocsf::derive

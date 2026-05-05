@@ -1,0 +1,23 @@
+// Test ocsf::derive with dns_activity containing multiple dns_answer.flag_ids
+// This test verifies that the derive operator can handle multiple flag_ids in dns_answer within dns_activity
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4003,  // DNS Activity
+  activity_id: 2,   // Response
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flag_ids: [1, 3, 4],  // Authoritative Answer, Recursion Desired, Recursion Available
+      ttl: 300,
+    },
+    {
+      rdata: "192.168.1.2",
+      flag_ids: [2, 5],     // Truncated Response, Authentic Data
+      ttl: 600,
+    },
+  ],
+}
+ocsf::derive

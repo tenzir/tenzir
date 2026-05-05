@@ -285,7 +285,7 @@ private:
     -> basic_series<list_type> {
     auto values = cast(series{input.type.value_type(), input.array->values()},
                        ty.value_type(), path.list());
-    return make_list_series(values, *input.array);
+    return dangerously_rejoin_list_series(values, *input.array);
   }
 
   auto is_profile_enabled(const type& ty) -> bool {
@@ -589,7 +589,7 @@ private:
     -> basic_series<list_type> {
     auto values = trim(series{input.type.value_type(), input.array->values()},
                        ty.value_type());
-    return make_list_series(values, *input.array);
+    return dangerously_rejoin_list_series(values, *input.array);
   }
 
   auto trim(series input, const type& ty) -> series {
@@ -862,8 +862,8 @@ auto process_cast_slice(const table_slice& slice, location self,
         .emit(dh);
       return make_string_list_function(nullptr);
     }
-    auto name_lists
-      = make_list_series(series{string_type{}, name_array}, *extensions_lists);
+    auto name_lists = dangerously_rejoin_list_series(
+      series{string_type{}, name_array}, *extensions_lists);
     return make_string_list_function(std::move(name_lists.array));
   });
   // Figure out longest slices that share:
@@ -998,9 +998,9 @@ private:
 
   auto derive(basic_series<list_type> input, const list_type& ty,
               value_path path) -> basic_series<list_type> {
-    auto values = derive(series{input.type.value_type(), input.array->values()},
-                         ty.value_type(), path.list());
-    return make_list_series(values, *input.array);
+    auto values = derive(input.list_values(), ty.value_type(), path.list());
+    return make_list_series_with_offsets(
+      values, rebase_list_array_buffers(*input.array));
   }
 
   auto derive(series input, const type& ty, value_path path) -> series {
@@ -1050,8 +1050,8 @@ private:
       = boost::unordered_flat_map<std::string_view, series>{};
     for (auto&& [name, field_ty] : ty.fields()) {
       auto enum_attr = field_ty.attribute("enum");
-      if (not enum_attr or is<list_type>(field_ty)) {
-        continue; // Skip non-enums and enum lists.
+      if (not enum_attr) {
+        continue; // Skip non-enums.
       }
       auto sibling_attr = field_ty.attribute("sibling");
       if (not sibling_attr) {
@@ -1074,11 +1074,11 @@ private:
       } else if (int_it != input_lookup.end()) {
         // Only enum exists - derive sibling.
         derived_siblings[string_name]
-          = string_from_int(int_it->second, *enum_attr, int_path);
+          = derive_string_from_int(int_it->second, *enum_attr, int_path);
       } else if (string_it != input_lookup.end()) {
         // Only sibling exists - derive enum.
         derived_enums[int_name]
-          = int_from_string(string_it->second, *enum_attr, string_path);
+          = derive_int_from_string(string_it->second, *enum_attr, string_path);
       }
     }
     // Phase 2: Emit fields in original input order.
@@ -1098,8 +1098,8 @@ private:
       }
       const auto& field_ty = schema_it->second;
       auto enum_attr = field_ty.attribute("enum");
-      if (enum_attr and not is<list_type>(field_ty)) {
-        // This is an enum field (non-list).
+      if (enum_attr) {
+        // This is an enum field.
         auto sibling_attr = field_ty.attribute("sibling");
         if (not sibling_attr) {
           // Treat as regular field if schema invariant is violated.
@@ -1200,6 +1200,102 @@ private:
     return make_record_series(fields, *input.array);
   }
 
+  auto derive_string_from_int(const series& int_field, std::string_view enum_id,
+                              value_path int_path) -> series {
+    if (int_field.as<list_type>()) {
+      return string_list_from_int_list(int_field, enum_id, int_path);
+    }
+    return string_from_int(int_field, enum_id, int_path);
+  }
+
+  auto derive_int_from_string(const series& string_field,
+                              std::string_view enum_id, value_path string_path)
+    -> series {
+    if (string_field.as<list_type>()) {
+      return int_list_from_string_list(string_field, enum_id, string_path);
+    }
+    return int_from_string(string_field, enum_id, string_path);
+  }
+
+  auto same_list_layout(const arrow::ListArray& lhs,
+                        const arrow::ListArray& rhs) -> bool {
+    TENZIR_ASSERT_EQ(lhs.length(), rhs.length());
+    if (lhs.null_count() != rhs.null_count()) {
+      return false;
+    }
+    for (auto i = int64_t{0}; i < lhs.length(); ++i) {
+      if (lhs.value_length(i) != rhs.value_length(i)
+          or lhs.IsValid(i) != rhs.IsValid(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  auto string_list_from_int_list(const series& int_field,
+                                 std::string_view enum_id, value_path int_path)
+    -> basic_series<list_type> {
+    if (int_field.as<null_type>()) {
+      return basic_series<list_type>::null(list_type{string_type{}},
+                                           int_field.length());
+    }
+    auto int_list = int_field.as<list_type>();
+    if (not int_list) {
+      diagnostic::warning("expected field `{}` to be `list<int>`, but got `{}`",
+                          int_path, int_field.type.kind())
+        .primary(self_)
+        .emit(dh_);
+      return basic_series<list_type>::null(list_type{string_type{}},
+                                           int_field.length());
+    }
+    auto int_values = int_list->list_values();
+    if (not int_values.as<int64_type>()) {
+      diagnostic::warning("expected field `{}` to be `list<int>`, but got `{}`",
+                          int_path, int_field.type.kind())
+        .primary(self_)
+        .emit(dh_);
+      return basic_series<list_type>::null(list_type{string_type{}},
+                                           int_field.length());
+    }
+    auto string_values = string_from_int(int_values, enum_id, int_path.list());
+    return make_list_series_with_offsets(
+      string_values, rebase_list_array_buffers(*int_list->array));
+  }
+
+  auto
+  int_list_from_string_list(const series& string_field,
+                            std::string_view enum_id, value_path string_path)
+    -> basic_series<list_type> {
+    if (string_field.as<null_type>()) {
+      return basic_series<list_type>::null(list_type{int64_type{}},
+                                           string_field.length());
+    }
+    auto string_list = string_field.as<list_type>();
+    if (not string_list) {
+      diagnostic::warning("expected field `{}` to be `list<string>`, but got "
+                          "`{}`",
+                          string_path, string_field.type.kind())
+        .primary(self_)
+        .emit(dh_);
+      return basic_series<list_type>::null(list_type{int64_type{}},
+                                           string_field.length());
+    }
+    auto string_values = string_list->list_values();
+    if (not string_values.as<string_type>()) {
+      diagnostic::warning("expected field `{}` to be `list<string>`, but got "
+                          "`{}`",
+                          string_path, string_field.type.kind())
+        .primary(self_)
+        .emit(dh_);
+      return basic_series<list_type>::null(list_type{int64_type{}},
+                                           string_field.length());
+    }
+    auto int_values
+      = int_from_string(string_values, enum_id, string_path.list());
+    return make_list_series_with_offsets(
+      int_values, rebase_list_array_buffers(*string_list->array));
+  }
+
   auto
   derive_bidirectionally(const series& int_field, const series& string_field,
                          std::string_view enum_id, value_path int_path,
@@ -1208,8 +1304,51 @@ private:
     if (not int_array) {
       if (int_field.as<null_type>()) {
         return {
-          int_from_string(string_field, enum_id, string_path),
+          derive_int_from_string(string_field, enum_id, string_path),
           string_field,
+        };
+      }
+      if (auto int_list = int_field.as<list_type>()) {
+        auto string_list = string_field.as<list_type>();
+        if (not string_list) {
+          if (string_field.as<null_type>()) {
+            return {
+              int_field,
+              derive_string_from_int(int_field, enum_id, int_path),
+            };
+          }
+          diagnostic::warning("field `{}` must be `list<string>`, but got `{}`",
+                              string_path, string_field.type.kind())
+            .primary(self_)
+            .emit(dh_);
+          return {int_field, string_field};
+        }
+        auto int_values = int_list->list_values().as<int64_type>();
+        auto string_values = string_list->list_values().as<string_type>();
+        if (not int_values or not string_values) {
+          diagnostic::warning("fields `{}` and `{}` must be `list<int>` and "
+                              "`list<string>`",
+                              int_path, string_path)
+            .primary(self_)
+            .emit(dh_);
+          return {int_field, string_field};
+        }
+        if (not same_list_layout(*int_list->array, *string_list->array)) {
+          diagnostic::warning("found inconsistent list layout between `{}` "
+                              "and `{}`",
+                              int_path, string_path)
+            .primary(self_)
+            .emit(dh_);
+          return {int_field, string_field};
+        }
+        auto [derived_ints, derived_strings]
+          = derive_bidirectionally(*int_values, *string_values, enum_id,
+                                   int_path.list(), string_path.list());
+        return {
+          make_list_series_with_offsets(
+            derived_ints, rebase_list_array_buffers(*int_list->array)),
+          make_list_series_with_offsets(
+            derived_strings, rebase_list_array_buffers(*string_list->array)),
         };
       }
       diagnostic::warning("field `{}` must be `int`, but got `{}`", int_path,
@@ -1223,11 +1362,11 @@ private:
       if (string_field.as<null_type>()) {
         return {
           int_field,
-          string_from_int(int_field, enum_id, int_path),
+          derive_string_from_int(int_field, enum_id, int_path),
         };
       }
-      diagnostic::warning("field `{}` must be `int`, but got `{}`", int_path,
-                          int_field.type.kind())
+      diagnostic::warning("field `{}` must be `string`, but got `{}`",
+                          string_path, string_field.type.kind())
         .primary(self_)
         .emit(dh_);
       return {int_field, string_field};

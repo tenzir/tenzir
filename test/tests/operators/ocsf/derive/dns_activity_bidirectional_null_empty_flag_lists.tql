@@ -1,0 +1,32 @@
+// Test ocsf::derive with null-vs-empty DNS answer flag_ids/flags lists.
+// This verifies that bidirectional list derivation stays column-wise and treats
+// different outer list validity as an inconsistent layout.
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4003,  // DNS Activity
+  activity_id: 2,   // Response
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flag_ids: null,
+      flags: [],
+      ttl: 300,
+    },
+    {
+      rdata: "192.168.1.2",
+      flag_ids: [],
+      flags: null,
+      ttl: 600,
+    },
+    {
+      rdata: "192.168.1.3",
+      flag_ids: [1],
+      flags: ["Authoritative Answer"],
+      ttl: 900,
+    },
+  ],
+}
+ocsf::derive
