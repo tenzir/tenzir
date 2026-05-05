@@ -1104,6 +1104,9 @@ jobs:
           export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
           ./docker-uv-run.sh --all-packages --group dev pytest
+      - name: Sync tenzir-plugins nix sources
+        run: |
+          GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
       - name: Build package
         working-directory: python
         run: |
@@ -1156,6 +1159,9 @@ jobs:
         run: |
           TARBALL_PATH="$(ls ${{ runner.temp }}/signed-tarball/*.tar.gz)"
           echo "TENZIR_SIGNED_TARBALL_PATH=$TARBALL_PATH" >> "$GITHUB_ENV"
+      - name: Sync tenzir-plugins nix sources
+        run: |
+          GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
       - name: Build sdist
         working-directory: python
         run: |
