@@ -882,6 +882,90 @@ auto collect_match_pattern_bindings(ast::match_pattern const& pattern,
     });
 }
 
+auto same_or_nested_path(ast::field_path const& assigned,
+                         ast::field_path const& captured) -> bool {
+  auto assigned_path = assigned.path();
+  auto captured_path = captured.path();
+  if (assigned_path.size() > captured_path.size()) {
+    return false;
+  }
+  for (auto [assigned_segment, captured_segment] :
+       std::views::zip(assigned_path, captured_path)) {
+    if (assigned_segment.id.name != captured_segment.id.name) {
+      return false;
+    }
+  }
+  return true;
+}
+
+class match_binding_mutation_validator
+  : public ast::visitor<match_binding_mutation_validator> {
+public:
+  match_binding_mutation_validator(BindingMap const& replacements,
+                                   diagnostic_handler& dh)
+    : replacements_{replacements}, dh_{dh} {
+  }
+
+  void visit(ast::expression& expr) {
+    if (auto* var = try_as<ast::dollar_var>(expr)) {
+      auto name = std::string{var->name_without_dollar()};
+      used_bindings_.insert(std::move(name));
+      return;
+    }
+    enter(expr);
+  }
+
+  void visit(ast::assignment& assignment) {
+    visit(assignment.right);
+    auto const* assigned = std::get_if<ast::field_path>(&assignment.left);
+    if (not assigned) {
+      return;
+    }
+    for (auto const& name : used_bindings_) {
+      auto replacement = replacements_.find(name);
+      if (replacement == replacements_.end()) {
+        continue;
+      }
+      auto captured_expr = replacement->second;
+      auto captured = ast::field_path::try_from(std::move(captured_expr));
+      if (not captured or not same_or_nested_path(*assigned, *captured)) {
+        continue;
+      }
+      diagnostic::error("match binding `${}` is used after its matched field "
+                        "is assigned",
+                        name)
+        .primary(assignment.left)
+        .hint("move the assignment after all uses of the binding")
+        .emit(dh_);
+      result_ = failure::promise();
+    }
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  auto result() -> failure_or<void> {
+    return result_;
+  }
+
+private:
+  BindingMap const& replacements_;
+  diagnostic_handler& dh_;
+  std::unordered_set<std::string> used_bindings_;
+  failure_or<void> result_;
+};
+
+auto validate_match_binding_mutations(ast::pipeline& pipe,
+                                      BindingMap const& replacements,
+                                      diagnostic_handler& dh)
+  -> failure_or<void> {
+  auto validator = match_binding_mutation_validator{replacements, dh};
+  validator.visit(pipe);
+  return validator.result();
+}
+
 auto validate_record_pattern_scrutinee(ast::match_pattern const& pattern,
                                        ast::expression const& scrutinee,
                                        diagnostic_handler& dh)
@@ -1514,6 +1598,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                                                ctx, replacements));
           }
           if (not replacements.empty()) {
+            TRY(validate_match_binding_mutations(ast_arm.pipe, replacements,
+                                                 ctx));
             TRY(ast_arm.pipe, substitute_named_expressions(
                                 std::move(ast_arm.pipe), replacements, ctx));
           }
