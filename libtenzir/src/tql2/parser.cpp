@@ -213,11 +213,6 @@ public:
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
     auto scope = ignore_newlines(true);
-    if (peek(tk::rbrace)) {
-      diagnostic::error("expected at least one match arm")
-        .primary(next_location())
-        .throw_();
-    }
     auto saw_wildcard = false;
     while (not peek(tk::rbrace)) {
       auto arm = parse_match_stmt_arm();
