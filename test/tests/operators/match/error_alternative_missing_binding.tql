@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {src: 1, dst: 1}
+match this {
+  {src: $src, ..} | {dst: 1, ..} => {
+    value = $src
+  }
+}
