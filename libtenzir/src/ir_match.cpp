@@ -133,8 +133,7 @@ auto make_boolean_array(std::vector<bool> const& mask)
 class MatchImpl {
 public:
   explicit MatchImpl(MatchArgs args, bool passthrough_unmatched)
-    : args_{std::move(args)},
-      passthrough_unmatched_{passthrough_unmatched} {
+    : args_{std::move(args)}, passthrough_unmatched_{passthrough_unmatched} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> {

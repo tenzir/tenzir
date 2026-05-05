@@ -273,11 +273,7 @@ public:
       enter(x);
       return;
     }
-    auto name = std::string{dollar_var->name_without_dollar()};
-    if (shadowed_.contains(name)) {
-      return;
-    }
-    auto it = map_.find(name);
+    auto it = map_.find(std::string{dollar_var->name_without_dollar()});
     if (it == map_.end()) {
       emit_not_found(*dollar_var);
       return;
@@ -301,11 +297,7 @@ public:
       enter(x);
       return;
     }
-    auto name = std::string{dollar_var->name_without_dollar()};
-    if (shadowed_.contains(name)) {
-      return;
-    }
-    auto it = map_.find(name);
+    auto it = map_.find(std::string{dollar_var->name_without_dollar()});
     if (it == map_.end()) {
       emit_not_found(*dollar_var);
       return;
@@ -406,40 +398,8 @@ public:
                           std::move(original));
   }
 
-  void visit(ast::match_pattern& x) {
-    x.kind->match([](ast::wildcard_pattern&) {},
-                  [&](ast::expression_pattern& pattern) {
-                    visit(pattern.expr);
-                  },
-                  [&](ast::binding_pattern& pattern) {
-                    shadowed_.insert(std::string{pattern.name.name}.substr(1));
-                  },
-                  [&](ast::range_pattern& pattern) {
-                    visit(pattern.lower);
-                    visit(pattern.upper);
-                  },
-                  [&](ast::list_pattern& pattern) {
-                    for (auto& element : pattern.elements) {
-                      visit(*element);
-                    }
-                  },
-                  [&](ast::record_pattern& pattern) {
-                    for (auto& field : pattern.fields) {
-                      visit(*field.pattern);
-                    }
-                  });
-  }
-
   void visit(ast::match_stmt& x) {
     visit(x.expr);
-    for (auto& arm : x.arms) {
-      auto old_shadowed = shadowed_;
-      for (auto& pattern : arm.patterns) {
-        visit(pattern);
-      }
-      visit(arm.pipe);
-      shadowed_ = std::move(old_shadowed);
-    }
   }
 
   void visit(ast::invocation& x) {
@@ -464,7 +424,6 @@ public:
 private:
   failure_or<void> failure_;
   std::unordered_map<std::string, std::optional<ast::constant::kind>> map_;
-  std::unordered_set<std::string> shadowed_;
   session ctx_;
 };
 
