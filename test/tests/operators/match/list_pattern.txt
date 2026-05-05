@@ -1,0 +1,54 @@
+{
+  id: 1,
+  tags: [
+    "prod",
+    "checkout",
+    "critical",
+  ],
+  category: "production",
+  service: "checkout",
+}
+{
+  id: 2,
+  tags: [
+    "prod",
+    "search",
+  ],
+  category: "production",
+  service: "search",
+}
+{
+  id: 3,
+  tags: [
+    "prod",
+  ],
+  category: "other list",
+}
+{
+  id: 4,
+  tags: [],
+  category: "empty",
+}
+{
+  id: 5,
+  tags: [
+    "dev",
+    "checkout",
+  ],
+  category: "other list",
+}
+{
+  id: 6,
+  tags: [
+    "misc",
+  ],
+  category: "other list",
+}
+{
+  id: 7,
+  tags: [
+    "prod",
+    "checkout",
+  ],
+  category: "exact checkout",
+}

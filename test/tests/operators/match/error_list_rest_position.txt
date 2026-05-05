@@ -1,0 +1,6 @@
+error: list pattern rest must come after all elements
+ --> tests/operators/match/error_list_rest_position.tql:7:4
+  |
+7 |   [.., "checkout"] => {
+  |    ^^ 
+  |

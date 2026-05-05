@@ -1,0 +1,23 @@
+from {id: 1, tags: ["prod", "checkout", "critical"]},
+     {id: 2, tags: ["prod", "search"]},
+     {id: 3, tags: ["prod"]},
+     {id: 4, tags: []},
+     {id: 5, tags: ["dev", "checkout"]},
+     {id: 6, tags: ["misc"]},
+     {id: 7, tags: ["prod", "checkout"]}
+match this {
+  {tags: ["prod", "checkout"], ..} => {
+    category = "exact checkout"
+  }
+  {tags: ["prod", $service, ..], ..} => {
+    category = "production"
+    service = $service
+  }
+  {tags: [], ..} => {
+    category = "empty"
+  }
+  {tags: [..], ..} => {
+    category = "other list"
+  }
+}
+sort id

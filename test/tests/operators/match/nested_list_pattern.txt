@@ -1,0 +1,25 @@
+{
+  labels: [
+    "prod",
+    "worker",
+  ],
+  event: {
+    roles: [
+      "backend",
+    ],
+  },
+}
+{
+  labels: [
+    "prod",
+    "api",
+  ],
+  event: {
+    roles: [
+      "frontend",
+      "public",
+    ],
+  },
+  service: "api",
+  exposure: "public",
+}
