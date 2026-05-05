@@ -1,7 +1,7 @@
-error: guarded alternatives must bind the same names
+error: alternatives must bind the same names
  --> tests/operators/match/error_guarded_alternative_binding_path.tql:7:17
   |
 7 |   {a: $x, ..} | {b: $x, ..} if $x > 1 => {
   |                 ^ 
   |
-  = hint: split this arm into multiple guarded arms
+  = hint: split this arm into multiple arms
