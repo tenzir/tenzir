@@ -1354,7 +1354,6 @@ public:
     throw_token();
   }
 
-
   auto silent_peek(token_kind kind) -> bool {
     return next_ < tokens_.size() and tokens_[next_].kind == kind;
   }
