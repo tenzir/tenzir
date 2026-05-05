@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {x: 1}
+match this {
+  {x: $v, ..} => {
+    drop x
+    y = $v
+  }
+}
