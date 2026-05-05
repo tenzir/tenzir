@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/future_util.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/fs_url_template.hpp"
@@ -27,6 +28,7 @@
 #include <arrow/util/future.h>
 #include <arrow/util/uri.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/FutureUtil.h>
 #include <folly/coro/Task.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/futures/Future.h>
@@ -103,7 +105,7 @@ auto arrow_future_to_task(arrow::Future<T> future) -> Task<arrow::Result<T>> {
     [promise = std::move(promise)](arrow::Result<T> const& result) mutable {
       promise.setValue(result);
     });
-  co_return co_await std::move(sf);
+  co_return co_await to_task_interrupt_on_cancel(std::move(sf));
 }
 
 inline auto arrow_future_to_task(arrow::Future<arrow::internal::Empty> future)
@@ -113,7 +115,7 @@ inline auto arrow_future_to_task(arrow::Future<arrow::internal::Empty> future)
     [promise = std::move(promise)](arrow::Status const& status) mutable {
       promise.setValue(status);
     });
-  co_return co_await std::move(sf);
+  co_return co_await to_task_interrupt_on_cancel(std::move(sf));
 }
 
 /// Persisted state for a file that is pending or being actively processed.
@@ -298,6 +300,7 @@ private:
     std::in_place,
     max_jobs + 1,
   };
+  MetricsCounter bytes_read_counter_;
 };
 
 /// Common arguments for Arrow filesystem-based sink operators.

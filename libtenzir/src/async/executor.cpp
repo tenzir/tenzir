@@ -556,26 +556,25 @@ private:
       co_return failure::promise();
     }
     // All futures for requests we send to the node
-    auto futures
-      = std::vector<folly::SemiFuture<caf::expected<secret_resolution_result>>>{};
+    auto tasks = std::vector<Task<caf::expected<secret_resolution_result>>>{};
     // Key pairs used for the request encryption per request
     auto keys = std::vector<ecc::string_keypair>{};
     for (auto& [name, out] : requested_secrets) {
       auto key_pair = ecc::generate_keypair();
       TENZIR_ASSERT(key_pair);
       auto public_key = key_pair->public_key;
-      futures.push_back(
+      tasks.push_back(
         async_mail(atom::resolve_v, name, public_key).request(*node));
       keys.push_back(std::move(*key_pair));
     }
-    const auto results = co_await folly::collectAll(std::move(futures));
+    const auto results
+      = co_await folly::coro::collectAllRange(std::move(tasks));
     // We use a bool here to be able to validate all secrets instead of early
     // exiting.
     auto success = true;
-    for (auto&& [result, key, secret] :
+    for (auto&& [expected, key, secret] :
          std::views::zip(results, std::as_const(keys), requested_secrets)) {
       auto& [name, out] = secret;
-      auto& expected = result.value();
       if (not expected) {
         diagnostic::error(expected.error())
           .primary(out.loc, "secret `{}` failed", name)

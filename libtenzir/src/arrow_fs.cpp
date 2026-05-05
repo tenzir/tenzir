@@ -90,6 +90,9 @@ auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   TENZIR_ASSERT(fs_);
   glob_ = parse_glob(fs->path);
   root_path_ = extract_root_path(glob_, fs->path);
+  bytes_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
+                       MetricsDirection::read, MetricsVisibility::external_);
   co_await restore(ctx);
   auto ndh = null_diagnostic_handler{};
   co_await cleanup_files(ndh);
@@ -213,6 +216,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         co_await pipe.close();
         co_return;
       }
+      bytes_read_counter_.add(bytes);
       file_state.offset += detail::narrow<int64_t>(bytes);
       if (detail::narrow<size_t>(bytes) < read_size) {
         co_await pipe.close();
