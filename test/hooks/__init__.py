@@ -1,5 +1,6 @@
 """Project hooks for tenzir-test."""
 
+import logging
 import os
 from pathlib import Path
 import subprocess
@@ -7,6 +8,9 @@ import threading
 from typing import Any, Sequence
 
 from tenzir_test import hooks
+
+
+_LOGGER = logging.getLogger("tenzir_test.cli")
 
 
 def _should_tee_stderr(args: Sequence[str]) -> bool:
@@ -156,7 +160,7 @@ def use_local_tenzir_build(ctx):
     )
     if result.returncode != 0:
         if ctx.debug:
-            print(result.stderr.strip())
+            _LOGGER.debug(result.stderr.strip())
         return
 
     build_dir = Path(result.stdout.strip())
@@ -168,7 +172,7 @@ def use_local_tenzir_build(ctx):
     tenzir_node = bin_dir / "tenzir-node"
     if not tenzir.is_file() or not tenzir_node.is_file():
         if ctx.debug:
-            print(f"local Tenzir binaries not found in {bin_dir}")
+            _LOGGER.debug("local Tenzir binaries not found in %s", bin_dir)
         return
 
     ctx.path.insert(0, str(bin_dir))
@@ -176,4 +180,4 @@ def use_local_tenzir_build(ctx):
     ctx.env.setdefault("TENZIR_NODE_BINARY", str(tenzir_node))
 
     if ctx.debug:
-        print(f"using Tenzir binaries from {bin_dir}")
+        _LOGGER.debug("using Tenzir binaries from %s", bin_dir)
