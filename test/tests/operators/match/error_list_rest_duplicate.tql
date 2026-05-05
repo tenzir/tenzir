@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {tags: ["prod", "checkout"]}
+match tags {
+  [.., ..] => {
+    category = "invalid"
+  }
+}
