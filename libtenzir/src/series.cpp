@@ -85,22 +85,11 @@ auto make_record_series(std::span<const series_field> fields,
   };
 }
 
-auto make_list_series(const series& values, const arrow::ListArray& origin)
+auto dangerously_rejoin_list_series(const series& values,
+                                    const arrow::ListArray& origin)
   -> basic_series<list_type> {
-  const auto begin = origin.value_offset(0);
-  const auto end = origin.value_offset(origin.length());
-  if (values.array->length() == end - begin) {
-    auto [offsets, null_bitmap] = rebase_list_array_buffers(origin);
-    return {
-      list_type{values.type},
-      std::make_shared<arrow::ListArray>(
-        arrow::list(values.type.to_arrow_type()), origin.length(),
-        std::move(offsets), values.array, std::move(null_bitmap),
-        origin.null_count(), 0),
-    };
-  }
-  // If this triggers, most likely your `values` were not directly generated
-  // from `origin.values()`.
+  /// If this triggers, most likely your `values` were not directly generated
+  /// from `origin.values()`.
   TENZIR_ASSERT_GEQ(values.array->length(), origin.values()->length());
   return {
     list_type{values.type},
@@ -111,13 +100,29 @@ auto make_list_series(const series& values, const arrow::ListArray& origin)
   };
 }
 
+/// Returns a list series with the given inner values and a zero-based list
+/// structure, typically returned from `rebase_list_array_buffers`.
+auto make_list_series_with_offsets(const series& values,
+                                   rebased_list_buffers buffers)
+  -> basic_series<list_type> {
+  TENZIR_ASSERT_EQ(values.array->length(), buffers.value_length);
+  return {
+    list_type{values.type},
+    std::make_shared<arrow::ListArray>(
+      arrow::list(values.type.to_arrow_type()), buffers.length,
+      std::move(buffers.offsets), values.array, std::move(buffers.null_bitmap),
+      buffers.null_count, 0),
+  };
+}
+
 auto rebase_list_array_buffers(const arrow::ListArray& list)
   -> rebased_list_buffers {
   const auto n = list.length();
   const auto base = list.value_offset(0);
   // Fast path: buffer is already zero-based.
   if (base == 0 and list.offset() == 0) {
-    return {list.value_offsets(), list.null_bitmap()};
+    return {list.value_offsets(), list.null_bitmap(), n, list.null_count(),
+            list.value_offset(n)};
   }
   // General case: build normalized offsets and (optionally) null bitmap.
   auto offset_builder
@@ -139,7 +144,8 @@ auto rebase_list_array_buffers(const arrow::ListArray& list)
     }
   }
   offset_builder.UnsafeAppend(list.value_offset(n) - base);
-  return {check(offset_builder.Finish()), std::move(null_bitmap)};
+  return {check(offset_builder.Finish()), std::move(null_bitmap), n,
+          list.null_count(), list.value_offset(n) - base};
 }
 
 } // namespace tenzir

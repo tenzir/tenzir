@@ -41,7 +41,16 @@ auto nested = builder.record().field(*path).record();
 nested.field("value").data(int64_t{1});
 ```
 
-## Arrow Builder Patterns
+## Rebuilding Arrow lists
+
+When you rebuild a list array from values derived from `origin.values()`, use
+`dangerously_rejoin_list_series` and keep its precondition: the values must come
+from `origin.values()` without slicing. When you rebuild from the flattened
+values referenced by a sliced list array, first call `rebase_list_array_buffers`
+and then pass the returned buffers to `make_list_series_with_offsets`. This
+makes the offset rebasing explicit at the call site.
+
+## Arrow builder patterns
 
 When building Arrow arrays directly, always use `check()`:
 

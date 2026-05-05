@@ -285,7 +285,7 @@ private:
     -> basic_series<list_type> {
     auto values = cast(series{input.type.value_type(), input.array->values()},
                        ty.value_type(), path.list());
-    return make_list_series(values, *input.array);
+    return dangerously_rejoin_list_series(values, *input.array);
   }
 
   auto is_profile_enabled(const type& ty) -> bool {
@@ -589,7 +589,7 @@ private:
     -> basic_series<list_type> {
     auto values = trim(series{input.type.value_type(), input.array->values()},
                        ty.value_type());
-    return make_list_series(values, *input.array);
+    return dangerously_rejoin_list_series(values, *input.array);
   }
 
   auto trim(series input, const type& ty) -> series {
@@ -862,8 +862,8 @@ auto process_cast_slice(const table_slice& slice, location self,
         .emit(dh);
       return make_string_list_function(nullptr);
     }
-    auto name_lists
-      = make_list_series(series{string_type{}, name_array}, *extensions_lists);
+    auto name_lists = dangerously_rejoin_list_series(
+      series{string_type{}, name_array}, *extensions_lists);
     return make_string_list_function(std::move(name_lists.array));
   });
   // Figure out longest slices that share:
@@ -999,7 +999,8 @@ private:
   auto derive(basic_series<list_type> input, const list_type& ty,
               value_path path) -> basic_series<list_type> {
     auto values = derive(input.list_values(), ty.value_type(), path.list());
-    return make_list_series(values, *input.array);
+    return make_list_series_with_offsets(
+      values, rebase_list_array_buffers(*input.array));
   }
 
   auto derive(series input, const type& ty, value_path path) -> series {
@@ -1218,19 +1219,17 @@ private:
 
   auto same_list_layout(const arrow::ListArray& lhs,
                         const arrow::ListArray& rhs) -> bool {
-    if (lhs.length() != rhs.length() or lhs.null_count() != rhs.null_count()) {
+    TENZIR_ASSERT_EQ(lhs.length(), rhs.length());
+    if (lhs.null_count() != rhs.null_count()) {
       return false;
     }
-    const auto lhs_base = lhs.value_offset(0);
-    const auto rhs_base = rhs.value_offset(0);
     for (auto i = int64_t{0}; i < lhs.length(); ++i) {
-      if (lhs.value_offset(i) - lhs_base != rhs.value_offset(i) - rhs_base
+      if (lhs.value_length(i) != rhs.value_length(i)
           or lhs.IsValid(i) != rhs.IsValid(i)) {
         return false;
       }
     }
-    return lhs.value_offset(lhs.length()) - lhs_base
-           == rhs.value_offset(rhs.length()) - rhs_base;
+    return true;
   }
 
   auto string_list_from_int_list(const series& int_field,
@@ -1259,7 +1258,8 @@ private:
                                            int_field.length());
     }
     auto string_values = string_from_int(int_values, enum_id, int_path.list());
-    return make_list_series(string_values, *int_list->array);
+    return make_list_series_with_offsets(
+      string_values, rebase_list_array_buffers(*int_list->array));
   }
 
   auto
@@ -1292,7 +1292,8 @@ private:
     }
     auto int_values
       = int_from_string(string_values, enum_id, string_path.list());
-    return make_list_series(int_values, *string_list->array);
+    return make_list_series_with_offsets(
+      int_values, rebase_list_array_buffers(*string_list->array));
   }
 
   auto
@@ -1344,8 +1345,10 @@ private:
           = derive_bidirectionally(*int_values, *string_values, enum_id,
                                    int_path.list(), string_path.list());
         return {
-          make_list_series(derived_ints, *int_list->array),
-          make_list_series(derived_strings, *string_list->array),
+          make_list_series_with_offsets(
+            derived_ints, rebase_list_array_buffers(*int_list->array)),
+          make_list_series_with_offsets(
+            derived_strings, rebase_list_array_buffers(*string_list->array)),
         };
       }
       diagnostic::warning("field `{}` must be `int`, but got `{}`", int_path,

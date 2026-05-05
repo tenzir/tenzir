@@ -119,7 +119,7 @@ struct replace_visitor {
     if (not nested_replacement) {
       return std::nullopt;
     }
-    return make_list_series(*nested_replacement, *l.array);
+    return dangerously_rejoin_list_series(*nested_replacement, *l.array);
   }
 
   auto operator()(const basic_series<record_type>& r) -> std::optional<series> {

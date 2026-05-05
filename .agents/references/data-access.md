@@ -26,7 +26,7 @@ for (auto row : values3(array)) {
 - `value_at()` — From `arrow_table_slice.hpp`, also legacy
 - `.values()` method — Use free function `values3()` instead
 
-## Working with Records and Lists
+## Working with records and lists
 
 Access nested data through `view3<record>` and `view3<list>`:
 
@@ -40,7 +40,15 @@ for (auto&& doc : docs.values3()) {
 }
 ```
 
-## Never Materialize
+## Prefer Arrow accessors over offset arithmetic
+
+When you inspect Arrow list layout, use Arrow's semantic accessors. For example,
+compare per-row list lengths with `arrow::ListArray::value_length(i)` instead
+of subtracting adjacent offsets yourself. If two arrays are columns from the same
+slice, their outer `length()` is an invariant; assert that invariant instead of
+turning it into fallback behavior.
+
+## Never materialize
 
 Do not convert Arrow data to `record` or `list` types. Keep data in columnar
 form and operate on it directly during iteration.

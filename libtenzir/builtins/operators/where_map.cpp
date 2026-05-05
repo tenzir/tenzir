@@ -547,15 +547,8 @@ auto make_map_function(function_invocation inv, session ctx)
       const auto n_parts = ms.parts().size();
       if (n_parts == 1) {
         auto& values = ms.parts().front();
-        auto [offsets, null_bitmap]
-          = rebase_list_array_buffers(*field_list->array);
-        return series{
-          list_type{values.type},
-          std::make_shared<arrow::ListArray>(
-            list_type{values.type}.to_arrow_type(), field_list->array->length(),
-            std::move(offsets), values.array, std::move(null_bitmap),
-            field_list->array->null_count()),
-        };
+        return make_list_series_with_offsets(
+          values, rebase_list_array_buffers(*field_list->array));
       }
       // If there is more than one part, we need to rebuild batches by merging
       // the parts that should be part of the same event/list and splitting
