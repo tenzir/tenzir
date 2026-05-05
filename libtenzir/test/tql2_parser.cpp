@@ -135,8 +135,8 @@ TEST("tql2 parser: take remains usable in identifier contexts") {
   auto invocation
     = parse_pipeline_with_bad_diagnostics("take foo", provider.as_session());
   REQUIRE(invocation);
-  auto access = parse_assignment_with_bad_diagnostics(
-    "x = foo.take", provider.as_session());
+  auto access = parse_assignment_with_bad_diagnostics("x = foo.take",
+                                                      provider.as_session());
   REQUIRE(access);
   auto field
     = parse_assignment_with_bad_diagnostics("take = 1", provider.as_session());
