@@ -65,6 +65,11 @@ struct null_pattern_hash {
   }
 };
 
+struct bucket {
+  null_pattern pattern;
+  std::vector<int64_t> rows;
+};
+
 auto build_null_accessors(const table_slice& slice,
                           std::span<const offset> field_offsets)
   -> std::vector<null_accessor> {
@@ -205,6 +210,18 @@ auto rows_are_contiguous(std::span<const int64_t> rows) -> bool {
   return true;
 }
 
+auto emit_group(std::vector<table_slice>& result, table_slice group_slice,
+                null_pattern const& pattern,
+                std::vector<ast::field_path> const& fields,
+                diagnostic_handler& dh) -> void {
+  auto fields_to_drop = fields_to_drop_for_pattern(pattern, fields);
+  if (fields_to_drop.empty()) {
+    result.push_back(std::move(group_slice));
+  } else {
+    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+  }
+}
+
 auto drop_null_fields_ordered(table_slice slice,
                               const std::vector<ast::field_path>& fields,
                               std::span<const null_accessor> accessors,
@@ -216,13 +233,7 @@ auto drop_null_fields_ordered(table_slice slice,
   compute_null_pattern(accessors, 0, previous_pattern);
   auto result = std::vector<table_slice>{};
   auto emit_run = [&](size_t begin, size_t end, null_pattern const& pattern) {
-    auto run_slice = subslice(slice, begin, end);
-    auto fields_to_drop = fields_to_drop_for_pattern(pattern, fields);
-    if (fields_to_drop.empty()) {
-      result.push_back(std::move(run_slice));
-      return;
-    }
-    result.push_back(tenzir::drop(run_slice, fields_to_drop, dh, false));
+    emit_group(result, subslice(slice, begin, end), pattern, fields, dh);
   };
   auto run_begin = 0uz;
   for (auto row = 1uz; row < slice.rows(); ++row) {
@@ -245,38 +256,31 @@ auto drop_null_fields_unordered(table_slice slice,
   -> std::vector<table_slice> {
   auto words_per_pattern = (fields.size() + 63) / 64;
   auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
-  auto buckets = std::unordered_map<null_pattern, size_t, null_pattern_hash>{};
-  auto bucket_order = std::vector<null_pattern>{};
-  auto bucket_rows = std::vector<std::vector<int64_t>>{};
-  buckets.reserve(slice.rows());
+  auto bucket_index
+    = std::unordered_map<null_pattern, size_t, null_pattern_hash>{};
+  auto buckets = std::vector<bucket>{};
+  bucket_index.reserve(slice.rows());
   for (auto row = 0uz; row < slice.rows(); ++row) {
     compute_null_pattern(accessors, row, current_pattern);
     auto [it, inserted]
-      = buckets.try_emplace(current_pattern, bucket_rows.size());
+      = bucket_index.try_emplace(current_pattern, buckets.size());
     if (inserted) {
-      bucket_order.push_back(current_pattern);
-      bucket_rows.emplace_back();
+      buckets.push_back({.pattern = current_pattern, .rows = {}});
     }
-    bucket_rows[it->second].push_back(detail::narrow<int64_t>(row));
+    buckets[it->second].rows.push_back(detail::narrow<int64_t>(row));
   }
   auto result = std::vector<table_slice>{};
-  result.reserve(bucket_order.size());
-  for (auto i = 0uz; i < bucket_order.size(); ++i) {
-    auto const& pattern = bucket_order[i];
-    auto const& rows = bucket_rows[i];
-    auto fields_to_drop = fields_to_drop_for_pattern(pattern, fields);
-    if (rows.size() == slice.rows() and fields_to_drop.empty()) {
-      result.push_back(std::move(slice));
+  result.reserve(buckets.size());
+  for (auto const& bucket : buckets) {
+    auto const& rows = bucket.rows;
+    if (rows.size() == slice.rows()) {
+      emit_group(result, std::move(slice), bucket.pattern, fields, dh);
       continue;
     }
     auto group_slice = rows_are_contiguous(rows)
                          ? subslice(slice, rows.front(), rows.back() + 1)
                          : take_rows(slice, rows);
-    if (fields_to_drop.empty()) {
-      result.push_back(std::move(group_slice));
-      continue;
-    }
-    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+    emit_group(result, std::move(group_slice), bucket.pattern, fields, dh);
   }
   return result;
 }
