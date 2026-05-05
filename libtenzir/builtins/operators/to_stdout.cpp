@@ -11,6 +11,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -160,6 +161,9 @@ public:
       done_ = true;
       co_return;
     }
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},
+                         MetricsDirection::write, MetricsVisibility::external_);
     if (auto error = stdout_nonblocking_.activate()) {
       diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
       done_ = true;
@@ -209,6 +213,7 @@ public:
     if (not chunk or chunk->size() == 0 or not writer_) {
       co_return;
     }
+    const auto bytes = chunk->size();
     auto error = co_await folly::coro::co_withExecutor(
       io_executor_, write_chunk(*writer_, std::move(chunk)));
     if (error) {
@@ -216,6 +221,8 @@ public:
       // Only the first write error matters; blocking here would let concurrent
       // `process_sub()` calls stall behind an already queued error.
       std::ignore = queue_->try_enqueue(std::move(write_error));
+    } else {
+      bytes_write_counter_.add(bytes);
     }
     co_return;
   }
@@ -254,6 +261,7 @@ private:
   // `process_sub()` reports the first stdout write error back to the main
   // loop, which owns the operator lifecycle state.
   mutable Box<ErrorQueue> queue_{std::in_place, error_queue_capacity};
+  MetricsCounter bytes_write_counter_;
   bool done_ = false;
 };
 

@@ -13,6 +13,7 @@
 #include <tenzir/box.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/variant.hpp>
@@ -251,6 +252,9 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     auto normalized = normalize_args(args_, ctx);
     TENZIR_ASSERT(normalized);
     auto config = select_client_config(args_, ctx.dh());
@@ -293,6 +297,10 @@ public:
       collect_message(std::move(*next));
     }
     for (auto& response : responses) {
+      const auto bytes = response.ByteSizeLong();
+      if (bytes > 0) {
+        bytes_read_counter_.add(bytes);
+      }
       if (auto slices = parse(response)) {
         for (auto& slice : *slices) {
           co_await push(std::move(slice));
@@ -327,6 +335,7 @@ private:
                                            message_queue_capacity};
   Option<Box<VelociraptorReadReactor>> reactor_;
   bool stream_finished_ = false;
+  MetricsCounter bytes_read_counter_;
 };
 
 class FromVelociraptorPlugin final : public virtual OperatorPlugin {

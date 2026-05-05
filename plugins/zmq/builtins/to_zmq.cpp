@@ -16,6 +16,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -119,6 +120,17 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (Mode == transport::ConnectionMode::connect) {
+      bytes_write_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "to_zmq"},
+                           MetricsDirection::write,
+                           MetricsVisibility::external_);
+    } else {
+      bytes_write_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "serve_zmq"},
+                           MetricsDirection::write,
+                           MetricsVisibility::external_);
+    }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.monitor) {
       if (auto err = socket_.enable_peer_monitoring(); not err) {
@@ -196,6 +208,9 @@ public:
         err = socket_.send(framed, 0ms);
       }
       if (not err) {
+        if (framed->size() > 0) {
+          bytes_write_counter_.add(framed->size());
+        }
         continue;
       }
       diagnostic::error("failed to send ZeroMQ message")
@@ -221,6 +236,7 @@ private:
   Encoding encoding_;
   transport::Socket socket_{transport::SocketRole::publisher};
   bool done_ = false;
+  MetricsCounter bytes_write_counter_;
 };
 
 template <transport::ConnectionMode Mode>

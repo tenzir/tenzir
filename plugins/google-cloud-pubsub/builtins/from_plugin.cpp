@@ -13,6 +13,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -262,7 +263,10 @@ public:
   explicit FromGoogleCloudPubsub(from_args args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& /*ctx*/) -> Task<void> override {
+  auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_google_cloud_pubsub"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     auto subscription = pubsub::Subscription(args_.project_id.inner,
                                              args_.subscription_id.inner);
     // Detect whether the subscription has message ordering enabled.
@@ -351,6 +355,9 @@ public:
         ctx.dh(),
       };
       for (const auto& msg : messages) {
+        if (not msg.data.empty()) {
+          bytes_read_counter_.add(msg.data.size());
+        }
         auto event = msb.record();
         event.field("message").data(msg.data);
         if (args_.metadata_field) {
@@ -393,6 +400,7 @@ private:
   bool done_ = false;
   Option<SessionHandle> session_;
   std::shared_ptr<SharedState> shared_ = std::make_shared<SharedState>();
+  MetricsCounter bytes_read_counter_;
 };
 
 } // namespace

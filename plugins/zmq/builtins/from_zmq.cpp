@@ -17,6 +17,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -86,6 +87,17 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (Mode == transport::ConnectionMode::connect) {
+      bytes_read_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "from_zmq"},
+                           MetricsDirection::read,
+                           MetricsVisibility::external_);
+    } else {
+      bytes_read_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "accept_zmq"},
+                           MetricsDirection::read,
+                           MetricsVisibility::external_);
+    }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.prefix) {
       auto prefix = const_eval(*args_.prefix, ctx.dh());
@@ -162,6 +174,7 @@ public:
           // safely drop it and behave as if it was never received.
           co_return;
         }
+        const auto bytes = payload->size();
         if (not args_.keep_prefix and not prefix_.empty()) {
           auto stripped = transport::strip_prefix(std::move(payload), prefix_);
           if (not stripped) {
@@ -192,6 +205,8 @@ public:
         auto push_result = co_await sub_pipeline.push(std::move(payload));
         if (push_result.is_err()) {
           request_stop();
+        } else if (bytes > 0) {
+          bytes_read_counter_.add(bytes);
         }
         co_await sub_pipeline.close();
       });
@@ -279,6 +294,7 @@ private:
   bool read_loop_finished_ = true;
   size_t active_parsers_ = 0;
   uint64_t next_sub_id_ = 0;
+  MetricsCounter bytes_read_counter_;
 };
 
 template <transport::ConnectionMode Mode>

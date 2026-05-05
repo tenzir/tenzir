@@ -12,6 +12,7 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -187,6 +188,7 @@ public:
     std::unordered_map<uuid, table_slice> pending_inserts;
     std::mutex pending_inserts_mutex;
     Atomic<bool> done{false};
+    MetricsCounter bytes_write_counter;
     std::vector<AsyncHandle<void>> worker_handles;
   };
 
@@ -232,6 +234,9 @@ public:
       state_->done.store(true, std::memory_order_release);
       co_return;
     }
+    state_->bytes_write_counter
+      = ctx.make_counter(MetricsLabel{"operator", "to_clickhouse"},
+                         MetricsDirection::write, MetricsVisibility::external_);
     state_->worker_handles.reserve(args_.jobs);
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
       auto client = std::shared_ptr<easy_client>{};
@@ -358,6 +363,9 @@ private:
       if (not success) {
         shared_state->done.store(true, std::memory_order_release);
         continue;
+      }
+      if (auto bytes = slice.approx_bytes(); bytes > 0) {
+        shared_state->bytes_write_counter.add(bytes);
       }
       // Remove the slice from the persisted state.
       auto const guard = std::scoped_lock{shared_state->pending_inserts_mutex};
