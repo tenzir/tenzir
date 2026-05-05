@@ -294,7 +294,7 @@ auto drop_null_fields_impl(table_slice slice,
   }
   auto field_offsets = resolve_field_paths(fields, slice.schema());
   auto accessors = build_null_accessors(slice, field_offsets);
-  if (order == event_order::unordered) {
+  if (order == event_order::unordered and slice.offset() == invalid_id) {
     return drop_null_fields_unordered(std::move(slice), fields, accessors, dh);
   }
   return drop_null_fields_ordered(std::move(slice), fields, accessors, dh);
