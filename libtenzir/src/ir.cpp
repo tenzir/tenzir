@@ -1473,6 +1473,12 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
       },
       [&](ast::match_stmt x) -> failure_or<void> {
         TRY(x.expr.bind(ctx));
+        if (x.arms.empty()) {
+          diagnostic::error("expected at least one match arm")
+            .primary(x.end)
+            .emit(ctx);
+          return failure::promise();
+        }
         auto args = MatchArgs{};
         args.match_keyword = x.begin;
         args.scrutinee = std::move(x.expr);
