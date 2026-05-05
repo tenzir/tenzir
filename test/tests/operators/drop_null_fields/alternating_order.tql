@@ -1,0 +1,5 @@
+from {id: 1, a: null, b: "x"},
+     {id: 2, a: "y", b: null},
+     {id: 3, a: null, b: "z"},
+     {id: 4, a: "w", b: null}
+drop_null_fields

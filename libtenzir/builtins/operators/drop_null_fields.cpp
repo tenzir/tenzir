@@ -8,7 +8,6 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/detail/assert.hpp>
-#include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -19,12 +18,8 @@
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
-#include <arrow/compute/api_vector.h>
-#include <arrow/datum.h>
-
 #include <algorithm>
 #include <span>
-#include <unordered_map>
 
 namespace tenzir::plugins::drop_null_fields {
 
@@ -52,17 +47,6 @@ auto resolve_field_paths(const std::vector<ast::field_path>& fields,
 struct null_accessor {
   std::shared_ptr<arrow::Array> array;
   bool exists = false;
-};
-
-struct null_pattern_hash {
-  auto operator()(null_pattern const& pattern) const noexcept -> size_t {
-    auto seed = size_t{0};
-    for (auto word : pattern) {
-      seed ^= std::hash<uint64_t>{}(word) + 0x9e3779b9 + (seed << 6)
-              + (seed >> 2);
-    }
-    return seed;
-  }
 };
 
 auto build_null_accessors(const table_slice& slice,
@@ -169,6 +153,7 @@ auto fields_to_check(const table_slice& slice,
 auto fields_to_drop_for_pattern(const null_pattern& pattern,
                                 const std::vector<ast::field_path>& fields)
   -> std::vector<ast::field_path> {
+  TENZIR_ASSERT(pattern.size() >= (fields.size() + 63) / 64);
   auto result = std::vector<ast::field_path>{};
   for (auto i = 0uz; i < fields.size(); ++i) {
     auto const word = pattern[i / 64];
@@ -177,20 +162,6 @@ auto fields_to_drop_for_pattern(const null_pattern& pattern,
       result.push_back(fields[i]);
     }
   }
-  return result;
-}
-
-auto take_rows(const table_slice& slice, std::span<const int64_t> rows)
-  -> table_slice {
-  auto builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
-  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
-  for (auto row : rows) {
-    builder.UnsafeAppend(row);
-  }
-  auto batch = check(arrow::compute::Take(to_record_batch(slice), finish(builder)))
-                 .record_batch();
-  auto result = table_slice{std::move(batch), slice.schema()};
-  result.import_time(slice.import_time());
   return result;
 }
 
@@ -207,25 +178,30 @@ auto drop_null_fields_impl(table_slice slice,
   auto field_offsets = resolve_field_paths(fields, slice.schema());
   auto accessors = build_null_accessors(slice, field_offsets);
   auto words_per_pattern = (fields.size() + 63) / 64;
+  auto previous_pattern = null_pattern(words_per_pattern, uint64_t{0});
   auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
-  auto buckets
-    = std::unordered_map<null_pattern, std::vector<int64_t>, null_pattern_hash>{};
-  buckets.reserve(slice.rows());
-  for (auto row = 0uz; row < slice.rows(); ++row) {
-    compute_null_pattern(accessors, row, current_pattern);
-    buckets[current_pattern].push_back(detail::narrow<int64_t>(row));
-  }
+  compute_null_pattern(accessors, 0, previous_pattern);
   auto result = std::vector<table_slice>{};
-  result.reserve(buckets.size());
-  for (auto& [pattern, rows] : buckets) {
-    auto group_slice = take_rows(slice, rows);
+  auto emit_run = [&](size_t begin, size_t end, null_pattern const& pattern) {
+    auto run_slice = subslice(slice, begin, end);
     auto fields_to_drop = fields_to_drop_for_pattern(pattern, fields);
     if (fields_to_drop.empty()) {
-      result.push_back(std::move(group_slice));
+      result.push_back(std::move(run_slice));
+      return;
+    }
+    result.push_back(tenzir::drop(run_slice, fields_to_drop, dh, false));
+  };
+  auto run_begin = 0uz;
+  for (auto row = 1uz; row < slice.rows(); ++row) {
+    compute_null_pattern(accessors, row, current_pattern);
+    if (current_pattern == previous_pattern) {
       continue;
     }
-    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+    emit_run(run_begin, row, previous_pattern);
+    run_begin = row;
+    previous_pattern = current_pattern;
   }
+  emit_run(run_begin, slice.rows(), previous_pattern);
   return result;
 }
 
