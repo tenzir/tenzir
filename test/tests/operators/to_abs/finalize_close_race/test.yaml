@@ -2,7 +2,8 @@ suite: to-abs-finalize-close-race
 fixtures: [abs_slow_proxy]
 requires:
   operators:
-    - to_azure_blob_storage
+    - tql2.to_azure_blob_storage
+    - from_azure_blob_storage
 timeout: 240
 skip:
   on:
