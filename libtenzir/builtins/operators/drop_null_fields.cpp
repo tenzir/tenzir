@@ -372,7 +372,7 @@ public:
     -> optimize_result override {
     TENZIR_UNUSED(filter);
     return optimize_result{
-      filter, order,
+      std::nullopt, order,
       std::make_unique<drop_null_fields_operator>(selectors_, order)};
   }
 
