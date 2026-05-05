@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/series.hpp"
@@ -197,11 +198,9 @@ auto replace(const table_slice& slice, F transform,
   auto attrs = std::vector<tenzir::type::attribute_view>{};
   auto transformed_type = transformed->type;
   transformed_type.assign_metadata(slice.schema());
-  auto& transformed_array = as<arrow::StructArray>(*transformed->array);
-  auto output_batch
-    = arrow::RecordBatch::Make(transformed_type.to_arrow_schema(),
-                               transformed_array.length(),
-                               transformed_array.fields());
+  auto output_batch = record_batch_from_struct_array(
+    transformed_type.to_arrow_schema(),
+    as<arrow::StructArray>(*transformed->array));
   auto result = table_slice{output_batch, std::move(transformed_type)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());

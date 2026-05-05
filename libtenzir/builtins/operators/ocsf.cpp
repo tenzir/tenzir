@@ -110,10 +110,9 @@ public:
                     std::static_pointer_cast<arrow::Array>(std::move(array))},
              ty, value_path{});
     auto schema = type{name, result.type};
-    auto arrow_schema = schema.to_arrow_schema();
     return table_slice{
-      arrow::RecordBatch::Make(std::move(arrow_schema), result.length(),
-                               as<arrow::StructArray>(*result.array).fields()),
+      record_batch_from_struct_array(schema.to_arrow_schema(),
+                                     as<arrow::StructArray>(*result.array)),
       std::move(schema),
     };
   }
@@ -563,10 +562,9 @@ public:
 
   auto trim(const table_slice& slice, const type& ty) -> table_slice {
     auto result = trim(series{slice}, ty);
-    auto arrow_schema = result.type.to_arrow_schema();
     return table_slice{
-      arrow::RecordBatch::Make(arrow_schema, result.length(),
-                               as<arrow::StructArray>(*result.array).fields()),
+      record_batch_from_struct_array(result.type.to_arrow_schema(),
+                                     as<arrow::StructArray>(*result.array)),
       std::move(result.type),
     };
   }
@@ -973,10 +971,9 @@ public:
 
   auto derive(const table_slice& slice, const type& ty) -> table_slice {
     auto result = derive(series{slice}, ty, value_path{});
-    auto arrow_schema = result.type.to_arrow_schema();
     return table_slice{
-      arrow::RecordBatch::Make(arrow_schema, result.length(),
-                               as<arrow::StructArray>(*result.array).fields()),
+      record_batch_from_struct_array(result.type.to_arrow_schema(),
+                                     as<arrow::StructArray>(*result.array)),
       std::move(result.type),
     };
   }

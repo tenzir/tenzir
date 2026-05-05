@@ -67,7 +67,7 @@ public:
       TENZIR_ASSERT(cast);
       auto schema = tenzir::type{"tenzir.from", cast->type};
       co_yield table_slice{
-        record_batch_from_struct_array(schema.to_arrow_schema(), cast->array),
+        record_batch_from_struct_array(schema.to_arrow_schema(), *cast->array),
         schema};
     }
   }
@@ -119,7 +119,7 @@ public:
     TENZIR_ASSERT(cast);
     auto schema = tenzir::type{"tenzir.from", cast->type};
     auto slice = table_slice{
-      record_batch_from_struct_array(schema.to_arrow_schema(), cast->array),
+      record_batch_from_struct_array(schema.to_arrow_schema(), *cast->array),
       schema};
     read_bytes_counter_.add(slice.approx_bytes());
     co_await push(std::move(slice));

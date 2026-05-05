@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -173,13 +174,10 @@ public:
           detail::narrow<int>(index), tenzir::arrow_memory_pool()));
       }
     }
-    auto record = std::dynamic_pointer_cast<arrow::StructArray>(array);
-    TENZIR_ASSERT(record);
-    auto fields = check(record->Flatten(tenzir::arrow_memory_pool()));
-    auto result
-      = table_slice{arrow::RecordBatch::Make(new_type.to_arrow_schema(),
-                                             array->length(), fields),
-                    new_type};
+    auto result = table_slice{
+      record_batch_from_struct_array(new_type.to_arrow_schema(),
+                                     as<arrow::StructArray>(*array)),
+      new_type};
     TENZIR_ASSERT_EXPENSIVE(to_record_batch(result)->Validate().ok());
     return result;
   }

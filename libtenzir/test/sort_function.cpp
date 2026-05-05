@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/table_slice.hpp"
@@ -14,8 +15,6 @@
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
 
-#include <arrow/record_batch.h>
-
 using namespace tenzir;
 
 namespace {
@@ -23,10 +22,9 @@ namespace {
 auto make_input_slice(data row) -> table_slice {
   auto row_series = data_to_series(row, int64_t{1});
   auto schema = type{"input", as<record_type>(row_series.type)};
-  const auto& row_array = as<arrow::StructArray>(*row_series.array);
   return table_slice{
-    arrow::RecordBatch::Make(schema.to_arrow_schema(), int64_t{1},
-                             row_array.fields()),
+    record_batch_from_struct_array(schema.to_arrow_schema(),
+                                   as<arrow::StructArray>(*row_series.array)),
     std::move(schema),
   };
 }

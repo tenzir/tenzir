@@ -586,9 +586,8 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
     TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
     TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
-    auto null_batch = arrow::RecordBatch::Make(
-      last.schema().to_arrow_schema(), 1,
-      check(null_array->Flatten(tenzir::arrow_memory_pool())));
+    auto null_batch = record_batch_from_struct_array(
+      last.schema().to_arrow_schema(), *null_array);
     last
       = concatenate({std::move(last), table_slice{null_batch, last.schema()}});
   };

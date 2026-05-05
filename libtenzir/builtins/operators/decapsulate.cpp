@@ -390,10 +390,8 @@ public:
         co_yield {};
         continue;
       }
-      auto* ptr = try_as<arrow::StructArray>(&*s->array);
-      TENZIR_ASSERT(ptr);
-      auto batch = arrow::RecordBatch::Make(s->type.to_arrow_schema(),
-                                            s->length(), ptr->fields());
+      auto batch = record_batch_from_struct_array(
+        s->type.to_arrow_schema(), as<arrow::StructArray>(*s->array));
       co_yield table_slice{batch, s->type};
     }
   }

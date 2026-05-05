@@ -37,7 +37,7 @@ TEST("record batch from struct array preserves row nulls") {
   };
   auto struct_array = make_struct_array(2, bitmap, fields, {ints, strings});
   auto batch
-    = record_batch_from_struct_array(arrow::schema(fields), struct_array);
+    = record_batch_from_struct_array(arrow::schema(fields), *struct_array);
   REQUIRE(batch);
   auto a
     = std::dynamic_pointer_cast<arrow::Int64Array>(batch->GetColumnByName("a"));

@@ -9,6 +9,7 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/bitmap.hpp>
 #include <tenzir/collect.hpp>
@@ -157,8 +158,8 @@ auto finish_unroll_builder(arrow::StructBuilder& builder, const type& result_ty,
     emit_unroll_error(dh, status);
     return {.failed = true};
   }
-  auto batch = arrow::RecordBatch::Make(result_ty.to_arrow_schema(),
-                                        result->length(), result->fields());
+  auto batch
+    = record_batch_from_struct_array(result_ty.to_arrow_schema(), *result);
   return {.slice = table_slice{batch, result_ty}};
 }
 

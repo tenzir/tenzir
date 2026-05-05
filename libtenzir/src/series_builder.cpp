@@ -1477,10 +1477,9 @@ auto series_builder::finish_as_table_slice(std::string_view name)
       // which creates potential for confusion.
       array.type = tenzir::type{"tenzir.unknown", array.type};
     }
-    auto cast = std::dynamic_pointer_cast<arrow::StructArray>(array.array);
-    TENZIR_ASSERT(cast);
     auto arrow_schema = array.type.to_arrow_schema();
-    auto batch = record_batch_from_struct_array(std::move(arrow_schema), cast);
+    auto batch = record_batch_from_struct_array(
+      std::move(arrow_schema), as<arrow::StructArray>(*array.array));
     TENZIR_ASSERT(batch);
 #if TENZIR_ENABLE_ASSERTIONS
     const auto v = batch->Validate();
