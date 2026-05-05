@@ -124,8 +124,12 @@
     },
     arms: [
       {
-        filter: [
-          constant string "foo" @ 72..77
+        patterns: [
+          {
+            kind: expression_pattern {
+              expr: constant string "foo" @ 72..77
+            }
+          }
         ],
         pipe: [
           invocation {
@@ -152,8 +156,12 @@
     },
     arms: [
       {
-        filter: [
-          constant string "foo" @ 103..108
+        patterns: [
+          {
+            kind: expression_pattern {
+              expr: constant string "foo" @ 103..108
+            }
+          }
         ],
         pipe: [
           invocation {
@@ -170,8 +178,12 @@
         ]
       },
       {
-        filter: [
-          constant int64 42 @ 128..130
+        patterns: [
+          {
+            kind: expression_pattern {
+              expr: constant int64 42 @ 128..130
+            }
+          }
         ],
         pipe: [
           invocation {
