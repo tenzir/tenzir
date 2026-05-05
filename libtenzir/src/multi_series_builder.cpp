@@ -444,10 +444,9 @@ auto series_to_table_slice(series array, std::string_view fallback_name)
   if (array.type.name().empty()) {
     array.type = tenzir::type{fallback_name, array.type};
   }
-  auto cast = std::dynamic_pointer_cast<arrow::StructArray>(array.array);
-  TENZIR_ASSERT(cast);
   auto arrow_schema = array.type.to_arrow_schema();
-  auto batch = record_batch_from_struct_array(std::move(arrow_schema), cast);
+  auto batch = record_batch_from_struct_array(
+    std::move(arrow_schema), as<arrow::StructArray>(*array.array));
   TENZIR_ASSERT(batch);
   TENZIR_ASSERT_EXPENSIVE(batch->Validate().ok());
   return table_slice{std::move(batch), std::move(array.type)};

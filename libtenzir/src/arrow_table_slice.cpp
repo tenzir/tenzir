@@ -662,19 +662,15 @@ transform_columns(type schema,
   };
 }
 
-auto record_batch_from_struct_array(
-  const std::shared_ptr<arrow::Schema>& schema,
-  const std::shared_ptr<arrow::StructArray>& array)
+auto record_batch_from_struct_array(std::shared_ptr<arrow::Schema> schema,
+                                    const arrow::StructArray& array)
   -> std::shared_ptr<arrow::RecordBatch> {
   TENZIR_ASSERT(schema);
-  TENZIR_ASSERT(array);
-  auto columns = arrow::ArrayVector{};
-  if (array->null_count() > 0) {
-    columns = check(array->Flatten(tenzir::arrow_memory_pool()));
-  } else {
-    columns = array->fields();
-  }
-  return arrow::RecordBatch::Make(schema, array->length(), std::move(columns));
+  auto columns = array.null_count() > 0
+                   ? check(array.Flatten(tenzir::arrow_memory_pool()))
+                   : array.fields();
+  return arrow::RecordBatch::Make(std::move(schema), array.length(),
+                                  std::move(columns));
 }
 
 table_slice
@@ -697,7 +693,7 @@ transform_columns(const table_slice& slice,
     return {};
   }
   auto output_batch = record_batch_from_struct_array(
-    output_schema.to_arrow_schema(), output_struct_array);
+    output_schema.to_arrow_schema(), *output_struct_array);
   auto result = table_slice{output_batch, std::move(output_schema)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());

@@ -115,10 +115,8 @@ public:
                       as<record_type>(slice.schema()).key(*target_index)),
           field.type,
         };
-        auto rb = arrow::RecordBatch::Make(
-          field.type.to_arrow_schema(), array->length(),
-          check(static_cast<const arrow::StructArray&>(*array).Flatten(
-            tenzir::arrow_memory_pool())));
+        auto rb = record_batch_from_struct_array(
+          field.type.to_arrow_schema(), as<arrow::StructArray>(*array));
         auto slice = table_slice{rb, field.type};
         auto builder = series_builder{type{string_type{}}};
         for (size_t i = 0; i < slice.rows(); i++) {

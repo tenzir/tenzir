@@ -27,7 +27,7 @@ auto cast(table_slice from_slice, const type& to_schema) -> table_slice {
       as<record_type>(from_slice.schema()), from_struct_array,
       as<record_type>(to_schema));
   const auto to_batch = record_batch_from_struct_array(
-    to_schema.to_arrow_schema(), to_struct_array);
+    to_schema.to_arrow_schema(), *to_struct_array);
   auto result = table_slice{to_batch, to_schema};
   result.offset(from_slice.offset());
   result.import_time(from_slice.import_time());

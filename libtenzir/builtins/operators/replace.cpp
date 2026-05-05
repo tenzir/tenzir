@@ -292,7 +292,7 @@ public:
                                            args_.what.inner);
         co_yield table_slice{
           record_batch_from_struct_array(slice.schema().to_arrow_schema(),
-                                         rs.array),
+                                         *rs.array),
           slice.schema(),
         };
       } else {
@@ -302,7 +302,7 @@ public:
         for (auto& r : rs) {
           auto rty = type{slice.schema().name(), r.type, auto{attrs}};
           co_yield table_slice{
-            record_batch_from_struct_array(rty.to_arrow_schema(), r.array),
+            record_batch_from_struct_array(rty.to_arrow_schema(), *r.array),
             std::move(rty),
           };
         }
@@ -350,7 +350,7 @@ public:
                                          args_.what.inner);
       co_await push(table_slice{
         record_batch_from_struct_array(input.schema().to_arrow_schema(),
-                                       rs.array),
+                                       *rs.array),
         input.schema(),
       });
       co_return;
@@ -361,7 +361,7 @@ public:
     for (auto& r : rs) {
       auto rty = type{input.schema().name(), r.type, auto{attrs}};
       co_await push(table_slice{
-        record_batch_from_struct_array(rty.to_arrow_schema(), r.array),
+        record_batch_from_struct_array(rty.to_arrow_schema(), *r.array),
         std::move(rty),
       });
     }

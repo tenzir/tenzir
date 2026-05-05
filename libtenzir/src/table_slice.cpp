@@ -943,7 +943,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
     return {};
   }
   const auto array = finish(*builder);
-  auto batch = record_batch_from_struct_array(std::move(arrow_schema), array);
+  auto batch = record_batch_from_struct_array(std::move(arrow_schema), *array);
   auto result = table_slice{batch, schema};
   result.offset(slices[0].offset());
   result.import_time(slices[0].import_time());
@@ -1210,7 +1210,7 @@ auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
       return {};
     }
     auto array = finish(builder);
-    auto result_batch = record_batch_from_struct_array(arrow_schema, array);
+    auto result_batch = record_batch_from_struct_array(arrow_schema, *array);
     auto result = table_slice{result_batch, schema};
     result.offset(slice.offset());
     result.import_time(slice.import_time());
@@ -1721,8 +1721,8 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   if (not schema) {
     return {};
   }
-  auto batch = arrow::RecordBatch::Make(
-    schema.to_arrow_schema(), transformed->length(), transformed->fields());
+  auto batch
+    = record_batch_from_struct_array(schema.to_arrow_schema(), *transformed);
   auto result = table_slice{batch, std::move(schema)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());
@@ -1894,10 +1894,10 @@ auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice {
   }
   auto array = check(to_record_batch(slice)->ToStructArray());
   auto result = unflatten(array, sep);
-  auto cast = std::dynamic_pointer_cast<arrow::StructArray>(std::move(result));
-  TENZIR_ASSERT(cast);
-  auto schema = type{slice.schema().name(), type::from_arrow(*cast->type())};
-  auto batch = record_batch_from_struct_array(schema.to_arrow_schema(), cast);
+  auto schema = type{slice.schema().name(),
+                     type::from_arrow(*as<arrow::StructArray>(*result).type())};
+  auto batch = record_batch_from_struct_array(schema.to_arrow_schema(),
+                                              as<arrow::StructArray>(*result));
   auto out = table_slice{batch, std::move(schema)};
   out.import_time(slice.import_time());
   out.offset(slice.offset());

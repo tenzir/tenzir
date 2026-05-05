@@ -281,8 +281,8 @@ auto assign(const ast::field_path& left, series right, const table_slice& input,
   auto schema = arrow::schema(result.array->type()->fields(),
                               to_record_batch(input)->schema()->metadata());
   auto slice = table_slice{
-    arrow::RecordBatch::Make(std::move(schema), result.length(),
-                             as<arrow::StructArray>(*result.array).fields()),
+    record_batch_from_struct_array(std::move(schema),
+                                   as<arrow::StructArray>(*result.array)),
     std::move(result.type),
   };
   slice.import_time(input.import_time());
