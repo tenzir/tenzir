@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -18,8 +19,12 @@
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
+#include <arrow/compute/api_vector.h>
+#include <arrow/datum.h>
+
 #include <algorithm>
 #include <span>
+#include <unordered_map>
 
 namespace tenzir::plugins::drop_null_fields {
 
@@ -47,6 +52,17 @@ auto resolve_field_paths(const std::vector<ast::field_path>& fields,
 struct null_accessor {
   std::shared_ptr<arrow::Array> array;
   bool exists = false;
+};
+
+struct null_pattern_hash {
+  auto operator()(null_pattern const& pattern) const noexcept -> size_t {
+    auto seed = size_t{0};
+    for (auto word : pattern) {
+      seed
+        ^= std::hash<uint64_t>{}(word) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+  }
 };
 
 auto build_null_accessors(const table_slice& slice,
@@ -165,18 +181,35 @@ auto fields_to_drop_for_pattern(const null_pattern& pattern,
   return result;
 }
 
-auto drop_null_fields_impl(table_slice slice,
-                           const std::vector<ast::field_path>& selectors,
-                           diagnostic_handler& dh) -> std::vector<table_slice> {
-  if (slice.rows() == 0) {
-    return {table_slice{}};
+auto take_rows(const table_slice& slice, std::span<const int64_t> rows)
+  -> table_slice {
+  auto builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
+  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
+  for (auto row : rows) {
+    builder.UnsafeAppend(row);
   }
-  auto fields = fields_to_check(slice, selectors);
-  if (fields.empty()) {
-    return {std::move(slice)};
+  auto batch
+    = check(arrow::compute::Take(to_record_batch(slice), finish(builder)))
+        .record_batch();
+  auto result = table_slice{std::move(batch), slice.schema()};
+  result.import_time(slice.import_time());
+  return result;
+}
+
+auto rows_are_contiguous(std::span<const int64_t> rows) -> bool {
+  for (auto i = 1uz; i < rows.size(); ++i) {
+    if (rows[i] != rows[i - 1] + 1) {
+      return false;
+    }
   }
-  auto field_offsets = resolve_field_paths(fields, slice.schema());
-  auto accessors = build_null_accessors(slice, field_offsets);
+  return true;
+}
+
+auto drop_null_fields_ordered(table_slice slice,
+                              const std::vector<ast::field_path>& fields,
+                              std::span<const null_accessor> accessors,
+                              diagnostic_handler& dh)
+  -> std::vector<table_slice> {
   auto words_per_pattern = (fields.size() + 63) / 64;
   auto previous_pattern = null_pattern(words_per_pattern, uint64_t{0});
   auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
@@ -205,13 +238,76 @@ auto drop_null_fields_impl(table_slice slice,
   return result;
 }
 
+auto drop_null_fields_unordered(table_slice slice,
+                                const std::vector<ast::field_path>& fields,
+                                std::span<const null_accessor> accessors,
+                                diagnostic_handler& dh)
+  -> std::vector<table_slice> {
+  auto words_per_pattern = (fields.size() + 63) / 64;
+  auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
+  auto buckets = std::unordered_map<null_pattern, size_t, null_pattern_hash>{};
+  auto bucket_order = std::vector<null_pattern>{};
+  auto bucket_rows = std::vector<std::vector<int64_t>>{};
+  buckets.reserve(slice.rows());
+  for (auto row = 0uz; row < slice.rows(); ++row) {
+    compute_null_pattern(accessors, row, current_pattern);
+    auto [it, inserted]
+      = buckets.try_emplace(current_pattern, bucket_rows.size());
+    if (inserted) {
+      bucket_order.push_back(current_pattern);
+      bucket_rows.emplace_back();
+    }
+    bucket_rows[it->second].push_back(detail::narrow<int64_t>(row));
+  }
+  auto result = std::vector<table_slice>{};
+  result.reserve(bucket_order.size());
+  for (auto i = 0uz; i < bucket_order.size(); ++i) {
+    auto const& pattern = bucket_order[i];
+    auto const& rows = bucket_rows[i];
+    auto fields_to_drop = fields_to_drop_for_pattern(pattern, fields);
+    if (rows.size() == slice.rows() and fields_to_drop.empty()) {
+      result.push_back(std::move(slice));
+      continue;
+    }
+    auto group_slice = rows_are_contiguous(rows)
+                         ? subslice(slice, rows.front(), rows.back() + 1)
+                         : take_rows(slice, rows);
+    if (fields_to_drop.empty()) {
+      result.push_back(std::move(group_slice));
+      continue;
+    }
+    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+  }
+  return result;
+}
+
+auto drop_null_fields_impl(table_slice slice,
+                           const std::vector<ast::field_path>& selectors,
+                           event_order order, diagnostic_handler& dh)
+  -> std::vector<table_slice> {
+  if (slice.rows() == 0) {
+    return {table_slice{}};
+  }
+  auto fields = fields_to_check(slice, selectors);
+  if (fields.empty()) {
+    return {std::move(slice)};
+  }
+  auto field_offsets = resolve_field_paths(fields, slice.schema());
+  auto accessors = build_null_accessors(slice, field_offsets);
+  if (order == event_order::unordered) {
+    return drop_null_fields_unordered(std::move(slice), fields, accessors, dh);
+  }
+  return drop_null_fields_ordered(std::move(slice), fields, accessors, dh);
+}
+
 struct DropNullFieldsArgs {
   std::vector<ast::expression> fields;
+  event_order order = event_order::ordered;
 };
 
 class DropNullFields final : public Operator<table_slice, table_slice> {
 public:
-  explicit DropNullFields(DropNullFieldsArgs args) {
+  explicit DropNullFields(DropNullFieldsArgs args) : order_{args.order} {
     if (args.fields.size() == 1) {
       auto selector = ast::field_path::try_from(args.fields.front());
       TENZIR_ASSERT(selector);
@@ -230,7 +326,8 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto output = drop_null_fields_impl(std::move(input), selectors_, ctx.dh());
+    auto output
+      = drop_null_fields_impl(std::move(input), selectors_, order_, ctx.dh());
     for (auto& slice : output) {
       co_await push(std::move(slice));
     }
@@ -238,6 +335,7 @@ public:
 
 private:
   std::vector<ast::field_path> selectors_;
+  event_order order_ = event_order::ordered;
 };
 
 class drop_null_fields_operator final
@@ -245,8 +343,9 @@ class drop_null_fields_operator final
 public:
   drop_null_fields_operator() = default;
 
-  explicit drop_null_fields_operator(std::vector<ast::field_path> selectors)
-    : selectors_{std::move(selectors)} {
+  explicit drop_null_fields_operator(std::vector<ast::field_path> selectors,
+                                     event_order order = event_order::ordered)
+    : selectors_{std::move(selectors)}, order_{order} {
   }
 
   auto name() const -> std::string override {
@@ -257,7 +356,7 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      auto output = drop_null_fields_impl(std::move(slice), selectors_,
+      auto output = drop_null_fields_impl(std::move(slice), selectors_, order_,
                                           ctrl.diagnostics());
       for (auto& part : output) {
         co_yield std::move(part);
@@ -267,16 +366,21 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    TENZIR_UNUSED(filter);
+    return optimize_result{
+      filter, order,
+      std::make_unique<drop_null_fields_operator>(selectors_, order)};
   }
 
   friend auto inspect(auto& f, drop_null_fields_operator& x) -> bool {
-    return f.apply(x.selectors_);
+    return f.object(x)
+      .pretty_name("drop_null_fields_operator")
+      .fields(f.field("selectors", x.selectors_), f.field("order", x.order_));
   }
 
 private:
   std::vector<ast::field_path> selectors_;
+  event_order order_ = event_order::ordered;
 };
 
 } // namespace
@@ -288,6 +392,7 @@ public:
     auto d = Describer<DropNullFieldsArgs, DropNullFields>{};
     auto fields
       = d.optional_variadic("fields", &DropNullFieldsArgs::fields, "field");
+    d.optimization_order(&DropNullFieldsArgs::order);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);
       auto locations = ctx.get_locations(fields);

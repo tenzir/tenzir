@@ -3,4 +3,6 @@ from {id: 1, a: null.string(), b: "x"},
      {id: 3, a: null.string(), b: "z"},
      {id: 4, a: "w", b: null.string()}
 batch 4
-drop_null_fields
+unordered {
+  drop_null_fields
+}
