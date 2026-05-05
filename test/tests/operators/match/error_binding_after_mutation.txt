@@ -1,0 +1,7 @@
+error: match binding `$v` is used after its matched field is assigned
+ --> tests/operators/match/error_binding_after_mutation.tql:8:5
+  |
+8 |     x = 0
+  |     ^ 
+  |
+  = hint: move the assignment after all uses of the binding
