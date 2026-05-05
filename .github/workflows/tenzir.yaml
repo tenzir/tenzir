@@ -394,7 +394,7 @@ jobs:
                | ."image-registries") += ["docker.io"] |
               (.editions[] | ."image-registries") |= unique' \
               <<< "${docker_config}")"
-          # Non-release builds must not push the demo image.
+          # `push` and `workflow_dispatch` hit this branch; they must not push the demo image.
           else
             docker_config="$(jq -c '
               (.editions[] | select(.name == "tenzir-demo") | ."image-registries") |= []' \
