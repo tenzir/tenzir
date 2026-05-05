@@ -1,7 +1,7 @@
 error: match binding `$v` is used after its matched field is mutated
- --> tests/operators/match/error_binding_after_nested_mutation.tql:9:9
+ --> tests/operators/match/error_binding_after_drop.tql:9:9
   |
-9 |     z = $v
+9 |     y = $v
   |         ^^ 
   |
   = hint: move the mutation after all uses of the binding

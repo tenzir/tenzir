@@ -111,6 +111,16 @@ struct MatchArgs {
 
 auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool;
 
+auto make_boolean_array(std::vector<bool> const& mask)
+  -> std::shared_ptr<arrow::BooleanArray> {
+  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(builder.Reserve(mask.size()));
+  for (auto value : mask) {
+    builder.UnsafeAppend(value);
+  }
+  return finish(builder);
+}
+
 class MatchImpl {
 public:
   explicit MatchImpl(MatchArgs args) : args_{std::move(args)} {
@@ -167,11 +177,26 @@ public:
     TENZIR_ASSERT_EQ(offset, static_cast<int64_t>(input.rows()));
     for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
          ++arm_index) {
-      auto guard_mask = std::vector<bool>(input.rows(), true);
       auto const& arm = args_.arms[arm_index];
+      auto candidate_rows = std::vector<size_t>{};
+      for (auto row = size_t{0}; row < input.rows(); ++row) {
+        if (not matched[row] and candidate_masks[arm_index][row]) {
+          candidate_rows.push_back(row);
+        }
+      }
+      if (candidate_rows.empty()) {
+        continue;
+      }
+      auto guard_mask = std::vector<bool>(candidate_rows.size(), true);
       if (arm.guard) {
+        auto candidate_mask = std::vector<bool>(input.rows(), false);
+        for (auto row : candidate_rows) {
+          candidate_mask[row] = true;
+        }
+        auto candidate_input
+          = filter(input, *make_boolean_array(candidate_mask));
         auto end = int64_t{0};
-        for (auto const& predicate : eval(*arm.guard, input, ctx)) {
+        for (auto const& predicate : eval(*arm.guard, candidate_input, ctx)) {
           auto const start = std::exchange(end, end + predicate.length());
           auto const typed_predicate = predicate.as<bool_type>();
           if (not typed_predicate) {
@@ -194,11 +219,11 @@ public:
               = not array.IsNull(row - start) and array.GetView(row - start);
           }
         }
-        TENZIR_ASSERT_EQ(end, static_cast<int64_t>(input.rows()));
+        TENZIR_ASSERT_EQ(end, static_cast<int64_t>(candidate_rows.size()));
       }
-      for (auto row = size_t{0}; row < input.rows(); ++row) {
-        if (not matched[row] and candidate_masks[arm_index][row]
-            and guard_mask[row]) {
+      for (auto index = size_t{0}; index < candidate_rows.size(); ++index) {
+        if (guard_mask[index]) {
+          auto row = candidate_rows[index];
           arm_masks[arm_index][row] = true;
           matched[row] = true;
         }
@@ -209,12 +234,7 @@ public:
       if (arm_closed_[arm_index]) {
         continue;
       }
-      auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-      check(builder.Reserve(input.rows()));
-      for (auto value : arm_masks[arm_index]) {
-        builder.UnsafeAppend(value);
-      }
-      auto filtered = filter(input, *finish(builder));
+      auto filtered = filter(input, *make_boolean_array(arm_masks[arm_index]));
       if (filtered.rows() == 0) {
         continue;
       }
@@ -234,12 +254,11 @@ public:
         = (co_await handle.push(std::move(filtered))).is_err();
     }
     if (not has_wildcard() and push) {
-      auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-      check(builder.Reserve(input.rows()));
-      for (auto value : matched) {
-        builder.UnsafeAppend(not value);
+      auto unmatched = std::vector<bool>(matched.size(), false);
+      for (auto row = size_t{0}; row < matched.size(); ++row) {
+        unmatched[row] = not matched[row];
       }
-      auto filtered = filter(input, *finish(builder));
+      auto filtered = filter(input, *make_boolean_array(unmatched));
       if (filtered.rows() > 0) {
         co_await (*push)(std::move(filtered));
       }
@@ -599,6 +618,25 @@ auto paths_overlap(ast::field_path const& assigned,
   return true;
 }
 
+auto try_get_field_path(ast::expression const& expr)
+  -> std::optional<ast::field_path> {
+  auto copy = expr;
+  return ast::field_path::try_from(std::move(copy));
+}
+
+auto is_builtin_operator(ast::invocation const& invocation,
+                         std::string_view name) -> bool {
+  if (not invocation.op.ref.resolved()) {
+    return false;
+  }
+  if (invocation.op.ref.pkg() != entity_pkg_std
+      or invocation.op.ref.ns() != entity_ns::op) {
+    return false;
+  }
+  auto segments = invocation.op.ref.segments();
+  return segments.size() == 1 and segments.front() == name;
+}
+
 class match_binding_mutation_validator
   : public ast::visitor<match_binding_mutation_validator> {
 public:
@@ -614,8 +652,7 @@ public:
       if (replacement == replacements_.end()) {
         return;
       }
-      auto captured_expr = replacement->second;
-      auto captured = ast::field_path::try_from(std::move(captured_expr));
+      auto captured = try_get_field_path(replacement->second);
       if (not captured) {
         return;
       }
@@ -624,23 +661,58 @@ public:
           continue;
         }
         diagnostic::error("match binding `${}` is used after its matched field "
-                          "is assigned",
+                          "is mutated",
                           name)
           .primary(*var)
-          .hint("move the assignment after all uses of the binding")
+          .hint("move the mutation after all uses of the binding")
           .emit(dh_);
         result_ = failure::promise();
         return;
       }
       return;
     }
+    auto const was_in_expression = std::exchange(in_expression_, true);
     enter(expr);
+    in_expression_ = was_in_expression;
   }
 
   void visit(ast::assignment& assignment) {
     visit(assignment.right);
+    if (in_expression_) {
+      return;
+    }
+    auto copy = assignment;
+    auto moved_fields = resolve_move_keyword(std::move(copy)).second;
+    std::ranges::move(moved_fields, std::back_inserter(mutated_paths_));
     if (auto const* assigned = std::get_if<ast::field_path>(&assignment.left)) {
       mutated_paths_.push_back(*assigned);
+    }
+  }
+
+  void visit(ast::invocation& invocation) {
+    enter(invocation);
+    if (is_builtin_operator(invocation, "drop")) {
+      for (auto const& arg : invocation.args) {
+        if (auto field = try_get_field_path(arg)) {
+          mutated_paths_.push_back(std::move(*field));
+        }
+      }
+    } else if (is_builtin_operator(invocation, "move")) {
+      for (auto const& arg : invocation.args) {
+        auto const* assignment = try_as<ast::assignment>(arg);
+        if (not assignment) {
+          continue;
+        }
+        if (auto const* left
+            = std::get_if<ast::field_path>(&assignment->left)) {
+          mutated_paths_.push_back(*left);
+        }
+        if (auto right = try_get_field_path(assignment->right)) {
+          mutated_paths_.push_back(std::move(*right));
+        }
+      }
+    } else if (is_builtin_operator(invocation, "select")) {
+      mutated_paths_.push_back(ast::field_path::try_from(ast::this_{}).value());
     }
   }
 
@@ -658,6 +730,7 @@ private:
   diagnostic_handler& dh_;
   std::vector<ast::field_path> mutated_paths_;
   failure_or<void> result_;
+  bool in_expression_ = false;
 };
 
 auto validate_match_binding_mutations(ast::pipeline& pipe,
