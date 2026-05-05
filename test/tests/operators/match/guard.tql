@@ -1,0 +1,19 @@
+from {status: 200, retries: 0}, {status: 201, retries: 0}, {status: 429, retries: 1}, {status: 500, retries: 0}, {status: 503, retries: 2}, {status: 404, retries: 1}
+match status {
+  500..599 | 429 if retries > 0 => {
+    action = "retry"
+  }
+  $code if $code >= 500 => {
+    action = "page"
+  }
+  _ if status == 404 => {
+    action = "investigate"
+  }
+  _ if status == 200 => {
+    action = "ok"
+  }
+  _ => {
+    action = "other"
+  }
+}
+sort status
