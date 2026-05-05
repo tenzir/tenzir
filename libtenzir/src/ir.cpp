@@ -20,6 +20,7 @@
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
+#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
 
@@ -621,21 +622,31 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
-            // TODO: What about diagnostics that end up being emitted here?
-            // We need to provide a context that does not feature any outer
-            // variables.
+            auto op_name = make_operator_name(x.op);
+            auto udo_dh = udo_diagnostic_handler{
+              &static_cast<diagnostic_handler&>(ctx), op_name, op};
+            // Bind argument expressions in the outer ctx so that any
+            // `$outer_let` references are resolved here.
+            for (auto& arg : x.args) {
+              if (auto* assignment = try_as<ast::assignment>(arg)) {
+                TRY(assignment->right.bind(ctx));
+              } else {
+                TRY(arg.bind(ctx));
+              }
+            }
+            // Validate args and substitute them into the body AST. The
+            // session adopts `udo_dh` so that diagnostics also carry the
+            // call-site usage and parameters.
+            auto sp = session_provider::make(udo_dh);
+            auto inv
+              = operator_factory_invocation{std::move(x.op), std::move(x.args)};
+            TRY(auto substituted, instantiate_user_defined_operator(
+                                    op, inv, sp.as_session(), udo_dh));
+            // The body is hygienic: it cannot see outer `let` bindings. Any
+            // outer references reach the body only through arguments, which
+            // we pre-bound above before substitution copied them in.
             auto udo_ctx = ctx.without_env();
-            auto definition = op.definition;
-            // By compiling the operator every time from AST to IR, we assign
-            // new let IDs. This is important because if an operator is used
-            // twice, it could have different values for its bindings.
-            TRY(auto pipe, std::move(definition).compile(udo_ctx));
-            // If it would have arguments, we need to create appropriate
-            // bindings now. For constant arguments, we could bind the
-            // parameters to a new `let` that stores that value. For
-            // non-constant arguments, if we want to use the same `let`
-            // mechanism, then we could introduce a new constant that can store
-            // expressions that will be evaluated later.
+            TRY(auto pipe, std::move(substituted).compile(udo_ctx));
             merge_compiled_pipeline(lets, operators, std::move(pipe));
             return {};
           });

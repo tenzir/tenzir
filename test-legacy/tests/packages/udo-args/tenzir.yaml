@@ -1,4 +1,0 @@
-tenzir:
-  enable-assert-secret-operator: true
-  package-dirs:
-    - inputs/package-roots/udo-args
