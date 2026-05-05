@@ -628,29 +628,25 @@ private:
 // -- New executor-based TQL2 implementation -----------------------------------
 
 struct SortArgs {
-  Option<ast::expression> expr;
+  std::vector<ast::expression> exprs;
 };
 
 class Sort final : public Operator<table_slice, table_slice> {
 public:
   explicit Sort(SortArgs args) {
-    if (not args.expr) {
-      expr_ = ast::expression{ast::this_{location::unknown}};
+    if (args.exprs.empty()) {
+      keys_.emplace_back(ast::expression{ast::this_{location::unknown}});
       return;
     }
-    match(
-      std::move(*args.expr),
-      [&](ast::unary_expr&& unary) {
-        if (unary.op.inner == ast::unary_op::neg) {
-          expr_ = std::move(unary.expr);
-          reverse_ = true;
-        } else {
-          expr_ = std::move(unary);
-        }
-      },
-      [&](auto&& other) {
-        expr_ = std::forward<decltype(other)>(other);
-      });
+    keys_.reserve(args.exprs.size());
+    for (auto& arg : args.exprs) {
+      auto* unary = try_as<ast::unary_expr>(arg);
+      if (unary and unary->op.inner == ast::unary_op::neg) {
+        keys_.emplace_back(std::move(unary->expr), true);
+      } else {
+        keys_.emplace_back(std::move(arg));
+      }
+    }
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -659,10 +655,12 @@ public:
     auto const length = detail::narrow<int64_t>(input.rows());
     indices_.reserve(indices_.size() + input.rows());
     for (auto i = int64_t{0}; i < length; ++i) {
-      indices_.push_back({events_.size(), i});
+      indices_.emplace_back(events_.size(), i);
     }
-    keys_.push_back(eval(expr_, input, ctx.dh()));
-    events_.push_back(std::move(input));
+    for (auto& key : keys_) {
+      key.chunks.emplace_back(eval(key.expr, input, ctx.dh()));
+    }
+    events_.emplace_back(std::move(input));
     co_return;
   }
 
@@ -672,29 +670,31 @@ public:
     if (indices_.empty()) {
       co_return FinalizeBehavior::done;
     }
-    // TODO: If all chunks evaluate to the same type, we can choose a faster
-    // path where we do not need to evaluate the key's type for each row
-    // individually.
+    // TODO: If all chunks for a sort key evaluate to the same type, we can
+    // choose a faster path where we do not need to evaluate the sort key's
+    // type for each row individually.
     std::ranges::sort(indices_, [&](std::pair<size_t, int64_t> const& lhs,
                                     std::pair<size_t, int64_t> const& rhs) {
-      auto const& lhs_key = keys_[lhs.first];
-      auto const& rhs_key = keys_[rhs.first];
-      auto const lhs_value = lhs_key.view3_at(lhs.second);
-      auto const rhs_value = rhs_key.view3_at(rhs.second);
-      auto const lhs_null = is<caf::none_t>(lhs_value);
-      auto const rhs_null = is<caf::none_t>(rhs_value);
-      if (lhs_null and rhs_null) {
-        return false;
-      }
-      if (lhs_null) {
-        return false;
-      }
-      if (rhs_null) {
-        return true;
-      }
-      auto const relation = weak_order(lhs_value, rhs_value);
-      if (relation != std::weak_ordering::equivalent) {
-        return (relation == std::weak_ordering::less) != reverse_;
+      for (auto const& key : keys_) {
+        auto const& lhs_chunk = key.chunks[lhs.first];
+        auto const& rhs_chunk = key.chunks[rhs.first];
+        auto const lhs_value = lhs_chunk.view3_at(lhs.second);
+        auto const rhs_value = rhs_chunk.view3_at(rhs.second);
+        auto const lhs_null = is<caf::none_t>(lhs_value);
+        auto const rhs_null = is<caf::none_t>(rhs_value);
+        if (lhs_null and rhs_null) {
+          continue;
+        }
+        if (lhs_null) {
+          return false;
+        }
+        if (rhs_null) {
+          return true;
+        }
+        auto const relation = weak_order(lhs_value, rhs_value);
+        if (relation != std::weak_ordering::equivalent) {
+          return (relation == std::weak_ordering::less) != key.reverse;
+        }
       }
       return false;
     });
@@ -713,7 +713,8 @@ public:
       }
       // TODO: This excessive slicing is quite bad for performance. We could
       // merge consecutive entries from the same slice.
-      batch.push_back(subslice(events_[slice_idx], event_idx, event_idx + 1));
+      batch.emplace_back(
+        subslice(events_[slice_idx], event_idx, event_idx + 1));
       batch_rows += 1;
     }
     if (not batch.empty()) {
@@ -723,10 +724,14 @@ public:
   }
 
 private:
-  ast::expression expr_;
-  bool reverse_ = false;
+  struct Key {
+    ast::expression expr;
+    bool reverse = false;
+    std::vector<multi_series> chunks;
+  };
+
+  std::vector<Key> keys_;
   std::vector<table_slice> events_;
-  std::vector<multi_series> keys_;
   std::vector<std::pair<size_t, int64_t>> indices_;
 };
 
@@ -764,7 +769,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<SortArgs, Sort>{};
-    d.positional("expr", &SortArgs::expr, "any");
+    d.optional_variadic("expr", &SortArgs::exprs, "any");
     return d.without_optimize();
   }
 
