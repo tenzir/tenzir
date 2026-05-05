@@ -1,0 +1,30 @@
+{
+  status: 200,
+  retries: 0,
+  action: "ok",
+}
+{
+  status: 201,
+  retries: 0,
+  action: "other",
+}
+{
+  status: 404,
+  retries: 1,
+  action: "investigate",
+}
+{
+  status: 429,
+  retries: 1,
+  action: "retry",
+}
+{
+  status: 500,
+  retries: 0,
+  action: "page",
+}
+{
+  status: 503,
+  retries: 2,
+  action: "retry",
+}
