@@ -240,10 +240,11 @@ def _run_client_worker(
     if invalid_tls_handshake_first:
         _send_invalid_tls_handshake(port, stop_event)
     next_payloads = iter(payloads) if payloads is not None else None
+    current_payload: bytes | None = None
     while not stop_event.is_set():
         if next_payloads is None:
             current_payload = payload
-        else:
+        elif current_payload is None:
             try:
                 current_payload = next(next_payloads)
             except StopIteration:
@@ -301,6 +302,7 @@ def _run_client_worker(
                             idle_deadline = time.monotonic() + 2
         except (ssl.SSLError, OSError):
             pass
+        current_payload = None
         if inter_connection_delay > 0:
             stop_event.wait(inter_connection_delay)
         time.sleep(_CLIENT_RETRY_DELAY)

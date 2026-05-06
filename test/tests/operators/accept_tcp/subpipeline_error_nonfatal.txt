@@ -1,4 +1,4 @@
-warning: json parser: parser input ended with incomplete object
 {
   value: 42,
 }
+warning: json parser: parser input ended with incomplete object

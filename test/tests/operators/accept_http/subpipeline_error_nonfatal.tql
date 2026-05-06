@@ -8,7 +8,7 @@ fixtures:
           expected_status: 200
           expected_body: ""
         - path: /ingest
-          body: '{"value":42}\n'
+          body: "{\"value\":42}\n"
           expected_status: 200
           expected_body: ""
           stop_on_connection_drop: true

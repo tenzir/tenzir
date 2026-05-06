@@ -4,7 +4,7 @@ fixtures:
       mode: client
       payloads:
         - "{\n"
-        - '{"value":42}\n'
+        - "{\"value\":42}\n"
       inter_connection_delay: 0.2
 timeout: 60
 ---
