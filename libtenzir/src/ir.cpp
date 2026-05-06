@@ -49,6 +49,55 @@ auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
 
 namespace {
 
+// Migration hints for the neo executor transition.
+struct porting_hint {
+  std::string_view legacy_name;
+  std::string_view message;
+};
+
+constexpr porting_hint unported_replacements[] = {
+  {"compress", "use one of the `compress_*` operators (e.g. `compress_gzip`, "
+               "`compress_zstd`) instead"},
+  {"decompress", "use one of the `decompress_*` operators (e.g. "
+                 "`decompress_gzip`, "
+                 "`decompress_zstd`) instead"},
+  {"from", "use one of the `from_*` operators (e.g. `from_file`, "
+           "`from_http`) "
+           "instead"},
+  {"from_gcs", "use `from_google_cloud_storage` instead"},
+  {"from_udp", "use `accept_udp` instead"},
+  {"http", "use `from_http` instead, combined with `each` if needed"},
+  {"load_amqp", "use `from_amqp` instead"},
+  {"load_azure_blob_storage", "use `from_azure_blob_storage` instead"},
+  {"load_gcs", "use `from_google_cloud_storage` instead"},
+  {"load_google_cloud_pubsub", "use `from_google_cloud_pubsub` instead"},
+  {"load_kafka", "use `from_kafka` instead"},
+  {"load_nic", "use `from_nic` instead"},
+  {"load_s3", "use `from_s3` instead"},
+  {"load_sqs", "use `from_sqs` instead"},
+  {"load_tcp", "use `accept_tcp` instead"},
+  {"load_zmq", "use `from_zmq` instead"},
+  {"move", "use the `dst = move src` keyword form instead"},
+  {"save_amqp", "use `to_amqp` instead"},
+  {"save_azure_blob_storage", "use `to_azure_blob_storage` instead"},
+  {"save_gcs", "use `to_google_cloud_storage` instead"},
+  {"save_google_cloud_pubsub", "use `to_google_cloud_pubsub` instead"},
+  {"save_kafka", "use `to_kafka` instead"},
+  {"save_s3", "use `to_s3` instead"},
+  {"save_sqs", "use `to_sqs` instead"},
+  {"save_zmq", "use `to_zmq` instead"},
+  {"to", "use one of the `to_*` operators (e.g. `to_file`, `to_http`) "
+         "instead"},
+  {"to_hive", "use `to_file`, `to_s3`, etc. with hive partitioning instead"},
+};
+
+auto get_porting_hint(const ast::entity& op) -> std::string_view {
+  const auto it = std::ranges::find(unported_replacements, op.path.back().name,
+                                    &porting_hint::legacy_name);
+  return it != std::ranges::end(unported_replacements) ? it->message
+                                                       : std::string_view{};
+}
+
 auto merge_compiled_pipeline(std::vector<ir::let>& lets,
                              std::vector<Box<ir::Operator>>& operators,
                              ir::pipeline pipe) -> void {
@@ -552,8 +601,10 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                                                false));
               return {};
 #else
-              diagnostic::error("this operator was not ported yet")
+              diagnostic::error("This operator is not available in Tenzir v6")
                 .primary(x.op)
+                .hint("{}", get_porting_hint(x.op))
+                .hint("see https://docs.tenzir.com/guides/tenzir-v6-migration")
                 .emit(ctx);
               return failure::promise();
 #endif
