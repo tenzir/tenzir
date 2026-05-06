@@ -1,15 +1,5 @@
 {
-  labels: [
-    "prod",
-    "worker",
-  ],
-  event: {
-    roles: [
-      "backend",
-    ],
-  },
-}
-{
+  id: 1,
   labels: [
     "prod",
     "api",
@@ -22,4 +12,16 @@
   },
   service: "api",
   exposure: "public",
+}
+{
+  id: 2,
+  labels: [
+    "prod",
+    "worker",
+  ],
+  event: {
+    roles: [
+      "backend",
+    ],
+  },
 }

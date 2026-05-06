@@ -1,8 +1,9 @@
-from {labels: ["prod", "api"], event: {roles: ["frontend", "public"]}},
-     {labels: ["prod", "worker"], event: {roles: ["backend"]}}
+from {id: 1, labels: ["prod", "api"], event: {roles: ["frontend", "public"]}},
+     {id: 2, labels: ["prod", "worker"], event: {roles: ["backend"]}}
 match this {
   {event: {roles: ["frontend", ..], ..}, labels: ["prod", $service, ..], ..} => {
     service = $service
     exposure = "public"
   }
 }
+sort id
