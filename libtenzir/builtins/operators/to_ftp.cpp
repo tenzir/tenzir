@@ -11,6 +11,7 @@
 #include <tenzir/async/curl.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -134,6 +135,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_ftp"},
+                         MetricsDirection::write, MetricsVisibility::external_);
     auto code = easy.set([](std::span<const std::byte>) {});
     if (code != curl::easy::code::ok) {
       diagnostic::error("failed to configure FTP upload")
@@ -265,8 +269,10 @@ private:
           if (not accepting_chunks) {
             co_return false;
           }
+          const auto bytes = message.chunk->size();
           if (co_await upload.push(std::move(message.chunk))) {
             uploaded_anything = true;
+            bytes_write_counter_.add(bytes);
             co_return false;
           }
           accepting_chunks = false;
@@ -332,6 +338,7 @@ private:
   };
   ToFtpArgs args_;
   std::string resolved_url_;
+  MetricsCounter bytes_write_counter_;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 

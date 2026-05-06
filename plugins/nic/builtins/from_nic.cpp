@@ -13,6 +13,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pcap.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -349,6 +350,9 @@ public:
       done_ = true;
       co_return;
     }
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();
@@ -388,10 +392,13 @@ public:
       capture_closed_ = true;
       co_return;
     }
+    const auto bytes = chunk->size();
     auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
     auto push_result = co_await pipeline.push(std::move(chunk));
     if (push_result.is_err()) {
       done_ = true;
+    } else if (bytes > 0) {
+      bytes_read_counter_.add(bytes);
     }
   }
 
@@ -468,6 +475,7 @@ private:
   FromNicArgs args_;
   bool done_ = false;
   bool capture_closed_ = false;
+  MetricsCounter bytes_read_counter_;
   mutable std::shared_ptr<Notify> sub_finished_ = std::make_shared<Notify>();
   mutable std::shared_ptr<ChunkQueue> chunk_queue_
     = std::make_shared<ChunkQueue>(queue_capacity);

@@ -11,6 +11,7 @@
 #include <tenzir/async/curl.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -118,6 +119,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_ftp"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     download_.emplace(session_->start_download(download_buffer_capacity));
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
     co_return;
@@ -155,6 +159,7 @@ public:
           lifecycle_ = Lifecycle::done;
           co_return;
         }
+        const auto bytes = event.chunk->size();
         auto& parser = as<SubHandle<chunk_ptr>>(*sub);
         auto push_result = co_await parser.push(std::move(event.chunk));
         if (push_result.is_err()) {
@@ -162,6 +167,10 @@ public:
             download_->abort();
           }
           lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+        if (bytes > 0) {
+          bytes_read_counter_.add(bytes);
         }
       },
       [&](CurlDownloadFailed failure) -> Task<void> {
@@ -232,6 +241,7 @@ private:
 
   Option<CurlSession> session_;
   Option<CurlDownloadTransfer> download_;
+  MetricsCounter bytes_read_counter_;
   FromFtpArgs args_;
   std::string resolved_url_;
   Lifecycle lifecycle_ = Lifecycle::running;

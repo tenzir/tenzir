@@ -14,6 +14,7 @@
 #include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tls_options.hpp>
@@ -654,14 +655,14 @@ public:
   async_connection() = default;
 
   /// Connect to MySQL server asynchronously.
-  static auto
-  connect(folly::EventBase* evb, std::string const& host, uint16_t port,
-          std::chrono::milliseconds timeout = std::chrono::seconds{30})
-    -> Task<async_connection> {
+  static auto connect(folly::EventBase* evb, std::string const& host,
+                      uint16_t port, MetricsCounter bytes_read_counter,
+                      std::chrono::milliseconds timeout
+                      = std::chrono::seconds{30}) -> Task<async_connection> {
     auto addr = folly::SocketAddress{host, port};
     auto transport = co_await co_withExecutor(
       evb, folly::coro::Transport::newConnectedSocket(evb, addr, timeout));
-    co_return async_connection{std::move(transport), evb};
+    co_return async_connection{std::move(transport), evb, bytes_read_counter};
   }
 
   /// Read a MySQL packet asynchronously.
@@ -685,6 +686,7 @@ public:
             reinterpret_cast<unsigned char*>(payload.data()) + offset, len},
           "payload"));
       }
+      bytes_read_counter_.add(header.size() + len);
       if (len < max_packet_size) {
         break;
       }
@@ -1000,14 +1002,18 @@ private:
   }
 
   explicit async_connection(folly::coro::Transport transport,
-                            folly::EventBase* evb)
-    : transport_{std::in_place, std::move(transport)}, evb_{evb} {
+                            folly::EventBase* evb,
+                            MetricsCounter bytes_read_counter)
+    : transport_{std::in_place, std::move(transport)},
+      evb_{evb},
+      bytes_read_counter_{bytes_read_counter} {
   }
 
   Box<folly::coro::Transport> transport_;
   folly::EventBase* evb_ = nullptr;
   std::chrono::milliseconds read_timeout_{std::chrono::seconds{30}};
   uint8_t sequence_id_ = 0;
+  MetricsCounter bytes_read_counter_;
   bool is_tls_ = false;
 };
 
@@ -1485,11 +1491,13 @@ void parse_row_into_builder(std::span<std::byte const> data,
 class async_client {
 public:
   /// Connect to MySQL server asynchronously.
-  static auto make(folly::EventBase* evb, client_config config)
+  static auto make(folly::EventBase* evb, client_config config,
+                   MetricsCounter bytes_read_counter)
     -> Task<MysqlResult<Box<async_client>>> {
     auto conn = async_connection{};
     try {
-      conn = co_await async_connection::connect(evb, config.host, config.port);
+      conn = co_await async_connection::connect(evb, config.host, config.port,
+                                                bytes_read_counter);
     } catch (folly::AsyncSocketException const& e) {
       co_return Err{
         mysql_error{0, fmt::format("connect failed: {}", e.what())}};
@@ -2131,8 +2139,12 @@ public:
     // Use the global IO executor's EventBase for async socket I/O.
     auto* evb = folly::getGlobalIOExecutor()->getEventBase();
     auto const tls_enabled = config.ssl_context != nullptr;
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_mysql"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     // Connect asynchronously.
-    auto result = co_await async_client::make(evb, std::move(config));
+    auto result = co_await async_client::make(evb, std::move(config),
+                                              bytes_read_counter_);
     if (result.is_err()) {
       auto err = std::move(result).unwrap_err();
       auto diag
@@ -2242,6 +2254,7 @@ private:
   FromMySQLArgs args_;
   Box<async_client> client_;
   bool has_client_ = false;
+  MetricsCounter bytes_read_counter_;
   std::string query_;
   std::string schema_name_;
   std::string table_name_;

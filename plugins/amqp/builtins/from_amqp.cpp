@@ -12,6 +12,7 @@
 #include <tenzir/co_match.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -180,6 +181,9 @@ public:
     if (not setup_ok) {
       co_return;
     }
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_amqp"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     ctx.spawn_task(consume_loop(std::move(engine), queue_));
   }
 
@@ -211,8 +215,12 @@ public:
         if (not msg.chunk) {
           co_return;
         }
+        const auto bytes = msg.chunk->size();
         auto row = builder_.record();
         row.field("message").data(blob{as_bytes(msg.chunk)});
+        if (bytes > 0) {
+          bytes_read_counter_.add(bytes);
+        }
         co_await pusher_.push(builder_.yield_ready(), push);
       },
       [&](AmqpError err) -> Task<void> {
@@ -260,6 +268,7 @@ private:
   series_builder builder_{
     type{"tenzir.amqp", record_type{{"message", blob_type{}}}}};
   SeriesPusher pusher_;
+  MetricsCounter bytes_read_counter_;
 };
 
 class from_amqp_plugin final : public virtual OperatorPlugin {

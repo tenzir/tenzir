@@ -12,6 +12,7 @@
 #include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -170,8 +171,12 @@ public:
       .style = no_style(),
       .oneline = true,
     }};
-    worker_handle_ = ctx.spawn_task(
-      publish_loop(engine_, engine_mutex_, queue_, args_, channel_, dh));
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
+                         MetricsDirection::write, MetricsVisibility::external_);
+    worker_handle_
+      = ctx.spawn_task(publish_loop(engine_, engine_mutex_, queue_, args_,
+                                    channel_, dh, bytes_write_counter_));
     if (hb_interval > std::chrono::seconds{0}) {
       ctx.spawn_task(heartbeat_loop(engine_, engine_mutex_, hb_interval,
                                     args_.url.source, dh));
@@ -215,8 +220,8 @@ private:
   static auto publish_loop(std::shared_ptr<amqp_engine> engine,
                            std::shared_ptr<std::mutex> engine_mutex,
                            std::shared_ptr<MessageQueue> queue, ToAmqpArgs args,
-                           uint16_t channel, diagnostic_handler& dh)
-    -> Task<void> {
+                           uint16_t channel, diagnostic_handler& dh,
+                           MetricsCounter bytes_write_counter) -> Task<void> {
     auto opts = amqp_engine::publish_options{
       .channel = channel,
       .exchange = args.exchange ? std::string_view{args.exchange->inner}
@@ -255,6 +260,10 @@ private:
               .note("routing key: {}", opts.routing_key)
               .note("{}", err)
               .emit(dh);
+            continue;
+          }
+          if (not bytes.empty()) {
+            bytes_write_counter.add(bytes.size());
           }
         }
       };
@@ -309,6 +318,7 @@ private:
   Option<AsyncHandle<void>> worker_handle_;
   Option<json_printer2> printer_;
   bool is_default_printer_ = false;
+  MetricsCounter bytes_write_counter_;
 };
 
 class to_amqp_plugin final : public virtual OperatorPlugin {

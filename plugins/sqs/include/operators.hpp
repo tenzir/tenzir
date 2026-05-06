@@ -10,6 +10,7 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <memory>
@@ -52,6 +53,7 @@ private:
   FromSqsArgs args_;
   std::chrono::seconds poll_time_ = default_poll_time;
   std::shared_ptr<AsyncSqsQueue> queue_;
+  MetricsCounter bytes_read_counter_;
 };
 
 class ToSqs final : public Operator<table_slice, void> {
@@ -65,6 +67,7 @@ public:
 private:
   ToSqsArgs args_;
   std::shared_ptr<AsyncSqsQueue> queue_;
+  MetricsCounter bytes_write_counter_;
 };
 
 } // namespace tenzir::plugins::sqs

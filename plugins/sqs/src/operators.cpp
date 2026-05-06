@@ -106,6 +106,9 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
                      args_.poll_time->inner)
                  : default_poll_time;
   queue_ = co_await make_async_sqs_queue(args_, ctx);
+  bytes_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
+                       MetricsDirection::read, MetricsVisibility::external_);
 }
 
 auto FromSqs::await_task(diagnostic_handler& dh) const -> Task<Any> {
@@ -214,6 +217,10 @@ auto FromSqs::process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
   opts.settings.default_schema_name = "tenzir.sqs";
   auto msb = multi_series_builder{std::move(opts), ctx.dh()};
   for (const auto& message : messages) {
+    const auto& body = message.GetBody();
+    if (not body.empty()) {
+      bytes_read_counter_.add(body.size());
+    }
     build_event(msb, message);
   }
   for (auto&& slice : msb.finalize_as_table_slice()) {
@@ -234,6 +241,9 @@ ToSqs::ToSqs(ToSqsArgs args) : args_{std::move(args)} {
 
 auto ToSqs::start(OpCtx& ctx) -> Task<void> {
   queue_ = co_await make_async_sqs_queue(args_, ctx);
+  bytes_write_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
+                       MetricsDirection::write, MetricsVisibility::external_);
 }
 
 auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
@@ -253,6 +263,9 @@ auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
         auto bytes = as_bytes(array.Value(i));
         co_await queue_->send_message(Aws::String{
           reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+        if (not bytes.empty()) {
+          bytes_write_counter_.add(bytes.size());
+        }
       }
     };
     if (auto strings = messages.template as<string_type>()) {

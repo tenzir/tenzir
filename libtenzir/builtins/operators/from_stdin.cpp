@@ -11,6 +11,7 @@
 #include "tenzir/async/notify.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
@@ -99,6 +100,9 @@ public:
       done_ = true;
       co_return;
     }
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_stdin"},
+                         MetricsDirection::read, MetricsVisibility::external_);
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipe));
     ctx.spawn_task(folly::coro::co_withExecutor(
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
@@ -136,11 +140,15 @@ public:
       stdin_closed_ = true;
       co_return;
     }
+    const auto bytes = chunk->size();
     auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
     auto push_result = co_await pipeline.push(std::move(chunk));
     if (push_result.is_err()) {
       done_ = true;
       co_return;
+    }
+    if (bytes > 0) {
+      bytes_read_counter_.add(bytes);
     }
   }
 
@@ -239,6 +247,7 @@ private:
   FromStdinArgs args_;
   bool done_ = false;
   bool stdin_closed_ = false;
+  MetricsCounter bytes_read_counter_;
   mutable std::shared_ptr<Notify> sub_finished_ = std::make_shared<Notify>();
   mutable std::shared_ptr<ChunkQueue> chunk_queue_
     = std::make_shared<ChunkQueue>(queue_capacity);

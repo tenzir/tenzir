@@ -11,6 +11,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -195,11 +196,18 @@ public:
   using publish_future
     = google::cloud::future<google::cloud::StatusOr<std::string>>;
 
+  struct InflightPublish {
+    publish_future future;
+    size_t bytes = 0;
+  };
+
   explicit ToGoogleCloudPubsub(to_args args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_google_cloud_pubsub"},
+                         MetricsDirection::write, MetricsVisibility::external_);
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
     publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
     co_return;
@@ -221,10 +229,12 @@ public:
                 .emit(dh);
               continue;
             }
-            inflight_.push_back(
-              publisher_->Publish(pubsub::MessageBuilder{}
-                                    .SetData(std::string{array.GetView(i)})
-                                    .Build()));
+            const auto data = array.GetView(i);
+            inflight_.push_back(InflightPublish{
+              .future = publisher_->Publish(
+                pubsub::MessageBuilder{}.SetData(std::string{data}).Build()),
+              .bytes = data.size(),
+            });
           }
         },
         [&](const auto&) {
@@ -236,13 +246,11 @@ public:
         });
     }
     // Prune completed publish futures to prevent unbounded memory growth.
-    while (not inflight_.empty() and inflight_.front().is_ready()) {
-      auto result = inflight_.front().get();
+    while (not inflight_.empty() and inflight_.front().future.is_ready()) {
+      auto publish = std::move(inflight_.front());
       inflight_.pop_front();
-      if (not result) {
-        diagnostic::error("failed to publish: {}", result.status().message())
-          .emit(dh);
-      }
+      auto result = publish.future.get();
+      handle_publish_result(result, publish.bytes, dh);
     }
     co_return;
   }
@@ -257,24 +265,34 @@ public:
   }
 
 private:
+  auto handle_publish_result(google::cloud::StatusOr<std::string>& result,
+                             size_t bytes, diagnostic_handler& dh) -> void {
+    if (not result) {
+      diagnostic::error("failed to publish: {}", result.status().message())
+        .emit(dh);
+      return;
+    }
+    if (bytes > 0) {
+      bytes_write_counter_.add(bytes);
+    }
+  }
+
   auto drain_inflight(diagnostic_handler& dh) -> Task<void> {
     if (publisher_) {
       publisher_->Flush();
     }
     while (not inflight_.empty()) {
-      auto future = std::move(inflight_.front());
+      auto publish = std::move(inflight_.front());
       inflight_.pop_front();
-      auto result = co_await std::move(future);
-      if (not result) {
-        diagnostic::error("failed to publish: {}", result.status().message())
-          .emit(dh);
-      }
+      auto result = co_await std::move(publish.future);
+      handle_publish_result(result, publish.bytes, dh);
     }
   }
 
   to_args args_;
   Option<pubsub::Publisher> publisher_;
-  std::deque<publish_future> inflight_;
+  std::deque<InflightPublish> inflight_;
+  MetricsCounter bytes_write_counter_;
 };
 
 } // namespace
