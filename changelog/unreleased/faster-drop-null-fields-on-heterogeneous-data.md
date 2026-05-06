@@ -9,4 +9,4 @@ pr: 5963
 created: 2026-03-31T10:34:08.17118Z
 ---
 
-The `drop_null_fields` operator now avoids severe slowdowns on heterogeneous input with many null-shape changes by processing rows in larger groups with the same dropped-field pattern. This keeps pipelines that use `drop_null_fields` responsive on wide or highly variable event streams.
+The `drop_null_fields` operator is now much faster on heterogeneous input with many changing null patterns. In local 50,000-row benchmarks with 80 fields, `drop_null_fields | discard` improved from about 25–30 seconds to about 0.5 seconds. When unordered output is allowed, pipelines that write JSON after dropping fields improved from about 7–8 seconds to about 1 second.
