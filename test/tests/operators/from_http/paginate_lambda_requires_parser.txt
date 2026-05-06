@@ -4,5 +4,5 @@ error: required subpipeline was not provided
 5 | from_http "http://example.com", paginate=(x => x.next)
   | ^^^^^^^^^ 
   |
-  = usage: from_http url:secret, [method=string, body=any, headers=record, tls=record, timeout=duration, error_field=field, metadata_fields=any, paginate=any, paginate_delay=duration, connection_timeout=duration, max_retry_count=int, retry_delay=duration, encode=string, server=bool]
+  = usage: from_http url:secret, [method=string, body=any, headers=record, tls=record, timeout=duration, error_field=field, metadata_field=any, paginate=any, paginate_delay=duration, connection_timeout=duration, max_retry_count=int, retry_delay=duration, encode=string, server=bool]
   = docs: https://docs.tenzir.com/reference/operators/from_http
