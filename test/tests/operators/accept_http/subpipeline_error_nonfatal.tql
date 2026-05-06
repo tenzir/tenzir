@@ -1,0 +1,21 @@
+---
+fixtures:
+  - http_request:
+      initial_delay: 1.0
+      requests:
+        - path: /ingest
+          body: "{\n"
+          expected_status: 200
+          expected_body: ""
+        - path: /ingest
+          body: '{"value":42}\n'
+          expected_status: 200
+          expected_body: ""
+          stop_on_connection_drop: true
+timeout: 60
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT") {
+  read_json
+}
+head 1

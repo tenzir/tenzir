@@ -31,8 +31,10 @@ class TcpOptions:
     client_send_delay: float = 0.0
     client_split_payload_at: int | None = None
     client_split_send_delay: float = 0.0
+    inter_connection_delay: float = 0.0
     mode: str = "client"  # "client" sends data; "server" receives data
     payload: str = "foo\n"
+    payloads: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,7 @@ def tcp() -> FixtureHandle:
     stop_event = threading.Event()
     state = _TcpState()
     payload = opts.payload.encode()
+    payloads = [entry.encode() for entry in opts.payloads] if opts.payloads else None
     temp_dir = Path(tempfile.mkdtemp(prefix="tcp-")) if opts.tls or opts.certs else None
     cert_path: Path | None = None
     key_path: Path | None = None
@@ -87,6 +90,7 @@ def tcp() -> FixtureHandle:
                 "stop_event": stop_event,
                 "state": state,
                 "payload": payload,
+                "payloads": payloads,
                 "tls": opts.tls,
                 "ca_path": ca_path,
                 "capture_path": client_capture_path,
@@ -94,6 +98,7 @@ def tcp() -> FixtureHandle:
                 "send_delay": opts.client_send_delay,
                 "split_payload_at": opts.client_split_payload_at,
                 "split_send_delay": opts.client_split_send_delay,
+                "inter_connection_delay": opts.inter_connection_delay,
             },
             daemon=True,
         )
@@ -216,6 +221,7 @@ def _run_client_worker(
     stop_event: threading.Event,
     state: _TcpState,
     payload: bytes,
+    payloads: list[bytes] | None,
     tls: bool,
     ca_path: Path | None,
     capture_path: str | None,
@@ -223,6 +229,7 @@ def _run_client_worker(
     send_delay: float,
     split_payload_at: int | None,
     split_send_delay: float,
+    inter_connection_delay: float,
 ) -> None:
     context: ssl.SSLContext | None = None
     if tls:
@@ -232,7 +239,15 @@ def _run_client_worker(
         context.load_verify_locations(cafile=ca_path)
     if invalid_tls_handshake_first:
         _send_invalid_tls_handshake(port, stop_event)
+    next_payloads = iter(payloads) if payloads is not None else None
     while not stop_event.is_set():
+        if next_payloads is None:
+            current_payload = payload
+        else:
+            try:
+                current_payload = next(next_payloads)
+            except StopIteration:
+                return
         try:
             raw_sock = socket.create_connection((_HOST, port), timeout=1)
         except (ConnectionRefusedError, OSError):
@@ -249,14 +264,14 @@ def _run_client_worker(
                     sock.settimeout(0.2)
                     if send_delay > 0:
                         stop_event.wait(send_delay)
-                    if payload:
+                    if current_payload:
                         if split_payload_at is None:
-                            sock.sendall(payload)
+                            sock.sendall(current_payload)
                         else:
-                            sock.sendall(payload[:split_payload_at])
+                            sock.sendall(current_payload[:split_payload_at])
                             if split_send_delay > 0:
                                 stop_event.wait(split_send_delay)
-                            sock.sendall(payload[split_payload_at:])
+                            sock.sendall(current_payload[split_payload_at:])
                     if context is None:
                         try:
                             sock.shutdown(socket.SHUT_WR)
@@ -286,6 +301,8 @@ def _run_client_worker(
                             idle_deadline = time.monotonic() + 2
         except (ssl.SSLError, OSError):
             pass
+        if inter_connection_delay > 0:
+            stop_event.wait(inter_connection_delay)
         time.sleep(_CLIENT_RETRY_DELAY)
 
 
