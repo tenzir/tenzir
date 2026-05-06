@@ -1,0 +1,7 @@
+error: `metadata_fields` has been removed from `from_http`
+ --> tests/operators/from_http/error_metadata_fields_arg.tql:5:50
+  |
+5 | from_http "http://127.0.0.1:0/", metadata_fields=true {
+  |                                                  ^^^^ 
+  |
+  = hint: use `$response` in the parser sub-pipeline instead

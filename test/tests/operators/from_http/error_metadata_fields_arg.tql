@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_http "http://127.0.0.1:0/", metadata_fields=true {
+  read_json
+}

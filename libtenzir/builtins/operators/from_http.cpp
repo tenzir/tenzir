@@ -73,6 +73,7 @@ struct FromHttpArgs {
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<ast::field_path> error_field;
+  Option<located<data>> metadata_fields;
   Option<ast::expression> paginate;
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
@@ -932,6 +933,8 @@ public:
       {.is_server = false}}.add_to_describer(d, &FromHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &FromHttpArgs::timeout);
     d.named("error_field", &FromHttpArgs::error_field);
+    auto metadata_fields_arg
+      = d.named("metadata_fields", &FromHttpArgs::metadata_fields, "any");
     auto paginate_arg = d.named("paginate", &FromHttpArgs::paginate, "any");
     auto connection_timeout_arg
       = d.named("connection_timeout", &FromHttpArgs::connection_timeout);
@@ -951,6 +954,12 @@ public:
         diagnostic::error("`server` is not supported by `from_http` anymore")
           .hint("use `accept_http` to listen for incoming HTTP requests")
           .primary(*server)
+          .emit(ctx);
+      }
+      if (auto metadata_fields = ctx.get_location(metadata_fields_arg)) {
+        diagnostic::error("`metadata_fields` has been removed from `from_http`")
+          .hint("use `$response` in the parser sub-pipeline instead")
+          .primary(*metadata_fields)
           .emit(ctx);
       }
       // Validate encode: requires a body and must be "json" or "form".
