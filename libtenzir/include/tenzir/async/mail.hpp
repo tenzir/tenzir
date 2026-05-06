@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/async/future_util.hpp"
 #include "tenzir/error.hpp"
 
 #include <caf/actor_cast.hpp>
@@ -113,7 +114,7 @@ public:
   auto
   request(Handle receiver, caf::timespan timeout = caf::infinite,
           std::source_location location
-          = std::source_location::current()) && -> folly::SemiFuture<Result> {
+          = std::source_location::current()) && -> folly::coro::Task<Result> {
     auto [promise, future] = folly::makePromiseContract<Result>();
     std::apply(
       [&](auto&&... xs) mutable {
@@ -125,7 +126,7 @@ public:
           std::move(xs)...);
       },
       std::move(args_));
-    return std::move(future);
+    return to_task_interrupt_on_cancel(std::move(future));
   }
 
 private:
