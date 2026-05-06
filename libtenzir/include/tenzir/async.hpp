@@ -305,6 +305,12 @@ public:
     co_return;
   }
 
+  virtual auto finish_sub(SubKeyView key, failure error, Push<Output>& push,
+                          OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(error);
+    co_await finish_sub(key, push, ctx);
+  }
+
 protected:
   ~OperatorOutputBase() = default;
 };
@@ -343,6 +349,12 @@ public:
   virtual auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(key, ctx);
     co_return;
+  }
+
+  virtual auto finish_sub(SubKeyView key, failure error, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(error);
+    co_await finish_sub(key, ctx);
   }
 
 protected:

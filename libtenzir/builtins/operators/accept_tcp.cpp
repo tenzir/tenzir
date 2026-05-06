@@ -358,6 +358,12 @@ public:
     co_return;
   }
 
+  auto finish_sub(SubKeyView key, failure error, Push<table_slice>& push,
+                  OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(error);
+    co_await finish_sub(key, push, ctx);
+  }
+
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
