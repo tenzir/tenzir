@@ -65,10 +65,8 @@ constexpr porting_hint unported_replacements[] = {
            "`from_http`) "
            "instead"},
   {"from_gcs", "use `from_google_cloud_storage` instead"},
-  {"from_http_client", "use `from_http` instead"},
-  {"from_http_server", "use `accept_http` instead"},
   {"from_udp", "use `accept_udp` instead"},
-  {"http", "use `from_http` instead"},
+  {"http", "use `from_http` instead, combined with `each` if needed"},
   {"load_amqp", "use `from_amqp` instead"},
   {"load_azure_blob_storage", "use `from_azure_blob_storage` instead"},
   {"load_gcs", "use `from_google_cloud_storage` instead"},
@@ -90,38 +88,14 @@ constexpr porting_hint unported_replacements[] = {
   {"save_zmq", "use `to_zmq` instead"},
   {"to", "use one of the `to_*` operators (e.g. `to_file`, `to_http`) "
          "instead"},
-  {"to_hive", "the `to_hive` operator has not yet been ported"},
-  // TQL1
-  {"chart", "use one of the `chart_*` operators instead"},
-  {"decapsulate", "use the `decapsulate()` function instead"},
-  {"flatten", "use the `flatten()` function instead"},
-  {"get-attributes", "use `get_attributes` instead"},
-  {"load", "use one of the `from_*` operators (e.g. `from_file`, "
-           "`from_http`) "
-           "instead"},
-  {"parse", "use one of the `parse_*()` functions (e.g. `parse_json()`, "
-            "`parse_csv()`) instead"},
-  {"print", "use one of the `print_*()` functions (e.g. `print_json()`, "
-            "`print_csv()`) instead"},
-  {"read", "use one of the `from_*` operators or `parse_*()` functions "
-           "instead"},
-  {"save", "use one of the `to_*` operators (e.g. `to_file`, `to_http`) "
-           "instead"},
-  {"set-attributes", "use `set_attributes` instead"},
-  {"show", "use one of the dedicated operators (e.g. `version`, `plugins`, "
-           "`schemas`, `partitions`) instead"},
-  {"tcp-listen", "use `accept_tcp` instead"},
-  {"unflatten", "use the `unflatten()` function instead"},
-  {"write", "use one of the `to_*` operators or `print_*()` functions "
-            "instead"},
+  {"to_hive", "use `to_file`, `to_s3`, etc. with hive partitioning instead"},
 };
 
 auto get_porting_hint(const ast::entity& op) -> std::string_view {
   const auto it = std::ranges::find(unported_replacements, op.path.back().name,
                                     &porting_hint::legacy_name);
-  return it != std::ranges::end(unported_replacements)
-           ? it->message
-           : "this operator was not ported yet";
+  return it != std::ranges::end(unported_replacements) ? it->message
+                                                       : std::string_view{};
 }
 
 auto merge_compiled_pipeline(std::vector<ir::let>& lets,
@@ -581,8 +555,9 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                                                false));
               return {};
 #else
-              diagnostic::error("{}", get_porting_hint(x.op))
+              diagnostic::error("This operator is not available in Tenzir v6")
                 .primary(x.op)
+                .hint("{}", get_porting_hint(x.op))
                 .hint("see https://docs.tenzir.com/guides/tenzir-v6-migration")
                 .emit(ctx);
               return failure::promise();
