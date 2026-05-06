@@ -624,6 +624,38 @@ auto serialized_expressions_equal(ast::expression const& lhs,
 
 auto binding_expressions_equal(ast::expression const& lhs,
                                ast::expression const& rhs) -> bool {
+  if (std::holds_alternative<ast::this_>(*lhs.kind)
+      or std::holds_alternative<ast::this_>(*rhs.kind)) {
+    return std::holds_alternative<ast::this_>(*lhs.kind)
+           and std::holds_alternative<ast::this_>(*rhs.kind);
+  }
+  if (auto lhs_root = try_as<ast::root_field>(lhs)) {
+    auto rhs_root = try_as<ast::root_field>(rhs);
+    return rhs_root and lhs_root->id.name == rhs_root->id.name
+           and lhs_root->has_question_mark == rhs_root->has_question_mark;
+  }
+  if (auto lhs_field = try_as<ast::field_access>(lhs)) {
+    auto rhs_field = try_as<ast::field_access>(rhs);
+    return rhs_field and lhs_field->name.name == rhs_field->name.name
+           and lhs_field->has_question_mark == rhs_field->has_question_mark
+           and binding_expressions_equal(lhs_field->left, rhs_field->left);
+  }
+  if (auto lhs_index = try_as<ast::index_expr>(lhs)) {
+    auto rhs_index = try_as<ast::index_expr>(rhs);
+    if (not rhs_index
+        or lhs_index->has_question_mark != rhs_index->has_question_mark) {
+      return false;
+    }
+    auto lhs_constant = try_as<ast::constant>(lhs_index->index);
+    auto rhs_constant = try_as<ast::constant>(rhs_index->index);
+    if (not lhs_constant or not rhs_constant) {
+      return false;
+    }
+    auto lhs_integer = try_as<int64_t>(lhs_constant->value);
+    auto rhs_integer = try_as<int64_t>(rhs_constant->value);
+    return lhs_integer and rhs_integer and *lhs_integer == *rhs_integer
+           and binding_expressions_equal(lhs_index->expr, rhs_index->expr);
+  }
   auto lhs_path = ast::field_path::try_from(lhs);
   auto rhs_path = ast::field_path::try_from(rhs);
   if (not lhs_path or not rhs_path) {
