@@ -374,7 +374,7 @@ public:
                                       .bytes_read = std::move(bytes_read)});
         }
         co_await ctx.spawn_sub(request_id, std::move(pipeline),
-                               tag_v<chunk_ptr>);
+                               tag_v<chunk_ptr>, FateSharing::Off);
       },
       [&](RequestBody body) -> Task<void> {
         auto chunk = std::move(body.chunk);
