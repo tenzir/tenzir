@@ -634,6 +634,10 @@ public:
     auto capacity_arg = d.positional("capacity", &BufferArgs::capacity);
     auto policy_arg = d.named("policy", &BufferArgs::policy_str, "block|drop");
     d.validate([capacity_arg, policy_arg](DescribeCtx& ctx) -> Empty {
+      diagnostic::error("buffer has been removed")
+        .primary(ctx.operator_location())
+        .hint("consider removing the operator or using `batch` instead")
+        .emit(ctx);
       TRY(auto cap, ctx.get(capacity_arg));
       if (cap.inner == 0) {
         diagnostic::error("capacity must be greater than zero")
