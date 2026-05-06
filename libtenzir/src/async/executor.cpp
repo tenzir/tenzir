@@ -89,6 +89,29 @@ struct ExplicitAny {
 
 struct Terminated {};
 
+template <class T>
+class IdentityOperator final : public Operator<T, T> {
+public:
+  auto process(T input, Push<T>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await push(std::move(input));
+  }
+};
+
+template <>
+class IdentityOperator<void> final : public Operator<void, void> {
+public:
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+};
+
+auto make_identity_operator(element_type_tag input) -> AnyOperator {
+  return match(input, []<class Input>(tag<Input>) -> AnyOperator {
+    return Box<Operator<Input, Input>>{IdentityOperator<Input>{}};
+  });
+}
+
 /// An message transported from a subpipeline to the parent pipeline.
 ///
 /// Since this goes over a back-edge, we need to replay it when restoring.
@@ -665,9 +688,10 @@ private:
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
-    // TODO: Empty subpipelines need special treatment. We currently assume that
-    // they don't exist. Perhaps we should simply insert `pass` if they are empty.
-    TENZIR_ASSERT(not spawned.empty());
+    if (spawned.empty()) {
+      TENZIR_ASSERT(**output == input);
+      spawned.push_back(make_identity_operator(input));
+    }
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
