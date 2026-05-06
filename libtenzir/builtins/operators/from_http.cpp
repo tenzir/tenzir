@@ -232,8 +232,9 @@ auto resolve_http_secrets(
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return failure::promise();
   }
-  CO_TRY(auto tls_enabled, http::normalize_url_and_tls(args.tls, resolved_url,
-                                                       args.url.source, ctx));
+  CO_TRY(auto tls_enabled, http::normalize_url_and_tls(
+                             args.tls, resolved_url, args.url.source, ctx,
+                             std::addressof(ctx.actor_system().config())));
   co_return tls_enabled;
 }
 
@@ -432,9 +433,9 @@ auto make_fetch_config(FromHttpArgs const& args, bool tls_enabled,
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
-  if (tls_enabled) {
+  if (tls_enabled or args.paginate) {
     auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
-    auto result = tls_opts.make_folly_ssl_context(dh, cfg);
+    auto result = tls_opts.make_folly_ssl_context(dh, cfg, true);
     if (result.is_success()) {
       config.tls_context = std::move(*result);
     } else {
@@ -530,7 +531,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           is_secure ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                     : proxygen::coro::HTTPClient::SecureTransportImpl::NONE,
           host);
-        if (config.tls_context) {
+        if (is_secure and config.tls_context) {
           conn_params.sslContext = config.tls_context;
         }
         auto sess_params = proxygen::coro::HTTPClient::getSessionParams(

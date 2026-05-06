@@ -89,8 +89,9 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto config = http::make_http_pool_config(args_.tls, url_, args_.url.source,
-                                              ctx, get_timeout());
+    auto config = http::make_http_pool_config(
+      args_.tls, url_, args_.url.source, ctx, get_timeout(),
+      std::addressof(ctx.actor_system().config()));
     if (config.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;

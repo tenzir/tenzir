@@ -214,19 +214,22 @@ auto is_tls_enabled(Option<located<data>> const& tls,
 
 auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
+                           const caf::actor_system_config* cfg,
                            tls_options::options options) -> failure_or<bool> {
   auto tls_opts = tls_options::from_optional(tls, options);
   TRY(tls_opts.validate(url, url_loc, dh));
-  add_default_url_scheme(url, tls_opts.get_tls(nullptr).inner);
+  add_default_url_scheme(url, tls_opts.get_tls(cfg).inner);
   return url.starts_with("https://");
 }
 
 auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
                            std::chrono::milliseconds request_timeout,
+                           const caf::actor_system_config* cfg,
                            tls_options::options options)
   -> failure_or<HttpPoolConfig> {
-  TRY(auto tls_enabled, normalize_url_and_tls(tls, url, url_loc, dh, options));
+  TRY(auto tls_enabled,
+      normalize_url_and_tls(tls, url, url_loc, dh, cfg, options));
   auto config = HttpPoolConfig{
     .tls = tls_enabled,
     .ssl_context = nullptr,
@@ -234,7 +237,7 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
   };
   if (tls_enabled) {
     auto tls_opts = tls_options::from_optional(tls, options);
-    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh, nullptr));
+    TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh, cfg, true));
     config.ssl_context = std::move(ssl_context);
   }
   return config;

@@ -20,6 +20,7 @@
 
 #include <arrow/util/compression.h>
 #include <caf/error.hpp>
+#include <caf/fwd.hpp>
 #include <folly/io/async/SSLContext.h>
 
 #include <chrono>
@@ -41,12 +42,14 @@ auto is_tls_enabled(Option<located<data>> const& tls,
 
 auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
+                           const caf::actor_system_config* cfg = nullptr,
                            tls_options::options options = {.is_server = false})
   -> failure_or<bool>;
 
 auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
                            std::chrono::milliseconds request_timeout,
+                           const caf::actor_system_config* cfg = nullptr,
                            tls_options::options options = {.is_server = false})
   -> failure_or<HttpPoolConfig>;
 
