@@ -434,7 +434,7 @@ auto make_fetch_config(FromHttpArgs const& args, bool tls_enabled,
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
-  if (tls_enabled or args.paginate) {
+  if (tls_enabled) {
     auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
     auto result = tls_opts.make_folly_ssl_context(dh, cfg, true);
     if (result.is_success()) {
