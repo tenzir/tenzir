@@ -1,0 +1,6 @@
+error: `max_connections` must be greater than 0
+ --> tests/operators/serve_http/error_max_connections_zero.tql:8:46
+  |
+8 | serve_http "127.0.0.1:8080", max_connections=0 {
+  |                                              ^ 
+  |
