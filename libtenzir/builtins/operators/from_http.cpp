@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async/task.hpp"
+
 #include <tenzir/arc.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
@@ -75,6 +78,7 @@ struct FromHttpArgs {
   Option<ast::field_path> error_field;
   Option<located<data>> metadata_fields;
   Option<ast::expression> paginate;
+  Option<located<duration>> paginate_delay;
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
@@ -838,6 +842,12 @@ public:
       pagination_.current_url = std::move(*pagination_.next_url);
       pagination_.next_url = None{};
       pagination_.page_count += 1;
+      if (args_.paginate_delay
+          and args_.paginate_delay->inner > duration::zero()) {
+        co_await sleep_for(
+          std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            args_.paginate_delay->inner));
+      }
       co_await start_fetch(ctx,
                            make_paginated_request_config(resolved_headers_));
     } else {
@@ -936,6 +946,8 @@ public:
     auto metadata_fields_arg
       = d.named("metadata_fields", &FromHttpArgs::metadata_fields, "any");
     auto paginate_arg = d.named("paginate", &FromHttpArgs::paginate, "any");
+    auto paginate_delay_arg
+      = d.named("paginate_delay", &FromHttpArgs::paginate_delay);
     auto connection_timeout_arg
       = d.named("connection_timeout", &FromHttpArgs::connection_timeout);
     auto max_retry_count_arg
@@ -1026,6 +1038,13 @@ public:
         if (timeout->inner < duration::zero()) {
           diagnostic::error("`timeout` must be a non-negative duration")
             .primary(timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto pd = ctx.get(paginate_delay_arg)) {
+        if (pd->inner < duration::zero()) {
+          diagnostic::error("`paginate_delay` must be a non-negative duration")
+            .primary(pd->source)
             .emit(ctx);
         }
       }

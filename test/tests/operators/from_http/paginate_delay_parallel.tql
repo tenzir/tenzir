@@ -13,8 +13,7 @@ timeout: 60
 from {domain: "a-domain"},
      {domain: "b-domain"}
 each parallel=2 {
-  // TODO: paginate_delay=1ms,
-  from_http env("HTTP_FIXTURE_LAMBDA_URL") + f"?q={$this.domain}", paginate=(x => x.next), tls=false {
+  from_http env("HTTP_FIXTURE_LAMBDA_URL") + f"?q={$this.domain}", paginate=(x => x.next), paginate_delay=50ms, tls=false {
     read_json
     domain = $this.domain
   }
