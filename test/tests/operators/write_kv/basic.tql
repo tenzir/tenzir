@@ -8,4 +8,6 @@ from {},
   {x:r#"\n\r
 "#, y:0},
   {l:[0,1],l2:["hello\n"],l3:[]}
-write_kv
+to_stdout {
+  write_kv
+}

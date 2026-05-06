@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async.hpp"
-#include "tenzir/async/blocking_executor.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -24,7 +21,6 @@
 #include <tenzir/file.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -701,48 +697,7 @@ public:
   }
 };
 
-struct SaveStdoutArgs {
-  location self;
-};
-
-class SaveStdout final : public Operator<chunk_ptr, void> {
-public:
-  explicit SaveStdout(SaveStdoutArgs args) : args_{std::move(args)} {
-  }
-
-  auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override {
-    TENZIR_ASSERT(input);
-    auto err = co_await spawn_blocking([input = std::move(input)] {
-      auto written = std::fwrite(input->data(), 1, input->size(), stdout);
-      return written != input->size() ? errno : 0;
-    });
-    if (err != 0) {
-      diagnostic::error("failed to write to stdout: {}",
-                        detail::describe_errno(err))
-        .primary(args_.self)
-        .emit(ctx);
-    }
-  }
-
-  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    auto err = co_await spawn_blocking([] {
-      return std::fflush(stdout) != 0 ? errno : 0;
-    });
-    if (err != 0) {
-      diagnostic::warning("failed to flush stdout: {}",
-                          detail::describe_errno(err))
-        .primary(args_.self)
-        .emit(ctx);
-    }
-    co_return FinalizeBehavior::done;
-  }
-
-private:
-  SaveStdoutArgs args_;
-};
-
-class save_stdout_plugin final : public operator_plugin2<save_file_operator>,
-                                 public OperatorPlugin {
+class save_stdout_plugin final : public operator_plugin2<save_file_operator> {
 public:
   auto name() const -> std::string override {
     return "save_stdout";
@@ -754,12 +709,6 @@ public:
     auto args = saver_args{};
     args.path = located{"-", inv.self.get_location()};
     return std::make_unique<save_file_operator>(std::move(args));
-  }
-
-  auto describe() const -> Description override {
-    auto d = Describer<SaveStdoutArgs, SaveStdout>{};
-    d.operator_location(&SaveStdoutArgs::self);
-    return d.without_optimize();
   }
 };
 

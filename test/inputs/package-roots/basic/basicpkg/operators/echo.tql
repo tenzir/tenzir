@@ -1,3 +1,4 @@
 from {message: "hello from package", id: "basicpkg"}
-write_json
-save_stdout
+to_stdout {
+  write_json
+}

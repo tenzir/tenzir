@@ -5,4 +5,6 @@ from {
   d: "nan".float(), // printed as `null`
   e: 0.000000001, // scientific notation
 }
-write_json
+to_stdout {
+  write_json
+}

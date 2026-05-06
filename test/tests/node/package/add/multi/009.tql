@@ -1,3 +1,4 @@
 package::list
-write_tql
-save_stdout
+to_stdout {
+  write_tql
+}

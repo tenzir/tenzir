@@ -9,5 +9,6 @@ args:
 strict {
   suffix_value = "suffix: " + $suffix
 }
-write_json
-save_stdout
+to_stdout {
+  write_json
+}

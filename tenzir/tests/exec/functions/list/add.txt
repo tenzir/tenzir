@@ -8,7 +8,7 @@
 {xs:[1]}
 {xs:[1,2,3,4]}
 warning: type mismatch between list content and value
-  --> exec/functions/list/add.tql:35:6
+  --> tests/exec/functions/list/add.tql:35:6
    |
 35 | xs = xs.add("1")
    |      ~~ list contains `int64`

@@ -3,3 +3,5 @@ error: true
 ---
 
 shell "sh -n -c 'if then echo hi; fi' >/dev/null 2>&1"
+read_lines
+discard

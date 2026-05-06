@@ -7,4 +7,6 @@ api "/serve", {
 }
 unroll events
 this = events.data
-write_tql
+to_stdout {
+  write_tql
+}

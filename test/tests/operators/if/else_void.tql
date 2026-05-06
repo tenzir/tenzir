@@ -2,7 +2,8 @@ from {x: 1}, {x: 2}, {x: 3}
 if x > 1 {
   x = x * 10
 } else {
-  write_json
-  save_stdout
+  to_stdout {
+    write_json
+  }
 }
 sort x

@@ -3,3 +3,5 @@ error: true
 ---
 
 shell "exit 7"
+read_lines
+discard
