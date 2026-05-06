@@ -415,10 +415,7 @@ struct FetchConfig {
   std::shared_ptr<folly::SSLContext> tls_context;
 };
 
-auto make_fetch_config(FromHttpArgs const& args, bool tls_enabled,
-                       diagnostic_handler& dh,
-                       const caf::actor_system_config* cfg)
-  -> Option<FetchConfig> {
+auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
   auto config = FetchConfig{};
   if (args.timeout) {
     config.request_timeout
@@ -438,16 +435,7 @@ auto make_fetch_config(FromHttpArgs const& args, bool tls_enabled,
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
-  if (tls_enabled) {
-    auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
-    auto result = tls_opts.make_folly_ssl_context(dh, cfg, true);
-    if (result.is_success()) {
-      config.tls_context = std::move(*result);
-    } else {
-      return None{};
-    }
-  }
-  return Option<FetchConfig>{std::move(config)};
+  return config;
 }
 
 struct PaginationState {
@@ -660,21 +648,15 @@ public:
     paginate_ = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
-    auto tls_enabled = co_await resolve_http_secrets(ctx, args_, resolved_url,
-                                                     resolved_headers_);
-    if (tls_enabled.is_error()) {
+    auto secret_resolution = co_await resolve_http_secrets(
+      ctx, args_, resolved_url, resolved_headers_);
+    if (secret_resolution.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     pagination_.current_url = resolved_url;
     // prepare fetch config
-    auto fetch_config = make_fetch_config(
-      args_, *tls_enabled, ctx, std::addressof(ctx.actor_system().config()));
-    if (not fetch_config) {
-      lifecycle_ = Lifecycle::done;
-      co_return;
-    }
-    fetch_config_ = std::move(*fetch_config);
+    fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
     ensure_http_default_ca_paths();
     co_await start_fetch(ctx, make_request_config(args_, resolved_headers_));
@@ -869,6 +851,18 @@ private:
     response_ = None{};
     odata_envelope_seen_ = false;
     auto parsed_url = proxygen::URL{pagination_.current_url};
+    if (parsed_url.isSecure() and not fetch_config_.tls_context) {
+      auto tls_opts
+        = tls_options::from_optional(args_.tls, {.is_server = false});
+      auto result = tls_opts.make_folly_ssl_context(
+        ctx, std::addressof(ctx.actor_system().config()), true);
+      if (result.is_success()) {
+        fetch_config_.tls_context = std::move(*result);
+      } else {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+    }
     bytes_read_ = ctx.make_counter(
       MetricsLabel{"host",
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
