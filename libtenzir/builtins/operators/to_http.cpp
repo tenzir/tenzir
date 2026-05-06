@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async/task.hpp"
-
 #include <tenzir/arc.hpp>
 #include <tenzir/async/oneshot.hpp>
 #include <tenzir/async/semaphore.hpp>
+#include <tenzir/async/task.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
@@ -30,6 +30,7 @@
 #include <chrono>
 #include <exception>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <string>
 #include <utility>
@@ -47,6 +48,9 @@ struct ToHttpArgs {
   Option<located<data>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
+  Option<located<duration>> connection_timeout;
+  Option<located<uint64_t>> max_retry_count;
+  Option<located<duration>> retry_delay;
   Option<located<uint64_t>> parallel;
   located<ir::pipeline> printer;
   location operator_location;
@@ -92,6 +96,11 @@ public:
     auto config = http::make_http_pool_config(
       args_.tls, url_, args_.url.source, ctx, get_timeout(),
       std::addressof(ctx.actor_system().config()));
+    if (config.is_success()) {
+      config->connection_timeout = get_connection_timeout();
+      config->max_retry_count = get_max_retry_count();
+      config->retry_delay = get_retry_delay();
+    }
     if (config.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -249,6 +258,28 @@ private:
     return std::chrono::milliseconds{90'000};
   }
 
+  auto get_connection_timeout() const -> std::chrono::milliseconds {
+    if (args_.connection_timeout) {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(
+        args_.connection_timeout->inner);
+    }
+    return std::chrono::milliseconds{5'000};
+  }
+
+  auto get_max_retry_count() const -> uint32_t {
+    return args_.max_retry_count
+             ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
+             : 0;
+  }
+
+  auto get_retry_delay() const -> std::chrono::milliseconds {
+    if (args_.retry_delay) {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(
+        args_.retry_delay->inner);
+    }
+    return std::chrono::milliseconds{1'000};
+  }
+
   auto get_parallel() const -> uint64_t {
     return args_.parallel ? args_.parallel->inner : 1;
   }
@@ -266,7 +297,7 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
   Option<Box<HttpPool>> http_pool_;
   mutable Arc<Oneshot<std::string>> error_signal_{std::in_place};
-  MetricsCounter bytes_write_counter_ = {};
+  MetricsCounter bytes_write_counter_;
 };
 
 class ToHttpPlugin final : public OperatorPlugin {
@@ -283,6 +314,11 @@ public:
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &ToHttpArgs::timeout);
+    auto connection_timeout_arg
+      = d.named("connection_timeout", &ToHttpArgs::connection_timeout);
+    auto max_retry_count_arg
+      = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
+    auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
     auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
     auto printer_arg = d.pipeline(&ToHttpArgs::printer);
     d.operator_location(&ToHttpArgs::operator_location);
@@ -304,6 +340,29 @@ public:
         if (timeout->inner < duration::zero()) {
           diagnostic::error("`timeout` must be a non-negative duration")
             .primary(timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto connection_timeout = ctx.get(connection_timeout_arg)) {
+        if (connection_timeout->inner < duration::zero()) {
+          diagnostic::error(
+            "`connection_timeout` must be a non-negative duration")
+            .primary(connection_timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto max_retry_count = ctx.get(max_retry_count_arg)) {
+        if (max_retry_count->inner > std::numeric_limits<uint32_t>::max()) {
+          diagnostic::error("`max_retry_count` must be <= {}",
+                            std::numeric_limits<uint32_t>::max())
+            .primary(max_retry_count->source)
+            .emit(ctx);
+        }
+      }
+      if (auto retry_delay = ctx.get(retry_delay_arg)) {
+        if (retry_delay->inner < duration::zero()) {
+          diagnostic::error("`retry_delay` must be a non-negative duration")
+            .primary(retry_delay->source)
             .emit(ctx);
         }
       }

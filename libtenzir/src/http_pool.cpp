@@ -13,6 +13,9 @@
 
 #include <fmt/format.h>
 #include <folly/ScopeGuard.h>
+#include <folly/coro/Retry.h>
+#include <folly/io/async/AsyncSocketException.h>
+#include <proxygen/lib/http/coro/HTTPError.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
 #include <proxygen/lib/http/coro/client/HTTPCoroSessionPool.h>
@@ -24,6 +27,30 @@
 #include <mutex>
 
 namespace tenzir {
+
+namespace http {
+
+auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool {
+  using code_t = proxygen::coro::HTTPErrorCode;
+  return code == code_t::TRANSPORT_EOF or code == code_t::TRANSPORT_READ_ERROR
+         or code == code_t::TRANSPORT_WRITE_ERROR
+         or code == code_t::READ_TIMEOUT or code == code_t::WRITE_TIMEOUT;
+}
+
+auto is_retryable_http_status(uint16_t status_code) -> bool {
+  return status_code == 429 or (status_code >= 500 and status_code <= 599);
+}
+
+retryable_http_response::retryable_http_response(
+  uint16_t status_code,
+  std::vector<std::pair<std::string, std::string>> headers, std::string body)
+  : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
+    status_code{status_code},
+    headers{std::move(headers)},
+    body{std::move(body)} {
+}
+
+} // namespace http
 
 auto ensure_http_default_ca_paths() -> void {
   static std::once_flag flag;
@@ -161,11 +188,13 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   if (config.ssl_context) {
     conn_params.sslContext = config.ssl_context;
   }
+  auto pool_params = proxygen::coro::HTTPCoroSessionPool::PoolParams{};
+  pool_params.connectTimeout = config.connection_timeout;
   impl_->pool = SessionPoolPtr{
     std::make_unique<proxygen::coro::HTTPCoroSessionPool>(
-      impl_->evb, impl_->url.getHost(), impl_->url.getPort(),
-      proxygen::coro::HTTPCoroSessionPool::PoolParams{}, conn_params,
-      proxygen::coro::HTTPCoroConnector::defaultSessionParams(), true)
+      impl_->evb, impl_->url.getHost(), impl_->url.getPort(), pool_params,
+      conn_params, proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+      true)
       .release(),
   };
 }
@@ -214,19 +243,79 @@ auto HttpPool::request(std::string method, std::optional<std::string> target,
         co_return Err{fmt::format("invalid http method: {}", method)};
       }
       CO_TRY(auto url, with_target(impl->url, std::move(target)));
+      auto emitted_response = false;
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
-        auto sr = co_await impl->pool->getSessionWithReservation();
-        TENZIR_ASSERT_ALWAYS(sr.session);
-        auto* source = make_request_source(url, *method_parsed,
-                                           std::move(headers), std::move(body));
-        auto resp = proxygen::coro::HTTPClient::Response{};
-        co_await proxygen::coro::HTTPClient::request(
-          sr.session, std::move(sr.reservation), source,
-          proxygen::coro::HTTPClient::makeDefaultReader(resp),
-          impl->config.request_timeout);
-        co_return to_http_response(resp);
+        auto response = HttpResponse{};
+        co_await folly::coro::retryWithExponentialBackoff(
+          impl->config.max_retry_count, impl->config.retry_delay,
+          impl->config.retry_delay * 5, 0.0,
+          [&]() -> Task<void> {
+            emitted_response = false;
+            auto sr = co_await impl->pool->getSessionWithReservation();
+            TENZIR_ASSERT_ALWAYS(sr.session);
+            auto attempt_headers = headers;
+            auto attempt_body = body;
+            auto* source = make_request_source(url, *method_parsed,
+                                               std::move(attempt_headers),
+                                               std::move(attempt_body));
+            auto resp = proxygen::coro::HTTPClient::Response{};
+            co_await proxygen::coro::HTTPClient::request(
+              sr.session, std::move(sr.reservation), source,
+              proxygen::coro::HTTPClient::makeDefaultReader(resp),
+              impl->config.request_timeout);
+            if (not resp.headers
+                or http::is_retryable_http_status(
+                  resp.headers->getStatusCode())) {
+              auto headers = std::vector<std::pair<std::string, std::string>>{};
+              if (resp.headers) {
+                resp.headers->getHeaders().forEach(
+                  [&](std::string const& name, std::string const& value) {
+                    headers.emplace_back(name, value);
+                  });
+              }
+              auto response_body = std::string{};
+              if (not resp.body.empty()) {
+                response_body = resp.body.move()->to<std::string>();
+              }
+              throw http::retryable_http_response{
+                resp.headers ? resp.headers->getStatusCode() : uint16_t{0},
+                std::move(headers), std::move(response_body)};
+            }
+            emitted_response = true;
+            response = to_http_response(resp);
+          },
+          [&](folly::exception_wrapper const& ew) {
+            if (emitted_response) {
+              return false;
+            }
+            if (ew.is_compatible_with<folly::AsyncSocketException>()) {
+              return true;
+            }
+            if (ew.is_compatible_with<http::retryable_http_response>()) {
+              return true;
+            }
+            auto is_retryable = false;
+            ew.with_exception([&](proxygen::coro::HTTPError const& err) {
+              is_retryable = http::is_retryable_http_error(err.code);
+            });
+            return is_retryable;
+          });
+        co_return response;
       }());
       if (result.is_err()) {
+        auto retryable_response = Option<HttpResponse>{};
+        result.unwrap_err().with_exception(
+          [&](http::retryable_http_response const& err) {
+            retryable_response = HttpResponse{
+              .status_code = err.status_code,
+              .headers = std::map<std::string, std::string>{err.headers.begin(),
+                                                            err.headers.end()},
+              .body = err.body,
+            };
+          });
+        if (retryable_response) {
+          co_return std::move(*retryable_response);
+        }
         co_return Err{std::move(result).unwrap_err().what().toStdString()};
       }
       co_return std::move(result).unwrap();

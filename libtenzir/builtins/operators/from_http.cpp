@@ -465,13 +465,6 @@ auto make_response_context(ResponseState const& response) -> record {
   };
 }
 
-auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool {
-  using code_t = proxygen::coro::HTTPErrorCode;
-  return code == code_t::TRANSPORT_EOF or code == code_t::TRANSPORT_READ_ERROR
-         or code == code_t::TRANSPORT_WRITE_ERROR
-         or code == code_t::READ_TIMEOUT or code == code_t::WRITE_TIMEOUT;
-}
-
 // Normalizes platform-specific socket error text for user-facing diagnostics.
 // In particular, `AsyncSocketException` embeds OS-dependent errno values
 // (e.g., 111 on Linux vs. 61 on macOS) that make error messages noisy and
@@ -567,8 +560,17 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   // response headers.
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                emitted_response_messages = true;
                 auto status = msg->getStatusCode();
+                if (http::is_retryable_http_status(status)) {
+                  auto hdrs
+                    = std::vector<std::pair<std::string, std::string>>{};
+                  msg->getHeaders().forEach(
+                    [&](std::string& k, std::string& v) {
+                      hdrs.emplace_back(k, v);
+                    });
+                  throw http::retryable_http_response{status, std::move(hdrs)};
+                }
+                emitted_response_messages = true;
                 auto hdrs = std::vector<std::pair<std::string, std::string>>{};
                 msg->getHeaders().forEach([&](std::string& k, std::string& v) {
                   hdrs.emplace_back(k, v);
@@ -609,16 +611,28 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
               return true;
             }
+            if (ew.is_compatible_with<http::retryable_http_response>()) {
+              return true;
+            }
             auto retryable_http_error = false;
             ew.with_exception([&](proxygen::coro::HTTPError const& err) {
-              retryable_http_error = is_retryable_http_error(err.code);
+              retryable_http_error = http::is_retryable_http_error(err.code);
             });
             return retryable_http_error;
           });
       }());
       if (result.hasException()) {
-        co_await mq->enqueue(
-          FetchError{result.exception().what().toStdString()});
+        auto retryable_response = Option<ResponseHeader>{};
+        result.exception().with_exception(
+          [&](http::retryable_http_response const& err) {
+            retryable_response = ResponseHeader{err.status_code, err.headers};
+          });
+        if (retryable_response) {
+          co_await mq->enqueue(std::move(*retryable_response));
+        } else {
+          co_await mq->enqueue(
+            FetchError{result.exception().what().toStdString()});
+        }
       }
       co_await mq->enqueue(FetchDone{});
     }(evb, std::move(url), std::move(request), std::move(config),

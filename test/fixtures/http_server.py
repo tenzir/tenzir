@@ -12,6 +12,7 @@ Usage overview:
   - **HTTP_FIXTURE_HOST_URL** - Echoes the ``Host`` header as ``{"host":"…"}``.
   - **HTTP_FIXTURE_BODY_URL** - Echoes the request body as ``{"body":"…"}``.
   - **HTTP_FIXTURE_STATUS_404_URL** - Always replies 404 with ``{"error":"not-found"}``.
+  - **HTTP_FIXTURE_RETRY_503_URL** - Replies 503 twice, then 200.
   - **HTTP_FIXTURE_GZIP_EMPTY_URL** - Replies with an empty gzip-encoded body.
   - **HTTP_FIXTURE_GZIP_JSON_URL** - Replies with gzip-encoded JSON body.
   - **HTTP_FIXTURE_TLS_CERTFILE** - Path to the server certificate (TLS only).
@@ -47,6 +48,7 @@ from ._utils import generate_self_signed_cert
 
 _GZIP_EMPTY = "/content-encoding/gzip-empty"
 _GZIP_JSON = "/content-encoding/gzip-json"
+_RETRY_503 = "/status/retry-503"
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,8 @@ def _make_handler(
     errors: list[str],
     request_count: list[int],
 ):
+    retry_503_attempts = [0]
+
     class RecordingEchoHandler(BaseHTTPRequestHandler):
         def _validate_request(self, path: str, body: bytes) -> None:
             request_count[0] += 1
@@ -228,6 +232,16 @@ def _make_handler(
                     status=HTTPStatus.NOT_FOUND,
                 )
                 return
+            if path == _RETRY_503:
+                retry_503_attempts[0] += 1
+                if retry_503_attempts[0] <= 2:
+                    self._reply(
+                        b'{"error":"service-unavailable"}\n',
+                        status=HTTPStatus.SERVICE_UNAVAILABLE,
+                    )
+                else:
+                    self._reply(b'{"ok":true}\n')
+                return
             if path == _GZIP_EMPTY:
                 self._reply(
                     gzip.compress(b""),
@@ -305,6 +319,7 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_HOST_URL": f"{base_url}/options/host",
             "HTTP_FIXTURE_BODY_URL": f"{base_url}/options/body",
             "HTTP_FIXTURE_STATUS_404_URL": f"{base_url}/status/not-found",
+            "HTTP_FIXTURE_RETRY_503_URL": f"{base_url}{_RETRY_503}",
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",
             "HTTP_FIXTURE_GZIP_JSON_URL": f"{base_url}{_GZIP_JSON}",
         }

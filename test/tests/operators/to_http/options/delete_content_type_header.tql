@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 1
+        method: POST
+        path: /
+        header_name: Content-Type
+        header_value: ""
+timeout: 60
+---
+
+version
+select foo="bar"
+to_http env("HTTP_FIXTURE_URL"), headers={"Content-Type": ""} {
+  write_json
+}

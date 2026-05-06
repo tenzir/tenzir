@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+to_http "http://127.0.0.1:31337", retry_delay=-1s {
+  write_ndjson
+}

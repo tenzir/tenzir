@@ -15,9 +15,11 @@
 #include <folly/Executor.h>
 
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 namespace folly {
@@ -26,7 +28,30 @@ class IOExecutor;
 class SSLContext;
 } // namespace folly
 
+namespace proxygen::coro {
+enum class HTTPErrorCode : uint16_t;
+} // namespace proxygen::coro
+
 namespace tenzir {
+
+namespace http {
+
+auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
+
+auto is_retryable_http_status(uint16_t status_code) -> bool;
+
+struct retryable_http_response : std::runtime_error {
+  explicit retryable_http_response(
+    uint16_t status_code = 0,
+    std::vector<std::pair<std::string, std::string>> headers = {},
+    std::string body = {});
+
+  uint16_t status_code = 0;
+  std::vector<std::pair<std::string, std::string>> headers;
+  std::string body;
+};
+
+} // namespace http
 
 struct HttpResponse {
   uint16_t status_code = 0;
@@ -38,6 +63,9 @@ struct HttpPoolConfig {
   bool tls = true;
   std::shared_ptr<folly::SSLContext> ssl_context;
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
+  std::chrono::milliseconds connection_timeout = std::chrono::seconds{5};
+  uint32_t max_retry_count = 0;
+  std::chrono::milliseconds retry_delay = std::chrono::seconds{1};
 };
 
 /// Registers well-known system CA bundle paths for Proxygen HTTPS clients.

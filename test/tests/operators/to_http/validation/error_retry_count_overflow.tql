@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+to_http "http://127.0.0.1:31337", max_retry_count=4294967296 {
+  write_ndjson
+}

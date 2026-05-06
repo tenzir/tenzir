@@ -1,0 +1,16 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 1
+        method: POST
+        path: /status/retry-503
+timeout: 60
+---
+
+from {
+  value: 13,
+}
+to_http env("HTTP_FIXTURE_RETRY_503_URL") {
+  write_ndjson
+}
