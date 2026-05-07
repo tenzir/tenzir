@@ -512,11 +512,13 @@ struct retryable_http_response : std::runtime_error {
 // results are communicated through the message queue; no operator members
 // are touched from this task.
 auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-           FetchConfig config, Arc<MessageQueue> mq) -> Task<void> {
+           FetchConfig config, bool buffer_retryable_body, Arc<MessageQueue> mq)
+  -> Task<void> {
   co_return co_await folly::coro::co_withExecutor(
     evb,
     [](folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-       FetchConfig config, Arc<MessageQueue> mq) -> Task<void> {
+       FetchConfig config, bool buffer_retryable_body,
+       Arc<MessageQueue> mq) -> Task<void> {
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
@@ -562,7 +564,8 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             auto reader = proxygen::coro::HTTPSourceReader{};
             Option<retryable_http_response> retryable_response;
             reader
-              .onHeadersAsync([mq, &emitted_messages, &retryable_response](
+              .onHeadersAsync([mq, &emitted_messages, &retryable_response,
+                               buffer_retryable_body](
                                 std::unique_ptr<proxygen::HTTPMessage> msg,
                                 bool is_final,
                                 bool) mutable -> folly::coro::Task<bool> {
@@ -579,6 +582,9 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                 if (http::is_retryable_http_status(status)) {
                   retryable_response
                     = retryable_http_response{status, std::move(hdrs)};
+                  if (not buffer_retryable_body) {
+                    throw std::move(*retryable_response);
+                  }
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
                 emitted_messages = true;
@@ -655,7 +661,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
       }
       co_await mq->enqueue(FetchDone{});
     }(evb, std::move(url), std::move(request), std::move(config),
-                                                 std::move(mq)));
+                             buffer_retryable_body, std::move(mq)));
 }
 
 // ---- Operator ---------------------------------------------------------------
@@ -898,7 +904,8 @@ private:
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
       MetricsDirection::read, MetricsVisibility::external_);
     ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
-                         fetch_config_, message_queue_));
+                         fetch_config_, static_cast<bool>(args_.error_field),
+                         message_queue_));
     co_return;
   }
 
