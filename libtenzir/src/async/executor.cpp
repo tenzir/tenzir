@@ -168,8 +168,6 @@ struct SubPipeline {
   Arc<DiagHandler> sub_dh;
   /// Whether failures in the subpipeline are fate-sharing with the parent.
   FateSharing fate_sharing;
-  /// True once `finish_sub` was called for this subpipeline.
-  bool finish_reported = false;
   /// Set when process(SubMessage) observes the from_sub channel drain.
   bool from_sub_done = false;
   /// Set when process(SubMessage) observes the to_control channel drain.
@@ -1355,9 +1353,8 @@ private:
       if (sub.fate_sharing == FateSharing::Off) {
         sub_failure = sub.sub_dh->failure();
       }
-      auto finish_reported = sub.finish_reported;
       subpipelines_.erase(it);
-      if (phase_ != Phase::stopping_forced and not finish_reported) {
+      if (phase_ != Phase::stopping_forced) {
         if (sub_failure.is_error()) {
           co_await call_finish_sub(make_view(message.key), sub_failure.error());
         } else {
@@ -1483,14 +1480,7 @@ private:
     if (phase_ == Phase::running or phase_ == Phase::stopped) {
       co_return;
     }
-    auto has_unreported_subpipeline = false;
-    for (auto const& [_, sub] : subpipelines_) {
-      if (not sub.finish_reported) {
-        has_unreported_subpipeline = true;
-        break;
-      }
-    }
-    if (phase_ != Phase::stopping_forced and has_unreported_subpipeline) {
+    if (phase_ != Phase::stopping_forced and not subpipelines_.empty()) {
       // We need to wait for all subpipelines to finish.
       co_return;
     }
