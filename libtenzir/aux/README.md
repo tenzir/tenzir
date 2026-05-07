@@ -8,7 +8,6 @@ This directory contains the third-party software Tenzir uses. We manage it via
 ### submodules
 
 - [CAF](https://github.com/actor-framework/actor-framework) https://github.com/actor-framework/actor-framework
-- [fast_float](https://github.com/fastfloat/fast_float) https://github.com/fastfloat/fast_float
 - [simdjson](https://github.com/simdjson/simdjson) https://github.com/simdjson/simdjson
 
 ### subtrees
@@ -26,15 +25,15 @@ To add a new repository **foo** at location `REMOTE` (e.g.,
 
 2. Add the repository as a submodule:
 
-       git submodule add REMOTE aux/foo
-       git -C aux/foo checkout COMMIT
-       git commit -a -m 'Add 3rd-party library foo'
+   git submodule add REMOTE aux/foo
+   git -C aux/foo checkout COMMIT
+   git commit -a -m 'Add 3rd-party library foo'
 
 ### subtrees
 
 2. Add the repository as a subtree:
 
-       git subtree add --prefix=aux/foo --squash REMOTE main
+   git subtree add --prefix=aux/foo --squash REMOTE main
 
 ## Synchronize an Existing Repository
 
@@ -45,12 +44,12 @@ To update an existing repository **foo**, perform the following steps:
 1. Run `git -C aux/foo fetch` to synchronize with the remote
 2. Check out the commit that should be tracked:
 
-       git -C aux/foo checkout COMMIT
+   git -C aux/foo checkout COMMIT
 
 3. Go to the top-level directory of the Tenzir repository
 4. Create a commit for the updated submodule reference
 
-       git commit -a -m 'Update aux/foo'
+   git commit -a -m 'Update aux/foo'
 
 ### subtrees
 
@@ -58,11 +57,11 @@ To update an existing repository **foo**, perform the following steps:
 2. Go to the top-level directory of the Tenzir repository
 3. Pull from the remote repository:
 
-       git subtree pull --prefix aux/foo REMOTE main --squash
+   git subtree pull --prefix aux/foo REMOTE main --squash
 
 4. Commit your changes:
 
-       git commit -a -m 'Update aux/foo'
+   git commit -a -m 'Update aux/foo'
 
 ### Both
 

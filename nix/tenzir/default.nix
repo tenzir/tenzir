@@ -23,7 +23,6 @@ let
       libbacktrace,
       clickhouse-cpp,
       empty-libgcc_eh,
-      fast-float,
       flatbuffers,
       fluent-bit,
       protobuf,
@@ -233,7 +232,6 @@ let
             azure-sdk-for-cpp.storage-blobs
             libbacktrace
             clickhouse-cpp
-            fast-float
             fluent-bit
             libpcap
             libunwind
@@ -367,6 +365,7 @@ let
             "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
           ]
           ++ lib.optionals stdenv.hostPlatform.isDarwin [
+            "-DCMAKE_OSX_DEPLOYMENT_TARGET=26.0"
             # Want's to install into the users home, but that would be the
             # builder in the Nix context, and that doesn't make sense.
             "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
