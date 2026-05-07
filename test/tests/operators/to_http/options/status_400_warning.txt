@@ -1,6 +1,0 @@
-warning: HTTP request returned status 400
-  --> tests/operators/to_http/options/status_400_warning.tql:14:1
-   |
-14 | to_http env("HTTP_FIXTURE_STATUS_400_URL"), max_retry_count=2, retry_delay=1ms {
-   | ~~~~~~~ 
-   |

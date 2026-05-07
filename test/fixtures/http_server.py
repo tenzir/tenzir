@@ -314,8 +314,8 @@ def _make_handler(
                 elif (
                     retry_503_backoff_second_gap_at[0]
                     - retry_503_backoff_first_gap_at[0]
-                    >= 0.08
-                    and now - retry_503_backoff_second_gap_at[0] >= 0.18
+                    >= 0.40
+                    and now - retry_503_backoff_second_gap_at[0] >= 0.90
                 ):
                     self._reply(b'{"ok":true}\n')
                 else:

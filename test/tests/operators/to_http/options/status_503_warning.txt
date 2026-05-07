@@ -1,6 +1,0 @@
-warning: HTTP request returned status 503
-  --> tests/operators/to_http/options/status_503_warning.tql:14:1
-   |
-14 | to_http env("HTTP_FIXTURE_RETRY_503_URL") {
-   | ~~~~~~~ 
-   |

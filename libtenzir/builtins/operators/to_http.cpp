@@ -166,10 +166,9 @@ public:
         std::ignore = error_signal_->send(std::move(error));
       } else {
         auto http_response = std::move(response).unwrap();
-        if (http_response.status_code < 200
-            or http_response.status_code > 299) {
-          diagnostic::warning("HTTP request returned status {}",
-                              http_response.status_code)
+        if (not http_response.is_status_success()) {
+          diagnostic::error("HTTP request returned status {}",
+                            http_response.status_code)
             .primary(args_.operator_location)
             .emit(*dh);
         }

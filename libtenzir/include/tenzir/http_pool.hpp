@@ -38,6 +38,10 @@ struct HttpResponse {
   uint16_t status_code = 0;
   std::map<std::string, std::string> headers;
   std::string body;
+
+  auto is_status_success() const -> bool {
+    return status_code >= 200 and status_code < 300;
+  }
 };
 
 struct HttpPoolConfig {

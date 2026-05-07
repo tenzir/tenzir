@@ -1,0 +1,6 @@
+error: HTTP request returned status 404
+  --> tests/operators/to_http/options/status_404_error.tql:15:1
+   |
+15 | to_http env("HTTP_FIXTURE_STATUS_404_URL") {
+   | ^^^^^^^ 
+   |

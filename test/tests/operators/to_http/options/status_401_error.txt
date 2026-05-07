@@ -1,0 +1,6 @@
+error: HTTP request returned status 401
+  --> tests/operators/to_http/options/status_401_error.tql:15:1
+   |
+15 | to_http env("HTTP_FIXTURE_STATUS_401_URL"), max_retry_count=2, retry_delay=1ms {
+   | ^^^^^^^ 
+   |
