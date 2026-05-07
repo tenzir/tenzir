@@ -12,7 +12,13 @@ Usage overview:
   - **HTTP_FIXTURE_HOST_URL** - Echoes the ``Host`` header as ``{"host":"…"}``.
   - **HTTP_FIXTURE_BODY_URL** - Echoes the request body as ``{"body":"…"}``.
   - **HTTP_FIXTURE_STATUS_404_URL** - Always replies 404 with ``{"error":"not-found"}``.
+  - **HTTP_FIXTURE_STATUS_400_URL** - Always replies 400 with ``{"error":"bad-request"}``.
+  - **HTTP_FIXTURE_STATUS_401_URL** - Always replies 401 with ``{"error":"unauthorized"}``.
+  - **HTTP_FIXTURE_STATUS_403_URL** - Always replies 403 with ``{"error":"forbidden"}``.
+  - **HTTP_FIXTURE_RETRY_429_AFTER_URL** - Replies 429 with ``Retry-After: 1``, then 200 after waiting long enough.
   - **HTTP_FIXTURE_RETRY_503_URL** - Replies 503 twice, then 200.
+  - **HTTP_FIXTURE_RETRY_503_BACKOFF_URL** - Replies 503 twice, then 200 only if retries follow the configured backoff.
+  - **HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL** - Always replies 503 with ``{"error":"service-unavailable"}``.
   - **HTTP_FIXTURE_GZIP_EMPTY_URL** - Replies with an empty gzip-encoded body.
   - **HTTP_FIXTURE_GZIP_JSON_URL** - Replies with gzip-encoded JSON body.
   - **HTTP_FIXTURE_TLS_CERTFILE** - Path to the server certificate (TLS only).
@@ -33,6 +39,7 @@ import shutil
 import ssl
 import tempfile
 import threading
+import time
 from dataclasses import dataclass, field, replace
 from email.message import Message
 from http import HTTPStatus
@@ -48,7 +55,13 @@ from ._utils import generate_self_signed_cert
 
 _GZIP_EMPTY = "/content-encoding/gzip-empty"
 _GZIP_JSON = "/content-encoding/gzip-json"
+_RETRY_429_AFTER = "/status/retry-429-after"
 _RETRY_503 = "/status/retry-503"
+_RETRY_503_BACKOFF = "/status/retry-503-backoff"
+_RETRY_EXHAUSTED_503 = "/status/retry-exhausted-503"
+_STATUS_400 = "/status/bad-request"
+_STATUS_401 = "/status/unauthorized"
+_STATUS_403 = "/status/forbidden"
 
 
 @dataclass(frozen=True)
@@ -98,7 +111,12 @@ def _make_handler(
     errors: list[str],
     request_count: list[int],
 ):
+    retry_429_after_attempts = [0]
+    retry_429_after_first_at = [0.0]
     retry_503_attempts = [0]
+    retry_503_backoff_attempts = [0]
+    retry_503_backoff_first_gap_at = [0.0]
+    retry_503_backoff_second_gap_at = [0.0]
 
     class RecordingEchoHandler(BaseHTTPRequestHandler):
         def _validate_request(self, path: str, body: bytes) -> None:
@@ -232,6 +250,42 @@ def _make_handler(
                     status=HTTPStatus.NOT_FOUND,
                 )
                 return
+            if path == _STATUS_400:
+                self._reply(
+                    b'{"error":"bad-request"}\n',
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
+            if path == _STATUS_401:
+                self._reply(
+                    b'{"error":"unauthorized"}\n',
+                    status=HTTPStatus.UNAUTHORIZED,
+                )
+                return
+            if path == _STATUS_403:
+                self._reply(
+                    b'{"error":"forbidden"}\n',
+                    status=HTTPStatus.FORBIDDEN,
+                )
+                return
+            if path == _RETRY_429_AFTER:
+                retry_429_after_attempts[0] += 1
+                now = time.monotonic()
+                if retry_429_after_attempts[0] == 1:
+                    retry_429_after_first_at[0] = now
+                    self._reply(
+                        b'{"error":"too-many-requests"}\n',
+                        [("Retry-After", "1")],
+                        status=HTTPStatus.TOO_MANY_REQUESTS,
+                    )
+                elif now - retry_429_after_first_at[0] >= 0.9:
+                    self._reply(b'{"ok":true}\n')
+                else:
+                    self._reply(
+                        b'{"error":"retried-too-early"}\n',
+                        status=HTTPStatus.TOO_MANY_REQUESTS,
+                    )
+                return
             if path == _RETRY_503:
                 retry_503_attempts[0] += 1
                 if retry_503_attempts[0] <= 2:
@@ -241,6 +295,40 @@ def _make_handler(
                     )
                 else:
                     self._reply(b'{"ok":true}\n')
+                return
+            if path == _RETRY_503_BACKOFF:
+                retry_503_backoff_attempts[0] += 1
+                now = time.monotonic()
+                if retry_503_backoff_attempts[0] == 1:
+                    retry_503_backoff_first_gap_at[0] = now
+                    self._reply(
+                        b'{"error":"service-unavailable"}\n',
+                        status=HTTPStatus.SERVICE_UNAVAILABLE,
+                    )
+                elif retry_503_backoff_attempts[0] == 2:
+                    retry_503_backoff_second_gap_at[0] = now
+                    self._reply(
+                        b'{"error":"service-unavailable"}\n',
+                        status=HTTPStatus.SERVICE_UNAVAILABLE,
+                    )
+                elif (
+                    retry_503_backoff_second_gap_at[0]
+                    - retry_503_backoff_first_gap_at[0]
+                    >= 0.08
+                    and now - retry_503_backoff_second_gap_at[0] >= 0.18
+                ):
+                    self._reply(b'{"ok":true}\n')
+                else:
+                    self._reply(
+                        b'{"error":"retried-too-early"}\n',
+                        status=HTTPStatus.SERVICE_UNAVAILABLE,
+                    )
+                return
+            if path == _RETRY_EXHAUSTED_503:
+                self._reply(
+                    b'{"error":"service-unavailable"}\n',
+                    status=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
                 return
             if path == _GZIP_EMPTY:
                 self._reply(
@@ -319,7 +407,13 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_HOST_URL": f"{base_url}/options/host",
             "HTTP_FIXTURE_BODY_URL": f"{base_url}/options/body",
             "HTTP_FIXTURE_STATUS_404_URL": f"{base_url}/status/not-found",
+            "HTTP_FIXTURE_STATUS_400_URL": f"{base_url}{_STATUS_400}",
+            "HTTP_FIXTURE_STATUS_401_URL": f"{base_url}{_STATUS_401}",
+            "HTTP_FIXTURE_STATUS_403_URL": f"{base_url}{_STATUS_403}",
+            "HTTP_FIXTURE_RETRY_429_AFTER_URL": f"{base_url}{_RETRY_429_AFTER}",
             "HTTP_FIXTURE_RETRY_503_URL": f"{base_url}{_RETRY_503}",
+            "HTTP_FIXTURE_RETRY_503_BACKOFF_URL": f"{base_url}{_RETRY_503_BACKOFF}",
+            "HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL": f"{base_url}{_RETRY_EXHAUSTED_503}",
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",
             "HTTP_FIXTURE_GZIP_JSON_URL": f"{base_url}{_GZIP_JSON}",
         }

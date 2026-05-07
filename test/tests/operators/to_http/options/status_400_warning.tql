@@ -1,0 +1,16 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 1
+        method: POST
+        path: /status/bad-request
+timeout: 60
+---
+
+from {
+  value: 13,
+}
+to_http env("HTTP_FIXTURE_STATUS_400_URL"), max_retry_count=2, retry_delay=1ms {
+  write_ndjson
+}
