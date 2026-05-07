@@ -16,11 +16,11 @@
 #include <folly/ScopeGuard.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/async/AsyncSocketException.h>
+#include <folly/portability/Time.h>
 #include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
 #include <proxygen/lib/http/coro/client/HTTPCoroSessionPool.h>
-#include <proxygen/lib/utils/HTTPTime.h>
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
@@ -99,6 +99,20 @@ auto make_request_source(proxygen::URL const& host_url, std::string path,
   return source;
 }
 
+auto parse_http_date(std::string_view value) -> Option<int64_t> {
+  if (value.empty()) {
+    return None{};
+  }
+  auto tm = std::tm{};
+  auto parsed = std::string{value};
+  if (::strptime(parsed.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) != nullptr
+      or ::strptime(parsed.c_str(), "%a, %d-%b-%y %H:%M:%S GMT", &tm) != nullptr
+      or ::strptime(parsed.c_str(), "%a %b %d %H:%M:%S %Y", &tm) != nullptr) {
+    return int64_t{timegm(&tm)};
+  }
+  return None{};
+}
+
 auto parse_retry_after(std::string_view value)
   -> Option<std::chrono::milliseconds> {
   if (value.empty()) {
@@ -114,7 +128,7 @@ auto parse_retry_after(std::string_view value)
       std::chrono::seconds{seconds});
   }
   // try parse as HTTP date
-  auto parsed = proxygen::parseHTTPDateTime(std::string{value});
+  auto parsed = parse_http_date(value);
   if (not parsed) {
     return None{};
   }
