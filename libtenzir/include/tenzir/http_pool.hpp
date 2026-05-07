@@ -10,6 +10,7 @@
 
 #include <tenzir/async/task.hpp>
 #include <tenzir/box.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
 
 #include <folly/Executor.h>
@@ -18,7 +19,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <optional>
 #include <string>
 
 namespace folly {
@@ -77,11 +77,11 @@ public:
                std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
-  /// Request through the session pool with an origin-form target.
+  /// Request through the session pool to a path.
   ///
-  /// The target must start with `/` and may contain a query string. The request
-  /// still uses the scheme, host, and port from the pool URL.
-  auto request(proxygen::HTTPMethod method, std::string target,
+  /// Path must start with `/` and may contain fragment and/or query.
+  /// When None, it falls back to path of the pool URL.
+  auto request(proxygen::HTTPMethod method, Option<std::string> path,
                std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
@@ -89,18 +89,14 @@ public:
   auto post(std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
-  /// POST through the session pool with an origin-form target.
-  auto post(std::string target, std::string body,
+  /// POST through the session pool to a path.
+  auto post(std::string path, std::string body,
             std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
 private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config);
-
-  auto request(proxygen::HTTPMethod method, std::optional<std::string> target,
-               std::string body, std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
 
   struct Impl;
   std::shared_ptr<Impl> impl_;

@@ -76,7 +76,8 @@ auto to_http_response(proxygen::coro::HTTPClient::Response& resp)
 /// `strPtr.release()` as arguments to the same function call. Because C++
 /// does not specify argument evaluation order, the compiler may evaluate
 /// `release()` first, making `data()`/`size()` dereference a null unique_ptr.
-auto make_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
+auto make_request_source(proxygen::URL const& host_url, std::string path,
+                         proxygen::HTTPMethod method,
                          std::map<std::string, std::string> const& headers,
                          Option<std::string> body)
   -> proxygen::coro::HTTPSource* {
@@ -85,16 +86,16 @@ auto make_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
     body_buf = folly::IOBuf::fromString(std::move(*body));
   }
   auto* source = proxygen::coro::HTTPFixedSource::makeFixedRequest(
-    url.makeRelativeURL(), method, std::move(body_buf));
+    std::move(path), method, std::move(body_buf));
   for (auto const& [name, value] : headers) {
     source->msg_->getHeaders().add(name, value);
   }
   if (not source->msg_->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
     source->msg_->getHeaders().add(proxygen::HTTP_HEADER_HOST,
-                                   url.getHostAndPortOmitDefault());
+                                   host_url.getHostAndPortOmitDefault());
   }
   source->msg_->setWantsKeepalive(true);
-  source->msg_->setSecure(url.isSecure());
+  source->msg_->setSecure(host_url.isSecure());
   return source;
 }
 
@@ -208,27 +209,6 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
   }
 }
 
-auto with_target(proxygen::URL const& base, std::optional<std::string> target)
-  -> Result<proxygen::URL, std::string> {
-  if (not target) {
-    return base;
-  }
-  if (target->empty() or target->front() != '/'
-      or target->find('#') != std::string::npos) {
-    return Err{fmt::format("invalid request target: {}", *target)};
-  }
-  auto path = std::string_view{*target};
-  auto query = std::string_view{};
-  if (auto pos = target->find('?'); pos != std::string::npos) {
-    path = std::string_view{*target}.substr(0, pos);
-    query = std::string_view{*target}.substr(pos + 1);
-  }
-  return proxygen::URL{
-    base.getScheme(),  base.getHost(),     base.getPort(),
-    std::string{path}, std::string{query},
-  };
-}
-
 /// Custom deleter that ensures the session pool is destroyed on its event base
 /// thread, which proxygen requires for safe cleanup.
 struct SessionPoolDeleter {
@@ -302,35 +282,29 @@ auto HttpPool::operator=(HttpPool&&) noexcept -> HttpPool& = default;
 auto HttpPool::request(proxygen::HTTPMethod method, std::string body,
                        std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request(method, std::nullopt, std::move(body),
+  co_return co_await request(method, None{}, std::move(body),
                              std::move(headers));
 }
 
-auto HttpPool::request(proxygen::HTTPMethod method, std::string target,
+auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
                        std::string body,
                        std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request(method,
-                             std::optional<std::string>{std::move(target)},
-                             std::move(body), std::move(headers));
-}
-
-auto HttpPool::request(proxygen::HTTPMethod method,
-                       std::optional<std::string> target, std::string body,
-                       std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  auto p = path.unwrap_or_else([&]() {
+    return impl_->url.makeRelativeURL();
+  });
   co_return co_await co_withExecutor(
     impl_->evb,
     [](std::shared_ptr<Impl> impl, proxygen::HTTPMethod method,
-       std::optional<std::string> target, std::string body,
+       std::string path, std::string body,
        std::map<std::string, std::string> headers)
       -> Task<Result<HttpResponse, std::string>> {
-      CO_TRY(auto url, with_target(impl->url, std::move(target)));
       co_return co_await retry_request(
         impl->config, [&]() -> Task<proxygen::coro::HTTPClient::Response> {
           auto sr = co_await impl->pool->getSessionWithReservation();
           TENZIR_ASSERT_ALWAYS(sr.session);
-          auto* source = make_request_source(url, method, headers, body);
+          auto* source
+            = make_request_source(impl->url, path, method, headers, body);
           auto resp = proxygen::coro::HTTPClient::Response{};
           co_await proxygen::coro::HTTPClient::request(
             sr.session, std::move(sr.reservation), source,
@@ -338,7 +312,7 @@ auto HttpPool::request(proxygen::HTTPMethod method,
             impl->config.request_timeout);
           co_return resp;
         });
-    }(impl_, method, std::move(target), std::move(body), std::move(headers)));
+    }(impl_, method, std::move(p), std::move(body), std::move(headers)));
 }
 
 auto HttpPool::post(std::string body,
@@ -348,10 +322,10 @@ auto HttpPool::post(std::string body,
                              std::move(headers));
 }
 
-auto HttpPool::post(std::string target, std::string body,
+auto HttpPool::post(std::string path, std::string body,
                     std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request(proxygen::HTTPMethod::POST, std::move(target),
+  co_return co_await request(proxygen::HTTPMethod::POST, std::move(path),
                              std::move(body), std::move(headers));
 }
 
@@ -369,16 +343,16 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
        std::chrono::milliseconds timeout)
       -> Task<Result<HttpResponse, std::string>> {
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
-        auto parsed = proxygen::URL{url};
-        if (not parsed.isValid() or not parsed.hasHost()) {
+        auto url_parsed = proxygen::URL{url};
+        if (not url_parsed.isValid() or not url_parsed.hasHost()) {
           throw std::runtime_error(fmt::format("invalid url: {}", url));
         }
-        if (parsed.isSecure()) {
+        if (url_parsed.isSecure()) {
           ensure_http_default_ca_paths();
         }
         auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
-          evb, parsed.getHost(), parsed.getPort(), parsed.isSecure(), false,
-          timeout, timeout);
+          evb, url_parsed.getHost(), url_parsed.getPort(),
+          url_parsed.isSecure(), false, timeout, timeout);
         auto holder = session->acquireKeepAlive();
         SCOPE_EXIT {
           if (auto* s = holder.get()) {
@@ -389,8 +363,9 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         if (reservation.hasException()) {
           co_yield folly::coro::co_error(std::move(reservation.exception()));
         }
-        auto* source = make_request_source(parsed, method, std::move(headers),
-                                           std::move(body));
+        auto* source
+          = make_request_source(url_parsed, url_parsed.makeRelativeURL(),
+                                method, headers, std::move(body));
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
           session, std::move(*reservation), source,
