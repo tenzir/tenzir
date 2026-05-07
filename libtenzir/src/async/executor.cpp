@@ -240,30 +240,48 @@ private:
   Ref<secret_censor> censor_;
 };
 
-// Forwards diagnostics to a parent handler, but emits errors as warnings and
-// cancels its source so the owner can stop the isolated computation.
-class ErrorDemotingDiagHandler final : public DiagHandler {
+// Transforms diagnostic severity between a subpipeline and its parent handler.
+//
+// ErrorToWarning (ErrorDemotingDiagHandler): emits errors as warnings
+//   and cancels the sub via its own source so the owner can stop the isolated
+//   computation.
+// WarningToError (WarningPromotingDiagHandler): promotes warnings to
+//   errors and forwards them to the parent handler which drives cancellation.
+template <DiagnosticBehavior Behaviour>
+  requires(Behaviour == DiagnosticBehavior::ErrorToWarning
+           or Behaviour == DiagnosticBehavior::WarningToError)
+class DiagTransformHandler final : public DiagHandler {
 public:
-  ErrorDemotingDiagHandler(DiagHandler& dh,
-                           std::shared_ptr<folly::CancellationSource> source)
+  DiagTransformHandler(DiagHandler& dh,
+                       std::shared_ptr<folly::CancellationSource> source)
     : dh_{dh}, cancel_source_{std::move(source)} {
   }
 
   auto emit(diagnostic d) -> void override {
     auto lock = std::scoped_lock{mutex_};
     if (dedup_.insert(d)) {
-      if (d.severity == severity::error) {
-        failure_ = failure::promise();
-        cancel_source_->requestCancellation();
-        d.severity = severity::warning;
+      if constexpr (Behaviour == DiagnosticBehavior::WarningToError) {
+        if (d.severity == severity::warning) {
+          d.severity = severity::error;
+        }
+      } else {
+        if (d.severity == severity::error) {
+          failure_ = failure::promise();
+          cancel_source_->requestCancellation();
+          d.severity = severity::warning;
+        }
       }
       dh_->emit(std::move(d));
     }
   }
 
   auto failure() -> failure_or<void> override {
-    auto lock = std::scoped_lock{mutex_};
-    return failure_;
+    if constexpr (Behaviour == DiagnosticBehavior::WarningToError) {
+      return {};
+    } else {
+      auto lock = std::scoped_lock{mutex_};
+      return failure_;
+    }
   }
 
   auto cancellation_token() const -> folly::CancellationToken {
@@ -277,6 +295,11 @@ private:
   diagnostic_deduplicator dedup_;
   failure_or<void> failure_;
 };
+
+using ErrorDemotingDiagHandler
+  = DiagTransformHandler<DiagnosticBehavior::ErrorToWarning>;
+using WarningPromotingDiagHandler
+  = DiagTransformHandler<DiagnosticBehavior::WarningToError>;
 
 /// Decorator over any `ExecCtx` that produces fused channels and shares a
 /// single executor across all operators. This gives run-to-completion
@@ -690,23 +713,36 @@ private:
   }
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
-                 Fate fate) -> Task<AnySubHandle&> override {
-    if (fate == Fate::Shared) {
-      return spawn_sub_impl(std::move(key), std::move(pipe), input, false, dh_,
-                            dh_, folly::CancellationToken{}, fate);
+                 DiagnosticBehavior diag_behavior)
+    -> Task<AnySubHandle&> override {
+    switch (diag_behavior) {
+      case DiagnosticBehavior::Unchanged:
+        return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
+                              dh_, folly::CancellationToken{}, *dh_);
+      case DiagnosticBehavior::ErrorToWarning: {
+        auto cancel_source = std::make_shared<folly::CancellationSource>();
+        auto sub_cancel_token = cancel_source->getToken();
+        return spawn_sub_impl(
+          std::move(key), std::move(pipe), input, false,
+          Arc<DiagHandler>{std::in_place_type<ErrorDemotingDiagHandler>, *dh_,
+                           std::move(cancel_source)},
+          sub_cancel_token, *dh_);
+      }
+      case DiagnosticBehavior::WarningToError: {
+        return spawn_sub_impl(
+          std::move(key), std::move(pipe), input, false,
+          Arc<DiagHandler>{std::in_place_type<WarningPromotingDiagHandler>,
+                           *dh_, nullptr},
+          folly::CancellationToken{}, *dh_);
+      }
     }
-    auto cancel_source = std::make_shared<folly::CancellationSource>();
-    auto sub_cancel_token = cancel_source->getToken();
-    auto sub_dh = Arc<DiagHandler>::from_non_null(
-      std::make_shared<ErrorDemotingDiagHandler>(*dh_, cancel_source));
-    return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
-                          std::move(sub_dh), dh_, sub_cancel_token, fate);
+    TENZIR_UNREACHABLE();
   }
 
   auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnySubHandle&> override {
     return spawn_sub_impl(std::move(key), std::move(pipe), input, true, dh_,
-                          dh_, folly::CancellationToken{}, Fate::Shared);
+                          folly::CancellationToken{}, *dh_);
   }
 
   auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id,
@@ -738,9 +774,8 @@ private:
 
   auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
                       bool fused, Arc<DiagHandler> sub_dh,
-                      Arc<DiagHandler> parent_dh,
-                      folly::CancellationToken sub_cancel_token, Fate fate)
-    -> Task<AnySubHandle&> {
+                      folly::CancellationToken sub_cancel_token,
+                      DiagHandler& parent_dh) -> Task<AnySubHandle&> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     if (not fused) {
       // For the parallel operator, which is currently the only user of the
@@ -749,8 +784,8 @@ private:
       next_subpipeline_id_ += 1;
     }
     // Instantiate for the case where it was not instantiated yet.
-    if (not pipe.substitute(
-          substitute_ctx{base_ctx{*parent_dh, *reg_}, nullptr}, true)) {
+    if (not pipe.substitute(substitute_ctx{base_ctx{parent_dh, *reg_}, nullptr},
+                            true)) {
       // We just emitted an error. Either we return some placeholder no-op
       // handle now, or we just sleep and wait for cancellation. For now, we
       // pick the simple option, but we might need to reconsider how we want to
@@ -770,7 +805,7 @@ private:
       std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
                   pipe.operators.end());
     }
-    auto output = pipe.infer_type(input, *parent_dh);
+    auto output = pipe.infer_type(input, parent_dh);
     // The caller is responsible for passing a well-typed pipeline that
     // type-checks against `input`. And since optimizations are type-preserving,
     // we know that this cannot fail.
@@ -820,7 +855,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
       std::move(from_control_sender), std::move(to_control_receiver), input,
-      sub_dh);
+      std::move(sub_dh));
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
