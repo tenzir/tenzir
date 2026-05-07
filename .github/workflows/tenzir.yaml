@@ -394,6 +394,11 @@ jobs:
                | ."image-registries") += ["docker.io"] |
               (.editions[] | ."image-registries") |= unique' \
               <<< "${docker_config}")"
+          # `push` and `workflow_dispatch` hit this branch; they must not push the demo image.
+          else
+            docker_config="$(jq -c '
+              (.editions[] | select(.name == "tenzir-demo") | ."image-registries") |= []' \
+              <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
