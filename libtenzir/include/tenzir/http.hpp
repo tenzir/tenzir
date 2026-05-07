@@ -32,7 +32,15 @@
 #include <utility>
 #include <vector>
 
+namespace proxygen::coro {
+enum class HTTPErrorCode : uint16_t;
+} // namespace proxygen::coro
+
 namespace tenzir::http {
+
+auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
+
+auto is_retryable_http_status(uint16_t status_code) -> bool;
 
 constexpr auto default_timeout = std::chrono::seconds{90};
 constexpr auto default_connection_timeout = std::chrono::seconds{5};

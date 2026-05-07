@@ -158,7 +158,6 @@ public:
       }
       auto body = std::string{reinterpret_cast<char const*>(chunk->data()),
                               chunk->size()};
-
       auto response = co_await (*http_pool_)
                         ->request(method, std::move(body), std::move(headers));
       if (response.is_err()) {
@@ -248,8 +247,16 @@ private:
     co_await pipeline.close();
   }
 
-  auto get_method() const -> std::string {
-    return args_.method ? args_.method->inner : "POST";
+  auto get_method() const -> proxygen::HTTPMethod {
+    if (args_.method) {
+      return proxygen::HTTPMethod::POST;
+    }
+    // validated before (in Describer::validate)
+    auto method_s = args_.method->inner;
+    std::ranges::transform(method_s, method_s.begin(), [](unsigned char c) {
+      return static_cast<char>(std::toupper(c));
+    });
+    return *proxygen::stringToMethod(method_s);
   }
 
   auto get_timeout() const -> std::chrono::milliseconds {
@@ -328,12 +335,11 @@ public:
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto method = ctx.get(method_arg)) {
-        auto normalized = method->inner;
-        std::ranges::transform(normalized, normalized.begin(),
-                               [](unsigned char c) {
-                                 return static_cast<char>(std::toupper(c));
-                               });
-        if (not proxygen::stringToMethod(normalized)) {
+        auto method_s = method->inner;
+        std::ranges::transform(method_s, method_s.begin(), [](unsigned char c) {
+          return static_cast<char>(std::toupper(c));
+        });
+        if (not proxygen::stringToMethod(method_s)) {
           diagnostic::error("invalid http method: `{}`", method->inner)
             .primary(method->source)
             .emit(ctx);

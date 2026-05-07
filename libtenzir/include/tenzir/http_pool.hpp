@@ -27,21 +27,12 @@ class IOExecutor;
 class SSLContext;
 } // namespace folly
 
-namespace proxygen::coro {
-enum class HTTPErrorCode : uint16_t;
-} // namespace proxygen::coro
+// namespace proxygen::coro
+namespace proxygen {
+enum class HTTPMethod;
+} // namespace proxygen
 
 namespace tenzir {
-
-namespace http {
-
-auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
-
-auto is_retryable_http_status(uint16_t status_code) -> bool;
-
-
-
-} // namespace http
 
 struct HttpResponse {
   uint16_t status_code = 0;
@@ -82,7 +73,7 @@ public:
   auto operator=(HttpPool&&) noexcept -> HttpPool&;
 
   /// Request through the session pool.
-  auto request(std::string method, std::string body,
+  auto request(proxygen::HTTPMethod method, std::string body,
                std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
@@ -90,8 +81,8 @@ public:
   ///
   /// The target must start with `/` and may contain a query string. The request
   /// still uses the scheme, host, and port from the pool URL.
-  auto request(std::string method, std::string target, std::string body,
-               std::map<std::string, std::string> headers)
+  auto request(proxygen::HTTPMethod method, std::string target,
+               std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
   /// POST through the session pool.
@@ -107,7 +98,7 @@ private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config);
 
-  auto request(std::string method, std::optional<std::string> target,
+  auto request(proxygen::HTTPMethod method, std::optional<std::string> target,
                std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 

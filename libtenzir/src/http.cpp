@@ -16,6 +16,7 @@
 
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
+#include <proxygen/lib/http/coro/HTTPError.h>
 
 #include <algorithm>
 #include <cctype>
@@ -23,6 +24,17 @@
 #include <string_view>
 
 namespace tenzir::http {
+
+auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool {
+  using code_t = proxygen::coro::HTTPErrorCode;
+  return code == code_t::TRANSPORT_EOF or code == code_t::TRANSPORT_READ_ERROR
+         or code == code_t::TRANSPORT_WRITE_ERROR
+         or code == code_t::READ_TIMEOUT or code == code_t::WRITE_TIMEOUT;
+}
+
+auto is_retryable_http_status(uint16_t status_code) -> bool {
+  return status_code == 429 or (status_code >= 500 and status_code <= 599);
+}
 
 namespace {
 
@@ -527,6 +539,7 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
   return std::move(dec.ValueUnsafe());
 }
 
+namespace {
 template <class Buffer>
 auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
                            std::span<std::byte const> input,
@@ -581,6 +594,7 @@ auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
   out.resize(written);
   return out;
 }
+} // namespace
 
 auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       std::span<std::byte const> input, diagnostic_handler& dh,
