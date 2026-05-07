@@ -180,72 +180,75 @@ private:
   std::vector<ast::field_path> moved_fields_;
 };
 
-class SetIr final : public ir::Operator {
-public:
-  SetIr() = default;
+} // namespace
 
-  explicit SetIr(std::vector<ast::assignment> assignments)
-    : assignments_(std::move(assignments)) {
+ir::SetIr::SetIr() : order_{event_order::ordered} {
+}
+
+ir::SetIr::SetIr(std::vector<ast::assignment> assignments)
+  : assignments_{std::move(assignments)}, order_{event_order::ordered} {
+}
+
+auto ir::SetIr::name() const -> std::string {
+  return "SetIr";
+}
+
+auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
+  -> failure_or<void> {
+  (void)instantiate;
+  for (auto& x : assignments_) {
+    TRY(x.right.substitute(ctx));
   }
+  return {};
+}
 
-  auto name() const -> std::string override {
-    return "SetIr";
+auto ir::SetIr::spawn(element_type_tag input) && -> AnyOperator {
+  TENZIR_ASSERT(input.is<table_slice>());
+  return Set{std::move(assignments_), order_};
+}
+
+auto ir::SetIr::optimize(ir::optimize_filter filter,
+                         event_order order) && -> ir::optimize_result {
+  order_ = weaker_event_order(order_, order);
+  auto ops = std::vector<Box<ir::Operator>>{};
+  ops.reserve(1 + filter.size());
+  ops.emplace_back(ir::SetIr{std::move(*this)});
+  for (auto& expr : filter) {
+    ops.push_back(make_where_ir(expr));
   }
+  return {
+    ir::optimize_filter{},
+    order_,
+    ir::pipeline{{}, std::move(ops)},
+  };
+}
 
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    (void)instantiate;
-    for (auto& x : assignments_) {
-      TRY(x.right.substitute(ctx));
-    }
-    return {};
+auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
+  -> failure_or<std::optional<element_type_tag>> {
+  if (input.is_not<table_slice>()) {
+    diagnostic::error("set operator expected events").emit(dh);
+    return failure::promise();
   }
+  return input;
+}
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return Set{std::move(assignments_), order_};
-  }
+namespace ir {
 
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
-    order_ = weaker_event_order(order_, order);
-    auto ops = std::vector<Box<ir::Operator>>{};
-    ops.reserve(1 + filter.size());
-    ops.emplace_back(SetIr{std::move(*this)});
-    for (auto& expr : filter) {
-      ops.push_back(make_where_ir(expr));
-    }
-    return {
-      ir::optimize_filter{},
-      order_,
-      ir::pipeline{{}, std::move(ops)},
-    };
-  }
+template <class Inspector>
+auto inspect(Inspector& f, SetIr& x) -> bool {
+  return f.object(x).fields(f.field("assignments", x.assignments_),
+                            f.field("order", x.order_));
+}
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    if (input.is_not<table_slice>()) {
-      diagnostic::error("set operator expected events").emit(dh);
-      return failure::promise();
-    }
-    return input;
-  }
+} // namespace ir
 
-  friend auto inspect(auto& f, SetIr& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_),
-                              f.field("order", x.order_));
-  }
-
-private:
-  std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
-};
+namespace {
 
 /// Create a `set` operator with the given assignment.
 auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.push_back(std::move(x));
-  return SetIr{std::move(assignments)};
+  return ir::SetIr{std::move(assignments)};
 }
 
 struct IfArgs {
@@ -409,7 +412,7 @@ private:
 
 auto make_set_ir(std::vector<ast::assignment> assignments)
   -> Box<ir::Operator> {
-  return SetIr{std::move(assignments)};
+  return ir::SetIr{std::move(assignments)};
 }
 
 class IfIr final : public ir::Operator {
@@ -545,7 +548,7 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
-    new inspection_plugin<ir::Operator, SetIr>{},
+    new inspection_plugin<ir::Operator, ir::SetIr>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
