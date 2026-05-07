@@ -373,8 +373,8 @@ public:
                                       .finished = msg.response_signal,
                                       .bytes_read = std::move(bytes_read)});
         }
-        co_await ctx.spawn_sub(request_id, std::move(pipeline),
-                               tag_v<chunk_ptr>, FateSharing::Off);
+        co_await ctx.spawn_sub<chunk_ptr>(request_id, std::move(pipeline),
+                                          Fate::Isolated);
       },
       [&](RequestBody body) -> Task<void> {
         auto chunk = std::move(body.chunk);

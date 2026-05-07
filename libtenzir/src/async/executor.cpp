@@ -127,7 +127,7 @@ struct SubPipeline {
   SubPipeline(AnyOpPush push, Receiver<Checkpoint> from_sub,
               Sender<FromControl> from_control_sender,
               Receiver<ToControl> to_control_receiver, element_type_tag input,
-              Arc<DiagHandler> sub_dh, FateSharing fate_sharing)
+              Arc<DiagHandler> sub_dh, Fate fate)
     : push{Option<AnyOpPush>{std::move(push)}},
       from_sub{std::move(from_sub)},
       from_control_sender{
@@ -135,7 +135,7 @@ struct SubPipeline {
       to_control_receiver{std::move(to_control_receiver)},
       input{input},
       sub_dh{std::move(sub_dh)},
-      fate_sharing{fate_sharing},
+      fate{fate},
       handle{match(input, [this]<class Input>(tag<Input>) -> AnySubHandle {
         // TODO: There surely is a better way to model this than passing `this`.
         return AnySubHandle{std::in_place_type<SubHandle<Input>>, *this};
@@ -166,8 +166,8 @@ struct SubPipeline {
   bool wants_commit = false;
   /// Diagnostic handler used for running the subpipeline.
   Arc<DiagHandler> sub_dh;
-  /// Whether failures in the subpipeline are fate-sharing with the parent.
-  FateSharing fate_sharing;
+  /// Whether failures in the subpipeline are shared with the parent.
+  Fate fate;
   /// Set when process(SubMessage) observes the from_sub channel drain.
   bool from_sub_done = false;
   /// Set when process(SubMessage) observes the to_control channel drain.
@@ -683,29 +683,27 @@ private:
   }
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
-                 FateSharing fate_sharing) -> Task<AnySubHandle&> override {
-    if (fate_sharing == FateSharing::On) {
+                 Fate fate) -> Task<AnySubHandle&> override {
+    if (fate == Fate::Shared) {
       return spawn_sub_impl(std::move(key), std::move(pipe), input, false, dh_,
-                            dh_, folly::CancellationToken{}, fate_sharing);
+                            dh_, folly::CancellationToken{}, fate);
     }
     auto cancel_source = std::make_shared<folly::CancellationSource>();
     auto sub_cancel_token = cancel_source->getToken();
     auto sub_dh = Arc<DiagHandler>::from_non_null(
       std::make_shared<ErrorDemotingDiagHandler>(*dh_, cancel_source));
     return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
-                          std::move(sub_dh), dh_, sub_cancel_token,
-                          fate_sharing);
+                          std::move(sub_dh), dh_, sub_cancel_token, fate);
   }
 
   auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnySubHandle&> override {
     return spawn_sub_impl(std::move(key), std::move(pipe), input, true, dh_,
-                          dh_, folly::CancellationToken{}, FateSharing::On);
+                          dh_, folly::CancellationToken{}, Fate::Shared);
   }
 
   auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id,
-                       Arc<DiagHandler> sub_dh, FateSharing fate_sharing)
-    -> AnySubHandle& {
+                       Arc<DiagHandler> sub_dh, Fate fate) -> AnySubHandle& {
     auto [from_sub_sender, from_sub] = channel<Checkpoint>(1);
     auto [from_control_sender, from_control_receiver] = channel<FromControl>(1);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(1);
@@ -719,7 +717,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
       std::move(from_control_sender), std::move(to_control_receiver), input,
-      std::move(dh), fate_sharing);
+      std::move(dh), fate);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -734,8 +732,8 @@ private:
   auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
                       bool fused, Arc<DiagHandler> sub_dh,
                       Arc<DiagHandler> parent_dh,
-                      folly::CancellationToken sub_cancel_token,
-                      FateSharing fate_sharing) -> Task<AnySubHandle&> {
+                      folly::CancellationToken sub_cancel_token, Fate fate)
+    -> Task<AnySubHandle&> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     if (not fused) {
       // For the parallel operator, which is currently the only user of the
@@ -815,7 +813,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
       std::move(from_control_sender), std::move(to_control_receiver), input,
-      sub_dh, fate_sharing);
+      sub_dh, fate);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -1350,7 +1348,7 @@ private:
         co_return;
       }
       auto sub_failure = failure_or<void>{};
-      if (sub.fate_sharing == FateSharing::Off) {
+      if (sub.fate == Fate::Isolated) {
         sub_failure = sub.sub_dh->failure();
       }
       subpipelines_.erase(it);
