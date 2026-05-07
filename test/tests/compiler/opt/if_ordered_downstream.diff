@@ -84,11 +84,11 @@
      GenericIr {
        op: {
          path: [
-           `write_tql` @ 42..51
+           `to_stdout` @ 42..51
          ],
-         ref: std::write_tql/op
+         ref: std::to_stdout/op
        },
-       desc: "write_tql",
+       desc: "to_stdout",
        args: [
          
        ],
@@ -98,26 +98,38 @@
        order: "ordered",
        named_args: [
          
-       ]
-     },
-     GenericIr {
-       op: {
-         path: [
-           `save_stdout` @ 52..63
-         ],
-         ref: std::save_stdout/op
-       },
-       desc: "save_stdout",
-       args: [
-         
        ],
-       filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               op: {
+                 path: [
+                   `write_tql` @ 56..65
+                 ],
+                 ref: std::write_tql/op
+               },
+               desc: "write_tql",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 52..67,
+         let_ids: {
+           
+         }
+       }
      }
    ]
  }

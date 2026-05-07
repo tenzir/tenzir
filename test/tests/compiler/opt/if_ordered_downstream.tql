@@ -4,5 +4,6 @@ if true {
 } else {
   head
 }
-write_tql
-save_stdout
+to_stdout {
+  write_tql
+}

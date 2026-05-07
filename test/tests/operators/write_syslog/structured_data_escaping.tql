@@ -14,4 +14,6 @@ from {
   },
   message: "Hello",
 }
-write_syslog
+to_stdout {
+  write_syslog
+}

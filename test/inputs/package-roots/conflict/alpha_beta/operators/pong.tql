@@ -1,3 +1,4 @@
 from {source: "alpha_beta"}
-write_json
-save_stdout
+to_stdout {
+  write_json
+}

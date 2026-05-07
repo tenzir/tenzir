@@ -24,5 +24,6 @@ from {
   age: $age,
   excited: $excited
 }
-write_json
-save_stdout
+to_stdout {
+  write_json
+}
