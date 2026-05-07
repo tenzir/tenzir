@@ -8,6 +8,7 @@
 
 #include "tenzir/async/executor.hpp"
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/join_set.hpp"
 #include "tenzir/async/log.hpp"
@@ -126,14 +127,15 @@ struct SubPipeline {
   SubPipeline(AnyOpPush push, Receiver<Checkpoint> from_sub,
               Sender<FromControl> from_control_sender,
               Receiver<ToControl> to_control_receiver, element_type_tag input,
-              std::shared_ptr<DiagHandler> local_dh = {})
+              Arc<DiagHandler> sub_dh, FateSharing fate_sharing)
     : push{Option<AnyOpPush>{std::move(push)}},
       from_sub{std::move(from_sub)},
       from_control_sender{
         Option<Sender<FromControl>>{std::move(from_control_sender)}},
       to_control_receiver{std::move(to_control_receiver)},
       input{input},
-      local_dh{std::move(local_dh)},
+      sub_dh{std::move(sub_dh)},
+      fate_sharing{fate_sharing},
       handle{match(input, [this]<class Input>(tag<Input>) -> AnySubHandle {
         // TODO: There surely is a better way to model this than passing `this`.
         return AnySubHandle{std::in_place_type<SubHandle<Input>>, *this};
@@ -162,8 +164,10 @@ struct SubPipeline {
   element_type_tag input;
   /// True if this subpipeline received the last checkpoint, requiring a commit.
   bool wants_commit = false;
-  /// Diagnostic handler used by non-fate-sharing subpipelines.
-  std::shared_ptr<DiagHandler> local_dh;
+  /// Diagnostic handler used for running the subpipeline.
+  Arc<DiagHandler> sub_dh;
+  /// Whether failures in the subpipeline are fate-sharing with the parent.
+  FateSharing fate_sharing;
   /// True once `finish_sub` was called for this subpipeline.
   bool finish_reported = false;
   /// Set when process(SubMessage) observes the from_sub channel drain.
@@ -224,24 +228,21 @@ private:
 
 class CensoringDiagHandler final : public DiagHandler {
 public:
-  explicit CensoringDiagHandler(DiagHandler& dh) : dh_{dh} {
+  CensoringDiagHandler(DiagHandler& dh, secret_censor& censor)
+    : dh_{dh}, censor_{censor} {
   }
 
   auto emit(diagnostic diag) -> void override {
-    dh_->emit(censor_.censor(diag));
+    dh_->emit(censor_->censor(diag));
   }
 
   auto failure() -> failure_or<void> override {
     return dh_->failure();
   }
 
-  auto censor() -> secret_censor& {
-    return censor_;
-  }
-
 private:
   Ref<DiagHandler> dh_;
-  secret_censor censor_;
+  Ref<secret_censor> censor_;
 };
 
 // Forwards diagnostics to a parent handler, but emits errors as warnings and
@@ -473,7 +474,8 @@ public:
       to_control_{std::move(to_control)},
       id_{std::move(id)},
       exec_ctx_{exec_ctx},
-      dh_{dh},
+      dh_{Arc<DiagHandler>::from_non_null(
+        std::make_shared<CensoringDiagHandler>(dh, censor_))},
       sys_{sys},
       input_is_void_{
         match(op_,
@@ -553,7 +555,7 @@ private:
   }
 
   auto dh() -> diagnostic_handler& override {
-    return dh_;
+    return *dh_;
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -611,14 +613,14 @@ private:
       auto success = true;
       for (const auto& f : finishers) {
         success
-          &= static_cast<bool>(f.finish(requested_secrets, dh_.censor(), dh_));
+          &= static_cast<bool>(f.finish(requested_secrets, censor_, *dh_));
       }
       if (not success) {
         co_return failure::promise();
       }
       co_return {};
     }
-    auto node = co_await fetch_node(sys_, dh_);
+    auto node = co_await fetch_node(sys_, *dh_);
     if (not node or not *node) {
       co_return failure::promise();
     }
@@ -674,8 +676,7 @@ private:
     }
     /// Finish all secrets via the respective finisher.
     for (const auto& f : finishers) {
-      success
-        &= static_cast<bool>(f.finish(requested_secrets, dh_.censor(), dh_));
+      success &= static_cast<bool>(f.finish(requested_secrets, censor_, *dh_));
     }
     if (not success) {
       co_return failure::promise();
@@ -687,25 +688,25 @@ private:
                  FateSharing fate_sharing) -> Task<AnySubHandle&> override {
     if (fate_sharing == FateSharing::On) {
       return spawn_sub_impl(std::move(key), std::move(pipe), input, false, dh_,
-                            folly::CancellationToken{}, {}, false);
+                            dh_, folly::CancellationToken{}, fate_sharing);
     }
     auto cancel_source = std::make_shared<folly::CancellationSource>();
-    auto sub_dh
-      = std::make_shared<ErrorDemotingDiagHandler>(dh_, cancel_source);
-    auto& sub_dh_ref = *sub_dh;
-    auto sub_cancel_token = sub_dh->cancellation_token();
+    auto sub_cancel_token = cancel_source->getToken();
+    auto sub_dh = Arc<DiagHandler>::from_non_null(
+      std::make_shared<ErrorDemotingDiagHandler>(*dh_, cancel_source));
     return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
-                          sub_dh_ref, sub_cancel_token, std::move(sub_dh),
-                          true);
+                          std::move(sub_dh), dh_, sub_cancel_token,
+                          fate_sharing);
   }
 
   auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnySubHandle&> override {
     return spawn_sub_impl(std::move(key), std::move(pipe), input, true, dh_,
-                          folly::CancellationToken{}, {}, false);
+                          dh_, folly::CancellationToken{}, FateSharing::On);
   }
 
-  auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id)
+  auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id,
+                       Arc<DiagHandler> sub_dh, FateSharing fate_sharing)
     -> AnySubHandle& {
     auto [from_sub_sender, from_sub] = channel<Checkpoint>(1);
     auto [from_control_sender, from_control_receiver] = channel<FromControl>(1);
@@ -716,9 +717,11 @@ private:
       TENZIR_UNUSED(pull);
       return AnyOpPush{std::move(push)};
     });
+    auto dh = std::move(sub_dh);
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
-      std::move(from_control_sender), std::move(to_control_receiver), input);
+      std::move(from_control_sender), std::move(to_control_receiver), input,
+      std::move(dh), fate_sharing);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -731,11 +734,10 @@ private:
   }
 
   auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
-                      bool fused, DiagHandler& sub_dh,
+                      bool fused, Arc<DiagHandler> sub_dh,
+                      Arc<DiagHandler> parent_dh,
                       folly::CancellationToken sub_cancel_token,
-                      std::shared_ptr<DiagHandler> local_dh,
-                      bool construction_errors_are_nonfatal)
-    -> Task<AnySubHandle&> {
+                      FateSharing fate_sharing) -> Task<AnySubHandle&> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     if (not fused) {
       // For the parallel operator, which is currently the only user of the
@@ -744,11 +746,8 @@ private:
       next_subpipeline_id_ += 1;
     }
     // Instantiate for the case where it was not instantiated yet.
-    if (not pipe.substitute(substitute_ctx{base_ctx{sub_dh, *reg_}, nullptr},
-                            true)) {
-      if (construction_errors_are_nonfatal) {
-        co_return make_closed_sub(std::move(key), input, sub_id);
-      }
+    if (not pipe.substitute(
+          substitute_ctx{base_ctx{*parent_dh, *reg_}, nullptr}, true)) {
       // We just emitted an error. Either we return some placeholder no-op
       // handle now, or we just sleep and wait for cancellation. For now, we
       // pick the simple option, but we might need to reconsider how we want to
@@ -768,13 +767,10 @@ private:
       std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
                   pipe.operators.end());
     }
-    auto output = pipe.infer_type(input, sub_dh);
+    auto output = pipe.infer_type(input, *parent_dh);
     // The caller is responsible for passing a well-typed pipeline that
     // type-checks against `input`. And since optimizations are type-preserving,
     // we know that this cannot fail.
-    if (construction_errors_are_nonfatal and (not output or not *output)) {
-      co_return make_closed_sub(std::move(key), input, sub_id);
-    }
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
@@ -802,12 +798,12 @@ private:
                                     std::move(push_downstream),
                                     std::move(from_control_receiver),
                                     std::move(to_control_sender),
-                                    std::move(sub_id), exec_ctx_, sys_, sub_dh)
+                                    std::move(sub_id), exec_ctx_, sys_, *sub_dh)
                   : run_chain(std::move(chain), std::move(pull_upstream),
                               std::move(push_downstream),
                               std::move(from_control_receiver),
                               std::move(to_control_sender), std::move(sub_id),
-                              exec_ctx_, sys_, sub_dh);
+                              exec_ctx_, sys_, *sub_dh);
         return {
           std::move(runner),
           AnyOpPush{std::move(push_upstream)},
@@ -821,7 +817,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
       std::move(from_control_sender), std::move(to_control_receiver), input,
-      local_dh);
+      sub_dh, fate_sharing);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -832,14 +828,12 @@ private:
     operator_scope_->spawn([this, key = std::move(sub_key),
                             runner = std::move(runner),
                             pull_sub = std::move(pull_sub),
-                            to_parent = std::move(to_parent), sub_cancel_token,
-                            local_dh
-                            = std::move(local_dh)]() mutable -> Task<void> {
+                            to_parent = std::move(to_parent),
+                            sub_cancel_token]() mutable -> Task<void> {
       // The main loop of the subpipeline (or combiner?).
       using Event = variant<Terminated, Option<AnyOperatorMsg>>;
       // TODO: Fully implement checkpointing with `allow_output`.
       auto allow_output = true;
-      TENZIR_UNUSED(local_dh);
       auto driver = SelectSet<Event>{};
       co_await driver.activate([&] -> Task<void> {
         auto add_pull = [&] {
@@ -1358,8 +1352,8 @@ private:
         co_return;
       }
       auto sub_failure = failure_or<void>{};
-      if (sub.local_dh) {
-        sub_failure = sub.local_dh->failure();
+      if (sub.fate_sharing == FateSharing::Off) {
+        sub_failure = sub.sub_dh->failure();
       }
       auto finish_reported = sub.finish_reported;
       subpipelines_.erase(it);
@@ -1528,7 +1522,8 @@ private:
   Sender<ToControl> to_control_;
   OpId id_;
   ExecCtx& exec_ctx_;
-  CensoringDiagHandler dh_;
+  secret_censor censor_;
+  Arc<DiagHandler> dh_;
   caf::actor_system& sys_;
   bool input_is_void_;
   bool output_is_void_;
