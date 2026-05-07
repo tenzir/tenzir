@@ -248,7 +248,7 @@ private:
   }
 
   auto get_method() const -> proxygen::HTTPMethod {
-    if (args_.method) {
+    if (not args_.method) {
       return proxygen::HTTPMethod::POST;
     }
     // validated before (in Describer::validate)
