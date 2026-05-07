@@ -19,7 +19,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 
 namespace folly {
@@ -40,16 +39,7 @@ auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
 
 auto is_retryable_http_status(uint16_t status_code) -> bool;
 
-struct retryable_http_response : std::runtime_error {
-  explicit retryable_http_response(
-    uint16_t status_code = 0,
-    std::vector<std::pair<std::string, std::string>> headers = {},
-    std::string body = {});
 
-  uint16_t status_code = 0;
-  std::vector<std::pair<std::string, std::string>> headers;
-  std::string body;
-};
 
 } // namespace http
 

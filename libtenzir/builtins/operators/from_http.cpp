@@ -402,7 +402,8 @@ auto builtin_pagination_mode(Option<pagination_spec> const& paginate)
 // Configuration for a single fetch (and its retries).
 struct FetchConfig {
   std::chrono::milliseconds request_timeout = http::default_timeout;
-  std::chrono::milliseconds connection_timeout = http::default_connection_timeout;
+  std::chrono::milliseconds connection_timeout
+    = http::default_connection_timeout;
   uint32_t max_retry_count = http::default_max_retry_count;
   std::chrono::milliseconds retry_delay = http::default_retry_delay;
   std::shared_ptr<folly::SSLContext> tls_context;
@@ -493,6 +494,19 @@ auto find_content_encoding(
   return None{};
 }
 
+struct retryable_http_response : std::runtime_error {
+  retryable_http_response(
+    uint16_t status_code,
+    std::vector<std::pair<std::string, std::string>> headers)
+    : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
+      status_code{status_code},
+      headers{std::move(headers)} {
+  }
+
+  uint16_t status_code = 0;
+  std::vector<std::pair<std::string, std::string>> headers;
+};
+
 // Static fetch task that runs on the Proxygen EventBase thread. All
 // results are communicated through the message queue; no operator members
 // are touched from this task.
@@ -555,21 +569,15 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   // response headers.
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                auto status = msg->getStatusCode();
-                if (http::is_retryable_http_status(status)) {
-                  auto hdrs
-                    = std::vector<std::pair<std::string, std::string>>{};
-                  msg->getHeaders().forEach(
-                    [&](std::string& k, std::string& v) {
-                      hdrs.emplace_back(k, v);
-                    });
-                  throw http::retryable_http_response{status, std::move(hdrs)};
-                }
-                emitted_response_messages = true;
                 auto hdrs = std::vector<std::pair<std::string, std::string>>{};
                 msg->getHeaders().forEach([&](std::string& k, std::string& v) {
                   hdrs.emplace_back(k, v);
                 });
+                auto status = msg->getStatusCode();
+                if (http::is_retryable_http_status(status)) {
+                  throw retryable_http_response{status, std::move(hdrs)};
+                }
+                emitted_response_messages = true;
                 co_await mq->enqueue(ResponseHeader{status, std::move(hdrs)});
                 co_return proxygen::coro::HTTPSourceReader::Continue;
               })
@@ -606,7 +614,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
               return true;
             }
-            if (ew.is_compatible_with<http::retryable_http_response>()) {
+            if (ew.is_compatible_with<retryable_http_response>()) {
               return true;
             }
             auto retryable_http_error = false;
@@ -619,7 +627,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
       if (result.hasException()) {
         auto retryable_response = Option<ResponseHeader>{};
         result.exception().with_exception(
-          [&](http::retryable_http_response const& err) {
+          [&](retryable_http_response const& err) {
             retryable_response = ResponseHeader{err.status_code, err.headers};
           });
         if (retryable_response) {
@@ -639,8 +647,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
 class FromHttp final : public Operator<void, table_slice> {
 public:
   explicit FromHttp(FromHttpArgs args)
-    : message_queue_{std::in_place, 64},
-      args_{std::move(args)} {
+    : message_queue_{std::in_place, 64}, args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
