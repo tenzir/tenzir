@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "tenzir/async/result.hpp"
 #include "tenzir/blob.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http_pool.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/simdjson_buffer.hpp"
 #include "tenzir/table_slice.hpp"
@@ -33,6 +33,11 @@
 #include <vector>
 
 namespace tenzir::http {
+
+constexpr auto default_timeout = std::chrono::seconds{90};
+constexpr auto default_connection_timeout = std::chrono::seconds{5};
+constexpr auto default_max_retry_count = 5;
+constexpr auto default_retry_delay = std::chrono::seconds{1};
 
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void;
 

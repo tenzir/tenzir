@@ -61,11 +61,6 @@ namespace tenzir::plugins::from_http {
 
 namespace {
 
-constexpr auto message_queue_capacity = uint32_t{256};
-constexpr auto default_timeout = std::chrono::milliseconds{90 * 1000};
-constexpr auto default_connection_timeout = std::chrono::milliseconds{5 * 1000};
-constexpr auto default_retry_delay = std::chrono::milliseconds{1 * 1000};
-
 struct FromHttpArgs {
   located<secret> url;
   Option<located<std::string>> method;
@@ -139,7 +134,7 @@ auto has_header(std::span<const std::pair<std::string, std::string>> headers,
 }
 
 // Builds the initial request configuration from the operator arguments.
-// Resolves method, serialises the body (records become JSON, blobs are sent
+// Resolves method, serializes the body (records become JSON, blobs are sent
 // verbatim), and assembles request headers.
 auto make_request_config(
   FromHttpArgs const& args,
@@ -153,7 +148,7 @@ auto make_request_config(
                  ::toupper);
   auto method = proxygen::stringToMethod(method_str);
   TENZIR_ASSERT(method);
-  // Serialise the optional body. Records become JSON; blobs and strings are
+  // Serialize the optional body. Records become JSON; blobs and strings are
   // sent verbatim.
   auto body = std::vector<std::byte>{};
   Option<std::string> content_type;
@@ -406,10 +401,10 @@ auto builtin_pagination_mode(Option<pagination_spec> const& paginate)
 
 // Configuration for a single fetch (and its retries).
 struct FetchConfig {
-  std::chrono::milliseconds request_timeout = default_timeout;
-  std::chrono::milliseconds connection_timeout = default_connection_timeout;
-  uint32_t max_retry_count = 0;
-  std::chrono::milliseconds retry_delay = default_retry_delay;
+  std::chrono::milliseconds request_timeout = http::default_timeout;
+  std::chrono::milliseconds connection_timeout = http::default_connection_timeout;
+  uint32_t max_retry_count = http::default_max_retry_count;
+  std::chrono::milliseconds retry_delay = http::default_retry_delay;
   std::shared_ptr<folly::SSLContext> tls_context;
 };
 
@@ -644,7 +639,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
 class FromHttp final : public Operator<void, table_slice> {
 public:
   explicit FromHttp(FromHttpArgs args)
-    : message_queue_{std::in_place, message_queue_capacity},
+    : message_queue_{std::in_place, 64},
       args_{std::move(args)} {
   }
 

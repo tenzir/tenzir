@@ -40,6 +40,8 @@ namespace tenzir::plugins::to_http {
 
 namespace {
 
+constexpr auto default_parallel = 1;
+
 using Headers = std::vector<std::pair<std::string, std::string>>;
 
 struct ToHttpArgs {
@@ -255,7 +257,7 @@ private:
       return std::chrono::duration_cast<std::chrono::milliseconds>(
         args_.timeout->inner);
     }
-    return std::chrono::milliseconds{90'000};
+    return http::default_timeout;
   }
 
   auto get_connection_timeout() const -> std::chrono::milliseconds {
@@ -263,13 +265,14 @@ private:
       return std::chrono::duration_cast<std::chrono::milliseconds>(
         args_.connection_timeout->inner);
     }
-    return std::chrono::milliseconds{5'000};
+    return http::default_connection_timeout;
   }
 
   auto get_max_retry_count() const -> uint32_t {
-    return args_.max_retry_count
-             ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
-             : 0;
+    if (args_.max_retry_count) {
+      return detail::narrow<uint32_t>(args_.max_retry_count->inner);
+    }
+    return http::default_max_retry_count;
   }
 
   auto get_retry_delay() const -> std::chrono::milliseconds {
@@ -277,11 +280,11 @@ private:
       return std::chrono::duration_cast<std::chrono::milliseconds>(
         args_.retry_delay->inner);
     }
-    return std::chrono::milliseconds{1'000};
+    return http::default_retry_delay;
   }
 
   auto get_parallel() const -> uint64_t {
-    return args_.parallel ? args_.parallel->inner : 1;
+    return args_.parallel ? args_.parallel->inner : default_parallel;
   }
 
   static auto sub_key() -> int64_t {
