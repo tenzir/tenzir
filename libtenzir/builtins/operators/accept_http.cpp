@@ -374,7 +374,7 @@ public:
                                       .bytes_read = std::move(bytes_read)});
         }
         co_await ctx.spawn_sub(request_id, std::move(pipeline),
-                               tag_v<chunk_ptr>);
+                               tag_v<chunk_ptr>, FateSharing::Off);
       },
       [&](RequestBody body) -> Task<void> {
         auto chunk = std::move(body.chunk);
@@ -458,6 +458,12 @@ public:
       active_requests->erase(request_id);
     }
     co_return;
+  }
+
+  auto finish_sub(SubKeyView key, failure error, Push<table_slice>& push,
+                  OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(error);
+    co_await finish_sub(key, push, ctx);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

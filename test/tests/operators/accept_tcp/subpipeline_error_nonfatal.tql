@@ -1,0 +1,15 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+      payloads:
+        - "{\n"
+        - "{\"value\":42}\n"
+      inter_connection_delay: 0.2
+timeout: 60
+---
+
+accept_tcp env("TCP_ENDPOINT") {
+  read_json
+}
+head 1

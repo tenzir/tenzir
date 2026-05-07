@@ -125,13 +125,15 @@ struct SubMessage {
 struct SubPipeline {
   SubPipeline(AnyOpPush push, Receiver<Checkpoint> from_sub,
               Sender<FromControl> from_control_sender,
-              Receiver<ToControl> to_control_receiver, element_type_tag input)
+              Receiver<ToControl> to_control_receiver, element_type_tag input,
+              std::shared_ptr<DiagHandler> local_dh = {})
     : push{Option<AnyOpPush>{std::move(push)}},
       from_sub{std::move(from_sub)},
       from_control_sender{
         Option<Sender<FromControl>>{std::move(from_control_sender)}},
       to_control_receiver{std::move(to_control_receiver)},
       input{input},
+      local_dh{std::move(local_dh)},
       handle{match(input, [this]<class Input>(tag<Input>) -> AnySubHandle {
         // TODO: There surely is a better way to model this than passing `this`.
         return AnySubHandle{std::in_place_type<SubHandle<Input>>, *this};
@@ -160,6 +162,10 @@ struct SubPipeline {
   element_type_tag input;
   /// True if this subpipeline received the last checkpoint, requiring a commit.
   bool wants_commit = false;
+  /// Diagnostic handler used by non-fate-sharing subpipelines.
+  std::shared_ptr<DiagHandler> local_dh;
+  /// True once `finish_sub` was called for this subpipeline.
+  bool finish_reported = false;
   /// Set when process(SubMessage) observes the from_sub channel drain.
   bool from_sub_done = false;
   /// Set when process(SubMessage) observes the to_control channel drain.
@@ -236,6 +242,44 @@ public:
 private:
   Ref<DiagHandler> dh_;
   secret_censor censor_;
+};
+
+// Forwards diagnostics to a parent handler, but emits errors as warnings and
+// cancels its source so the owner can stop the isolated computation.
+class ErrorDemotingDiagHandler final : public DiagHandler {
+public:
+  ErrorDemotingDiagHandler(DiagHandler& dh,
+                           std::shared_ptr<folly::CancellationSource> source)
+    : dh_{dh}, cancel_source_{std::move(source)} {
+  }
+
+  auto emit(diagnostic d) -> void override {
+    auto lock = std::scoped_lock{mutex_};
+    if (dedup_.insert(d)) {
+      if (d.severity == severity::error) {
+        failure_ = failure::promise();
+        cancel_source_->requestCancellation();
+        d.severity = severity::warning;
+      }
+      dh_->emit(std::move(d));
+    }
+  }
+
+  auto failure() -> failure_or<void> override {
+    auto lock = std::scoped_lock{mutex_};
+    return failure_;
+  }
+
+  auto cancellation_token() const -> folly::CancellationToken {
+    return cancel_source_->getToken();
+  }
+
+private:
+  std::mutex mutex_;
+  Ref<DiagHandler> dh_;
+  std::shared_ptr<folly::CancellationSource> cancel_source_;
+  diagnostic_deduplicator dedup_;
+  failure_or<void> failure_;
 };
 
 /// Decorator over any `ExecCtx` that produces fused channels and shares a
@@ -639,18 +683,59 @@ private:
     co_return {};
   }
 
-  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnySubHandle&> override {
-    return spawn_sub_impl(std::move(key), std::move(pipe), input, false);
+  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
+                 FateSharing fate_sharing) -> Task<AnySubHandle&> override {
+    if (fate_sharing == FateSharing::On) {
+      return spawn_sub_impl(std::move(key), std::move(pipe), input, false, dh_,
+                            folly::CancellationToken{}, {}, false);
+    }
+    auto cancel_source = std::make_shared<folly::CancellationSource>();
+    auto sub_dh
+      = std::make_shared<ErrorDemotingDiagHandler>(dh_, cancel_source);
+    auto& sub_dh_ref = *sub_dh;
+    auto sub_cancel_token = sub_dh->cancellation_token();
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
+                          sub_dh_ref, sub_cancel_token, std::move(sub_dh),
+                          true);
   }
 
   auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnySubHandle&> override {
-    return spawn_sub_impl(std::move(key), std::move(pipe), input, true);
+    return spawn_sub_impl(std::move(key), std::move(pipe), input, true, dh_,
+                          folly::CancellationToken{}, {}, false);
+  }
+
+  auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id)
+    -> AnySubHandle& {
+    auto [from_sub_sender, from_sub] = channel<Checkpoint>(1);
+    auto [from_control_sender, from_control_receiver] = channel<FromControl>(1);
+    auto [to_control_sender, to_control_receiver] = channel<ToControl>(1);
+    TENZIR_UNUSED(from_sub_sender, from_control_receiver, to_control_sender);
+    auto push_sub = match(input, [&]<class In>(tag<In>) -> AnyOpPush {
+      auto [push, pull] = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+      TENZIR_UNUSED(pull);
+      return AnyOpPush{std::move(push)};
+    });
+    auto [it, inserted] = subpipelines_.try_emplace(
+      std::move(key), std::move(push_sub), std::move(from_sub),
+      std::move(from_control_sender), std::move(to_control_receiver), input);
+    if (not inserted) {
+      panic("already have a subpipeline for that key");
+    }
+    it->second.closed_data = true;
+    it->second.push = None{};
+    it->second.from_control_sender = None{};
+    add_from_sub_recv(it);
+    add_to_control_recv(it);
+    return it->second.handle;
   }
 
   auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
-                      bool fused) -> Task<AnySubHandle&> {
+                      bool fused, DiagHandler& sub_dh,
+                      folly::CancellationToken sub_cancel_token,
+                      std::shared_ptr<DiagHandler> local_dh,
+                      bool construction_errors_are_nonfatal)
+    -> Task<AnySubHandle&> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     if (not fused) {
       // For the parallel operator, which is currently the only user of the
@@ -659,8 +744,11 @@ private:
       next_subpipeline_id_ += 1;
     }
     // Instantiate for the case where it was not instantiated yet.
-    if (not pipe.substitute(substitute_ctx{base_ctx{dh_, *reg_}, nullptr},
+    if (not pipe.substitute(substitute_ctx{base_ctx{sub_dh, *reg_}, nullptr},
                             true)) {
+      if (construction_errors_are_nonfatal) {
+        co_return make_closed_sub(std::move(key), input, sub_id);
+      }
       // We just emitted an error. Either we return some placeholder no-op
       // handle now, or we just sleep and wait for cancellation. For now, we
       // pick the simple option, but we might need to reconsider how we want to
@@ -680,10 +768,13 @@ private:
       std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
                   pipe.operators.end());
     }
-    auto output = pipe.infer_type(input, dh_);
+    auto output = pipe.infer_type(input, sub_dh);
     // The caller is responsible for passing a well-typed pipeline that
     // type-checks against `input`. And since optimizations are type-preserving,
     // we know that this cannot fail.
+    if (construction_errors_are_nonfatal and (not output or not *output)) {
+      co_return make_closed_sub(std::move(key), input, sub_id);
+    }
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
@@ -711,12 +802,12 @@ private:
                                     std::move(push_downstream),
                                     std::move(from_control_receiver),
                                     std::move(to_control_sender),
-                                    std::move(sub_id), exec_ctx_, sys_, dh_)
+                                    std::move(sub_id), exec_ctx_, sys_, sub_dh)
                   : run_chain(std::move(chain), std::move(pull_upstream),
                               std::move(push_downstream),
                               std::move(from_control_receiver),
                               std::move(to_control_sender), std::move(sub_id),
-                              exec_ctx_, sys_, dh_);
+                              exec_ctx_, sys_, sub_dh);
         return {
           std::move(runner),
           AnyOpPush{std::move(push_upstream)},
@@ -729,7 +820,8 @@ private:
     // its runner so shutdown paths can already observe and drain it.
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
-      std::move(from_control_sender), std::move(to_control_receiver), input);
+      std::move(from_control_sender), std::move(to_control_receiver), input,
+      local_dh);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -740,12 +832,14 @@ private:
     operator_scope_->spawn([this, key = std::move(sub_key),
                             runner = std::move(runner),
                             pull_sub = std::move(pull_sub),
-                            to_parent
-                            = std::move(to_parent)]() mutable -> Task<void> {
+                            to_parent = std::move(to_parent), sub_cancel_token,
+                            local_dh
+                            = std::move(local_dh)]() mutable -> Task<void> {
       // The main loop of the subpipeline (or combiner?).
       using Event = variant<Terminated, Option<AnyOperatorMsg>>;
       // TODO: Fully implement checkpointing with `allow_output`.
       auto allow_output = true;
+      TENZIR_UNUSED(local_dh);
       auto driver = SelectSet<Event>{};
       co_await driver.activate([&] -> Task<void> {
         auto add_pull = [&] {
@@ -757,8 +851,13 @@ private:
                               }));
         };
         add_pull();
-        driver.add([runner = std::move(runner)] mutable -> Task<Terminated> {
-          co_await std::move(runner);
+        driver.add([runner = std::move(runner),
+                    sub_cancel_token] mutable -> Task<Terminated> {
+          auto token = folly::cancellation_token_merge(
+            co_await folly::coro::co_current_cancellation_token,
+            sub_cancel_token);
+          co_await catch_cancellation(
+            folly::coro::co_withCancellation(token, std::move(runner)));
           co_return Terminated{};
         });
         while (auto next = co_await driver.next([&](Event const& event) {
@@ -1001,6 +1100,20 @@ private:
       });
   }
 
+  auto call_finish_sub(SubKeyView key, failure error) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->finish_sub(key, error, ctx_ref);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->finish_sub(key, error, wrapper, ctx_ref);
+        }
+      });
+  }
+
   template <class DataInput>
   auto call_process(DataInput input) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
@@ -1157,6 +1270,9 @@ private:
           signal,
           [&](EndOfData) -> Task<void> {
             LOGV("got end of data in {}", op_name());
+            if (phase_ != Phase::running) {
+              co_return;
+            }
             TENZIR_ASSERT(not input_is_void_);
             got_end_of_data_ = true;
             co_await handle_done(false);
@@ -1168,6 +1284,9 @@ private:
     // We always pull from upstream, even if the operator is done, since we want
     // to continue receiving checkpoints and our shutdown logic depends on it.
     driver_.add(pull_upstream());
+    if (phase_ == Phase::running and base_op().state() == OperatorState::done) {
+      co_await handle_done(false);
+    }
   }
 
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
@@ -1238,9 +1357,18 @@ private:
       if (not closed) {
         co_return;
       }
+      auto sub_failure = failure_or<void>{};
+      if (sub.local_dh) {
+        sub_failure = sub.local_dh->failure();
+      }
+      auto finish_reported = sub.finish_reported;
       subpipelines_.erase(it);
-      if (phase_ != Phase::stopping_forced) {
-        co_await call_finish_sub(make_view(message.key));
+      if (phase_ != Phase::stopping_forced and not finish_reported) {
+        if (sub_failure.is_error()) {
+          co_await call_finish_sub(make_view(message.key), sub_failure.error());
+        } else {
+          co_await call_finish_sub(make_view(message.key));
+        }
       }
       co_await check_done();
     };
@@ -1298,6 +1426,14 @@ private:
     }
     LOGV("running done in {}", op_name());
     auto first_time = phase_ == Phase::running;
+    if (not force and not first_time) {
+      if (operator_draining_ and base_op().state() == OperatorState::done) {
+        operator_draining_ = false;
+      } else {
+        co_await check_done();
+        co_return;
+      }
+    }
     phase_ = force ? Phase::stopping_forced : Phase::stopping_gracefully;
     if (force) {
       // Cancel operator-scoped tasks immediately so that background IO
@@ -1353,7 +1489,14 @@ private:
     if (phase_ == Phase::running or phase_ == Phase::stopped) {
       co_return;
     }
-    if (not subpipelines_.empty()) {
+    auto has_unreported_subpipeline = false;
+    for (auto const& [_, sub] : subpipelines_) {
+      if (not sub.finish_reported) {
+        has_unreported_subpipeline = true;
+        break;
+      }
+    }
+    if (phase_ != Phase::stopping_forced and has_unreported_subpipeline) {
       // We need to wait for all subpipelines to finish.
       co_return;
     }
@@ -1457,9 +1600,9 @@ auto run_operator(Box<Operator<Input, Output>> op,
   };
   auto result
     = co_await catch_cancellation(std::move(runner).run_to_completion());
-  // Ensure that we only cancel if cancellation was requested from outside.
-  co_await folly::coro::co_safe_point;
-  TENZIR_ASSERT(result);
+  if (not result) {
+    co_return;
+  }
   co_return;
 }
 
@@ -1551,7 +1694,6 @@ private:
                       -> Task<std::pair<size_t, Terminated>> {
           co_await folly::coro::co_withExecutor(std::move(executor),
                                                 std::move(task));
-          LOGI("got termination from operator {}", index);
           co_return {index, Terminated{}};
         });
       });

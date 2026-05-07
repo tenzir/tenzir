@@ -291,8 +291,8 @@ public:
           co_return;
         }
         auto key = sub_key_for(conn_id);
-        co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
-                                          std::move(pipeline_copy));
+        co_await ctx.spawn_sub<chunk_ptr>(
+          std::move(key), std::move(pipeline_copy), FateSharing::Off);
         auto [_, inserted]
           = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
@@ -356,6 +356,12 @@ public:
       maybe_finish_draining();
     }
     co_return;
+  }
+
+  auto finish_sub(SubKeyView key, failure error, Push<table_slice>& push,
+                  OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(error);
+    co_await finish_sub(key, push, ctx);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
