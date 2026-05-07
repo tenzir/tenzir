@@ -134,6 +134,8 @@ cpack_add_component(
   DISPLAY_NAME "Runtime"
   DESCRIPTION "Runtime files for Tenzir"
   REQUIRED)
+# Keep this component available for bundled dependencies that may install files
+# without assigning an explicit component.
 cpack_add_component(
   Unspecified
   DISPLAY_NAME "Unspecified"
