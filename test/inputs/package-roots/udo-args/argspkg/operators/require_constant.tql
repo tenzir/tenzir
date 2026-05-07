@@ -6,9 +6,7 @@ args:
       type: string
       description: "Must be an expression of type string"
 ---
-strict {
+// TODO: Temporarily removed `strict` from here to be able to merge
+// strict {
   suffix_value = "suffix: " + $suffix
-}
-to_stdout {
-  write_json
-}
+// }

@@ -1,5 +1,5 @@
 error: expected a selector
- --> tests/packages/udo-args/udo-args-field-path-invalid.tql:6:20
+ --> tests/operators/udo/args/udo-args-field-path-invalid.tql:6:20
   |
 6 | argspkg::set_field "y", "hello"
   |                    ^^^ 

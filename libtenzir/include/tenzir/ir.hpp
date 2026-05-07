@@ -167,6 +167,33 @@ struct optimize_result {
   pipeline replacement;
 };
 
+class SetIr final : public Operator {
+public:
+  SetIr();
+
+  explicit SetIr(std::vector<ast::assignment> assignments);
+
+  auto name() const -> std::string override;
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override;
+
+  auto spawn(element_type_tag input) && -> AnyOperator override;
+
+  auto optimize(optimize_filter filter,
+                event_order order) && -> optimize_result override;
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, SetIr& x) -> bool;
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_;
+};
+
 } // namespace ir
 
 /// Create a `set` IR operator from assignments.

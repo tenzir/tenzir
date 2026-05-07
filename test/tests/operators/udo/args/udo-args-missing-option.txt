@@ -1,5 +1,5 @@
 error: required argument `required_opt` was not provided
- --> tests/packages/udo-args/udo-args-missing-option.tql:5:1
+ --> tests/operators/udo/args/udo-args-missing-option.tql:5:1
   |
 5 | argspkg::require_option "A"
   | ^^^^^^^^^^^^^^^^^^^^^^^ 

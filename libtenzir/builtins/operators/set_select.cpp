@@ -8,6 +8,7 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -49,7 +50,8 @@ auto make_select_assignments(std::vector<ast::expression> args,
   return assignments;
 }
 
-class set final : public operator_plugin2<set_operator> {
+class set final : public virtual operator_plugin2<set_operator>,
+                  public virtual operator_compiler_plugin {
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -70,6 +72,27 @@ public:
         });
     }
     return std::make_unique<set_operator>(std::move(assignments));
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    auto usage = "set <path>=<expr>...";
+    auto docs = "https://docs.tenzir.com/reference/operators/set";
+    auto assignments = std::vector<ast::assignment>{};
+    for (auto& arg : inv.args) {
+      auto* assignment = try_as<ast::assignment>(arg);
+      if (not assignment) {
+        diagnostic::error("expected assignment")
+          .primary(arg)
+          .usage(usage)
+          .docs(docs)
+          .emit(ctx);
+        return failure::promise();
+      }
+      TRY(assignment->right.bind(ctx));
+      assignments.push_back(std::move(*assignment));
+    }
+    return make_set_ir(std::move(assignments));
   }
 };
 
