@@ -73,6 +73,7 @@
 #include <caf/actor_addr.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/send.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -365,7 +366,8 @@ using serve_response = std::tuple<std::string, std::vector<table_slice>>;
 
 using serve_manager_actor = typed_actor_fwd<
   // Register a new serve operator.
-  auto(atom::start, std::string serve_id, uint64_t buffer_size)
+  auto(atom::start, std::string serve_id, uint64_t buffer_size,
+       caf::actor watched)
     ->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
   auto(atom::stop, std::string serve_id)->caf::result<void>,
@@ -536,7 +538,8 @@ struct serve_manager_state {
                              delete_serve);
   }
 
-  auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
+  auto start(std::string serve_id, uint64_t buffer_size, caf::actor watched)
+    -> caf::result<void> {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
       return op.serve_id == serve_id;
     });
@@ -549,16 +552,20 @@ struct serve_manager_state {
       }
       ops.erase(found);
     }
-    const auto sender = caf::actor_cast<caf::actor>(self->current_sender());
-    TENZIR_ASSERT(sender);
-    const auto addr = sender->address();
+    if (not watched) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} received null watched actor for "
+                                         "serve id {}",
+                                         *self, escape_operator_arg(serve_id)));
+    }
+    const auto addr = watched->address();
     ops.push_back({
       .source = addr,
       .serve_id = serve_id,
       .continuation_token = "",
       .buffer_size = buffer_size,
     });
-    self->monitor(sender, [this, addr](const caf::error& err) {
+    self->monitor(std::move(watched), [this, addr](const caf::error& err) {
       handle_down_msg(addr, err);
     });
     return {};
@@ -727,9 +734,10 @@ auto serve_manager(
   -> serve_manager_actor::behavior_type {
   self->state().self = self;
   return {
-    [self](atom::start, std::string& serve_id,
-           uint64_t buffer_size) -> caf::result<void> {
-      return self->state().start(std::move(serve_id), buffer_size);
+    [self](atom::start, std::string& serve_id, uint64_t buffer_size,
+           caf::actor& watched) -> caf::result<void> {
+      return self->state().start(std::move(serve_id), buffer_size,
+                                 std::move(watched));
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
       return self->state().stop(std::move(serve_id));
@@ -1221,13 +1229,24 @@ public:
     co_await OperatorBase::start(ctx);
     serve_manager_ = ctx.actor_system().registry().get<serve_manager_actor>(
       "tenzir.serve-manager");
-    auto result
-      = co_await async_mail(atom::start_v, args_.id, args_.buffer_size)
-          .request(serve_manager_);
+    lifetime_actor_
+      = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor*) {
+          return caf::behavior{
+            []() {
+              // Dummy handler because CAF immediately kills actors who return
+              // an empty behavior.
+              return;
+            },
+          };
+        });
+    auto result = co_await async_mail(atom::start_v, args_.id,
+                                      args_.buffer_size, lifetime_actor_)
+                    .request(serve_manager_);
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to register at serve-manager")
         .emit(ctx);
+      co_return;
     }
   }
 
@@ -1251,6 +1270,7 @@ public:
       diagnostic::error(result.error())
         .note("failed to deregister at serve-manager")
         .emit(ctx);
+      co_return FinalizeBehavior::done;
     }
     co_return FinalizeBehavior::done;
   }
@@ -1258,6 +1278,7 @@ public:
 private:
   ServeArgs args_;
   serve_manager_actor serve_manager_;
+  caf::actor lifetime_actor_;
 };
 
 // -- serve operator ----------------------------------------------------------
@@ -1279,7 +1300,8 @@ public:
     // Register this operator at SERVE MANAGER actor using the serve_id.
     ctrl.set_waiting(true);
     ctrl.self()
-      .mail(atom::start_v, serve_id_, buffer_size_)
+      .mail(atom::start_v, serve_id_, buffer_size_,
+            caf::actor_cast<caf::actor>(&ctrl.self()))
       .request(serve_manager, caf::infinite)
       .then(
         [&]() {
