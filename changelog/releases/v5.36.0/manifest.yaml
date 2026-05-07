@@ -1,0 +1,10 @@
+created: 2026-05-07
+title: OCSF enum list derivation
+intro: >-
+  This release makes int64/uint64 column merging lossless during parsing, so fields
+  like `flow_id` that mix signed and unsigned values no longer cause unnecessary table-slice
+  splits. It also extends ocsf::derive to handle list-valued enum fields for full
+  bidirectional OCSF enum normalization.
+source:
+  mode: sync-stable-queue
+  previous_stable: v5.35.2
