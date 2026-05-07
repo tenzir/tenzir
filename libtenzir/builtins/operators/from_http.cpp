@@ -505,6 +505,7 @@ struct retryable_http_response : std::runtime_error {
 
   uint16_t status_code = 0;
   std::vector<std::pair<std::string, std::string>> headers;
+  blob body;
 };
 
 // Static fetch task that runs on the Proxygen EventBase thread. All
@@ -531,12 +532,12 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           config.request_timeout);
         // Retry only on socket-level failures (connect refused, reset, …).
         // HTTP-level errors (non-2xx) are not retried.
-        auto emitted_response_messages = false;
+        auto emitted_messages = false;
         co_await folly::coro::retryWithExponentialBackoff(
           config.max_retry_count, config.retry_delay, config.retry_delay * 5,
           0.0 /* no jitter */,
           [&]() -> Task<void> {
-            emitted_response_messages = false;
+            emitted_messages = false;
             // Resolve DNS and establish the TCP connection.
             auto addresses
               = co_await proxygen::coro::CoroDNSResolver::resolveHost(
@@ -559,8 +560,9 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             }
             // Build a streaming reader that feeds messages into the queue.
             auto reader = proxygen::coro::HTTPSourceReader{};
+            Option<retryable_http_response> retryable_response;
             reader
-              .onHeadersAsync([mq, &emitted_response_messages](
+              .onHeadersAsync([mq, &emitted_messages, &retryable_response](
                                 std::unique_ptr<proxygen::HTTPMessage> msg,
                                 bool is_final,
                                 bool) mutable -> folly::coro::Task<bool> {
@@ -575,21 +577,32 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                 });
                 auto status = msg->getStatusCode();
                 if (http::is_retryable_http_status(status)) {
-                  throw retryable_http_response{status, std::move(hdrs)};
+                  retryable_response
+                    = retryable_http_response{status, std::move(hdrs)};
+                  co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                emitted_response_messages = true;
+                emitted_messages = true;
                 co_await mq->enqueue(ResponseHeader{status, std::move(hdrs)});
                 co_return proxygen::coro::HTTPSourceReader::Continue;
               })
-              .onBodyAsync([mq, &emitted_response_messages](
+              .onBodyAsync([mq, &emitted_messages, &retryable_response](
                              quic::BufQueue buf_queue,
                              bool) mutable -> folly::coro::Task<bool> {
                 if (not buf_queue.empty()) {
-                  emitted_response_messages = true;
                   auto iobuf = buf_queue.move();
                   iobuf->coalesce();
-                  auto cptr = chunk::copy(iobuf->data(), iobuf->length());
-                  co_await mq->enqueue(ResponseBody{std::move(cptr)});
+                  if (retryable_response) {
+                    // buffer body
+                    auto const* p
+                      = reinterpret_cast<std::byte const*>(iobuf->data());
+                    retryable_response->body.insert(
+                      retryable_response->body.end(), p, p + iobuf->length());
+                  } else {
+                    // send as message
+                    emitted_messages = true;
+                    auto cptr = chunk::copy(iobuf->data(), iobuf->length());
+                    co_await mq->enqueue(ResponseBody{std::move(cptr)});
+                  }
                 }
                 co_return proxygen::coro::HTTPSourceReader::Continue;
               });
@@ -603,12 +616,15 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             co_await proxygen::coro::HTTPClient::request(
               session, std::move(*reservation), std::move(req_source),
               std::move(reader), config.request_timeout);
+            if (retryable_response) {
+              throw std::move(*retryable_response);
+            }
           },
           [&](folly::exception_wrapper const& ew) {
             // Once an attempt emitted response messages, do not retry.
             // Retrying after partial output can duplicate/corrupt downstream
             // parser and pagination state.
-            if (emitted_response_messages) {
+            if (emitted_messages) {
               return false;
             }
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
@@ -625,13 +641,13 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           });
       }());
       if (result.hasException()) {
-        auto retryable_response = Option<ResponseHeader>{};
-        result.exception().with_exception(
-          [&](retryable_http_response const& err) {
-            retryable_response = ResponseHeader{err.status_code, err.headers};
-          });
-        if (retryable_response) {
-          co_await mq->enqueue(std::move(*retryable_response));
+        if (auto const* res
+            = result.exception().get_exception<retryable_http_response>()) {
+          co_await mq->enqueue(ResponseHeader{res->status_code, res->headers});
+          if (not res->body.empty()) {
+            co_await mq->enqueue(
+              ResponseBody{chunk::copy(res->body.data(), res->body.size())});
+          }
         } else {
           co_await mq->enqueue(
             FetchError{result.exception().what().toStdString()});
