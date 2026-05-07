@@ -87,9 +87,7 @@ struct ExplicitAny {
   Any value;
 };
 
-struct Terminated {
-  bool failed = false;
-};
+struct Terminated {};
 
 template <class T>
 class IdentityOperator final : public Operator<T, T> {
@@ -694,9 +692,11 @@ private:
     auto cancel_source = std::make_shared<folly::CancellationSource>();
     auto sub_dh
       = std::make_shared<ErrorDemotingDiagHandler>(dh_, cancel_source);
+    auto& sub_dh_ref = *sub_dh;
+    auto sub_cancel_token = sub_dh->cancellation_token();
     return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
-                          *sub_dh, sub_dh->cancellation_token(),
-                          std::move(sub_dh), true);
+                          sub_dh_ref, sub_cancel_token, std::move(sub_dh),
+                          true);
   }
 
   auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
@@ -839,6 +839,7 @@ private:
       using Event = variant<Terminated, Option<AnyOperatorMsg>>;
       // TODO: Fully implement checkpointing with `allow_output`.
       auto allow_output = true;
+      TENZIR_UNUSED(local_dh);
       auto driver = SelectSet<Event>{};
       co_await driver.activate([&] -> Task<void> {
         auto add_pull = [&] {
@@ -850,22 +851,19 @@ private:
                               }));
         };
         add_pull();
-        driver.add(
-          [runner = std::move(runner), sub_cancel_token,
-           local_dh = std::move(local_dh)] mutable -> Task<Terminated> {
-            auto token = folly::cancellation_token_merge(
-              co_await folly::coro::co_current_cancellation_token,
-              sub_cancel_token);
-            co_await catch_cancellation(
-              folly::coro::co_withCancellation(token, std::move(runner)));
-            co_return Terminated{.failed
-                                 = local_dh and local_dh->failure().is_error()};
-          });
+        driver.add([runner = std::move(runner),
+                    sub_cancel_token] mutable -> Task<Terminated> {
+          auto token = folly::cancellation_token_merge(
+            co_await folly::coro::co_current_cancellation_token,
+            sub_cancel_token);
+          co_await catch_cancellation(
+            folly::coro::co_withCancellation(token, std::move(runner)));
+          co_return Terminated{};
+        });
         while (auto next = co_await driver.next([&](Event const& event) {
           // Block subpipeline output after receiving its checkpoint.
           return allow_output or not is<Option<AnyOperatorMsg>>(event);
         })) {
-          auto stop = false;
           co_await co_match(
             *next,
             [&](Option<AnyOperatorMsg> output) -> Task<void> {
@@ -901,15 +899,11 @@ private:
                 });
               add_pull();
             },
-            [&](Terminated terminated) -> Task<void> {
+            [&](Terminated) -> Task<void> {
               // We wait with informing the parent until everything is done to
               // ensure that we don't send anything anymore.
-              stop = terminated.failed;
               co_return;
             });
-          if (stop) {
-            break;
-          }
         }
         // Now is the time to notify the parent. For now, this happens just by
         // dropping `to_parent` and `to_control_sender`, closing the channels.
@@ -1276,6 +1270,9 @@ private:
           signal,
           [&](EndOfData) -> Task<void> {
             LOGV("got end of data in {}", op_name());
+            if (phase_ != Phase::running) {
+              co_return;
+            }
             TENZIR_ASSERT(not input_is_void_);
             got_end_of_data_ = true;
             co_await handle_done(false);
@@ -1287,7 +1284,7 @@ private:
     // We always pull from upstream, even if the operator is done, since we want
     // to continue receiving checkpoints and our shutdown logic depends on it.
     driver_.add(pull_upstream());
-    if (base_op().state() == OperatorState::done) {
+    if (phase_ == Phase::running and base_op().state() == OperatorState::done) {
       co_await handle_done(false);
     }
   }
@@ -1429,6 +1426,14 @@ private:
     }
     LOGV("running done in {}", op_name());
     auto first_time = phase_ == Phase::running;
+    if (not force and not first_time) {
+      if (operator_draining_ and base_op().state() == OperatorState::done) {
+        operator_draining_ = false;
+      } else {
+        co_await check_done();
+        co_return;
+      }
+    }
     phase_ = force ? Phase::stopping_forced : Phase::stopping_gracefully;
     if (force) {
       // Cancel operator-scoped tasks immediately so that background IO
