@@ -176,31 +176,15 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       // got response
       proxygen::coro::HTTPClient::Response resp
         = std::move(attempt_res).unwrap();
-      if (resp.headers
-          and not http::is_retryable_http_status(
-            resp.headers->getStatusCode())) {
+      if (attempt >= config.max_retry_count
+          or (not http::is_retryable_http_status(
+            resp.headers->getStatusCode()))) {
         // not retryable
         co_return to_http_response(resp);
       }
       // retryable
-      auto response_headers
-        = std::vector<std::pair<std::string, std::string>>{};
-      if (resp.headers) {
-        retry_after = parse_retry_after(
-          resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
-        resp.headers->getHeaders().forEach(
-          [&](std::string const& name, std::string const& value) {
-            response_headers.emplace_back(name, value);
-          });
-      }
-      auto response_body = std::string{};
-      if (not resp.body.empty()) {
-        response_body = resp.body.move()->to<std::string>();
-      }
-      if (attempt >= config.max_retry_count) {
-        // will not retry, return response
-        co_return to_http_response(resp);
-      }
+      retry_after = parse_retry_after(
+        resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
     } else {
       // transport error
       auto attempt_err = attempt_res.unwrap_err();
