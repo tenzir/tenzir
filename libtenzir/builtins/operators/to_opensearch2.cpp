@@ -251,8 +251,9 @@ public:
       final_url.segments().push_back("_bulk");
     }
     url_ = std::string{final_url.buffer()};
-    auto tls_needed
-      = http::normalize_url_and_tls(args_.tls, url_, args_.url.source, ctx);
+    auto tls_needed = http::normalize_url_and_tls(
+      args_.tls, url_, args_.url.source, ctx,
+      std::addressof(ctx.actor_system().config()));
     if (tls_needed.is_error()) {
       co_return;
     }
@@ -263,7 +264,7 @@ public:
     if (*tls_needed) {
       auto tls_opts = tls_options::from_optional(args_.tls);
       auto ssl_context = tls_opts.make_folly_ssl_context(
-        ctx, std::addressof(ctx.actor_system().config()));
+        ctx, std::addressof(ctx.actor_system().config()), true);
       if (ssl_context.is_error()) {
         co_return;
       }

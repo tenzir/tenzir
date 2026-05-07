@@ -1,8 +1,8 @@
-error: required subpipeline was not provided
- --> tests/operators/from_http/paginate_lambda_requires_parser.tql:5:1
+error: named argument `metadata_fields` does not exist
+ --> tests/operators/from_http/error_metadata_fields_arg.tql:5:34
   |
-5 | from_http "http://example.com", paginate=(x => x.next)
-  | ^^^^^^^^^ 
+5 | from_http "http://127.0.0.1:0/", metadata_fields=true {
+  |                                  ^^^^^^^^^^^^^^^ 
   |
   = usage: from_http url:secret, [method=string, body=any, headers=record, tls=record, timeout=duration, error_field=field, metadata_field=any, paginate=any, paginate_delay=duration, connection_timeout=duration, max_retry_count=int, retry_delay=duration, encode=string, server=bool]
   = docs: https://docs.tenzir.com/reference/operators/from_http

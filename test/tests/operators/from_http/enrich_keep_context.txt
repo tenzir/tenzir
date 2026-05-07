@@ -1,0 +1,10 @@
+{
+  ctx: {
+    severity: "HIGH",
+  },
+  domain: "tenzir.com",
+  ip: 0.0.0.0,
+  scan: {
+    method: "PUT",
+  },
+}

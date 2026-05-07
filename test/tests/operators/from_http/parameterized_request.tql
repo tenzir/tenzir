@@ -1,0 +1,32 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        method: POST
+        path: /options/body
+timeout: 60
+---
+
+// Original (`guides/collecting/fetch-via-http-and-apis.mdx`):
+// from {
+//   url: "https://api.example.com/users",
+//   method: "post",
+//   data: {
+//     name: "John",
+//     email: "john@example.com"
+//   }
+// }
+// http url, method=method, body=data
+from {
+  url: env("HTTP_FIXTURE_BODY_URL"),
+  method: "post",
+  data: {
+    name: "John",
+    email: "john@example.com",
+  },
+}
+each {
+  from_http $this.url, method=$this.method, body=$this.data, encode="json" {
+    read_json
+  }
+}

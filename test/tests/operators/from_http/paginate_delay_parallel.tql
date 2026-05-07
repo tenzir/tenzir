@@ -1,0 +1,21 @@
+---
+fixtures: [http_paginate]
+timeout: 60
+---
+
+// Original (`guides/collecting/fetch-via-http-and-apis.mdx`):
+// from {domain: "example.com"}
+// http f"https://api.example.com/scan?q={domain}",
+//   paginate=(x => x.next_url if x.has_next),
+//   paginate_delay=500ms,
+//   parallel=2
+
+from {domain: "a-domain"},
+     {domain: "b-domain"}
+each parallel=2 {
+  from_http env("HTTP_FIXTURE_LAMBDA_URL") + f"?q={$this.domain}", paginate=(x => x.next), paginate_delay=50ms, tls=false {
+    read_json
+    domain = $this.domain
+  }
+}
+sort f"{domain}{page}" // TODO: use two args instead of f-string

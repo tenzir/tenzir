@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
@@ -73,7 +74,9 @@ struct FromHttpArgs {
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<ast::field_path> error_field;
+  Option<located<data>> metadata_field;
   Option<ast::expression> paginate;
+  Option<located<duration>> paginate_delay;
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
@@ -81,6 +84,7 @@ struct FromHttpArgs {
   Option<location> server;
   located<ir::pipeline> parser;
   let_id response;
+  location operator_location = location::unknown;
 };
 
 // Messages from the fetch task to the operator.
@@ -213,7 +217,7 @@ auto make_paginated_request_config(
 auto resolve_http_secrets(
   OpCtx& ctx, FromHttpArgs const& args, std::string& resolved_url,
   std::vector<std::pair<std::string, std::string>>& resolved_headers)
-  -> Task<failure_or<void>> {
+  -> Task<failure_or<bool>> {
   resolved_url.clear();
   auto requests = std::vector<secret_request>{};
   requests.emplace_back(
@@ -231,9 +235,10 @@ auto resolve_http_secrets(
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return failure::promise();
   }
-  CO_TRY(
-    http::normalize_url_and_tls(args.tls, resolved_url, args.url.source, ctx));
-  co_return {};
+  CO_TRY(auto tls_enabled, http::normalize_url_and_tls(
+                             args.tls, resolved_url, args.url.source, ctx,
+                             std::addressof(ctx.actor_system().config())));
+  co_return tls_enabled;
 }
 
 using pagination_spec
@@ -408,9 +413,7 @@ struct FetchConfig {
   std::shared_ptr<folly::SSLContext> tls_context;
 };
 
-auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh,
-                       const caf::actor_system_config* cfg)
-  -> Option<FetchConfig> {
+auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
   auto config = FetchConfig{};
   if (args.timeout) {
     config.request_timeout
@@ -430,14 +433,7 @@ auto make_fetch_config(FromHttpArgs const& args, diagnostic_handler& dh,
     config.retry_delay = std::chrono::duration_cast<std::chrono::milliseconds>(
       args.retry_delay->inner);
   }
-  auto tls_opts = tls_options::from_optional(args.tls, {.is_server = false});
-  auto result = tls_opts.make_folly_ssl_context(dh, cfg);
-  if (result.is_success()) {
-    config.tls_context = std::move(*result);
-  } else {
-    return None{};
-  }
-  return Option<FetchConfig>{std::move(config)};
+  return config;
 }
 
 struct PaginationState {
@@ -526,7 +522,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           is_secure ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                     : proxygen::coro::HTTPClient::SecureTransportImpl::NONE,
           host);
-        if (config.tls_context) {
+        if (is_secure and config.tls_context) {
           conn_params.sslContext = config.tls_context;
         }
         auto sess_params = proxygen::coro::HTTPClient::getSessionParams(
@@ -650,21 +646,15 @@ public:
     paginate_ = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
-    auto sec_res = co_await resolve_http_secrets(ctx, args_, resolved_url,
-                                                 resolved_headers_);
-    if (sec_res.is_error()) {
+    auto secret_resolution = co_await resolve_http_secrets(
+      ctx, args_, resolved_url, resolved_headers_);
+    if (secret_resolution.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
     pagination_.current_url = resolved_url;
     // prepare fetch config
-    auto fetch_config = make_fetch_config(
-      args_, ctx, std::addressof(ctx.actor_system().config()));
-    if (not fetch_config) {
-      lifecycle_ = Lifecycle::done;
-      co_return;
-    }
-    fetch_config_ = std::move(*fetch_config);
+    fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
     ensure_http_default_ca_paths();
     co_await start_fetch(ctx, make_request_config(args_, resolved_headers_));
@@ -717,7 +707,7 @@ public:
           if (not args_.error_field) {
             diagnostic::error("received HTTP error status {}",
                               response_->status)
-              .primary(args_.url.source)
+              .primary(args_.operator_location)
               .emit(ctx);
           }
         }
@@ -762,7 +752,7 @@ public:
         diagnostic::error(
           "HTTP request to `{}` failed: {}", pagination_.current_url,
           strip_errno_from_error_message(std::move(err.message)))
-          .primary(args_.url.source)
+          .primary(args_.operator_location)
           .emit(ctx);
         pagination_.next_url = None{};
         lifecycle_ = Lifecycle::done;
@@ -832,6 +822,12 @@ public:
       pagination_.current_url = std::move(*pagination_.next_url);
       pagination_.next_url = None{};
       pagination_.page_count += 1;
+      if (args_.paginate_delay
+          and args_.paginate_delay->inner > duration::zero()) {
+        co_await sleep_for(
+          std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            args_.paginate_delay->inner));
+      }
       co_await start_fetch(ctx,
                            make_paginated_request_config(resolved_headers_));
     } else {
@@ -853,6 +849,18 @@ private:
     response_ = None{};
     odata_envelope_seen_ = false;
     auto parsed_url = proxygen::URL{pagination_.current_url};
+    if (parsed_url.isSecure() and not fetch_config_.tls_context) {
+      auto tls_opts
+        = tls_options::from_optional(args_.tls, {.is_server = false});
+      auto result = tls_opts.make_folly_ssl_context(
+        ctx, std::addressof(ctx.actor_system().config()), true);
+      if (result.is_success()) {
+        fetch_config_.tls_context = std::move(*result);
+      } else {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+    }
     bytes_read_ = ctx.make_counter(
       MetricsLabel{"host",
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
@@ -927,7 +935,11 @@ public:
       {.is_server = false}}.add_to_describer(d, &FromHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &FromHttpArgs::timeout);
     d.named("error_field", &FromHttpArgs::error_field);
+    auto metadata_field_arg
+      = d.named("metadata_field", &FromHttpArgs::metadata_field, "any");
     auto paginate_arg = d.named("paginate", &FromHttpArgs::paginate, "any");
+    auto paginate_delay_arg
+      = d.named("paginate_delay", &FromHttpArgs::paginate_delay);
     auto connection_timeout_arg
       = d.named("connection_timeout", &FromHttpArgs::connection_timeout);
     auto max_retry_count_arg
@@ -937,6 +949,7 @@ public:
     auto server_arg = d.named("server", &FromHttpArgs::server);
     auto parser_arg = d.pipeline(&FromHttpArgs::parser,
                                  {{"response", &FromHttpArgs::response}});
+    d.operator_location(&FromHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Validate TLS options.
       tls_validator(ctx);
@@ -947,17 +960,26 @@ public:
           .primary(*server)
           .emit(ctx);
       }
+      if (auto metadata_field = ctx.get_location(metadata_field_arg)) {
+        diagnostic::error("`metadata_field` has been removed from `from_http`")
+          .hint("use `$response` in the parser sub-pipeline instead")
+          .primary(*metadata_field)
+          .emit(ctx);
+      }
       // Validate encode: requires a body and must be "json" or "form".
-      if (auto encode = ctx.get(encode_arg)) {
-        if (not ctx.get(body_arg)) {
+      auto body_loc = ctx.get_location(body_arg);
+      if (auto encode_loc = ctx.get_location(encode_arg)) {
+        if (not body_loc) {
           diagnostic::error("`encode` requires a `body`")
-            .primary(encode->source)
+            .primary(*encode_loc)
             .emit(ctx);
-        } else if (encode->inner != "json" and encode->inner != "form") {
-          diagnostic::error("unsupported encoding: `{}`", encode->inner)
-            .hint(R"(`encode` must be `"json"` or `"form"`)")
-            .primary(encode->source)
-            .emit(ctx);
+        } else if (auto encode = ctx.get(encode_arg)) {
+          if (encode->inner != "json" and encode->inner != "form") {
+            diagnostic::error("unsupported encoding: `{}`", encode->inner)
+              .hint(R"(`encode` must be `"json"` or `"form"`)")
+              .primary(encode->source)
+              .emit(ctx);
+          }
         }
       }
       // Validate body type when explicitly provided.
@@ -1008,6 +1030,13 @@ public:
         if (timeout->inner < duration::zero()) {
           diagnostic::error("`timeout` must be a non-negative duration")
             .primary(timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto pd = ctx.get(paginate_delay_arg)) {
+        if (pd->inner < duration::zero()) {
+          diagnostic::error("`paginate_delay` must be a non-negative duration")
+            .primary(pd->source)
             .emit(ctx);
         }
       }

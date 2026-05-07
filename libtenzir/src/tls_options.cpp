@@ -883,10 +883,11 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
   return ctx;
 }
 
-auto tls_options::make_folly_ssl_context(
-  diagnostic_handler& dh, const caf::actor_system_config* cfg) const
+auto tls_options::make_folly_ssl_context(diagnostic_handler& dh,
+                                         const caf::actor_system_config* cfg,
+                                         bool tls_required) const
   -> failure_or<std::shared_ptr<folly::SSLContext>> {
-  if (not get_tls(cfg).inner) {
+  if (not get_tls(cfg).inner and not tls_required) {
     return nullptr;
   }
   auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);

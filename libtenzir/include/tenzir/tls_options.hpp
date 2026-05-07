@@ -107,10 +107,12 @@ public:
     -> caf::expected<caf::net::ssl::context>;
 
   /// Creates a folly SSL context from the TLS options.
-  /// Returns nullptr if TLS is disabled, a configured context on success,
-  /// or failure on error (diagnostics emitted via dh).
+  /// Returns nullptr if TLS is disabled and not required by the caller,
+  /// a configured context on success, or failure on error
+  /// (diagnostics emitted via dh).
   auto make_folly_ssl_context(diagnostic_handler& dh,
-                              const caf::actor_system_config* cfg) const
+                              const caf::actor_system_config* cfg,
+                              bool tls_required = false) const
     -> failure_or<std::shared_ptr<folly::SSLContext>>;
 
   /// Updates values in *this using the config.
