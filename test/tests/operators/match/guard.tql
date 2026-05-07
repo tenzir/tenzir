@@ -3,7 +3,7 @@ match status {
   500..599 | 429 if retries > 0 => {
     action = "retry"
   }
-  $code if $code >= 500 => {
+  _ if status >= 500 => {
     action = "page"
   }
   _ if status == 404 => {

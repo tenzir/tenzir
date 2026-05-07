@@ -1,0 +1,24 @@
+from {id: 1, value: ["prod", "checkout"]},
+     {id: 2, value: ["prod"]},
+     {id: 3, value: []},
+     {id: 4, value: {action: "allow", port: 443}},
+     {id: 5, value: {action: "allow"}},
+     {id: 6, value: {}}
+match value {
+  ["prod", "checkout"] => {
+    class = "checkout"
+  }
+  [] => {
+    class = "empty list"
+  }
+  {action: "allow", port: 443} => {
+    class = "allow web"
+  }
+  {} => {
+    class = "empty record"
+  }
+  _ => {
+    class = "other"
+  }
+}
+sort id

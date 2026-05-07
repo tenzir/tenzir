@@ -7,4 +7,5 @@ match action {
   other => {
     verdict = "dynamic"
   }
+  _ => {}
 }

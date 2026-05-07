@@ -4,7 +4,7 @@
 }
 {
   elapsed: 1s,
-  bucket: "inside",
+  bucket: "outside",
 }
 {
   elapsed: 3s,
@@ -12,7 +12,7 @@
 }
 {
   elapsed: 5s,
-  bucket: "inside",
+  bucket: "outside",
 }
 {
   elapsed: 6s,

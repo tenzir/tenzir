@@ -17,6 +17,8 @@ match action {
 }
 ```
 
-Patterns can be constants, ranges, records, bindings, alternatives separated by
-`|`, or the final wildcard `_`. This provides a concise alternative to long
-`else if` chains when routing events by field value or structure.
+Patterns can be constants, exclusive ranges, alternatives separated by `|`, or
+the final wildcard `_`. Every `match` must include an unguarded final wildcard
+arm, so Tenzir can prove at compile time that all possible values are covered.
+This provides a concise alternative to long `else if` chains when routing events
+by field value.

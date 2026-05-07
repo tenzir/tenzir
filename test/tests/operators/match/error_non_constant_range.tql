@@ -7,4 +7,5 @@ match x {
   1..upper => {
     y = true
   }
+  _ => {}
 }

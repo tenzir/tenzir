@@ -4,4 +4,4 @@ error: match patterns must be constant expressions
 7 |   -"foo" => {
   |   ^^^^^^ 
   |
-  = hint: use a literal, a constant `let` binding, or `_`
+  = hint: use a literal, a constant expression, or `_`

@@ -1,6 +1,0 @@
-error: binding `$service` cannot be derived from a non-addressable match expression
- --> tests/operators/match/error_non_addressable_list_binding.tql:7:12
-  |
-7 |   ["prod", $service] => {
-  |            ^^^^^^^^ 
-  |

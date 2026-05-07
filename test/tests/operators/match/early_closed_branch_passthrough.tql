@@ -4,5 +4,6 @@ match x {
   1 => {
     head 0
   }
+  _ => {}
 }
 sort x

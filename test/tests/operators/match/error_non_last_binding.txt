@@ -1,6 +1,0 @@
-error: irrefutable match arm must be last
- --> tests/operators/match/error_non_last_binding.tql:7:3
-  |
-7 |   $value => {
-  |   ^^^^^^ 
-  |

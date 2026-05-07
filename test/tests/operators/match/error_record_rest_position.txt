@@ -1,6 +1,0 @@
-error: record pattern rest must come after all fields
- --> tests/operators/match/error_record_rest_position.tql:7:4
-  |
-7 |   {.., x: 1} => {
-  |    ^^ 
-  |
