@@ -1,8 +1,0 @@
-from {x: 1}, {x: 2}, {x: 3}
-batch 1
-match x {
-  $value | $value => {
-    head 0
-  }
-}
-sort x

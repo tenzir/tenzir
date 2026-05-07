@@ -4,4 +4,4 @@ error: use `|` to separate match arm alternatives
 7 |   "a", "b" => {
   |   ^^^ 
   |
-  = hint: commas are only separators inside record and list patterns
+  = hint: commas are not separators for match arm alternatives

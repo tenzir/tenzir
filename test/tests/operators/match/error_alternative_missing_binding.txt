@@ -1,7 +1,0 @@
-error: alternatives must bind the same names
- --> tests/operators/match/error_alternative_missing_binding.tql:7:21
-  |
-7 |   {src: $src, ..} | {dst: 1, ..} => {
-  |                     ^ 
-  |
-  = hint: split this arm into multiple arms

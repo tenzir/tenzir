@@ -1,0 +1,40 @@
+{
+  id: 1,
+  value: [
+    "prod",
+    "checkout",
+  ],
+  class: "checkout",
+}
+{
+  id: 2,
+  value: [
+    "prod",
+  ],
+  class: "other",
+}
+{
+  id: 3,
+  value: [],
+  class: "empty list",
+}
+{
+  id: 4,
+  value: {
+    action: "allow",
+    port: 443,
+  },
+  class: "allow web",
+}
+{
+  id: 5,
+  value: {
+    action: "allow",
+  },
+  class: "other",
+}
+{
+  id: 6,
+  value: {},
+  class: "empty record",
+}

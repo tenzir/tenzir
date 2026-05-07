@@ -1,11 +1,7 @@
-{
-  x: 1,
-  y: "one",
-}
-{
-  x: 2,
-}
-{
-  x: 3,
-  y: "three",
-}
+error: match arms must be exhaustive
+ --> tests/operators/match/no_wildcard.tql:6:1
+  |
+6 | match x {
+  | ^^^^^ 
+  |
+  = hint: add a final `_` arm

@@ -21,8 +21,6 @@
 
 #include <ranges>
 #include <string_view>
-#include <unordered_set>
-
 namespace tenzir {
 
 namespace {
@@ -266,7 +264,7 @@ public:
       if (accept(tk::comma)) {
         diagnostic::error("use `|` to separate match arm alternatives")
           .primary(pattern)
-          .hint("commas are only separators inside record and list patterns")
+          .hint("commas are not separators for match arm alternatives")
           .throw_();
       }
       expect(tk::pipe);
@@ -290,15 +288,6 @@ public:
     if (auto wildcard = accept(tk::underscore)) {
       return ast::match_pattern{ast::wildcard_pattern{wildcard.location}};
     }
-    if (auto name = accept(tk::dollar_ident)) {
-      return ast::match_pattern{ast::binding_pattern{name.as_identifier()}};
-    }
-    if (peek(tk::lbrace)) {
-      return parse_record_pattern();
-    }
-    if (peek(tk::lbracket)) {
-      return parse_list_pattern();
-    }
     auto lower = parse_expression(1, true);
     if (auto dots = accept(tk::dot_dot)) {
       auto upper = parse_expression(1, true);
@@ -309,92 +298,6 @@ public:
       }};
     }
     return ast::match_pattern{ast::expression_pattern{std::move(lower)}};
-  }
-
-  auto parse_list_pattern() -> ast::match_pattern {
-    auto begin = expect(tk::lbracket);
-    auto elements = std::vector<Box<ast::match_pattern>>{};
-    auto rest = Option<location>{None{}};
-    while (not peek(tk::rbracket)) {
-      if (auto dots = accept(tk::dot_dot)) {
-        if (rest.is_some()) {
-          diagnostic::error("list pattern rest appears more than once")
-            .primary(dots.location)
-            .throw_();
-        }
-        rest = dots.location;
-        if (not peek(tk::rbracket)) {
-          if (silent_peek(tk::comma) and silent_peek_n(tk::dot_dot, 1)) {
-            diagnostic::error("list pattern rest appears more than once")
-              .primary(dots.location)
-              .throw_();
-          }
-          diagnostic::error("list pattern rest must come after all elements")
-            .primary(dots.location)
-            .throw_();
-        }
-        break;
-      }
-      elements.push_back(Box{parse_match_pattern()});
-      if (not accept(tk::comma)) {
-        break;
-      }
-    }
-    auto end = expect(tk::rbracket);
-    return ast::match_pattern{ast::list_pattern{
-      begin.location,
-      std::move(elements),
-      rest,
-      end.location,
-    }};
-  }
-
-  auto parse_record_pattern() -> ast::match_pattern {
-    auto begin = expect(tk::lbrace);
-    auto fields = std::vector<ast::record_pattern::field>{};
-    auto field_names = std::unordered_set<std::string>{};
-    auto rest = Option<location>{None{}};
-    while (not peek(tk::rbrace)) {
-      if (auto dots = accept(tk::dot_dot)) {
-        if (rest.is_some()) {
-          diagnostic::error("record pattern rest appears more than once")
-            .primary(dots.location)
-            .throw_();
-        }
-        rest = dots.location;
-        if (not peek(tk::rbrace)) {
-          if (silent_peek(tk::comma) and silent_peek_n(tk::dot_dot, 1)) {
-            diagnostic::error("record pattern rest appears more than once")
-              .primary(dots.location)
-              .throw_();
-          }
-          diagnostic::error("record pattern rest must come after all fields")
-            .primary(dots.location)
-            .throw_();
-        }
-        break;
-      }
-      auto name = expect(tk::identifier).as_identifier();
-      if (not field_names.emplace(name.name).second) {
-        diagnostic::error("record pattern field `{}` appears more than once",
-                          name.name)
-          .primary(name)
-          .throw_();
-      }
-      expect(tk::colon);
-      fields.push_back(
-        ast::record_pattern::field{name, Box{parse_match_pattern()}});
-      if (not accept(tk::comma)) {
-        break;
-      }
-    }
-    auto end = expect(tk::rbrace);
-    return ast::match_pattern{ast::record_pattern{
-      begin.location,
-      std::move(fields),
-      rest,
-      end.location,
-    }};
   }
 
   auto parse_invocation_or_assignment() -> statement {

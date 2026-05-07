@@ -783,18 +783,6 @@ struct expression_pattern {
   }
 };
 
-struct binding_pattern {
-  identifier name;
-
-  friend auto inspect(auto& f, binding_pattern& x) -> bool {
-    return f.object(x).fields(f.field("name", x.name));
-  }
-
-  auto get_location() const -> location {
-    return name.location;
-  }
-};
-
 struct range_pattern {
   expression lower;
   expression upper;
@@ -811,62 +799,14 @@ struct range_pattern {
   }
 };
 
-struct list_pattern {
-  location begin;
-  std::vector<Box<match_pattern>> elements;
-  Option<location> rest;
-  location end;
-
-  friend auto inspect(auto& f, list_pattern& x) -> bool {
-    return f.object(x).fields(f.field("begin", x.begin),
-                              f.field("elements", x.elements),
-                              f.field("rest", x.rest), f.field("end", x.end));
-  }
-
-  auto get_location() const -> location {
-    return begin;
-  }
-};
-
-struct record_pattern {
-  struct field {
-    identifier name;
-    Box<match_pattern> pattern;
-
-    friend auto inspect(auto& f, field& x) -> bool {
-      return f.object(x).fields(f.field("name", x.name),
-                                f.field("pattern", x.pattern));
-    }
-  };
-
-  location begin;
-  std::vector<field> fields;
-  Option<location> rest;
-  location end;
-
-  friend auto inspect(auto& f, record_pattern& x) -> bool {
-    return f.object(x).fields(f.field("begin", x.begin),
-                              f.field("fields", x.fields),
-                              f.field("rest", x.rest), f.field("end", x.end));
-  }
-
-  auto get_location() const -> location {
-    return begin;
-  }
-};
-
 using match_pattern_kind
-  = variant<wildcard_pattern, expression_pattern, binding_pattern,
-            range_pattern, list_pattern, record_pattern>;
+  = variant<wildcard_pattern, expression_pattern, range_pattern>;
 
 struct match_pattern {
   match_pattern();
   explicit match_pattern(wildcard_pattern pattern);
   explicit match_pattern(expression_pattern pattern);
-  explicit match_pattern(binding_pattern pattern);
   explicit match_pattern(range_pattern pattern);
-  explicit match_pattern(list_pattern pattern);
-  explicit match_pattern(record_pattern pattern);
   ~match_pattern();
   match_pattern(const match_pattern& other);
   match_pattern(match_pattern&& other) noexcept;
@@ -1102,19 +1042,7 @@ inline match_pattern::match_pattern(expression_pattern pattern)
   : kind{std::in_place, std::move(pattern)} {
 }
 
-inline match_pattern::match_pattern(binding_pattern pattern)
-  : kind{std::in_place, std::move(pattern)} {
-}
-
 inline match_pattern::match_pattern(range_pattern pattern)
-  : kind{std::in_place, std::move(pattern)} {
-}
-
-inline match_pattern::match_pattern(list_pattern pattern)
-  : kind{std::in_place, std::move(pattern)} {
-}
-
-inline match_pattern::match_pattern(record_pattern pattern)
   : kind{std::in_place, std::move(pattern)} {
 }
 
@@ -1352,24 +1280,10 @@ protected:
                   [&](ast::expression_pattern& pattern) {
                     go(pattern.expr);
                   },
-                  [&](ast::binding_pattern& pattern) {
-                    go(pattern.name);
-                  },
                   [&](ast::range_pattern& pattern) {
                     go(pattern.lower);
                     go(pattern.upper);
-                  },
-                  [&](ast::list_pattern& pattern) {
-                    go(pattern.elements);
-                  },
-                  [&](ast::record_pattern& pattern) {
-                    go(pattern.fields);
                   });
-  }
-
-  void enter(ast::record_pattern::field& x) {
-    go(x.name);
-    go(*x.pattern);
   }
 
   void enter(ast::selector& x) {

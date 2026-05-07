@@ -1,6 +1,0 @@
-error: record pattern field `x` appears more than once
- --> tests/operators/match/error_duplicate_record_pattern_field.tql:7:10
-  |
-7 |   {x: 1, x: 1, ..} => {
-  |          ^ 
-  |

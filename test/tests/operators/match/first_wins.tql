@@ -6,5 +6,6 @@ match x {
   "a" | "b" => {
     y = 2
   }
+  _ => {}
 }
 sort x

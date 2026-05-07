@@ -4,5 +4,6 @@ match x {
   2 => {
     y = "two"
   }
+  _ => {}
 }
 sort x

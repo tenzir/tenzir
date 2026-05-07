@@ -1,6 +1,0 @@
-error: binding `$ip` appears more than once in this match arm
- --> tests/operators/match/error_duplicate_binding.tql:7:34
-  |
-7 |   {src: {ip: $ip, ..}, dst: {ip: $ip, ..}, ..} => {
-  |                                  ^^^ 
-  |
