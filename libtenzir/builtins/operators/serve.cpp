@@ -1231,7 +1231,13 @@ public:
       "tenzir.serve-manager");
     lifetime_actor_
       = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor*) {
-          return caf::behavior{};
+          return caf::behavior{
+            []() {
+              // Dummy handler because CAF immediately kills actors who return
+              // an empty behavior.
+              return;
+            },
+          };
         });
     auto result = co_await async_mail(atom::start_v, args_.id,
                                       args_.buffer_size, lifetime_actor_)
