@@ -70,26 +70,31 @@ constexpr porting_hint unported_replacements[] = {
   {"http", "use `from_http` instead, combined with `each` if needed"},
   {"load_amqp", "use `from_amqp` instead"},
   {"load_azure_blob_storage", "use `from_azure_blob_storage` instead"},
+  {"load_file", "use `from_file` instead"},
   {"load_gcs", "use `from_google_cloud_storage` instead"},
   {"load_google_cloud_pubsub", "use `from_google_cloud_pubsub` instead"},
   {"load_kafka", "use `from_kafka` instead"},
   {"load_nic", "use `from_nic` instead"},
   {"load_s3", "use `from_s3` instead"},
+  {"load_stdin", "use `from_stdin` instead"},
   {"load_sqs", "use `from_sqs` instead"},
   {"load_tcp", "use `accept_tcp` instead"},
   {"load_zmq", "use `from_zmq` instead"},
   {"move", "use the `dst = move src` keyword form instead"},
   {"save_amqp", "use `to_amqp` instead"},
   {"save_azure_blob_storage", "use `to_azure_blob_storage` instead"},
+  {"save_file", "use `to_file` instead"},
   {"save_gcs", "use `to_google_cloud_storage` instead"},
   {"save_google_cloud_pubsub", "use `to_google_cloud_pubsub` instead"},
   {"save_kafka", "use `to_kafka` instead"},
   {"save_s3", "use `to_s3` instead"},
+  {"save_stdout", "use `to_stdout` instead"},
   {"save_sqs", "use `to_sqs` instead"},
   {"save_zmq", "use `to_zmq` instead"},
   {"to", "use one of the `to_*` operators (e.g. `to_file`, `to_http`) "
          "instead"},
-  {"to_hive", "use `to_file`, `to_s3`, etc. with hive partitioning instead"},
+  {"to_hive",
+   "use `to_file`, `to_s3`, etc. with the `partition_by` argument instead"},
 };
 
 auto get_porting_hint(const ast::entity& op) -> std::string_view {
@@ -605,7 +610,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                                                false));
               return {};
 #else
-              diagnostic::error("This operator is not available in Tenzir v6")
+              diagnostic::error(
+                "This operator is not available in Tenzir Node v6")
                 .primary(x.op)
                 .hint("{}", get_porting_hint(x.op))
                 .hint("see https://docs.tenzir.com/guides/tenzir-v6-migration")
