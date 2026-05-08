@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <filesystem>
 #include <mutex>
 #include <system_error>
@@ -99,7 +100,10 @@ auto make_request_source(proxygen::URL const& host_url, std::string path,
   return source;
 }
 
-auto parse_http_date(std::string_view value) -> Option<int64_t> {
+using std::chrono::utc_clock;
+
+/// Parsers an "HTTP date" (see "Date" header). Return universal time seconds.
+auto parse_http_date(std::string_view value) -> Option<utc_clock::time_point> {
   if (value.empty()) {
     return None{};
   }
@@ -108,13 +112,14 @@ auto parse_http_date(std::string_view value) -> Option<int64_t> {
   if (::strptime(parsed.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) != nullptr
       or ::strptime(parsed.c_str(), "%a, %d-%b-%y %H:%M:%S GMT", &tm) != nullptr
       or ::strptime(parsed.c_str(), "%a %b %d %H:%M:%S %Y", &tm) != nullptr) {
-    return int64_t{timegm(&tm)};
+    return utc_clock::time_point{
+      std::chrono::seconds{int64_t{timegm(&tm)}},
+    };
   }
   return None{};
 }
 
-auto parse_retry_after(std::string_view value)
-  -> Option<std::chrono::milliseconds> {
+auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds> {
   if (value.empty()) {
     return None{};
   }
@@ -124,26 +129,20 @@ auto parse_retry_after(std::string_view value)
   auto* end = value.data() + value.size();
   if (auto [ptr, ec] = std::from_chars(begin, end, seconds);
       ec == std::errc{} and ptr == end) {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::seconds{seconds});
+    return std::chrono::seconds{seconds};
   }
   // try parse as HTTP date
-  auto parsed = parse_http_date(value);
-  if (not parsed) {
+  auto retry_at = parse_http_date(value);
+  if (not retry_at) {
     return None{};
   }
-  auto retry_at = std::chrono::system_clock::time_point{
-    std::chrono::seconds{*parsed},
-  };
-  auto now = std::chrono::system_clock::now();
-  if (retry_at <= now) {
-    return std::chrono::milliseconds{0};
-  }
-  return std::chrono::duration_cast<std::chrono::milliseconds>(retry_at - now);
+  auto now = utc_clock::now();
+  return std::chrono::duration_cast<std::chrono::seconds>(
+    retry_at <= now ? utc_clock::duration::zero() : *retry_at - now);
 }
 
 auto retry_delay_for_attempt(HttpPoolConfig const& config, uint32_t attempt,
-                             Option<std::chrono::milliseconds> retry_after)
+                             Option<std::chrono::seconds> retry_after)
   -> std::chrono::milliseconds {
   if (retry_after) {
     // explict Retry-After header
@@ -151,13 +150,16 @@ auto retry_delay_for_attempt(HttpPoolConfig const& config, uint32_t attempt,
   }
   // exponential backoff with upper bound
   auto delay = config.retry_delay;
-  auto max_delay = config.retry_delay * 5;
+  auto max_delay = config.retry_delay * 16;
   for (auto i = uint32_t{0}; i < attempt; ++i) {
     auto next_delay = delay * 2;
     if (next_delay <= delay) {
       return max_delay;
     }
-    delay = std::min(next_delay, max_delay);
+    delay = next_delay;
+    if (delay > max_delay) {
+      return max_delay;
+    }
   }
   return delay;
 }
@@ -167,7 +169,7 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
   -> Task<Result<HttpResponse, std::string>> {
   auto attempt = uint32_t{0};
   while (true) {
-    auto retry_after = Option<std::chrono::milliseconds>{};
+    auto retry_after = Option<std::chrono::seconds>{};
     auto attempt_res
       = co_await async_try([&]() -> Task<proxygen::coro::HTTPClient::Response> {
           co_return co_await f();

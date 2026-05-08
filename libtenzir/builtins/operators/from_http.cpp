@@ -516,9 +516,10 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
   -> Task<void> {
   co_return co_await folly::coro::co_withExecutor(
     evb,
-    [](folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-       FetchConfig config, bool buffer_retryable_body,
-       Arc<MessageQueue> mq) -> Task<void> {
+    folly::coro::co_invoke([evb, url = std::move(url),
+                            request = std::move(request),
+                            config = std::move(config), buffer_retryable_body,
+                            mq = std::move(mq)]() mutable -> Task<void> {
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
@@ -536,7 +537,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
         // HTTP-level errors (non-2xx) are not retried.
         auto emitted_messages = false;
         co_await folly::coro::retryWithExponentialBackoff(
-          config.max_retry_count, config.retry_delay, config.retry_delay * 5,
+          config.max_retry_count, config.retry_delay, config.retry_delay * 16,
           0.0 /* no jitter */,
           [&]() -> Task<void> {
             emitted_messages = false;
@@ -596,18 +597,16 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                              bool) mutable -> folly::coro::Task<bool> {
                 if (not buf_queue.empty()) {
                   auto iobuf = buf_queue.move();
-                  iobuf->coalesce();
+                  auto bytes = as_bytes(iobuf->coalesce());
                   if (retryable_response) {
                     // buffer body
-                    auto const* p
-                      = reinterpret_cast<std::byte const*>(iobuf->data());
                     retryable_response->body.insert(
-                      retryable_response->body.end(), p, p + iobuf->length());
+                      retryable_response->body.end(), bytes.begin(),
+                      bytes.end());
                   } else {
                     // send as message
                     emitted_messages = true;
-                    auto cptr = chunk::copy(iobuf->data(), iobuf->length());
-                    co_await mq->enqueue(ResponseBody{std::move(cptr)});
+                    co_await mq->enqueue(ResponseBody{chunk::copy(bytes)});
                   }
                 }
                 co_return proxygen::coro::HTTPSourceReader::Continue;
@@ -660,8 +659,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
         }
       }
       co_await mq->enqueue(FetchDone{});
-    }(evb, std::move(url), std::move(request), std::move(config),
-                             buffer_retryable_body, std::move(mq)));
+    }));
 }
 
 // ---- Operator ---------------------------------------------------------------

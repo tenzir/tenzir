@@ -42,10 +42,10 @@ auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
 
 auto is_retryable_http_status(uint16_t status_code) -> bool;
 
-constexpr auto default_timeout = std::chrono::seconds{90};
-constexpr auto default_connection_timeout = std::chrono::seconds{5};
-constexpr auto default_max_retry_count = 5;
-constexpr auto default_retry_delay = std::chrono::seconds{1};
+inline constexpr auto default_timeout = std::chrono::seconds{90};
+inline constexpr auto default_connection_timeout = std::chrono::seconds{5};
+inline constexpr auto default_max_retry_count = 5;
+inline constexpr auto default_retry_delay = std::chrono::seconds{1};
 
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void;
 
