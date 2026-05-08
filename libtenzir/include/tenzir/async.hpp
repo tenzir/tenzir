@@ -106,7 +106,7 @@ private:
 using AnySubHandle
   = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>>;
 
-enum class FateSharing { Off, On };
+enum class Fate { Isolated, Shared };
 
 class OpCtx {
 public:
@@ -134,16 +134,14 @@ public:
   ///
   /// When the pipeline completes, `finish_sub` is called.
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
-                         FateSharing fate_sharing = FateSharing::On)
-    -> Task<AnySubHandle&>
+                         Fate fate = Fate::Shared) -> Task<AnySubHandle&>
     = 0;
 
   template <class Input>
-  auto spawn_sub(SubKey key, ir::pipeline pipe,
-                 FateSharing fate_sharing = FateSharing::On)
+  auto spawn_sub(SubKey key, ir::pipeline pipe, Fate fate = Fate::Shared)
     -> Task<SubHandle<Input>&> {
-    co_return as<SubHandle<Input>>(co_await spawn_sub(
-      std::move(key), std::move(pipe), tag_v<Input>, fate_sharing));
+    co_return as<SubHandle<Input>>(
+      co_await spawn_sub(std::move(key), std::move(pipe), tag_v<Input>, fate));
   }
 
   virtual auto

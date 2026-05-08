@@ -292,7 +292,7 @@ public:
         }
         auto key = sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(
-          std::move(key), std::move(pipeline_copy), FateSharing::Off);
+          std::move(key), std::move(pipeline_copy), Fate::Isolated);
         auto [_, inserted]
           = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
