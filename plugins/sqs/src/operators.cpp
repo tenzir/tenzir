@@ -44,10 +44,19 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
       .throw_();
   }
   auto resolved_creds = std::move(auth->credentials);
+  // Strip the sqs:// scheme prefix if present (e.g. `from_sqs "sqs://name"`).
+  // The argument may also be a full queue URL (`https://...`), in which case
+  // we leave it intact and let `AsyncSqsQueue` skip URL resolution.
+  auto queue_name = args.queue;
+  if (queue_name.inner.starts_with("sqs://")) {
+    queue_name.inner.erase(0, 6);
+  }
   // Resolve the effective region: explicit `aws_region` wins, then the region
   // from resolved AWS IAM credentials, then the AWS SDK's default resolution
   // (AWS_REGION / AWS_DEFAULT_REGION env vars, the configured profile in
-  // `~/.aws/config`, and finally the SDK default of "us-east-1").
+  // `~/.aws/config`, and finally the SDK default of "us-east-1"). When a full
+  // queue URL is supplied for a non-default region, `aws_region` must be set
+  // explicitly so SigV4 signing matches the queue's region.
   auto region = std::string{};
   if (args.aws_region) {
     region = args.aws_region->inner;
@@ -63,14 +72,13 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
         args.poll_time->inner);
     }
   }
-  // Strip the sqs:// scheme prefix if present (e.g. `from_sqs "sqs://name"`).
-  auto queue_name = args.queue;
-  if (queue_name.inner.starts_with("sqs://")) {
-    queue_name.inner.erase(0, 6);
-  }
+  auto creds_opt
+    = resolved_creds
+        ? Option<tenzir::resolved_aws_credentials>{std::move(*resolved_creds)}
+        : std::nullopt;
   auto queue
     = std::make_shared<AsyncSqsQueue>(std::move(queue_name), poll_time,
-                                      std::move(region), resolved_creds,
+                                      std::move(region), std::move(creds_opt),
                                       ctx.io_executor());
   co_await queue->init();
   co_return queue;
@@ -144,7 +152,7 @@ auto find_attribute(const Aws::SQS::Model::Message& message,
 }
 
 /// Parses an SQS epoch-millisecond timestamp string into a `time`.
-auto parse_epoch_ms(const Aws::String& value) -> std::optional<time> {
+auto parse_epoch_ms(const Aws::String& value) -> Option<time> {
   auto ms = int64_t{};
   auto [ptr, ec]
     = std::from_chars(value.data(), value.data() + value.size(), ms);

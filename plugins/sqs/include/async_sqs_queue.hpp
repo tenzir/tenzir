@@ -12,12 +12,17 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/option.hpp>
 
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/sqs/model/Message.h>
 #include <folly/executors/IOExecutor.h>
 
 namespace tenzir::plugins::sqs {
+
+/// Returns whether `s` is a queue URL (i.e., starts with `http://` or
+/// `https://`) rather than a queue name.
+auto is_sqs_queue_url(std::string_view s) -> bool;
 
 /// Async SQS client using proxygen for HTTP transport.
 ///
@@ -28,11 +33,16 @@ class AsyncSqsQueue {
 public:
   /// Creates an async SQS queue client.
   ///
-  /// This constructor is synchronous and does not resolve the queue URL.
-  /// Call init() to resolve the queue URL asynchronously.
+  /// `name` is either a queue name or a full queue URL (`https://...` or
+  /// `http://...`). For URLs, the queue URL resolution step is skipped and
+  /// the URL's origin is used as the SQS endpoint. For names, the endpoint is
+  /// derived from `region` (or `AWS_ENDPOINT_URL[_SQS]`) and the URL is
+  /// resolved asynchronously by `init()`.
+  ///
+  /// This constructor is synchronous; call `init()` before other operations.
   explicit AsyncSqsQueue(
     located<std::string> name, std::chrono::seconds poll_time,
-    std::string region, std::optional<tenzir::resolved_aws_credentials> creds,
+    std::string region, Option<tenzir::resolved_aws_credentials> creds,
     folly::Executor::KeepAlive<folly::IOExecutor> io_executor);
 
   /// Resolves the queue URL. Must be called before other operations.
@@ -47,7 +57,7 @@ public:
 
   /// Deletes a message from the queue.
   auto delete_message(const Aws::SQS::Model::Message& message)
-    -> Task<std::optional<diagnostic>>;
+    -> Task<Option<diagnostic>>;
 
 private:
   located<std::string> name_;

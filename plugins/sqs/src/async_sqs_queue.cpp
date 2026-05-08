@@ -72,6 +72,21 @@ auto sqs_endpoint_url(std::string_view region) -> std::string {
   return fmt::format("https://sqs.{}.amazonaws.com", region);
 }
 
+/// Returns the origin (`scheme://host[:port]`) of a URL, i.e., everything up
+/// to (but excluding) the path. Used to point the HTTP pool at the right
+/// host when a full queue URL is supplied as the queue argument.
+auto url_origin(std::string_view url) -> std::string {
+  auto scheme_end = url.find("://");
+  if (scheme_end == std::string_view::npos) {
+    return std::string{url};
+  }
+  auto path_start = url.find('/', scheme_end + 3);
+  if (path_start == std::string_view::npos) {
+    return std::string{url};
+  }
+  return std::string{url.substr(0, path_start)};
+}
+
 /// Extracts an error message from an SQS JSON error response body.
 auto extract_sqs_error_message(const std::string& body) -> std::string {
   auto json
@@ -174,22 +189,40 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
 
 } // namespace
 
+// --- Free helpers ---
+
+auto is_sqs_queue_url(std::string_view s) -> bool {
+  return s.starts_with("http://") or s.starts_with("https://");
+}
+
 // --- AsyncSqsQueue ---
 
 AsyncSqsQueue::AsyncSqsQueue(
   located<std::string> name, std::chrono::seconds poll_time, std::string region,
-  std::optional<tenzir::resolved_aws_credentials> creds,
+  Option<tenzir::resolved_aws_credentials> creds,
   folly::Executor::KeepAlive<folly::IOExecutor> io_executor)
   : name_{std::move(name)}, region_{std::move(region)} {
+  // The credentials provider helper still uses `std::optional` at its API
+  // boundary; convert at the call site rather than threading `Option` through.
+  auto creds_std = creds ? std::optional{std::move(*creds)} : std::nullopt;
   auto credentials
-    = tenzir::make_aws_credentials_provider(creds, std::optional{region_});
+    = tenzir::make_aws_credentials_provider(creds_std, std::optional{region_});
   if (not credentials) {
     diagnostic::error(credentials.error()).throw_();
   }
   credentials_ = std::move(*credentials);
   signer_ = std::make_unique<Aws::Client::AWSAuthV4Signer>(
     credentials_, "sqs", Aws::String{region_.c_str()});
-  endpoint_url_ = sqs_endpoint_url(region_);
+  // When the user passes a full queue URL, use its origin as the SQS endpoint
+  // and remember the URL so `init()` can skip the GetQueueUrl round-trip. For
+  // queue names, fall back to the region-derived endpoint (and optional env
+  // overrides), and let `init()` resolve the URL.
+  if (is_sqs_queue_url(name_.inner)) {
+    endpoint_url_ = url_origin(name_.inner);
+    url_ = Aws::String{name_.inner.c_str(), name_.inner.size()};
+  } else {
+    endpoint_url_ = sqs_endpoint_url(region_);
+  }
   auto timeout
     = std::chrono::milliseconds{poll_time} + std::chrono::seconds{10};
   auto tls = endpoint_url_.starts_with("https://");
@@ -199,6 +232,11 @@ AsyncSqsQueue::AsyncSqsQueue(
 }
 
 auto AsyncSqsQueue::init() -> Task<void> {
+  // Skip the URL lookup when the user supplied a full queue URL; the URL was
+  // already populated in the constructor.
+  if (not url_.empty()) {
+    co_return;
+  }
   auto request = Aws::SQS::Model::GetQueueUrlRequest{};
   request.SetQueueName(name_.inner);
   auto aws_result
@@ -234,7 +272,7 @@ auto AsyncSqsQueue::send_message(Aws::String data) -> Task<void> {
 }
 
 auto AsyncSqsQueue::delete_message(const Aws::SQS::Model::Message& message)
-  -> Task<std::optional<diagnostic>> {
+  -> Task<Option<diagnostic>> {
   auto request = Aws::SQS::Model::DeleteMessageRequest{};
   request.SetQueueUrl(url_);
   request.SetReceiptHandle(message.GetReceiptHandle());
