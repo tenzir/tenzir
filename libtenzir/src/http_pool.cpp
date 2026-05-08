@@ -100,10 +100,11 @@ auto make_request_source(proxygen::URL const& host_url, std::string path,
   return source;
 }
 
-using std::chrono::utc_clock;
+using std::chrono::system_clock;
 
-/// Parsers an "HTTP date" (see "Date" header). Return universal time seconds.
-auto parse_http_date(std::string_view value) -> Option<utc_clock::time_point> {
+/// Parses an HTTP date and returns a `system_clock` time point.
+auto parse_http_date(std::string_view value)
+  -> Option<system_clock::time_point> {
   if (value.empty()) {
     return None{};
   }
@@ -112,7 +113,7 @@ auto parse_http_date(std::string_view value) -> Option<utc_clock::time_point> {
   if (::strptime(parsed.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) != nullptr
       or ::strptime(parsed.c_str(), "%a, %d-%b-%y %H:%M:%S GMT", &tm) != nullptr
       or ::strptime(parsed.c_str(), "%a %b %d %H:%M:%S %Y", &tm) != nullptr) {
-    return utc_clock::time_point{
+    return system_clock::time_point{
       std::chrono::seconds{int64_t{timegm(&tm)}},
     };
   }
@@ -136,9 +137,9 @@ auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds> {
   if (not retry_at) {
     return None{};
   }
-  auto now = utc_clock::now();
+  auto now = system_clock::now();
   return std::chrono::duration_cast<std::chrono::seconds>(
-    retry_at <= now ? utc_clock::duration::zero() : *retry_at - now);
+    retry_at <= now ? system_clock::duration::zero() : *retry_at - now);
 }
 
 auto retry_delay_for_attempt(HttpPoolConfig const& config, uint32_t attempt,
