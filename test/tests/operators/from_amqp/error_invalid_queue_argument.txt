@@ -1,0 +1,7 @@
+error: expected type `number`, `bool`, or `string` for queue argument
+ --> tests/operators/from_amqp/error_invalid_queue_argument.tql:6:27
+  |
+6 |           queue_arguments={
+  |                           ^ 
+  |
+  = hint: unsupported key: `x-invalid`

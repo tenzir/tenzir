@@ -11,10 +11,14 @@
 #include <tenzir/async/pusher.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/concepts.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <limits>
+#include <optional>
 
 #include <folly/CancellationToken.h>
 #include <folly/coro/BoundedQueue.h>
@@ -39,6 +43,7 @@ struct FromAmqpArgs {
   Option<located<std::string>> routing_key;
   Option<located<std::string>> queue;
   Option<located<record>> options;
+  Option<located<record>> queue_arguments;
   bool passive = false;
   bool durable = false;
   bool exclusive = false;
@@ -60,6 +65,96 @@ struct PeriodicTick {};
 
 using FromAmqpEvent = variant<AmqpMessage, AmqpError>;
 using FromAmqpQueue = folly::coro::BoundedQueue<FromAmqpEvent>;
+
+class AmqpFieldTable {
+public:
+  explicit AmqpFieldTable(const record& args) {
+    keys_.reserve(args.size());
+    string_values_.reserve(args.size());
+    entries_.reserve(args.size());
+    for (const auto& [key, value] : args) {
+      keys_.push_back(key);
+      auto entry = amqp_table_entry_t{
+        .key = as_amqp_bytes(keys_.back()),
+        .value = {},
+      };
+      entry.value = make_value(value);
+      entries_.push_back(entry);
+    }
+    table_ = amqp_table_t{
+      .num_entries = detail::narrow<int>(entries_.size()),
+      .entries = entries_.empty() ? nullptr : entries_.data(),
+    };
+  }
+
+  AmqpFieldTable(const AmqpFieldTable&) = delete;
+  auto operator=(const AmqpFieldTable&) -> AmqpFieldTable& = delete;
+  AmqpFieldTable(AmqpFieldTable&&) = delete;
+  auto operator=(AmqpFieldTable&&) -> AmqpFieldTable& = delete;
+
+  auto get() const -> amqp_table_t {
+    return table_;
+  }
+
+private:
+  auto make_value(const data& value) -> amqp_field_value_t {
+    return match(
+      value,
+      [](bool x) {
+        return amqp_field_value_t{
+          .kind = AMQP_FIELD_KIND_BOOLEAN,
+          .value = {.boolean = as_amqp_bool(x)},
+        };
+      },
+      [](int64_t x) {
+        if (x >= std::numeric_limits<int32_t>::min()
+            and x <= std::numeric_limits<int32_t>::max()) {
+          return amqp_field_value_t{
+            .kind = AMQP_FIELD_KIND_I32,
+            .value = {.i32 = detail::narrow<int32_t>(x)},
+          };
+        }
+        return amqp_field_value_t{
+          .kind = AMQP_FIELD_KIND_I64,
+          .value = {.i64 = x},
+        };
+      },
+      [](uint64_t x) {
+        if (x <= detail::narrow<uint64_t>(std::numeric_limits<int32_t>::max())) {
+          return amqp_field_value_t{
+            .kind = AMQP_FIELD_KIND_I32,
+            .value = {.i32 = detail::narrow<int32_t>(x)},
+          };
+        }
+        return amqp_field_value_t{
+          .kind = AMQP_FIELD_KIND_U64,
+          .value = {.u64 = x},
+        };
+      },
+      [](double x) {
+        return amqp_field_value_t{
+          .kind = AMQP_FIELD_KIND_F64,
+          .value = {.f64 = x},
+        };
+      },
+      [&](const std::string& x) {
+        string_values_.push_back(x);
+        return amqp_field_value_t{
+          .kind = AMQP_FIELD_KIND_UTF8,
+          .value = {.bytes = as_amqp_bytes(string_values_.back())},
+        };
+      },
+      [](const auto&) -> amqp_field_value_t {
+        // validated in describe()
+        TENZIR_UNREACHABLE();
+      });
+  }
+
+  std::vector<std::string> keys_;
+  std::vector<std::string> string_values_;
+  std::vector<amqp_table_entry_t> entries_;
+  amqp_table_t table_{amqp_empty_table};
+};
 
 class FromAmqp final : public Operator<void, table_slice> {
 public:
@@ -153,6 +248,10 @@ public:
           .emit(dh);
         return false;
       }
+      auto queue_arguments = std::optional<AmqpFieldTable>{};
+      if (args_.queue_arguments) {
+        queue_arguments.emplace(args_.queue_arguments->inner);
+      }
       if (auto err = engine->start_consumer({
             .channel = channel,
             .exchange = args_.exchange ? std::string_view{args_.exchange->inner}
@@ -168,6 +267,8 @@ public:
             .auto_delete = not args_.no_auto_delete,
             .no_local = args_.no_local,
             .no_ack = not args_.ack,
+            .queue_arguments
+            = queue_arguments ? queue_arguments->get() : amqp_empty_table,
           });
           err.valid()) {
         diagnostic::error("failed to start AMQP consumer")
@@ -302,6 +403,8 @@ public:
     d.named("exchange", &FromAmqpArgs::exchange);
     d.named("routing_key", &FromAmqpArgs::routing_key);
     d.named("queue", &FromAmqpArgs::queue);
+    auto queue_arguments_arg
+      = d.named("queue_arguments", &FromAmqpArgs::queue_arguments);
     d.named("passive", &FromAmqpArgs::passive);
     d.named("durable", &FromAmqpArgs::durable);
     d.named("exclusive", &FromAmqpArgs::exclusive);
@@ -325,6 +428,29 @@ public:
                 "expected type `number`, `bool`, `string`, or `secret` "
                 "for option")
                 .primary(options->source)
+                .emit(ctx);
+              return false;
+            });
+          if (not ok) {
+            return {};
+          }
+        }
+      }
+      if (auto queue_arguments = ctx.get(queue_arguments_arg);
+          queue_arguments) {
+        for (const auto& [k, v] : queue_arguments->inner) {
+          auto ok = match(
+            v,
+            [](const concepts::one_of<bool, int64_t, uint64_t, double,
+                                      std::string> auto&) {
+              return true;
+            },
+            [&](const auto&) {
+              diagnostic::error(
+                "expected type `number`, `bool`, or `string` for queue "
+                "argument")
+                .primary(queue_arguments->source.subloc(0, 1))
+                .hint("unsupported key: `{}`", k)
                 .emit(ctx);
               return false;
             });

@@ -1,0 +1,5 @@
+suite: amqp-fixture
+fixtures: [amqp]
+timeout: 180
+skip:
+  on: fixture-unavailable
