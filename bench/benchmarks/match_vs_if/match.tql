@@ -1,0 +1,27 @@
+---
+bench:
+  id: match
+  description: Dispatch repeated action values with statement-level match.
+  # TODO: Remove this once match statements work on the default executor.
+  tenzir_args:
+    - --neo
+---
+from {action: "accept"},
+     {action: "allow"},
+     {action: "deny"},
+     {action: "drop"},
+     {action: "other"}
+repeat 1M
+batch
+match action {
+  "accept" | "allow" => {
+    verdict = "allowed"
+  }
+  "deny" | "drop" => {
+    verdict = "blocked"
+  }
+  _ => {
+    verdict = "unknown"
+  }
+}
+discard
