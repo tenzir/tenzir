@@ -1,7 +1,7 @@
 created: 2026-02-13
-title: Tenzir Node v5.26.0
+title: Link header pagination for HTTP operators
 intro: >-
-  This release introduces the from_mysql operator for reading data directly from MySQL
-  databases, with support for live streaming, custom SQL queries, and TLS connections.
-  It also adds link-based HTTP pagination and optional field parameters for user-defined
-  operators.
+  This release adds link-based HTTP pagination for the from_http and http operators
+  and introduces optional field parameters and secret-typed parameters for
+  user-defined operators. It also performs recursive deep merging in the merge()
+  function and improves write_lines performance.

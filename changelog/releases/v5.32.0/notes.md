@@ -14,16 +14,6 @@ Use `NO_PROXY` to bypass the proxy for selected hosts. This helps deployments wh
 
 *By @tobim and @codex in #6039.*
 
-## 🔧 Changes
-
-### Add `accept_http` operator for receiving HTTP requests
-
-We added a new operator to accept data from incoming HTTP connections.
-
-The `server` option of the `from_http` operator is now deprecated. Going forward, it should only be used for client-mode HTTP operations, and the new `accept_http` operator should be used for server-mode operations.
-
-*By @lava.*
-
 ## 🐞 Bug fixes
 
 ### Raw-byte hashing for binary values

@@ -1,28 +1,4 @@
-Tenzir can now consume from and publish to NATS JetStream subjects with from_nats and to_nats. This release also fixes crashes in static musl builds when evaluating deeply nested generated TQL expressions.
-
-## 🚀 Features
-
-### NATS JetStream operators
-
-Tenzir can now consume from and publish to NATS JetStream subjects with `from_nats` and `to_nats`.
-
-Use `from_nats` to receive one event per message. The raw payload appears in the `message` blob field, and `metadata_field` attaches NATS metadata:
-
-```tql
-from_nats "alerts", metadata_field=nats
-parsed = string(message).parse_json()
-```
-
-Use `to_nats` to publish one message per event. By default, the operator serializes the whole event with `this.print_ndjson()`:
-
-```tql
-from {severity: "high", alert_type: "suspicious-login"}
-to_nats "alerts"
-```
-
-Both operators support configurable connection settings, authentication, and the standard Tenzir `tls` record.
-
-*By @mavam and @codex.*
+This release fixes crashes in static musl builds when evaluating deeply nested generated TQL expressions.
 
 ## 🐞 Bug fixes
 
