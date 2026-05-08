@@ -1,0 +1,13 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 3
+        method: GET
+        path: /status/retry-503
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_RETRY_503_URL"), max_retry_count=2, retry_delay=1ms {
+  read_json
+}

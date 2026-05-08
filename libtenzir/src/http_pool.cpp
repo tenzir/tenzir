@@ -8,20 +8,27 @@
 
 #include <tenzir/async/result.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/logger.hpp>
 
 #include <fmt/format.h>
 #include <folly/ScopeGuard.h>
+#include <folly/coro/Sleep.h>
+#include <folly/io/async/AsyncSocketException.h>
+#include <folly/portability/Time.h>
+#include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
 #include <proxygen/lib/http/coro/client/HTTPCoroSessionPool.h>
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
-#include <cctype>
+#include <charconv>
+#include <chrono>
 #include <filesystem>
 #include <mutex>
+#include <system_error>
 
 namespace tenzir {
 
@@ -70,47 +77,137 @@ auto to_http_response(proxygen::coro::HTTPClient::Response& resp)
 /// `strPtr.release()` as arguments to the same function call. Because C++
 /// does not specify argument evaluation order, the compiler may evaluate
 /// `release()` first, making `data()`/`size()` dereference a null unique_ptr.
-auto make_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
-                         std::map<std::string, std::string> headers,
-                         std::optional<std::string> body)
+auto make_request_source(proxygen::URL const& host_url, std::string path,
+                         proxygen::HTTPMethod method,
+                         std::map<std::string, std::string> const& headers,
+                         Option<std::string> body)
   -> proxygen::coro::HTTPSource* {
   auto body_buf = std::unique_ptr<folly::IOBuf>{};
   if (body and not body->empty()) {
     body_buf = folly::IOBuf::fromString(std::move(*body));
   }
   auto* source = proxygen::coro::HTTPFixedSource::makeFixedRequest(
-    url.makeRelativeURL(), method, std::move(body_buf));
-  for (auto& [name, value] : headers) {
-    source->msg_->getHeaders().add(name, std::move(value));
+    std::move(path), method, std::move(body_buf));
+  for (auto const& [name, value] : headers) {
+    source->msg_->getHeaders().add(name, value);
   }
   if (not source->msg_->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
     source->msg_->getHeaders().add(proxygen::HTTP_HEADER_HOST,
-                                   url.getHostAndPortOmitDefault());
+                                   host_url.getHostAndPortOmitDefault());
   }
   source->msg_->setWantsKeepalive(true);
-  source->msg_->setSecure(url.isSecure());
+  source->msg_->setSecure(host_url.isSecure());
   return source;
 }
 
-auto with_target(proxygen::URL const& base, std::optional<std::string> target)
-  -> Result<proxygen::URL, std::string> {
-  if (not target) {
-    return base;
+using std::chrono::system_clock;
+
+/// Parses an HTTP date and returns a `system_clock` time point.
+auto parse_http_date(std::string_view value)
+  -> Option<system_clock::time_point> {
+  if (value.empty()) {
+    return None{};
   }
-  if (target->empty() or target->front() != '/'
-      or target->find('#') != std::string::npos) {
-    return Err{fmt::format("invalid request target: {}", *target)};
+  auto tm = std::tm{};
+  auto parsed = std::string{value};
+  if (::strptime(parsed.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) != nullptr
+      or ::strptime(parsed.c_str(), "%a, %d-%b-%y %H:%M:%S GMT", &tm) != nullptr
+      or ::strptime(parsed.c_str(), "%a %b %d %H:%M:%S %Y", &tm) != nullptr) {
+    return system_clock::time_point{
+      std::chrono::seconds{int64_t{timegm(&tm)}},
+    };
   }
-  auto path = std::string_view{*target};
-  auto query = std::string_view{};
-  if (auto pos = target->find('?'); pos != std::string::npos) {
-    path = std::string_view{*target}.substr(0, pos);
-    query = std::string_view{*target}.substr(pos + 1);
+  return None{};
+}
+
+auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds> {
+  if (value.empty()) {
+    return None{};
   }
-  return proxygen::URL{
-    base.getScheme(),  base.getHost(),     base.getPort(),
-    std::string{path}, std::string{query},
-  };
+  // try parse a number of seconds
+  auto seconds = uint64_t{};
+  auto* begin = value.data();
+  auto* end = value.data() + value.size();
+  if (auto [ptr, ec] = std::from_chars(begin, end, seconds);
+      ec == std::errc{} and ptr == end) {
+    return std::chrono::seconds{seconds};
+  }
+  // try parse as HTTP date
+  auto retry_at = parse_http_date(value);
+  if (not retry_at) {
+    return None{};
+  }
+  auto now = system_clock::now();
+  return std::chrono::duration_cast<std::chrono::seconds>(
+    retry_at <= now ? system_clock::duration::zero() : *retry_at - now);
+}
+
+auto retry_delay_for_attempt(HttpPoolConfig const& config, uint32_t attempt,
+                             Option<std::chrono::seconds> retry_after)
+  -> std::chrono::milliseconds {
+  if (retry_after) {
+    // explict Retry-After header
+    return *retry_after;
+  }
+  // exponential backoff with upper bound
+  auto delay = config.retry_delay;
+  auto max_delay = config.retry_delay * 16;
+  for (auto i = uint32_t{0}; i < attempt; ++i) {
+    auto next_delay = delay * 2;
+    if (next_delay <= delay) {
+      return max_delay;
+    }
+    delay = next_delay;
+    if (delay > max_delay) {
+      return max_delay;
+    }
+  }
+  return delay;
+}
+
+template <class F>
+auto retry_request(HttpPoolConfig const& config, F&& f)
+  -> Task<Result<HttpResponse, std::string>> {
+  auto attempt = uint32_t{0};
+  while (true) {
+    auto retry_after = Option<std::chrono::seconds>{};
+    auto attempt_res
+      = co_await async_try([&]() -> Task<proxygen::coro::HTTPClient::Response> {
+          co_return co_await f();
+        }());
+    if (attempt_res.is_ok()) {
+      // got response
+      proxygen::coro::HTTPClient::Response resp
+        = std::move(attempt_res).unwrap();
+      if (attempt >= config.max_retry_count
+          or (not http::is_retryable_http_status(
+            resp.headers->getStatusCode()))) {
+        // not retryable
+        co_return to_http_response(resp);
+      }
+      // retryable
+      retry_after = parse_retry_after(
+        resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
+    } else {
+      // transport error
+      auto attempt_err = attempt_res.unwrap_err();
+      auto is_retryable = false;
+      attempt_err.with_exception([&](folly::AsyncSocketException const&) {
+        is_retryable = true;
+      });
+      attempt_err.with_exception([&](proxygen::coro::HTTPError const& err) {
+        is_retryable = http::is_retryable_http_error(err.code);
+      });
+      if (not is_retryable or attempt >= config.max_retry_count) {
+        // will not retry, return error
+        co_return Err{std::move(attempt_err).what().toStdString()};
+      }
+    }
+    // will retry, compute delay
+    auto delay = retry_delay_for_attempt(config, attempt, retry_after);
+    ++attempt;
+    co_await folly::coro::sleep(delay);
+  }
 }
 
 /// Custom deleter that ensures the session pool is destroyed on its event base
@@ -146,26 +243,28 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   impl_->executor = std::move(executor);
   impl_->evb = impl_->executor->getEventBase();
   impl_->url = proxygen::URL{url};
-  impl_->config = config;
+  impl_->config = std::move(config);
   if (not impl_->url.isValid() or not impl_->url.hasHost()) {
     throw std::runtime_error(fmt::format("invalid url: {}", url));
   }
-  auto secure = config.tls
+  auto secure = impl_->config.tls
                   ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
-  if (config.tls) {
+  if (impl_->config.tls) {
     ensure_http_default_ca_paths();
   }
   auto conn_params
     = proxygen::coro::HTTPClient::getConnParams(secure, impl_->url.getHost());
-  if (config.ssl_context) {
-    conn_params.sslContext = config.ssl_context;
+  if (impl_->config.ssl_context) {
+    conn_params.sslContext = impl_->config.ssl_context;
   }
+  auto pool_params = proxygen::coro::HTTPCoroSessionPool::PoolParams{};
+  pool_params.connectTimeout = impl_->config.connection_timeout;
   impl_->pool = SessionPoolPtr{
     std::make_unique<proxygen::coro::HTTPCoroSessionPool>(
-      impl_->evb, impl_->url.getHost(), impl_->url.getPort(),
-      proxygen::coro::HTTPCoroSessionPool::PoolParams{}, conn_params,
-      proxygen::coro::HTTPCoroConnector::defaultSessionParams(), true)
+      impl_->evb, impl_->url.getHost(), impl_->url.getPort(), pool_params,
+      conn_params, proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+      true)
       .release(),
   };
 }
@@ -173,7 +272,7 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
 auto HttpPool::make(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config) -> Box<HttpPool> {
   return Box<HttpPool>::from_non_null(std::unique_ptr<HttpPool>{
-    new HttpPool{std::move(executor), std::move(url), config},
+    new HttpPool{std::move(executor), std::move(url), std::move(config)},
   });
 }
 
@@ -181,97 +280,80 @@ HttpPool::~HttpPool() = default;
 HttpPool::HttpPool(HttpPool&&) noexcept = default;
 auto HttpPool::operator=(HttpPool&&) noexcept -> HttpPool& = default;
 
-auto HttpPool::request(std::string method, std::string body,
+auto HttpPool::request(proxygen::HTTPMethod method, std::string body,
                        std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request(std::move(method), std::nullopt, std::move(body),
+  co_return co_await request(method, None{}, std::move(body),
                              std::move(headers));
 }
 
-auto HttpPool::request(std::string method, std::string target, std::string body,
-                       std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request(std::move(method),
-                             std::optional<std::string>{std::move(target)},
-                             std::move(body), std::move(headers));
-}
-
-auto HttpPool::request(std::string method, std::optional<std::string> target,
+auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
                        std::string body,
                        std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
+  auto p = path.unwrap_or_else([&]() {
+    return impl_->url.makeRelativeURL();
+  });
   co_return co_await co_withExecutor(
     impl_->evb,
-    [](std::shared_ptr<Impl> impl, std::string method,
-       std::optional<std::string> target, std::string body,
+    [](std::shared_ptr<Impl> impl, proxygen::HTTPMethod method,
+       std::string path, std::string body,
        std::map<std::string, std::string> headers)
       -> Task<Result<HttpResponse, std::string>> {
-      std::ranges::transform(method, method.begin(), [](unsigned char c) {
-        return static_cast<char>(std::toupper(c));
-      });
-      auto method_parsed = proxygen::stringToMethod(method);
-      if (not method_parsed) {
-        co_return Err{fmt::format("invalid http method: {}", method)};
-      }
-      CO_TRY(auto url, with_target(impl->url, std::move(target)));
-      auto result = co_await async_try([&]() -> Task<HttpResponse> {
-        auto sr = co_await impl->pool->getSessionWithReservation();
-        TENZIR_ASSERT_ALWAYS(sr.session);
-        auto* source = make_request_source(url, *method_parsed,
-                                           std::move(headers), std::move(body));
-        auto resp = proxygen::coro::HTTPClient::Response{};
-        co_await proxygen::coro::HTTPClient::request(
-          sr.session, std::move(sr.reservation), source,
-          proxygen::coro::HTTPClient::makeDefaultReader(resp),
-          impl->config.request_timeout);
-        co_return to_http_response(resp);
-      }());
-      if (result.is_err()) {
-        co_return Err{std::move(result).unwrap_err().what().toStdString()};
-      }
-      co_return std::move(result).unwrap();
-    }(impl_, std::move(method), std::move(target), std::move(body),
-      std::move(headers)));
+      co_return co_await retry_request(
+        impl->config, [&]() -> Task<proxygen::coro::HTTPClient::Response> {
+          auto sr = co_await impl->pool->getSessionWithReservation();
+          TENZIR_ASSERT_ALWAYS(sr.session);
+          auto* source
+            = make_request_source(impl->url, path, method, headers, body);
+          auto resp = proxygen::coro::HTTPClient::Response{};
+          co_await proxygen::coro::HTTPClient::request(
+            sr.session, std::move(sr.reservation), source,
+            proxygen::coro::HTTPClient::makeDefaultReader(resp),
+            impl->config.request_timeout);
+          co_return resp;
+        });
+    }(impl_, method, std::move(p), std::move(body), std::move(headers)));
 }
 
 auto HttpPool::post(std::string body,
                     std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request("POST", std::move(body), std::move(headers));
+  co_return co_await request(proxygen::HTTPMethod::POST, std::move(body),
+                             std::move(headers));
 }
 
-auto HttpPool::post(std::string target, std::string body,
+auto HttpPool::post(std::string path, std::string body,
                     std::map<std::string, std::string> headers)
   -> Task<Result<HttpResponse, std::string>> {
-  co_return co_await request("POST", std::move(target), std::move(body),
-                             std::move(headers));
+  co_return co_await request(proxygen::HTTPMethod::POST, std::move(path),
+                             std::move(body), std::move(headers));
 }
 
 namespace {
 
 auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
-                  std::string url, std::optional<std::string> body,
+                  std::string url, Option<std::string> body,
                   std::map<std::string, std::string> headers,
                   std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
   co_return co_await co_withExecutor(
     evb,
     [](folly::EventBase* evb, proxygen::HTTPMethod method, std::string url,
-       std::optional<std::string> body,
-       std::map<std::string, std::string> headers,
+       Option<std::string> body, std::map<std::string, std::string> headers,
        std::chrono::milliseconds timeout)
       -> Task<Result<HttpResponse, std::string>> {
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
-        auto parsed = proxygen::URL{url};
-        if (not parsed.isValid() or not parsed.hasHost()) {
+        auto url_parsed = proxygen::URL{url};
+        if (not url_parsed.isValid() or not url_parsed.hasHost()) {
           throw std::runtime_error(fmt::format("invalid url: {}", url));
         }
-        if (parsed.isSecure()) {
+        if (url_parsed.isSecure()) {
           ensure_http_default_ca_paths();
         }
         auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
-          evb, parsed.getHost(), parsed.getPort(), parsed.isSecure(), false,
-          timeout, timeout);
+          evb, url_parsed.getHost(), url_parsed.getPort(),
+          url_parsed.isSecure(), false, timeout, timeout);
         auto holder = session->acquireKeepAlive();
         SCOPE_EXIT {
           if (auto* s = holder.get()) {
@@ -282,8 +364,9 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         if (reservation.hasException()) {
           co_yield folly::coro::co_error(std::move(reservation.exception()));
         }
-        auto* source = make_request_source(parsed, method, std::move(headers),
-                                           std::move(body));
+        auto* source
+          = make_request_source(url_parsed, url_parsed.makeRelativeURL(),
+                                method, headers, std::move(body));
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
           session, std::move(*reservation), source,
@@ -312,8 +395,8 @@ auto http_get(folly::EventBase* evb, std::string url,
               std::map<std::string, std::string> headers,
               std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
-  return http_request(evb, proxygen::HTTPMethod::GET, std::move(url),
-                      std::nullopt, std::move(headers), timeout);
+  return http_request(evb, proxygen::HTTPMethod::GET, std::move(url), None{},
+                      std::move(headers), timeout);
 }
 
 } // namespace tenzir

@@ -1,6 +1,0 @@
-warning: HTTP request returned status 404
-  --> tests/operators/to_http/options/status_404_warning.tql:14:1
-   |
-14 | to_http env("HTTP_FIXTURE_STATUS_404_URL") {
-   | ~~~~~~~ 
-   |

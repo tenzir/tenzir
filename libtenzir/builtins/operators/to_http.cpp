@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async/task.hpp"
-
 #include <tenzir/arc.hpp>
 #include <tenzir/async/oneshot.hpp>
 #include <tenzir/async/semaphore.hpp>
+#include <tenzir/async/task.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
@@ -30,6 +30,7 @@
 #include <chrono>
 #include <exception>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <string>
 #include <utility>
@@ -39,6 +40,8 @@ namespace tenzir::plugins::to_http {
 
 namespace {
 
+constexpr auto default_parallel = 1;
+
 using Headers = std::vector<std::pair<std::string, std::string>>;
 
 struct ToHttpArgs {
@@ -47,6 +50,9 @@ struct ToHttpArgs {
   Option<located<data>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
+  Option<located<duration>> connection_timeout;
+  Option<located<uint64_t>> max_retry_count;
+  Option<located<duration>> retry_delay;
   Option<located<uint64_t>> parallel;
   located<ir::pipeline> printer;
   location operator_location;
@@ -92,6 +98,11 @@ public:
     auto config = http::make_http_pool_config(
       args_.tls, url_, args_.url.source, ctx, get_timeout(),
       std::addressof(ctx.actor_system().config()));
+    if (config.is_success()) {
+      config->connection_timeout = get_connection_timeout();
+      config->max_retry_count = get_max_retry_count();
+      config->retry_delay = get_retry_delay();
+    }
     if (config.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -147,7 +158,6 @@ public:
       }
       auto body = std::string{reinterpret_cast<char const*>(chunk->data()),
                               chunk->size()};
-
       auto response = co_await (*http_pool_)
                         ->request(method, std::move(body), std::move(headers));
       if (response.is_err()) {
@@ -156,10 +166,9 @@ public:
         std::ignore = error_signal_->send(std::move(error));
       } else {
         auto http_response = std::move(response).unwrap();
-        if (http_response.status_code < 200
-            or http_response.status_code > 299) {
-          diagnostic::warning("HTTP request returned status {}",
-                              http_response.status_code)
+        if (not http_response.is_status_success()) {
+          diagnostic::error("HTTP request returned status {}",
+                            http_response.status_code)
             .primary(args_.operator_location)
             .emit(*dh);
         }
@@ -237,8 +246,16 @@ private:
     co_await pipeline.close();
   }
 
-  auto get_method() const -> std::string {
-    return args_.method ? args_.method->inner : "POST";
+  auto get_method() const -> proxygen::HTTPMethod {
+    if (not args_.method) {
+      return proxygen::HTTPMethod::POST;
+    }
+    // validated before (in Describer::validate)
+    auto method_s = args_.method->inner;
+    std::ranges::transform(method_s, method_s.begin(), [](unsigned char c) {
+      return static_cast<char>(std::toupper(c));
+    });
+    return *proxygen::stringToMethod(method_s);
   }
 
   auto get_timeout() const -> std::chrono::milliseconds {
@@ -246,11 +263,34 @@ private:
       return std::chrono::duration_cast<std::chrono::milliseconds>(
         args_.timeout->inner);
     }
-    return std::chrono::milliseconds{90'000};
+    return http::default_timeout;
+  }
+
+  auto get_connection_timeout() const -> std::chrono::milliseconds {
+    if (args_.connection_timeout) {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(
+        args_.connection_timeout->inner);
+    }
+    return http::default_connection_timeout;
+  }
+
+  auto get_max_retry_count() const -> uint32_t {
+    if (args_.max_retry_count) {
+      return detail::narrow<uint32_t>(args_.max_retry_count->inner);
+    }
+    return http::default_max_retry_count;
+  }
+
+  auto get_retry_delay() const -> std::chrono::milliseconds {
+    if (args_.retry_delay) {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(
+        args_.retry_delay->inner);
+    }
+    return http::default_retry_delay;
   }
 
   auto get_parallel() const -> uint64_t {
-    return args_.parallel ? args_.parallel->inner : 1;
+    return args_.parallel ? args_.parallel->inner : default_parallel;
   }
 
   static auto sub_key() -> int64_t {
@@ -266,7 +306,7 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
   Option<Box<HttpPool>> http_pool_;
   mutable Arc<Oneshot<std::string>> error_signal_{std::in_place};
-  MetricsCounter bytes_write_counter_ = {};
+  MetricsCounter bytes_write_counter_;
 };
 
 class ToHttpPlugin final : public OperatorPlugin {
@@ -283,18 +323,22 @@ public:
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &ToHttpArgs::timeout);
+    auto connection_timeout_arg
+      = d.named("connection_timeout", &ToHttpArgs::connection_timeout);
+    auto max_retry_count_arg
+      = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
+    auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
     auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
     auto printer_arg = d.pipeline(&ToHttpArgs::printer);
     d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto method = ctx.get(method_arg)) {
-        auto normalized = method->inner;
-        std::ranges::transform(normalized, normalized.begin(),
-                               [](unsigned char c) {
-                                 return static_cast<char>(std::toupper(c));
-                               });
-        if (not proxygen::stringToMethod(normalized)) {
+        auto method_s = method->inner;
+        std::ranges::transform(method_s, method_s.begin(), [](unsigned char c) {
+          return static_cast<char>(std::toupper(c));
+        });
+        if (not proxygen::stringToMethod(method_s)) {
           diagnostic::error("invalid http method: `{}`", method->inner)
             .primary(method->source)
             .emit(ctx);
@@ -304,6 +348,29 @@ public:
         if (timeout->inner < duration::zero()) {
           diagnostic::error("`timeout` must be a non-negative duration")
             .primary(timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto connection_timeout = ctx.get(connection_timeout_arg)) {
+        if (connection_timeout->inner < duration::zero()) {
+          diagnostic::error(
+            "`connection_timeout` must be a non-negative duration")
+            .primary(connection_timeout->source)
+            .emit(ctx);
+        }
+      }
+      if (auto max_retry_count = ctx.get(max_retry_count_arg)) {
+        if (max_retry_count->inner > std::numeric_limits<uint32_t>::max()) {
+          diagnostic::error("`max_retry_count` must be <= {}",
+                            std::numeric_limits<uint32_t>::max())
+            .primary(max_retry_count->source)
+            .emit(ctx);
+        }
+      }
+      if (auto retry_delay = ctx.get(retry_delay_arg)) {
+        if (retry_delay->inner < duration::zero()) {
+          diagnostic::error("`retry_delay` must be a non-negative duration")
+            .primary(retry_delay->source)
             .emit(ctx);
         }
       }

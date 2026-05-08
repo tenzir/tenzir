@@ -10,14 +10,15 @@
 
 #include <tenzir/async/task.hpp>
 #include <tenzir/box.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
 
 #include <folly/Executor.h>
 
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <memory>
-#include <optional>
 #include <string>
 
 namespace folly {
@@ -26,18 +27,30 @@ class IOExecutor;
 class SSLContext;
 } // namespace folly
 
+// namespace proxygen::coro
+namespace proxygen {
+enum class HTTPMethod;
+} // namespace proxygen
+
 namespace tenzir {
 
 struct HttpResponse {
   uint16_t status_code = 0;
   std::map<std::string, std::string> headers;
   std::string body;
+
+  auto is_status_success() const -> bool {
+    return status_code >= 200 and status_code < 300;
+  }
 };
 
 struct HttpPoolConfig {
   bool tls = true;
   std::shared_ptr<folly::SSLContext> ssl_context;
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
+  std::chrono::milliseconds connection_timeout = std::chrono::seconds{5};
+  uint32_t max_retry_count = 0;
+  std::chrono::milliseconds retry_delay = std::chrono::seconds{1};
 };
 
 /// Registers well-known system CA bundle paths for Proxygen HTTPS clients.
@@ -64,34 +77,30 @@ public:
   auto operator=(HttpPool&&) noexcept -> HttpPool&;
 
   /// Request through the session pool.
-  auto request(std::string method, std::string body,
+  auto request(proxygen::HTTPMethod method, std::string body,
                std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
-  /// Request through the session pool with an origin-form target.
+  /// Request through the session pool to a path.
   ///
-  /// The target must start with `/` and may contain a query string. The request
-  /// still uses the scheme, host, and port from the pool URL.
-  auto request(std::string method, std::string target, std::string body,
-               std::map<std::string, std::string> headers)
+  /// Path must start with `/` and may contain fragment and/or query.
+  /// When None, it falls back to path of the pool URL.
+  auto request(proxygen::HTTPMethod method, Option<std::string> path,
+               std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
   /// POST through the session pool.
   auto post(std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
-  /// POST through the session pool with an origin-form target.
-  auto post(std::string target, std::string body,
+  /// POST through the session pool to a path.
+  auto post(std::string path, std::string body,
             std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
 private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config);
-
-  auto request(std::string method, std::optional<std::string> target,
-               std::string body, std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
 
   struct Impl;
   std::shared_ptr<Impl> impl_;

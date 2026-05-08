@@ -61,11 +61,6 @@ namespace tenzir::plugins::from_http {
 
 namespace {
 
-constexpr auto message_queue_capacity = uint32_t{256};
-constexpr auto default_timeout = std::chrono::milliseconds{90 * 1000};
-constexpr auto default_connection_timeout = std::chrono::milliseconds{5 * 1000};
-constexpr auto default_retry_delay = std::chrono::milliseconds{1 * 1000};
-
 struct FromHttpArgs {
   located<secret> url;
   Option<located<std::string>> method;
@@ -139,7 +134,7 @@ auto has_header(std::span<const std::pair<std::string, std::string>> headers,
 }
 
 // Builds the initial request configuration from the operator arguments.
-// Resolves method, serialises the body (records become JSON, blobs are sent
+// Resolves method, serializes the body (records become JSON, blobs are sent
 // verbatim), and assembles request headers.
 auto make_request_config(
   FromHttpArgs const& args,
@@ -153,7 +148,7 @@ auto make_request_config(
                  ::toupper);
   auto method = proxygen::stringToMethod(method_str);
   TENZIR_ASSERT(method);
-  // Serialise the optional body. Records become JSON; blobs and strings are
+  // Serialize the optional body. Records become JSON; blobs and strings are
   // sent verbatim.
   auto body = std::vector<std::byte>{};
   Option<std::string> content_type;
@@ -406,10 +401,11 @@ auto builtin_pagination_mode(Option<pagination_spec> const& paginate)
 
 // Configuration for a single fetch (and its retries).
 struct FetchConfig {
-  std::chrono::milliseconds request_timeout = default_timeout;
-  std::chrono::milliseconds connection_timeout = default_connection_timeout;
-  uint32_t max_retry_count = 0;
-  std::chrono::milliseconds retry_delay = default_retry_delay;
+  std::chrono::milliseconds request_timeout = http::default_timeout;
+  std::chrono::milliseconds connection_timeout
+    = http::default_connection_timeout;
+  uint32_t max_retry_count = http::default_max_retry_count;
+  std::chrono::milliseconds retry_delay = http::default_retry_delay;
   std::shared_ptr<folly::SSLContext> tls_context;
 };
 
@@ -465,13 +461,6 @@ auto make_response_context(ResponseState const& response) -> record {
   };
 }
 
-auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool {
-  using code_t = proxygen::coro::HTTPErrorCode;
-  return code == code_t::TRANSPORT_EOF or code == code_t::TRANSPORT_READ_ERROR
-         or code == code_t::TRANSPORT_WRITE_ERROR
-         or code == code_t::READ_TIMEOUT or code == code_t::WRITE_TIMEOUT;
-}
-
 // Normalizes platform-specific socket error text for user-facing diagnostics.
 // In particular, `AsyncSocketException` embeds OS-dependent errno values
 // (e.g., 111 on Linux vs. 61 on macOS) that make error messages noisy and
@@ -505,15 +494,32 @@ auto find_content_encoding(
   return None{};
 }
 
+struct retryable_http_response : std::runtime_error {
+  retryable_http_response(
+    uint16_t status_code,
+    std::vector<std::pair<std::string, std::string>> headers)
+    : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
+      status_code{status_code},
+      headers{std::move(headers)} {
+  }
+
+  uint16_t status_code = 0;
+  std::vector<std::pair<std::string, std::string>> headers;
+  blob body;
+};
+
 // Static fetch task that runs on the Proxygen EventBase thread. All
 // results are communicated through the message queue; no operator members
 // are touched from this task.
 auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-           FetchConfig config, Arc<MessageQueue> mq) -> Task<void> {
+           FetchConfig config, bool buffer_retryable_body, Arc<MessageQueue> mq)
+  -> Task<void> {
   co_return co_await folly::coro::co_withExecutor(
     evb,
-    [](folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-       FetchConfig config, Arc<MessageQueue> mq) -> Task<void> {
+    folly::coro::co_invoke([evb, url = std::move(url),
+                            request = std::move(request),
+                            config = std::move(config), buffer_retryable_body,
+                            mq = std::move(mq)]() mutable -> Task<void> {
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
@@ -529,12 +535,12 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           config.request_timeout);
         // Retry only on socket-level failures (connect refused, reset, …).
         // HTTP-level errors (non-2xx) are not retried.
-        auto emitted_response_messages = false;
+        auto emitted_messages = false;
         co_await folly::coro::retryWithExponentialBackoff(
-          config.max_retry_count, config.retry_delay, config.retry_delay * 5,
+          config.max_retry_count, config.retry_delay, config.retry_delay * 16,
           0.0 /* no jitter */,
           [&]() -> Task<void> {
-            emitted_response_messages = false;
+            emitted_messages = false;
             // Resolve DNS and establish the TCP connection.
             auto addresses
               = co_await proxygen::coro::CoroDNSResolver::resolveHost(
@@ -557,8 +563,10 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             }
             // Build a streaming reader that feeds messages into the queue.
             auto reader = proxygen::coro::HTTPSourceReader{};
+            Option<retryable_http_response> retryable_response;
             reader
-              .onHeadersAsync([mq, &emitted_response_messages](
+              .onHeadersAsync([mq, &emitted_messages, &retryable_response,
+                               buffer_retryable_body](
                                 std::unique_ptr<proxygen::HTTPMessage> msg,
                                 bool is_final,
                                 bool) mutable -> folly::coro::Task<bool> {
@@ -567,24 +575,39 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   // response headers.
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                emitted_response_messages = true;
-                auto status = msg->getStatusCode();
                 auto hdrs = std::vector<std::pair<std::string, std::string>>{};
                 msg->getHeaders().forEach([&](std::string& k, std::string& v) {
                   hdrs.emplace_back(k, v);
                 });
+                auto status = msg->getStatusCode();
+                if (http::is_retryable_http_status(status)) {
+                  retryable_response
+                    = retryable_http_response{status, std::move(hdrs)};
+                  if (not buffer_retryable_body) {
+                    throw std::move(*retryable_response);
+                  }
+                  co_return proxygen::coro::HTTPSourceReader::Continue;
+                }
+                emitted_messages = true;
                 co_await mq->enqueue(ResponseHeader{status, std::move(hdrs)});
                 co_return proxygen::coro::HTTPSourceReader::Continue;
               })
-              .onBodyAsync([mq, &emitted_response_messages](
+              .onBodyAsync([mq, &emitted_messages, &retryable_response](
                              quic::BufQueue buf_queue,
                              bool) mutable -> folly::coro::Task<bool> {
                 if (not buf_queue.empty()) {
-                  emitted_response_messages = true;
                   auto iobuf = buf_queue.move();
-                  iobuf->coalesce();
-                  auto cptr = chunk::copy(iobuf->data(), iobuf->length());
-                  co_await mq->enqueue(ResponseBody{std::move(cptr)});
+                  auto bytes = as_bytes(iobuf->coalesce());
+                  if (retryable_response) {
+                    // buffer body
+                    retryable_response->body.insert(
+                      retryable_response->body.end(), bytes.begin(),
+                      bytes.end());
+                  } else {
+                    // send as message
+                    emitted_messages = true;
+                    co_await mq->enqueue(ResponseBody{chunk::copy(bytes)});
+                  }
                 }
                 co_return proxygen::coro::HTTPSourceReader::Continue;
               });
@@ -598,31 +621,45 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             co_await proxygen::coro::HTTPClient::request(
               session, std::move(*reservation), std::move(req_source),
               std::move(reader), config.request_timeout);
+            if (retryable_response) {
+              throw std::move(*retryable_response);
+            }
           },
           [&](folly::exception_wrapper const& ew) {
             // Once an attempt emitted response messages, do not retry.
             // Retrying after partial output can duplicate/corrupt downstream
             // parser and pagination state.
-            if (emitted_response_messages) {
+            if (emitted_messages) {
               return false;
             }
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
               return true;
             }
+            if (ew.is_compatible_with<retryable_http_response>()) {
+              return true;
+            }
             auto retryable_http_error = false;
             ew.with_exception([&](proxygen::coro::HTTPError const& err) {
-              retryable_http_error = is_retryable_http_error(err.code);
+              retryable_http_error = http::is_retryable_http_error(err.code);
             });
             return retryable_http_error;
           });
       }());
       if (result.hasException()) {
-        co_await mq->enqueue(
-          FetchError{result.exception().what().toStdString()});
+        if (auto const* res
+            = result.exception().get_exception<retryable_http_response>()) {
+          co_await mq->enqueue(ResponseHeader{res->status_code, res->headers});
+          if (not res->body.empty()) {
+            co_await mq->enqueue(
+              ResponseBody{chunk::copy(res->body.data(), res->body.size())});
+          }
+        } else {
+          co_await mq->enqueue(
+            FetchError{result.exception().what().toStdString()});
+        }
       }
       co_await mq->enqueue(FetchDone{});
-    }(evb, std::move(url), std::move(request), std::move(config),
-                                                 std::move(mq)));
+    }));
 }
 
 // ---- Operator ---------------------------------------------------------------
@@ -630,8 +667,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
 class FromHttp final : public Operator<void, table_slice> {
 public:
   explicit FromHttp(FromHttpArgs args)
-    : message_queue_{std::in_place, message_queue_capacity},
-      args_{std::move(args)} {
+    : message_queue_{std::in_place, 64}, args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -866,7 +902,8 @@ private:
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
       MetricsDirection::read, MetricsVisibility::external_);
     ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
-                         fetch_config_, message_queue_));
+                         fetch_config_, static_cast<bool>(args_.error_field),
+                         message_queue_));
     co_return;
   }
 

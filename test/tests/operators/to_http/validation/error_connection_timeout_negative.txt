@@ -1,0 +1,6 @@
+error: `connection_timeout` must be a non-negative duration
+ --> tests/operators/to_http/validation/error_connection_timeout_negative.tql:5:54
+  |
+5 | to_http "http://127.0.0.1:31337", connection_timeout=-1s {
+  |                                                      ^^^ 
+  |

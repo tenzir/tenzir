@@ -1,0 +1,6 @@
+error: `retry_delay` must be a non-negative duration
+ --> tests/operators/to_http/validation/error_retry_delay_negative.tql:5:47
+  |
+5 | to_http "http://127.0.0.1:31337", retry_delay=-1s {
+  |                                               ^^^ 
+  |

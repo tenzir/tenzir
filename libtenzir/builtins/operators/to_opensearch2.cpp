@@ -435,7 +435,7 @@ private:
       co_return;
     }
     auto response = std::move(result).unwrap();
-    if (response.status_code < 200 or response.status_code > 299) {
+    if (not response.is_status_success()) {
       diagnostic::error("issue sending data. HTTP response code `{}`",
                         response.status_code)
         .note("response body: {}", response.body)

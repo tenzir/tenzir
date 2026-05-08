@@ -1,0 +1,17 @@
+---
+error: true
+fixtures:
+  - http_server:
+      expected_request:
+        count: 1
+        method: POST
+        path: /status/not-found
+timeout: 60
+---
+
+from {
+  value: 13,
+}
+to_http env("HTTP_FIXTURE_STATUS_404_URL") {
+  write_ndjson
+}

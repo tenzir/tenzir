@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "tenzir/async/result.hpp"
 #include "tenzir/blob.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http_pool.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/simdjson_buffer.hpp"
 #include "tenzir/table_slice.hpp"
@@ -32,7 +32,20 @@
 #include <utility>
 #include <vector>
 
+namespace proxygen::coro {
+enum class HTTPErrorCode : uint16_t;
+} // namespace proxygen::coro
+
 namespace tenzir::http {
+
+auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
+
+auto is_retryable_http_status(uint16_t status_code) -> bool;
+
+inline constexpr auto default_timeout = std::chrono::seconds{90};
+inline constexpr auto default_connection_timeout = std::chrono::seconds{5};
+inline constexpr auto default_max_retry_count = 5;
+inline constexpr auto default_retry_delay = std::chrono::seconds{1};
 
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void;
 

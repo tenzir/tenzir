@@ -1,0 +1,18 @@
+---
+fixtures:
+  - http_server:
+      expected_request:
+        count: 3
+        method: POST
+        path: /status/retry-503-backoff
+timeout: 60
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_RETRY_503_BACKOFF_URL"),
+        max_retry_count=2,
+        retry_delay=500ms {
+  write_ndjson
+}

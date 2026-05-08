@@ -1,0 +1,6 @@
+error: `max_retry_count` must be <= 4294967295
+ --> tests/operators/to_http/validation/error_retry_count_overflow.tql:5:51
+  |
+5 | to_http "http://127.0.0.1:31337", max_retry_count=4294967296 {
+  |                                                   ^^^^^^^^^^ 
+  |
