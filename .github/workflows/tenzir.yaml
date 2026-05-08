@@ -368,7 +368,11 @@ jobs:
             major_minor_patch='${{ steps.configure.outputs.release-version }}'
             major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
             major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
-            tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
+            if [[ "${{ github.event.release.prerelease }}" == "true" || "$major_minor_patch" == *-* ]]; then
+              tags=("${{ github.sha }}" "${major_minor_patch}")
+            else
+              tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
+            fi
           else
             echo "::error::unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
