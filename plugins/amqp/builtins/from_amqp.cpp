@@ -17,13 +17,13 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <limits>
-#include <optional>
-
 #include <folly/CancellationToken.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/CurrentExecutor.h>
+
+#include <limits>
+#include <optional>
 
 #include "operator.hpp"
 
@@ -120,7 +120,8 @@ private:
         };
       },
       [](uint64_t x) {
-        if (x <= detail::narrow<uint64_t>(std::numeric_limits<int32_t>::max())) {
+        if (x
+            <= detail::narrow<uint64_t>(std::numeric_limits<int32_t>::max())) {
           return amqp_field_value_t{
             .kind = AMQP_FIELD_KIND_I32,
             .value = {.i32 = detail::narrow<int32_t>(x)},
