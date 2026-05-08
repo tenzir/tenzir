@@ -66,6 +66,7 @@ struct PeriodicTick {};
 using FromAmqpEvent = variant<AmqpMessage, AmqpError>;
 using FromAmqpQueue = folly::coro::BoundedQueue<FromAmqpEvent>;
 
+/// Owns the storage referenced by the shallow RabbitMQ-C table view.
 class AmqpFieldTable {
 public:
   explicit AmqpFieldTable(const record& args) {
@@ -92,7 +93,7 @@ public:
   AmqpFieldTable(AmqpFieldTable&&) = delete;
   auto operator=(AmqpFieldTable&&) -> AmqpFieldTable& = delete;
 
-  auto get() const -> amqp_table_t {
+  auto view() const -> amqp_table_t {
     return table_;
   }
 
@@ -269,7 +270,7 @@ public:
             .no_local = args_.no_local,
             .no_ack = not args_.ack,
             .queue_arguments
-            = queue_arguments ? queue_arguments->get() : amqp_empty_table,
+            = queue_arguments ? queue_arguments->view() : amqp_empty_table,
           });
           err.valid()) {
         diagnostic::error("failed to start AMQP consumer")
