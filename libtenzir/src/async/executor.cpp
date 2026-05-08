@@ -127,7 +127,7 @@ struct SubPipeline {
   SubPipeline(AnyOpPush push, Receiver<Checkpoint> from_sub,
               Sender<FromControl> from_control_sender,
               Receiver<ToControl> to_control_receiver, element_type_tag input,
-              Arc<DiagHandler> sub_dh, Fate fate)
+              Arc<DiagHandler> sub_dh)
     : push{Option<AnyOpPush>{std::move(push)}},
       from_sub{std::move(from_sub)},
       from_control_sender{
@@ -135,7 +135,6 @@ struct SubPipeline {
       to_control_receiver{std::move(to_control_receiver)},
       input{input},
       sub_dh{std::move(sub_dh)},
-      fate{fate},
       handle{match(input, [this]<class Input>(tag<Input>) -> AnySubHandle {
         // TODO: There surely is a better way to model this than passing `this`.
         return AnySubHandle{std::in_place_type<SubHandle<Input>>, *this};
@@ -166,8 +165,6 @@ struct SubPipeline {
   bool wants_commit = false;
   /// Diagnostic handler used for running the subpipeline.
   Arc<DiagHandler> sub_dh;
-  /// Whether failures in the subpipeline are shared with the parent.
-  Fate fate;
   /// Set when process(SubMessage) observes the from_sub channel drain.
   bool from_sub_done = false;
   /// Set when process(SubMessage) observes the to_control channel drain.
@@ -703,7 +700,7 @@ private:
   }
 
   auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id,
-                       Arc<DiagHandler> sub_dh, Fate fate) -> AnySubHandle& {
+                       Arc<DiagHandler> sub_dh) -> AnySubHandle& {
     auto [from_sub_sender, from_sub] = channel<Checkpoint>(1);
     auto [from_control_sender, from_control_receiver] = channel<FromControl>(1);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(1);
@@ -717,7 +714,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
       std::move(from_control_sender), std::move(to_control_receiver), input,
-      std::move(dh), fate);
+      std::move(dh));
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -813,7 +810,7 @@ private:
     auto [it, inserted] = subpipelines_.try_emplace(
       std::move(key), std::move(push_sub), std::move(from_sub),
       std::move(from_control_sender), std::move(to_control_receiver), input,
-      sub_dh, fate);
+      sub_dh);
     if (not inserted) {
       panic("already have a subpipeline for that key");
     }
@@ -1347,10 +1344,7 @@ private:
       if (not closed) {
         co_return;
       }
-      auto sub_failure = failure_or<void>{};
-      if (sub.fate == Fate::Isolated) {
-        sub_failure = sub.sub_dh->failure();
-      }
+      auto sub_failure = sub.sub_dh->failure();
       subpipelines_.erase(it);
       if (phase_ != Phase::stopping_forced) {
         if (sub_failure.is_error()) {
