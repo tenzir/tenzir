@@ -1,0 +1,23 @@
+---
+bench:
+  id: if
+  description: Dispatch repeated action values with an equivalent if/else chain.
+  # TODO: Remove this once match statements work on the default executor.
+  tenzir_args:
+    - --neo
+---
+from {action: "accept"},
+     {action: "allow"},
+     {action: "deny"},
+     {action: "drop"},
+     {action: "other"}
+repeat 1M
+batch
+if action == "accept" or action == "allow" {
+  verdict = "allowed"
+} else if action == "deny" or action == "drop" {
+  verdict = "blocked"
+} else {
+  verdict = "unknown"
+}
+discard
