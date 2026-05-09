@@ -331,7 +331,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"
-tenzir -q 'version | select version | write_ndjson'
+tenzir -q 'version | select version | to_stdout { write_ndjson }'
 
 # Inform about next steps.
 action "Providing guidance"
