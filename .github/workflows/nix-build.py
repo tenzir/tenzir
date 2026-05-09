@@ -39,7 +39,6 @@ import xml.etree.ElementTree as ET
 
 from pathlib import Path
 
-
 # Homebrew's `uninstall pkgutil:` matches the component package receipt ids from
 # PackageInfo and Distribution. CPack's product identifier is separate, so we
 # normalize the pkgutil-facing identifier after expanding the signed archive.
@@ -562,7 +561,12 @@ def run_container_test(
 
         # Create a test pipeline
         notice("Creating test pipeline")
-        pipeline_args = '{"definition": "from \\"udp://0.0.0.0:514\\" { read_syslog } | discard", "autostart": {"created": true}}'
+        pipeline_definition = 'from "udp://0.0.0.0:514" { read_syslog } | discard'
+        pipeline = (
+            'api "/pipeline/create", '
+            f"{{definition: {json.dumps(pipeline_definition)}, "
+            "autostart: {created: true}}"
+        )
         result = subprocess.run(
             [
                 "docker",
@@ -571,7 +575,7 @@ def run_container_test(
                 "TENZIR_LEGACY=true",
                 container_name,
                 "/opt/tenzir/bin/tenzir",
-                f"api /pipeline/create '{pipeline_args}'",
+                pipeline,
             ],
             capture_output=True,
             text=True,
