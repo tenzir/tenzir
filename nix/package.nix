@@ -59,14 +59,14 @@ rec {
 
   tenzir-test = pkgs.python3Packages.buildPythonPackage rec {
     pname = "tenzir-test";
-    version = "1.8.2";
+    version = "1.8.4";
     pyproject = true;
 
     src = pkgs.fetchFromGitHub {
       owner = "tenzir";
       repo = "test";
       tag = "v${version}";
-      hash = "sha256-KmzcUy2GAoTpv9RKEJ82sYnljQSAgzSTqA/WDmaSuVc=";
+      hash = "sha256-YXsJZagUeloS+LcyimefORZ5/7wnZ5fWrT2JKCjpN5w=";
     };
 
     build-system = with pkgs.python3Packages; [ hatchling ];
