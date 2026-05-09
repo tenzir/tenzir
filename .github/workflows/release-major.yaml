@@ -3,22 +3,10 @@ name: Release (Major)
 on:
   workflow_dispatch:
     inputs:
-      bump:
-        description: |
-          Major release mode
-
-          Use `major` to start a new major release or major RC series. Use
-          `auto` to continue or promote the latest outstanding major RC.
-        required: false
-        default: major
-        type: choice
-        options:
-          - major
-          - auto
       rc:
         description: |
-          Create or continue the release-candidate series for the resolved
-          stable version.
+          Create or continue the next major release-candidate series. Leave
+          disabled to promote the latest outstanding major RC to stable.
         required: false
         default: false
         type: boolean
@@ -41,7 +29,7 @@ jobs:
   release:
     uses: ./.github/workflows/release.yaml
     with:
-      bump: ${{ inputs.bump }}
+      bump: ${{ inputs.rc && 'major' || 'auto' }}
       rc: ${{ inputs.rc }}
       intro: ${{ inputs.intro }}
       title: ${{ inputs.title }}
