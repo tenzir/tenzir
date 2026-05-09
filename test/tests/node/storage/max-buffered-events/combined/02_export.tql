@@ -1,0 +1,5 @@
+export
+sort x
+to_stdout {
+  write_lines
+}

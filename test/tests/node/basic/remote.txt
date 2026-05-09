@@ -1,0 +1,9 @@
+{
+  message: "Hello, world!",
+}
+warning: `remote` has no effect in the new executor
+ --> tests/node/basic/remote.tql:6:1
+  |
+6 | remote {
+  | ~~~~~~ 
+  |

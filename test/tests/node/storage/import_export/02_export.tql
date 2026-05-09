@@ -1,0 +1,3 @@
+export
+where @name == "count"
+summarize count(), min(index), max(index)

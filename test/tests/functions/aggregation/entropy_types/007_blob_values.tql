@@ -1,0 +1,3 @@
+from {x: b"hello"}, {x: b"world"}, {x: b"hello"}
+summarize blob_values=entropy(x)
+blob_values = round(blob_values * 100) / 100

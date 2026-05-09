@@ -1,0 +1,5 @@
+suite:
+  name: to-opensearch-doc-param
+  mode: sequential
+fixtures: [http]
+timeout: 60

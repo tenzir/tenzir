@@ -1,0 +1,6 @@
+error: subpipeline must produce events
+ --> tests/node/scheduler/every_pipeline_invalid.tql:7:12
+  |
+7 | every 10ms {
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

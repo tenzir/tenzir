@@ -1,0 +1,2 @@
+suite: max-buffered-events-combined
+fixtures: [node]

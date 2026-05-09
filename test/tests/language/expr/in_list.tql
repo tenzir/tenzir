@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/json/lists.json" {
+  read_json
+}
+exists = x in y
+not_exists = x not in y

@@ -1,2 +1,0 @@
-from_file f"{env("TENZIR_INPUTS")}/from_file/**", path_field=path
-sort path

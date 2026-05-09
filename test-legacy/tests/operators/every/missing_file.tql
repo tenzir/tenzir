@@ -1,7 +1,0 @@
----
-error: true
----
-
-every 1s {
-  from "./this-file-does-not-exist.json"
-}

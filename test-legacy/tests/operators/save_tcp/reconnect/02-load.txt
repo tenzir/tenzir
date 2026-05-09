@@ -1,9 +1,0 @@
-{
-  line: "Hello, world!",
-}
-{
-  line: "Hello, world!",
-}
-{
-  line: "Hello, world!",
-}

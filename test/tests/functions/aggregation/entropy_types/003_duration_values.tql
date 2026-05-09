@@ -1,0 +1,3 @@
+from {x: 1s}, {x: 2s}, {x: 1s}
+summarize duration_values=entropy(x)
+duration_values = round(duration_values * 100) / 100

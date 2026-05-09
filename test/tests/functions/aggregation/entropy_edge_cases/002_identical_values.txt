@@ -1,0 +1,3 @@
+{
+  identical_values: 0.0,
+}

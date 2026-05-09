@@ -1,3 +1,0 @@
-from {message: "foo"}
-write_json
-save_tcp env("TCP_SINK_ENDPOINT")

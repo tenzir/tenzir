@@ -1,0 +1,3 @@
+from {x: 192.168.1.1}, {x: 192.168.1.2}, {x: 192.168.1.1}
+summarize ip_values=entropy(x)
+ip_values = round(ip_values * 100) / 100

@@ -1,9 +1,0 @@
----
-description: "Invalid non-null default for a field parameter"
-args:
-  named:
-    - name: field
-      type: field
-      default: this.input
----
-set marker = "should not load"

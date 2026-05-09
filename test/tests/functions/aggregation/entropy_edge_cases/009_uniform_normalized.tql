@@ -1,0 +1,3 @@
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+summarize uniform_normalized=entropy(x, normalize=true)
+uniform_normalized = round(uniform_normalized * 100) / 100

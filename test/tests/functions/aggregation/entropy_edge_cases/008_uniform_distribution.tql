@@ -1,0 +1,3 @@
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+summarize uniform_distribution=entropy(x)
+uniform_distribution = round(uniform_distribution * 100) / 100

@@ -1,0 +1,3 @@
+from {x: "a"}, {x: "b"}, {x: "a"}
+summarize string_values=entropy(x)
+string_values = round(string_values * 100) / 100
