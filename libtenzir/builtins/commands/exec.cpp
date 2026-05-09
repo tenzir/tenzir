@@ -85,17 +85,19 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.implicit_bytes_sink
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-sink",
                   use_neo_executor ? "" : cfg.implicit_bytes_sink);
-  cfg.implicit_events_sink = caf::get_or(
-    inv.options, "tenzir.exec.implicit-events-sink",
-    use_neo_executor ? "" : make_default_implicit_events_sink(stdout_color));
+  cfg.implicit_events_sink
+    = caf::get_or(inv.options, "tenzir.exec.implicit-events-sink",
+                  use_neo_executor
+                    ? "to_stdout"
+                    : make_default_implicit_events_sink(stdout_color));
   cfg.implicit_bytes_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
                   use_neo_executor ? "" : cfg.implicit_bytes_source);
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
-                  use_neo_executor ? "" : cfg.implicit_events_source);
+                  use_neo_executor ? R"(from_stdin { read_json })"
+                                   : cfg.implicit_events_source);
   cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
-  cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   auto profile_str
     = caf::get_or(inv.options, "tenzir.exec.profile", std::string{});

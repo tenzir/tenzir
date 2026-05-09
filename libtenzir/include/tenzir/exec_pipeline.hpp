@@ -36,7 +36,6 @@ struct exec_config {
   bool dump_opt_ir = false;
 
   bool multi = false;
-  bool legacy = false;
   bool strict = false;
   bool neo = true;
   std::optional<std::string> profile;
