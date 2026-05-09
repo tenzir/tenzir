@@ -117,9 +117,6 @@ jobs:
         uv --directory python add --package tenzir-operator --frozen "tenzir-common>=${VERSION_NUMBER},<${UPPER_BOUND}"
         uv --directory python lock
 
-        # Stage tracked version updates for the release commit.
-        git add -u
-
         echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
         echo "Updated Python package versions to: ${VERSION_NUMBER}"
       publish-no-latest-on-non-main: true
