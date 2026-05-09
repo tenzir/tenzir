@@ -2284,7 +2284,8 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if (cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir) {
+    if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
+        or cfg.dump_opt_ir) {
       // This new code path will eventually supersede the current one.
       return exec_with_ir(std::move(parsed), cfg, ctx, sys);
     }
