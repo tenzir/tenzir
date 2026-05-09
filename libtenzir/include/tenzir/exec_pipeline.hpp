@@ -38,7 +38,7 @@ struct exec_config {
   bool multi = false;
   bool legacy = false;
   bool strict = false;
-  bool neo = false;
+  bool neo = true;
   std::optional<std::string> profile;
 };
 

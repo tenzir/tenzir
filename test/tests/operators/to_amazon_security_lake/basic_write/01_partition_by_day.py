@@ -57,7 +57,7 @@ def main() -> None:
         pipe_path = Path(tmpdir) / "pipe.tql"
         pipe_path.write_text(pipeline, encoding="utf-8")
         result = subprocess.run(
-            [*tenzir, "--bare-mode", "--multi", "--neo", "-f", str(pipe_path)],
+            [*tenzir, "--bare-mode", "--multi", "-f", str(pipe_path)],
             capture_output=True,
             text=True,
             timeout=45,

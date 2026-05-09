@@ -32,11 +32,11 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `write_tql` @ 0..0
 +        ],
-+        ref: std::to_stdout/op
++        ref: std::write_tql/op
 +      },
-+      desc: "to_stdout",
++      desc: "write_tql",
 +      args: [
 +        
 +      ],
@@ -47,7 +47,7 @@
        named_args: [
          
        ]
--    },
+     },
 -    where_ir {
 -      self: 336..341,
 -      predicate: binary_expr {
@@ -58,6 +58,24 @@
 -        op: "eq" @ 346..348,
 -        right: constant bool true @ 349..353
 -      }
++    GenericIr {
++      op: {
++        path: [
++          `save_stdout` @ 0..0
++        ],
++        ref: std::save_stdout/op
++      },
++      desc: "save_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
      }
    ]
  }

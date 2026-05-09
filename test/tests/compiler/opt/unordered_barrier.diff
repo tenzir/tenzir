@@ -78,11 +78,30 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `write_tql` @ 0..0
 +        ],
-+        ref: std::to_stdout/op
++        ref: std::write_tql/op
 +      },
-+      desc: "to_stdout",
++      desc: "write_tql",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `save_stdout` @ 0..0
++        ],
++        ref: std::save_stdout/op
++      },
++      desc: "save_stdout",
 +      args: [
 +        
 +      ],

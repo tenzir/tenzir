@@ -52,7 +52,6 @@ select line = string(message)
             "--bare-mode",
             "--console-verbosity=warning",
             "--multi",
-            "--neo",
             pipeline,
         ],
         text=True,

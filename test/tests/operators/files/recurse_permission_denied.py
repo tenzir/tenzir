@@ -39,7 +39,6 @@ def main() -> None:
                 "--bare-mode",
                 "--console-verbosity=quiet",
                 "--multi",
-                "--neo",
                 "-f",
                 str(pipeline_path),
             ],

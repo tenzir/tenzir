@@ -32,11 +32,11 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `write_tql` @ 0..0
 +        ],
-+        ref: std::to_stdout/op
++        ref: std::write_tql/op
 +      },
-+      desc: "to_stdout",
++      desc: "write_tql",
 +      args: [
 +        
 +      ],
@@ -47,12 +47,16 @@
        named_args: [
          
        ]
--    },
+     },
 -    UnorderedIr {
 -      pipeline: {
 -        lets: [
 -          
--        ],
++    GenericIr {
++      op: {
++        path: [
++          `save_stdout` @ 0..0
+         ],
 -        operators: [
 -          where_ir {
 -            self: 21..26,
@@ -66,8 +70,20 @@
 -            }
 -          }
 -        ]
--      },
++        ref: std::save_stdout/op
+       },
 -      loc: 7..16
++      desc: "save_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
      }
    ]
  }
