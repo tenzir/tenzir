@@ -26,7 +26,43 @@ on:
         type: string
 
 jobs:
+  validate-major-release:
+    name: Validate major release mode
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Validate major promotion target
+        env:
+          RC: ${{ inputs.rc }}
+        run: |
+          if [ "$RC" = "true" ]; then
+            exit 0
+          fi
+
+          outstanding_major_rc=""
+          for manifest in changelog/releases/v*.0.0-rc.*/manifest.yaml; do
+            [ -e "$manifest" ] || continue
+            release_dir="${manifest%/manifest.yaml}"
+            rc_version="${release_dir##*/}"
+            stable_version="${rc_version%%-rc.*}"
+
+            if [ ! -d "changelog/releases/${stable_version}" ]; then
+              outstanding_major_rc="$rc_version"
+            fi
+          done
+
+          if [ -z "$outstanding_major_rc" ]; then
+            echo "::error::No outstanding major release candidate found. Run with rc=true to start or continue a major RC series."
+            exit 1
+          fi
+
+          echo "Found outstanding major release candidate: ${outstanding_major_rc}"
+
   release:
+    needs: validate-major-release
     uses: ./.github/workflows/release.yaml
     with:
       bump: ${{ inputs.rc && 'major' || 'auto' }}
