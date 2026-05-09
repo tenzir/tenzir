@@ -32,7 +32,6 @@ rec {
   integration-test-tree = lib.fileset.difference
     (lib.fileset.unions [
       ../test
-      ../test-legacy
     ])
     excluded-integration-tests;
   tenzir-tree = lib.fileset.unions [

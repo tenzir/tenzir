@@ -346,25 +346,33 @@ endif ()
 
 # Separate make targets for legacy and neo tests
 add_custom_target(integration-legacy DEPENDS tenzir)
+if (EXISTS "${CMAKE_SOURCE_DIR}/test-legacy")
+  tenzir_build_test_command(
+    _legacy_cmd
+    EXTRA_ARGS
+    "--jobs"
+    "4"
+    WORKING_DIR
+    "${CMAKE_SOURCE_DIR}/test-legacy"
+    SELECTION
+    ${_contrib_legacy_test_dirs})
+  add_custom_command(
+    TARGET integration-legacy
+    POST_BUILD
+    COMMAND ${_legacy_cmd}
+    USES_TERMINAL VERBATIM)
+endif ()
+
+add_custom_target(integration-neo DEPENDS tenzir)
 tenzir_build_test_command(
-  _legacy_cmd
+  _neo_cmd
   EXTRA_ARGS
   "--jobs"
   "4"
   WORKING_DIR
-  "${CMAKE_SOURCE_DIR}/test-legacy"
+  "${CMAKE_SOURCE_DIR}/test"
   SELECTION
-  ${_contrib_legacy_test_dirs})
-add_custom_command(
-  TARGET integration-legacy
-  POST_BUILD
-  COMMAND ${_legacy_cmd}
-  USES_TERMINAL VERBATIM)
-
-add_custom_target(integration-neo DEPENDS tenzir)
-tenzir_build_test_command(_neo_cmd EXTRA_ARGS "--jobs" "4" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test" SELECTION
-                          ${_contrib_neo_test_dirs})
+  ${_contrib_neo_test_dirs})
 add_custom_command(
   TARGET integration-neo
   POST_BUILD
@@ -373,35 +381,44 @@ add_custom_command(
 
 # Combined target that runs all tests
 add_custom_target(integration-tests DEPENDS tenzir)
+set(_integration_test_commands)
+if (_legacy_cmd)
+  list(APPEND _integration_test_commands COMMAND ${_legacy_cmd})
+endif ()
+list(APPEND _integration_test_commands COMMAND ${_neo_cmd})
 add_custom_command(
-  TARGET integration-tests
-  POST_BUILD
-  COMMAND ${_legacy_cmd}
-  COMMAND ${_neo_cmd}
-  USES_TERMINAL VERBATIM)
+  TARGET integration-tests POST_BUILD ${_integration_test_commands}
+                           USES_TERMINAL VERBATIM)
 
 add_custom_target(integration)
 add_dependencies(integration integration-tests)
 
 add_custom_target(update-integration-legacy DEPENDS tenzir)
+if (EXISTS "${CMAKE_SOURCE_DIR}/test-legacy")
+  tenzir_build_test_command(
+    _update_legacy_cmd
+    EXTRA_ARGS
+    "--update"
+    WORKING_DIR
+    "${CMAKE_SOURCE_DIR}/test-legacy"
+    SELECTION
+    ${_contrib_legacy_test_dirs})
+  add_custom_command(
+    TARGET update-integration-legacy
+    POST_BUILD
+    COMMAND ${_update_legacy_cmd}
+    USES_TERMINAL VERBATIM)
+endif ()
+
+add_custom_target(update-integration-neo DEPENDS tenzir)
 tenzir_build_test_command(
-  _update_legacy_cmd
+  _update_neo_cmd
   EXTRA_ARGS
   "--update"
   WORKING_DIR
-  "${CMAKE_SOURCE_DIR}/test-legacy"
+  "${CMAKE_SOURCE_DIR}/test"
   SELECTION
-  ${_contrib_legacy_test_dirs})
-add_custom_command(
-  TARGET update-integration-legacy
-  POST_BUILD
-  COMMAND ${_update_legacy_cmd}
-  USES_TERMINAL VERBATIM)
-
-add_custom_target(update-integration-neo DEPENDS tenzir)
-tenzir_build_test_command(_update_neo_cmd EXTRA_ARGS "--update" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test" SELECTION
-                          ${_contrib_neo_test_dirs})
+  ${_contrib_neo_test_dirs})
 add_custom_command(
   TARGET update-integration-neo
   POST_BUILD
@@ -409,12 +426,14 @@ add_custom_command(
   USES_TERMINAL VERBATIM)
 
 add_custom_target(update-integration DEPENDS tenzir)
+set(_update_integration_commands)
+if (_update_legacy_cmd)
+  list(APPEND _update_integration_commands COMMAND ${_update_legacy_cmd})
+endif ()
+list(APPEND _update_integration_commands COMMAND ${_update_neo_cmd})
 add_custom_command(
-  TARGET update-integration
-  POST_BUILD
-  COMMAND ${_update_legacy_cmd}
-  COMMAND ${_update_neo_cmd}
-  USES_TERMINAL VERBATIM)
+  TARGET update-integration POST_BUILD ${_update_integration_commands}
+                            USES_TERMINAL VERBATIM)
 
 if (TENZIR_ENABLE_CODE_COVERAGE)
   if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -499,7 +518,8 @@ if (TENZIR_ENABLE_MANPAGES)
       "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
     COMMENT "Generating tenzir.1"
     VERBATIM)
-  add_custom_target(tenzir-manpage DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1")
+  add_custom_target(tenzir-manpage
+                    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1")
   add_dependencies(tenzir tenzir-manpage)
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
