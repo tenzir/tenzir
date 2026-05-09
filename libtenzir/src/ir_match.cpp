@@ -11,6 +11,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -123,23 +124,19 @@ public:
 
   auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
     -> Task<void> {
-    auto candidate_masks = std::vector<std::vector<bool>>(args_.arms.size());
-    auto arm_masks = std::vector<std::vector<bool>>(args_.arms.size());
-    for (auto& mask : candidate_masks) {
-      mask.resize(input.rows(), false);
-    }
-    for (auto& mask : arm_masks) {
-      mask.resize(input.rows(), false);
-    }
     auto matched = std::vector<bool>(input.rows(), false);
     auto scrutinee = eval(args_.scrutinee, input, ctx);
-    auto offset = int64_t{0};
-    for (auto& part : scrutinee) {
-      for (auto value : part.values3()) {
-        auto row = offset++;
-        for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
-             ++arm_index) {
-          auto const& arm = args_.arms[arm_index];
+    for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
+         ++arm_index) {
+      auto const& arm = args_.arms[arm_index];
+      auto candidate_rows = std::vector<size_t>{};
+      auto offset = int64_t{0};
+      for (auto& part : scrutinee) {
+        for (auto value : part.values3()) {
+          auto const row = detail::narrow<size_t>(offset++);
+          if (matched[row]) {
+            continue;
+          }
           auto matches = arm.wildcard;
           for (auto const& pattern : arm.patterns) {
             if (matches_pattern(value, pattern)) {
@@ -148,21 +145,11 @@ public:
             }
           }
           if (matches) {
-            candidate_masks[arm_index][row] = true;
+            candidate_rows.push_back(row);
           }
         }
       }
-    }
-    TENZIR_ASSERT_EQ(offset, static_cast<int64_t>(input.rows()));
-    for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
-         ++arm_index) {
-      auto const& arm = args_.arms[arm_index];
-      auto candidate_rows = std::vector<size_t>{};
-      for (auto row = size_t{0}; row < input.rows(); ++row) {
-        if (not matched[row] and candidate_masks[arm_index][row]) {
-          candidate_rows.push_back(row);
-        }
-      }
+      TENZIR_ASSERT_EQ(offset, static_cast<int64_t>(input.rows()));
       if (candidate_rows.empty()) {
         continue;
       }
@@ -200,20 +187,18 @@ public:
         }
         TENZIR_ASSERT_EQ(end, static_cast<int64_t>(candidate_rows.size()));
       }
+      auto arm_mask = std::vector<bool>(input.rows(), false);
       for (auto index = size_t{0}; index < candidate_rows.size(); ++index) {
         if (guard_mask[index]) {
           auto row = candidate_rows[index];
-          arm_masks[arm_index][row] = true;
+          arm_mask[row] = true;
           matched[row] = true;
         }
       }
-    }
-    for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
-         ++arm_index) {
       if (arm_closed_[arm_index]) {
         continue;
       }
-      auto filtered = filter(input, *make_boolean_array(arm_masks[arm_index]));
+      auto filtered = filter(input, *make_boolean_array(arm_mask));
       if (filtered.rows() == 0) {
         continue;
       }
