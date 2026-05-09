@@ -88,11 +88,11 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.implicit_bytes_sink
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-sink",
                   use_neo_executor ? "" : cfg.implicit_bytes_sink);
-  cfg.implicit_events_sink
-    = caf::get_or(inv.options, "tenzir.exec.implicit-events-sink",
-                  use_neo_executor
-                    ? "to_stdout"
-                    : make_default_implicit_events_sink(stdout_color));
+  cfg.implicit_events_sink = caf::get_or(
+    inv.options, "tenzir.exec.implicit-events-sink",
+    use_neo_executor
+      ? (stdout_color ? "to_stdout { write_tql color=true }" : "to_stdout")
+      : make_default_implicit_events_sink(stdout_color));
   cfg.implicit_bytes_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
                   use_neo_executor ? "" : cfg.implicit_bytes_source);
