@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [macos-15]
+        image: [macos-26]
         tag: ["latest", "main"]
     runs-on: ${{ matrix.image }}
     env:
