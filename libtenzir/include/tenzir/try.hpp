@@ -165,13 +165,19 @@ struct tenzir::tryable<tenzir::variant<V, E>> {
 
 // -- Coroutine variants (use `co_return`) -------------------------------------
 
+// Use source-line-stable temporary names for coroutine variants. With
+// `__COUNTER__`, the same header-defined coroutine template can expand to
+// different local names in different translation units depending on prior macro
+// expansions. GCC's LTO ODR checker observes those locals as coroutine frame
+// fields and warns about mismatching frame types. `__LINE__` trades support for
+// multiple `CO_TRY` calls on one physical line for stable expansions across
+// translation units.
 #define TENZIR_CO_TRY_1(expr)                                                  \
-  TENZIR_TRY_IMPL_DISCARD(co_return, TENZIR_PP_PASTE2(_co_try, __COUNTER__),   \
-                          expr)
+  TENZIR_TRY_IMPL_DISCARD(co_return, TENZIR_PP_PASTE2(_co_try, __LINE__), expr)
 
 #define TENZIR_CO_TRY_2(decl, expr)                                            \
   TENZIR_TRY_IMPL_EXTRACT(co_return, decl,                                     \
-                          TENZIR_PP_PASTE2(_co_try, __COUNTER__), expr)
+                          TENZIR_PP_PASTE2(_co_try, __LINE__), expr)
 
 #define TENZIR_CO_TRY(...)                                                     \
   TENZIR_PP_OVERLOAD(TENZIR_CO_TRY_, __VA_ARGS__)(__VA_ARGS__)
