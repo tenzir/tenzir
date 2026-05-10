@@ -79,12 +79,12 @@ jobs:
       - name: Prepare ccache directory
         if: runner.os == 'Linux'
         run: |
-          sudo mkdir -p /var/cache/ccache
-          sudo chmod 1777 /var/cache/ccache
+          sudo mkdir -p /tmp/tenzir-ccache
+          sudo chmod 1777 /tmp/tenzir-ccache
           sudo rm -f \
-            /var/cache/ccache/remote-only \
-            /var/cache/ccache/s3.sock \
-            /var/cache/ccache/s3-helper.pid
+            /tmp/tenzir-ccache/remote-only \
+            /tmp/tenzir-ccache/s3.sock \
+            /tmp/tenzir-ccache/s3-helper.pid
       - name: Configure ccache AWS credentials
         if: runner.os == 'Linux' && vars.CCACHE_S3_BUCKET != '' && vars.CCACHE_AWS_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
@@ -108,20 +108,20 @@ jobs:
             echo "::notice::CCACHE_S3_BUCKET is unset, skipping ccache S3 helper"
             exit 0
           fi
-          sudo touch /var/cache/ccache/remote-only
-          sudo chmod 0666 /var/cache/ccache/remote-only
+          sudo touch /tmp/tenzir-ccache/remote-only
+          sudo chmod 0666 /tmp/tenzir-ccache/remote-only
           nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' --run '
             python_bin="$(command -v python3)"
             nohup "$python_bin" scripts/ccache/s3-storage-helper.py \
-              --endpoint /var/cache/ccache/s3.sock \
+              --endpoint /tmp/tenzir-ccache/s3.sock \
               --url "s3://${CCACHE_S3_BUCKET}/${CCACHE_S3_PREFIX}" \
               --idle-timeout 0 \
               --socket-mode 0666 \
               >/tmp/ccache-s3-helper.log 2>&1 &
-            echo $! | sudo tee /var/cache/ccache/s3-helper.pid >/dev/null
+            echo $! | sudo tee /tmp/tenzir-ccache/s3-helper.pid >/dev/null
           '
           sleep 1
-          sudo test -S /var/cache/ccache/s3.sock
+          sudo test -S /tmp/tenzir-ccache/s3.sock
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
         if: runner.os == 'macOS'
@@ -362,6 +362,6 @@ jobs:
       - name: Stop ccache storage helpers
         if: always() && runner.os == 'Linux'
         run: |
-          if [[ -f /var/cache/ccache/s3-helper.pid ]]; then
-            sudo kill "$(cat /var/cache/ccache/s3-helper.pid)" || true
+          if [[ -f /tmp/tenzir-ccache/s3-helper.pid ]]; then
+            sudo kill "$(cat /tmp/tenzir-ccache/s3-helper.pid)" || true
           fi

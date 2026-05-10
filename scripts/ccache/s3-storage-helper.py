@@ -770,6 +770,24 @@ def _attrs_from_env() -> dict[str, str]:
     return attrs
 
 
+def _default_auth(endpoint_url: str | None) -> str:
+    if endpoint_url:
+        return "credentials"
+    if any(
+        os.environ.get(name)
+        for name in (
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "AWS_WEB_IDENTITY_TOKEN_FILE",
+            "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        )
+    ):
+        return "credentials"
+    return "aws-sso"
+
+
 def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
     parsed = urlparse(url)
     if parsed.scheme != "s3":
@@ -789,7 +807,9 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
     auth = (
         attrs.get("auth")
         or os.environ.get("CCACHE_S3_AUTH")
-        or ("credentials" if endpoint_url else "aws-sso")
+        or _default_auth(
+            endpoint_url,
+        )
     )
     if auth not in {
         "aws-sso",
@@ -1317,10 +1337,15 @@ def _initialize_auth(config: S3Config) -> S3Config:
     try:
         account_id = caller_account()
     except (BotoCoreError, ClientError, OSError) as error:
-        if resolved_config.auth == "aws-sso" and resolved_config.profile and _is_interactive():
+        if (
+            resolved_config.auth == "aws-sso"
+            and resolved_config.profile
+            and _is_interactive()
+        ):
             _run_aws_sso_login(
                 resolved_config.profile,
-                resolved_config.expected_account_id or DEFAULT_INFRASTRUCTURE_ACCOUNT_ID,
+                resolved_config.expected_account_id
+                or DEFAULT_INFRASTRUCTURE_ACCOUNT_ID,
             )
             account_id = caller_account()
         else:
@@ -1331,7 +1356,10 @@ def _initialize_auth(config: S3Config) -> S3Config:
             raise StorageError(
                 message,
             ) from error
-    if resolved_config.expected_account_id and account_id != resolved_config.expected_account_id:
+    if (
+        resolved_config.expected_account_id
+        and account_id != resolved_config.expected_account_id
+    ):
         raise StorageError(
             f"AWS credentials are for account {account_id}, "
             f"expected {resolved_config.expected_account_id}",
