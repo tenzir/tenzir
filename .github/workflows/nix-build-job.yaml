@@ -112,7 +112,7 @@ jobs:
           sudo chmod 0666 /var/cache/ccache/remote-only
           nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' --run '
             python_bin="$(command -v python3)"
-            nohup "$python_bin" scripts/ccache-storage-s3.py \
+            nohup "$python_bin" scripts/ccache/s3-storage-helper.py \
               --endpoint /var/cache/ccache/s3.sock \
               --url "s3://${CCACHE_S3_BUCKET}/${CCACHE_S3_PREFIX}" \
               --idle-timeout 0 \

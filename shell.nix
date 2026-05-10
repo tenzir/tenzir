@@ -154,7 +154,7 @@ pkgs.mkShell (
       if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
         echo "ccache S3 helper: already running at $ccache_s3_sock."
       else
-        echo "ccache S3 helper: run 'scripts/ccache-storage-s3.py --deamonize' to enable remote cache."
+        echo "ccache S3 helper: run 'scripts/ccache/s3-storage-helper.py --deamonize' to enable remote cache."
       fi
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator

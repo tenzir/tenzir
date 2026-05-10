@@ -1742,7 +1742,7 @@ def _cmd_setup(argv: list[str]) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Serve the ccache remote storage helper protocol with S3 storage",
-        epilog="Run 'ccache-storage-s3.py setup --help' to create AWS resources.",
+        epilog="Run 's3-storage-helper.py setup --help' to create AWS resources.",
     )
     parser.add_argument(
         "--endpoint",
@@ -1795,12 +1795,12 @@ def _cmd_serve(argv: list[str]) -> int:
     if not args.endpoint:
         parser.error(
             "--endpoint or CRSH_IPC_ENDPOINT is required for serving; "
-            "run 'ccache-storage-s3.py setup' to configure AWS resources",
+            "run 's3-storage-helper.py setup' to configure AWS resources",
         )
     if not args.url:
         parser.error(
             "--url or CRSH_URL is required for serving; "
-            "run 'ccache-storage-s3.py setup' to configure AWS resources",
+            "run 's3-storage-helper.py setup' to configure AWS resources",
         )
 
     attrs = _attrs_from_env()
@@ -1878,7 +1878,7 @@ def main() -> NoReturn:
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as error:
-        print(f"ccache-storage-s3.py: {error}", file=sys.stderr)
+        print(f"s3-storage-helper.py: {error}", file=sys.stderr)
         sys.exit(1)
     sys.exit(result)
 

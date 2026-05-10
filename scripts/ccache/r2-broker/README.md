@@ -162,7 +162,7 @@ CCACHE_R2_ALLOWED_PREFIXES=tenzir/
 ## Deploy
 
 After the variables and secrets are set, run the **ccache R2 broker** workflow
-manually once, or push a change under `workers/ccache-r2-broker/`.
+manually once, or push a change under `scripts/ccache/r2-broker/`.
 
 The workflow deploys the Worker and stores these Worker secrets:
 

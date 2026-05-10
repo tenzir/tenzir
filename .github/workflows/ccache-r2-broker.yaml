@@ -6,7 +6,7 @@ on:
       - main
       - master
     paths:
-      - workers/ccache-r2-broker/**
+      - scripts/ccache/r2-broker/**
       - .github/workflows/ccache-r2-broker.yaml
   workflow_dispatch:
 
@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure Worker vars
-        working-directory: workers/ccache-r2-broker
+        working-directory: scripts/ccache/r2-broker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.TENZIR_CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET: ${{ vars.CCACHE_R2_BUCKET }}
@@ -61,7 +61,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           accountId: ${{ secrets.TENZIR_CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers/ccache-r2-broker
+          workingDirectory: scripts/ccache/r2-broker
           command: deploy
           secrets: |
             R2_PARENT_ACCESS_KEY_ID
