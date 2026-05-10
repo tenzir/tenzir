@@ -1,0 +1,7 @@
+// Test to_sqs with explicit AWS credentials.
+from {id: 42, message: "Sent with explicit creds"}
+to_sqs env("LOCALSTACK_SQS_QUEUE_SAVE"), aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+}
