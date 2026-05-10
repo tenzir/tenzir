@@ -559,31 +559,6 @@ def run_container_test(
             error(f"Installation failed: {result.stderr}")
             return False
 
-        # Create a test pipeline
-        notice("Creating test pipeline")
-        pipeline_definition = 'from "udp://0.0.0.0:514" { read_syslog } | discard'
-        pipeline = (
-            'api "/pipeline/create", '
-            f"{{definition: {json.dumps(pipeline_definition)}, "
-            "autostart: {created: true}}"
-        )
-        result = subprocess.run(
-            [
-                "docker",
-                "exec",
-                "-e",
-                "TENZIR_LEGACY=true",
-                container_name,
-                "/opt/tenzir/bin/tenzir",
-                pipeline,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error(f"Pipeline creation failed: {result.stderr}")
-            return False
-
         # Install dependencies for tenzir-test
         notice("Installing test dependencies")
         if "ubuntu" in container_name.lower():
