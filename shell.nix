@@ -96,6 +96,7 @@ let
         pkgs.socat
         pkgs.openssl
         package.tenzir-test
+        pkgs.wrangler
         pkgs.yara
       ]
       ++ clang-shims
@@ -138,8 +139,13 @@ pkgs.mkShell (
 
     env.CCACHE_S3_BUCKET = "tenzir-tenzir-ccache";
     env.CCACHE_S3_PREFIX = "ccache";
-    env.CCACHE_S3_REGION = "eu-central-1";
-    env.CCACHE_AWS_ROLE_ARN = "arn:aws:iam::622024652768:role/tenzir-ccache-s3";
+    env.CCACHE_S3_REGION = "auto";
+    env.CCACHE_S3_AUTH = "cloudflare-r2-wrangler";
+    env.TENZIR_CLOUDFLARE_ACCOUNT_ID = "1b865e9bd11f413fb445868e5251f0f2";
+    env.CCACHE_R2_PARENT_ACCESS_KEY_ID = "dbc6a23e248c175730e0b592592fed22";
+    env.CCACHE_R2_ALLOWED_PREFIXES = "ccache/";
+    env.CCACHE_R2_TEMP_CREDENTIAL_PERMISSION = "object-read-write";
+    env.CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS = "3600";
     env.CCACHE_NOREMOTE_ONLY = "true";
     env.CCACHE_RESHARE = "true";
     env.CCACHE_NAMESPACE = "tenzir";
@@ -152,9 +158,9 @@ pkgs.mkShell (
       mkdir -p "$ccache_s3_dir"
       export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60"
       if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
-        echo "ccache S3 helper: already running at $ccache_s3_sock."
+        echo "ccache R2 helper: already running at $ccache_s3_sock."
       else
-        echo "ccache S3 helper: run 'scripts/ccache/s3-storage-helper.py --deamonize' to enable remote cache."
+        echo "ccache R2 helper: run 'wrangler login' if needed, then 'env PATH=$PATH scripts/ccache/s3-storage-helper.py --deamonize' to enable remote cache."
       fi
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator

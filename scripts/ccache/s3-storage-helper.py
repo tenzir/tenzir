@@ -24,9 +24,10 @@ import termios
 import threading
 import time
 import tty
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import BinaryIO, Callable, Iterator, NoReturn, Protocol
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
@@ -87,6 +88,11 @@ class S3Config:
     credential_expiration: str | None
     oidc_broker_url: str | None
     oidc_audience: str
+    cloudflare_account_id: str | None
+    r2_parent_access_key_id: str | None
+    r2_allowed_prefixes: str | None
+    r2_temp_credential_permission: str
+    r2_temp_credential_ttl_seconds: int
     layout: str
     max_pool_connections: int
     object_list_min_interval: float
@@ -135,9 +141,9 @@ class S3Storage:
         if config.region:
             session_args["region_name"] = config.region
         session = boto3.Session(**session_args)
-        if config.auth == "cloudflare-r2-oidc-broker":
+        if config.auth in {"cloudflare-r2-oidc-broker", "cloudflare-r2-wrangler"}:
             if not config.credential_expiration:
-                raise StorageError("R2 broker credentials are missing an expiration time")
+                raise StorageError("R2 credentials are missing an expiration time")
             refreshable_credentials = RefreshableCredentials.create_from_metadata(
                 metadata={
                     "access_key": config.access_key_id,
@@ -145,8 +151,8 @@ class S3Storage:
                     "token": config.session_token,
                     "expiry_time": config.credential_expiration,
                 },
-                refresh_using=lambda: _cloudflare_r2_oidc_broker_metadata(config),
-                method="cloudflare-r2-oidc-broker",
+                refresh_using=lambda: _cloudflare_r2_refresh_metadata(config),
+                method=config.auth,
             )
             session._session._credentials = refreshable_credentials
             session._session.set_config_variable("region", config.region or "auto")
@@ -164,11 +170,15 @@ class S3Storage:
         client_args = {
             "config": Config(max_pool_connections=config.max_pool_connections),
         }
-        if config.access_key_id:
+        use_refreshable_credentials = config.auth in {
+            "cloudflare-r2-oidc-broker",
+            "cloudflare-r2-wrangler",
+        }
+        if config.access_key_id and not use_refreshable_credentials:
             client_args["aws_access_key_id"] = config.access_key_id
-        if config.secret_access_key:
+        if config.secret_access_key and not use_refreshable_credentials:
             client_args["aws_secret_access_key"] = config.secret_access_key
-        if config.session_token:
+        if config.session_token and not use_refreshable_credentials:
             client_args["aws_session_token"] = config.session_token
         if config.endpoint_url:
             client_args["endpoint_url"] = config.endpoint_url
@@ -781,10 +791,16 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
         or os.environ.get("CCACHE_S3_AUTH")
         or ("credentials" if endpoint_url else "aws-sso")
     )
-    if auth not in {"aws-sso", "aws", "credentials", "cloudflare-r2-oidc-broker"}:
+    if auth not in {
+        "aws-sso",
+        "aws",
+        "credentials",
+        "cloudflare-r2-oidc-broker",
+        "cloudflare-r2-wrangler",
+    }:
         raise StorageError(
             "auth must be one of 'aws-sso', 'aws', 'credentials', or "
-            "'cloudflare-r2-oidc-broker'",
+            "'cloudflare-r2-oidc-broker', or 'cloudflare-r2-wrangler'",
         )
     expected_account_id = (
         attrs.get("aws-account-id")
@@ -815,6 +831,33 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
             attrs.get("oidc-audience")
             or os.environ.get("CCACHE_R2_OIDC_AUDIENCE")
             or "ccache-r2-broker"
+        ),
+        cloudflare_account_id=(
+            attrs.get("cloudflare-account-id")
+            or os.environ.get("TENZIR_CLOUDFLARE_ACCOUNT_ID")
+            or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+        ),
+        r2_parent_access_key_id=(
+            attrs.get("r2-parent-access-key-id")
+            or os.environ.get("CCACHE_R2_PARENT_ACCESS_KEY_ID")
+            or os.environ.get("R2_PARENT_ACCESS_KEY_ID")
+        ),
+        r2_allowed_prefixes=(
+            attrs.get("r2-allowed-prefixes")
+            or os.environ.get("CCACHE_R2_ALLOWED_PREFIXES")
+            or os.environ.get("R2_ALLOWED_PREFIXES")
+        ),
+        r2_temp_credential_permission=(
+            attrs.get("r2-temp-credential-permission")
+            or os.environ.get("CCACHE_R2_TEMP_CREDENTIAL_PERMISSION")
+            or os.environ.get("R2_TEMP_CREDENTIAL_PERMISSION")
+            or "object-read-write"
+        ),
+        r2_temp_credential_ttl_seconds=_positive_int(
+            attrs.get("r2-temp-credential-ttl-seconds")
+            or os.environ.get("CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS")
+            or os.environ.get("R2_TEMP_CREDENTIAL_TTL_SECONDS")
+            or "3600",
         ),
         layout=layout,
         max_pool_connections=_positive_int(
@@ -983,27 +1026,7 @@ def _resolve_aws_profile(config: S3Config) -> S3Config:
     if not config.expected_account_id:
         raise StorageError("aws-sso auth requires an expected AWS account ID")
     profile = _select_aws_profile(config.expected_account_id)
-    return S3Config(
-        bucket=config.bucket,
-        prefix=config.prefix,
-        region=config.region,
-        endpoint_url=config.endpoint_url,
-        profile=profile,
-        auth=config.auth,
-        expected_account_id=config.expected_account_id,
-        access_key_id=config.access_key_id,
-        secret_access_key=config.secret_access_key,
-        session_token=config.session_token,
-        credential_expiration=config.credential_expiration,
-        oidc_broker_url=config.oidc_broker_url,
-        oidc_audience=config.oidc_audience,
-        layout=config.layout,
-        max_pool_connections=config.max_pool_connections,
-        object_list_min_interval=config.object_list_min_interval,
-        upload_queue_size=config.upload_queue_size,
-        upload_workers=config.upload_workers,
-        upload_drain_timeout=config.upload_drain_timeout,
-    )
+    return replace(config, profile=profile)
 
 
 def _github_actions_oidc_token(audience: str) -> str:
@@ -1050,29 +1073,30 @@ def _cloudflare_r2_oidc_broker_response(config: S3Config) -> dict[str, object]:
     return data
 
 
-def _cloudflare_r2_oidc_broker_metadata(config: S3Config) -> dict[str, str]:
-    data = _cloudflare_r2_oidc_broker_response(config)
-    return _cloudflare_r2_oidc_broker_metadata_from_response(config, data)
-
-
-def _cloudflare_r2_oidc_broker_metadata_from_response(
+def _cloudflare_r2_credentials_metadata_from_response(
     config: S3Config,
     data: dict[str, object],
+    source: str,
+    require_bucket: bool,
 ) -> dict[str, str]:
     try:
         access_key_id = data["accessKeyId"]
         secret_access_key = data["secretAccessKey"]
         session_token = data["sessionToken"]
-        bucket = data["bucket"]
     except KeyError as error:
-        raise StorageError(f"R2 OIDC broker response is missing {error.args[0]}") from error
+        raise StorageError(f"{source} response is missing {error.args[0]}") from error
     if not all(
         isinstance(value, str) and value
-        for value in (access_key_id, secret_access_key, session_token, bucket)
+        for value in (access_key_id, secret_access_key, session_token)
     ):
-        raise StorageError("R2 OIDC broker response contains invalid credentials")
-    if bucket != config.bucket:
-        raise StorageError(f"R2 OIDC broker returned bucket {bucket}, expected {config.bucket}")
+        raise StorageError(f"{source} response contains invalid credentials")
+    bucket = data.get("bucket")
+    if require_bucket and not isinstance(bucket, str):
+        raise StorageError(f"{source} response is missing bucket")
+    if isinstance(bucket, str) and bucket != config.bucket:
+        raise StorageError(
+            f"{source} returned bucket {bucket}, expected {config.bucket}"
+        )
     expires_at = data.get("expiresAt")
     if not isinstance(expires_at, str) or not expires_at:
         expires_at = _default_credential_expiration()
@@ -1084,41 +1108,190 @@ def _cloudflare_r2_oidc_broker_metadata_from_response(
     }
 
 
+def _cloudflare_r2_oidc_broker_metadata(config: S3Config) -> dict[str, str]:
+    data = _cloudflare_r2_oidc_broker_response(config)
+    return _cloudflare_r2_credentials_metadata_from_response(
+        config,
+        data,
+        "R2 OIDC broker",
+        True,
+    )
+
+
 def _cloudflare_r2_oidc_broker_credentials(config: S3Config) -> S3Config:
     data = _cloudflare_r2_oidc_broker_response(config)
-    metadata = _cloudflare_r2_oidc_broker_metadata_from_response(config, data)
+    metadata = _cloudflare_r2_credentials_metadata_from_response(
+        config,
+        data,
+        "R2 OIDC broker",
+        True,
+    )
     endpoint_url = data.get("endpointUrl")
     region = data.get("region")
     if not isinstance(endpoint_url, str) or not endpoint_url:
         raise StorageError("R2 OIDC broker response is missing endpointUrl")
     if not isinstance(region, str) or not region:
         region = "auto"
-    return S3Config(
-        bucket=config.bucket,
-        prefix=config.prefix,
+    return replace(
+        config,
         region=region,
         endpoint_url=endpoint_url,
         profile=None,
-        auth=config.auth,
-        expected_account_id=config.expected_account_id,
         access_key_id=metadata["access_key"],
         secret_access_key=metadata["secret_key"],
         session_token=metadata["token"],
         credential_expiration=metadata["expiry_time"],
-        oidc_broker_url=config.oidc_broker_url,
-        oidc_audience=config.oidc_audience,
-        layout=config.layout,
-        max_pool_connections=config.max_pool_connections,
-        object_list_min_interval=config.object_list_min_interval,
-        upload_queue_size=config.upload_queue_size,
-        upload_workers=config.upload_workers,
-        upload_drain_timeout=config.upload_drain_timeout,
     )
+
+
+def _wrangler_auth_token() -> str:
+    command = shutil.which("wrangler")
+    if not command:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires Wrangler on PATH; "
+            "enter the dev shell or install Wrangler, then run `wrangler login`",
+        )
+    try:
+        result = subprocess.run(
+            [command, "auth", "token", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as error:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires Wrangler; run `wrangler login`",
+        ) from error
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        message = "could not get Cloudflare token from Wrangler"
+        if stderr:
+            message = f"{message}: {stderr}"
+        raise StorageError(f"{message}; run `wrangler login`")
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise StorageError("Wrangler auth token output was not JSON") from error
+    token = data.get("token")
+    token_type = data.get("type")
+    if not isinstance(token, str) or not token:
+        raise StorageError("Wrangler auth token output did not contain a token")
+    if token_type not in {"api_token", "oauth"}:
+        raise StorageError(f"unsupported Wrangler auth token type: {token_type}")
+    return token
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _cloudflare_r2_temporary_credentials_response(
+    config: S3Config,
+    api_token: str,
+) -> dict[str, object]:
+    account_id = config.cloudflare_account_id
+    if not account_id:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires TENZIR_CLOUDFLARE_ACCOUNT_ID "
+            "or CLOUDFLARE_ACCOUNT_ID",
+        )
+    parent_access_key_id = config.r2_parent_access_key_id
+    if not parent_access_key_id:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires CCACHE_R2_PARENT_ACCESS_KEY_ID",
+        )
+    payload: dict[str, object] = {
+        "bucket": config.bucket,
+        "parentAccessKeyId": parent_access_key_id,
+        "permission": config.r2_temp_credential_permission,
+        "ttlSeconds": config.r2_temp_credential_ttl_seconds,
+    }
+    allowed_prefixes = config.r2_allowed_prefixes
+    if allowed_prefixes is None and config.prefix:
+        allowed_prefixes = f"{config.prefix.rstrip('/')}/"
+    prefixes = _split_csv(allowed_prefixes)
+    if prefixes:
+        payload["prefixes"] = prefixes
+    request = Request(
+        f"https://api.cloudflare.com/client/v4/accounts/{account_id}/r2/temp-access-credentials",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise StorageError(
+            f"could not create R2 temporary credentials: HTTP {error.code}: {body}",
+        ) from error
+    except URLError as error:
+        raise StorageError(f"could not reach Cloudflare API: {error.reason}") from error
+    if not isinstance(data, dict):
+        raise StorageError("Cloudflare R2 temporary credentials response is not JSON")
+    if not data.get("success"):
+        errors = data.get("errors")
+        raise StorageError(f"could not create R2 temporary credentials: {errors}")
+    result = data.get("result")
+    if not isinstance(result, dict):
+        raise StorageError(
+            "Cloudflare R2 temporary credentials response is missing result"
+        )
+    return result
+
+
+def _cloudflare_r2_wrangler_metadata(config: S3Config) -> dict[str, str]:
+    data = _cloudflare_r2_temporary_credentials_response(config, _wrangler_auth_token())
+    return _cloudflare_r2_credentials_metadata_from_response(
+        config,
+        data,
+        "Cloudflare R2 temporary credentials",
+        False,
+    )
+
+
+def _cloudflare_r2_wrangler_credentials(config: S3Config) -> S3Config:
+    metadata = _cloudflare_r2_wrangler_metadata(config)
+    if not config.cloudflare_account_id:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires TENZIR_CLOUDFLARE_ACCOUNT_ID "
+            "or CLOUDFLARE_ACCOUNT_ID",
+        )
+    endpoint_url = (
+        config.endpoint_url
+        or f"https://{config.cloudflare_account_id}.r2.cloudflarestorage.com"
+    )
+    return replace(
+        config,
+        region=config.region or "auto",
+        endpoint_url=endpoint_url,
+        profile=None,
+        access_key_id=metadata["access_key"],
+        secret_access_key=metadata["secret_key"],
+        session_token=metadata["token"],
+        credential_expiration=metadata["expiry_time"],
+    )
+
+
+def _cloudflare_r2_refresh_metadata(config: S3Config) -> dict[str, str]:
+    if config.auth == "cloudflare-r2-oidc-broker":
+        return _cloudflare_r2_oidc_broker_metadata(config)
+    if config.auth == "cloudflare-r2-wrangler":
+        return _cloudflare_r2_wrangler_metadata(config)
+    raise StorageError(f"auth mode {config.auth} does not support credential refresh")
 
 
 def _initialize_auth(config: S3Config) -> S3Config:
     if config.auth == "cloudflare-r2-oidc-broker":
         return _cloudflare_r2_oidc_broker_credentials(config)
+    if config.auth == "cloudflare-r2-wrangler":
+        return _cloudflare_r2_wrangler_credentials(config)
     if config.auth == "credentials" or (
         config.auth == "aws" and not config.expected_account_id
     ):
@@ -1805,7 +1978,8 @@ def _cmd_serve(argv: list[str]) -> int:
 
     attrs = _attrs_from_env()
     config = _parse_url(args.url, attrs)
-    _prepare_writable_aws_home()
+    if config.auth in {"aws", "aws-sso"}:
+        _prepare_writable_aws_home()
     config = _initialize_auth(config)
     if args.daemonize:
         _daemonize(args.log_file)

@@ -176,3 +176,54 @@ https://tenzir-ccache-r2-broker.<workers-subdomain>.workers.dev
 ```
 
 Use that URL as `CCACHE_R2_OIDC_BROKER_URL`.
+
+### Local deploy
+
+To deploy from this checkout without opening a pull request, create
+`scripts/ccache/r2-broker/.env`:
+
+```text
+CLOUDFLARE_WORKERS_API_TOKEN=<cloudflare-api-token-for-worker-deploys>
+TENZIR_CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
+CCACHE_R2_API_TOKEN=<cloudflare-api-token-for-r2-temp-credentials>
+CCACHE_R2_PARENT_ACCESS_KEY_ID=<r2-parent-access-key-id>
+CCACHE_R2_BUCKET=<r2-bucket-name>
+GITHUB_REPOSITORY=tenzir/tenzir
+GITHUB_SUBJECT=
+GITHUB_OIDC_AUDIENCE=ccache-r2-broker
+R2_ALLOWED_PREFIXES=ccache/
+R2_TEMP_CREDENTIAL_PERMISSION=object-read-write
+R2_TEMP_CREDENTIAL_TTL_SECONDS=3600
+```
+
+Then run:
+
+```sh
+scripts/ccache/r2-broker/deploy.sh
+```
+
+The script writes `.wrangler.generated.toml`, syncs the Worker secrets, and
+deploys the Worker with Wrangler.
+
+## Local developer use
+
+For local builds, the ccache helper can use Wrangler's logged-in Cloudflare
+identity directly instead of the GitHub OIDC broker:
+
+```sh
+wrangler login
+export CCACHE_R2_PARENT_ACCESS_KEY_ID=<r2-parent-access-key-id>
+scripts/ccache/s3-storage-helper.py --deamonize
+```
+
+The dev shell configures:
+
+```text
+CCACHE_S3_AUTH=cloudflare-r2-wrangler
+TENZIR_CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
+CCACHE_R2_ALLOWED_PREFIXES=ccache/
+```
+
+The helper calls `wrangler auth token --json`, creates short-lived R2
+credentials through Cloudflare's temporary credentials API, and refreshes them
+before they expire.

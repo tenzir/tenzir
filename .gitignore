@@ -5,6 +5,7 @@
 
 # Docker environment variables
 .env
+.wrangler.generated.toml
 
 # Direnv
 .envrc
