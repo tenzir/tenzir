@@ -142,10 +142,10 @@ TENZIR_CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
 ```text
 CCACHE_R2_OIDC_AUDIENCE=ccache-r2-broker
 CCACHE_R2_GITHUB_SUBJECT=<exact-github-oidc-subject>
-CCACHE_R2_ALLOWED_PREFIXES=tenzir/
+CCACHE_R2_ALLOWED_PREFIXES=ccache/
 CCACHE_R2_TEMP_CREDENTIAL_PERMISSION=object-read-write
 CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS=3600
-CCACHE_S3_PREFIX=tenzir
+CCACHE_S3_PREFIX=ccache
 ```
 
 `CCACHE_R2_GITHUB_SUBJECT` is stricter than repository matching. Leave it unset
@@ -153,10 +153,10 @@ until you know the exact `sub` claim emitted by the workflows that should use
 the broker.
 
 `CCACHE_R2_ALLOWED_PREFIXES` should match the cache prefix when possible. For
-example, if `CCACHE_S3_PREFIX=tenzir`, set:
+example, if `CCACHE_S3_PREFIX=ccache`, set:
 
 ```text
-CCACHE_R2_ALLOWED_PREFIXES=tenzir/
+CCACHE_R2_ALLOWED_PREFIXES=ccache/
 ```
 
 ## Deploy

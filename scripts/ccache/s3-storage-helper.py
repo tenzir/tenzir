@@ -859,7 +859,7 @@ def _default_url() -> str | None:
     bucket = os.environ.get("CCACHE_S3_BUCKET")
     if not bucket:
         return None
-    prefix = os.environ.get("CCACHE_S3_PREFIX", "tenzir").strip("/")
+    prefix = os.environ.get("CCACHE_S3_PREFIX", "ccache").strip("/")
     if not prefix:
         return f"s3://{bucket}"
     return f"s3://{bucket}/{prefix}"
@@ -1460,7 +1460,7 @@ def _resolve_setup_config(args: argparse.Namespace, account_id: str) -> SetupCon
         args.github_repository,
     )
     bucket = _prompt_value("CCACHE_S3_BUCKET", bucket_default, True, args.yes)
-    prefix = _prompt_value("CCACHE_S3_PREFIX", args.prefix or "tenzir", True, args.yes)
+    prefix = _prompt_value("CCACHE_S3_PREFIX", args.prefix or "ccache", True, args.yes)
     role_name = _prompt_value(
         "IAM role name",
         args.role_name or "tenzir-ccache-s3",

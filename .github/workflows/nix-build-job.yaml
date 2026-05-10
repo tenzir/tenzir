@@ -95,7 +95,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           CCACHE_S3_BUCKET: ${{ vars.CCACHE_S3_BUCKET }}
-          CCACHE_S3_PREFIX: ${{ vars.CCACHE_S3_PREFIX || 'tenzir' }}
+          CCACHE_S3_PREFIX: ${{ vars.CCACHE_S3_PREFIX || 'ccache' }}
           CCACHE_S3_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
           CCACHE_S3_AUTH: ${{ vars.CCACHE_S3_AUTH }}
           CCACHE_R2_OIDC_BROKER_URL: ${{ vars.CCACHE_R2_OIDC_BROKER_URL }}

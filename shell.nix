@@ -137,7 +137,7 @@ pkgs.mkShell (
     env.TENZIR_ENABLE_BUNDLED_UV = "OFF";
 
     env.CCACHE_S3_BUCKET = "tenzir-tenzir-ccache";
-    env.CCACHE_S3_PREFIX = "develop";
+    env.CCACHE_S3_PREFIX = "ccache";
     env.CCACHE_S3_REGION = "eu-central-1";
     env.CCACHE_AWS_ROLE_ARN = "arn:aws:iam::622024652768:role/tenzir-ccache-s3";
     env.CCACHE_NOREMOTE_ONLY = "true";
