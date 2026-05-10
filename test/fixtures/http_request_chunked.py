@@ -88,6 +88,7 @@ def http_request_chunked() -> FixtureHandle:
     sent_count = [0]
     stopped_early = [False]
     stop_event = threading.Event()
+    first_request_at = time.monotonic() + opts.initial_delay
 
     def _send_request(spec: _RequestSpec) -> int | None:
         with socket.create_connection(
@@ -140,9 +141,24 @@ def http_request_chunked() -> FixtureHandle:
                 response.extend(chunk)
             return _parse_status(bytes(response))
 
+    def _wait_until_ready() -> bool:
+        while not stop_event.is_set():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(opts.request_timeout)
+                    if sock.connect_ex((_HOST, port)) == 0:
+                        return True
+            except OSError:
+                pass
+            stop_event.wait(opts.retry_delay)
+        return False
+
     def _worker() -> None:
-        if opts.initial_delay > 0:
-            time.sleep(opts.initial_delay)
+        if not _wait_until_ready():
+            return
+        remaining_initial_delay = first_request_at - time.monotonic()
+        if remaining_initial_delay > 0:
+            stop_event.wait(remaining_initial_delay)
         for spec in request_specs:
             if stop_event.is_set():
                 return
@@ -171,14 +187,14 @@ def http_request_chunked() -> FixtureHandle:
                     ):
                         stopped_early[0] = True
                         return
-                    time.sleep(opts.retry_delay)
+                    stop_event.wait(opts.retry_delay)
             if not sent:
                 errors.append(
                     f"failed to deliver chunked HTTP request to {endpoint}: {last_error}"
                 )
                 return
             if opts.inter_request_delay > 0:
-                time.sleep(opts.inter_request_delay)
+                stop_event.wait(opts.inter_request_delay)
 
     worker = threading.Thread(target=_worker, daemon=True)
     worker.start()
