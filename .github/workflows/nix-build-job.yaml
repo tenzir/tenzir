@@ -120,8 +120,21 @@ jobs:
               >/tmp/ccache-s3-helper.log 2>&1 &
             echo $! | sudo tee /tmp/tenzir-ccache/s3-helper.pid >/dev/null
           '
-          sleep 1
-          sudo test -S /tmp/tenzir-ccache/s3.sock
+          helper_pid="$(cat /tmp/tenzir-ccache/s3-helper.pid)"
+          for _ in {1..30}; do
+            if sudo test -S /tmp/tenzir-ccache/s3.sock; then
+              exit 0
+            fi
+            if ! kill -0 "${helper_pid}" 2>/dev/null; then
+              echo "::error::ccache S3 helper exited before creating its socket"
+              cat /tmp/ccache-s3-helper.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::ccache S3 helper did not create its socket within 30 seconds"
+          cat /tmp/ccache-s3-helper.log || true
+          exit 1
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
         if: runner.os == 'macOS'
