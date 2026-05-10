@@ -57,6 +57,10 @@ PUBLIC_ACCESS_BLOCK_CONFIGURATION = {
     "BlockPublicPolicy": True,
     "RestrictPublicBuckets": True,
 }
+HTTP_HEADERS = {
+    "Accept": "application/json",
+    "User-Agent": "tenzir-ccache-s3-storage-helper/1",
+}
 
 
 class Storage(Protocol):
@@ -1058,7 +1062,13 @@ def _github_actions_oidc_token(audience: str) -> str:
         )
     separator = "&" if "?" in request_url else "?"
     url = f"{request_url}{separator}audience={audience}"
-    request = Request(url, headers={"Authorization": f"Bearer {request_token}"})
+    request = Request(
+        url,
+        headers={
+            **HTTP_HEADERS,
+            "Authorization": f"Bearer {request_token}",
+        },
+    )
     try:
         with urlopen(request, timeout=30) as response:
             data = json.loads(response.read().decode("utf-8"))
@@ -1092,7 +1102,10 @@ def _cloudflare_r2_oidc_broker_response(config: S3Config) -> dict[str, object]:
     request = Request(
         config.oidc_broker_url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            **HTTP_HEADERS,
+            "Content-Type": "application/json",
+        },
         method="POST",
     )
     try:
@@ -1255,6 +1268,7 @@ def _cloudflare_r2_temporary_credentials_response(
         f"https://api.cloudflare.com/client/v4/accounts/{account_id}/r2/temp-access-credentials",
         data=json.dumps(payload).encode("utf-8"),
         headers={
+            **HTTP_HEADERS,
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json",
         },
