@@ -19,6 +19,7 @@ from ._utils import find_free_port, generate_self_signed_cert
 _HOST = "127.0.0.1"
 _COMMON_NAME = "tenzir-node.example.org"
 _CLIENT_RETRY_DELAY = 0.01
+_INVALID_TLS_HANDSHAKE_SETTLE_DELAY = 0.2
 _ASSERTION_WAIT_TIMEOUT = 2.0
 _ASSERTION_WAIT_INTERVAL = 0.01
 
@@ -239,6 +240,7 @@ def _run_client_worker(
         context.load_verify_locations(cafile=ca_path)
     if invalid_tls_handshake_first:
         _send_invalid_tls_handshake(port, stop_event)
+        stop_event.wait(_INVALID_TLS_HANDSHAKE_SETTLE_DELAY)
     next_payloads = iter(payloads) if payloads is not None else None
     current_payload: bytes | None = None
     while not stop_event.is_set():
