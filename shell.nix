@@ -150,17 +150,20 @@ pkgs.mkShell (
     env.CCACHE_RESHARE = "true";
     env.CCACHE_NAMESPACE = "tenzir";
     env.CCACHE_COMPRESS = "true";
-    env.CCACHE_SLOPPINESS = "pch_defines,time_macros,include_file_mtime,include_file_ctime";
+    env.CCACHE_DIR = "/tmp/tenzir-ccache/cache";
+    env.CCACHE_SLOPPINESS = "pch_defines,time_macros,include_file_mtime,include_file_ctime,random_seed";
 
     shellHook = ''
-      ccache_s3_dir="''${XDG_RUNTIME_DIR:-/tmp}/tenzir-ccache"
+      ccache_s3_dir="/tmp/tenzir-ccache"
       ccache_s3_sock="$ccache_s3_dir/s3.sock"
-      mkdir -p "$ccache_s3_dir"
+      mkdir -p "$ccache_s3_dir/cache"
+      chmod 1777 "$ccache_s3_dir" 2>/dev/null || true
+      chmod 0777 "$ccache_s3_dir/cache" 2>/dev/null || true
       export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60"
       if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
         echo "ccache R2 helper: already running at $ccache_s3_sock."
       else
-        echo "ccache R2 helper: run 'wrangler login' if needed, then 'env PATH=$PATH scripts/ccache/s3-storage-helper.py --deamonize' to enable remote cache."
+        echo "ccache R2 helper: run 'wrangler login' if needed, then 'scripts/ccache/s3-storage-helper.py --deamonize --socket-mode 0666' to enable remote cache."
       fi
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator

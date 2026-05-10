@@ -311,6 +311,7 @@ let
             "-DTENZIR_ALLOCATOR=jemalloc"
             "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
+            "-DTENZIR_ENABLE_PCH=OFF"
             "-DTENZIR_ENABLE_BUNDLED_DEPENDENCIES=OFF"
             "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
             "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"

@@ -9,24 +9,20 @@
 rec {
   ccacheExtraConfig = ''
     export CCACHE_COMPRESS=1
+    export CCACHE_BASEDIR=/build/source
+    export CCACHE_NOHASHDIR=true
     export CCACHE_UMASK=007
     export CCACHE_NAMESPACE=tenzir
-    export CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime
-    if [ -w /var/cache/ccache ] || (mkdir -p /var/cache/ccache 2>/dev/null && [ -w /var/cache/ccache ]); then
-      export CCACHE_DIR=/var/cache/ccache
+    export CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime,random_seed
+    if mkdir -p /tmp/tenzir-ccache/cache 2>/dev/null && [ -w /tmp/tenzir-ccache/cache ]; then
+      export CCACHE_DIR=/tmp/tenzir-ccache/cache
     else
       export CCACHE_DIR=''${TMPDIR:-/tmp}/ccache
       mkdir -p "$CCACHE_DIR"
     fi
-    export CCACHE_STATSLOG="$CCACHE_DIR/stats.log"
-    if [ -f "$CCACHE_DIR/debug-log" ]; then
-      export CCACHE_LOGFILE="$CCACHE_DIR/ccache.log"
-    else
-      unset CCACHE_LOGFILE
-    fi
-    if [ -S /var/cache/ccache/s3.sock ]; then
-      export CCACHE_REMOTE_STORAGE='crsh:/var/cache/ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60'
-      if [ -f /var/cache/ccache/remote-only ]; then
+    if [ -S /tmp/tenzir-ccache/s3.sock ]; then
+      export CCACHE_REMOTE_STORAGE='crsh:/tmp/tenzir-ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60'
+      if [ -f /tmp/tenzir-ccache/remote-only ]; then
         export CCACHE_REMOTE_ONLY=true
         unset CCACHE_NOREMOTE_ONLY
       else

@@ -884,8 +884,7 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
 
 
 def _default_endpoint() -> str:
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    return os.path.join(runtime_dir, "tenzir-ccache", "s3.sock")
+    return "/tmp/tenzir-ccache/s3.sock"
 
 
 def _default_state_dir() -> str:
