@@ -1059,8 +1059,18 @@ def _github_actions_oidc_token(audience: str) -> str:
     separator = "&" if "?" in request_url else "?"
     url = f"{request_url}{separator}audience={audience}"
     request = Request(url, headers={"Authorization": f"Bearer {request_token}"})
-    with urlopen(request, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise StorageError(
+            f"could not fetch GitHub Actions OIDC token: HTTP {error.code}: {body}",
+        ) from error
+    except URLError as error:
+        raise StorageError(
+            f"could not reach GitHub Actions OIDC endpoint: {error.reason}",
+        ) from error
     token = data.get("value")
     if not isinstance(token, str) or not token:
         raise StorageError("GitHub Actions OIDC response did not contain a token")
@@ -1085,8 +1095,16 @@ def _cloudflare_r2_oidc_broker_response(config: S3Config) -> dict[str, object]:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urlopen(request, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise StorageError(
+            f"could not obtain R2 credentials from broker: HTTP {error.code}: {body}",
+        ) from error
+    except URLError as error:
+        raise StorageError(f"could not reach R2 OIDC broker: {error.reason}") from error
     if not isinstance(data, dict):
         raise StorageError("R2 OIDC broker response is not a JSON object")
     return data

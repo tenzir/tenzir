@@ -126,15 +126,15 @@ jobs:
               exit 0
             fi
             if ! kill -0 "${helper_pid}" 2>/dev/null; then
-              echo "::error::ccache S3 helper exited before creating its socket"
+              echo "::warning::ccache S3 helper exited before creating its socket; continuing without remote ccache"
               cat /tmp/ccache-s3-helper.log || true
-              exit 1
+              exit 0
             fi
             sleep 1
           done
-          echo "::error::ccache S3 helper did not create its socket within 30 seconds"
+          echo "::warning::ccache S3 helper did not create its socket within 30 seconds; continuing without remote ccache"
           cat /tmp/ccache-s3-helper.log || true
-          exit 1
+          exit 0
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
         if: runner.os == 'macOS'
