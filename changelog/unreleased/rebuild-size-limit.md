@@ -5,6 +5,7 @@ authors:
   - tobim
   - codex
 created: 2026-05-11T12:33:13.375284Z
+pr: 6155
 ---
 
 Rebuilds now avoid loading too much data into memory at once. Partitions store
