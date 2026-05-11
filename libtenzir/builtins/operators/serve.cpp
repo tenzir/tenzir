@@ -112,18 +112,17 @@ constexpr auto serve_spec = R"_(
                 description: The output stream identifier returned when the pipeline was launched.
               continuation_token:
                 type: string
-                nullable: true
                 example: "340ce2j"
-                description: The continuation token from the previous response. Omit this field or set it to `null` for the initial request.
+                description: The continuation token from the previous response. Omit this field for the initial request.
               max_events:
                 type: integer
-                minimum: 1
+                minimum: 0
                 example: 1024
                 default: 1024
                 description: The maximum number of events to return.
               min_events:
                 type: integer
-                minimum: 1
+                minimum: 0
                 example: 1
                 default: 1
                 description: The minimum number of events to wait for before returning.
@@ -140,7 +139,6 @@ constexpr auto serve_spec = R"_(
                 description: The schema representation to include in the response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
           example:
             serve_id: "query-1"
-            continuation_token: null
             max_events: 1024
             min_events: 1
             timeout: "5s"
@@ -287,18 +285,17 @@ constexpr auto serve_multi_spec = R"_(
                       description: The output stream identifier returned when the pipeline was launched.
                     continuation_token:
                       type: string
-                      nullable: true
                       example: "340ce2j"
-                      description: The continuation token from the previous response for this output stream. Omit this field or set it to `null` for the initial request.
+                      description: The continuation token from the previous response for this output stream. Omit this field for the initial request.
               max_events:
                 type: integer
-                minimum: 1
+                minimum: 0
                 example: 1024
                 default: 1024
                 description: The maximum number of events to return across all requested output streams. The limit is split evenly across streams and rounded up when necessary.
               min_events:
                 type: integer
-                minimum: 1
+                minimum: 0
                 example: 1
                 default: 1
                 description: The minimum number of events to wait for across all requested output streams before returning. The limit is split evenly across streams and rounded up when necessary.
@@ -316,7 +313,6 @@ constexpr auto serve_multi_spec = R"_(
           example:
             requests:
               - serve_id: "query-1"
-                continuation_token: null
               - serve_id: "query-2"
                 continuation_token: "340ce2j"
             max_events: 1024
