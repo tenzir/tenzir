@@ -108,6 +108,16 @@ using AnySubHandle
 
 enum class Fate { Isolated, Shared };
 
+/// Settings for the checkpointing mechanism.
+struct CheckpointSettings {
+  CheckpointSettings(duration interval, bool exactly_once)
+    : interval{interval}, exactly_once{exactly_once} {
+  }
+
+  duration interval;
+  bool exactly_once;
+};
+
 class OpCtx {
 public:
   virtual ~OpCtx() = default;
@@ -200,6 +210,10 @@ public:
 
   /// Returns whether the operator has access to an interactive terminal.
   virtual auto has_terminal() const -> bool = 0;
+
+  /// Returns the (immutable) checkpoint settings of the pipeline.
+  virtual auto checkpoint_settings() const -> Option<CheckpointSettings const&>
+    = 0;
 };
 
 enum class OperatorState {

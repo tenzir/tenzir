@@ -1063,6 +1063,12 @@ public:
     return metrics_->take_snapshot();
   }
 
+  auto checkpoint_settings() const
+    -> Option<CheckpointSettings const&> override {
+    // No checkpointing for now.
+    return None{};
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
     return make_profiled_channel<void>(std::move(id), void_limit);
