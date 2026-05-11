@@ -385,10 +385,14 @@ let
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
               '';
 
-          hardeningDisable = lib.optionals isStatic [
-            "fortify"
-            "pic"
-          ];
+          hardeningDisable =
+            lib.optionals isStatic [
+              "fortify"
+              "pic"
+            ]
+            ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isAarch64) [
+              "stackclashprotection"
+            ];
 
           preBuild =
             let
