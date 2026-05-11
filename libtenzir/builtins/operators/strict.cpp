@@ -182,6 +182,10 @@ public:
                                  DiagnosticBehavior::WarningToError);
   }
 
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+
   auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
                    OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(key, ctx);
@@ -206,6 +210,10 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await ctx.spawn_sub<void>(int64_t{0}, args_.pipe.inner,
                                  DiagnosticBehavior::WarningToError);
+  }
+
+  auto state() -> OperatorState override {
+    return OperatorState::done;
   }
 
 private:
