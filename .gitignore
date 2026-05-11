@@ -51,6 +51,7 @@ CLAUDE-TODOS.md
 
 # The VSCode codex extension really wants to create this empty file for reasons
 .codex
+.agents/agents.override.md
 
 # SBOM artifacts
 /tenzir.spdx.json

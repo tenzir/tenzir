@@ -1,0 +1,18 @@
+from {
+  nothing: null,
+  flag: true,
+  signed: 1,
+  unsigned: uint(2),
+  real: 3.0,
+  dur: 5s,
+  ts: 2025-01-15,
+  addr: 10.0.0.1,
+  net: 10.0.0.0/8,
+  text: "abc",
+  payload: b"\x00\x01",
+  sec: secret("test", _literal=true),
+  nested: {count: 1},
+  items: [1, 2],
+}
+size = internal_memory_size(this)
+drop nothing, flag, signed, unsigned, real, dur, ts, addr, net, text, payload, sec, nested, items

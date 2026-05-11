@@ -1,0 +1,3 @@
+from {x: "a"}, {x: 1}, {x: "abc"}
+size = internal_memory_size(x)
+drop x
