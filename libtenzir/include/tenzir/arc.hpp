@@ -74,6 +74,13 @@ public:
     : ptr_{std::make_shared<T>(std::forward<Args>(args)...)} {
   }
 
+  /// Constructs an arc by in-place constructing a `U` (subtype of `T`).
+  template <class U, class... Args>
+    requires std::convertible_to<std::shared_ptr<U>, std::shared_ptr<T>>
+  explicit Arc(std::in_place_type_t<U>, Args&&... args)
+    : ptr_{std::make_shared<U>(std::forward<Args>(args)...)} {
+  }
+
   /// Arcs can be used as pointers.
   auto operator->() -> T* {
     return &deref();

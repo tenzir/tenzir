@@ -106,7 +106,14 @@ private:
 using AnySubHandle
   = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>>;
 
-enum class Fate { Isolated, Shared };
+enum class DiagnosticBehavior {
+  /// Forward diagnostics to the parent unchanged.
+  Unchanged,
+  /// Demote errors to warnings and cancel the sub via its own source.
+  ErrorToWarning,
+  /// Promote warnings to errors; the parent handler drives cancellation.
+  WarningToError,
+};
 
 /// Settings for the checkpointing mechanism.
 struct CheckpointSettings {
@@ -143,15 +150,19 @@ public:
   /// subpipeline is routed through the `process_sub` function of the operator.
   ///
   /// When the pipeline completes, `finish_sub` is called.
-  virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
-                         Fate fate = Fate::Shared) -> Task<AnySubHandle&>
+  virtual auto
+  spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
+            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged)
+    -> Task<AnySubHandle&>
     = 0;
 
   template <class Input>
-  auto spawn_sub(SubKey key, ir::pipeline pipe, Fate fate = Fate::Shared)
+  auto
+  spawn_sub(SubKey key, ir::pipeline pipe,
+            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged)
     -> Task<SubHandle<Input>&> {
-    co_return as<SubHandle<Input>>(
-      co_await spawn_sub(std::move(key), std::move(pipe), tag_v<Input>, fate));
+    co_return as<SubHandle<Input>>(co_await spawn_sub(
+      std::move(key), std::move(pipe), tag_v<Input>, diag_behavior));
   }
 
   virtual auto

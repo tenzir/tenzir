@@ -4,5 +4,5 @@ error: expected exactly 1 positional argument
 5 | every {
   | ^^^^^ 
   |
-  = usage: tql2.every interval:duration
-  = docs: https://docs.tenzir.com/reference/operators/tql2.every
+  = usage: every interval:duration
+  = docs: https://docs.tenzir.com/reference/operators/every

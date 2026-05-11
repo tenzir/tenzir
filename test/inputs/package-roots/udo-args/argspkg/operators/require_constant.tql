@@ -6,7 +6,6 @@ args:
       type: string
       description: "Must be an expression of type string"
 ---
-// TODO: Temporarily removed `strict` from here to be able to merge
-// strict {
+strict {
   suffix_value = "suffix: " + $suffix
-// }
+}

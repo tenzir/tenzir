@@ -1,0 +1,4 @@
+strict {
+  from {x: 1}
+  discard
+}

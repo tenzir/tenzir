@@ -10,7 +10,9 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -102,7 +104,126 @@ private:
   operator_ptr op_;
 };
 
-struct strict : public virtual operator_plugin2<strict_operator> {
+// --- New-executor implementation ---
+
+struct StrictArgs {
+  located<ir::pipeline> pipe;
+};
+
+// Primary template: non-void input, non-void output.
+template <class Input, class Output>
+class StrictOp final : public Operator<Input, Output> {
+public:
+  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await ctx.spawn_sub<Input>(int64_t{0}, args_.pipe.inner,
+                                  DiagnosticBehavior::WarningToError);
+  }
+
+  auto process(Input input, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    auto sub = ctx.get_sub(int64_t{0});
+    if (not sub) {
+      co_return;
+    }
+    std::ignore = co_await as<SubHandle<Input>>(*sub).push(std::move(input));
+  }
+
+  auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key, ctx);
+    if constexpr (std::same_as<Output, chunk_ptr>) {
+      co_await push(std::move(chunk));
+    } else {
+      TENZIR_UNREACHABLE();
+    }
+  }
+
+private:
+  StrictArgs args_;
+};
+
+// Partial specialisation: void output, non-void input.
+template <class Input>
+class StrictOp<Input, void> final : public Operator<Input, void> {
+public:
+  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await ctx.spawn_sub<Input>(int64_t{0}, args_.pipe.inner,
+                                  DiagnosticBehavior::WarningToError);
+  }
+
+  auto process(Input input, OpCtx& ctx) -> Task<void> override {
+    auto sub = ctx.get_sub(int64_t{0});
+    if (not sub) {
+      co_return;
+    }
+    std::ignore = co_await as<SubHandle<Input>>(*sub).push(std::move(input));
+  }
+
+private:
+  StrictArgs args_;
+};
+
+// Partial specialisation: void input, non-void output.
+template <class Output>
+class StrictOp<void, Output> final : public Operator<void, Output> {
+public:
+  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await ctx.spawn_sub<void>(int64_t{0}, args_.pipe.inner,
+                                 DiagnosticBehavior::WarningToError);
+  }
+
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+
+  auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key, ctx);
+    if constexpr (std::same_as<Output, chunk_ptr>) {
+      co_await push(std::move(chunk));
+    } else {
+      TENZIR_UNREACHABLE();
+    }
+  }
+
+private:
+  StrictArgs args_;
+};
+
+// Full specialisation: void input, void output.
+template <>
+class StrictOp<void, void> final : public Operator<void, void> {
+public:
+  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await ctx.spawn_sub<void>(int64_t{0}, args_.pipe.inner,
+                                 DiagnosticBehavior::WarningToError);
+  }
+
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+
+private:
+  StrictArgs args_;
+};
+
+// --- Plugin ---
+
+struct strict : public virtual operator_plugin2<strict_operator>,
+                public virtual OperatorPlugin {
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};
@@ -113,6 +234,38 @@ struct strict : public virtual operator_plugin2<strict_operator> {
       op = std::make_unique<strict_operator>(std::move(op));
     }
     return std::make_unique<pipeline>(std::move(ops));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<StrictArgs>{};
+    auto pipe = d.pipeline(&StrictArgs::pipe);
+    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
+      TRY(auto p, ctx.get(pipe));
+      TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
+      if (not output) {
+        return {};
+      }
+      return match(
+        *output,
+        [](tag<table_slice>)
+          -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
+          return [](StrictArgs args) {
+            return StrictOp<Input, table_slice>{std::move(args)};
+          };
+        },
+        [](tag<chunk_ptr>) -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
+          return [](StrictArgs args) {
+            return StrictOp<Input, chunk_ptr>{std::move(args)};
+          };
+        },
+        [](tag<void>) -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
+          return [](StrictArgs args) {
+            return StrictOp<Input, void>{std::move(args)};
+          };
+        });
+    });
+    return d.without_optimize();
   }
 };
 

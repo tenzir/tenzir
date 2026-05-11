@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {}
+strict {
+  assert false, message="you shall not pass"
+}

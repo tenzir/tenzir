@@ -1,0 +1,6 @@
+error: assertion failed: "you shall not pass"
+ --> tests/operators/strict/basic.tql:7:10
+  |
+7 |   assert false, message="you shall not pass"
+  |          ^^^^^ 
+  |
