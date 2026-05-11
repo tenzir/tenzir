@@ -5,3 +5,4 @@ error: unknown key `surprise` in package definition
   | ^^^^^^^^^^^^ 
   |
   = note: invalid package definition
+  = hint: use the top-level `metadata` key for package data

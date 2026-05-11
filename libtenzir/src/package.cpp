@@ -45,9 +45,10 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
 
 auto should_ignore_package_key(std::string_view section, std::string_view key)
   -> bool {
-  // `labels` comes from configured pipelines, and `snippets` is a legacy
-  // library field superseded by `examples`.
-  return (section == "package" and key == "snippets")
+  // `metadata` is package-spec data for external tools, `snippets` is a legacy
+  // library field superseded by `examples`, and `labels` comes from configured
+  // pipelines.
+  return (section == "package" and (key == "metadata" or key == "snippets"))
          or (section == "pipeline" and key == "labels");
 }
 
@@ -55,6 +56,7 @@ auto unknown_package_key_error(std::string_view section, std::string_view key)
   -> caf::error {
   return diagnostic::error("unknown key `{}` in {} definition", key, section)
     .note("invalid package definition")
+    .hint("use the top-level `metadata` key for package data")
     .to_error();
 }
 

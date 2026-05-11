@@ -9,3 +9,4 @@ pipelines:
     schedule: hourly
     definition: |
       from {message: "hello"}
+      import

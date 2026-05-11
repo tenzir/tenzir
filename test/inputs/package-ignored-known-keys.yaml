@@ -6,6 +6,9 @@ snippets:
   - name: Legacy snippet field
     definition: version
 
+metadata:
+  source: package-spec
+
 inputs:
   message:
     name: Message
