@@ -128,12 +128,14 @@ jobs:
             if ! kill -0 "${helper_pid}" 2>/dev/null; then
               echo "::warning::ccache S3 helper exited before creating its socket; continuing without remote ccache"
               cat /tmp/ccache-s3-helper.log || true
+              sudo rm -f /tmp/tenzir-ccache/s3-helper.pid
               exit 0
             fi
             sleep 1
           done
           echo "::warning::ccache S3 helper did not create its socket within 30 seconds; continuing without remote ccache"
           cat /tmp/ccache-s3-helper.log || true
+          sudo rm -f /tmp/tenzir-ccache/s3-helper.pid
           exit 0
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
@@ -376,5 +378,9 @@ jobs:
         if: always() && runner.os == 'Linux'
         run: |
           if [[ -f /tmp/tenzir-ccache/s3-helper.pid ]]; then
-            sudo kill "$(cat /tmp/tenzir-ccache/s3-helper.pid)" || true
+            helper_pid="$(cat /tmp/tenzir-ccache/s3-helper.pid)"
+            if [[ -r "/proc/$helper_pid/cmdline" ]] \
+              && tr '\0' ' ' <"/proc/$helper_pid/cmdline" | grep -Fq 'scripts/ccache/s3-storage-helper.py'; then
+              sudo kill "$helper_pid" || true
+            fi
           fi

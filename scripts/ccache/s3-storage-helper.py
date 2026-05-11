@@ -101,6 +101,7 @@ class S3Config:
     max_pool_connections: int
     object_list_min_interval: float
     upload_queue_size: int
+    upload_queue_bytes: int
     upload_workers: int
     upload_drain_timeout: float
 
@@ -195,6 +196,8 @@ class S3Storage:
         self._upload_queue: queue.Queue[UploadQueueItem] = queue.Queue(
             maxsize=config.upload_queue_size,
         )
+        self._upload_queue_bytes = 0
+        self._upload_queue_bytes_condition = threading.Condition()
         self._upload_workers = [
             threading.Thread(
                 target=self._upload_worker,
@@ -209,6 +212,8 @@ class S3Storage:
     def status(self) -> str:
         return (
             f"queue {self._upload_queue.qsize()}/{self._config.upload_queue_size} "
+            f"bytes {_format_bytes(self._queued_upload_bytes())}/"
+            f"{_format_bytes(self._config.upload_queue_bytes)} "
             f"known {self._known_object_count()} "
             f"bucket {self._config.bucket}/{self._config.prefix or '-'}"
         )
@@ -244,13 +249,22 @@ class S3Storage:
                 )
                 return False
             if self._mark_object_queued(object_key):
-                self._upload_queue.put(UploadTask(object_key, value))
+                self._reserve_upload_bytes(len(value))
+                task = UploadTask(object_key, value)
+                try:
+                    self._upload_queue.put(task)
+                except Exception:
+                    self._release_upload_bytes(len(value))
+                    self._unmark_object_queued(object_key)
+                    raise
                 logging.info(
-                    "cache put queued object=%s size=%d queue=%d/%d",
+                    "cache put queued object=%s size=%d queue=%d/%d bytes=%s/%s",
                     object_key,
                     len(value),
                     self._upload_queue.qsize(),
                     self._config.upload_queue_size,
+                    _format_bytes(self._queued_upload_bytes()),
+                    _format_bytes(self._config.upload_queue_bytes),
                 )
                 return True
             logging.info("cache put skipped object=%s reason=queued", object_key)
@@ -279,7 +293,12 @@ class S3Storage:
         logging.info("cache remove object=%s", object_key)
         return True
 
-    def close(self) -> None:
+    def close(self, drain: bool = False) -> None:
+        if not drain:
+            unfinished = self._upload_queue.unfinished_tasks
+            if unfinished:
+                logging.warning("cache upload queue abandoned pending=%d", unfinished)
+            return
         deadline = time.monotonic() + self._config.upload_drain_timeout
         while self._upload_queue.unfinished_tasks and time.monotonic() < deadline:
             time.sleep(0.05)
@@ -312,12 +331,15 @@ class S3Storage:
                 )
             finally:
                 if task is not None:
+                    self._release_upload_bytes(len(task.value))
                     self._unmark_object_queued(task.object_key)
                     logging.info(
-                        "cache put dequeued object=%s queue=%d/%d",
+                        "cache put dequeued object=%s queue=%d/%d bytes=%s/%s",
                         task.object_key,
                         self._upload_queue.qsize(),
                         self._config.upload_queue_size,
+                        _format_bytes(self._queued_upload_bytes()),
+                        _format_bytes(self._config.upload_queue_bytes),
                     )
                 self._upload_queue.task_done()
 
@@ -388,6 +410,24 @@ class S3Storage:
     def _unmark_object_queued(self, object_key: str) -> None:
         with self._queued_objects_lock:
             self._queued_objects.discard(object_key)
+
+    def _queued_upload_bytes(self) -> int:
+        with self._upload_queue_bytes_condition:
+            return self._upload_queue_bytes
+
+    def _reserve_upload_bytes(self, size: int) -> None:
+        with self._upload_queue_bytes_condition:
+            while (
+                self._upload_queue_bytes > 0
+                and self._upload_queue_bytes + size > self._config.upload_queue_bytes
+            ):
+                self._upload_queue_bytes_condition.wait()
+            self._upload_queue_bytes += size
+
+    def _release_upload_bytes(self, size: int) -> None:
+        with self._upload_queue_bytes_condition:
+            self._upload_queue_bytes -= size
+            self._upload_queue_bytes_condition.notify_all()
 
     def _refresh_known_objects_debounced(self) -> None:
         now = time.monotonic()
@@ -726,6 +766,15 @@ def _write_message(output_file: BinaryIO, message: str) -> None:
     output_file.write(data)
 
 
+def _format_bytes(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            return f"{value:.1f}{unit}" if unit != "B" else f"{size}B"
+        value /= 1024
+    return f"{value:.1f}GiB"
+
+
 def _is_client_disconnect(error: BaseException | None) -> bool:
     if isinstance(error, (BrokenPipeError, ConnectionResetError, TimeoutError)):
         return True
@@ -895,6 +944,10 @@ def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
         upload_queue_size=_positive_int(
             attrs.get("upload-queue-size")
             or os.environ.get("CCACHE_S3_UPLOAD_QUEUE_SIZE", "4096"),
+        ),
+        upload_queue_bytes=_positive_int(
+            attrs.get("upload-queue-bytes")
+            or os.environ.get("CCACHE_S3_UPLOAD_QUEUE_BYTES", "536870912"),
         ),
         upload_workers=_positive_int(
             attrs.get("upload-workers")
@@ -2096,7 +2149,7 @@ def _run_server(
             ui.stop()
             root_logger.handlers = old_handlers or []
         server.server_close()
-        storage.close()
+        storage.close(drain=daemonize_requested.is_set())
     return daemonize_requested.is_set()
 
 

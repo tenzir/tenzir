@@ -21,7 +21,7 @@ rec {
       mkdir -p "$CCACHE_DIR"
     fi
     if [ -S /tmp/tenzir-ccache/s3.sock ]; then
-      export CCACHE_REMOTE_STORAGE='crsh:/tmp/tenzir-ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60'
+      export CCACHE_REMOTE_STORAGE='crsh:/tmp/tenzir-ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-queue-bytes=536870912 @upload-workers=8 @upload-drain-timeout=60'
       if [ -f /tmp/tenzir-ccache/remote-only ]; then
         export CCACHE_REMOTE_ONLY=true
         unset CCACHE_NOREMOTE_ONLY

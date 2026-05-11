@@ -159,7 +159,7 @@ pkgs.mkShell (
       mkdir -p "$ccache_s3_dir/cache"
       chmod 1777 "$ccache_s3_dir" 2>/dev/null || true
       chmod 0777 "$ccache_s3_dir/cache" 2>/dev/null || true
-      export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60"
+      export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-queue-bytes=536870912 @upload-workers=8 @upload-drain-timeout=60"
       if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
         echo "ccache R2 helper: already running at $ccache_s3_sock."
       else
