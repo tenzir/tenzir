@@ -1,4 +1,4 @@
-Tenzir v6.0.0-rc.1 introduces a rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
+Tenzir v6.0.0-rc.2 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
 
 ## 💥 Breaking changes
 
@@ -262,6 +262,18 @@ to_s3 "s3://my-bucket/year=**/month=**/{uuid}.json",
 Files rotate automatically when the configured `max_size` or `timeout` is reached, so long-running pipelines do not produce single huge objects.
 
 *By @raxyte in #6053.*
+
+### Internal memory size function
+
+The new `internal_memory_size` function estimates the size of each event in bytes:
+
+```tql
+size = internal_memory_size(this)
+```
+
+This is useful for building pipelines that inspect or route events based on their approximate in-memory payload size.
+
+*By @IyeOnline and @codex.*
 
 ### Keyed routing and source mode for `parallel`
 
@@ -567,3 +579,9 @@ to_sentinelone_data_lake "https://example.com", token="TOKEN"
 ```
 
 *By @mavam and @codex in #6081.*
+
+### Top-level package metadata
+
+Packages can now include a top-level `metadata` field for data consumed by external tools. Unknown package keys still fail validation, and the error now points users to `metadata` for non-engine package data.
+
+*By @tobim and @codex in #6149.*
