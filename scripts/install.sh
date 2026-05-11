@@ -302,19 +302,20 @@ if [ -n "${TENZIR_TOKEN:-}" ]; then
   # with the new token, preserving any other settings.
   if [ -f "${config_file}" ]; then
     # Read existing config, merge in token, write back.
-    tql_pipeline="load_file \"${config_file}\"
-      read_yaml
-      if this.has(\"tenzir\") and tenzir.type_id() == type_id({}) {
-        tenzir = { token: \"${TENZIR_TOKEN}\"}, ...tenzir }
-      } else {
-        tenzir = { token: \"${TENZIR_TOKEN}\"} }
+    tql_pipeline="from_file \"${config_file}\" {
+        read_yaml
       }
-      write_yaml
+      this = merge(this, {tenzir: {token: \"${TENZIR_TOKEN}\"}})
+      to_stdout {
+        write_yaml
+      }
       "
   else
     # Create new config with token.
     tql_pipeline="from {tenzir: {token: \"${TENZIR_TOKEN}\"}}
-      write_yaml"
+      to_stdout {
+        write_yaml
+      }"
   fi
 
   # Write config using tenzir and sudo tee.
