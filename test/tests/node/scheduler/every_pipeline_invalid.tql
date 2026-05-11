@@ -1,0 +1,12 @@
+---
+error: true
+fixtures:
+- node
+---
+
+every 10ms {
+  from_file "" {
+    read_json
+  }
+  import
+}

@@ -116,4 +116,4 @@ else
 fi
 echo "bench: count=$COUNT sink=$SINK"
 
-/usr/bin/time -p "$TENZIR_BIN" --neo -f "$pipeline_file"
+/usr/bin/time -p "$TENZIR_BIN" -f "$pipeline_file"

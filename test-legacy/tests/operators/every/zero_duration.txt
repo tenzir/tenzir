@@ -1,8 +1,0 @@
-error: expected argument of type `duration`, but got `int64`
- --> tests/operators/every/zero_duration.tql:5:7
-  |
-5 | every 0 {
-  |       ^ 
-  |
-  = usage: every interval:duration { … }
-  = docs: https://docs.tenzir.com/reference/operators/every

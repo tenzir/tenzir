@@ -105,19 +105,32 @@ def http_request() -> FixtureHandle:
     request_specs = _to_request_specs(opts)
     first_request_at = time.monotonic() + opts.initial_delay
 
-    def _wait_until_ready() -> bool:
+    def _wait_until_ready(*, tls: bool) -> bool:
         while not stop_event.is_set():
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    if sock.connect_ex((_HOST, port)) == 0:
+                    sock.settimeout(opts.request_timeout)
+                    if not tls:
+                        if sock.connect_ex((_HOST, port)) == 0:
+                            return True
+                        stop_event.wait(opts.retry_delay)
+                        continue
+                    if tls_ca is not None:
+                        context = ssl.create_default_context(cafile=str(tls_ca))
+                    else:
+                        context = ssl.create_default_context()
+                        context.check_hostname = False
+                        context.verify_mode = ssl.CERT_NONE
+                    with context.wrap_socket(sock, server_hostname=_HOST) as tls_sock:
+                        tls_sock.connect((_HOST, port))
                         return True
-            except OSError:
+            except (OSError, ssl.SSLError):
                 pass
             stop_event.wait(opts.retry_delay)
         return False
 
     def _worker() -> None:
-        if not _wait_until_ready():
+        if not _wait_until_ready(tls=bool(request_specs and request_specs[0].tls)):
             return
         remaining_initial_delay = first_request_at - time.monotonic()
         if remaining_initial_delay > 0:

@@ -325,7 +325,8 @@ auto exec_pipeline(pipeline pipe, std::string definition,
 auto exec_pipeline(std::string content, diagnostic_handler& dh,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
-  if (not cfg.legacy) {
+  if (cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir
+      or cfg.dump_pipeline) {
     auto success = exec2(std::move(content), dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;
   }

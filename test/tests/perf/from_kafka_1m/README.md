@@ -12,7 +12,7 @@ test/tests/perf/from_kafka_1m/run.sh
 The runner:
 - Starts the `kafka` fixture in foreground mode via `uvx tenzir-test --fixture`.
 - Waits until the fixture exports `KAFKA_BOOTSTRAP_SERVERS` and `KAFKA_TOPIC`.
-- Executes `tenzir --neo` with `TENZIR_KAFKA_FROM_PERF_STATS=1`.
+- Executes `tenzir` with `TENZIR_KAFKA_FROM_PERF_STATS=1`.
 - Prints wall time (`/usr/bin/time -p`) and `from_kafka` stage counters.
 - Uses `test/tests/perf/from_kafka_1m/route53_sample.ndjson` by default.
 - Seeding scale/trim is controlled by two fixture options:

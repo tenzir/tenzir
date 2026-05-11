@@ -1,4 +1,3 @@
 suite: api
-runner: neo
 fixtures: [node]
 timeout: 60

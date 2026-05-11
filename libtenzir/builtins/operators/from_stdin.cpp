@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/arc.hpp"
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/async/notify.hpp"
@@ -42,6 +43,10 @@ using ChunkQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
 struct FromStdinArgs {
   located<ir::pipeline> pipe;
+};
+
+struct LoadStdinArgs {
+  location self;
 };
 
 struct ReadCB : folly::AsyncReader::ReadCallback {
@@ -84,6 +89,133 @@ struct ReadCB : folly::AsyncReader::ReadCallback {
     done = true;
     notify.notify_one();
   }
+};
+
+auto read_stdin(Arc<ChunkQueue> queue, diagnostic_handler& dh) -> Task<void> {
+  const auto fail = [&](auto&& emit) -> Task<void> {
+    emit();
+    co_await queue->enqueue(chunk_ptr{});
+  };
+  // Set stdin to non-blocking for event-driven IO.
+  auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
+  if (orig_flags < 0) {
+    auto err = errno;
+    co_await fail([&] {
+      diagnostic::error("failed to get stdin flags")
+        .note("errno {}: {}", err, std::strerror(err))
+        .emit(dh);
+    });
+    co_return;
+  }
+  auto rc = ::fcntl(STDIN_FILENO, F_SETFL, orig_flags | O_NONBLOCK);
+  if (rc < 0) {
+    auto err = errno;
+    co_await fail([&] {
+      diagnostic::error("failed to enable non-blocking mode")
+        .note("errno {}: {}", err, std::strerror(err))
+        .emit(dh);
+    });
+    co_return;
+  }
+  auto guard = folly::makeGuard([orig_flags] {
+    ::fcntl(STDIN_FILENO, F_SETFL, orig_flags);
+  });
+  auto* evb = folly::getGlobalIOExecutor()->getEventBase();
+  auto reader = folly::AsyncPipeReader::newReader(
+    evb, folly::NetworkSocket::fromFd(STDIN_FILENO));
+  // Prevent AsyncPipeReader cleanup from closing the process-global stdin.
+  reader->setCloseCallback([](folly::NetworkSocket) {});
+  auto cb = ReadCB{};
+  reader->setReadCB(&cb);
+  if (not reader->isHandlerRegistered()) {
+    reader->setReadCB(nullptr);
+    co_await fail([&] {
+      diagnostic::error("stdin is not eventable")
+        .note("from_stdin requires eventable stdin")
+        .emit(dh);
+    });
+    co_return;
+  }
+  // The callback object lives on this coroutine frame, so unregister it on
+  // every exit path before `cb` is destroyed.
+  auto cb_guard = folly::makeGuard([&reader] {
+    reader->setReadCB(nullptr);
+  });
+  while (true) {
+    while (not cb.chunks.empty()) {
+      auto item = std::move(cb.chunks.front());
+      cb.chunks.pop_front();
+      if (not queue->try_enqueue(std::move(item))) {
+        // Queue is full — pause the reader to apply backpressure.
+        reader->setReadCB(nullptr);
+        co_await queue->enqueue(std::move(item));
+        reader->setReadCB(&cb);
+        if (not reader->isHandlerRegistered()) {
+          reader->setReadCB(nullptr);
+          co_await fail([&] {
+            diagnostic::error("async stdin re-registration failed").emit(dh);
+          });
+          co_return;
+        }
+      }
+    }
+    if (cb.done) {
+      break;
+    }
+    // Check again to avoid waiting if callback pushed while processing.
+    if (cb.done or not cb.chunks.empty()) {
+      continue;
+    }
+    co_await cb.notify.wait();
+  }
+  co_await queue->enqueue(chunk_ptr{});
+}
+
+class LoadStdin final : public Operator<void, chunk_ptr> {
+public:
+  explicit LoadStdin(LoadStdinArgs args) {
+    TENZIR_UNUSED(args);
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "load_stdin"},
+                         MetricsDirection::read, MetricsVisibility::external_);
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (done_) {
+      co_await wait_forever();
+    }
+    co_return co_await chunk_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<chunk_ptr>& push, OpCtx&)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.has_value());
+    auto chunk = std::move(result).as<chunk_ptr>();
+    if (not chunk) {
+      done_ = true;
+      co_return;
+    }
+    const auto bytes = chunk->size();
+    co_await push(std::move(chunk));
+    if (bytes > 0) {
+      bytes_read_counter_.add(bytes);
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  bool done_ = false;
+  MetricsCounter bytes_read_counter_;
+  mutable Arc<ChunkQueue> chunk_queue_{std::in_place, queue_capacity};
 };
 
 class FromStdin final : public Operator<void, table_slice> {
@@ -163,94 +295,25 @@ public:
   }
 
 private:
-  static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
-                         diagnostic_handler& dh) -> Task<void> {
-    const auto fail = [&](auto&& emit) -> Task<void> {
-      emit();
-      co_await queue->enqueue(chunk_ptr{});
-    };
-    // Set stdin to non-blocking for event-driven IO.
-    auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
-    if (orig_flags < 0) {
-      auto err = errno;
-      co_await fail([&] {
-        diagnostic::error("failed to get stdin flags")
-          .note("errno {}: {}", err, std::strerror(err))
-          .emit(dh);
-      });
-      co_return;
-    }
-    auto rc = ::fcntl(STDIN_FILENO, F_SETFL, orig_flags | O_NONBLOCK);
-    if (rc < 0) {
-      auto err = errno;
-      co_await fail([&] {
-        diagnostic::error("failed to enable non-blocking mode")
-          .note("errno {}: {}", err, std::strerror(err))
-          .emit(dh);
-      });
-      co_return;
-    }
-    auto guard = folly::makeGuard([orig_flags] {
-      ::fcntl(STDIN_FILENO, F_SETFL, orig_flags);
-    });
-    auto* evb = folly::getGlobalIOExecutor()->getEventBase();
-    auto reader = folly::AsyncPipeReader::newReader(
-      evb, folly::NetworkSocket::fromFd(STDIN_FILENO));
-    // Prevent AsyncPipeReader cleanup from closing the process-global stdin.
-    reader->setCloseCallback([](folly::NetworkSocket) {});
-    auto cb = ReadCB{};
-    reader->setReadCB(&cb);
-    if (not reader->isHandlerRegistered()) {
-      reader->setReadCB(nullptr);
-      co_await fail([&] {
-        diagnostic::error("stdin is not eventable")
-          .note("from_stdin requires eventable stdin")
-          .emit(dh);
-      });
-      co_return;
-    }
-    // The callback object lives on this coroutine frame, so unregister it on
-    // every exit path before `cb` is destroyed.
-    auto cb_guard = folly::makeGuard([&reader] {
-      reader->setReadCB(nullptr);
-    });
-    while (true) {
-      while (not cb.chunks.empty()) {
-        auto item = std::move(cb.chunks.front());
-        cb.chunks.pop_front();
-        if (not queue->try_enqueue(std::move(item))) {
-          // Queue is full — pause the reader to apply backpressure.
-          reader->setReadCB(nullptr);
-          co_await queue->enqueue(std::move(item));
-          reader->setReadCB(&cb);
-          if (not reader->isHandlerRegistered()) {
-            reader->setReadCB(nullptr);
-            co_await fail([&] {
-              diagnostic::error("async stdin re-registration failed").emit(dh);
-            });
-            co_return;
-          }
-        }
-      }
-      if (cb.done) {
-        break;
-      }
-      // Check again to avoid waiting if callback pushed while processing.
-      if (cb.done or not cb.chunks.empty()) {
-        continue;
-      }
-      co_await cb.notify.wait();
-    }
-    co_await queue->enqueue(chunk_ptr{});
-  }
-
   FromStdinArgs args_;
   bool done_ = false;
   bool stdin_closed_ = false;
   MetricsCounter bytes_read_counter_;
-  mutable std::shared_ptr<Notify> sub_finished_ = std::make_shared<Notify>();
-  mutable std::shared_ptr<ChunkQueue> chunk_queue_
-    = std::make_shared<ChunkQueue>(queue_capacity);
+  mutable Arc<Notify> sub_finished_{std::in_place};
+  mutable Arc<ChunkQueue> chunk_queue_{std::in_place, queue_capacity};
+};
+
+class LoadStdinPlugin final : public OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.load_stdin";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<LoadStdinArgs, LoadStdin>{};
+    d.operator_location(&LoadStdinArgs::self);
+    return d.without_optimize();
+  }
 };
 
 class FromStdinPlugin final : public OperatorPlugin {
@@ -285,4 +348,5 @@ public:
 
 } // namespace tenzir::plugins::from_stdin
 
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_stdin::LoadStdinPlugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_stdin::FromStdinPlugin)

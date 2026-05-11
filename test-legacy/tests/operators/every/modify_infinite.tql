@@ -1,5 +1,0 @@
-from {}
-repeat 
-enumerate i
-every 1s { i = i * 2 }
-head 3

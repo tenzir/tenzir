@@ -1,0 +1,3 @@
+from {x: 1}, {x: 2}
+summarize two_values_normalized=entropy(x, normalize=true)
+two_values_normalized = round(two_values_normalized * 100) / 100

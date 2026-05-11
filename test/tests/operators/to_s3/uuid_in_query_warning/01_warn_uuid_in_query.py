@@ -56,7 +56,6 @@ def main() -> None:
                 "--bare-mode",
                 "--console-verbosity=warning",
                 "--multi",
-                "--neo",
                 "-f",
                 str(pipe_path),
             ],

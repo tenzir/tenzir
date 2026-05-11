@@ -1,0 +1,3 @@
+suite:
+  name: entropy-edge-cases
+  mode: sequential

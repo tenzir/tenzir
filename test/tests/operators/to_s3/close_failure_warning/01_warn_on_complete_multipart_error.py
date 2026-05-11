@@ -67,7 +67,7 @@ def main() -> None:
         pipeline = Path(tmpdir) / "close_failure.tql"
         _write_pipeline(pipeline)
         result = subprocess.run(
-            [*tenzir, "--bare-mode", "--console-verbosity=warning", "--multi", "--neo", "-f", str(pipeline)],
+            [*tenzir, "--bare-mode", "--console-verbosity=warning", "--multi", "-f", str(pipeline)],
             capture_output=True,
             text=True,
             timeout=180,

@@ -1,0 +1,3 @@
+from {x: true}, {x: false}, {x: true}
+summarize boolean_values=entropy(x)
+boolean_values = round(boolean_values * 100) / 100

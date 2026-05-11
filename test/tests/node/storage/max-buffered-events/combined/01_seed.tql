@@ -1,0 +1,6 @@
+// Tests whether a combined batch of larger size is handled correctly.
+from {}
+repeat 10
+enumerate x
+batch 10
+import

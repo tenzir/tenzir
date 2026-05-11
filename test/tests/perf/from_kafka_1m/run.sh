@@ -87,4 +87,4 @@ PIPELINE
 echo "fixture: bootstrap=$KAFKA_BOOTSTRAP_SERVERS topic=$KAFKA_TOPIC partitions=$PARTITIONS messages=$MESSAGES compression=$COMPRESSION payload_file=${PAYLOAD_FILE:-none}"
 echo "bench: count=$COUNT batch_size=$BATCH_SIZE batch_timeout=$BATCH_TIMEOUT fetch_wait_timeout=$FETCH_WAIT_TIMEOUT sink=$SINK group_id=$GROUP_ID"
 
-TENZIR_KAFKA_FROM_PERF_STATS=1 /usr/bin/time -p "$TENZIR_BIN" --neo -f "$pipeline_file"
+TENZIR_KAFKA_FROM_PERF_STATS=1 /usr/bin/time -p "$TENZIR_BIN" -f "$pipeline_file"

@@ -13,7 +13,7 @@ The runner:
 
 - Starts the `udp` fixture via `uvx tenzir-test --fixture` in client mode.
 - Waits until the fixture exports `UDP_ENDPOINT`.
-- Executes `tenzir --neo` with `accept_udp`, stops after `COUNT` events, and
+- Executes `tenzir` with `accept_udp`, stops after `COUNT` events, and
   discards the result by default.
 - Prints wall time via `/usr/bin/time -p`.
 

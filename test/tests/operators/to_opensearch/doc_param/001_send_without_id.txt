@@ -1,0 +1,7 @@
+warning: action `upsert` requires `id`, but got `null`
+  --> tests/operators/to_opensearch/doc_param/001_send_without_id.tql:13:63
+   |
+13 | to_opensearch env("HTTP_FIXTURE_ENDPOINT"), tls=false, action="upsert", index="main", doc=target_doc, compress=false
+   |                                                               ~~~~~~~~ 
+   |
+   = note: skipping event

@@ -1,5 +1,0 @@
-pipeline::detach {
-  from {x: 1}
-  assert x != 1
-  discard
-}, id="test-id"

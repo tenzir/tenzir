@@ -1,3 +1,0 @@
-from {message: "hello from package", id: "basicpkg"}
-write_json
-save_stdout

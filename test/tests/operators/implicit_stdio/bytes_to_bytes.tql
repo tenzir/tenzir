@@ -1,0 +1,3 @@
+read_yaml
+select x
+write_csv

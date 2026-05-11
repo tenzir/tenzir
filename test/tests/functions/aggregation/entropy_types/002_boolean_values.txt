@@ -1,0 +1,3 @@
+{
+  boolean_values: 0.64,
+}

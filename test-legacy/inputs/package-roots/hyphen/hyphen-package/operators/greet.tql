@@ -1,7 +1,0 @@
-from {
-  id: "hyphen-package",
-  normalized: "hyphen_package",
-  message: "hello from hyphenated package",
-}
-write_json
-save_stdout

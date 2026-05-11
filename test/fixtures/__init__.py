@@ -12,6 +12,7 @@ from . import ftp  # noqa: F401
 from . import gcs  # noqa: F401
 from . import google_cloud_logging  # noqa: F401
 from . import google_secops  # noqa: F401
+from . import http  # noqa: F401
 from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
@@ -39,6 +40,7 @@ __all__ = [
     "gcs",
     "google_cloud_logging",
     "google_secops",
+    "http",
     "http_request",
     "http_paginate",
     "http_server",

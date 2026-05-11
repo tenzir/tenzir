@@ -1,0 +1,3 @@
+from {x: 2023-01-01}, {x: 2023-01-02}, {x: 2023-01-01}
+summarize time_values=entropy(x)
+time_values = round(time_values * 100) / 100

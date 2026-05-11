@@ -1,6 +1,6 @@
 error: operator expects events
  --> tests/operators/every/bad_source.tql:6:3
   |
-6 |   where x == 1
+6 |   where x == 1 | discard
   |   ^^^^^ 
   |

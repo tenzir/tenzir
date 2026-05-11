@@ -52,7 +52,6 @@ def main() -> None:
                 *tenzir,
                 "--bare-mode",
                 "--multi",
-                "--neo",
                 "--console-verbosity=warning",
                 "-f",
                 str(pipe_path),

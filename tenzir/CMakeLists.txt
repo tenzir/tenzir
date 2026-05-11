@@ -277,49 +277,21 @@ set_tests_properties(
   build-tenzir PROPERTIES FIXTURES_SETUP "tenzir_integration_test_fixture"
                           LABELS integration)
 
-# Legacy tests (test-legacy/)
-set(_legacy_tests_root "${CMAKE_SOURCE_DIR}/test-legacy/tests")
-if (EXISTS "${_legacy_tests_root}")
+# Integration tests (test/)
+set(_integration_tests_root "${CMAKE_SOURCE_DIR}/test/tests")
+if (EXISTS "${_integration_tests_root}")
   file(
-    GLOB _legacy_test_dirs
-    RELATIVE "${_legacy_tests_root}"
-    "${_legacy_tests_root}/[^_]*")
-  foreach (dir IN LISTS _legacy_test_dirs)
-    if (NOT IS_DIRECTORY "${_legacy_tests_root}/${dir}" OR "${dir}" MATCHES
-                                                           "^inputs/?$")
+    GLOB _integration_test_dirs
+    RELATIVE "${_integration_tests_root}"
+    "${_integration_tests_root}/[^_]*")
+  foreach (dir IN LISTS _integration_test_dirs)
+    if (NOT IS_DIRECTORY "${_integration_tests_root}/${dir}"
+        OR "${dir}" MATCHES "^inputs/?$")
       continue()
     endif ()
     tenzir_build_test_command(
-      _test_cmd TEST_ROOT "${_legacy_tests_root}/${dir}/" WORKING_DIR
-      "${CMAKE_SOURCE_DIR}/test-legacy")
-    add_test(NAME "tenzir-legacy/${dir}" COMMAND ${_test_cmd})
-    set_tests_properties(
-      "tenzir-legacy/${dir}"
-      PROPERTIES WORKING_DIRECTORY
-                 "${CMAKE_SOURCE_DIR}/test-legacy"
-                 FIXTURES_REQUIRED
-                 "tenzir_integration_test_fixture"
-                 LABELS
-                 "integration;legacy"
-                 RUN_SERIAL
-                 TRUE)
-  endforeach ()
-endif ()
-
-# Neo tests (test/)
-set(_neo_tests_root "${CMAKE_SOURCE_DIR}/test/tests")
-if (EXISTS "${_neo_tests_root}")
-  file(
-    GLOB _neo_test_dirs
-    RELATIVE "${_neo_tests_root}"
-    "${_neo_tests_root}/[^_]*")
-  foreach (dir IN LISTS _neo_test_dirs)
-    if (NOT IS_DIRECTORY "${_neo_tests_root}/${dir}" OR "${dir}" MATCHES
-                                                        "^inputs/?$")
-      continue()
-    endif ()
-    tenzir_build_test_command(_test_cmd TEST_ROOT "${_neo_tests_root}/${dir}/"
-                              WORKING_DIR "${CMAKE_SOURCE_DIR}/test")
+      _test_cmd TEST_ROOT "${_integration_tests_root}/${dir}/" WORKING_DIR
+      "${CMAKE_SOURCE_DIR}/test")
     add_test(NAME "tenzir/${dir}" COMMAND ${_test_cmd})
     set_tests_properties(
       "tenzir/${dir}"
@@ -328,92 +300,53 @@ if (EXISTS "${_neo_tests_root}")
                  FIXTURES_REQUIRED
                  "tenzir_integration_test_fixture"
                  LABELS
-                 "integration;neo"
+                 "integration"
                  RUN_SERIAL
                  TRUE)
   endforeach ()
 endif ()
 
-# Discover contrib plugin test directories split by legacy/neo layout.
-set(_contrib_legacy_test_dirs)
-set(_contrib_neo_test_dirs)
+# Discover contrib plugin test directories.
+set(_contrib_test_dirs)
 if (EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
-  file(GLOB _contrib_legacy_test_dirs
-       "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test-legacy")
-  file(GLOB _contrib_neo_test_dirs
+  file(GLOB _contrib_test_dirs
        "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
 endif ()
 
-# Separate make targets for legacy and neo tests
-add_custom_target(integration-legacy DEPENDS tenzir)
 tenzir_build_test_command(
-  _legacy_cmd
+  _integration_cmd
   EXTRA_ARGS
   "--jobs"
   "4"
   WORKING_DIR
-  "${CMAKE_SOURCE_DIR}/test-legacy"
+  "${CMAKE_SOURCE_DIR}/test"
   SELECTION
-  ${_contrib_legacy_test_dirs})
-add_custom_command(
-  TARGET integration-legacy
-  POST_BUILD
-  COMMAND ${_legacy_cmd}
-  USES_TERMINAL VERBATIM)
+  ${_contrib_test_dirs})
 
-add_custom_target(integration-neo DEPENDS tenzir)
-tenzir_build_test_command(_neo_cmd EXTRA_ARGS "--jobs" "4" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test" SELECTION
-                          ${_contrib_neo_test_dirs})
-add_custom_command(
-  TARGET integration-neo
-  POST_BUILD
-  COMMAND ${_neo_cmd}
-  USES_TERMINAL VERBATIM)
-
-# Combined target that runs all tests
 add_custom_target(integration-tests DEPENDS tenzir)
 add_custom_command(
   TARGET integration-tests
   POST_BUILD
-  COMMAND ${_legacy_cmd}
-  COMMAND ${_neo_cmd}
+  COMMAND ${_integration_cmd}
   USES_TERMINAL VERBATIM)
 
 add_custom_target(integration)
 add_dependencies(integration integration-tests)
 
-add_custom_target(update-integration-legacy DEPENDS tenzir)
 tenzir_build_test_command(
-  _update_legacy_cmd
+  _update_integration_cmd
   EXTRA_ARGS
   "--update"
   WORKING_DIR
-  "${CMAKE_SOURCE_DIR}/test-legacy"
+  "${CMAKE_SOURCE_DIR}/test"
   SELECTION
-  ${_contrib_legacy_test_dirs})
-add_custom_command(
-  TARGET update-integration-legacy
-  POST_BUILD
-  COMMAND ${_update_legacy_cmd}
-  USES_TERMINAL VERBATIM)
-
-add_custom_target(update-integration-neo DEPENDS tenzir)
-tenzir_build_test_command(_update_neo_cmd EXTRA_ARGS "--update" WORKING_DIR
-                          "${CMAKE_SOURCE_DIR}/test" SELECTION
-                          ${_contrib_neo_test_dirs})
-add_custom_command(
-  TARGET update-integration-neo
-  POST_BUILD
-  COMMAND ${_update_neo_cmd}
-  USES_TERMINAL VERBATIM)
+  ${_contrib_test_dirs})
 
 add_custom_target(update-integration DEPENDS tenzir)
 add_custom_command(
   TARGET update-integration
   POST_BUILD
-  COMMAND ${_update_legacy_cmd}
-  COMMAND ${_update_neo_cmd}
+  COMMAND ${_update_integration_cmd}
   USES_TERMINAL VERBATIM)
 
 if (TENZIR_ENABLE_CODE_COVERAGE)
@@ -499,7 +432,8 @@ if (TENZIR_ENABLE_MANPAGES)
       "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"
     COMMENT "Generating tenzir.1"
     VERBATIM)
-  add_custom_target(tenzir-manpage DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1")
+  add_custom_target(tenzir-manpage
+                    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1")
   add_dependencies(tenzir tenzir-manpage)
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir.1"

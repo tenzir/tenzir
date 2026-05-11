@@ -2204,34 +2204,57 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     diagnostic::error("empty pipeline is not supported yet").emit(ctx);
     return failure::promise();
   }
-  // Type check the instantiated IR. Because we do not support implicit sources
-  // anymore, the pipeline must start with `void` if it's well-formed. After
-  // instantiation, the pipeline must know it's output type when given a fixed
-  // input type.
-  TRY(auto output, ir.infer_type(tag_v<void>, ctx));
-  if (not output.has_value()) {
+  // Type check the instantiated IR and add implicit sources before sinks.
+  // During probing, suppress diagnostics for input types that do not match.
+  auto parse_implicit
+    = [&](std::string_view definition) -> failure_or<ir::pipeline> {
+    TRY(auto ast, parse_pipeline_with_bad_diagnostics(definition, ctx));
+    TRY(auto pipe, std::move(ast).compile(c_ctx));
+    TRY(pipe.substitute(sub_ctx, true));
+    return pipe;
+  };
+  auto null_dh = null_diagnostic_handler{};
+  auto output = Option<element_type_tag>{};
+  auto implicit_source = Option<std::string_view>{};
+  if (auto inferred = ir.infer_type(tag_v<void>, null_dh);
+      inferred and *inferred) {
+    output = **inferred;
+  } else if (auto inferred = ir.infer_type(tag_v<chunk_ptr>, null_dh);
+             inferred and *inferred and not cfg.implicit_bytes_source.empty()) {
+    implicit_source = cfg.implicit_bytes_source;
+  } else if (auto inferred = ir.infer_type(tag_v<table_slice>, null_dh);
+             inferred and *inferred
+             and not cfg.implicit_events_source.empty()) {
+    implicit_source = cfg.implicit_events_source;
+  } else {
+    TRY(output, ir.infer_type(tag_v<void>, ctx));
+  }
+  if (implicit_source) {
+    TRY(auto implicit, parse_implicit(*implicit_source));
+    ir.lets.insert(ir.lets.begin(), std::move_iterator{implicit.lets.begin()},
+                   std::move_iterator{implicit.lets.end()});
+    ir.operators.insert(ir.operators.begin(),
+                        std::move_iterator{implicit.operators.begin()},
+                        std::move_iterator{implicit.operators.end()});
+    TRY(auto inferred_after_source, ir.infer_type(tag_v<void>, ctx));
+    output = *inferred_after_source;
+  }
+  if (output.is_none()) {
     // TODO: Improve?
     panic("expected pipeline to know it's output type after instantiation");
   }
   // Add implicit sink before optimization.
   if (output->is_not<void>()) {
-    // TODO: Support bytes.
     auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
                                               : cfg.implicit_bytes_sink;
-    auto sink = parse_pipeline_with_bad_diagnostics(sink_def, ctx)
-                  // TODO: Error handling.
-                  .unwrap()
-                  .compile(c_ctx)
-                  .unwrap();
-    // Instantiate the sink (same as the main pipeline).
-    TRY(sink.substitute(sub_ctx, true));
-    ir.lets.insert(ir.lets.end(), std::move_iterator{sink.lets.begin()},
-                   std::move_iterator{sink.lets.end()});
+    TRY(auto implicit, parse_implicit(sink_def));
+    ir.lets.insert(ir.lets.end(), std::move_iterator{implicit.lets.begin()},
+                   std::move_iterator{implicit.lets.end()});
     ir.operators.insert(ir.operators.end(),
-                        std::move_iterator{sink.operators.begin()},
-                        std::move_iterator{sink.operators.end()});
+                        std::move_iterator{implicit.operators.begin()},
+                        std::move_iterator{implicit.operators.end()});
     TRY(output, ir.infer_type(tag_v<void>, ctx));
-    TENZIR_ASSERT(output.has_value());
+    TENZIR_ASSERT(output.is_some());
     // TODO: This is a problem with the implicit sink config.
     if (not output->is<void>()) {
       diagnostic::error("last operator must close pipeline, but it returns {}",
@@ -2284,7 +2307,8 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if (cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir) {
+    if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
+        or cfg.dump_opt_ir) {
       // This new code path will eventually supersede the current one.
       return exec_with_ir(std::move(parsed), cfg, ctx, sys);
     }

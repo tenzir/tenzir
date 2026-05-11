@@ -3,5 +3,5 @@ error: true
 ---
 
 every 1s {
-  where x == 1
+  where x == 1 | discard
 }

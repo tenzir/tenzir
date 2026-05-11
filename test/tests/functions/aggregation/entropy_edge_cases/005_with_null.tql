@@ -1,0 +1,3 @@
+from {x: null}, {x: 1}, {x: 2}
+summarize with_null=entropy(x)
+with_null = round(with_null * 100) / 100
