@@ -10,3 +10,4 @@ pipelines:
     description: Emits one event.
     definition: |
       from {message: "hello"}
+      import
