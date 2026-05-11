@@ -10,6 +10,7 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/hash/hash.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -56,12 +57,7 @@ struct null_accessor {
 
 struct null_pattern_hash {
   auto operator()(null_pattern const& pattern) const noexcept -> size_t {
-    auto seed = size_t{0};
-    for (auto word : pattern) {
-      seed
-        ^= std::hash<uint64_t>{}(word) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    }
-    return seed;
+    return tenzir::hash(pattern);
   }
 };
 
