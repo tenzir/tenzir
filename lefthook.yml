@@ -1,0 +1,60 @@
+# Local hooks intentionally avoid Nix because not every developer has it.
+# CI runs the authoritative treefmt check in .github/workflows/style-check.yaml.
+# Tool versions are anchored at first use and reused by the fix hook to keep
+# check and fix commands on the same pinned versions.
+glob_matcher: doublestar
+
+pre-push:
+  parallel: true
+  commands:
+    ruff-format:
+      env:
+        RUFF_VERSION: &ruff_version "0.15.6"
+      glob: "**/*.py"
+      run: uvx ruff==$RUFF_VERSION format --check --diff {push_files}
+    clang-format:
+      env:
+        CLANG_FORMAT_VERSION: &clang_format_version "21.1.8"
+      glob: "**/*.{cpp,cpp.in,hpp,hpp.in}"
+      run: uvx clang-format@$CLANG_FORMAT_VERSION --dry-run --Werror {push_files}
+    cmake-format:
+      env:
+        CMAKE_FORMAT_VERSION: &cmake_format_version "0.6.13"
+      glob: "**/{CMakeLists.txt,*.cmake,*.cmake.in}"
+      run: uvx --from cmakelang==$CMAKE_FORMAT_VERSION cmake-format --check {push_files}
+    shfmt:
+      env:
+        SHFMT_PY_VERSION: &shfmt_py_version "3.12.0.2"
+      glob: "**/*.{sh,bash}"
+      run: uvx --from shfmt-py==$SHFMT_PY_VERSION shfmt -d {push_files}
+    yamllint:
+      env:
+        YAMLLINT_VERSION: &yamllint_version "1.37.1"
+      glob: "**/*.{yaml,yml}"
+      run: uvx yamllint==$YAMLLINT_VERSION {push_files}
+
+# This hook is for automated local fixes with pinned non-Nix tools.
+# YAML remains check-only here; CI/treefmt is the broader style authority.
+fix:
+  parallel: true
+  commands:
+    ruff-format:
+      env:
+        RUFF_VERSION: *ruff_version
+      glob: "**/*.py"
+      run: uvx ruff==$RUFF_VERSION format {files}
+    clang-format:
+      env:
+        CLANG_FORMAT_VERSION: *clang_format_version
+      glob: "**/*.{cpp,cpp.in,hpp,hpp.in}"
+      run: uvx clang-format@$CLANG_FORMAT_VERSION -i {files}
+    cmake-format:
+      env:
+        CMAKE_FORMAT_VERSION: *cmake_format_version
+      glob: "**/{CMakeLists.txt,*.cmake,*.cmake.in}"
+      run: uvx --from cmakelang==$CMAKE_FORMAT_VERSION cmake-format -i {files}
+    shfmt:
+      env:
+        SHFMT_PY_VERSION: *shfmt_py_version
+      glob: "**/*.{sh,bash}"
+      run: uvx --from shfmt-py==$SHFMT_PY_VERSION shfmt -w {files}

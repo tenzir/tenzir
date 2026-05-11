@@ -5,7 +5,7 @@
 let
   inherit (pkgs) lib;
   inherit (pkgs.stdenv.hostPlatform) isStatic;
-  unchecked = package.tenzir-de.unchecked;
+  inherit (package.tenzir-de) unchecked;
   # Build one explicit dependency closure for discovery instead of importing
   # the full package environment into the shell. That keeps CMake and the Nix
   # compiler/linker wrappers from seeing the same include/lib paths multiple
@@ -88,6 +88,7 @@ let
         pkgs.clangbuildanalyzer
         pkgs.curl
         pkgs.jq
+        pkgs.lefthook
         pkgs.lsof
         pkgs.perl
         pkgs.procps

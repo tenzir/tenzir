@@ -42,6 +42,32 @@ building modular pipelines that process structured event data.
 
 ## Key tasks
 
+### Set up the checkout
+
+Use checked-in entry points instead of invoking formatter binaries from `PATH`.
+Tool versions are pinned in `lefthook.yml` or by the Nix formatter environment.
+
+For non-Nix setups, install local hooks with:
+
+```sh
+npx --yes lefthook install
+```
+
+For Nix setups, install local hooks from the dev shell with:
+
+```sh
+lefthook install
+```
+
+After installing hooks, Git runs Lefthook's `pre-push` hook automatically. To
+auto-fix local formatting issues, run Lefthook's `fix` hook on the files changed
+by your branch. Pass files explicitly with `--file <path>` when running
+Lefthook outside Git's actual pre-push flow.
+
+Nix setups can also run the repository formatter with
+`nix run .#format -- <path>...`. CI uses this Nix/treefmt path on PR-changed
+files, so use it to reproduce and fix CI style failures.
+
 ### Configure the build
 
 Configure a build by selecting a CMake prefix:

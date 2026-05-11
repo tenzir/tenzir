@@ -166,17 +166,6 @@ LicenseComments: Includes code from https://github.com/lewissbaker/cppcoro
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-generator-hpp
 
-FileName: ./scripts/clang-format-diff.py
-SPDXID: SPDXRef-file-scripts-clang-format-diff-py
-FileChecksum: SHA1: 3657ca7f17cbabe06a6d7b2c5c20e9c0ad70eb0e
-FileChecksum: SHA256: e38a916123daaaab8abe57765be6239900d47f67b3fb49b669e7d316d6dda528
-FileCopyrightText: (c) 2003-2017 University of Illinois at Urbana-Champaign
-LicenseConcluded: Apache-2.0 WITH LLVM-exception
-LicenseInfoInFile: Apache-2.0 WITH LLVM-exception
-LicenseComments: Taken from LLVM.
-
-Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-scripts-clang-format-diff-py
-
 FileName: ./libtenzir/include/tenzir/detail/worm.hpp
 SPDXID: SPDXRef-file-libtenzir-include-tenzir-worm-hpp
 FileChecksum: SHA1: ff112373b036f2d67d6a1aa78a143ae770ee2b16

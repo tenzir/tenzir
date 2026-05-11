@@ -11,8 +11,8 @@ on:
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
-  flake-check:
-    name: nix flake check
+  treefmt:
+    name: treefmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -28,18 +28,38 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Check out submodule
+      - name: Run treefmt
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
-          git submodule update --init --recommend-shallow contrib/tenzir-plugins
-          sleep 5
-          GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
-      - run: |
-          nix -L flake check
+          set -euo pipefail
+          # CI intentionally uses Nix/treefmt as the authoritative style check.
+          # Lefthook remains a non-Nix local guard for pushed files and local
+          # automated fixes before pushing. Limit treefmt to changed paths so
+          # unrelated tree-wide formatting drift does not block focused PRs.
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          base="origin/$BASE_REF"
+          main_files=()
+          tenzir_plugins_files=()
+          while IFS= read -r file; do
+            case "$file" in
+              contrib/tenzir-plugins|contrib/tenzir-plugins/*)
+                tenzir_plugins_files+=("$file")
+                ;;
+              *)
+                main_files+=("$file")
+                ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACMR "$base" HEAD)
+
+          if [ "${#main_files[@]}" -gt 0 ]; then
+            nix run .#format -- --fail-on-change "${main_files[@]}"
+          fi
+          if [ "${#tenzir_plugins_files[@]}" -gt 0 ]; then
+            git config submodule.contrib/tenzir-plugins.url https://github.com/tenzir/tenzir-plugins
+            git submodule update --init contrib/tenzir-plugins
+            nix run .#format -- --fail-on-change "${tenzir_plugins_files[@]}"
+          fi
 
   ansible-lint:
     name: ansible-lint
@@ -57,96 +77,6 @@ jobs:
           pip install --upgrade ansible ansible-lint
           ansible-galaxy collection install ansible.posix
           ansible-lint --strict --profile production ansible
-
-  black:
-    name: black
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-      - name: Check
-        run: |
-          set -eo pipefail
-          pip install --upgrade black
-          # Note: black fails when it doesn't have to do anything.
-          git add --intent-to-add --all
-          git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
-            tr '\n' '\0' |
-            grep '\.py$' |
-            xargs -0 --no-run-if-empty black || true
-          git diff --submodule=diff --exit-code
-
-  clang-format:
-    name: clang-format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-      - name: Check
-        run: |
-          set -eo pipefail
-          CLANG_FORMAT_VERSION=$(cat .clang-format-version)
-          pip install --upgrade clang-format=="${CLANG_FORMAT_VERSION}"
-          which clang-format
-          clang-format --version
-          git add --intent-to-add --all
-          git diff --submodule=diff -U0 --no-color $(git merge-base origin/main HEAD) -- \
-              '*.cpp' '*.cpp.in' '*.hpp' '*.hpp.in' |
-            scripts/clang-format-diff.py -p1
-
-  cmake-format:
-    name: cmake-format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 1
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Check out submodule
-        run: |
-          git submodule update --init --recommend-shallow contrib/tenzir-plugins
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-      - name: Run cmake-format
-        run: |
-          set -eo pipefail
-          git add --intent-to-add --all
-          git ls-files -z -- 'CMakeLists.txt' '*.cmake' |
-            xargs -0 uvx --from cmakelang cmake-format --in-place
-          git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
-            xargs -0 uvx --from cmakelang cmake-format --in-place
-          git diff --quiet --submodule=diff --exit-code || {
-            echo '::error title=cmake-format::Please run `cmake-format --in-place path/to/file.cmake` or apply the following diff directly:'
-            git diff --submodule=diff --exit-code
-          }
-
-  markdownlint:
-    name: markdownlint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-      - name: Check
-        run: |
-          npm install --no-save markdownlint-cli
-          npx markdownlint --ignore libtenzir/aux --ignore node_modules .
 
   ocsf-schemas:
     name: ocsf-schemas
@@ -180,45 +110,6 @@ jobs:
             git diff --submodule=diff --exit-code
           }
 
-  shellcheck:
-    name: shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-      - name: Check
-        run: |
-          set -eo pipefail
-          pip install --upgrade shellcheck-py
-          git add --intent-to-add --all
-          git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
-            scripts/shellcheck.bash
-
-  shfmt:
-    name: shfmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 1
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-      - name: Check
-        run: |
-          set -eo pipefail
-          pip install --upgrade shfmt-py
-          git add --intent-to-add --all
-          git ls-files --recurse-submodules -z -- '*.sh' '*.bash' |
-            xargs -0 shfmt -l -w
-          git diff --submodule=diff --exit-code
-
   terraform-fmt:
     name: terraform fmt
     runs-on: ubuntu-latest
@@ -231,37 +122,12 @@ jobs:
         run: |
           terraform fmt -check -recursive -diff
 
-  yamllint:
-    name: yamllint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 1
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-      - name: Check
-        run: |
-          set -eo pipefail
-          pip install --upgrade yamllint
-          git add --intent-to-add --all
-          git ls-files --recurse-submodules -z -- '*.yaml' '.yml' |
-            xargs -0 yamllint
-
   style-check:
     needs:
       - ansible-lint
-      - black
-      - clang-format
-      - cmake-format
-      - markdownlint
       - ocsf-schemas
-      - shellcheck
-      - shfmt
       - terraform-fmt
-      - yamllint
+      - treefmt
     if: always()
     runs-on: ubuntu-latest
     name: Style Check
@@ -273,5 +139,5 @@ jobs:
           exit 1
       - name: Success
         run: |
-          # This check runs after all other jobs are done or skipped
+          # This check runs after all other jobs are done or skipped.
           exit 0
