@@ -314,6 +314,11 @@ public:
     return inner_.has_terminal();
   }
 
+  auto checkpoint_settings() const
+    -> Option<CheckpointSettings const&> override {
+    return inner_.checkpoint_settings();
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
     return inner_.make_fused_channel<void>(std::move(id));
@@ -568,6 +573,11 @@ private:
 
   auto has_terminal() const -> bool override {
     return exec_ctx_.has_terminal();
+  }
+
+  auto checkpoint_settings() const
+    -> Option<CheckpointSettings const&> override {
+    return exec_ctx_.checkpoint_settings();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)

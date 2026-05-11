@@ -235,10 +235,14 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
     [this, &ctx](SubFinished& sub) -> Task<void> {
       auto slot = find_slot_by_job(sub.job_id);
       TENZIR_ASSERT(slot);
-      cleanup_pending_.push_back(std::move(processing_[*slot]->path));
+      auto path = std::move(processing_[*slot]->path);
       processing_[*slot].reset();
       start_job_in_slot(*slot, ctx);
-      co_return;
+      if (ctx.checkpoint_settings()) {
+        cleanup_pending_.push_back(std::move(path));
+      } else {
+        co_await cleanup_file(std::move(path), ctx.dh());
+      }
     });
 }
 
