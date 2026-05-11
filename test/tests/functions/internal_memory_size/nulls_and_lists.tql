@@ -1,0 +1,11 @@
+from {
+  text: null.string(),
+  payload: null.string().decode_base64(),
+  nested: {
+    count: int(null),
+    label: null.string(),
+  },
+  items: [1, 2, 3],
+}
+size = internal_memory_size(this)
+drop text, payload, nested, items
