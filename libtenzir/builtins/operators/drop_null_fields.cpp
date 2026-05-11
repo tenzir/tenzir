@@ -223,6 +223,9 @@ auto drop_null_fields_ordered(table_slice slice,
                               std::span<const null_accessor> accessors,
                               diagnostic_handler& dh)
   -> std::vector<table_slice> {
+  // Preserve row order by only merging adjacent rows with the same null shape.
+  // Alternating shapes still fragment into many slices, but this path remains
+  // valid for ordered pipelines and for slices whose event IDs encode position.
   auto words_per_pattern = (fields.size() + 63) / 64;
   auto previous_pattern = null_pattern(words_per_pattern, uint64_t{0});
   auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
@@ -250,6 +253,9 @@ auto drop_null_fields_unordered(table_slice slice,
                                 std::span<const null_accessor> accessors,
                                 diagnostic_handler& dh)
   -> std::vector<table_slice> {
+  // Group equal null shapes across the whole slice when ordering no longer
+  // matters. This collapses alternating or high-cardinality input patterns
+  // into fewer output slices, which avoids amplifying downstream per-slice work.
   auto words_per_pattern = (fields.size() + 63) / 64;
   auto current_pattern = null_pattern(words_per_pattern, uint64_t{0});
   auto bucket_index
@@ -294,6 +300,9 @@ auto drop_null_fields_impl(table_slice slice,
   }
   auto field_offsets = resolve_field_paths(fields, slice.schema());
   auto accessors = build_null_accessors(slice, field_offsets);
+  // The bucketed fast path may reorder non-contiguous rows. That is only safe
+  // for explicitly unordered pipelines and for slices without offset metadata,
+  // because otherwise regrouping rows would invent a dense event-ID range.
   if (order == event_order::unordered and slice.offset() == invalid_id) {
     return drop_null_fields_unordered(std::move(slice), fields, accessors, dh);
   }
