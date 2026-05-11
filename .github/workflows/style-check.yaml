@@ -30,7 +30,7 @@ jobs:
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
       - name: Configure ssh-agent
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387  # v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Run treefmt
@@ -67,10 +67,11 @@ jobs:
           if [ "$tenzir_plugins_gitlink_changed" = true ] || [ "${#tenzir_plugins_files[@]}" -gt 0 ]; then
             git submodule update --init contrib/tenzir-plugins
             if [ "$tenzir_plugins_gitlink_changed" = true ]; then
-              git -C contrib/tenzir-plugins fetch --no-tags --depth=1 origin main
+              plugins_base=$(git rev-parse "$base:contrib/tenzir-plugins")
+              git -C contrib/tenzir-plugins fetch --no-tags --depth=1 origin "$plugins_base"
               while IFS= read -r file; do
                 tenzir_plugins_files+=("contrib/tenzir-plugins/$file")
-              done < <(git -C contrib/tenzir-plugins diff --name-only --diff-filter=ACMR origin/main HEAD)
+              done < <(git -C contrib/tenzir-plugins diff --name-only --diff-filter=ACMR "$plugins_base" HEAD)
             fi
           fi
           if [ "${#tenzir_plugins_files[@]}" -gt 0 ]; then
