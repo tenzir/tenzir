@@ -92,10 +92,13 @@ constexpr auto serve_multi_endpoint_id = 1;
 constexpr auto serve_spec = R"_(
 /serve:
   post:
-    summary: Return data from a pipeline
-    description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 5s`) and returns events as soon as they are available (`min_events: 1`)."
+    tags:
+      - Pipeline output
+    operationId: readPipelineOutput
+    summary: Read pipeline output
+    description: "Reads events from an existing pipeline output stream. By default, the endpoint uses long polling (`timeout: 5s`) and returns as soon as at least one event is available (`min_events: 1`)."
     requestBody:
-      description: Body for the serve endpoint
+      description: Pipeline output request.
       required: true
       content:
         application/json:
@@ -105,47 +108,64 @@ constexpr auto serve_spec = R"_(
             properties:
               serve_id:
                 type: string
-                example: "query1"
-                description: The id that was passed to the serve operator.
+                example: "query-1"
+                description: The output stream identifier returned when the pipeline was launched.
               continuation_token:
                 type: string
+                nullable: true
                 example: "340ce2j"
-                description: The continuation token that was returned with the last response. For the initial request this is null.
+                description: The continuation token from the previous response. Omit this field or set it to `null` for the initial request.
               max_events:
                 type: integer
+                minimum: 1
                 example: 1024
                 default: 1024
-                description: The maximum number of events returned.
+                description: The maximum number of events to return.
               min_events:
                 type: integer
+                minimum: 1
                 example: 1
                 default: 1
-                description: Wait for this number of events before returning.
+                description: The minimum number of events to wait for before returning.
               timeout:
                 type: string
                 example: "200ms"
                 default: "5s"
-                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
+                description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
               schema:
                 type: string
+                enum: [legacy, exact, never]
                 example: "exact"
                 default: "legacy"
-                description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema definitions from the output entirely.
+                description: The schema representation to include in the response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
+          example:
+            serve_id: "query-1"
+            continuation_token: null
+            max_events: 1024
+            min_events: 1
+            timeout: "5s"
+            schema: exact
     responses:
       200:
-        description: Success.
+        description: Events are available, the timeout was reached, or the pipeline reached a terminal state.
         content:
           application/json:
             schema:
               type: object
+              required:
+                - next_continuation_token
+                - state
+                - events
               properties:
                 next_continuation_token:
                   type: string
-                  description: A token to access the next pipeline data batch, null if the pipeline is completed.
+                  nullable: true
+                  description: The token to use when reading the next batch. The value is `null` when the pipeline reached a terminal state.
                   example: "340ce2j"
                 state:
                   type: string
-                  description: The state of the corresponding pipeline at the time of the request. One of `running`, `completed`, or `failed`.
+                  enum: [running, completed, failed]
+                  description: The pipeline state at the time of the request.
                   example: "running"
                 schemas:
                   type: array
@@ -156,9 +176,8 @@ constexpr auto serve_spec = R"_(
                         type: string
                         description: The unique schema identifier.
                       definition:
-                        type: object
                         description: The schema definition in JSON format.
-                  description: The schemas that the served events are based on.
+                  description: The schemas for the returned events. This field is omitted when the request sets `schema` to `never`.
                   example:
                   - schema_id: c631d301e4b18f4
                     definition:
@@ -192,8 +211,8 @@ constexpr auto serve_spec = R"_(
                         description: The unique schema identifier.
                       data:
                         type: object
-                        description: The actual served data in JSON format.
-                  description: The served events.
+                        description: The event data in JSON format.
+                  description: The returned events.
                   example:
                   - schema_id: c631d301e4b18f4
                     data:
@@ -207,8 +226,26 @@ constexpr auto serve_spec = R"_(
                       schema: "suricata.dns"
                       schema_id: "cd4771bas235f1"
                       events: 50
+            example:
+              next_continuation_token: "340ce2j"
+              state: running
+              schemas:
+                - schema_id: c631d301e4b18f4
+                  definition:
+                    name: tenzir.summarize
+                    kind: record
+                    type: tenzir.summarize
+                    attributes: {}
+                    path: []
+                    fields: []
+              events:
+                - schema_id: c631d301e4b18f4
+                  data:
+                    timestamp: "2023-04-26T12:00:00Z"
+                    schema: "zeek.conn"
+                    events: 50
       400:
-        description: Invalid arguments.
+        description: The request body is invalid.
         content:
           application/json:
             schema:
@@ -223,10 +260,13 @@ constexpr auto serve_spec = R"_(
 constexpr auto serve_multi_spec = R"_(
 /serve-multi:
   post:
-    summary: Return data from multiple pipelines
-    description: "Returns events from existing pipelines. The pipeline definitions must include a serve operator. By default, the endpoint performs long polling (`timeout: 5s`) and returns events as soon as they are available (`min_events: 1`)."
+    tags:
+      - Pipeline output
+    operationId: readMultiplePipelineOutputs
+    summary: Read multiple pipeline outputs
+    description: "Reads events from multiple existing pipeline output streams. By default, the endpoint uses long polling (`timeout: 5s`) and returns as soon as at least one event is available (`min_events: 1`)."
     requestBody:
-      description: Body for the serve-multi endpoint
+      description: Pipeline output batch request.
       required: true
       content:
         application/json:
@@ -236,55 +276,77 @@ constexpr auto serve_multi_spec = R"_(
             properties:
               requests:
                 type: array
+                minItems: 1
                 items:
                   type: object
+                  required: [serve_id]
                   properties:
                     serve_id:
                       type: string
-                      example: "query1"
-                      description: The id that was passed to the serve operator.
+                      example: "query-1"
+                      description: The output stream identifier returned when the pipeline was launched.
                     continuation_token:
                       type: string
+                      nullable: true
                       example: "340ce2j"
-                      description: The continuation token that was returned with the last response. For the initial request this is null.
+                      description: The continuation token from the previous response for this output stream. Omit this field or set it to `null` for the initial request.
               max_events:
                 type: integer
+                minimum: 1
                 example: 1024
                 default: 1024
-                description: The maximum number of events returned. This is split evenly for all serve_ids. If necessary, it is rounded up.
+                description: The maximum number of events to return across all requested output streams. The limit is split evenly across streams and rounded up when necessary.
               min_events:
                 type: integer
+                minimum: 1
                 example: 1
                 default: 1
-                description: Wait for this number of events before returning. This is split evenly for all serve_ids. If necessary, it is rounded up.
+                description: The minimum number of events to wait for across all requested output streams before returning. The limit is split evenly across streams and rounded up when necessary.
               timeout:
                 type: string
                 example: "200ms"
                 default: "5s"
-                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
+                description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
               schema:
                 type: string
+                enum: [legacy, exact, never]
                 example: "exact"
                 default: "legacy"
-                description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema definitions from the output entirely.
+                description: The schema representation to include in each response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
+          example:
+            requests:
+              - serve_id: "query-1"
+                continuation_token: null
+              - serve_id: "query-2"
+                continuation_token: "340ce2j"
+            max_events: 1024
+            min_events: 1
+            timeout: "5s"
+            schema: exact
     responses:
       200:
-        description: Success.
+        description: The response contains one entry for each requested output stream.
         content:
           application/json:
             schema:
               type: object
               additionalProperties:
                 type: object
-                description: The response is keyed by the serve-id
+                description: A response keyed by output stream identifier.
+                required:
+                  - next_continuation_token
+                  - state
+                  - events
                 properties:
                   next_continuation_token:
                     type: string
-                    description: A token to access the next pipeline data batch, null if the pipeline is completed.
+                    nullable: true
+                    description: The token to use when reading the next batch. The value is `null` when the pipeline reached a terminal state.
                     example: "340ce2j"
                   state:
                     type: string
-                    description: The state of the corresponding pipeline at the time of the request. One of `running`, `completed`, or `failed`.
+                    enum: [running, completed, failed]
+                    description: The pipeline state at the time of the request.
                     example: "running"
                   schemas:
                     type: array
@@ -295,9 +357,8 @@ constexpr auto serve_multi_spec = R"_(
                           type: string
                           description: The unique schema identifier.
                         definition:
-                          type: object
                           description: The schema definition in JSON format.
-                    description: The schemas that the served events are based on.
+                    description: The schemas for the returned events. This field is omitted when the request sets `schema` to `never`.
                     example:
                     - schema_id: c631d301e4b18f4
                       definition:
@@ -331,8 +392,8 @@ constexpr auto serve_multi_spec = R"_(
                           description: The unique schema identifier.
                         data:
                           type: object
-                          description: The actual served data in JSON format.
-                    description: The served events.
+                          description: The event data in JSON format.
+                    description: The returned events.
                     example:
                     - schema_id: c631d301e4b18f4
                       data:
@@ -346,8 +407,24 @@ constexpr auto serve_multi_spec = R"_(
                         schema: "suricata.dns"
                         schema_id: "cd4771bas235f1"
                         events: 50
+            example:
+              query-1:
+                next_continuation_token: "340ce2j"
+                state: running
+                schemas: []
+                events:
+                  - schema_id: c631d301e4b18f4
+                    data:
+                      timestamp: "2023-04-26T12:00:00Z"
+                      schema: "zeek.conn"
+                      events: 50
+              query-2:
+                next_continuation_token: null
+                state: completed
+                schemas: []
+                events: []
       400:
-        description: Invalid arguments.
+        description: The request body is invalid.
         content:
           application/json:
             schema:

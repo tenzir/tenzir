@@ -16,15 +16,20 @@ namespace tenzir::plugins::rest_api::ping {
 static auto const* SPEC_V0 = R"_(
 /ping:
   post:
-    summary: Returns a success response
-    description: Returns a success response to indicate that the node is able to respond to requests. The response body includes the current node version.
+    tags:
+      - Health
+    operationId: pingNode
+    summary: Check node health
+    description: Checks whether the node can respond to authenticated API requests. The response includes the node version.
     responses:
       200:
-        description: OK.
+        description: The node is healthy.
         content:
           application/json:
             schema:
               type: object
+              required:
+                - version
               properties:
                 version:
                   type: string
@@ -33,7 +38,7 @@ static auto const* SPEC_V0 = R"_(
             example:
               version: v2.3.0-rc3-32-g8529a6c43f
       401:
-        description: Not authenticated.
+        description: The request is missing a valid authentication token.
     )_";
 
 using ping_handler_actor
