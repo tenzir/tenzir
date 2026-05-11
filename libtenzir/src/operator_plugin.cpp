@@ -683,6 +683,10 @@ auto OperatorPlugin::describe_shared() const
     if (desc->name.empty()) {
       desc->name = name();
     }
+    constexpr auto tql2_prefix = std::string_view{"tql2."};
+    if (desc->name.starts_with(tql2_prefix)) {
+      desc->name.erase(0, tql2_prefix.size());
+    }
     if (desc->docs.empty()) {
       desc->docs = "https://docs.tenzir.com/reference/operators/" + desc->name;
     }
