@@ -40,8 +40,12 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <fstream>
 #include <optional>
+#include <string>
 #include <unordered_map>
 
 #if __has_include(<unistd.h>)
@@ -110,7 +114,47 @@ struct schema_size_estimate {
   uint64_t approx_bytes = 0;
 };
 
-auto available_memory_bytes() -> std::optional<uint64_t> {
+auto read_uint64_file(std::string_view path) -> std::optional<uint64_t> {
+  auto file = std::ifstream{std::string{path}};
+  auto value = std::string{};
+  if (not(file >> value) or value == "max") {
+    return std::nullopt;
+  }
+  auto result = uint64_t{0};
+  const auto* first = value.data();
+  const auto* last = first + value.size();
+  const auto [ptr, ec] = std::from_chars(first, last, result);
+  if (ec != std::errc{} or ptr != last) {
+    return std::nullopt;
+  }
+  return result;
+}
+
+auto cgroup_available_memory_bytes(std::string_view limit_path,
+                                   std::string_view usage_path)
+  -> std::optional<uint64_t> {
+  const auto limit = read_uint64_file(limit_path);
+  const auto usage = read_uint64_file(usage_path);
+  if (not limit or not usage) {
+    return std::nullopt;
+  }
+  if (*usage >= *limit) {
+    return 0;
+  }
+  return *limit - *usage;
+}
+
+auto cgroup_available_memory_bytes() -> std::optional<uint64_t> {
+  if (auto result = cgroup_available_memory_bytes(
+        "/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")) {
+    return result;
+  }
+  return cgroup_available_memory_bytes(
+    "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    "/sys/fs/cgroup/memory/memory.usage_in_bytes");
+}
+
+auto system_available_memory_bytes() -> std::optional<uint64_t> {
 #if defined(_SC_AVPHYS_PAGES) && defined(_SC_PAGESIZE)
   const auto pages = ::sysconf(_SC_AVPHYS_PAGES);
   const auto page_size = ::sysconf(_SC_PAGESIZE);
@@ -129,9 +173,21 @@ auto available_memory_bytes() -> std::optional<uint64_t> {
 #endif
 }
 
+auto available_memory_bytes() -> std::optional<uint64_t> {
+  const auto cgroup_available = cgroup_available_memory_bytes();
+  const auto system_available = system_available_memory_bytes();
+  if (cgroup_available and system_available) {
+    return std::min(*cgroup_available, *system_available);
+  }
+  if (cgroup_available) {
+    return cgroup_available;
+  }
+  return system_available;
+}
+
 auto default_rebuild_size_limit() -> uint64_t {
   if (auto available = available_memory_bytes()) {
-    return *available / 2;
+    return std::max<uint64_t>(*available / 2, 1);
   }
   return defaults::rebuild_size_limit;
 }
