@@ -25,7 +25,9 @@ from __future__ import absolute_import, division, print_function
 
 import argparse
 import difflib
+import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -33,6 +35,32 @@ if sys.version_info.major >= 3:
     from io import StringIO
 else:
     from io import BytesIO as StringIO
+
+
+def default_binary():
+    version_file = os.path.normpath(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            os.pardir,
+            ".clang-format-version",
+        )
+    )
+    script = sys.argv[0] if sys.argv else "clang-format-diff.py"
+    hint = (
+        "either write a clang-format version to {0}, e.g.\n"
+        "  echo 21.1.8 > {0}\n"
+        "or pass an explicit binary via -binary, e.g.\n"
+        "  git diff -U0 --no-color $(git merge-base origin/main HEAD) HEAD "
+        "| {1} -p1 -binary 'uvx clang-format@21.1.8'"
+    ).format(version_file, script)
+    try:
+        with open(version_file) as f:
+            version = f.read().strip()
+    except OSError as e:
+        sys.exit("error: cannot read {}: {}\n{}".format(version_file, e.strerror, hint))
+    if not version:
+        sys.exit("error: {} is empty\n{}".format(version_file, hint))
+    return "uvx clang-format@{}".format(version)
 
 
 def main():
@@ -87,10 +115,14 @@ def main():
     )
     parser.add_argument(
         "-binary",
-        default="clang-format",
-        help="location of binary to use for clang-format",
+        default=None,
+        help="command to invoke clang-format (may include arguments, parsed with shlex); "
+        "defaults to 'uvx clang-format@<version>' using the version from "
+        ".clang-format-version at the repo root",
     )
     args = parser.parse_args()
+    if args.binary is None:
+        args.binary = default_binary()
 
     # Extract changed lines for each file.
     filename = None
@@ -126,7 +158,7 @@ def main():
     for filename, lines in lines_by_file.items():
         if args.i and args.verbose:
             print("Formatting {}".format(filename))
-        command = [args.binary, filename]
+        command = shlex.split(args.binary) + [filename]
         if args.i:
             command.append("-i")
         if args.sort_includes:
