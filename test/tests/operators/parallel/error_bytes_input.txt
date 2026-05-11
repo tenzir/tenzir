@@ -4,4 +4,4 @@ error: operator does not accept bytes
 7 | parallel { pass }
   | ^^^^^^^^ 
   |
-  = docs: https://docs.tenzir.com/reference/operators/tql2.parallel
+  = docs: https://docs.tenzir.com/reference/operators/parallel
