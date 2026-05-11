@@ -98,6 +98,11 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
                             "triggered (default: 2h)");
+  cmd.options.add<std::string>("?tenzir.rebuild", "max-size",
+                               "approximate in-memory size budget for "
+                               "partitions admitted to one rebuild "
+                               "transformation (default: 50% of available "
+                               "memory, 0 disables the limit)");
 }
 
 auto make_start_command() {

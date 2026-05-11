@@ -171,4 +171,9 @@ WITH_FIXTURE(fixture) {
     parse(std::vector<std::string>{"rebuild", "--all="});
     CHECK_EQUAL(get<bool>("tenzir.rebuild.all"), true);
   }
+
+  TEST("command line parses rebuild size limit") {
+    parse(std::vector<std::string>{"rebuild", "--max-size=512MiB"});
+    CHECK_EQUAL(get<std::string>("tenzir.rebuild.max-size"), "512MiB");
+  }
 }

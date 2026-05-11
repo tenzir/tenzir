@@ -64,6 +64,10 @@ struct partition_synopsis final : public caf::ref_counted {
   // Number of events in the partition.
   uint64_t events = 0;
 
+  /// Approximate number of bytes required to materialize this partition as
+  /// table slices in memory.
+  uint64_t approx_bytes = 0;
+
   /// The minimum import timestamp of all contained table slices.
   time min_import_time = time::max();
 
@@ -108,10 +112,11 @@ struct partition_info {
 
   partition_info() noexcept = default;
 
-  partition_info(class uuid uuid, size_t events, time max_import_time,
-                 type schema, uint64_t version) noexcept
+  partition_info(class uuid uuid, size_t events, uint64_t approx_bytes,
+                 time max_import_time, type schema, uint64_t version) noexcept
     : uuid{uuid},
       events{events},
+      approx_bytes{approx_bytes},
       max_import_time{max_import_time},
       schema{std::move(schema)},
       version{version} {
@@ -119,8 +124,12 @@ struct partition_info {
   }
 
   partition_info(class uuid uuid, const partition_synopsis& synopsis)
-    : partition_info{uuid, synopsis.events, synopsis.max_import_time,
-                     synopsis.schema, synopsis.version} {
+    : partition_info{uuid,
+                     synopsis.events,
+                     synopsis.approx_bytes,
+                     synopsis.max_import_time,
+                     synopsis.schema,
+                     synopsis.version} {
     // nop
   }
 
@@ -130,6 +139,10 @@ struct partition_info {
   /// Total number of events in the partition. The sum of all
   /// values in `stats`.
   size_t events = 0ull;
+
+  /// Approximate number of bytes required to materialize this partition as
+  /// table slices in memory.
+  uint64_t approx_bytes = 0;
 
   /// The newest import timestamp of the table slices in this partition.
   time max_import_time = {};
@@ -165,6 +178,7 @@ struct partition_info {
     return f.object(x)
       .pretty_name("tenzir.partition-info")
       .fields(f.field("uuid", x.uuid), f.field("events", x.events),
+              f.field("approx-bytes", x.approx_bytes),
               f.field("max-import-time", x.max_import_time),
               f.field("schema", x.schema), f.field("version", x.version));
   }

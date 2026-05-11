@@ -14,10 +14,24 @@
 #include "tenzir/index_config.hpp"
 #include "tenzir/synopsis_factory.hpp"
 
+#include <limits>
+
 namespace tenzir {
+
+namespace {
+
+auto saturating_add(uint64_t lhs, uint64_t rhs) -> uint64_t {
+  if (rhs > std::numeric_limits<uint64_t>::max() - lhs) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return lhs + rhs;
+}
+
+} // namespace
 
 partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
   events = std::exchange(that.events, {});
+  approx_bytes = std::exchange(that.approx_bytes, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
   version = std::exchange(that.version, version::current_partition_version);
@@ -31,6 +45,7 @@ partition_synopsis&
 partition_synopsis::operator=(partition_synopsis&& that) noexcept {
   if (this != &that) {
     events = std::exchange(that.events, {});
+    approx_bytes = std::exchange(that.approx_bytes, {});
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
     version = std::exchange(that.version, version::current_partition_version);
@@ -107,6 +122,7 @@ void partition_synopsis::add(const table_slice& slice,
                              size_t partition_capacity,
                              const index_config& fp_rates) {
   memusage_ = 0; // Invalidate cached size.
+  approx_bytes = saturating_add(approx_bytes, slice.approx_bytes());
   auto make_synopsis
     = [](const type& t, const caf::settings& synopsis_options) -> synopsis_ptr {
     if (t.attribute("skip")) {
@@ -196,6 +212,7 @@ size_t partition_synopsis::memusage() const {
 partition_synopsis* partition_synopsis::copy() const {
   auto result = std::make_unique<partition_synopsis>();
   result->events = events;
+  result->approx_bytes = approx_bytes;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
   result->version = version;
@@ -254,6 +271,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   ps_builder.add_import_time_range(&import_time_range);
   ps_builder.add_version(x.version);
   ps_builder.add_schema(schema_vector);
+  ps_builder.add_approx_bytes(x.approx_bytes);
   return ps_builder.Finish();
 }
 
@@ -301,6 +319,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                            "are no longer supported");
   }
   ps.events = x.id_range()->end();
+  ps.approx_bytes = x.approx_bytes();
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
     ps.max_import_time = time{} + duration{x.import_time_range()->end()};

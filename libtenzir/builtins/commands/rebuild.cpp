@@ -16,6 +16,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/settings.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/index.hpp>
@@ -39,6 +40,14 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#include <cmath>
+#include <optional>
+#include <unordered_map>
+
+#if __has_include(<unistd.h>)
+#  include <unistd.h>
+#endif
+
 namespace tenzir::plugins::rebuild {
 
 namespace {
@@ -49,14 +58,15 @@ struct start_options {
   bool undersized = false;
   size_t parallel = 1;
   size_t max_partitions = std::numeric_limits<size_t>::max();
+  uint64_t max_size = std::numeric_limits<uint64_t>::max();
   class expression expression = {};
   bool detached = false;
   bool automatic = false;
 
   friend auto inspect(auto& f, start_options& x) {
     return detail::apply_all(f, x.all, x.undersized, x.parallel,
-                             x.max_partitions, x.expression, x.detached,
-                             x.automatic);
+                             x.max_partitions, x.max_size, x.expression,
+                             x.detached, x.automatic);
   }
 };
 
@@ -88,6 +98,118 @@ namespace {
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
 
+/// Sentinel for resolving the default rebuild size limit in the rebuilder actor.
+inline constexpr auto use_default_rebuild_size_limit
+  = std::numeric_limits<uint64_t>::max();
+
+/// Fallback estimate for partitions whose metadata predates `approx_bytes`.
+inline constexpr auto legacy_approx_bytes_per_event = uint64_t{250};
+
+struct schema_size_estimate {
+  uint64_t events = 0;
+  uint64_t approx_bytes = 0;
+};
+
+auto available_memory_bytes() -> std::optional<uint64_t> {
+#if defined(_SC_AVPHYS_PAGES) && defined(_SC_PAGESIZE)
+  const auto pages = ::sysconf(_SC_AVPHYS_PAGES);
+  const auto page_size = ::sysconf(_SC_PAGESIZE);
+  if (pages <= 0 or page_size <= 0) {
+    return std::nullopt;
+  }
+  const auto unsigned_pages = static_cast<uint64_t>(pages);
+  const auto unsigned_page_size = static_cast<uint64_t>(page_size);
+  if (unsigned_pages
+      > std::numeric_limits<uint64_t>::max() / unsigned_page_size) {
+    return std::nullopt;
+  }
+  return unsigned_pages * unsigned_page_size;
+#else
+  return std::nullopt;
+#endif
+}
+
+auto default_rebuild_size_limit() -> uint64_t {
+  if (auto available = available_memory_bytes()) {
+    return *available / 2;
+  }
+  return defaults::rebuild_size_limit;
+}
+
+auto parse_rebuild_size_limit(const caf::settings& options)
+  -> caf::expected<uint64_t> {
+  constexpr auto key = "tenzir.rebuild.max-size";
+  if (caf::get_if(&options, key) == nullptr) {
+    return use_default_rebuild_size_limit;
+  }
+  return detail::get_bytesize(options, key, uint64_t{0});
+}
+
+auto saturating_add(uint64_t lhs, uint64_t rhs) -> uint64_t {
+  if (rhs > std::numeric_limits<uint64_t>::max() - lhs) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return lhs + rhs;
+}
+
+auto estimate_from_bytes_per_event(size_t events, uint64_t total_events,
+                                   uint64_t total_approx_bytes) -> uint64_t {
+  TENZIR_ASSERT(total_events > 0);
+  if (events == 0) {
+    return 0;
+  }
+  if (events <= std::numeric_limits<uint64_t>::max() / total_approx_bytes) {
+    const auto product = static_cast<uint64_t>(events) * total_approx_bytes;
+    return product / total_events + (product % total_events == 0 ? 0 : 1);
+  }
+  const auto estimate = std::ceil(static_cast<long double>(events)
+                                  * static_cast<long double>(total_approx_bytes)
+                                  / static_cast<long double>(total_events));
+  if (estimate
+      >= static_cast<long double>(std::numeric_limits<uint64_t>::max())) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return static_cast<uint64_t>(estimate);
+}
+
+void update_schema_size_estimate(
+  std::unordered_map<std::string, schema_size_estimate>& estimates,
+  const partition_info& partition) {
+  if (partition.events == 0 or partition.approx_bytes == 0) {
+    return;
+  }
+  auto& estimate = estimates[partition.schema.make_fingerprint()];
+  estimate.events = saturating_add(estimate.events, partition.events);
+  estimate.approx_bytes
+    = saturating_add(estimate.approx_bytes, partition.approx_bytes);
+}
+
+auto estimate_approx_bytes(
+  const std::unordered_map<std::string, schema_size_estimate>& estimates,
+  const partition_info& partition) -> uint64_t {
+  if (partition.approx_bytes != 0) {
+    return partition.approx_bytes;
+  }
+  if (const auto it = estimates.find(partition.schema.make_fingerprint());
+      it != estimates.end() and it->second.events != 0
+      and it->second.approx_bytes != 0) {
+    return estimate_from_bytes_per_event(partition.events, it->second.events,
+                                         it->second.approx_bytes);
+  }
+  if (partition.events
+      > std::numeric_limits<uint64_t>::max() / legacy_approx_bytes_per_event) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return partition.events * legacy_approx_bytes_per_event;
+}
+
+auto fits_size_limit(uint64_t current, uint64_t next, uint64_t limit) -> bool {
+  if (limit == 0) {
+    return true;
+  }
+  return next <= limit and current <= limit - next;
+}
+
 /// Statistics for an ongoing rebuild. Numbers are partitions.
 struct statistics {
   size_t num_total = {};
@@ -99,6 +221,8 @@ struct statistics {
 /// The state of an in-progress rebuild.
 struct run {
   std::vector<partition_info> remaining_partitions = {};
+  std::unordered_map<std::string, schema_size_estimate> schema_size_estimates
+    = {};
   struct statistics statistics = {};
   start_options options = {};
   std::vector<caf::typed_response_promise<void>> stop_requests = {};
@@ -137,6 +261,7 @@ struct rebuilder_state {
   size_t desired_batch_size = 0u;
   size_t automatic_rebuild = 0u;
   duration rebuild_interval = {};
+  uint64_t rebuild_size_limit = use_default_rebuild_size_limit;
 
   /// The state of the ongoing rebuild.
   std::optional<struct run> run = {};
@@ -163,6 +288,7 @@ struct rebuilder_state {
          {"undersized", run->options.undersized},
          {"parallel", run->options.parallel},
          {"max-partitions", run->options.max_partitions},
+         {"max-size", run->options.max_size},
          {"expression", fmt::to_string(run->options.expression)},
          {"detached", run->options.detached},
          {"automatic", run->options.automatic},
@@ -201,6 +327,11 @@ struct rebuilder_state {
             rp.deliver(std::move(err));
           });
       return rp;
+    }
+    if (options.max_size == use_default_rebuild_size_limit) {
+      options.max_size = rebuild_size_limit == use_default_rebuild_size_limit
+                           ? default_rebuild_size_limit()
+                           : rebuild_size_limit;
     }
     run.emplace();
     run->options = std::move(options);
@@ -252,6 +383,10 @@ struct rebuilder_state {
         [this, finish](catalog_lookup_result& lookup_result) mutable {
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
+            for (const auto& partition : result.partition_infos) {
+              update_schema_size_estimate(run->schema_size_estimates,
+                                          partition);
+            }
             if (not run->options.all) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
@@ -362,6 +497,8 @@ struct rebuilder_state {
     }
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
+    auto current_run_approx_bytes = uint64_t{0};
+    auto skipped_partitions = size_t{0};
     // Take the first partition and collect as many of the same
     // type as possible to create new paritions. The approach used may
     // collects too many partitions if there is no exact match, but that is
@@ -375,18 +512,43 @@ struct rebuilder_state {
       [&](const partition_info& partition) {
         if (schema == partition.schema
             and current_run_events < max_partition_size) {
+          const auto approx_bytes
+            = estimate_approx_bytes(run->schema_size_estimates, partition);
+          if (not fits_size_limit(current_run_approx_bytes, approx_bytes,
+                                  run->options.max_size)) {
+            if (current_run_partitions.empty()) {
+              TENZIR_WARN(
+                "{} skips partition {} because its estimated in-memory size "
+                "of {} bytes exceeds the rebuild size limit of {} bytes",
+                *self, partition.uuid, approx_bytes, run->options.max_size);
+              ++skipped_partitions;
+              return true;
+            }
+            return false;
+          }
           current_run_events += partition.events;
+          current_run_approx_bytes
+            = saturating_add(current_run_approx_bytes, approx_bytes);
           current_run_partitions.push_back(partition);
           TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
-                       "{} events (total: {})",
+                       "{} events and {} bytes (total: {} events, {} bytes)",
                        *self, partition.uuid, partition.version,
-                       partition.schema, partition.events, current_run_events);
+                       partition.schema, partition.events, approx_bytes,
+                       current_run_events, current_run_approx_bytes);
           return true;
         }
         return false;
       });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
+    if (skipped_partitions > 0) {
+      run->statistics.num_total -= skipped_partitions;
+    }
+    if (current_run_partitions.empty()) {
+      // Pick up new work until we run out of remaining partitions.
+      return self->mail(atom::internal_v, atom::rebuild_v)
+        .delegate(static_cast<rebuilder_actor>(self));
+    }
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
@@ -442,6 +604,9 @@ struct rebuilder_state {
           }
           TENZIR_DEBUG("{} rebuilt {} into {} partitions", *self,
                        num_partitions, result.size());
+          for (const auto& partition : result) {
+            update_schema_size_estimate(run->schema_size_estimates, partition);
+          }
           // If the number of events in the resulting partitions does not
           // match the number of events in the partitions that went in we ran
           // into a conflict with other partition transformations on an
@@ -486,6 +651,7 @@ struct rebuilder_state {
       .undersized = true,
       .parallel = automatic_rebuild,
       .max_partitions = std::numeric_limits<size_t>::max(),
+      .max_size = rebuild_size_limit,
       .expression = trivially_true_expression(),
       .detached = true,
       .automatic = true,
@@ -523,6 +689,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
                   defaults::import::table_slice_size);
   self->state().automatic_rebuild = caf::get_or(
     content(self->system().config()), "tenzir.automatic-rebuild", size_t{1});
+  if (auto rebuild_size_limit
+      = parse_rebuild_size_limit(content(self->system().config()))) {
+    self->state().rebuild_size_limit = *rebuild_size_limit;
+  } else {
+    const auto fallback = default_rebuild_size_limit();
+    TENZIR_WARN("{} failed to parse tenzir.rebuild.max-size: {}; using "
+                "default of {} bytes",
+                *self, rebuild_size_limit.error(), fallback);
+    self->state().rebuild_size_limit = fallback;
+  }
   if (self->state().automatic_rebuild > 0) {
     self->state().rebuild_interval
       = caf::get_or(content(self->system().config()), "tenzir.rebuild-interval",
@@ -660,12 +836,17 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
     }
     expr = std::move(*parsed);
   }
+  auto max_size = parse_rebuild_size_limit(inv.options);
+  if (not max_size) {
+    return caf::make_message(std::move(max_size.error()));
+  }
   auto options = start_options{
     .all = caf::get_or(inv.options, "tenzir.rebuild.all", false),
     .undersized = caf::get_or(inv.options, "tenzir.rebuild.undersized", false),
     .parallel = caf::get_or(inv.options, "tenzir.rebuild.parallel", size_t{1}),
     .max_partitions = caf::get_or(inv.options, "tenzir.rebuild.max-partitions",
                                   std::numeric_limits<size_t>::max()),
+    .max_size = *max_size,
     .expression = std::move(expr),
     .detached = caf::get_or(inv.options, "tenzir.rebuild.detached", false),
     .automatic = false,
@@ -749,6 +930,10 @@ public:
         .add<std::string>("read,r", "path for reading the (optional) query")
         .add<int64_t>("max-partitions,n", "number of partitions to rebuild at "
                                           "most (default: unlimited)")
+        .add<std::string>("max-size", "approximate in-memory size budget for "
+                                      "partitions admitted to one rebuild "
+                                      "transformation (default: 50% of "
+                                      "available memory, 0 disables the limit)")
         .add<int64_t>("parallel,j", "number of runs to start in parallel "
                                     "(default: 1)"));
     rebuild->add_subcommand("start",
