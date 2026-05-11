@@ -82,9 +82,11 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   const auto stdout_color
     = (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
       or color_mode == "always";
-  // For neo, keep implicit stdio compatibility only at the event boundary. We
-  // intentionally do not install implicit byte operators; byte parsing and
-  // printing should happen in explicit source/sink subpipelines.
+  // TODO: Move shell-style stdin/stdout magic to `tq`. The `tenzir` binary
+  // should execute complete `void -> void` pipelines; for now, neo keeps
+  // implicit stdio compatibility only for pipelines that accept or produce
+  // events. We intentionally do not install implicit byte operators; byte
+  // parsing and printing should happen in explicit source/sink subpipelines.
   cfg.implicit_bytes_sink
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-sink",
                   use_neo_executor ? "" : cfg.implicit_bytes_sink);
