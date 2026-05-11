@@ -53,6 +53,10 @@ cmake --preset <preset>
 
 A build is configured when its directory contains `CMakeCache.txt`.
 
+Before configuring a new build, run `scripts/build.sh --print-build-dir` to find
+an existing configured build. Reuse it unless the task specifically requires a
+different configuration.
+
 ### Compile the project
 
 Compile a configured build:
