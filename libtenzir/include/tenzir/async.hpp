@@ -212,8 +212,8 @@ public:
   virtual auto has_terminal() const -> bool = 0;
 
   /// Returns the (immutable) checkpoint settings of the pipeline.
-  virtual auto checkpoint_settings() const
-    -> Option<CheckpointSettings const&> = 0;
+  virtual auto checkpoint_settings() const -> Option<CheckpointSettings const&>
+    = 0;
 };
 
 enum class OperatorState {
