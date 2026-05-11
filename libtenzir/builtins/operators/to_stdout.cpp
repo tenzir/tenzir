@@ -42,6 +42,10 @@ struct ToStdoutArgs {
   Option<located<ir::pipeline>> pipe;
 };
 
+struct SaveStdoutArgs {
+  location self;
+};
+
 auto make_default_printer(base_ctx ctx) -> failure_or<ir::pipeline> {
   auto sessions = session_provider::make(static_cast<diagnostic_handler&>(ctx));
   TRY(auto pipe, parse("write_tql", sessions.as_session()));
@@ -265,6 +269,98 @@ private:
   bool done_ = false;
 };
 
+class SaveStdout final : public Operator<chunk_ptr, void> {
+public:
+  explicit SaveStdout(SaveStdoutArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "save_stdout"},
+                         MetricsDirection::write, MetricsVisibility::external_);
+    if (auto error = stdout_nonblocking_.activate()) {
+      diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    io_executor_ = ctx.io_executor();
+    writer_ = folly::AsyncPipeWriter::newWriter(
+      io_executor_->getEventBase(),
+      folly::NetworkSocket::fromFd(STDOUT_FILENO));
+    // Avoid closing the process-global stdout when the writer shuts down.
+    writer_->setCloseCallback([](folly::NetworkSocket) {});
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    auto* error = result.try_as<std::string>();
+    TENZIR_ASSERT(error);
+    diagnostic::error("failed to write to stdout: {}", *error)
+      .primary(args_.self)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
+
+  auto process(chunk_ptr chunk, OpCtx&) -> Task<void> override {
+    if (done_ or not chunk or chunk->size() == 0 or not writer_) {
+      co_return;
+    }
+    const auto bytes = chunk->size();
+    auto error = co_await folly::coro::co_withExecutor(
+      io_executor_, write_chunk(*writer_, std::move(chunk)));
+    if (error) {
+      auto write_error = std::move(*error);
+      // Only the first write error matters; blocking here would let concurrent
+      // `process()` calls stall behind an already queued error.
+      std::ignore = queue_->try_enqueue(std::move(write_error));
+    } else {
+      bytes_write_counter_.add(bytes);
+    }
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
+    writer_.reset();
+    stdout_nonblocking_.restore();
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  using ErrorQueue = folly::coro::BoundedQueue<std::string>;
+
+  SaveStdoutArgs args_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+  StdoutNonblockingGuard stdout_nonblocking_;
+  folly::AsyncPipeWriter::UniquePtr writer_;
+  // `process()` reports the first stdout write error back to the main loop,
+  // which owns the operator lifecycle state.
+  mutable Box<ErrorQueue> queue_{std::in_place, error_queue_capacity};
+  MetricsCounter bytes_write_counter_;
+  bool done_ = false;
+};
+
+class SaveStdoutPlugin final : public OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.save_stdout";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<SaveStdoutArgs, SaveStdout>{};
+    d.operator_location(&SaveStdoutArgs::self);
+    return d.without_optimize();
+  }
+};
+
 class ToStdoutPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -299,4 +395,5 @@ public:
 
 } // namespace tenzir::plugins::to_stdout
 
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::to_stdout::SaveStdoutPlugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::to_stdout::ToStdoutPlugin)

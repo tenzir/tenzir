@@ -1,7 +1,7 @@
 error: operator does not accept void
- --> tests/operators/discard/standalone.tql:5:1
+ --> tests/operators/discard/after_sink.tql:5:1
   |
-5 | discard
+5 | discard | discard
   | ^^^^^^^ 
   |
   = docs: https://docs.tenzir.com/reference/operators/discard

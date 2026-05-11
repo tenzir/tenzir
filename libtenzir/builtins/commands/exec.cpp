@@ -82,14 +82,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   const auto stdout_color
     = (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
       or color_mode == "always";
-  // TODO: Move shell-style stdin/stdout magic to `tq`. The `tenzir` binary
-  // should execute complete `void -> void` pipelines; for now, neo keeps
-  // implicit stdio compatibility only for pipelines that accept or produce
-  // events. We intentionally do not install implicit byte operators; byte
-  // parsing and printing should happen in explicit source/sink subpipelines.
-  cfg.implicit_bytes_sink
-    = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-sink",
-                  use_neo_executor ? "" : cfg.implicit_bytes_sink);
+  cfg.implicit_bytes_sink = caf::get_or(
+    inv.options, "tenzir.exec.implicit-bytes-sink", cfg.implicit_bytes_sink);
   cfg.implicit_events_sink = caf::get_or(
     inv.options, "tenzir.exec.implicit-events-sink",
     use_neo_executor
@@ -97,7 +91,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
       : make_default_implicit_events_sink(stdout_color));
   cfg.implicit_bytes_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
-                  use_neo_executor ? "" : cfg.implicit_bytes_source);
+                  cfg.implicit_bytes_source);
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
                   use_neo_executor ? R"(from_stdin { read_json })"
