@@ -224,6 +224,10 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "accept_udp"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsType::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_udp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::events);
     TENZIR_ASSERT(message_sender_);
     ctx.spawn_task(folly::coro::co_withExecutor(
       evb_, read_loop(*evb_, std::move(bind_address).unwrap(), *message_sender_,
@@ -475,7 +479,10 @@ private:
       co_return;
     }
     cancel_batch_flush();
-    co_await push(builder_.finish_assert_one_slice());
+    auto slice = builder_.finish_assert_one_slice();
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   AcceptUdpArgs args_;
@@ -486,6 +493,7 @@ private:
   Option<Sender<Message>> message_sender_;
   mutable Receiver<Message> message_receiver_;
   Option<folly::CancellationSource> batch_flush_cancel_;
+  MetricsCounter events_read_counter_;
   uint64_t batch_generation_ = 0;
   bool peer_resolution_warning_emitted_ = false;
 };
