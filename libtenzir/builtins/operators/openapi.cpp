@@ -39,25 +39,41 @@ auto openapi_record() -> record {
     return l.first < r.first;
   });
   auto description
-    = "This API can be used to interact with a Tenzir Node in a RESTful "
-      "manner.\n\n"
-      "All API requests must be authenticated with a valid token, which must "
-      "be supplied in the `X-Tenzir-Token` request header. The token can be "
-      "generated on the command-line using `tenzir-ctl web generate-token`.\n\n"
-      "All endpoints are versioned, and must be prefixed with `/v0`.";
+    = "Use the Tenzir REST API to manage pipelines and read pipeline output "
+      "from a Tenzir node.\n\n"
+      "Authenticate every request with a token in the `X-Tenzir-Token` request "
+      "header. Generate tokens with `tenzir-ctl web generate-token`.\n\n"
+      "All endpoints are versioned. Prefix every path in this specification "
+      "with `/v0`.";
   auto openapi = record{
     {"openapi", "3.0.0"},
     {"info",
      record{
        {"title", "Tenzir REST API"},
-       {"version", "\"v0\""},
+       {"version", "v0"},
        {"description", std::move(description)},
+       {"license",
+        record{
+          {"name", "BSD-3-Clause"},
+          {"url", "https://github.com/tenzir/tenzir/blob/main/LICENSE"},
+        }},
      }},
     {
       "servers",
       list{{record{
-        {"url", "https://tenzir.example.com/api/v0"},
+        {"url", "/api/v0"},
+        {"description", "Versioned API endpoint on the current Tenzir node."},
       }}},
+    },
+    {
+      "tags",
+      list{
+        record{{"name", "Health"}, {"description", "Node health checks."}},
+        record{{"name", "Pipelines"},
+               {"description", "Pipeline lifecycle management."}},
+        record{{"name", "Pipeline output"},
+               {"description", "Read events produced by running pipelines."}},
+      },
     },
     {
       "security",
