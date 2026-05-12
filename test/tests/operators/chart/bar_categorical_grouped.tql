@@ -1,0 +1,5 @@
+from {x: "b", g: "red", v: 1},
+     {x: "a", g: "blue", v: 2},
+     {x: "b", g: "blue", v: 3},
+     {x: "a", g: "red", v: 4}
+chart_bar x=x, y=sum(v), group=g

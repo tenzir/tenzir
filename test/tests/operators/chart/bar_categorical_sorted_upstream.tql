@@ -1,0 +1,9 @@
+from {category: "low"},
+     {category: "medium"},
+     {category: "medium"},
+     {category: "critical"},
+     {category: "critical"},
+     {category: "critical"}
+summarize category, n=count()
+sort -n
+chart_bar x=category, y=n

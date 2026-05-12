@@ -1,0 +1,5 @@
+from {x: "b", v: 1},
+     {x: "a", v: 2},
+     {x: "b", v: 3},
+     {x: "c", v: 4}
+chart_bar x=x, y=sum(v)
