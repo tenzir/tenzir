@@ -433,6 +433,9 @@ def cmd_build(args: argparse.Namespace) -> int:
     )
     cmd = [
         "nix",
+        "--option",
+        "extra-sandbox-paths",
+        "/tmp/tenzir-ccache?",
         "--accept-flake-config",
         "--print-build-logs",
         "build",
@@ -1120,6 +1123,9 @@ def cmd_push(args: argparse.Namespace) -> int:
                 _ = run(
                     [
                         "nix",
+                        "--option",
+                        "extra-sandbox-paths",
+                        "/tmp/tenzir-ccache?",
                         "--accept-flake-config",
                         "run",
                         f".#{args.attribute}.asImage.{repo}.copyTo",

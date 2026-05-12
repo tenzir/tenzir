@@ -1,0 +1,2433 @@
+#!/usr/bin/env python3
+"""ccache remote storage helper backed by S3."""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import contextlib
+import errno
+import json
+import logging
+import os
+import queue
+import re
+import select
+import shutil
+import signal
+import socket
+import socketserver
+import stat
+import subprocess
+import sys
+import termios
+import threading
+import time
+import tty
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
+from typing import Callable, NoReturn, Protocol, cast, final, override
+from urllib.error import HTTPError, URLError
+from urllib.parse import unquote, urlparse
+from urllib.request import Request, urlopen
+
+
+PROTOCOL_VERSION = 0x01
+CAP_GET_PUT_REMOVE_STOP = 0x00
+
+REQUEST_GET = 0x00
+REQUEST_PUT = 0x01
+REQUEST_REMOVE = 0x02
+REQUEST_STOP = 0x03
+
+RESPONSE_OK = 0x00
+RESPONSE_NOOP = 0x01
+RESPONSE_ERR = 0x02
+
+PUT_OVERWRITE = 0x01
+
+DEFAULT_REGION = "eu-central-1"
+DEFAULT_INFRASTRUCTURE_ACCOUNT_ID = "622024652768"
+GITHUB_OIDC_PROVIDER_URL = "https://token.actions.githubusercontent.com"
+GITHUB_OIDC_PROVIDER_HOST = "token.actions.githubusercontent.com"
+GITHUB_OIDC_AUDIENCE = "sts.amazonaws.com"
+PUBLIC_ACCESS_BLOCK_CONFIGURATION = {
+    "BlockPublicAcls": True,
+    "IgnorePublicAcls": True,
+    "BlockPublicPolicy": True,
+    "RestrictPublicBuckets": True,
+}
+HTTP_HEADERS = {
+    "Accept": "application/json",
+    "User-Agent": "tenzir-ccache-s3-storage-helper/1",
+}
+
+
+class Storage(Protocol):
+    def get(self, key: bytes) -> bytes | None: ...
+
+    def put(self, key: bytes, value: bytes, overwrite: bool) -> bool: ...
+
+    def remove(self, key: bytes) -> bool: ...
+
+    def close(self) -> None: ...
+
+
+class StorageError(Exception):
+    """Short, user-facing storage error."""
+
+
+class BinaryReader(Protocol):
+    def read(self, size: int = -1, /) -> bytes: ...
+
+
+class BinaryWriter(Protocol):
+    def write(self, data: bytes, /) -> object: ...
+
+
+class StreamingBody(Protocol):
+    def read(self, amt: int | None = None, /) -> bytes: ...
+
+
+class S3Paginator(Protocol):
+    def paginate(self, **kwargs: object) -> Iterator[Mapping[str, object]]: ...
+
+
+class S3Client(Protocol):
+    def get_object(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def put_object(self, **kwargs: object) -> object: ...
+
+    def delete_object(self, **kwargs: object) -> object: ...
+
+    def head_object(self, **kwargs: object) -> object: ...
+
+    def get_paginator(self, operation_name: str) -> S3Paginator: ...
+
+
+class BotocoreSession(Protocol):
+    _credentials: object
+
+    def set_config_variable(self, name: str, value: object) -> None: ...
+
+
+class Boto3Session(Protocol):
+    _session: BotocoreSession
+
+
+class StsClient(Protocol):
+    def get_caller_identity(self) -> Mapping[str, object]: ...
+
+
+class S3SetupClient(Protocol):
+    def head_bucket(self, **kwargs: object) -> object: ...
+
+    def create_bucket(self, **kwargs: object) -> object: ...
+
+    def get_bucket_location(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def get_public_access_block(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def put_public_access_block(self, **kwargs: object) -> object: ...
+
+
+class IamSetupClient(Protocol):
+    def get_open_id_connect_provider(
+        self, **kwargs: object
+    ) -> Mapping[str, object]: ...
+
+    def create_open_id_connect_provider(self, **kwargs: object) -> object: ...
+
+    def add_client_id_to_open_id_connect_provider(self, **kwargs: object) -> object: ...
+
+    def get_role(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def create_role(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def update_assume_role_policy(self, **kwargs: object) -> object: ...
+
+    def get_role_policy(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def put_role_policy(self, **kwargs: object) -> object: ...
+
+
+@dataclass(frozen=True)
+class S3Config:
+    bucket: str
+    prefix: str
+    region: str | None
+    endpoint_url: str | None
+    profile: str | None
+    auth: str
+    expected_account_id: str | None
+    access_key_id: str | None
+    secret_access_key: str | None
+    session_token: str | None
+    credential_expiration: str | None
+    oidc_broker_url: str | None
+    oidc_audience: str
+    cloudflare_account_id: str | None
+    r2_parent_access_key_id: str | None
+    r2_allowed_prefixes: str | None
+    r2_temp_credential_permission: str
+    r2_temp_credential_ttl_seconds: int
+    layout: str
+    max_pool_connections: int
+    object_list_min_interval: float
+    upload_queue_size: int
+    upload_queue_bytes: int
+    upload_workers: int
+    upload_drain_timeout: float
+
+
+@dataclass(frozen=True)
+class UploadTask:
+    object_key: str
+    value: bytes
+
+
+UploadQueueItem = UploadTask | None
+
+
+@dataclass(frozen=True)
+class SetupConfig:
+    bucket: str
+    prefix: str
+    region: str
+    role_name: str
+    policy_name: str
+    github_subject: str
+    yes: bool
+
+
+@dataclass(frozen=True)
+class SetupArgs:
+    bucket: str | None
+    prefix: str | None
+    region: str | None
+    role_name: str | None
+    policy_name: str | None
+    github_repository: str | None
+    github_subject: str | None
+    yes: bool
+
+
+@dataclass(frozen=True)
+class ServeArgs:
+    endpoint: str
+    url: str
+    idle_timeout: float
+    socket_mode: int
+    log_level: int
+    daemonize: bool
+    log_file: str
+
+
+@final
+class S3Storage:
+    def __init__(self, config: S3Config) -> None:
+        try:
+            import boto3
+            from botocore.config import Config
+            from botocore.credentials import RefreshableCredentials
+            from botocore.exceptions import BotoCoreError, ClientError
+        except ImportError as error:
+            raise StorageError("boto3 is required for S3 ccache storage") from error
+
+        self._config = config
+        self._client_error = ClientError
+        self._boto_core_error = BotoCoreError
+
+        session = boto3.Session(
+            profile_name=config.profile,
+            region_name=config.region,
+        )
+        boto3_session = cast(Boto3Session, cast(object, session))
+        if config.auth in {"cloudflare-r2-oidc-broker", "cloudflare-r2-wrangler"}:
+            if not config.credential_expiration:
+                raise StorageError("R2 credentials are missing an expiration time")
+            refreshable_credentials = RefreshableCredentials.create_from_metadata(
+                metadata={
+                    "access_key": config.access_key_id,
+                    "secret_key": config.secret_access_key,
+                    "token": config.session_token,
+                    "expiry_time": config.credential_expiration,
+                },
+                refresh_using=lambda: _cloudflare_r2_refresh_metadata(config),
+                method=config.auth,
+            )
+            boto3_session._session._credentials = refreshable_credentials  # pyright: ignore[reportPrivateUsage]
+            boto3_session._session.set_config_variable(  # pyright: ignore[reportPrivateUsage]
+                "region", config.region or "auto"
+            )
+        credentials = session.get_credentials()
+        if credentials is None:
+            raise StorageError(
+                "AWS credentials not found; set AWS_PROFILE or provide credentials "
+                + "via the AWS SDK credential chain",
+            )
+        try:
+            # Force lazy credential providers to resolve during startup, but keep the
+            # session-owned provider so refreshable credentials can continue to refresh.
+            _ = credentials.get_frozen_credentials()
+        except BotoCoreError as error:
+            raise StorageError(f"could not resolve AWS credentials: {error}") from error
+
+        use_refreshable_credentials = config.auth in {
+            "cloudflare-r2-oidc-broker",
+            "cloudflare-r2-wrangler",
+        }
+        self._s3 = cast(
+            S3Client,
+            session.client(  # pyright: ignore[reportUnknownMemberType]
+                "s3",
+                config=Config(max_pool_connections=config.max_pool_connections),
+                endpoint_url=config.endpoint_url,
+                aws_access_key_id=(
+                    None if use_refreshable_credentials else config.access_key_id
+                ),
+                aws_secret_access_key=(
+                    None if use_refreshable_credentials else config.secret_access_key
+                ),
+                aws_session_token=(
+                    None if use_refreshable_credentials else config.session_token
+                ),
+            ),
+        )
+        self._known_objects: set[str] = set()
+        self._known_objects_lock = threading.Lock()
+        self._last_object_list_refresh = float("-inf")
+        self._queued_objects: set[str] = set()
+        self._queued_objects_lock = threading.Lock()
+        self._upload_queue: queue.Queue[UploadQueueItem] = queue.Queue(
+            maxsize=config.upload_queue_size,
+        )
+        self._upload_queue_bytes = 0
+        self._upload_queue_bytes_condition = threading.Condition()
+        self._upload_workers = [
+            threading.Thread(
+                target=self._upload_worker,
+                name=f"s3-upload-{index}",
+                daemon=True,
+            )
+            for index in range(config.upload_workers)
+        ]
+        for worker in self._upload_workers:
+            worker.start()
+
+    def status(self) -> str:
+        return (
+            f"queue {self._upload_queue.qsize()}/{self._config.upload_queue_size} "
+            f"bytes {_format_bytes(self._queued_upload_bytes())}/"
+            f"{_format_bytes(self._config.upload_queue_bytes)} "
+            f"known {self._known_object_count()} "
+            f"bucket {self._config.bucket}/{self._config.prefix or '-'}"
+        )
+
+    def get(self, key: bytes) -> bytes | None:
+        object_key = self._object_key(key)
+        try:
+            response = self._s3.get_object(
+                Bucket=self._config.bucket,
+                Key=object_key,
+            )
+            body = cast(StreamingBody, response["Body"])
+            value = body.read()
+            self._remember_object(object_key)
+            logging.info("cache hit object=%s size=%d", object_key, len(value))
+            return value
+        except self._client_error as error:
+            if _is_not_found(error):
+                logging.info("cache miss object=%s", object_key)
+                return None
+            logging.warning("cache get failed object=%s error=%s", object_key, error)
+            raise StorageError(_client_error_message(error)) from error
+        except self._boto_core_error as error:
+            logging.warning("cache get failed object=%s error=%s", object_key, error)
+            raise StorageError(str(error)) from error
+
+    def put(self, key: bytes, value: bytes, overwrite: bool) -> bool:
+        object_key = self._object_key(key)
+        if not overwrite:
+            if self._known_object_exists(object_key):
+                logging.info(
+                    "cache put skipped object=%s reason=known-exists",
+                    object_key,
+                )
+                return False
+            if self._mark_object_queued(object_key):
+                self._reserve_upload_bytes(len(value))
+                task = UploadTask(object_key, value)
+                try:
+                    self._upload_queue.put(task)
+                except Exception:
+                    self._release_upload_bytes(len(value))
+                    self._unmark_object_queued(object_key)
+                    raise
+                logging.info(
+                    "cache put queued object=%s size=%d queue=%d/%d bytes=%s/%s",
+                    object_key,
+                    len(value),
+                    self._upload_queue.qsize(),
+                    self._config.upload_queue_size,
+                    _format_bytes(self._queued_upload_bytes()),
+                    _format_bytes(self._config.upload_queue_bytes),
+                )
+                return True
+            logging.info("cache put skipped object=%s reason=queued", object_key)
+            return False
+        return self._put_object(object_key, value, overwrite=True)
+
+    def remove(self, key: bytes) -> bool:
+        object_key = self._object_key(key)
+        try:
+            if not self._exists_object(object_key):
+                logging.info(
+                    "cache remove skipped object=%s reason=missing", object_key
+                )
+                return False
+            _ = self._s3.delete_object(
+                Bucket=self._config.bucket,
+                Key=object_key,
+            )
+        except self._client_error as error:
+            logging.warning("cache remove failed object=%s error=%s", object_key, error)
+            raise StorageError(_client_error_message(error)) from error
+        except self._boto_core_error as error:
+            logging.warning("cache remove failed object=%s error=%s", object_key, error)
+            raise StorageError(str(error)) from error
+        self._forget_object(object_key)
+        logging.info("cache remove object=%s", object_key)
+        return True
+
+    def close(self, drain: bool = False) -> None:
+        if not drain:
+            unfinished = self._upload_queue.unfinished_tasks
+            if unfinished:
+                logging.warning("cache upload queue abandoned pending=%d", unfinished)
+            return
+        deadline = time.monotonic() + self._config.upload_drain_timeout
+        while self._upload_queue.unfinished_tasks and time.monotonic() < deadline:
+            time.sleep(0.05)
+        unfinished = self._upload_queue.unfinished_tasks
+        if unfinished:
+            logging.warning("cache upload queue not drained pending=%d", unfinished)
+        for _worker in self._upload_workers:
+            try:
+                self._upload_queue.put(None, timeout=1)
+            except queue.Full:
+                logging.warning(
+                    "could not stop cache upload worker because queue is full"
+                )
+        join_timeout = max(0.0, deadline - time.monotonic())
+        for worker in self._upload_workers:
+            worker.join(timeout=join_timeout)
+
+    def _upload_worker(self) -> None:
+        while True:
+            task = self._upload_queue.get()
+            try:
+                if task is None:
+                    return
+                _ = self._put_object(task.object_key, task.value, overwrite=False)
+            except Exception as error:
+                logging.warning(
+                    "cache put failed object=%s error=%s",
+                    task.object_key if task is not None else "<stop>",
+                    error,
+                )
+            finally:
+                if task is not None:
+                    self._release_upload_bytes(len(task.value))
+                    self._unmark_object_queued(task.object_key)
+                    logging.info(
+                        "cache put dequeued object=%s queue=%d/%d bytes=%s/%s",
+                        task.object_key,
+                        self._upload_queue.qsize(),
+                        self._config.upload_queue_size,
+                        _format_bytes(self._queued_upload_bytes()),
+                        _format_bytes(self._config.upload_queue_bytes),
+                    )
+                self._upload_queue.task_done()
+
+    def _put_object(self, object_key: str, value: bytes, overwrite: bool) -> bool:
+        try:
+            if not overwrite and self._known_object_exists(object_key):
+                logging.info(
+                    "cache put skipped object=%s reason=known-exists",
+                    object_key,
+                )
+                return False
+            if not overwrite and self._exists_object(object_key):
+                self._refresh_known_objects_debounced()
+                logging.info("cache put skipped object=%s reason=exists", object_key)
+                return False
+            _ = self._s3.put_object(
+                Bucket=self._config.bucket,
+                Key=object_key,
+                Body=value,
+            )
+        except self._client_error as error:
+            logging.warning("cache put failed object=%s error=%s", object_key, error)
+            raise StorageError(_client_error_message(error)) from error
+        except self._boto_core_error as error:
+            logging.warning("cache put failed object=%s error=%s", object_key, error)
+            raise StorageError(str(error)) from error
+        self._remember_object(object_key)
+        logging.info("cache put object=%s size=%d", object_key, len(value))
+        return True
+
+    def _exists_object(self, object_key: str) -> bool:
+        try:
+            _ = self._s3.head_object(
+                Bucket=self._config.bucket,
+                Key=object_key,
+            )
+        except self._client_error as error:
+            if _is_not_found(error):
+                return False
+            raise StorageError(_client_error_message(error)) from error
+        except self._boto_core_error as error:
+            raise StorageError(str(error)) from error
+        return True
+
+    def _known_object_exists(self, object_key: str) -> bool:
+        with self._known_objects_lock:
+            return object_key in self._known_objects
+
+    def _remember_object(self, object_key: str) -> None:
+        with self._known_objects_lock:
+            self._known_objects.add(object_key)
+
+    def _forget_object(self, object_key: str) -> None:
+        with self._known_objects_lock:
+            self._known_objects.discard(object_key)
+
+    def _known_object_count(self) -> int:
+        with self._known_objects_lock:
+            return len(self._known_objects)
+
+    def _mark_object_queued(self, object_key: str) -> bool:
+        with self._queued_objects_lock:
+            if object_key in self._queued_objects:
+                return False
+            self._queued_objects.add(object_key)
+            return True
+
+    def _unmark_object_queued(self, object_key: str) -> None:
+        with self._queued_objects_lock:
+            self._queued_objects.discard(object_key)
+
+    def _queued_upload_bytes(self) -> int:
+        with self._upload_queue_bytes_condition:
+            return self._upload_queue_bytes
+
+    def _reserve_upload_bytes(self, size: int) -> None:
+        with self._upload_queue_bytes_condition:
+            while (
+                self._upload_queue_bytes > 0
+                and self._upload_queue_bytes + size > self._config.upload_queue_bytes
+            ):
+                _ = self._upload_queue_bytes_condition.wait()
+            self._upload_queue_bytes += size
+
+    def _release_upload_bytes(self, size: int) -> None:
+        with self._upload_queue_bytes_condition:
+            self._upload_queue_bytes -= size
+            self._upload_queue_bytes_condition.notify_all()
+
+    def _refresh_known_objects_debounced(self) -> None:
+        now = time.monotonic()
+        with self._known_objects_lock:
+            if (
+                now - self._last_object_list_refresh
+                < self._config.object_list_min_interval
+            ):
+                return
+            self._last_object_list_refresh = now
+        try:
+            objects = self._list_objects()
+        except Exception as error:
+            logging.warning("cache object listing failed error=%s", error)
+            return
+        with self._known_objects_lock:
+            self._known_objects = objects
+        logging.info("cache object listing refreshed count=%d", len(objects))
+
+    def _list_objects(self) -> set[str]:
+        list_args: dict[str, object] = {"Bucket": self._config.bucket}
+        prefix = self._object_list_prefix()
+        if prefix:
+            list_args["Prefix"] = prefix
+        paginator = self._s3.get_paginator("list_objects_v2")
+        objects: set[str] = set()
+        for page in paginator.paginate(**list_args):
+            contents = page.get("Contents")
+            if not isinstance(contents, list):
+                continue
+            for value in cast(list[object], contents):
+                item = _object_mapping(value)
+                if item is None:
+                    continue
+                key = item.get("Key")
+                if isinstance(key, str):
+                    objects.add(key)
+        return objects
+
+    def _object_list_prefix(self) -> str:
+        if not self._config.prefix:
+            return ""
+        return f"{self._config.prefix.rstrip('/')}/"
+
+    def _object_key(self, key: bytes) -> str:
+        key_hex = key.hex()
+        if self._config.layout == "subdirs" and len(key_hex) > 2:
+            cache_key = f"{key_hex[:2]}/{key_hex[2:]}"
+        else:
+            cache_key = key_hex
+        if not self._config.prefix:
+            return cache_key
+        return f"{self._config.prefix.rstrip('/')}/{cache_key}"
+
+
+@final
+class StorageHelperServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+
+    def __init__(
+        self,
+        endpoint: str,
+        storage: Storage,
+        idle_timeout: float,
+        socket_mode: int,
+    ) -> None:
+        self.storage = storage
+        self.idle_timeout = idle_timeout
+        self.last_activity = time.monotonic()
+        self.stop_event = threading.Event()
+        super().__init__(endpoint, StorageHelperHandler)
+        os.chmod(endpoint, socket_mode)
+
+    def touch(self) -> None:
+        self.last_activity = time.monotonic()
+
+    def serve_until_stopped(self) -> None:
+        if self.idle_timeout > 0:
+            monitor = threading.Thread(target=self._monitor_idle_timeout, daemon=True)
+            monitor.start()
+        self.serve_forever(poll_interval=0.5)
+
+    def request_stop(self) -> None:
+        self.stop_event.set()
+        threading.Thread(target=self.shutdown, daemon=True).start()
+
+    @override
+    def handle_error(self, request: object, client_address: object) -> None:
+        error = sys.exc_info()[1]
+        if _is_client_disconnect(error):
+            return
+        super().handle_error(cast(socket.socket, request), client_address)
+
+    def _monitor_idle_timeout(self) -> None:
+        while not self.stop_event.wait(timeout=1):
+            if time.monotonic() - self.last_activity >= self.idle_timeout:
+                self.request_stop()
+                return
+
+
+@final
+class StorageHelperHandler(socketserver.StreamRequestHandler):
+    @override
+    def handle(self) -> None:
+        try:
+            server = self._storage_server()
+            server.touch()
+            _ = self.wfile.write(bytes([PROTOCOL_VERSION, 1, CAP_GET_PUT_REMOVE_STOP]))
+            self.wfile.flush()
+            while True:
+                request = self.rfile.read(1)
+                if not request:
+                    return
+                server.touch()
+                request_code = request[0]
+                if request_code == REQUEST_GET:
+                    self._handle_get()
+                elif request_code == REQUEST_PUT:
+                    self._handle_put()
+                elif request_code == REQUEST_REMOVE:
+                    self._handle_remove()
+                elif request_code == REQUEST_STOP:
+                    _ = self.wfile.write(bytes([RESPONSE_OK]))
+                    self.wfile.flush()
+                    server.request_stop()
+                    return
+                else:
+                    self._write_error(f"unknown request {request_code}")
+                    return
+        except (OSError, TimeoutError) as error:
+            if _is_client_disconnect(error):
+                return
+            raise
+
+    def _storage_server(self) -> StorageHelperServer:
+        return cast(StorageHelperServer, self.server)
+
+    def _handle_get(self) -> None:
+        key = _read_key(self.rfile)
+        try:
+            value = self._storage_server().storage.get(key)
+        except Exception as error:
+            self._write_error(str(error))
+            return
+        if value is None:
+            _ = self.wfile.write(bytes([RESPONSE_NOOP]))
+            self.wfile.flush()
+            return
+        _ = self.wfile.write(bytes([RESPONSE_OK]))
+        _write_value(self.wfile, value)
+        self.wfile.flush()
+
+    def _handle_put(self) -> None:
+        key = _read_key(self.rfile)
+        flags = _read_exact(self.rfile, 1)[0]
+        value = _read_value(self.rfile)
+        try:
+            stored = self._storage_server().storage.put(
+                key,
+                value,
+                overwrite=bool(flags & PUT_OVERWRITE),
+            )
+        except Exception as error:
+            self._write_error(str(error))
+            return
+        _ = self.wfile.write(bytes([RESPONSE_OK if stored else RESPONSE_NOOP]))
+        self.wfile.flush()
+
+    def _handle_remove(self) -> None:
+        key = _read_key(self.rfile)
+        try:
+            removed = self._storage_server().storage.remove(key)
+        except Exception as error:
+            self._write_error(str(error))
+            return
+        _ = self.wfile.write(bytes([RESPONSE_OK if removed else RESPONSE_NOOP]))
+        self.wfile.flush()
+
+    def _write_error(self, message: str) -> None:
+        _ = self.wfile.write(bytes([RESPONSE_ERR]))
+        _write_message(self.wfile, message)
+        self.wfile.flush()
+
+
+@final
+class TerminalLogHandler(logging.Handler):
+    def __init__(self, ui: ForegroundUi) -> None:
+        super().__init__()
+        self._ui = ui
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._ui.add_log(self.format(record))
+        except Exception:
+            self.handleError(record)
+
+
+@final
+class ForegroundUi:
+    def __init__(
+        self,
+        storage: S3Storage,
+        endpoint: str,
+        daemonize_event: threading.Event,
+        stop_callback: Callable[[], None],
+    ) -> None:
+        self._storage = storage
+        self._endpoint = endpoint
+        self._daemonize_event = daemonize_event
+        self._stop_callback = stop_callback
+        self._logs: collections.deque[str] = collections.deque(maxlen=10)
+        self._logs_lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._started_at = time.monotonic()
+        self._old_termios: list[int | bytes] | None = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self.handler = TerminalLogHandler(self)
+        self.handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+
+    def start(self) -> None:
+        self._enter_terminal_mode()
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self._thread.join(timeout=1)
+        self._draw(final=True)
+        self._leave_terminal_mode()
+
+    def add_log(self, message: str) -> None:
+        with self._logs_lock:
+            self._logs.append(message)
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(timeout=0.2):
+            self._read_input()
+            self._draw(final=False)
+
+    def _read_input(self) -> None:
+        if not sys.stdin.isatty():
+            return
+        try:
+            readable, _, _ = select.select([sys.stdin], [], [], 0)
+        except OSError:
+            return
+        if not readable:
+            return
+        try:
+            key = os.read(sys.stdin.fileno(), 1)
+        except OSError:
+            return
+        if key.lower() == b"d":
+            self._daemonize_event.set()
+            self._stop_callback()
+
+    def _draw(self, final: bool) -> None:
+        if not sys.stdout.isatty():
+            return
+        columns = shutil.get_terminal_size(fallback=(100, 24)).columns
+        with self._logs_lock:
+            logs = list(self._logs)
+        visible_logs = [_truncate(line, columns) for line in logs[-10:]]
+        lines = [""] * (10 - len(visible_logs)) + visible_logs
+        status = self._status_line(columns, final)
+        output = ["\x1b[s", "\x1b[?25l", "\x1b[11A"]
+        for index in range(10):
+            line = lines[index] if index < len(lines) else ""
+            output.append("\x1b[2K")
+            output.append(line)
+            output.append("\n")
+        output.append("\x1b[7m")
+        output.append(_pad(status, columns))
+        output.append("\x1b[0m")
+        output.append("\x1b[u")
+        if final:
+            output.append("\x1b[?25h")
+        _ = sys.stdout.write("".join(output))
+        _ = sys.stdout.flush()
+
+    def _status_line(self, columns: int, final: bool) -> str:
+        elapsed = int(time.monotonic() - self._started_at)
+        left = (
+            f"ccache S3 helper {'stopping' if final else 'running'} "
+            f"{elapsed // 60:02d}:{elapsed % 60:02d} "
+            f"{self._storage.status()} socket {self._endpoint}"
+        )
+        right = "press 'd' to daemonize"
+        if len(left) + len(right) + 1 >= columns:
+            return _truncate(f"{left} {right}", columns)
+        return f"{left}{' ' * (columns - len(left) - len(right))}{right}"
+
+    def _enter_terminal_mode(self) -> None:
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return
+        self._old_termios = termios.tcgetattr(sys.stdin.fileno())
+        _ = tty.setcbreak(sys.stdin.fileno())
+        _ = sys.stdout.write("\n" * 11)
+        _ = sys.stdout.flush()
+
+    def _leave_terminal_mode(self) -> None:
+        if self._old_termios is not None:
+            termios.tcsetattr(
+                sys.stdin.fileno(),
+                termios.TCSADRAIN,
+                self._old_termios,  # pyright: ignore[reportArgumentType]
+            )
+            self._old_termios = None
+        if sys.stdout.isatty():
+            _ = sys.stdout.write("\n")
+            _ = sys.stdout.flush()
+
+
+def _truncate(value: str, columns: int) -> str:
+    if columns <= 0:
+        return ""
+    value = value.replace("\n", " ")
+    if len(value) <= columns:
+        return value
+    if columns == 1:
+        return "."
+    return f"{value[: columns - 1]}."
+
+
+def _pad(value: str, columns: int) -> str:
+    value = _truncate(value, columns)
+    return value + " " * max(0, columns - len(value))
+
+
+def _read_exact(input_file: BinaryReader, size: int) -> bytes:
+    data = input_file.read(size)
+    if len(data) != size:
+        raise EOFError("unexpected end of request")
+    return data
+
+
+def _read_key(input_file: BinaryReader) -> bytes:
+    size = _read_exact(input_file, 1)[0]
+    return _read_exact(input_file, size)
+
+
+def _read_value(input_file: BinaryReader) -> bytes:
+    size = int.from_bytes(_read_exact(input_file, 8), sys.byteorder)
+    return _read_exact(input_file, size)
+
+
+def _write_value(output_file: BinaryWriter, value: bytes) -> None:
+    _ = output_file.write(len(value).to_bytes(8, sys.byteorder))
+    _ = output_file.write(value)
+
+
+def _write_message(output_file: BinaryWriter, message: str) -> None:
+    data = message.encode("utf-8", errors="replace")[:255]
+    _ = output_file.write(bytes([len(data)]))
+    _ = output_file.write(data)
+
+
+def _format_bytes(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            return f"{value:.1f}{unit}" if unit != "B" else f"{size}B"
+        value /= 1024
+    return f"{value:.1f}GiB"
+
+
+def _is_client_disconnect(error: BaseException | None) -> bool:
+    if isinstance(error, (BrokenPipeError, ConnectionResetError, TimeoutError)):
+        return True
+    return isinstance(error, OSError) and error.errno in {
+        errno.ECONNRESET,
+        errno.EPIPE,
+    }
+
+
+def _client_error_message(error: Exception) -> str:
+    response = _client_error_response(error)
+    error_data = _object_mapping(response.get("Error"))
+    if error_data is None:
+        return str(error)
+    code = error_data.get("Code", "S3Error")
+    message = error_data.get("Message", str(error))
+    return f"{code}: {message}"
+
+
+def _is_not_found(error: Exception) -> bool:
+    response = _client_error_response(error)
+    metadata = _object_mapping(response.get("ResponseMetadata"))
+    status_code = metadata.get("HTTPStatusCode") if metadata is not None else None
+    error_data = _object_mapping(response.get("Error"))
+    code = error_data.get("Code") if error_data is not None else None
+    return status_code == 404 or code in {"404", "NoSuchKey", "NotFound"}
+
+
+def _error_code(error: Exception) -> str:
+    response = _client_error_response(error)
+    error_data = _object_mapping(response.get("Error"))
+    code = error_data.get("Code") if error_data is not None else ""
+    return str(code)
+
+
+def _is_error_code(error: Exception, *codes: str) -> bool:
+    return _error_code(error) in codes
+
+
+def _botocore_client_error() -> type[Exception]:
+    try:
+        from botocore.exceptions import ClientError
+    except ImportError as error:
+        raise StorageError("botocore is required for AWS setup") from error
+    return cast(type[Exception], ClientError)
+
+
+def _object_mapping(value: object) -> Mapping[str, object] | None:
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value)
+    return None
+
+
+def _client_error_response(error: Exception) -> Mapping[str, object]:
+    response = getattr(error, "response", {})
+    return _object_mapping(response) or {}
+
+
+def _attrs_from_env() -> dict[str, str]:
+    count_text = os.environ.get("CRSH_NUM_ATTR", "0")
+    try:
+        count = int(count_text)
+    except ValueError:
+        return {}
+    attrs: dict[str, str] = {}
+    for index in range(count):
+        key = os.environ.get(f"CRSH_ATTR_KEY_{index}")
+        value = os.environ.get(f"CRSH_ATTR_VALUE_{index}")
+        if key is not None and value is not None:
+            attrs[key] = value
+    return attrs
+
+
+def _default_auth(endpoint_url: str | None) -> str:
+    if endpoint_url:
+        return "credentials"
+    if any(
+        os.environ.get(name)
+        for name in (
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "AWS_WEB_IDENTITY_TOKEN_FILE",
+            "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        )
+    ):
+        return "credentials"
+    return "aws-sso"
+
+
+def _parse_url(url: str, attrs: dict[str, str]) -> S3Config:
+    parsed = urlparse(url)
+    if parsed.scheme != "s3":
+        raise StorageError(f"unsupported storage URL scheme: {parsed.scheme}")
+    if not parsed.netloc:
+        raise StorageError("S3 storage URL must include a bucket")
+
+    layout = attrs.get("layout", "subdirs")
+    if layout not in {"flat", "subdirs"}:
+        raise StorageError("layout must be 'flat' or 'subdirs'")
+
+    endpoint_url = (
+        attrs.get("endpoint-url")
+        or os.environ.get("AWS_ENDPOINT_URL_S3")
+        or os.environ.get("AWS_ENDPOINT_URL")
+    )
+    auth = (
+        attrs.get("auth")
+        or os.environ.get("CCACHE_S3_AUTH")
+        or _default_auth(
+            endpoint_url,
+        )
+    )
+    if auth not in {
+        "aws-sso",
+        "aws",
+        "credentials",
+        "cloudflare-r2-oidc-broker",
+        "cloudflare-r2-wrangler",
+    }:
+        raise StorageError(
+            "auth must be one of 'aws-sso', 'aws', 'credentials', or "
+            + "'cloudflare-r2-oidc-broker', or 'cloudflare-r2-wrangler'",
+        )
+    expected_account_id = (
+        attrs.get("aws-account-id")
+        or os.environ.get("CCACHE_AWS_ACCOUNT_ID")
+        or (DEFAULT_INFRASTRUCTURE_ACCOUNT_ID if auth == "aws-sso" else None)
+    )
+
+    return S3Config(
+        bucket=parsed.netloc,
+        prefix=unquote(parsed.path.lstrip("/")),
+        region=(
+            attrs.get("region")
+            or os.environ.get("CCACHE_S3_REGION")
+            or os.environ.get("AWS_REGION")
+        ),
+        endpoint_url=endpoint_url,
+        profile=attrs.get("profile") or os.environ.get("AWS_PROFILE"),
+        auth=auth,
+        expected_account_id=expected_account_id,
+        access_key_id=None,
+        secret_access_key=None,
+        session_token=None,
+        credential_expiration=None,
+        oidc_broker_url=(
+            attrs.get("oidc-broker-url") or os.environ.get("CCACHE_R2_OIDC_BROKER_URL")
+        ),
+        oidc_audience=(
+            attrs.get("oidc-audience")
+            or os.environ.get("CCACHE_R2_OIDC_AUDIENCE")
+            or "ccache-r2-broker"
+        ),
+        cloudflare_account_id=(
+            attrs.get("cloudflare-account-id")
+            or os.environ.get("TENZIR_CLOUDFLARE_ACCOUNT_ID")
+            or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+        ),
+        r2_parent_access_key_id=(
+            attrs.get("r2-parent-access-key-id")
+            or os.environ.get("CCACHE_R2_PARENT_ACCESS_KEY_ID")
+            or os.environ.get("R2_PARENT_ACCESS_KEY_ID")
+        ),
+        r2_allowed_prefixes=(
+            attrs.get("r2-allowed-prefixes")
+            or os.environ.get("CCACHE_R2_ALLOWED_PREFIXES")
+            or os.environ.get("R2_ALLOWED_PREFIXES")
+        ),
+        r2_temp_credential_permission=(
+            attrs.get("r2-temp-credential-permission")
+            or os.environ.get("CCACHE_R2_TEMP_CREDENTIAL_PERMISSION")
+            or os.environ.get("R2_TEMP_CREDENTIAL_PERMISSION")
+            or "object-read-write"
+        ),
+        r2_temp_credential_ttl_seconds=_positive_int(
+            attrs.get("r2-temp-credential-ttl-seconds")
+            or os.environ.get("CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS")
+            or os.environ.get("R2_TEMP_CREDENTIAL_TTL_SECONDS")
+            or "3600",
+        ),
+        layout=layout,
+        max_pool_connections=_positive_int(
+            attrs.get("max-pool-connections")
+            or os.environ.get("CCACHE_S3_MAX_POOL_CONNECTIONS", "64"),
+        ),
+        object_list_min_interval=_positive_float(
+            attrs.get("object-list-min-interval")
+            or os.environ.get("CCACHE_S3_OBJECT_LIST_MIN_INTERVAL", "300"),
+        ),
+        upload_queue_size=_positive_int(
+            attrs.get("upload-queue-size")
+            or os.environ.get("CCACHE_S3_UPLOAD_QUEUE_SIZE", "4096"),
+        ),
+        upload_queue_bytes=_positive_int(
+            attrs.get("upload-queue-bytes")
+            or os.environ.get("CCACHE_S3_UPLOAD_QUEUE_BYTES", "536870912"),
+        ),
+        upload_workers=_positive_int(
+            attrs.get("upload-workers")
+            or os.environ.get("CCACHE_S3_UPLOAD_WORKERS", "8"),
+        ),
+        upload_drain_timeout=_positive_float(
+            attrs.get("upload-drain-timeout")
+            or os.environ.get("CCACHE_S3_UPLOAD_DRAIN_TIMEOUT", "60"),
+        ),
+    )
+
+
+def _default_endpoint() -> str:
+    return "/tmp/tenzir-ccache/s3.sock"
+
+
+def _default_state_dir() -> str:
+    return os.path.dirname(_default_endpoint())
+
+
+def _default_log_file() -> str:
+    return os.path.join(_default_state_dir(), "helper.log")
+
+
+def _default_url() -> str | None:
+    if url := os.environ.get("CRSH_URL"):
+        return url
+    bucket = os.environ.get("CCACHE_S3_BUCKET")
+    if not bucket:
+        return None
+    prefix = os.environ.get("CCACHE_S3_PREFIX", "ccache").strip("/")
+    if not prefix:
+        return f"s3://{bucket}"
+    return f"s3://{bucket}/{prefix}"
+
+
+def _is_interactive() -> bool:
+    return sys.stdin.isatty() and sys.stderr.isatty()
+
+
+def _copy_file_if_present(source: str, destination: str) -> None:
+    if os.path.isfile(source):
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        _ = shutil.copy2(source, destination)
+
+
+def _prepare_writable_aws_home() -> None:
+    original_home = os.environ.get("HOME")
+    if not original_home:
+        return
+    aws_dir = os.path.join(original_home, ".aws")
+    if not os.path.isdir(aws_dir):
+        return
+    writable_home = os.path.join(_default_state_dir(), "home")
+    writable_aws_dir = os.path.join(writable_home, ".aws")
+    os.makedirs(os.path.join(writable_aws_dir, "sso", "cache"), exist_ok=True)
+    for name in ("config", "credentials"):
+        _copy_file_if_present(
+            os.path.join(aws_dir, name),
+            os.path.join(writable_aws_dir, name),
+        )
+    source_cache = os.path.join(aws_dir, "sso", "cache")
+    destination_cache = os.path.join(writable_aws_dir, "sso", "cache")
+    if os.path.isdir(source_cache):
+        for name in os.listdir(source_cache):
+            _copy_file_if_present(
+                os.path.join(source_cache, name),
+                os.path.join(destination_cache, name),
+            )
+    os.environ["HOME"] = writable_home
+
+
+def _run_aws_sso_login(profile: str, account_id: str) -> None:
+    aws = shutil.which("aws")
+    if not aws:
+        raise StorageError(
+            f"AWS login is required for account {account_id}. Install the AWS CLI "
+            + "and log in to that account.",
+        )
+    print(
+        f"AWS login is required for account {account_id}.",
+        file=sys.stderr,
+    )
+    answer = input("Run AWS SSO login now? [Y/n]: ").strip()
+    if answer.lower() in {"n", "no"}:
+        raise StorageError(f"AWS login is required for account {account_id}")
+    _ = subprocess.run([aws, "sso", "login", "--profile", profile], check=True)
+
+
+@contextlib.contextmanager  # pyright: ignore[reportDeprecated]
+def _quiet_botocore_credential_refresh() -> Iterator[None]:
+    loggers = [
+        logging.getLogger("botocore.credentials"),
+        logging.getLogger("botocore.tokens"),
+    ]
+    old_levels = [logger.level for logger in loggers]
+    try:
+        for logger in loggers:
+            logger.setLevel(logging.ERROR)
+        yield
+    finally:
+        for logger, old_level in zip(loggers, old_levels, strict=True):
+            logger.setLevel(old_level)
+
+
+def _matching_aws_profiles(account_id: str) -> list[str]:
+    try:
+        import botocore.session
+    except ImportError as error:
+        raise StorageError("botocore is required for AWS profile discovery") from error
+
+    session = botocore.session.Session()
+    full_config = cast(Mapping[str, object], session.full_config)
+    profiles = _object_mapping(full_config.get("profiles")) or {}
+    matches: list[str] = []
+    for name, values in sorted(profiles.items()):
+        profile = _object_mapping(values)
+        if profile is not None and profile.get("sso_account_id") == account_id:
+            matches.append(name)
+    return matches
+
+
+def _select_aws_profile(account_id: str) -> str:
+    matches = _matching_aws_profiles(account_id)
+    if not matches:
+        raise StorageError(
+            f"No AWS SSO profile is configured for account {account_id}. "
+            + "Create one with 'aws configure sso'.",
+        )
+    if len(matches) == 1 or not _is_interactive():
+        return matches[0]
+
+    print(f"Select an AWS profile for account {account_id}:", file=sys.stderr)
+    for index, profile in enumerate(matches, start=1):
+        print(f"  {index}. {profile}", file=sys.stderr)
+    while True:
+        answer = input(f"Profile [1-{len(matches)}]: ").strip()
+        if not answer:
+            return matches[0]
+        try:
+            selected = int(answer)
+        except ValueError:
+            print("Enter a number from the list.", file=sys.stderr)
+            continue
+        if 1 <= selected <= len(matches):
+            return matches[selected - 1]
+        print("Enter a number from the list.", file=sys.stderr)
+
+
+def _resolve_aws_profile(config: S3Config) -> S3Config:
+    if config.profile or config.auth != "aws-sso":
+        return config
+    if not config.expected_account_id:
+        raise StorageError("aws-sso auth requires an expected AWS account ID")
+    profile = _select_aws_profile(config.expected_account_id)
+    return replace(config, profile=profile)
+
+
+def _github_actions_oidc_token(audience: str) -> str:
+    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not request_url or not request_token:
+        raise StorageError(
+            "GitHub Actions OIDC is unavailable; expected "
+            + "ACTIONS_ID_TOKEN_REQUEST_URL and ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        )
+    separator = "&" if "?" in request_url else "?"
+    url = f"{request_url}{separator}audience={audience}"
+    request = Request(
+        url,
+        headers={
+            **HTTP_HEADERS,
+            "Authorization": f"Bearer {request_token}",
+        },
+    )
+    try:
+        with urlopen(request, timeout=30) as response:  # pyright: ignore[reportAny]
+            data = _read_json_object(cast(object, response), "GitHub Actions OIDC")
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise StorageError(
+            f"could not fetch GitHub Actions OIDC token: HTTP {error.code}: {body}",
+        ) from error
+    except URLError as error:
+        raise StorageError(
+            f"could not reach GitHub Actions OIDC endpoint: {error.reason}",
+        ) from error
+    token = data.get("value")
+    if not isinstance(token, str) or not token:
+        raise StorageError("GitHub Actions OIDC response did not contain a token")
+    return token
+
+
+def _default_credential_expiration() -> str:
+    return (datetime.now(UTC) + timedelta(minutes=50)).isoformat()
+
+
+def _read_json_object(response: object, source: str) -> dict[str, object]:
+    data: object = json.loads(  # pyright: ignore[reportAny]
+        cast(BinaryReader, response).read().decode("utf-8")
+    )
+    if not isinstance(data, dict):
+        raise StorageError(f"{source} response is not a JSON object")
+    return cast(dict[str, object], data)
+
+
+def _cloudflare_r2_oidc_broker_response(config: S3Config) -> dict[str, object]:
+    if not config.oidc_broker_url:
+        raise StorageError(
+            "cloudflare-r2-oidc-broker auth requires CCACHE_R2_OIDC_BROKER_URL "
+            + "or @oidc-broker-url",
+        )
+    token = _github_actions_oidc_token(config.oidc_audience)
+    payload = json.dumps({"token": token}).encode("utf-8")
+    request = Request(
+        config.oidc_broker_url,
+        data=payload,
+        headers={
+            **HTTP_HEADERS,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:  # pyright: ignore[reportAny]
+            data = _read_json_object(cast(object, response), "R2 OIDC broker")
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise StorageError(
+            f"could not obtain R2 credentials from broker: HTTP {error.code}: {body}",
+        ) from error
+    except URLError as error:
+        raise StorageError(f"could not reach R2 OIDC broker: {error.reason}") from error
+    return data
+
+
+def _cloudflare_r2_credentials_metadata_from_response(
+    config: S3Config,
+    data: dict[str, object],
+    source: str,
+    require_bucket: bool,
+) -> dict[str, str]:
+    try:
+        access_key_id = data["accessKeyId"]
+        secret_access_key = data["secretAccessKey"]
+        session_token = data["sessionToken"]
+    except KeyError as error:
+        raise StorageError(f"{source} response is missing {error.args[0]}") from error
+    if not isinstance(access_key_id, str) or not access_key_id:
+        raise StorageError(f"{source} response contains invalid credentials")
+    if not isinstance(secret_access_key, str) or not secret_access_key:
+        raise StorageError(f"{source} response contains invalid credentials")
+    if not isinstance(session_token, str) or not session_token:
+        raise StorageError(f"{source} response contains invalid credentials")
+    bucket = data.get("bucket")
+    if require_bucket and not isinstance(bucket, str):
+        raise StorageError(f"{source} response is missing bucket")
+    if isinstance(bucket, str) and bucket != config.bucket:
+        raise StorageError(
+            f"{source} returned bucket {bucket}, expected {config.bucket}"
+        )
+    expires_at = data.get("expiresAt")
+    if not isinstance(expires_at, str) or not expires_at:
+        expires_at = _default_credential_expiration()
+    return {
+        "access_key": access_key_id,
+        "secret_key": secret_access_key,
+        "token": session_token,
+        "expiry_time": expires_at,
+    }
+
+
+def _cloudflare_r2_oidc_broker_metadata(config: S3Config) -> dict[str, str]:
+    data = _cloudflare_r2_oidc_broker_response(config)
+    return _cloudflare_r2_credentials_metadata_from_response(
+        config,
+        data,
+        "R2 OIDC broker",
+        True,
+    )
+
+
+def _cloudflare_r2_oidc_broker_credentials(config: S3Config) -> S3Config:
+    data = _cloudflare_r2_oidc_broker_response(config)
+    metadata = _cloudflare_r2_credentials_metadata_from_response(
+        config,
+        data,
+        "R2 OIDC broker",
+        True,
+    )
+    endpoint_url = data.get("endpointUrl")
+    region = data.get("region")
+    if not isinstance(endpoint_url, str) or not endpoint_url:
+        raise StorageError("R2 OIDC broker response is missing endpointUrl")
+    if not isinstance(region, str) or not region:
+        region = "auto"
+    return replace(
+        config,
+        region=region,
+        endpoint_url=endpoint_url,
+        profile=None,
+        access_key_id=metadata["access_key"],
+        secret_access_key=metadata["secret_key"],
+        session_token=metadata["token"],
+        credential_expiration=metadata["expiry_time"],
+    )
+
+
+def _wrangler_auth_token() -> str:
+    command = shutil.which("wrangler")
+    if not command:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires Wrangler on PATH; "
+            + "enter the dev shell or install Wrangler, then run `wrangler login`",
+        )
+    try:
+        result = subprocess.run(
+            [command, "auth", "token", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as error:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires Wrangler; run `wrangler login`",
+        ) from error
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        message = "could not get Cloudflare token from Wrangler"
+        if stderr:
+            message = f"{message}: {stderr}"
+        raise StorageError(f"{message}; run `wrangler login`")
+    try:
+        data: object = json.loads(result.stdout)  # pyright: ignore[reportAny]
+    except json.JSONDecodeError as error:
+        raise StorageError("Wrangler auth token output was not JSON") from error
+    if not isinstance(data, dict):
+        raise StorageError("Wrangler auth token output was not a JSON object")
+    data = cast(dict[str, object], data)
+    token = data.get("token")
+    token_type = data.get("type")
+    if not isinstance(token, str) or not token:
+        raise StorageError("Wrangler auth token output did not contain a token")
+    if token_type not in {"api_token", "oauth"}:
+        raise StorageError(f"unsupported Wrangler auth token type: {token_type}")
+    return token
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _cloudflare_r2_temporary_credentials_response(
+    config: S3Config,
+    api_token: str,
+) -> dict[str, object]:
+    account_id = config.cloudflare_account_id
+    if not account_id:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires TENZIR_CLOUDFLARE_ACCOUNT_ID "
+            + "or CLOUDFLARE_ACCOUNT_ID",
+        )
+    parent_access_key_id = config.r2_parent_access_key_id
+    if not parent_access_key_id:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires CCACHE_R2_PARENT_ACCESS_KEY_ID",
+        )
+    payload: dict[str, object] = {
+        "bucket": config.bucket,
+        "parentAccessKeyId": parent_access_key_id,
+        "permission": config.r2_temp_credential_permission,
+        "ttlSeconds": config.r2_temp_credential_ttl_seconds,
+    }
+    allowed_prefixes = config.r2_allowed_prefixes
+    if allowed_prefixes is None and config.prefix:
+        allowed_prefixes = f"{config.prefix.rstrip('/')}/"
+    prefixes = _split_csv(allowed_prefixes)
+    if prefixes:
+        payload["prefixes"] = prefixes
+    request = Request(
+        f"https://api.cloudflare.com/client/v4/accounts/{account_id}/r2/temp-access-credentials",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            **HTTP_HEADERS,
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:  # pyright: ignore[reportAny]
+            data = _read_json_object(
+                cast(object, response),
+                "Cloudflare R2 temporary credentials",
+            )
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise StorageError(
+            f"could not create R2 temporary credentials: HTTP {error.code}: {body}",
+        ) from error
+    except URLError as error:
+        raise StorageError(f"could not reach Cloudflare API: {error.reason}") from error
+    if data.get("success") is not True:
+        errors = data.get("errors")
+        raise StorageError(f"could not create R2 temporary credentials: {errors}")
+    result = _object_mapping(data.get("result"))
+    if result is None:
+        raise StorageError(
+            "Cloudflare R2 temporary credentials response is missing result"
+        )
+    return dict(result)
+
+
+def _cloudflare_r2_wrangler_metadata(config: S3Config) -> dict[str, str]:
+    data = _cloudflare_r2_temporary_credentials_response(config, _wrangler_auth_token())
+    return _cloudflare_r2_credentials_metadata_from_response(
+        config,
+        data,
+        "Cloudflare R2 temporary credentials",
+        False,
+    )
+
+
+def _cloudflare_r2_wrangler_credentials(config: S3Config) -> S3Config:
+    metadata = _cloudflare_r2_wrangler_metadata(config)
+    if not config.cloudflare_account_id:
+        raise StorageError(
+            "cloudflare-r2-wrangler auth requires TENZIR_CLOUDFLARE_ACCOUNT_ID "
+            + "or CLOUDFLARE_ACCOUNT_ID",
+        )
+    endpoint_url = (
+        config.endpoint_url
+        or f"https://{config.cloudflare_account_id}.r2.cloudflarestorage.com"
+    )
+    return replace(
+        config,
+        region=config.region or "auto",
+        endpoint_url=endpoint_url,
+        profile=None,
+        access_key_id=metadata["access_key"],
+        secret_access_key=metadata["secret_key"],
+        session_token=metadata["token"],
+        credential_expiration=metadata["expiry_time"],
+    )
+
+
+def _cloudflare_r2_refresh_metadata(config: S3Config) -> dict[str, str]:
+    if config.auth == "cloudflare-r2-oidc-broker":
+        return _cloudflare_r2_oidc_broker_metadata(config)
+    if config.auth == "cloudflare-r2-wrangler":
+        return _cloudflare_r2_wrangler_metadata(config)
+    raise StorageError(f"auth mode {config.auth} does not support credential refresh")
+
+
+def _initialize_auth(config: S3Config) -> S3Config:
+    if config.auth == "cloudflare-r2-oidc-broker":
+        return _cloudflare_r2_oidc_broker_credentials(config)
+    if config.auth == "cloudflare-r2-wrangler":
+        return _cloudflare_r2_wrangler_credentials(config)
+    if config.auth == "credentials" or (
+        config.auth == "aws" and not config.expected_account_id
+    ):
+        return config
+
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError as error:
+        raise StorageError("boto3 is required for S3 ccache storage") from error
+
+    resolved_config = _resolve_aws_profile(config)
+
+    def caller_account() -> str:
+        session = boto3.Session(
+            profile_name=resolved_config.profile,
+            region_name=resolved_config.region,
+        )
+        with _quiet_botocore_credential_refresh():
+            sts = cast(StsClient, session.client("sts"))  # pyright: ignore[reportUnknownMemberType]
+            account = sts.get_caller_identity()["Account"]
+            if not isinstance(account, str):
+                raise StorageError("AWS STS response did not contain an account ID")
+            return account
+
+    try:
+        account_id = caller_account()
+    except (BotoCoreError, ClientError, OSError) as error:
+        if (
+            resolved_config.auth == "aws-sso"
+            and resolved_config.profile
+            and _is_interactive()
+        ):
+            _run_aws_sso_login(
+                resolved_config.profile,
+                resolved_config.expected_account_id
+                or DEFAULT_INFRASTRUCTURE_ACCOUNT_ID,
+            )
+            account_id = caller_account()
+        else:
+            if resolved_config.expected_account_id:
+                message = f"AWS login is required for account {resolved_config.expected_account_id}"
+            else:
+                message = "AWS credentials are required"
+            raise StorageError(
+                message,
+            ) from error
+    if (
+        resolved_config.expected_account_id
+        and account_id != resolved_config.expected_account_id
+    ):
+        raise StorageError(
+            f"AWS credentials are for account {account_id}, "
+            + f"expected {resolved_config.expected_account_id}",
+        )
+    return resolved_config
+
+
+def _daemonize(log_file: str) -> None:
+    if not hasattr(os, "fork"):
+        raise StorageError("--deamonize is only supported on Unix-like systems")
+
+    os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
+    pid = os.fork()
+    if pid > 0:
+        print(f"ccache S3 helper started in background; log: {log_file}", flush=True)
+        os._exit(0)
+
+    os.setsid()
+    _ = signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    pid = os.fork()
+    if pid > 0:
+        os._exit(0)
+
+    stdin_fd = os.open(os.devnull, os.O_RDONLY)
+    log_fd = os.open(log_file, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        _ = os.dup2(stdin_fd, sys.stdin.fileno())
+        _ = os.dup2(log_fd, sys.stdout.fileno())
+        _ = os.dup2(log_fd, sys.stderr.fileno())
+    finally:
+        os.close(stdin_fd)
+        os.close(log_fd)
+
+
+def _remove_stale_socket(endpoint: str) -> None:
+    try:
+        mode = os.stat(endpoint).st_mode
+    except FileNotFoundError:
+        return
+    if not stat.S_ISSOCK(mode):
+        raise StorageError(
+            f"IPC endpoint already exists and is not a socket: {endpoint}"
+        )
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.connect(endpoint)
+    except OSError as error:
+        if error.errno not in {errno.ECONNREFUSED, errno.ENOENT}:
+            raise StorageError(
+                f"could not probe existing IPC endpoint {endpoint}: {error}",
+            ) from error
+        os.unlink(endpoint)
+    else:
+        raise StorageError(f"IPC endpoint is already accepting connections: {endpoint}")
+    finally:
+        probe.close()
+
+
+def _parse_mode(mode: str) -> int:
+    try:
+        return int(mode, 8)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "socket mode must be an octal value"
+        ) from error
+
+
+def _positive_float(value: str) -> float:
+    try:
+        result = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("timeout must be numeric") from error
+    if result < 0:
+        raise argparse.ArgumentTypeError("timeout must be non-negative")
+    return result
+
+
+def _positive_int(value: str) -> int:
+    try:
+        result = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("value must be an integer") from error
+    if result <= 0:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return result
+
+
+def _log_level(value: str) -> int:
+    level = getattr(logging, value.upper(), None)
+    if not isinstance(level, int):
+        raise argparse.ArgumentTypeError(
+            "log level must be one of DEBUG, INFO, WARNING, ERROR, or CRITICAL",
+        )
+    return level
+
+
+def _env_first(*names: str) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _role_name_from_arn(role_arn: str | None) -> str | None:
+    if not role_arn:
+        return None
+    match = re.fullmatch(r"arn:aws[a-zA-Z-]*:iam::\d{12}:role/(.+)", role_arn)
+    if not match:
+        return None
+    role_path = match.group(1).rstrip("/")
+    return role_path.rsplit("/", maxsplit=1)[-1]
+
+
+def _prompt_value(name: str, default: str | None, required: bool, yes: bool) -> str:
+    if yes:
+        if default:
+            return default
+        if required:
+            raise StorageError(f"{name} is required")
+        return ""
+
+    if sys.stdin.isatty():
+        suffix = f" [{default}]" if default else ""
+        while True:
+            value = input(f"{name}{suffix}: ").strip()
+            if value:
+                return value
+            if default is not None:
+                return default
+            if not required:
+                return ""
+            print(f"{name} is required", file=sys.stderr)
+
+    if default:
+        logging.info("using %s=%s", name, default)
+        return default
+    if required:
+        raise StorageError(f"{name} is required in non-interactive mode")
+    return ""
+
+
+def _confirm(prompt: str, yes: bool) -> bool:
+    if yes:
+        return True
+    if not sys.stdin.isatty():
+        logging.warning("not changing existing resource without --yes: %s", prompt)
+        return False
+    answer = input(f"{prompt} [y/N]: ").strip().lower()
+    return answer in {"y", "yes"}
+
+
+def _canonical_json(document: object) -> str:
+    return json.dumps(document, sort_keys=True, separators=(",", ":"))
+
+
+def _documents_match(left: object, right: object) -> bool:
+    return _canonical_json(left) == _canonical_json(right)
+
+
+def _normalize_bucket_region(region: str | None) -> str:
+    if not region:
+        return "us-east-1"
+    if region == "EU":
+        return "eu-west-1"
+    return region
+
+
+def _object_resource(bucket: str, prefix: str) -> str:
+    clean_prefix = prefix.strip("/")
+    if clean_prefix:
+        return f"arn:aws:s3:::{bucket}/{clean_prefix}/*"
+    return f"arn:aws:s3:::{bucket}/*"
+
+
+def _list_bucket_statement(bucket: str, prefix: str) -> dict[str, object]:
+    statement: dict[str, object] = {
+        "Sid": "ListCachePrefix",
+        "Effect": "Allow",
+        "Action": [
+            "s3:GetBucketLocation",
+            "s3:ListBucket",
+        ],
+        "Resource": f"arn:aws:s3:::{bucket}",
+    }
+    clean_prefix = prefix.strip("/")
+    if clean_prefix:
+        statement["Condition"] = {
+            "StringLike": {
+                "s3:prefix": [
+                    clean_prefix,
+                    f"{clean_prefix}/*",
+                ],
+            },
+        }
+    return statement
+
+
+def _s3_policy_document(bucket: str, prefix: str) -> dict[str, object]:
+    return {
+        "Version": "2012-10-17",
+        "Statement": [
+            _list_bucket_statement(bucket, prefix),
+            {
+                "Sid": "UseCacheObjects",
+                "Effect": "Allow",
+                "Action": [
+                    "s3:DeleteObject",
+                    "s3:GetObject",
+                    "s3:PutObject",
+                ],
+                "Resource": _object_resource(bucket, prefix),
+            },
+        ],
+    }
+
+
+def _trust_policy_document(account_id: str, github_subject: str) -> dict[str, object]:
+    return {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Federated": (
+                        f"arn:aws:iam::{account_id}:oidc-provider/"
+                        f"{GITHUB_OIDC_PROVIDER_HOST}"
+                    ),
+                },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": {
+                    "StringEquals": {
+                        f"{GITHUB_OIDC_PROVIDER_HOST}:aud": GITHUB_OIDC_AUDIENCE,
+                    },
+                    "StringLike": {
+                        f"{GITHUB_OIDC_PROVIDER_HOST}:sub": github_subject,
+                    },
+                },
+            },
+        ],
+    }
+
+
+def _bucket_name_part(value: str) -> str:
+    return re.sub(r"[^a-z0-9.-]+", "-", value.lower()).strip(".-")
+
+
+def _default_bucket(account_id: str, region: str, repository: str | None) -> str:
+    if repository and "/" in repository:
+        owner, name = repository.split("/", maxsplit=1)
+        bucket = f"{_bucket_name_part(owner)}-{_bucket_name_part(name)}-ccache"
+        if bucket != "-ccache":
+            return bucket
+    return f"tenzir-ccache-{account_id}-{region}"
+
+
+def _default_github_subject() -> str | None:
+    return _env_first("CCACHE_GITHUB_SUBJECT")
+
+
+def _default_github_repository() -> str | None:
+    return _env_first("CCACHE_GITHUB_REPOSITORY", "GITHUB_REPOSITORY")
+
+
+def _build_setup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Create or verify AWS resources for the S3 ccache helper",
+    )
+    _ = parser.add_argument("--bucket", default=os.environ.get("CCACHE_S3_BUCKET"))
+    _ = parser.add_argument("--prefix", default=os.environ.get("CCACHE_S3_PREFIX"))
+    _ = parser.add_argument(
+        "--region",
+        default=_env_first("CCACHE_S3_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"),
+    )
+    _ = parser.add_argument(
+        "--role-name",
+        default=_role_name_from_arn(os.environ.get("CCACHE_AWS_ROLE_ARN")),
+    )
+    _ = parser.add_argument(
+        "--policy-name", default=os.environ.get("CCACHE_AWS_POLICY_NAME")
+    )
+    _ = parser.add_argument("--github-repository", default=_default_github_repository())
+    _ = parser.add_argument("--github-subject", default=_default_github_subject())
+    _ = parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="accept defaults and update mismatched mutable resources",
+    )
+    return parser
+
+
+def _namespace_values(args: argparse.Namespace) -> Mapping[str, object]:
+    return cast(Mapping[str, object], vars(args))
+
+
+def _optional_str_arg(args: argparse.Namespace, name: str) -> str | None:
+    value = _namespace_values(args).get(name)
+    if value is None or isinstance(value, str):
+        return value
+    raise StorageError(f"internal parser error: {name} must be a string")
+
+
+def _required_str_arg(args: argparse.Namespace, name: str) -> str:
+    value = _optional_str_arg(args, name)
+    if value is None:
+        raise StorageError(f"internal parser error: {name} must be set")
+    return value
+
+
+def _bool_arg(args: argparse.Namespace, name: str) -> bool:
+    value = _namespace_values(args).get(name)
+    if isinstance(value, bool):
+        return value
+    raise StorageError(f"internal parser error: {name} must be a boolean")
+
+
+def _int_arg(args: argparse.Namespace, name: str) -> int:
+    value = _namespace_values(args).get(name)
+    if isinstance(value, int):
+        return value
+    raise StorageError(f"internal parser error: {name} must be an integer")
+
+
+def _float_arg(args: argparse.Namespace, name: str) -> float:
+    value = _namespace_values(args).get(name)
+    if isinstance(value, int | float):
+        return float(value)
+    raise StorageError(f"internal parser error: {name} must be numeric")
+
+
+def _setup_args(args: argparse.Namespace) -> SetupArgs:
+    return SetupArgs(
+        bucket=_optional_str_arg(args, "bucket"),
+        prefix=_optional_str_arg(args, "prefix"),
+        region=_optional_str_arg(args, "region"),
+        role_name=_optional_str_arg(args, "role_name"),
+        policy_name=_optional_str_arg(args, "policy_name"),
+        github_repository=_optional_str_arg(args, "github_repository"),
+        github_subject=_optional_str_arg(args, "github_subject"),
+        yes=_bool_arg(args, "yes"),
+    )
+
+
+def _serve_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> ServeArgs:
+    endpoint = _optional_str_arg(args, "endpoint")
+    if not endpoint:
+        parser.error(
+            "--endpoint or CRSH_IPC_ENDPOINT is required for serving; "
+            + "run 's3-storage-helper.py setup' to configure AWS resources",
+        )
+    url = _optional_str_arg(args, "url")
+    if not url:
+        parser.error(
+            "--url or CRSH_URL is required for serving; "
+            + "run 's3-storage-helper.py setup' to configure AWS resources",
+        )
+    return ServeArgs(
+        endpoint=endpoint,
+        url=url,
+        idle_timeout=_float_arg(args, "idle_timeout"),
+        socket_mode=_int_arg(args, "socket_mode"),
+        log_level=_int_arg(args, "log_level"),
+        daemonize=_bool_arg(args, "daemonize"),
+        log_file=_required_str_arg(args, "log_file"),
+    )
+
+
+def _resolve_setup_config(args: SetupArgs, account_id: str) -> SetupConfig:
+    region_default = args.region or DEFAULT_REGION
+    region = _prompt_value("CCACHE_S3_REGION", region_default, True, args.yes)
+    bucket_default = args.bucket or _default_bucket(
+        account_id,
+        region,
+        args.github_repository,
+    )
+    bucket = _prompt_value("CCACHE_S3_BUCKET", bucket_default, True, args.yes)
+    prefix = _prompt_value("CCACHE_S3_PREFIX", args.prefix or "ccache", True, args.yes)
+    role_name = _prompt_value(
+        "IAM role name",
+        args.role_name or "tenzir-ccache-s3",
+        True,
+        args.yes,
+    )
+    policy_name = _prompt_value(
+        "IAM inline policy name",
+        args.policy_name or f"{role_name}-s3",
+        True,
+        args.yes,
+    )
+    if args.github_subject:
+        github_subject = args.github_subject
+    else:
+        repository = _prompt_value(
+            "GitHub repository",
+            args.github_repository,
+            True,
+            args.yes,
+        )
+        github_subject = f"repo:{repository}:*"
+    github_subject = _prompt_value(
+        "GitHub OIDC subject condition",
+        github_subject,
+        True,
+        args.yes,
+    )
+    return SetupConfig(
+        bucket=bucket,
+        prefix=prefix.strip("/"),
+        region=region,
+        role_name=role_name,
+        policy_name=policy_name,
+        github_subject=github_subject,
+        yes=args.yes,
+    )
+
+
+def _ensure_bucket(s3_client: S3SetupClient, config: SetupConfig) -> None:
+    client_error = _botocore_client_error()
+    try:
+        _ = s3_client.head_bucket(Bucket=config.bucket)
+    except client_error as error:
+        if _is_error_code(error, "404", "NoSuchBucket", "NotFound"):
+            create_args: dict[str, object] = {"Bucket": config.bucket}
+            if config.region != "us-east-1":
+                create_args["CreateBucketConfiguration"] = {
+                    "LocationConstraint": config.region,
+                }
+            _ = s3_client.create_bucket(**create_args)
+            logging.info("created S3 bucket %s in %s", config.bucket, config.region)
+        elif _is_error_code(error, "403"):
+            raise StorageError(
+                f"S3 bucket {config.bucket} already exists but is not accessible",
+            ) from error
+        else:
+            raise
+    else:
+        location = s3_client.get_bucket_location(Bucket=config.bucket).get(
+            "LocationConstraint",
+        )
+        existing_region = _normalize_bucket_region(
+            location if isinstance(location, str) else None
+        )
+        if existing_region == config.region:
+            logging.info(
+                "S3 bucket %s already exists in %s and matches",
+                config.bucket,
+                config.region,
+            )
+        else:
+            logging.warning(
+                "S3 bucket %s already exists in %s, expected %s",
+                config.bucket,
+                existing_region,
+                config.region,
+            )
+            raise StorageError("cannot change the region of an existing S3 bucket")
+
+    _ensure_public_access_block(s3_client, config)
+
+
+def _ensure_public_access_block(s3_client: S3SetupClient, config: SetupConfig) -> None:
+    client_error = _botocore_client_error()
+    try:
+        response = s3_client.get_public_access_block(Bucket=config.bucket)
+        current = response["PublicAccessBlockConfiguration"]
+    except client_error as error:
+        if not _is_error_code(error, "NoSuchPublicAccessBlockConfiguration", "404"):
+            raise
+        current = None
+
+    if current is None:
+        _ = s3_client.put_public_access_block(
+            Bucket=config.bucket,
+            PublicAccessBlockConfiguration=PUBLIC_ACCESS_BLOCK_CONFIGURATION,
+        )
+        logging.info("configured public access block for bucket %s", config.bucket)
+        return
+
+    if _documents_match(current, PUBLIC_ACCESS_BLOCK_CONFIGURATION):
+        logging.info("bucket %s public access block already matches", config.bucket)
+        return
+
+    logging.warning("bucket %s public access block exists but differs", config.bucket)
+    if _confirm("Update bucket public access block?", config.yes):
+        _ = s3_client.put_public_access_block(
+            Bucket=config.bucket,
+            PublicAccessBlockConfiguration=PUBLIC_ACCESS_BLOCK_CONFIGURATION,
+        )
+        logging.info("updated public access block for bucket %s", config.bucket)
+
+
+def _ensure_oidc_provider(iam_client: IamSetupClient, account_id: str) -> None:
+    provider_arn = (
+        f"arn:aws:iam::{account_id}:oidc-provider/{GITHUB_OIDC_PROVIDER_HOST}"
+    )
+    client_error = _botocore_client_error()
+    try:
+        provider = iam_client.get_open_id_connect_provider(
+            OpenIDConnectProviderArn=provider_arn,
+        )
+    except client_error as error:
+        if not _is_error_code(error, "NoSuchEntity"):
+            raise
+        _ = iam_client.create_open_id_connect_provider(
+            Url=GITHUB_OIDC_PROVIDER_URL,
+            ClientIDList=[GITHUB_OIDC_AUDIENCE],
+        )
+        logging.info("created GitHub Actions OIDC provider %s", provider_arn)
+        return
+
+    client_id_list = provider.get("ClientIDList")
+    client_ids = set(
+        cast(list[object], client_id_list) if isinstance(client_id_list, list) else []
+    )
+    if GITHUB_OIDC_AUDIENCE in client_ids:
+        logging.info("GitHub Actions OIDC provider already matches")
+        return
+
+    logging.warning(
+        "GitHub Actions OIDC provider exists but lacks audience %s",
+        GITHUB_OIDC_AUDIENCE,
+    )
+    _ = iam_client.add_client_id_to_open_id_connect_provider(
+        OpenIDConnectProviderArn=provider_arn,
+        ClientID=GITHUB_OIDC_AUDIENCE,
+    )
+    logging.info(
+        "added audience %s to GitHub Actions OIDC provider", GITHUB_OIDC_AUDIENCE
+    )
+
+
+def _ensure_role(
+    iam_client: IamSetupClient,
+    account_id: str,
+    config: SetupConfig,
+) -> str:
+    client_error = _botocore_client_error()
+    desired_trust_policy = _trust_policy_document(account_id, config.github_subject)
+    try:
+        response = iam_client.get_role(RoleName=config.role_name)
+    except client_error as error:
+        if not _is_error_code(error, "NoSuchEntity"):
+            raise
+        response = iam_client.create_role(
+            RoleName=config.role_name,
+            AssumeRolePolicyDocument=json.dumps(desired_trust_policy),
+            Description="Allows GitHub Actions to use the Tenzir ccache S3 bucket",
+        )
+        role = response["Role"]
+        if not isinstance(role, Mapping):
+            raise StorageError("IAM create-role response did not contain a role")
+        role_arn = role["Arn"]
+        if not isinstance(role_arn, str):
+            raise StorageError("IAM create-role response did not contain a role ARN")
+        logging.info("created IAM role %s", role_arn)
+        return role_arn
+
+    role = response["Role"]
+    if not isinstance(role, Mapping):
+        raise StorageError("IAM get-role response did not contain a role")
+    role_arn = role["Arn"]
+    if not isinstance(role_arn, str):
+        raise StorageError("IAM get-role response did not contain a role ARN")
+    current_trust_policy = role["AssumeRolePolicyDocument"]
+    if _documents_match(current_trust_policy, desired_trust_policy):
+        logging.info("IAM role %s trust policy already matches", config.role_name)
+    else:
+        logging.warning(
+            "IAM role %s exists but its trust policy differs",
+            config.role_name,
+        )
+        if _confirm("Update IAM role trust policy?", config.yes):
+            _ = iam_client.update_assume_role_policy(
+                RoleName=config.role_name,
+                PolicyDocument=json.dumps(desired_trust_policy),
+            )
+            logging.info("updated IAM role %s trust policy", config.role_name)
+    return role_arn
+
+
+def _ensure_role_policy(iam_client: IamSetupClient, config: SetupConfig) -> None:
+    client_error = _botocore_client_error()
+    desired_policy = _s3_policy_document(config.bucket, config.prefix)
+    try:
+        response = iam_client.get_role_policy(
+            RoleName=config.role_name,
+            PolicyName=config.policy_name,
+        )
+    except client_error as error:
+        if not _is_error_code(error, "NoSuchEntity"):
+            raise
+        _ = iam_client.put_role_policy(
+            RoleName=config.role_name,
+            PolicyName=config.policy_name,
+            PolicyDocument=json.dumps(desired_policy),
+        )
+        logging.info(
+            "created IAM inline policy %s on role %s",
+            config.policy_name,
+            config.role_name,
+        )
+        return
+
+    current_policy = response["PolicyDocument"]
+    if _documents_match(current_policy, desired_policy):
+        logging.info(
+            "IAM inline policy %s on role %s already matches",
+            config.policy_name,
+            config.role_name,
+        )
+        return
+
+    logging.warning(
+        "IAM inline policy %s on role %s exists but differs",
+        config.policy_name,
+        config.role_name,
+    )
+    if _confirm("Update IAM inline policy?", config.yes):
+        _ = iam_client.put_role_policy(
+            RoleName=config.role_name,
+            PolicyName=config.policy_name,
+            PolicyDocument=json.dumps(desired_policy),
+        )
+        logging.info(
+            "updated IAM inline policy %s on role %s",
+            config.policy_name,
+            config.role_name,
+        )
+
+
+def _print_setup_environment(config: SetupConfig, role_arn: str) -> None:
+    print()
+    print("Use these GitHub Actions variables:")
+    print(f"CCACHE_S3_BUCKET={config.bucket}")
+    print(f"CCACHE_S3_PREFIX={config.prefix}")
+    print(f"CCACHE_S3_REGION={config.region}")
+    print(f"CCACHE_AWS_ROLE_ARN={role_arn}")
+    print()
+    print("For a local shell:")
+    print(f"export CCACHE_S3_BUCKET={config.bucket!r}")
+    print(f"export CCACHE_S3_PREFIX={config.prefix!r}")
+    print(f"export CCACHE_S3_REGION={config.region!r}")
+    print(f"export CCACHE_AWS_ROLE_ARN={role_arn!r}")
+
+
+def _cmd_setup(argv: list[str]) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    parser = _build_setup_parser()
+    args = _setup_args(parser.parse_args(argv))
+
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError as error:
+        raise StorageError("boto3 is required for S3 ccache setup") from error
+
+    region = args.region or DEFAULT_REGION
+    session = boto3.Session(region_name=region)
+    try:
+        sts = cast(StsClient, session.client("sts"))  # pyright: ignore[reportUnknownMemberType]
+        account = sts.get_caller_identity()["Account"]
+        if not isinstance(account, str):
+            raise StorageError("AWS STS response did not contain an account ID")
+        account_id = account
+        config = _resolve_setup_config(args, account_id)
+        configured_session = boto3.Session(region_name=config.region)
+        _ensure_bucket(
+            cast(S3SetupClient, configured_session.client("s3")),  # pyright: ignore[reportUnknownMemberType]
+            config,
+        )
+        iam_client = cast(
+            IamSetupClient,
+            configured_session.client("iam"),  # pyright: ignore[reportUnknownMemberType]
+        )
+        _ensure_oidc_provider(iam_client, account_id)
+        role_arn = _ensure_role(iam_client, account_id, config)
+        _ensure_role_policy(iam_client, config)
+        _print_setup_environment(config, role_arn)
+    except (BotoCoreError, ClientError) as error:
+        raise StorageError(str(error)) from error
+    return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Serve the ccache remote storage helper protocol with S3 storage",
+        epilog="Run 's3-storage-helper.py setup --help' to create AWS resources.",
+    )
+    _ = parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("CRSH_IPC_ENDPOINT") or _default_endpoint(),
+        help="Unix socket path to listen on; defaults to CRSH_IPC_ENDPOINT or the local Tenzir ccache socket",
+    )
+    _ = parser.add_argument(
+        "--url",
+        default=_default_url(),
+        help="S3 URL, for example s3://bucket/prefix; defaults to CRSH_URL or CCACHE_S3_BUCKET/CCACHE_S3_PREFIX",
+    )
+    _ = parser.add_argument(
+        "--idle-timeout",
+        type=_positive_float,
+        default=_positive_float(os.environ.get("CRSH_IDLE_TIMEOUT", "0")),
+        help="exit after this many seconds without client activity; 0 disables",
+    )
+    _ = parser.add_argument(
+        "--socket-mode",
+        type=_parse_mode,
+        default=0o600,
+        help="Unix socket mode, in octal; default: 0600",
+    )
+    _ = parser.add_argument(
+        "--log-level",
+        type=_log_level,
+        default=_log_level(os.environ.get("CCACHE_S3_LOG_LEVEL", "INFO")),
+        help="log level for cache activity; default: INFO",
+    )
+    _ = parser.add_argument(
+        "--deamonize",
+        "--daemonize",
+        action="store_true",
+        dest="daemonize",
+        help="move into the background after interactive AWS initialization",
+    )
+    _ = parser.add_argument(
+        "--log-file",
+        default=os.environ.get("CCACHE_S3_LOG_FILE") or _default_log_file(),
+        help="log file used with --deamonize; defaults to the local Tenzir ccache helper log",
+    )
+    return parser
+
+
+def _cmd_serve(argv: list[str]) -> int:
+    parser = _build_parser()
+    args = _serve_args(parser, parser.parse_args(argv))
+    logging.basicConfig(level=args.log_level, format="%(levelname)s: %(message)s")
+
+    attrs = _attrs_from_env()
+    config = _parse_url(args.url, attrs)
+    if config.auth in {"aws", "aws-sso"}:
+        _prepare_writable_aws_home()
+    config = _initialize_auth(config)
+    if args.daemonize:
+        _daemonize(args.log_file)
+
+    daemonize_requested = threading.Event()
+    while True:
+        requested = _run_server(args, config, daemonize_requested)
+        if not requested:
+            return 0
+        daemonize_requested.clear()
+        _daemonize(args.log_file)
+
+
+def _run_server(
+    args: ServeArgs,
+    config: S3Config,
+    daemonize_requested: threading.Event,
+) -> bool:
+    os.makedirs(os.path.dirname(args.endpoint) or ".", exist_ok=True)
+    _remove_stale_socket(args.endpoint)
+    storage = S3Storage(config)
+    old_umask = os.umask(0o077)
+    try:
+        server = StorageHelperServer(
+            args.endpoint,
+            storage,
+            args.idle_timeout,
+            args.socket_mode,
+        )
+    finally:
+        _ = os.umask(old_umask)
+
+    def stop(_signum: int, _frame: object) -> None:
+        server.request_stop()
+
+    ui: ForegroundUi | None = None
+    root_logger = logging.getLogger()
+    old_handlers: list[logging.Handler] | None = None
+    if not args.daemonize and _is_interactive():
+        ui = ForegroundUi(
+            storage, args.endpoint, daemonize_requested, server.request_stop
+        )
+        old_handlers = root_logger.handlers[:]
+        root_logger.handlers = [ui.handler]
+        ui.start()
+
+    _ = signal.signal(signal.SIGTERM, stop)
+    _ = signal.signal(signal.SIGINT, stop)
+    try:
+        server.serve_until_stopped()
+    except KeyboardInterrupt:
+        server.request_stop()
+    finally:
+        if ui is not None:
+            ui.stop()
+            root_logger.handlers = old_handlers or []
+        server.server_close()
+        storage.close(drain=daemonize_requested.is_set())
+    return daemonize_requested.is_set()
+
+
+def main() -> NoReturn:
+    try:
+        if len(sys.argv) > 1 and sys.argv[1] == "setup":
+            result = _cmd_setup(sys.argv[2:])
+        elif len(sys.argv) > 1 and sys.argv[1] == "serve":
+            result = _cmd_serve(sys.argv[2:])
+        else:
+            result = _cmd_serve(sys.argv[1:])
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except Exception as error:
+        print(f"s3-storage-helper.py: {error}", file=sys.stderr)
+        sys.exit(1)
+    sys.exit(result)
+
+
+if __name__ == "__main__":
+    main()

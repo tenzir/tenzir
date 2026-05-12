@@ -1,0 +1,71 @@
+name: ccache R2 broker
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - scripts/ccache/r2-broker/**
+      - .github/workflows/ccache-r2-broker.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+    if: vars.CCACHE_R2_BROKER_ENABLED == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Worker vars
+        working-directory: scripts/ccache/r2-broker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.TENZIR_CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.CCACHE_R2_BUCKET }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SUBJECT: ${{ vars.CCACHE_R2_GITHUB_SUBJECT }}
+          GITHUB_OIDC_AUDIENCE: ${{ vars.CCACHE_R2_GITHUB_OIDC_AUDIENCE || 'ccache-r2-broker' }}
+          R2_ALLOWED_PREFIXES: ${{ vars.CCACHE_R2_ALLOWED_PREFIXES }}
+          R2_TEMP_CREDENTIAL_PERMISSION: ${{ vars.CCACHE_R2_TEMP_CREDENTIAL_PERMISSION || 'object-read-write' }}
+          R2_TEMP_CREDENTIAL_TTL_SECONDS: ${{ vars.CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS || '3600' }}
+        run: |
+          python3 - <<'PY'
+          import os
+
+          def toml_string(value):
+              return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+          vars = {
+              "CLOUDFLARE_ACCOUNT_ID": os.environ["CLOUDFLARE_ACCOUNT_ID"],
+              "R2_BUCKET": os.environ["R2_BUCKET"],
+              "GITHUB_REPOSITORY": os.environ["GITHUB_REPOSITORY"],
+              "GITHUB_SUBJECT": os.environ["GITHUB_SUBJECT"],
+              "GITHUB_OIDC_AUDIENCE": os.environ["GITHUB_OIDC_AUDIENCE"],
+              "R2_ALLOWED_PREFIXES": os.environ["R2_ALLOWED_PREFIXES"],
+              "R2_TEMP_CREDENTIAL_PERMISSION": os.environ["R2_TEMP_CREDENTIAL_PERMISSION"],
+              "R2_TEMP_CREDENTIAL_TTL_SECONDS": os.environ["R2_TEMP_CREDENTIAL_TTL_SECONDS"],
+          }
+          with open("wrangler.toml", "w", encoding="utf-8") as output:
+              output.write('name = "tenzir-ccache-r2-broker"\n')
+              output.write('main = "src/index.js"\n')
+              output.write('compatibility_date = "2026-04-30"\n\n')
+              output.write("[vars]\n")
+              for key, value in vars.items():
+                  output.write(f"{key} = {toml_string(value)}\n")
+          PY
+      - name: Deploy ccache R2 broker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          accountId: ${{ secrets.TENZIR_CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: scripts/ccache/r2-broker
+          command: deploy
+          secrets: |
+            R2_PARENT_ACCESS_KEY_ID
+            CLOUDFLARE_API_TOKEN
+        env:
+          R2_PARENT_ACCESS_KEY_ID: ${{ secrets.CCACHE_R2_PARENT_ACCESS_KEY_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CCACHE_R2_API_TOKEN }}

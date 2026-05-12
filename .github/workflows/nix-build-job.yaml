@@ -76,6 +76,65 @@ jobs:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+      - name: Prepare ccache directory
+        run: |
+          sudo mkdir -p /tmp/tenzir-ccache
+          sudo chmod 1777 /tmp/tenzir-ccache
+          sudo rm -f \
+            /tmp/tenzir-ccache/remote-only \
+            /tmp/tenzir-ccache/s3.sock \
+            /tmp/tenzir-ccache/s3-helper.pid
+      - name: Configure ccache AWS credentials
+        if: vars.CCACHE_S3_BUCKET != '' && vars.CCACHE_AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
+        with:
+          role-to-assume: ${{ vars.CCACHE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+      - name: Start ccache S3 helper
+        env:
+          CCACHE_S3_BUCKET: ${{ vars.CCACHE_S3_BUCKET }}
+          CCACHE_S3_PREFIX: ${{ vars.CCACHE_S3_PREFIX || 'ccache' }}
+          CCACHE_S3_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+          CCACHE_S3_AUTH: ${{ vars.CCACHE_S3_AUTH }}
+          CCACHE_R2_OIDC_BROKER_URL: ${{ vars.CCACHE_R2_OIDC_BROKER_URL }}
+          CCACHE_R2_OIDC_AUDIENCE: ${{ vars.CCACHE_R2_OIDC_AUDIENCE || 'ccache-r2-broker' }}
+          AWS_ENDPOINT_URL_S3: ${{ vars.CCACHE_S3_ENDPOINT_URL }}
+          AWS_DEFAULT_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+          AWS_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+        run: |
+          if [[ -z "${CCACHE_S3_BUCKET}" ]]; then
+            echo "::notice::CCACHE_S3_BUCKET is unset, skipping ccache S3 helper"
+            exit 0
+          fi
+          sudo touch /tmp/tenzir-ccache/remote-only
+          sudo chmod 0666 /tmp/tenzir-ccache/remote-only
+          nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' --run '
+            python_bin="$(command -v python3)"
+            nohup "$python_bin" scripts/ccache/s3-storage-helper.py \
+              --endpoint /tmp/tenzir-ccache/s3.sock \
+              --url "s3://${CCACHE_S3_BUCKET}/${CCACHE_S3_PREFIX}" \
+              --idle-timeout 0 \
+              --socket-mode 0666 \
+              >/tmp/ccache-s3-helper.log 2>&1 &
+            echo $! | sudo tee /tmp/tenzir-ccache/s3-helper.pid >/dev/null
+          '
+          helper_pid="$(cat /tmp/tenzir-ccache/s3-helper.pid)"
+          for _ in {1..30}; do
+            if sudo test -S /tmp/tenzir-ccache/s3.sock; then
+              exit 0
+            fi
+            if ! kill -0 "${helper_pid}" 2>/dev/null; then
+              echo "::warning::ccache S3 helper exited before creating its socket; continuing without remote ccache"
+              cat /tmp/ccache-s3-helper.log || true
+              sudo rm -f /tmp/tenzir-ccache/s3-helper.pid
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::warning::ccache S3 helper did not create its socket within 30 seconds; continuing without remote ccache"
+          cat /tmp/ccache-s3-helper.log || true
+          sudo rm -f /tmp/tenzir-ccache/s3-helper.pid
+          exit 0
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
         if: runner.os == 'macOS'
@@ -313,3 +372,16 @@ jobs:
           fi
           nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' skopeo \
             --run "python3 .github/workflows/nix-build.py push ${args[*]}"
+      - name: Stop ccache storage helpers
+        if: always()
+        run: |
+          if [[ -f /tmp/tenzir-ccache/s3-helper.pid ]]; then
+            helper_pid="$(cat /tmp/tenzir-ccache/s3-helper.pid)"
+            if [[ "$helper_pid" =~ ^[0-9]+$ ]]; then
+              helper_command="$(ps -p "$helper_pid" -o command= 2>/dev/null || true)"
+              if grep -Fq 'scripts/ccache/s3-storage-helper.py' <<<"$helper_command"; then
+                kill "$helper_pid" || sudo kill "$helper_pid" || true
+              fi
+            fi
+            sudo rm -f /tmp/tenzir-ccache/s3-helper.pid
+          fi

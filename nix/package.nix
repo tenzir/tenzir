@@ -7,6 +7,32 @@
   forceClang ? false,
 }:
 rec {
+  ccacheExtraConfig = ''
+    export CCACHE_COMPRESS=1
+    export CCACHE_BASEDIR=/build/source
+    export CCACHE_NOHASHDIR=true
+    export CCACHE_UMASK=007
+    export CCACHE_NAMESPACE=tenzir
+    export CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime,random_seed
+    if mkdir -p /tmp/tenzir-ccache/cache 2>/dev/null && [ -w /tmp/tenzir-ccache/cache ]; then
+      export CCACHE_DIR=/tmp/tenzir-ccache/cache
+    else
+      export CCACHE_DIR=''${TMPDIR:-/tmp}/ccache
+      mkdir -p "$CCACHE_DIR"
+    fi
+    if [ -S /tmp/tenzir-ccache/s3.sock ]; then
+      export CCACHE_REMOTE_STORAGE='crsh:/tmp/tenzir-ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-queue-bytes=536870912 @upload-workers=8 @upload-drain-timeout=60'
+      if [ -f /tmp/tenzir-ccache/remote-only ]; then
+        export CCACHE_REMOTE_ONLY=true
+        unset CCACHE_NOREMOTE_ONLY
+      else
+        unset CCACHE_REMOTE_ONLY
+        export CCACHE_NOREMOTE_ONLY=true
+        export CCACHE_RESHARE=true
+      fi
+    fi
+  '';
+
   excluded-integration-tests = lib.fileset.unions [
     # plugins not available in the Nix build.
     ../test/tests/operators/from_sentinelone_data_lake
@@ -29,11 +55,8 @@ rec {
     ../test/tests/operators/from_zmq/plain_read_json.tql
     ../test/tests/operators/from_zmq/prefix_read_json.tql
   ];
-  integration-test-tree = lib.fileset.difference
-    (lib.fileset.unions [
-      ../test
-    ])
-    excluded-integration-tests;
+  integration-test-tree = lib.fileset.difference ../test excluded-integration-tests;
+
   tenzir-tree = lib.fileset.unions [
     ../changelog
     ../cmake
@@ -109,6 +132,10 @@ rec {
       canUseMold = false; # linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
       linkAdapter = if canUseMold then linkPkgs.stdenvAdapters.useMoldLinker else lib.trivial.id;
       tenzirStdenv = linkAdapter baseStdenv;
+      tenzirCcacheStdenv = linkPkgs.ccacheStdenv.override {
+        stdenv = if forceClang then linkPkgs.clangStdenv else linkPkgs.stdenv;
+        extraConfig = ccacheExtraConfig;
+      };
       tenzir-de = linkPkgs.callPackage ./tenzir {
         inherit
           tenzir-source
@@ -116,7 +143,7 @@ rec {
           toImageFn
           isReleaseBuild
           ;
-        stdenv = tenzirStdenv;
+        stdenv = tenzirCcacheStdenv;
         caf = linkPkgs.caf.override {
           stdenv = tenzirStdenv;
         };

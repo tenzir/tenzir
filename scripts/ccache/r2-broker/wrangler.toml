@@ -1,0 +1,10 @@
+name = "tenzir-ccache-r2-broker"
+main = "src/index.js"
+compatibility_date = "2026-04-30"
+workers_dev = true
+preview_urls = false
+
+[vars]
+GITHUB_OIDC_AUDIENCE = "ccache-r2-broker"
+R2_TEMP_CREDENTIAL_PERMISSION = "object-read-write"
+R2_TEMP_CREDENTIAL_TTL_SECONDS = "3600"
