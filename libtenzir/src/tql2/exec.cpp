@@ -1883,36 +1883,45 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     }
   }
   auto elapsed = now - start_time;
-  // FIXME: The pipeline manager maintains a per-`operator_index` diff and
-  // cannot disambiguate two metrics at the same index. As a workaround, emit
-  // external first and fall back to internal only if there is no external
-  // traffic for that direction. This loses visibility into pipelines that mix
-  // internal and external ingress or egress.
-  auto send_source_metrics = [&](TrafficMetrics metrics, bool internal) {
-    if (metrics.bytes == 0 and metrics.events == 0) {
+  auto select_bytes = [](TrafficMetrics external, TrafficMetrics internal) {
+    return std::pair{external.bytes > 0 ? external.bytes : internal.bytes,
+                     external.bytes == 0};
+  };
+  auto select_events = [](TrafficMetrics external, TrafficMetrics internal) {
+    return std::pair{external.events > 0 ? external.events : internal.events,
+                     external.events == 0};
+  };
+  auto send_source_metrics = [&](TrafficMetrics external,
+                                 TrafficMetrics internal) {
+    auto [bytes_count, bytes_internal] = select_bytes(external, internal);
+    auto [events_count, events_internal] = select_events(external, internal);
+    if (bytes_count == 0 and events_count == 0) {
       return;
     }
     auto bytes = operator_metric{};
     bytes.operator_index = 0;
     bytes.operator_name = "source";
-    bytes.internal = internal;
+    bytes.internal = bytes_internal;
     bytes.outbound_measurement.unit = "bytes";
-    bytes.outbound_measurement.num_elements = metrics.bytes;
+    bytes.outbound_measurement.num_elements = bytes_count;
     bytes.time_total = elapsed;
     bytes.time_running = elapsed;
     caf::anon_mail(std::move(bytes)).send(node.metrics);
     auto events = operator_metric{};
     events.operator_index = 2;
     events.operator_name = "source";
-    events.internal = internal;
+    events.internal = events_internal;
     events.outbound_measurement.unit = "events";
-    events.outbound_measurement.num_elements = metrics.events;
+    events.outbound_measurement.num_elements = events_count;
     events.time_total = elapsed;
     events.time_running = elapsed;
     caf::anon_mail(std::move(events)).send(node.metrics);
   };
-  auto send_sink_metrics = [&](TrafficMetrics metrics, bool internal) {
-    if (metrics.bytes == 0 and metrics.events == 0) {
+  auto send_sink_metrics = [&](TrafficMetrics external,
+                               TrafficMetrics internal) {
+    auto [bytes_count, bytes_internal] = select_bytes(external, internal);
+    auto [events_count, events_internal] = select_events(external, internal);
+    if (bytes_count == 0 and events_count == 0) {
       return;
     }
     auto bytes = operator_metric{};
@@ -1921,32 +1930,24 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     // in the pipeline manager cannot handle the case where it's the same.
     bytes.operator_index = 1;
     bytes.operator_name = "sink";
-    bytes.internal = internal;
+    bytes.internal = bytes_internal;
     bytes.inbound_measurement.unit = "bytes";
-    bytes.inbound_measurement.num_elements = metrics.bytes;
+    bytes.inbound_measurement.num_elements = bytes_count;
     bytes.time_total = elapsed;
     bytes.time_running = elapsed;
     caf::anon_mail(std::move(bytes)).send(node.metrics);
     auto events = operator_metric{};
     events.operator_index = 3;
     events.operator_name = "sink";
-    events.internal = internal;
+    events.internal = events_internal;
     events.inbound_measurement.unit = "events";
-    events.inbound_measurement.num_elements = metrics.events;
+    events.inbound_measurement.num_elements = events_count;
     events.time_total = elapsed;
     events.time_running = elapsed;
     caf::anon_mail(std::move(events)).send(node.metrics);
   };
-  if (external_read.bytes > 0 or external_read.events > 0) {
-    send_source_metrics(external_read, false);
-  } else {
-    send_source_metrics(internal_read, true);
-  }
-  if (external_write.bytes > 0 or external_write.events > 0) {
-    send_sink_metrics(external_write, false);
-  } else {
-    send_sink_metrics(internal_write, true);
-  }
+  send_source_metrics(external_read, internal_read);
+  send_sink_metrics(external_write, internal_write);
   // Always drain profiles to prune dead channels/executors, even when there
   // is no importer to send snapshots to. Without this, the profile vectors
   // would grow unboundedly for long-running pipelines with dynamic
