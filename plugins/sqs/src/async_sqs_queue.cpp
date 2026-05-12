@@ -149,11 +149,12 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
         if (resp.status_code < 200 or resp.status_code >= 300) {
           auto error_msg = extract_sqs_error_message(resp.body);
           if (is_retriable_status(resp.status_code)) {
-            TENZIR_WARN("SQS API returned HTTP {} (retrying): {}",
-                        resp.status_code, error_msg);
+            TENZIR_WARN("SQS API at {} returned HTTP {} (retrying): {}",
+                        endpoint_url, resp.status_code, error_msg);
             throw sqs_retriable_error{resp.status_code, std::move(error_msg)};
           }
           diagnostic::error("SQS API returned HTTP {}", resp.status_code)
+            .note("endpoint: {}", endpoint_url)
             .note("{}", error_msg)
             .throw_();
         }
@@ -177,11 +178,13 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
     if (e.status_code != 0) {
       diagnostic::error("SQS API returned HTTP {} after {} retries",
                         e.status_code, retry_max_retries)
+        .note("endpoint {}", endpoint_url)
         .note("{}", e.detail)
         .throw_();
     }
     diagnostic::error("SQS HTTP request failed after {} retries",
                       retry_max_retries)
+      .note("endpoint {}", endpoint_url)
       .note("{}", e.detail)
       .throw_();
   }
