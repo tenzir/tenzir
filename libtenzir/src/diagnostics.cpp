@@ -64,14 +64,16 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::optional<location_origin> origin,
+  diagnostic_printer(std::vector<location_origin> origins,
                      color_diagnostics color, std::ostream& stream)
-    : colors{colors::make(color)},
-      storage_{origin ? std::move(origin->source) : ""},
-      lines_{origin ? detail::split(storage_, "\n")
-                    : std::vector<std::string_view>{}},
-      stream_{stream},
-      filename_{origin ? std::move(origin->filename) : ""} {
+    : colors{colors::make(color)}, stream_{stream} {
+    sources_.reserve(origins.size());
+    for (auto& o : origins) {
+      auto storage = std::move(o.source);
+      auto lines = detail::split(storage, "\n");
+      sources_.push_back(
+        {std::move(storage), std::move(lines), std::move(o.filename)});
+    }
   }
 
   void emit(diagnostic diag) override {
@@ -83,18 +85,20 @@ public:
                diag.severity, uncolor, diag.message, reset);
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
-      if (lines_.empty()) {
+      auto* src = source_for(annotation.source.source_index);
+      if (not src) {
         // TODO: This is a hack for the case where we don't have the information.
         break;
       }
-      if (auto lc = line_col_indices(annotation.source.begin)) {
+      if (auto lc = line_col_indices(*src, annotation.source.begin)) {
         auto [line, col] = *lc;
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
-      if (lines_.empty()) {
+      auto* src = source_for(annotation.source.source_index);
+      if (not src) {
         // TODO: This is a hack for the case where we don't have the information.
         break;
       }
@@ -102,7 +106,7 @@ public:
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
-      auto lc = line_col_indices(annotation.source.begin);
+      auto lc = line_col_indices(*src, annotation.source.begin);
       if (not lc) {
         // Source offset is beyond the available source text. This can
         // happen when diagnostics reference a modified definition.
@@ -112,14 +116,14 @@ public:
       auto line = line_idx + 1;
       if (&annotation == &diag.annotations.front()) {
         fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                   filename_, line, col + 1);
+                   src->filename, line, col + 1);
         fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       } else {
         fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
       }
       fmt::print(stream_, "{}{}{}{} |{} {}\n",
                  std::string(indent_width - std::to_string(line).size(), ' '),
-                 bold, blue, line, reset, lines_[line_idx]);
+                 bold, blue, line, reset, src->lines[line_idx]);
       // TODO: This doesn't respect multi-line spans.
       auto count
         = std::max(size_t{1}, annotation.source.end - annotation.source.begin);
@@ -151,6 +155,12 @@ public:
   }
 
 private:
+  struct per_source {
+    std::string storage;
+    std::vector<std::string_view> lines;
+    std::string filename;
+  };
+
   static auto symbol(severity s) -> char {
     switch (s) {
       case severity::error:
@@ -175,20 +185,27 @@ private:
     TENZIR_UNREACHABLE();
   }
 
+  auto source_for(size_t source_index) const -> const per_source* {
+    if (source_index >= sources_.size()) {
+      return nullptr;
+    }
+    return &sources_[source_index];
+  }
+
   /// Returned indices are zero-based. Returns nullopt if the offset is
   /// beyond the end of the source text.
-  auto line_col_indices(size_t offset)
+  static auto line_col_indices(const per_source& src, size_t offset)
     -> std::optional<std::pair<size_t, size_t>> {
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      if (line >= lines_.size()) {
+      if (line >= src.lines.size()) {
         return std::nullopt;
       }
-      if (col <= lines_[line].size()) {
+      if (col <= src.lines[line].size()) {
         break;
       }
-      col -= lines_[line].size() + 1;
+      col -= src.lines[line].size() + 1;
       line += 1;
     }
     return std::pair{line, col};
@@ -196,10 +213,8 @@ private:
 
   bool first = true;
   bool error_ = false;
-  std::string storage_;
-  std::vector<std::string_view> lines_;
+  std::vector<per_source> sources_;
   std::ostream& stream_;
-  std::string filename_;
 };
 
 } // namespace
@@ -215,10 +230,11 @@ diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
   trim_and_truncate(this->message);
 }
 
-auto make_diagnostic_printer(std::optional<location_origin> origin,
+auto make_diagnostic_printer(std::vector<location_origin> origins,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
-  return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
+  return std::make_unique<diagnostic_printer>(std::move(origins), color,
+                                              stream);
 }
 
 auto diagnostic::builder(enum severity s, caf::error err,

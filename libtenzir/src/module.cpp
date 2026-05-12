@@ -259,8 +259,9 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       TENZIR_DEBUG("loading schema {}", f);
       auto str = detail::load_contents(f);
       TENZIR_ASSERT(str);
-      auto dh = make_diagnostic_printer(location_origin{f, *str},
-                                        color_diagnostics::yes, std::cerr);
+      auto dh = make_diagnostic_printer(
+        std::vector<location_origin>{{std::string{f}, *str}},
+        color_diagnostics::yes, std::cerr);
       auto sp = session_provider::make(*dh);
       auto ast = parse(*str, sp.as_session());
       if (not ast) {
@@ -293,8 +294,8 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       }
     }
   }
-  auto dh
-    = make_diagnostic_printer(std::nullopt, color_diagnostics::yes, std::cerr);
+  auto dh = make_diagnostic_printer(std::vector<location_origin>{},
+                                    color_diagnostics::yes, std::cerr);
   struct visitor {
     visitor(symbol_map2& res, diagnostic_handler& dh) : res{res}, dh{dh} {
     }

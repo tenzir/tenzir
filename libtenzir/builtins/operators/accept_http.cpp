@@ -349,9 +349,7 @@ public:
         auto pipeline = args_.parser.inner;
         auto env = substitute_ctx::env_t{};
         env[args_.request] = make_request_context(msg.metadata);
-        auto reg = global_registry();
-        auto b_ctx = base_ctx{ctx, *reg};
-        if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
+        if (not pipeline.substitute(substitute_ctx{ctx, &env}, true)) {
           diagnostic::warning("failed to prepare parser pipeline for request")
             .primary(args_.endpoint)
             .note("request path: {}", msg.metadata.path)

@@ -19,6 +19,7 @@
 
 #include <arrow/util/utf8.h>
 
+#include <limits>
 #include <ranges>
 #include <string_view>
 namespace tenzir {
@@ -76,10 +77,10 @@ public:
 
   template <class F>
   static auto parse_with(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag, bool anonymous, F&& f)
+                         diagnostic_handler& diag, size_t source_index, F&& f)
     -> failure_or<std::invoke_result_t<F, parser&>> {
     try {
-      auto self = parser{tokens, source, diag, anonymous};
+      auto self = parser{tokens, source, diag, source_index};
       auto result = std::invoke(std::forward<F>(f), self);
       if (self.next_ != self.tokens_.size()) {
         self.throw_token("expected EOF");
@@ -1351,7 +1352,7 @@ public:
   }
 
   auto token_location(size_t idx) const -> location {
-    if (anonymous_) {
+    if (source_index_ == suppress_source_index) {
       return location::unknown;
     }
     return force_token_location(idx);
@@ -1361,8 +1362,11 @@ public:
     TENZIR_ASSERT(idx < tokens_.size());
     auto begin = idx == 0 ? 0 : tokens_[idx - 1].end;
     auto end = tokens_[idx].end;
-    // This ignores `anonymous_` on purpose.
-    return location{begin, end};
+    // This ignores the suppress mode on purpose — caller decides whether to
+    // use the result for diagnostics.
+    auto si
+      = (source_index_ != suppress_source_index) ? source_index_ : size_t{0};
+    return {begin, end, si};
   }
 
   auto token_string(size_t idx) const -> std::string_view {
@@ -1520,7 +1524,7 @@ public:
   }
 
   auto next_location() const -> location {
-    if (anonymous_) {
+    if (source_index_ == suppress_source_index) {
       return location::unknown;
     }
     auto loc = location{};
@@ -1531,6 +1535,7 @@ public:
       loc.begin = tokens_.back().end;
       loc.end = tokens_.back().end;
     }
+    loc.source_index = source_index_;
     return loc;
   }
 
@@ -1599,10 +1604,18 @@ public:
   }
 
   parser(std::span<token> tokens, std::string_view source,
-         diagnostic_handler& diag, bool anonymous)
-    : tokens_{tokens}, source_{source}, diag_{diag}, anonymous_{anonymous} {
+         diagnostic_handler& diag, size_t source_index)
+    : tokens_{tokens},
+      source_{source},
+      diag_{diag},
+      source_index_{source_index} {
     consume_trivia();
   }
+
+  /// Sentinel value for `source_index_` that suppresses location output,
+  /// equivalent to the former `anonymous = true` mode.
+  static constexpr size_t suppress_source_index
+    = std::numeric_limits<size_t>::max();
 
   std::span<token> tokens_;
   std::string_view source_;
@@ -1611,21 +1624,21 @@ public:
   size_t last_ = 0;
   bool ignore_newlines_ = false;
   std::vector<token_kind> tries_;
-  bool anonymous_ = false;
+  size_t source_index_ = 0;
 };
 
 auto parse_pipeline(std::span<token> tokens, std::string_view source,
-                    diagnostic_handler& dh, bool anonymous)
+                    diagnostic_handler& dh, size_t source_index)
   -> failure_or<ast::pipeline> {
-  return parser::parse_with(tokens, source, dh, anonymous, [](parser& self) {
+  return parser::parse_with(tokens, source, dh, source_index, [](parser& self) {
     return self.parse_pipeline();
   });
 }
 
 auto parse_expression_stream(std::span<token> tokens, std::string_view source,
-                             diagnostic_handler& dh, bool anonymous)
+                             diagnostic_handler& dh, size_t source_index)
   -> failure_or<expression_stream> {
-  auto self = parser{tokens, source, dh, anonymous};
+  auto self = parser{tokens, source, dh, source_index};
   return self.parse_expression_stream();
 }
 
@@ -1633,7 +1646,7 @@ auto parse_expression_stream(std::span<token> tokens, std::string_view source,
 
 auto parse(std::span<token> tokens, std::string_view source, session ctx)
   -> failure_or<ast::pipeline> {
-  return parse_pipeline(tokens, source, ctx, false);
+  return parse_pipeline(tokens, source, ctx, 0);
 }
 
 auto parse(std::string_view source, session ctx) -> failure_or<ast::pipeline> {
@@ -1644,15 +1657,23 @@ auto parse(std::string_view source, session ctx) -> failure_or<ast::pipeline> {
 auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::pipeline> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parse_pipeline(tokens, source, ctx, true);
+  return parse_pipeline(tokens, source, ctx, parser::suppress_source_index);
+}
+
+auto parse_pipeline_with_source_index(std::string_view source,
+                                      size_t source_index, session ctx)
+  -> failure_or<ast::pipeline> {
+  TRY(auto tokens, tokenize(source, ctx));
+  return parse_pipeline(tokens, source, ctx, source_index);
 }
 
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::expression> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, true, [](class parser& self) {
-    return self.parse_expression();
-  });
+  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+                            [](class parser& self) {
+                              return self.parse_expression();
+                            });
 }
 
 auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)
@@ -1669,24 +1690,27 @@ auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
   // Streaming callers may pass partial trailing UTF-8 sequences at chunk
   // boundaries; defer handling to permissive tokenization + parser recovery.
   auto tokens = tokenize_permissive(source);
-  return parse_expression_stream(tokens, source, ctx, true);
+  return parse_expression_stream(tokens, source, ctx,
+                                 parser::suppress_source_index);
 }
 
 auto parse_assignment_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::assignment> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, true, [](class parser& self) {
-    return self.parse_assignment();
-  });
+  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+                            [](class parser& self) {
+                              return self.parse_assignment();
+                            });
 }
 
 auto parse_multiple_assignments_with_bad_diagnostics(std::string_view source,
                                                      session ctx)
   -> failure_or<std::vector<ast::assignment>> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, true, [](class parser& self) {
-    return self.parse_multiple_assignments();
-  });
+  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+                            [](class parser& self) {
+                              return self.parse_multiple_assignments();
+                            });
 }
 
 } // namespace tenzir
