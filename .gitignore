@@ -45,8 +45,8 @@ venv/
 .cmake/
 
 # Claude
+.claude/
 CLAUDE.local.md
-.claude/settings.local.json
 CLAUDE-TODOS.md
 .docs/
 
