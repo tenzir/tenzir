@@ -352,6 +352,10 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsType::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::events);
     co_return;
   }
 
@@ -447,11 +451,13 @@ public:
         for (auto& slice : slices) {
           auto filtered = handle_slice(is_action, slice);
           if (args_.keep_actions) {
-            if (slice.rows() > 0) {
+            if (auto rows = slice.rows(); rows > 0) {
+              events_read_counter_.add(rows);
               co_await push(std::move(slice));
             }
           } else {
-            if (filtered.rows() > 0) {
+            if (auto rows = filtered.rows(); rows > 0) {
+              events_read_counter_.add(rows);
               co_await push(std::move(filtered));
             }
           }
@@ -484,11 +490,13 @@ public:
         for (auto& slice : slices) {
           auto filtered = handle_slice(is_action, slice);
           if (args_.keep_actions) {
-            if (slice.rows() > 0) {
+            if (auto rows = slice.rows(); rows > 0) {
+              events_read_counter_.add(rows);
               co_await push(std::move(slice));
             }
           } else {
-            if (filtered.rows() > 0) {
+            if (auto rows = filtered.rows(); rows > 0) {
+              events_read_counter_.add(rows);
               co_await push(std::move(filtered));
             }
           }
@@ -596,6 +604,7 @@ private:
   Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
   std::unordered_map<uint64_t, InFlightRequest> active_requests_{{}};
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
 };
 
