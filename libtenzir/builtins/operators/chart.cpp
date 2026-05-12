@@ -21,6 +21,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/variant.hpp"
 
 #include <ranges>
 #include <string_view>
@@ -65,6 +66,9 @@ struct Bucket {
 struct GroupedBucket {
   detail::stable_map<std::string, Bucket> groups;
 };
+
+using OrderedGroupMap = std::map<data, GroupedBucket>;
+using CategoricalGroupMap = detail::stable_map<data, GroupedBucket>;
 
 struct xlimit {
   located<data> value;
@@ -169,20 +173,19 @@ auto handle_y(call_map& y_out, location& y_loc_out,
     },
     [&](auto&) -> failure_or<void> {
       TENZIR_ASSERT(not res); // caught by validate
-      auto const yname = std::invoke([&]() -> std::string {
-        if (auto ss = ast::field_path::try_from(y)) {
-          return fmt::format("{}", fmt::join(ss->path()
-                                               | std::ranges::views::transform(
-                                                 &ast::field_path::segment::id)
-                                               | std::ranges::views::transform(
-                                                 &ast::identifier::name),
-                                             "."));
-        }
-        if (Ty == chart_type::pie) {
-          return "value";
-        }
-        return "y";
-      });
+      auto yname = std::string{};
+      if (auto ss = ast::field_path::try_from(y)) {
+        yname = fmt::format("{}", fmt::join(ss->path()
+                                              | std::ranges::views::transform(
+                                                &ast::field_path::segment::id)
+                                              | std::ranges::views::transform(
+                                                &ast::identifier::name),
+                                            "."));
+      } else if (Ty == chart_type::pie) {
+        yname = "value";
+      } else {
+        yname = "y";
+      }
       auto const loc = y.get_location();
       auto result = ast::function_call{entity, {std::move(y)}, loc, false};
       TENZIR_ASSERT(resolve_entities(result, ctx));
@@ -349,16 +352,19 @@ private:
 
   auto process_slice(table_slice const& slice, session ctx) -> void {
     auto& dh = ctx.dh();
-    auto consumed = size_t{};
     auto xs = eval(args_.x, slice, dh);
     auto gs = get_group_strings(slice, dh);
     TENZIR_ASSERT(gs.type.kind().template is<string_type>());
     if (not xty_) {
       if (not validate_x(xs.type, dh)) {
-        consumed += xs.length();
         return;
       }
       xty_ = xs.type;
+      if (is_categorical(xs.type)) {
+        groups_ = CategoricalGroupMap{};
+      } else {
+        groups_ = OrderedGroupMap{};
+      }
     }
     if (xs.type != xty_.value()) {
       if (xs.type.kind().template is_not<null_type>()
@@ -369,59 +375,95 @@ private:
           .primary(args_.x)
           .note("skipping invalid events")
           .emit(dh);
-        consumed += xs.length();
         return;
       }
     }
     if (args_.res) {
       xs = floor(xs);
     }
-    Bucket* b = nullptr;
-    for (auto i = size_t{};
-         auto&& [idx, x] : detail::enumerate<int64_t>(xs.values())) {
-      auto const group_name = std::invoke([&]() -> std::string {
+    match(groups_, [&](auto& groups) {
+      auto* current_bucket = static_cast<Bucket*>(nullptr);
+      auto run_begin = size_t{0};
+      auto flush = [&](size_t run_end) {
+        if (not current_bucket or run_begin == run_end) {
+          return;
+        }
+        for (auto&& instance : current_bucket->instances) {
+          instance->update(subslice(slice, run_begin, run_end), ctx);
+        }
+      };
+      for (auto&& [idx, x] : detail::enumerate<int64_t>(xs.values())) {
+        auto const row = detail::narrow<size_t>(idx);
+        if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {
+          if (is<caf::none_t>(x)) {
+            flush(row);
+            current_bucket = nullptr;
+            run_begin = row + 1;
+            diagnostic::warning("x-axis cannot be `null`")
+              .primary(args_.x)
+              .emit(ctx);
+            continue;
+          }
+        }
+        auto group_name = std::string{};
         if (gs.array->IsNull(idx)) {
           if (args_.group) {
             diagnostic::warning("got group name `null`")
               .primary(*args_.group)
               .note("using `\"null\"` instead")
               .emit(dh);
-            return std::string{"null"};
+            group_name = "null";
           }
-          return std::string{};
-        }
-        return std::string{*view_at<string_type>(*gs.array, idx)};
-      });
-      auto [newb, new_bucket] = get_bucket(groups_, x, group_name, ctx);
-      if (b != newb or new_bucket) {
-        if (b) {
-          for (auto&& instance : b->instances) {
-            instance->update(subslice(slice, consumed, consumed + i), ctx);
-          }
-        }
-        if (new_bucket) {
-          b = &get_groups(groups_, x, ctx)
-                 ->groups.emplace(group_name, make_bucket(prep_->plugins, ctx))
-                 .first->second;
         } else {
-          b = newb;
+          group_name = *view_at<string_type>(*gs.array, idx);
         }
-        consumed += i;
-        i = 0;
-      }
-      ++i;
-    }
-    if (b) {
-      for (auto&& instance : b->instances) {
-        if (consumed != slice.rows()) {
-          instance->update(subslice(slice, consumed, slice.rows()), ctx);
+        auto x_value = materialize(x);
+        auto group_it = groups.find(x_value);
+        if (group_it == groups.end()) {
+          flush(row);
+          current_bucket = nullptr;
+          run_begin = row;
+          if (groups.size() == args_.limit.inner) {
+            if (not limit_warning_emitted_) {
+              diagnostic::warning("got more than {} data points",
+                                  args_.limit.inner)
+                .primary(args_.x)
+                .note("skipping excess data points")
+                .hint("consider filtering data or aggregating over a bigger "
+                      "`resolution`")
+                .emit(ctx);
+              limit_warning_emitted_ = true;
+            }
+            run_begin = row + 1;
+            continue;
+          }
+          group_it = groups.try_emplace(std::move(x_value)).first;
+        }
+        auto& group = group_it->second.groups;
+        auto bucket_it = group.find(group_name);
+        if (bucket_it == group.end()) {
+          flush(row);
+          current_bucket = nullptr;
+          run_begin = row;
+          bucket_it
+            = group.try_emplace(group_name, make_bucket(prep_->plugins, ctx))
+                .first;
+        }
+        auto* bucket = &bucket_it->second;
+        if (bucket != current_bucket) {
+          flush(row);
+          current_bucket = bucket;
+          run_begin = row;
         }
       }
-    }
+      flush(slice.rows());
+    });
   }
 
   auto build_output(diagnostic_handler& dh) -> std::vector<table_slice> {
-    if (groups_.empty()) {
+    if (match(groups_, [](auto const& groups) {
+          return groups.empty();
+        })) {
       diagnostic::warning("chart_{} received no valid data", to_string(Ty))
         .primary(args_.x)
         .emit(dh);
@@ -430,11 +472,13 @@ private:
     auto const& xpath = prep_->xpath;
     // Collect unique group names in insertion order
     auto all_group_names = detail::stable_set<std::string>{};
-    for (auto const& [_, gb] : groups_) {
-      for (auto const& [gname, _] : gb.groups) {
-        all_group_names.emplace(gname);
+    match(groups_, [&](auto const& groups) {
+      for (auto const& [_, gb] : groups) {
+        for (auto const& [gname, _] : gb.groups) {
+          all_group_names.emplace(gname);
+        }
       }
-    }
+    });
     auto ynames = detail::stable_map<std::string, bool>{};
     auto b = series_builder{};
     auto const make_yname = [&](std::string_view group, std::string_view y) {
@@ -486,41 +530,51 @@ private:
         }
       }
     };
-    if (prep_->x_min and args_.res) {
-      TENZIR_ASSERT(not groups_.empty());
-      auto min = std::optional{prep_->x_min->rounded};
-      auto const& first = groups_.begin()->first;
-      if (*min != first) {
-        fill_at(*min);
-      }
-      while (auto gap = find_gap(min, first)) {
-        min = gap.value();
-        fill_at(std::move(gap).value());
-      }
-    }
-    for (auto prev = std::optional<data>{};
-         auto const& [x, gb] : groups_ | std::views::take(args_.limit.inner)) {
-      if (args_.res) {
-        while (auto gap = find_gap(prev, x)) {
-          prev = gap.value();
-          fill_at(std::move(gap).value());
+    match(
+      groups_,
+      [&](OrderedGroupMap const& groups) {
+        if (prep_->x_min and args_.res) {
+          TENZIR_ASSERT(not groups.empty());
+          auto min = std::optional{prep_->x_min->rounded};
+          auto const& first = groups.begin()->first;
+          if (*min != first) {
+            fill_at(*min);
+          }
+          while (auto gap = find_gap(min, first)) {
+            min = gap.value();
+            fill_at(std::move(gap).value());
+          }
         }
-      }
-      insert(x, gb);
-      prev = x;
-    }
-    if (prep_->x_max and args_.res) {
-      TENZIR_ASSERT(not groups_.empty());
-      auto last = std::optional{groups_.rbegin()->first};
-      auto const& max = prep_->x_max->rounded;
-      while (auto gap = find_gap(last, max)) {
-        last = gap.value();
-        fill_at(std::move(gap).value());
-      }
-      if (*last != max) {
-        fill_at(max);
-      }
-    }
+        for (auto prev = std::optional<data>{};
+             auto const& [x, gb] :
+             groups | std::views::take(args_.limit.inner)) {
+          if (args_.res) {
+            while (auto gap = find_gap(prev, x)) {
+              prev = gap.value();
+              fill_at(std::move(gap).value());
+            }
+          }
+          insert(x, gb);
+          prev = x;
+        }
+        if (prep_->x_max and args_.res) {
+          TENZIR_ASSERT(not groups.empty());
+          auto last = std::optional{groups.rbegin()->first};
+          auto const& max = prep_->x_max->rounded;
+          while (auto gap = find_gap(last, max)) {
+            last = gap.value();
+            fill_at(std::move(gap).value());
+          }
+          if (*last != max) {
+            fill_at(max);
+          }
+        }
+      },
+      [&](CategoricalGroupMap const& groups) {
+        for (auto const& [x, gb] : groups) {
+          insert(x, gb);
+        }
+      });
     auto slices = b.finish_as_table_slice("tenzir.chart");
     if (slices.size() > 1) {
       diagnostic::warning("got type conflicts, emitting multiple schemas")
@@ -597,65 +651,25 @@ private:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(std::map<data, GroupedBucket>& map, data_view3 const& x,
-                  session ctx) const -> GroupedBucket* {
-    auto const xv = materialize(x);
-    if (auto it = map.find(xv); it != map.end()) {
-      return &it->second;
-    }
-    if (map.size() == args_.limit.inner) {
-      diagnostic::warning("got more than {} data points", args_.limit.inner)
-        .primary(args_.x)
-        .note("skipping excess data points")
-        .hint(
-          "consider filtering data or aggregating over a bigger `resolution`")
-        .emit(ctx);
-      return nullptr;
-    }
-    return &map[xv];
-  }
-
-  auto get_bucket(std::map<data, GroupedBucket>& map, data_view3 const& x,
-                  std::string const& group, session ctx) const
-    -> std::pair<Bucket*, bool> {
-    if constexpr (Ty != chart_type::bar and Ty != chart_type::pie) {
-      if (is<caf::none_t>(x)) {
-        diagnostic::warning("x-axis cannot be `null`")
-          .primary(args_.x)
-          .emit(ctx);
-        return {nullptr, false};
-      }
-    }
-    auto* gs = get_groups(map, x, ctx);
-    if (not gs) {
-      return {nullptr, false};
-    }
-    if (auto it = gs->groups.find(group); it != gs->groups.end()) {
-      return {&it->second, false};
-    }
-    return {nullptr, true};
-  }
-
   auto filter_input(table_slice slice, diagnostic_handler& dh) -> table_slice {
     // Early exit: no limits set
     if (not prep_->x_min and not prep_->x_max) {
       return slice;
     }
     // Build combined expression from x_min and x_max
-    auto const expr = std::invoke([&]() -> ast::expression {
-      if (prep_->x_min and prep_->x_max) {
-        return ast::binary_expr{
-          prep_->x_min->expr,
-          {ast::binary_op::and_, location::unknown},
-          prep_->x_max->expr,
-        };
-      }
-      if (prep_->x_min) {
-        return prep_->x_min->expr;
-      }
+    auto expr = ast::expression{};
+    if (prep_->x_min and prep_->x_max) {
+      expr = ast::binary_expr{
+        prep_->x_min->expr,
+        {ast::binary_op::and_, location::unknown},
+        prep_->x_max->expr,
+      };
+    } else if (prep_->x_min) {
+      expr = prep_->x_min->expr;
+    } else {
       TENZIR_ASSERT(prep_->x_max);
-      return prep_->x_max->expr;
-    });
+      expr = prep_->x_max->expr;
+    }
     // Evaluate expression and collect filtered slices
     auto results = std::vector<table_slice>{};
     auto offset = int64_t{0};
@@ -760,6 +774,13 @@ private:
     return true;
   }
 
+  auto is_categorical(type const& ty) const -> bool {
+    if constexpr (Ty == chart_type::bar or Ty == chart_type::pie) {
+      return ty.kind().is_any<null_type, ip_type, subnet_type, string_type>();
+    }
+    return false;
+  }
+
   auto validate_y(data const& d, std::string_view yname, tenzir::location loc,
                   diagnostic_handler& dh) const -> bool {
     auto const ty = type::infer(d);
@@ -842,7 +863,8 @@ private:
   std::optional<Prepared> prep_;
   // state
   std::optional<type> xty_;
-  std::map<data, GroupedBucket> groups_;
+  variant<OrderedGroupMap, CategoricalGroupMap> groups_ = OrderedGroupMap{};
+  bool limit_warning_emitted_ = false;
 };
 
 // Helper validation for x limit types

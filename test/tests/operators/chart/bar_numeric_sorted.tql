@@ -1,0 +1,4 @@
+from {x: 2},
+     {x: 1},
+     {x: 3}
+chart_bar x=x, y=count()

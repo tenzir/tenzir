@@ -1,0 +1,12 @@
+{
+  category: "critical",
+  n: 3.0,
+}
+{
+  category: "medium",
+  n: 2.0,
+}
+{
+  category: "low",
+  n: 1.0,
+}

@@ -1,0 +1,16 @@
+{
+  x: "b",
+  y: 2.0,
+}
+{
+  x: "a",
+  y: 1.0,
+}
+warning: got more than 2 data points
+ --> tests/operators/chart/bar_categorical_limit.tql:5:13
+  |
+5 | chart_bar x=x, y=count(), _limit=2
+  |             ~ 
+  |
+  = note: skipping excess data points
+  = hint: consider filtering data or aggregating over a bigger `resolution`
