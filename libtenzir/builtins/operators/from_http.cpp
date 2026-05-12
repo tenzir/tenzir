@@ -934,7 +934,7 @@ private:
     bytes_read_ = ctx.make_counter(
       MetricsLabel{"host",
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
-      MetricsDirection::read, MetricsVisibility::external_);
+      MetricsDirection::read, MetricsVisibility::external_, MetricsType::bytes);
     ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
                          fetch_config_, static_cast<bool>(args_.error_field),
                          message_queue_));

@@ -364,7 +364,8 @@ public:
         auto bytes_read = ctx.make_counter(
           MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
                                       msg.metadata.client_ip)},
-          MetricsDirection::read, MetricsVisibility::external_);
+          MetricsDirection::read, MetricsVisibility::external_,
+          MetricsType::bytes);
         {
           auto active_requests = co_await active_requests_.lock();
           active_requests->emplace(

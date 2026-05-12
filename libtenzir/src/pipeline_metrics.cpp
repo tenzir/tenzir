@@ -10,54 +10,57 @@
 
 namespace tenzir {
 
-template <MetricsType Type>
-Metric<Type>::Metric(std::shared_ptr<std::atomic<uint64_t>> value)
+template <MetricsInstrument Instrument>
+Metric<Instrument>::Metric(std::shared_ptr<std::atomic<uint64_t>> value)
   : value_{std::move(value)} {
 }
 
-template <MetricsType type>
-void Metric<type>::add(uint64_t bytes) {
+template <MetricsInstrument Instrument>
+void Metric<Instrument>::add(uint64_t value) {
   if (value_) {
-    value_->fetch_add(bytes, std::memory_order_relaxed);
+    value_->fetch_add(value, std::memory_order_relaxed);
   }
 }
 
-template <MetricsType Type>
-void Metric<Type>::remove(uint64_t bytes)
-  requires(Type == MetricsType::gauge)
+template <MetricsInstrument Instrument>
+void Metric<Instrument>::remove(uint64_t value)
+  requires(Instrument == MetricsInstrument::gauge)
 {
   if (value_) {
-    value_->fetch_sub(bytes, std::memory_order_relaxed);
+    value_->fetch_sub(value, std::memory_order_relaxed);
   }
 }
 
-template <MetricsType Type>
-void Metric<Type>::set(uint64_t bytes)
-  requires(Type == MetricsType::gauge)
+template <MetricsInstrument Instrument>
+void Metric<Instrument>::set(uint64_t value)
+  requires(Instrument == MetricsInstrument::gauge)
 {
   if (value_) {
-    value_->store(bytes, std::memory_order_relaxed);
+    value_->store(value, std::memory_order_relaxed);
   }
 }
 
-template <MetricsType type>
-Metric<type>::operator bool() const {
+template <MetricsInstrument Instrument>
+Metric<Instrument>::operator bool() const {
   return value_ != nullptr;
 }
 
-template class Metric<MetricsType::counter>;
+template class Metric<MetricsInstrument::counter>;
 
-template class Metric<MetricsType::gauge>;
+template class Metric<MetricsInstrument::gauge>;
 
-template <MetricsType Type>
+template <MetricsInstrument Instrument>
 auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
-                           MetricsVisibility visibility) -> Metric<Type> {
+                           MetricsVisibility visibility, MetricsType type)
+  -> Metric<Instrument> {
   auto lock = std::lock_guard{mutex_};
   for (auto& e : entries_) {
     // We currently ignore the labels and only store one entry per `(direction,
-    // visibility)` combination. This should be cleaned up together with gauges.
-    if (e.direction == direction and e.visibility == visibility) {
-      return Metric<Type>{e.value};
+    // visibility, type)` combination. This should be cleaned up together with
+    // gauges.
+    if (e.direction == direction and e.visibility == visibility
+        and e.type == type) {
+      return Metric<Instrument>{e.value};
     }
   }
   auto value = std::make_shared<std::atomic<uint64_t>>(0);
@@ -65,27 +68,29 @@ auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
     .label = label,
     .direction = direction,
     .visibility = visibility,
-    .type = Type,
+    .instrument = Instrument,
+    .type = type,
     .value = value,
   });
-  return Metric<Type>{std::move(value)};
+  return Metric<Instrument>{std::move(value)};
 }
 
-template auto
-  PipelineMetrics::make<MetricsType::counter>(MetricsLabel, MetricsDirection,
-                                              MetricsVisibility)
-    -> Metric<MetricsType::counter>;
+template auto PipelineMetrics::make<MetricsInstrument::counter>(
+  MetricsLabel, MetricsDirection, MetricsVisibility, MetricsType)
+  -> Metric<MetricsInstrument::counter>;
 
-template auto
-  PipelineMetrics::make<MetricsType::gauge>(MetricsLabel, MetricsDirection,
-                                            MetricsVisibility)
-    -> Metric<MetricsType::gauge>;
+template auto PipelineMetrics::make<MetricsInstrument::gauge>(MetricsLabel,
+                                                              MetricsDirection,
+                                                              MetricsVisibility,
+                                                              MetricsType)
+  -> Metric<MetricsInstrument::gauge>;
 
 auto PipelineMetrics::Entry::snapshot() const -> MetricsSnapshotEntry {
   return MetricsSnapshotEntry{
     .label = label,
     .direction = direction,
     .visibility = visibility,
+    .instrument = instrument,
     .type = type,
     .value = value->load(std::memory_order_relaxed),
   };

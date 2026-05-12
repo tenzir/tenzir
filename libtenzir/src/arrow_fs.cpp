@@ -92,7 +92,12 @@ auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   root_path_ = extract_root_path(glob_, fs->path);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
-                       MetricsDirection::read, MetricsVisibility::external_);
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsType::bytes);
+  events_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsType::events);
   co_await restore(ctx);
   auto ndh = null_diagnostic_handler{};
   co_await cleanup_files(ndh);
@@ -244,6 +249,15 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         co_await cleanup_file(std::move(path), ctx.dh());
       }
     });
+}
+
+auto FromArrowFsOperator::process_sub(SubKeyView key, table_slice slice,
+                                      Push<table_slice>& push, OpCtx& ctx)
+  -> Task<void> {
+  TENZIR_UNUSED(key, ctx);
+  auto const rows = slice.rows();
+  co_await push(std::move(slice));
+  events_read_counter_.add(rows);
 }
 
 auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
@@ -599,7 +613,12 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
   bytes_written_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
-                       MetricsDirection::write, MetricsVisibility::external_);
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsType::bytes);
+  events_written_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsType::events);
 }
 
 auto ToArrowFsOperator::preprocess(table_slice input, OpCtx&)
@@ -690,6 +709,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
       co_return;
     }
     auto slice = filter(input, arrow::BooleanArray{rows, bitmap});
+    auto const slice_rows = slice.rows();
     // `push` runs without the guard. If it suspends on a full input
     // channel and we still hold the guard, `process_sub` on the draining
     // side cannot acquire the guard to look up the partition, and
@@ -702,6 +722,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
         .emit(ctx.dh());
       co_return;
     }
+    events_written_counter_.add(slice_rows);
   }
 }
 

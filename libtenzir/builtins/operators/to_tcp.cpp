@@ -239,7 +239,8 @@ private:
     bytes_write_counter_ = ctx.make_counter(
       MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                 peer_addr.getAddressStr())},
-      MetricsDirection::write, MetricsVisibility::external_);
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsType::bytes);
     TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
   }
 

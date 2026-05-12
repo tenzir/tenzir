@@ -88,7 +88,8 @@ public:
         "operator",
         "to_http",
       },
-      MetricsDirection::write, MetricsVisibility::external_);
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsType::bytes);
     // setup url, headers & tls
     if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
         result.is_error()) {

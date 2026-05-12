@@ -286,7 +286,12 @@ public:
     }
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_amqp"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_amqp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::events);
     ctx.spawn_task(consume_loop(std::move(engine), queue_));
   }
 
@@ -305,7 +310,7 @@ public:
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (result.try_as<PeriodicTick>()) {
-      co_await pusher_.push(builder_.yield_ready(), push);
+      co_await pusher_.push(builder_.yield_ready(), push, events_read_counter_);
       co_return;
     }
     auto* event = result.try_as<FromAmqpEvent>();
@@ -324,7 +329,8 @@ public:
         if (bytes > 0) {
           bytes_read_counter_.add(bytes);
         }
-        co_await pusher_.push(builder_.yield_ready(), push);
+        co_await pusher_.push(builder_.yield_ready(), push,
+                              events_read_counter_);
       },
       [&](AmqpError err) -> Task<void> {
         diagnostic::error("failed to consume AMQP message")
@@ -338,7 +344,9 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
     for (auto&& slice : builder_.finish_as_table_slice()) {
+      auto const rows = slice.rows();
       co_await push(std::move(slice));
+      events_read_counter_.add(rows);
     }
     co_return FinalizeBehavior::done;
   }
@@ -372,6 +380,7 @@ private:
     type{"tenzir.amqp", record_type{{"message", blob_type{}}}}};
   SeriesPusher pusher_;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 class from_amqp_plugin final : public virtual OperatorPlugin {

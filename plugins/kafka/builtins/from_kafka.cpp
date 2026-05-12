@@ -445,7 +445,14 @@ public:
         "operator",
         "from_kafka",
       },
-      MetricsDirection::read, MetricsVisibility::external_);
+      MetricsDirection::read, MetricsVisibility::external_, MetricsType::bytes);
+    read_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_kafka",
+      },
+      MetricsDirection::read, MetricsVisibility::external_,
+      MetricsType::events);
     initialize_perf_tracking();
     auto aws_iam = args_.aws_iam
                      ? std::optional<located<record>>{*args_.aws_iam}
@@ -548,11 +555,13 @@ public:
       std::move(d).modify().emit(ctx);
     }
     for (auto& slice : frame.slices) {
+      auto const rows = slice.rows();
       auto push_started = std::chrono::steady_clock::time_point{};
       if (perf_enabled_) {
         push_started = std::chrono::steady_clock::now();
       }
       co_await push(std::move(slice));
+      read_events_counter_.add(rows);
       if (perf_enabled_) {
         add_perf_counter(
           perf_.push_wait_ns,
@@ -1725,6 +1734,7 @@ private:
   // Optional counters for benchmarking; enabled via env flag.
   mutable FromKafkaPerfCounters perf_;
   mutable MetricsCounter read_bytes_counter_;
+  mutable MetricsCounter read_events_counter_;
   mutable std::atomic<bool> perf_reported_ = false;
   bool perf_enabled_ = false;
   bool perf_started_ = false;

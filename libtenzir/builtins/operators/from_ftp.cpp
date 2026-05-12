@@ -121,7 +121,8 @@ public:
     }
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_ftp"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::bytes);
     download_.emplace(session_->start_download(download_buffer_capacity));
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
     co_return;
