@@ -2141,7 +2141,8 @@ public:
     auto const tls_enabled = config.ssl_context != nullptr;
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_mysql"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::bytes);
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config),
                                               bytes_read_counter_);

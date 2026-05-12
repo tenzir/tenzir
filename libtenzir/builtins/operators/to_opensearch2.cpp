@@ -293,7 +293,8 @@ public:
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsType::bytes);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {

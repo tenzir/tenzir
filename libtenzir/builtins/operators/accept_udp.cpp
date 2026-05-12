@@ -222,7 +222,8 @@ public:
     // `make_counter` always requires exactly one label pair.
     auto bytes_read_counter
       = ctx.make_counter(MetricsLabel{"operator", "accept_udp"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::bytes);
     TENZIR_ASSERT(message_sender_);
     ctx.spawn_task(folly::coro::co_withExecutor(
       evb_, read_loop(*evb_, std::move(bind_address).unwrap(), *message_sender_,

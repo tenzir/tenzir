@@ -125,7 +125,12 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
-                       MetricsDirection::read, MetricsVisibility::external_);
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsType::bytes);
+  events_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsType::events);
 }
 
 auto FromSqs::await_task(diagnostic_handler& dh) const -> Task<Any> {
@@ -241,7 +246,9 @@ auto FromSqs::process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     build_event(msb, message);
   }
   for (auto&& slice : msb.finalize_as_table_slice()) {
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
   if (args_.keep_messages) {
     co_return;
@@ -263,7 +270,12 @@ auto ToSqs::start(OpCtx& ctx) -> Task<void> {
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
-                       MetricsDirection::write, MetricsVisibility::external_);
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsType::bytes);
+  events_write_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsType::events);
 }
 
 auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
@@ -286,6 +298,7 @@ auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
         if (not bytes.empty()) {
           bytes_write_counter_.add(bytes.size());
         }
+        events_write_counter_.add(1);
       }
     };
     if (auto strings = messages.template as<string_type>()) {

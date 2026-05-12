@@ -325,8 +325,9 @@ public:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility) -> MetricsCounter override {
-    return inner_.make_counter(label, direction, visibility);
+                    MetricsVisibility visibility, MetricsType type)
+    -> MetricsCounter override {
+    return inner_.make_counter(label, direction, visibility, type);
   }
 
   auto is_hidden() const -> bool override {
@@ -582,8 +583,9 @@ private:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility) -> MetricsCounter override {
-    return exec_ctx_.make_counter(label, direction, visibility);
+                    MetricsVisibility visibility, MetricsType type)
+    -> MetricsCounter override {
+    return exec_ctx_.make_counter(label, direction, visibility, type);
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {

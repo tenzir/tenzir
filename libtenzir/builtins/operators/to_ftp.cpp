@@ -137,7 +137,8 @@ public:
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_ftp"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsType::bytes);
     auto code = easy.set([](std::span<const std::byte>) {});
     if (code != curl::easy::code::ok) {
       diagnostic::error("failed to configure FTP upload")

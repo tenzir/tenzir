@@ -167,7 +167,12 @@ public:
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsType::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsType::events);
     if (auto error = stdout_nonblocking_.activate()) {
       diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
       done_ = true;
@@ -206,11 +211,14 @@ public:
       done_ = true;
       co_return;
     }
+    auto const rows = input.rows();
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await pipeline.push(std::move(input));
     if (push_result.is_err()) {
       done_ = true;
+      co_return;
     }
+    events_write_counter_.add(rows);
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
@@ -266,6 +274,7 @@ private:
   // loop, which owns the operator lifecycle state.
   mutable Box<ErrorQueue> queue_{std::in_place, error_queue_capacity};
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
   bool done_ = false;
 };
 
@@ -277,7 +286,8 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "save_stdout"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsType::bytes);
     if (auto error = stdout_nonblocking_.activate()) {
       diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
       done_ = true;

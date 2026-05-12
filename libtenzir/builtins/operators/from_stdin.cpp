@@ -180,7 +180,8 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "load_stdin"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::bytes);
     ctx.spawn_task(folly::coro::co_withExecutor(
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
     co_return;
@@ -234,7 +235,8 @@ public:
     }
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_stdin"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsType::bytes);
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipe));
     ctx.spawn_task(folly::coro::co_withExecutor(
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));

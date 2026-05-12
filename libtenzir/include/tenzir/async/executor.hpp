@@ -241,7 +241,8 @@ public:
 
   /// Create and register a new counter for the pipeline.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility) -> MetricsCounter
+                            MetricsVisibility visibility, MetricsType type)
+    -> MetricsCounter
     = 0;
 
   /// Returns whether the pipeline is hidden.

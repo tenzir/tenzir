@@ -1043,8 +1043,9 @@ public:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility) -> MetricsCounter override {
-    return metrics_->make_counter(label, direction, visibility);
+                    MetricsVisibility visibility, MetricsType type)
+    -> MetricsCounter override {
+    return metrics_->make_counter(label, direction, visibility, type);
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
@@ -1847,23 +1848,37 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
                        std::unordered_map<OpId, OpSnapshot>& prev_snapshots) {
   TENZIR_UNUSED(num_ops);
   auto entries = exec_ctx.take_metrics_snapshot();
-  auto external_read_bytes = uint64_t{0};
-  auto external_write_bytes = uint64_t{0};
-  auto internal_read_bytes = uint64_t{0};
-  auto internal_write_bytes = uint64_t{0};
+  struct TrafficMetrics {
+    uint64_t bytes = 0;
+    uint64_t events = 0;
+  };
+  auto external_read = TrafficMetrics{};
+  auto external_write = TrafficMetrics{};
+  auto internal_read = TrafficMetrics{};
+  auto internal_write = TrafficMetrics{};
+  auto add = [](TrafficMetrics& metrics, MetricsSnapshotEntry const& entry) {
+    switch (entry.type) {
+      case MetricsType::bytes:
+        metrics.bytes += entry.value;
+        break;
+      case MetricsType::events:
+        metrics.events += entry.value;
+        break;
+    }
+  };
   for (auto const& e : entries) {
-    TENZIR_ASSERT(e.type != MetricsType::gauge);
+    TENZIR_ASSERT(e.instrument != MetricsInstrument::gauge);
     if (e.visibility == MetricsVisibility::external_) {
       if (e.direction == MetricsDirection::read) {
-        external_read_bytes += e.value;
+        add(external_read, e);
       } else {
-        external_write_bytes += e.value;
+        add(external_write, e);
       }
     } else {
       if (e.direction == MetricsDirection::read) {
-        internal_read_bytes += e.value;
+        add(internal_read, e);
       } else {
-        internal_write_bytes += e.value;
+        add(internal_write, e);
       }
     }
   }
@@ -1873,50 +1888,64 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
   // external first and fall back to internal only if there is no external
   // traffic for that direction. This loses visibility into pipelines that mix
   // internal and external ingress or egress.
-  if (external_read_bytes > 0) {
-    auto m = operator_metric{};
-    m.operator_index = 0;
-    m.operator_name = "source";
-    m.internal = false;
-    m.outbound_measurement.unit = "bytes";
-    m.outbound_measurement.num_elements = external_read_bytes;
-    m.time_total = elapsed;
-    m.time_running = elapsed;
-    caf::anon_mail(std::move(m)).send(node.metrics);
-  } else if (internal_read_bytes > 0) {
-    auto m = operator_metric{};
-    m.operator_index = 0;
-    m.operator_name = "source";
-    m.internal = true;
-    m.outbound_measurement.unit = "bytes";
-    m.outbound_measurement.num_elements = internal_read_bytes;
-    m.time_total = elapsed;
-    m.time_running = elapsed;
-    caf::anon_mail(std::move(m)).send(node.metrics);
-  }
-  if (external_write_bytes > 0) {
-    auto m = operator_metric{};
+  auto send_source_metrics = [&](TrafficMetrics metrics, bool internal) {
+    if (metrics.bytes == 0 and metrics.events == 0) {
+      return;
+    }
+    auto bytes = operator_metric{};
+    bytes.operator_index = 0;
+    bytes.operator_name = "source";
+    bytes.internal = internal;
+    bytes.outbound_measurement.unit = "bytes";
+    bytes.outbound_measurement.num_elements = metrics.bytes;
+    bytes.time_total = elapsed;
+    bytes.time_running = elapsed;
+    caf::anon_mail(std::move(bytes)).send(node.metrics);
+    auto events = operator_metric{};
+    events.operator_index = 2;
+    events.operator_name = "source";
+    events.internal = internal;
+    events.outbound_measurement.unit = "events";
+    events.outbound_measurement.num_elements = metrics.events;
+    events.time_total = elapsed;
+    events.time_running = elapsed;
+    caf::anon_mail(std::move(events)).send(node.metrics);
+  };
+  auto send_sink_metrics = [&](TrafficMetrics metrics, bool internal) {
+    if (metrics.bytes == 0 and metrics.events == 0) {
+      return;
+    }
+    auto bytes = operator_metric{};
     // We use operator index 1 such that a pipeline with a single operator will
     // still use two different operator indices for ingress and egress. The code
     // in the pipeline manager cannot handle the case where it's the same.
-    m.operator_index = 1;
-    m.operator_name = "sink";
-    m.internal = false;
-    m.inbound_measurement.unit = "bytes";
-    m.inbound_measurement.num_elements = external_write_bytes;
-    m.time_total = elapsed;
-    m.time_running = elapsed;
-    caf::anon_mail(std::move(m)).send(node.metrics);
-  } else if (internal_write_bytes > 0) {
-    auto m = operator_metric{};
-    m.operator_index = 1;
-    m.operator_name = "sink";
-    m.internal = true;
-    m.inbound_measurement.unit = "bytes";
-    m.inbound_measurement.num_elements = internal_write_bytes;
-    m.time_total = elapsed;
-    m.time_running = elapsed;
-    caf::anon_mail(std::move(m)).send(node.metrics);
+    bytes.operator_index = 1;
+    bytes.operator_name = "sink";
+    bytes.internal = internal;
+    bytes.inbound_measurement.unit = "bytes";
+    bytes.inbound_measurement.num_elements = metrics.bytes;
+    bytes.time_total = elapsed;
+    bytes.time_running = elapsed;
+    caf::anon_mail(std::move(bytes)).send(node.metrics);
+    auto events = operator_metric{};
+    events.operator_index = 3;
+    events.operator_name = "sink";
+    events.internal = internal;
+    events.inbound_measurement.unit = "events";
+    events.inbound_measurement.num_elements = metrics.events;
+    events.time_total = elapsed;
+    events.time_running = elapsed;
+    caf::anon_mail(std::move(events)).send(node.metrics);
+  };
+  if (external_read.bytes > 0 or external_read.events > 0) {
+    send_source_metrics(external_read, false);
+  } else {
+    send_source_metrics(internal_read, true);
+  }
+  if (external_write.bytes > 0 or external_write.events > 0) {
+    send_sink_metrics(external_write, false);
+  } else {
+    send_sink_metrics(internal_write, true);
   }
   // Always drain profiles to prune dead channels/executors, even when there
   // is no importer to send snapshots to. Without this, the profile vectors
