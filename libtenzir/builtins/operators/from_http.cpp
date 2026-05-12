@@ -666,11 +666,10 @@ auto path_from_url(std::string_view url) -> std::string {
 }
 
 auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
-                          diagnostic_handler& dh) -> failure_or<ir::pipeline> {
+                          OpCtx& ctx) -> failure_or<ir::pipeline> {
   auto ast = ast::pipeline{};
   ast.body.emplace_back(invocation_for_plugin(plugin, loc));
-  auto reg = global_registry();
-  auto root = compile_ctx::make_root(base_ctx{dh, *reg});
+  auto root = compile_ctx::make_root(ctx);
   return std::move(ast).compile(root);
 }
 
@@ -1166,9 +1165,7 @@ private:
       pipeline = args_.parser->inner;
       auto env = substitute_ctx::env_t{};
       env[args_.response] = make_response_context(*response_);
-      auto reg = global_registry();
-      auto b_ctx = base_ctx{ctx, *reg};
-      if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
+      if (not pipeline.substitute(substitute_ctx{ctx, &env}, true)) {
         lifecycle_ = Lifecycle::done;
         co_return;
       }
@@ -1199,7 +1196,7 @@ private:
         }
       }
       auto inferred
-        = make_parser_pipeline(*plugin, args_.operator_location, ctx.dh());
+        = make_parser_pipeline(*plugin, args_.operator_location, ctx);
       if (inferred.is_error()) {
         lifecycle_ = Lifecycle::done;
         co_return;

@@ -19,6 +19,7 @@
 #include <tsl/robin_set.h>
 
 #include <functional>
+#include <vector>
 
 /// Similar to `TENZIR_ASSERT(...)`, but throws a `diagnostic` instead of
 /// aborting. Unlike `TENZIR_ASSERT(...)`, this assertion is always checked,
@@ -472,9 +473,11 @@ struct location_origin {
   std::string source;
 };
 
-// TODO: The optionality of `origin` is a hack until we make the necessary info
-// available in all places where we need it.
-auto make_diagnostic_printer(std::optional<location_origin> origin,
+/// Creates a diagnostic printer that renders source context from `origins`.
+/// `origins[i]` supplies the filename and source text for locations whose
+/// `source_index` equals `i`. An empty vector disables source-context
+/// rendering (equivalent to the former `std::nullopt` argument).
+auto make_diagnostic_printer(std::vector<location_origin> origins,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 

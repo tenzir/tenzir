@@ -373,7 +373,7 @@ auto pipeline_executor(
         if (has_node) {
           auto buffer = std::stringstream{};
           buffer << "internal error in operator\n";
-          auto printer = make_diagnostic_printer(std::nullopt,
+          auto printer = make_diagnostic_printer(std::vector<location_origin>{},
                                                  color_diagnostics::no, buffer);
           printer->emit(diagnostic);
           auto string = std::move(buffer).str();

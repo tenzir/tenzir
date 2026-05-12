@@ -152,10 +152,8 @@ struct TcpFrom {
                   OpCtx& ctx) const -> bool {
     auto env = substitute_ctx::env_t{};
     env[args_.peer_info] = std::move(info.peer_record);
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
     return static_cast<bool>(
-      pipeline.substitute(substitute_ctx{b_ctx, &env}, true));
+      pipeline.substitute(substitute_ctx{ctx, &env}, true));
   }
 
   auto pipeline() -> located<ir::pipeline>& {

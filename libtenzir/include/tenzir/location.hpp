@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/type_traits.hpp"
@@ -24,15 +25,20 @@ struct into_location;
 
 /// Identifies a consecutive byte sequence within a source file.
 ///
-/// If both offsets are zero, the location is unknown. Otherwise, the location
-/// corresponds to the range `[begin, end)` in the main source file. In the
-/// future, a `file` field might be added in order to support diagnostics from
-/// multiple files simultaneously.
+/// If all fields are zero, the location is unknown. Otherwise, the location
+/// corresponds to the range `[begin, end)` in the source file identified by
+/// `source_index`.
 struct location {
-  size_t begin{};
-  size_t end{};
+  uint32_t begin{};
+  uint32_t end{};
+  /// The global index of the source file the location comes from. This is
+  /// populated by the parser when producing the AST.
+  uint32_t source_index{0};
+  /// The global index of the callsite this came from; `0` means this was top
+  /// level. This is populated by the compiler when going from AST -> IR.
+  uint32_t callsite_index{0};
 
-  /// The "unknown" location, where `begin` and `end` are 0.
+  /// The "unknown" location, where all fields are 0.
   static const location unknown;
 
   /// Returns true if the location is known, and false otherwise.
@@ -40,15 +46,15 @@ struct location {
     return *this != unknown;
   }
 
-  auto
-  subloc(size_t pos, size_t count = std::numeric_limits<size_t>::max()) const
+  auto subloc(uint32_t pos, uint32_t count
+                            = std::numeric_limits<uint32_t>::max()) const
     -> location {
     if (*this == unknown or pos > end) {
       return *this;
     }
     const auto first = begin + pos;
     const auto last = (count > end - first) ? end : (first + count);
-    return {first, last};
+    return {first, last, source_index};
   }
 
   auto combine(into_location other) const -> location;
@@ -57,11 +63,15 @@ struct location {
 
   friend auto inspect(auto& f, location& x) {
     if (auto dbg = as_debug_writer(f)) {
+      if (x.source_index != 0) {
+        return dbg->fmt_value("[{}]{}..{}", x.source_index, x.begin, x.end);
+      }
       return dbg->fmt_value("{}..{}", x.begin, x.end);
     }
     return f.object(x)
       .pretty_name("location")
-      .fields(f.field("begin", x.begin), f.field("end", x.end));
+      .fields(f.field("begin", x.begin), f.field("end", x.end),
+              f.field("source_index", x.source_index));
   }
 };
 
@@ -168,9 +178,8 @@ inline auto location::combine(into_location other) const -> location {
   if (not other) {
     return *this;
   }
-  other.begin = std::min(begin, other.begin);
-  other.end = std::max(end, other.end);
-  return other;
+  TENZIR_ASSERT(source_index == other.source_index);
+  return {std::min(begin, other.begin), std::max(end, other.end), source_index};
 }
 
 template <class T>
