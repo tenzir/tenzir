@@ -302,6 +302,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
 struct ReadLeefArgs {
   multi_series_builder::options msb_options;
   location operator_location = location::unknown;
+  event_order order = event_order::ordered;
 };
 
 class ReadLeef final : public Operator<chunk_ptr, table_slice> {
@@ -333,6 +334,7 @@ public:
                       fmt::format("line {}", line_counter_));
       return d;
     });
+    args_.msb_options.settings.ordered = args_.order == event_order::ordered;
     msb_ = multi_series_builder{args_.msb_options, *dh_};
     co_return;
   }
@@ -505,7 +507,8 @@ public:
     }};
     d.validate(add_msb_to_describer(d, &ReadLeefArgs::msb_options));
     d.operator_location(&ReadLeefArgs::operator_location);
-    return d.without_optimize();
+    d.optimization_order(&ReadLeefArgs::order);
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

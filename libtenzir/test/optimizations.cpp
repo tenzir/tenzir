@@ -12,7 +12,6 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 
-#include <string>
 #include <string_view>
 
 using namespace tenzir;
@@ -41,6 +40,4 @@ TEST("optimize now") {
   test("now() - 100d < x");
   test("now() + 100d < x", true);
   test("100d + now() < x", true);
-  // test("-100d + now() < x");
-  // test("x > -100d + now()");
 }

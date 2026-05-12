@@ -770,7 +770,13 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<SortArgs, Sort>{};
     d.optional_variadic("expr", &SortArgs::exprs, "any");
-    return d.without_optimize();
+    return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
+      return {
+        .order = event_order::unordered,
+        .propagate_filter = true,
+        .drop = order == event_order::unordered,
+      };
+    });
   }
 
   auto is_deterministic() const -> bool override {

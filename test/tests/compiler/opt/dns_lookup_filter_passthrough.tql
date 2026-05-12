@@ -1,0 +1,5 @@
+export
+unordered {
+  dns_lookup x
+  where x == 1
+}

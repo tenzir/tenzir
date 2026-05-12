@@ -95,6 +95,7 @@ let
         pkgs.procps
         pkgs.socat
         pkgs.openssl
+        pkgs.just
         package.tenzir-test
         pkgs.wrangler
         pkgs.yara

@@ -446,6 +446,7 @@ struct ReadXsvArgs {
   Option<uint64_t> batch_size;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
+  event_order order = event_order::ordered;
 };
 
 // Handles for args that the validate() callback needs to inspect.
@@ -994,7 +995,11 @@ public:
       .auto_expand = args_.auto_expand,
       .allow_comments = args_.allow_comments,
       .header = {},
-      .builder_options = std::move(msb_opts),
+      .builder_options =
+        [&] {
+          msb_opts.settings.ordered = args_.order == event_order::ordered;
+          return std::move(msb_opts);
+        }(),
     };
     // ── Eagerly evaluate the header expression if provided ───────────────────
     if (args_.header) {
@@ -1413,7 +1418,8 @@ public:
         validate_multi_series_builder_args(ctx, common);
         return {};
       });
-    return d.without_optimize();
+    d.optimization_order(&ReadXsvArgs::order);
+    return d.invariant_order();
   }
 };
 
@@ -1483,6 +1489,7 @@ public:
       validate_multi_series_builder_args(ctx, common);
       return {};
     });
+    d.optimization_order(&ReadXsvArgs::order);
     return d.without_optimize();
   }
 

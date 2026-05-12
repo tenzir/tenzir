@@ -138,6 +138,17 @@ using Spawner = std::function<
 
 using Validator = std::function<auto(DescribeCtx&)->Empty>;
 
+struct Optimization {
+  event_order order = event_order::ordered;
+  /// When true, the incoming downstream filter is pushed into upstream.
+  /// When false, filter is emitted as `where` operators after this operator.
+  bool propagate_filter = false;
+  /// Removes the operator.
+  bool drop = false;
+};
+
+using Optimizer = std::function<auto(DescribeCtx&, event_order)->Optimization>;
+
 struct Description {
   std::string name;
   std::string docs;
@@ -148,11 +159,10 @@ struct Description {
   std::optional<size_t> variadic_index;
   std::vector<Named> named;
   std::optional<Validator> validator;
+  std::optional<Optimizer> optimizer;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
   std::optional<Setter<event_order>> set_order;
-  bool propagate_order = false;
-  event_order initial_order = event_order::ordered;
   // FIXME: Document.
   std::optional<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -692,7 +702,8 @@ public:
   /// Adds a variadic positional argument (requires at least one value).
   template <ArgType T>
   auto variadic(std::string name, std::vector<T> Args::* ptr,
-                std::string type = type_default<T>) -> Argument<Args, T> {
+                const std::string& type = type_default<T>)
+    -> Argument<Args, T> {
     if (desc_.variadic_index) {
       panic("cannot have multiple variadic positional arguments");
     }
@@ -711,7 +722,7 @@ public:
   /// Adds an optional variadic positional argument (accepts zero or more values).
   template <ArgType T>
   auto optional_variadic(std::string name, std::vector<T> Args::* ptr,
-                         std::string type = type_default<T>)
+                         const std::string& type = type_default<T>)
     -> Argument<Args, T> {
     if (desc_.variadic_index) {
       panic("cannot have multiple variadic positional arguments");
@@ -910,19 +921,6 @@ public:
     };
   }
 
-  // TODO
-  template <class F>
-  auto optimize(F&& f) -> Description;
-
-  auto without_optimize() -> Description {
-    return std::move(desc_);
-  }
-
-  auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
-    desc_.set_filter = make_setter(ptr);
-    return std::move(desc_);
-  }
-
   /// Registers a member of `Args` to be populated with the operators location.
   auto operator_location(location Args::* ptr) {
     TENZIR_ASSERT(not desc_.set_operator_location);
@@ -936,15 +934,81 @@ public:
     desc_.set_order = make_setter(ptr);
   }
 
-  auto order_invariant() -> Description {
-    desc_.propagate_order = true;
+  /// Registers a member of `Args` to be populated with the optimization
+  /// filter, instead of keeping it as a separate `where` after the operator.
+  auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
+    desc_.set_filter = make_setter(ptr);
+    return optimize([](DescribeCtx&, event_order) -> Optimization {
+      return {.order = event_order::ordered};
+    });
+  }
+
+  /// Overrides the default optimization behavior.
+  ///
+  /// The callback receives the current description context and the weakest
+  /// ordering guarantee required by downstream operators. The returned
+  /// `Optimization` controls the required upstream order, whether the operator
+  /// may be dropped, and whether the incoming filter is blocked here (via
+  /// `stop_filter`) instead of being propagated further upstream.
+  ///
+  /// Filters are propagated upstream automatically unless `stop_filter` is set
+  /// or `optimize_filter` was called to absorb the filter into the operator.
+  template <class F>
+    requires requires(F& f, DescribeCtx& ctx, event_order order) {
+      { f(ctx, order) } -> std::same_as<Optimization>;
+    }
+  auto optimize(F&& f) -> Description {
+    desc_.optimizer = std::forward<F>(f);
     return std::move(desc_);
   }
 
+  /// Makes this operator an optimization barrier.
+  ///
+  /// The filters are not propagated and upstream is required to produce
+  /// ordered events.
+  auto without_optimize() -> Description {
+    return optimize([](DescribeCtx&, event_order) -> Optimization {
+      return {
+        .order = event_order::ordered,
+      };
+    });
+  }
+
+  /// Declares that the operator is invariant to filtering. That is, the
+  /// filter from downstream may pass through this operator to upstream
+  /// without changing semantics. Requires upstream to produce ordered events.
+  auto invariant_filter() -> Description {
+    return optimize([](DescribeCtx&, event_order) -> Optimization {
+      return {.order = event_order::ordered, .propagate_filter = true};
+    });
+  }
+
+  /// Declares that the operator is invariant to ordering and filtering.
+  ///
+  /// Filters are propagated upstream and the downstream order requirement is
+  /// forwarded unchanged to upstream operators.
+  auto invariant_order_filter() -> Description {
+    return optimize([](DescribeCtx&, event_order order) -> Optimization {
+      return {.order = order, .propagate_filter = true};
+    });
+  }
+
+  /// Declares that the operator is invariant to ordering.
+  ///
+  /// Filters are not propagated upstream.
+  auto invariant_order() -> Description {
+    return optimize([](DescribeCtx&, event_order order) -> Optimization {
+      return {.order = order};
+    });
+  }
+
+  /// Declares that the operator can always consume unordered upstream input.
+  ///
+  /// Filters are not propagated upstream.
   auto unordered() -> Description {
-    desc_.propagate_order = true;
-    desc_.initial_order = event_order::unordered;
-    return std::move(desc_);
+    return optimize([](DescribeCtx&, event_order) -> Optimization {
+      return {.order = event_order::unordered};
+    });
   }
 
 private:
@@ -959,6 +1023,8 @@ using _::operator_plugin::Describer;
 using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
+using _::operator_plugin::Optimization;
+using _::operator_plugin::Optimizer;
 using _::operator_plugin::Spawn;
 using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;

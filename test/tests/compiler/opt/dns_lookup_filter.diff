@@ -1,0 +1,90 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `domain` @ 7..13,
+               expr: constant string "tenzir.com" @ 15..27
+             }
+           ],
+           end: 28..29
+         }
+       ],
+       self: 0..4
+     },
+     GenericIr {
+       op: {
+         path: [
+           `dns_lookup` @ 30..40
+         ],
+         ref: std::dns_lookup/op
+       },
+       desc: "dns_lookup",
+       args: [
+         expression root_field {
+           id: `domain` @ 41..47,
+           has_question_mark: false
+         }
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         {
+           index: 0,
+           value: field_path {
+             expr: root_field {
+               id: `resolved` @ 56..64,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `resolved` @ 56..64,
+                 has_question_mark: false
+               }
+             ]
+           }
+         }
+       ]
+     },
+     where_ir {
+-      self: 65..70,
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `resolved` @ 71..79,
+           has_question_mark: false
+         },
+         op: "neq" @ 80..82,
+         right: constant none_t {} @ 83..87
+       }
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

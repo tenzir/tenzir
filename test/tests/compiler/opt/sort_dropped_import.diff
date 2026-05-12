@@ -1,0 +1,68 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+-          `sort` @ 7..11
+-        ],
+-        ref: std::sort/op
+-      },
+-      desc: "tql2.sort",
+-      args: [
+-        expression root_field {
+-          id: `x` @ 12..13,
+-          has_question_mark: false
+-        }
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `import` @ 14..20
+         ],
+         ref: std::import/op
+       },
+       desc: "import",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

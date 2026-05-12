@@ -1,0 +1,99 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     UnorderedIr {
+       pipeline: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `taste` @ 21..26
+               ],
+               ref: std::taste/op
+             },
+             desc: "taste",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ]
+-          },
++          }
++        ]
++      },
++      loc: 7..16
++    },
++    UnorderedIr {
++      pipeline: {
++        lets: [
++          
++        ],
++        operators: [
+           where_ir {
+-            self: 29..34,
++            self: 0..0,
+             predicate: binary_expr {
+               left: root_field {
+                 id: `x` @ 35..36,
+                 has_question_mark: false
+               },
+               op: "eq" @ 37..39,
+               right: constant int64 1 @ 40..41
+             }
+           }
+         ]
+       },
+       loc: 7..16
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
