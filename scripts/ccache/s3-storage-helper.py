@@ -1573,6 +1573,7 @@ def _initialize_auth(config: S3Config) -> S3Config:
         raise StorageError("boto3 is required for S3 ccache storage") from error
 
     resolved_config = _resolve_aws_profile(config)
+
     def caller_account() -> str:
         session = boto3.Session(
             profile_name=resolved_config.profile,
@@ -2122,7 +2123,9 @@ def _ensure_oidc_provider(iam_client: IamSetupClient, account_id: str) -> None:
         return
 
     client_id_list = provider.get("ClientIDList")
-    client_ids = set(cast(list[object], client_id_list) if isinstance(client_id_list, list) else [])
+    client_ids = set(
+        cast(list[object], client_id_list) if isinstance(client_id_list, list) else []
+    )
     if GITHUB_OIDC_AUDIENCE in client_ids:
         logging.info("GitHub Actions OIDC provider already matches")
         return
