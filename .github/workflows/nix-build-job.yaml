@@ -77,7 +77,6 @@ jobs:
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           pushFilter: "(tenzir-ee|tenzir-plugins-source)"
       - name: Prepare ccache directory
-        if: runner.os == 'Linux'
         run: |
           sudo mkdir -p /tmp/tenzir-ccache
           sudo chmod 1777 /tmp/tenzir-ccache
@@ -86,13 +85,12 @@ jobs:
             /tmp/tenzir-ccache/s3.sock \
             /tmp/tenzir-ccache/s3-helper.pid
       - name: Configure ccache AWS credentials
-        if: runner.os == 'Linux' && vars.CCACHE_S3_BUCKET != '' && vars.CCACHE_AWS_ROLE_ARN != ''
+        if: vars.CCACHE_S3_BUCKET != '' && vars.CCACHE_AWS_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
         with:
           role-to-assume: ${{ vars.CCACHE_AWS_ROLE_ARN }}
           aws-region: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
       - name: Start ccache S3 helper
-        if: runner.os == 'Linux'
         env:
           CCACHE_S3_BUCKET: ${{ vars.CCACHE_S3_BUCKET }}
           CCACHE_S3_PREFIX: ${{ vars.CCACHE_S3_PREFIX || 'ccache' }}
@@ -375,12 +373,15 @@ jobs:
           nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' skopeo \
             --run "python3 .github/workflows/nix-build.py push ${args[*]}"
       - name: Stop ccache storage helpers
-        if: always() && runner.os == 'Linux'
+        if: always()
         run: |
           if [[ -f /tmp/tenzir-ccache/s3-helper.pid ]]; then
             helper_pid="$(cat /tmp/tenzir-ccache/s3-helper.pid)"
-            if [[ -r "/proc/$helper_pid/cmdline" ]] \
-              && tr '\0' ' ' <"/proc/$helper_pid/cmdline" | grep -Fq 'scripts/ccache/s3-storage-helper.py'; then
-              sudo kill "$helper_pid" || true
+            if [[ "$helper_pid" =~ ^[0-9]+$ ]]; then
+              helper_command="$(ps -p "$helper_pid" -o command= 2>/dev/null || true)"
+              if grep -Fq 'scripts/ccache/s3-storage-helper.py' <<<"$helper_command"; then
+                kill "$helper_pid" || sudo kill "$helper_pid" || true
+              fi
             fi
+            sudo rm -f /tmp/tenzir-ccache/s3-helper.pid
           fi
