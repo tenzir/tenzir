@@ -975,7 +975,9 @@ private:
     error_sb.data(std::move(response_->error_body));
     auto slice = assign(*args_.error_field, error_sb.finish_assert_one_array(),
                         record_sb.finish_assert_one_slice(), ctx.dh());
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_.add(rows);
   }
 
   auto response_body_needed() const -> bool {
