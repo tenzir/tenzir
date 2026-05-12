@@ -5,6 +5,7 @@ from __future__ import annotations
 # Import modules so their decorators register fixtures on import.
 from . import abs  # noqa: F401
 from . import abs_proxy  # noqa: F401
+from . import amqp  # noqa: F401
 from . import clickhouse  # noqa: F401
 from . import http_request_chunked  # noqa: F401
 from . import files_permission_tree  # noqa: F401
@@ -33,6 +34,7 @@ from . import mock_s3  # noqa: F401
 __all__ = [
     "abs",
     "abs_proxy",
+    "amqp",
     "clickhouse",
     "http_request_chunked",
     "files_permission_tree",

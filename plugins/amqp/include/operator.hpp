@@ -192,6 +192,7 @@ public:
     bool auto_delete{true};
     bool no_local{false};
     bool no_ack{true};
+    amqp_table_t queue_arguments{amqp_empty_table};
   };
 
   /// Aditional options for starting a consumer.
@@ -401,11 +402,14 @@ public:
   /// @param opts The consuming options.
   auto start_consumer(const consume_options& opts) -> caf::error {
     TENZIR_DEBUG("declaring queue '{}'", opts.queue);
-    auto arguments = amqp_empty_table;
     auto* declare = amqp_queue_declare(
       conn_, amqp_channel_t{opts.channel}, as_amqp_bytes(opts.queue),
       as_amqp_bool(opts.passive), as_amqp_bool(opts.durable),
-      as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete), arguments);
+      as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete),
+      opts.queue_arguments);
+    if (auto err = to_error(amqp_get_rpc_reply(conn_)); err.valid()) {
+      return err;
+    }
     if (declare == nullptr) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to declare queue '{}', "
@@ -417,15 +421,12 @@ public:
     TENZIR_DEBUG("got queue '{}' with {} messages and {} consumers",
                  as_string_view(declare->queue), declare->message_count,
                  declare->consumer_count);
-    if (auto err = to_error(amqp_get_rpc_reply(conn_)); err.valid()) {
-      return err;
-    }
     auto declared_queue = std::string{as_string_view(declare->queue)};
     TENZIR_DEBUG("binding queue '{}' to exchange '{}' with routing key '{}'",
                  declared_queue, opts.exchange, opts.routing_key);
     amqp_queue_bind(conn_, amqp_channel_t{opts.channel},
                     as_amqp_bytes(declared_queue), as_amqp_bytes(opts.exchange),
-                    as_amqp_bytes(opts.routing_key), arguments);
+                    as_amqp_bytes(opts.routing_key), amqp_empty_table);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)); err.valid()) {
       return err;
     }
@@ -434,7 +435,7 @@ public:
     amqp_basic_consume(conn_, amqp_channel_t{opts.channel},
                        as_amqp_bytes(declared_queue), consumer_tag,
                        as_amqp_bool(opts.no_local), as_amqp_bool(opts.no_ack),
-                       as_amqp_bool(opts.exclusive), arguments);
+                       as_amqp_bool(opts.exclusive), amqp_empty_table);
     return to_error(amqp_get_rpc_reply(conn_));
   }
 
