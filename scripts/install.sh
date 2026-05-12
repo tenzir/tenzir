@@ -306,16 +306,12 @@ if [ -n "${TENZIR_TOKEN:-}" ]; then
         read_yaml
       }
       this = merge(this, {tenzir: {token: \"${TENZIR_TOKEN}\"}})
-      to_stdout {
-        write_yaml
-      }
+      write_yaml
       "
   else
     # Create new config with token.
     tql_pipeline="from {tenzir: {token: \"${TENZIR_TOKEN}\"}}
-      to_stdout {
-        write_yaml
-      }"
+      write_yaml"
   fi
 
   # Write config using tenzir and sudo tee.
@@ -332,7 +328,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"
-tenzir -q 'version | select version | to_stdout { write_ndjson }'
+tenzir -q 'version | select version | write_ndjson'
 
 # Inform about next steps.
 action "Providing guidance"
