@@ -51,15 +51,21 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   if (queue_name.inner.starts_with("sqs://")) {
     queue_name.inner.erase(0, 6);
   }
-  // Resolve the effective region: explicit `aws_region` wins, then the region
-  // from resolved AWS IAM credentials, then the AWS SDK's default resolution
-  // (AWS_REGION / AWS_DEFAULT_REGION env vars, the configured profile in
-  // `~/.aws/config`, and finally the SDK default of "us-east-1"). When a full
-  // queue URL is supplied for a non-default region, `aws_region` must be set
-  // explicitly so SigV4 signing matches the queue's region.
+  // Resolve the effective region in priority order:
+  //   1. Explicit `aws_region` (user override).
+  //   2. Region parsed from a full queue URL (e.g. the `us-west-2` in
+  //      `https://sqs.us-west-2.amazonaws.com/...`) — keeps SigV4 signing
+  //      aligned with the queue's region without forcing the user to set
+  //      `aws_region` redundantly.
+  //   3. Region from resolved AWS IAM credentials.
+  //   4. AWS SDK default resolution (AWS_REGION / AWS_DEFAULT_REGION env vars,
+  //      the configured profile in `~/.aws/config`, and finally the SDK
+  //      default of "us-east-1").
   auto region = std::string{};
   if (args.aws_region) {
     region = args.aws_region->inner;
+  } else if (auto url_region = region_from_sqs_url(args.queue.inner)) {
+    region = std::move(*url_region);
   } else if (resolved_creds and not resolved_creds->region.empty()) {
     region = resolved_creds->region;
   } else {
