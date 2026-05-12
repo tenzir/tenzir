@@ -1,114 +1,70 @@
-# TQL Operators
+# TQL operators
 
-Implementing TQL operators in Tenzir.
+Implementing TQL operator plugins in Tenzir.
 
-> **Note:** For new operators, only use the executor API documented in
-> [executor.md](./executor.md). The `crtp_operator` pattern below is legacy and
-> used by existing operators, but new code should use `Operator<Input, Output>`.
+Use the executor API in [executor.md](./executor.md) for operator
+implementations.
 
-## Operator Plugin Structure
+## Plugin declaration
+
+Use `OperatorPlugin` and `Describer` to register operators:
 
 ```cpp
-class my_operator final : public crtp_operator<my_operator> {
+struct Args {
+  located<uint64_t> capacity = {};
+  Option<located<std::string>> policy;
+};
+
+class plugin final : public virtual OperatorPlugin {
 public:
-  my_operator() = default;
-
-  explicit my_operator(config cfg) : cfg_{std::move(cfg)} {}
-
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (const auto& slice : input) {
-      // Process slice
-      co_yield result;
-    }
+  auto describe() const -> Description override {
+    auto d = Describer<Args, Impl>{};
+    auto cap = d.positional("capacity", &Args::capacity);
+    d.validate([cap](DescribeCtx& ctx) -> Empty {
+      TRY(auto c, ctx.get(cap));
+      if (c.inner == 0) {
+        diagnostic::error("capacity must be greater than zero")
+          .primary(c.source).emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
-
-  auto name() const noexcept -> std::string override {
-    return "my_operator";
-  }
-
-  friend auto inspect(auto& f, my_operator& x) -> bool {
-    return f.apply(x.cfg_);
-  }
-
-private:
-  config cfg_;
 };
 ```
 
-## Generator Best Practices
+Use `located<T>` when diagnostics need the source location. Use
+`Option<located<T>>` for optional named arguments.
 
-Keep iterators alive across loop iterations:
+`DescribeCtx::get()` returns an empty option when the caller omitted an
+argument, even if the target `Args` member has a default initializer. Apply
+defaults explicitly in validation callbacks.
+
+Use `d.order_invariant()` only for pure row transforms that can be reordered.
+Use `d.without_optimize()` otherwise.
+
+Use `d.spawner(...)` only when validation or instantiation depends on the input
+type.
+
+## Diagnostics
+
+If diagnostics need the operator location, store it in `Args` and register it:
 
 ```cpp
-auto operator()(generator<table_slice> input,
-                operator_control_plane& ctrl) const
-  -> generator<table_slice> {
-  // Do NOT call input.begin() multiple times
-  for (const auto& slice : input) {
-    co_yield process(slice);
-  }
-}
+d.operator_location(&Args::operator_location);
 ```
 
-## Operator Control Plane
+Prefer adding a primary location over rewriting diagnostic messages to mention
+the operator.
 
-Use `ctrl` for diagnostics and control:
+## Secret resolution
 
-```cpp
-auto operator()(..., operator_control_plane& ctrl) const
-  -> generator<table_slice> {
-  auto dh = ctrl.diagnostics();
-  dh.emit(diagnostic::warning("something happened")
-            .primary(location)
-            .done());
-  // ...
-}
-```
-
-## Plugin Registration
+Resolve secrets through `OpCtx`:
 
 ```cpp
-class plugin final : public virtual operator_plugin<my_operator> {
-public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-  // ...
+auto resolved = std::string{};
+auto requests = std::vector<secret_request>{
+  make_secret_request("url", args_.url, resolved, ctx.dh()),
 };
-
-TENZIR_REGISTER_PLUGIN(plugin)
+CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
 ```
-
-## Secret Resolution
-
-When your operator needs secrets (API keys, credentials), resolve them inside
-the generator loop using `operator_control_plane`:
-
-```cpp
-auto operator()(generator<table_slice> input,
-                operator_control_plane& ctrl) const
-  -> generator<table_slice> {
-  auto dh = ctrl.diagnostics();
-  // Declare variables to receive resolved values
-  auto url = std::string{};
-  auto token = std::string{};
-  // Resolve secrets (yields until complete)
-  auto x = ctrl.resolve_secrets_must_yield({
-    make_secret_request("url", args_.url, url, dh),
-    make_secret_request("token", args_.token, token, dh),
-  });
-  co_yield std::move(x);
-  // Now url and token contain resolved values
-  for (const auto& slice : input) {
-    co_yield process(slice, url, token);
-  }
-}
-```
-
-Key points:
-
-- Resolution must happen inside the generator (use `co_yield`)
-- `make_secret_request` takes: name, secret, output variable, diagnostic handler
-- Multiple secrets can be resolved in a single call

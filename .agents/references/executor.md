@@ -31,6 +31,17 @@ When overriding `snapshot(Serde&)`, only process **mutable** state that cannot
 be derived from arguments. Immutable state is restored from operator arguments
 on restart.
 
+Serialize all flags that drive the operator state machine. Omitting a flag can
+restore it to a zero value and stall the pipeline.
+
+Do not serialize dynamically large buffers. Flush them in `prepare_snapshot()`
+before `snapshot()` runs. If `prepare_snapshot()` flushes all buffered state,
+`snapshot()` can be a no-op.
+
+`steady_clock::time_point` values are not portable across restarts. If incorrect
+offsets after restart are acceptable, leave them out of `snapshot()` and document
+why.
+
 ### State
 
 Only override `state()` if the operator can terminate early (e.g., `head` stops
@@ -81,6 +92,10 @@ Use `SeriesPusher` from `tenzir/async/pusher.hpp` when an operator uses
 `series_builder::yield_ready()` together with `await_task()` /
 `process_task()` to drive timeout-based flushes.
 
+For timeout-driven flushes, let `await_task()` sleep until the earliest deadline
+and let `process_task()` flush expired buffers. Do not poll time while processing
+each input item. Guard `duration::max()` sentinels before time arithmetic.
+
 ### Per-chunk parser flushes
 
 If a `chunk_ptr -> table_slice` parser scans an input chunk incrementally,
@@ -90,6 +105,21 @@ once after the loop.
 
 This keeps parsing state changes local to `process()` and matches the existing
 parser patterns in `read_cef`, `read_leef`, `read_xsv`, and `read_kv`.
+
+### Blocking calls
+
+File I/O, subprocess calls, and synchronous SDK calls must not run directly on
+an executor thread. Wrap them in `co_await spawn_blocking(...)` from
+`tenzir/async/blocking_executor.hpp`.
+
+```cpp
+auto bytes = co_await spawn_blocking([path = path_] {
+  return blocking_file_read(path);
+});
+```
+
+`spawn_blocking` expects a synchronous callable. Passing a coroutine that returns
+`Task<T>` only constructs the coroutine handle on the blocking pool.
 
 ### Structured concurrency with `async_scope`
 
@@ -164,6 +194,10 @@ Do not attempt to catch cancellation, neither as an exception nor with
 `co_awaitTry`, unless truly necessary. Let cancellation propagate to the
 outermost task.
 
+For operators with multiple shutdown phases, prefer a `Lifecycle` enum over
+several booleans. If `stop()` and `finalize()` share teardown work, put it in one
+helper.
+
 ### Retry loops
 
 Use `folly::coro::retryWithExponentialBackoff` for retriable async operations
@@ -195,6 +229,8 @@ auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
 }
 ```
 
+The executor does not deliver zero-row slices to `process()`.
+
 ### Buffering (tail, sort)
 
 Operators that need all input before producing output buffer in `process()`
@@ -208,10 +244,12 @@ auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
   co_return;
 }
 
-auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  -> Task<FinalizeBehavior> override {
   for (auto& slice : buffer_) {
     co_await push(std::move(slice));
   }
+  co_return FinalizeBehavior::done;
 }
 ```
 
