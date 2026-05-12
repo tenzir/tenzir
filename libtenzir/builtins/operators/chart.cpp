@@ -424,16 +424,13 @@ private:
           current_bucket = nullptr;
           run_begin = row;
           if (groups.size() == args_.limit.inner) {
-            if (not limit_warning_emitted_) {
-              diagnostic::warning("got more than {} data points",
-                                  args_.limit.inner)
-                .primary(args_.x)
-                .note("skipping excess data points")
-                .hint("consider filtering data or aggregating over a bigger "
-                      "`resolution`")
-                .emit(ctx);
-              limit_warning_emitted_ = true;
-            }
+            diagnostic::warning("got more than {} data points",
+                                args_.limit.inner)
+              .primary(args_.x)
+              .note("skipping excess data points")
+              .hint("consider filtering data or aggregating over a bigger "
+                    "`resolution`")
+              .emit(ctx);
             run_begin = row + 1;
             continue;
           }
@@ -864,7 +861,6 @@ private:
   // state
   std::optional<type> xty_;
   variant<OrderedGroupMap, CategoricalGroupMap> groups_ = OrderedGroupMap{};
-  bool limit_warning_emitted_ = false;
 };
 
 // Helper validation for x limit types
