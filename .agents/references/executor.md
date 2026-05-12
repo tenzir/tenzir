@@ -96,6 +96,35 @@ For timeout-driven flushes, let `await_task()` sleep until the earliest deadline
 and let `process_task()` flush expired buffers. Do not poll time while processing
 each input item. Guard `duration::max()` sentinels before time arithmetic.
 
+### Metrics counters
+
+Operators that form an external pipeline edge should report both byte and event
+throughput when both quantities are meaningful. Create counters in `start()` with
+`ctx.make_counter(label, direction, visibility, type)` and keep them as operator
+members.
+
+- Use `MetricsDirection::read` for ingress/source-side data and
+  `MetricsDirection::write` for egress/sink-side data.
+- Use `MetricsVisibility::external_` for data crossing the pipeline boundary
+  (network, files, stdin/stdout, databases, message brokers). Use internal
+  visibility only for executor-internal handoff accounting.
+- Use `MetricsUnit::bytes` for encoded bytes read or written and
+  `MetricsUnit::events` for event rows.
+- If an operator emits `table_slice`s directly, increment the events counter by
+  `slice.rows()` immediately before pushing the slice downstream.
+- If an operator consumes `table_slice`s directly, increment the events counter
+  by `slice.rows()` when accepting the slice for output.
+- Operators that run parser or printer subpipelines should not count the rows
+  flowing through those subpipelines. The nested parser or printer operators own
+  those event counters.
+- Message-oriented connectors that produce or consume one event per message may
+  increment the events counter by `1`; slice-oriented code should use
+  `slice.rows()`.
+
+Do not register only a byte counter for an operator that produces or consumes
+rows directly. That causes node-level event throughput to report zero for that
+operator even though data is flowing.
+
 ### Per-chunk parser flushes
 
 If a `chunk_ptr -> table_slice` parser scans an input chunk incrementally,
