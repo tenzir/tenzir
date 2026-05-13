@@ -12,6 +12,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/result.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/secret_resolution.hpp"
 
@@ -90,12 +91,13 @@ public:
   auto token(OpCtx& ctx) -> Task<failure_or<std::string>>;
 
 private:
-  auto refresh(OpCtx& ctx) -> Task<failure_or<void>>;
+  auto refresh(OpCtx& ctx) -> Task<Result<void, diagnostic>>;
 
   resolved_azure_auth auth_;
   location loc_ = location::unknown;
   std::string token_;
   std::chrono::steady_clock::time_point refresh_at_{};
+  std::chrono::steady_clock::time_point expires_at_{};
 };
 
 } // namespace tenzir

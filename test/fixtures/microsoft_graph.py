@@ -17,10 +17,11 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from pathlib import Path
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
+from typing import Iterator, cast
 from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import fixture
@@ -31,6 +32,7 @@ _CLIENT_ID = "test-client"
 _CLIENT_SECRET = "test-secret"
 _ACCESS_TOKEN = "test-ms-graph-token"
 _SKIPTOKEN = "page-2"
+_FIRST_PAGE_DELAY_SECONDS = 2.1
 
 
 def _json_response(handler: BaseHTTPRequestHandler, code: int, obj: object) -> None:
@@ -40,6 +42,10 @@ def _json_response(handler: BaseHTTPRequestHandler, code: int, obj: object) -> N
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
+
+
+class _TokenServer(ThreadingHTTPServer):
+    token_requests: int = 0
 
 
 class _TokenHandler(BaseHTTPRequestHandler):
@@ -66,12 +72,21 @@ class _TokenHandler(BaseHTTPRequestHandler):
                     {"error": f"unexpected {key}: {form.get(key)!r}"},
                 )
                 return
+        server = cast(_TokenServer, self.server)
+        server.token_requests += 1
+        if server.token_requests > 1:
+            _json_response(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "temporary auth outage"},
+            )
+            return
         _json_response(
             self,
             HTTPStatus.OK,
             {
                 "token_type": "Bearer",
-                "expires_in": 3600,
+                "expires_in": 4,
                 "access_token": _ACCESS_TOKEN,
             },
         )
@@ -111,6 +126,7 @@ class _GraphHandler(BaseHTTPRequestHandler):
                 )
                 return
             base = f"http://{self.headers['Host']}/v1.0"
+            time.sleep(_FIRST_PAGE_DELAY_SECONDS)
             _json_response(
                 self,
                 HTTPStatus.OK,
@@ -175,7 +191,7 @@ class _GraphHandler(BaseHTTPRequestHandler):
 
 @fixture(name="microsoft_graph")
 def run() -> Iterator[dict[str, str]]:
-    token_server = ThreadingHTTPServer((_HOST, 0), _TokenHandler)
+    token_server = _TokenServer((_HOST, 0), _TokenHandler)
     graph_server = ThreadingHTTPServer((_HOST, 0), _GraphHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     graph_thread = threading.Thread(target=graph_server.serve_forever, daemon=True)

@@ -11,6 +11,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/curl.hpp"
 #include "tenzir/http_pool.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
@@ -120,13 +121,14 @@ auto parse_expires_in(record const& response) -> std::chrono::seconds {
   return std::chrono::seconds{seconds};
 }
 
-auto refresh_time(std::chrono::seconds expires_in)
+auto refresh_time(std::chrono::steady_clock::time_point now,
+                  std::chrono::seconds expires_in)
   -> std::chrono::steady_clock::time_point {
   auto safety_margin = 60s;
   if (expires_in <= 2 * safety_margin) {
     safety_margin = expires_in / 2;
   }
-  return std::chrono::steady_clock::now() + expires_in - safety_margin;
+  return now + expires_in - safety_margin;
 }
 
 } // namespace
@@ -234,15 +236,26 @@ auto AzureTokenProvider::authorize(std::map<std::string, std::string>& headers,
 }
 
 auto AzureTokenProvider::token(OpCtx& ctx) -> Task<failure_or<std::string>> {
-  if (not token_.empty() and std::chrono::steady_clock::now() < refresh_at_) {
+  const auto now = std::chrono::steady_clock::now();
+  if (not token_.empty() and now < refresh_at_) {
     co_return token_;
   }
-  CO_TRY(co_await refresh(ctx));
+  auto result = co_await refresh(ctx);
+  if (result.is_err()) {
+    auto diag = std::move(result).unwrap_err();
+    if (not token_.empty() and std::chrono::steady_clock::now() < expires_at_) {
+      TENZIR_WARN("failed to refresh Azure access token before expiry; using "
+                  "cached token: {}",
+                  diag.message);
+      co_return token_;
+    }
+    ctx.dh().emit(std::move(diag));
+    co_return failure::promise();
+  }
   co_return token_;
 }
 
-auto AzureTokenProvider::refresh(OpCtx& ctx) -> Task<failure_or<void>> {
-  auto& dh = ctx.dh();
+auto AzureTokenProvider::refresh(OpCtx& ctx) -> Task<Result<void, diagnostic>> {
   const auto url = token_endpoint(auth_);
   const auto body = curl::escape(record{
     {"client_id", auth_.client_id},
@@ -257,19 +270,17 @@ auto AzureTokenProvider::refresh(OpCtx& ctx) -> Task<failure_or<void>> {
   auto result = co_await http_post(ctx.io_executor()->getEventBase(), url, body,
                                    std::move(headers));
   if (result.is_err()) {
-    diagnostic::error("failed to fetch Azure access token: {}",
-                      std::move(result).unwrap_err())
-      .primary(loc_)
-      .emit(dh);
-    co_return failure::promise();
+    co_return Err{diagnostic::error("failed to fetch Azure access token: {}",
+                                    std::move(result).unwrap_err())
+                    .primary(loc_)
+                    .done()};
   }
   auto response = std::move(result).unwrap();
-  auto fail = [&](std::string message) -> failure_or<void> {
-    diagnostic_builder{severity::error, std::move(message)}
-      .primary(loc_)
-      .note("response body: {}", response.body)
-      .emit(dh);
-    return failure::promise();
+  auto fail = [&](std::string message) -> Result<void, diagnostic> {
+    return Err{diagnostic_builder{severity::error, std::move(message)}
+                 .primary(loc_)
+                 .note("response body: {}", response.body)
+                 .done()};
   };
   if (not response.is_status_success()) {
     co_return fail(
@@ -294,8 +305,11 @@ auto AzureTokenProvider::refresh(OpCtx& ctx) -> Task<failure_or<void>> {
       fmt::format("expected Azure `access_token` to be `string`, got `{}`",
                   type::infer(it->second).value_or(type{}).kind()));
   }
+  const auto expires_in = parse_expires_in(*object);
+  const auto now = std::chrono::steady_clock::now();
   token_ = *token;
-  refresh_at_ = refresh_time(parse_expires_in(*object));
+  refresh_at_ = refresh_time(now, expires_in);
+  expires_at_ = now + expires_in;
   co_return {};
 }
 
