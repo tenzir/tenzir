@@ -39,42 +39,23 @@ struct EndpointParser : parser_base<EndpointParser> {
       return tenzir::port{number};
     });
     auto host_char = alnum | ch<'-'> | ch<'_'> | ch<'.'>;
-    auto host = +host_char;
+    auto endpoint_host = +host_char;
     auto ipv6_char = xdigit | ch<':'> | ch<'.'>;
-    auto ipv6_host = (+ipv6_char).with([](std::string const& value) {
-      return parsers::ipv6(value);
-    });
-    auto optional_port = -(':'_p >> endpoint_port);
-    auto to_endpoint = [](std::string host, std::optional<tenzir::port> port) {
-      auto result = Endpoint{};
-      result.host = std::move(host);
-      if (port) {
-        result.port = *port;
-      }
-      return result;
-    };
+    auto ipv6_host = &(parsers::ipv6 >> ! ipv6_char) >> +ipv6_char;
     auto bracketed_ipv6
-      = ('['_p >> ipv6_host >> ']'_p >> optional_port)
-          .then([=](std::tuple<std::string, std::optional<tenzir::port>> x) {
-            return to_endpoint(std::move(std::get<0>(x)),
-                               std::move(std::get<1>(x)));
+      = ('['_p >> ipv6_host >> ']'_p >> -(':'_p >> endpoint_port))
+          .then([=](std::string host, std::optional<tenzir::port> port) {
+            return Endpoint{std::move(host), port};
           });
     auto bare_ipv6 = ipv6_host.then([](std::string host) {
-      auto result = Endpoint{};
-      result.host = std::move(host);
-      return result;
+      return Endpoint{std::move(host)};
     });
     auto host_and_port = (*host_char >> ':'_p >> endpoint_port)
-                           .then([](std::tuple<std::string, tenzir::port> x) {
-                             auto result = Endpoint{};
-                             result.host = std::move(std::get<0>(x));
-                             result.port = std::get<1>(x);
-                             return result;
+                           .then([](std::string host, tenzir::port port) {
+                             return Endpoint{std::move(host), port};
                            });
-    auto host_only = host.then([](std::string host) {
-      auto result = Endpoint{};
-      result.host = std::move(host);
-      return result;
+    auto host_only = endpoint_host.then([](std::string host) {
+      return Endpoint{std::move(host)};
     });
     return bracketed_ipv6 | bare_ipv6 | host_and_port | host_only;
   }
