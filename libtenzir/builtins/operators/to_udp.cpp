@@ -9,6 +9,7 @@
 #include <tenzir/async/channel.hpp>
 #include <tenzir/async/dns.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/posix.hpp>
@@ -55,10 +56,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto endpoint
-      = parse_socket_address(args_.endpoint.inner, SocketAddressKind::remote)
-          .expect("to_udp endpoint should be valid after "
-                  "operator validation");
+    auto endpoint = tenzir::endpoint{};
+    auto parsed = parsers::endpoint(args_.endpoint.inner, endpoint)
+                  and endpoint.port and not endpoint.host.empty();
+    TENZIR_ASSERT(parsed);
     auto address
       = co_await forward_dns_.resolve_socket_address(std::move(endpoint));
     if (address.is_err()) {
@@ -261,8 +262,9 @@ public:
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      if (not parse_socket_address(endpoint_str.inner,
-                                   SocketAddressKind::remote)) {
+      auto endpoint = tenzir::endpoint{};
+      if (not parsers::endpoint(endpoint_str.inner, endpoint)
+          or not endpoint.port or endpoint.host.empty()) {
         diagnostic::error("failed to parse endpoint")
           .primary(location)
           .emit(ctx);

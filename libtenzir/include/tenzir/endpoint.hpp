@@ -8,17 +8,17 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/port.hpp"
 
-#include <optional>
 #include <string>
 
 namespace tenzir {
 
 /// A transport-layer endpoint consisting of host and port.
 struct endpoint {
-  std::string host;               ///< The hostname or IP address.
-  std::optional<class port> port; ///< The transport-layer port.
+  std::string host;          ///< The hostname or IP address.
+  Option<class port> port{}; ///< The transport-layer port.
 
   friend auto inspect(auto& f, endpoint& x) -> bool {
     return f.object(x).fields(f.field("host", x.host), f.field("port", x.port));
@@ -39,9 +39,15 @@ struct formatter<tenzir::endpoint> {
   template <class FormatContext>
   auto format(const ::tenzir::endpoint& value, FormatContext& ctx) const {
     auto out = ctx.out();
-    out = fmt::format_to(out, "{}", value.host);
     if (value.port) {
-      out = fmt::format_to(out, ":{}", value.port.value());
+      if (value.host.contains(':')) {
+        out = fmt::format_to(out, "[{}]", value.host);
+      } else {
+        out = fmt::format_to(out, "{}", value.host);
+      }
+      out = fmt::format_to(out, ":{}", *value.port);
+    } else {
+      out = fmt::format_to(out, "{}", value.host);
     }
     return out;
   }

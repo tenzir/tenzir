@@ -7,8 +7,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/result.hpp>
+#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/logger.hpp>
@@ -25,8 +27,6 @@
 #include <proxygen/lib/http/coro/client/HTTPCoroSessionPool.h>
 #include <proxygen/lib/utils/URL.h>
 
-#include <algorithm>
-#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
@@ -160,29 +160,18 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
   }
 }
 
-auto trim(std::string_view value) -> std::string_view {
-  while (not value.empty()
-         and std::isspace(static_cast<unsigned char>(value.front())) != 0) {
-    value.remove_prefix(1);
-  }
-  while (not value.empty()
-         and std::isspace(static_cast<unsigned char>(value.back())) != 0) {
-    value.remove_suffix(1);
-  }
-  return value;
-}
-
 auto host_matches_no_proxy(std::string_view host, std::string_view pattern)
   -> bool {
-  pattern = trim(pattern);
+  pattern = detail::trim(pattern);
   if (pattern.empty()) {
     return false;
   }
   if (pattern == "*") {
     return true;
   }
-  if (auto colon = pattern.find(':'); colon != std::string_view::npos) {
-    pattern = pattern.substr(0, colon);
+  auto parsed = endpoint{};
+  if (parsers::endpoint(pattern, parsed)) {
+    pattern = parsed.host;
   }
   if (host == pattern) {
     return true;
@@ -202,17 +191,10 @@ auto bypass_proxy(std::string_view host) -> bool {
   if (not no_proxy) {
     return false;
   }
-  auto value = std::string_view{no_proxy};
-  while (not value.empty()) {
-    auto comma = value.find(',');
-    auto pattern = value.substr(0, comma);
+  for (auto pattern : detail::split(no_proxy, ",")) {
     if (host_matches_no_proxy(host, pattern)) {
       return true;
     }
-    if (comma == std::string_view::npos) {
-      break;
-    }
-    value.remove_prefix(comma + 1);
   }
   return false;
 }
@@ -252,12 +234,40 @@ auto curl_http_request(proxygen::HTTPMethod method, std::string const& url,
   -> Result<HttpResponse, std::string> {
   auto easy = curl::easy{};
   auto response_body = std::string{};
+  auto response_headers = std::map<std::string, std::string>{};
   auto write_callback = [&](std::span<std::byte const> data) {
     response_body.append(reinterpret_cast<char const*>(data.data()),
                          data.size());
   };
   if (auto code = easy.set(write_callback); code != curl::easy::code::ok) {
     return Err{fmt::format("failed to configure HTTP response body: {}",
+                           to_string(code))};
+  }
+  auto header_callback = [&](std::span<std::byte const> data) {
+    auto header = std::string_view{reinterpret_cast<char const*>(data.data()),
+                                   data.size()};
+    header = detail::trim(header);
+    if (header.empty()) {
+      return;
+    }
+    if (header.starts_with("HTTP/")) {
+      response_headers.clear();
+      return;
+    }
+    auto colon = header.find(':');
+    if (colon == std::string_view::npos) {
+      return;
+    }
+    auto [name, value] = detail::split_once(header, ":");
+    name = detail::trim(name);
+    value = detail::trim(value);
+    if (not name.empty()) {
+      response_headers[std::string{name}] = std::string{value};
+    }
+  };
+  if (auto code = easy.set_header_callback(header_callback);
+      code != curl::easy::code::ok) {
+    return Err{fmt::format("failed to configure HTTP response headers: {}",
                            to_string(code))};
   }
   if (auto code = easy.set(CURLOPT_URL, url); code != curl::easy::code::ok) {
@@ -321,6 +331,7 @@ auto curl_http_request(proxygen::HTTPMethod method, std::string const& url,
       fmt::format("failed to read HTTP response code: {}", to_string(code))};
   }
   return HttpResponse{.status_code = static_cast<uint16_t>(status),
+                      .headers = std::move(response_headers),
                       .body = std::move(response_body)};
 }
 

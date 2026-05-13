@@ -180,7 +180,7 @@ auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
     connector, retry_delay, detail::get_deadline(timeout), internal_connection);
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
-  TENZIR_ASSERT(endpoint.port.has_value());
+  TENZIR_ASSERT(endpoint.port);
   self
     ->mail(atom::connect_v, connect_request{.port = endpoint.port->number(),
                                             .host = endpoint.host})

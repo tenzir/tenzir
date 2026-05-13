@@ -117,6 +117,28 @@ auto easy::set_write_result_callback(write_result_callback fun) -> code {
   return static_cast<code>(curl_code);
 }
 
+auto easy::set_header_callback(write_callback fun) -> code {
+  struct HeaderCallback final : write_callback_base {
+    explicit HeaderCallback(write_callback fun) : fun_{std::move(fun)} {
+    }
+
+    auto invoke(std::span<const std::byte> buffer) -> size_t override {
+      fun_(buffer);
+      return buffer.size();
+    }
+
+    write_callback fun_;
+  };
+  TENZIR_ASSERT(fun);
+  on_header_ = std::make_unique<HeaderCallback>(std::move(fun));
+  auto curl_code
+    = curl_easy_setopt(easy_.get(), CURLOPT_HEADERFUNCTION, on_write);
+  TENZIR_ASSERT(curl_code == CURLE_OK);
+  curl_code
+    = curl_easy_setopt(easy_.get(), CURLOPT_HEADERDATA, on_header_.get());
+  return static_cast<code>(curl_code);
+}
+
 auto easy::set(read_callback fun) -> code {
   TENZIR_ASSERT(fun);
   on_read_ = std::make_unique<read_callback>(std::move(fun));

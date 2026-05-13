@@ -8,6 +8,8 @@
 
 #include "tenzir/http_server.hpp"
 
+#include "tenzir/concept/parseable/tenzir/endpoint.hpp"
+
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
@@ -127,52 +129,21 @@ auto parse_endpoint(std::string_view endpoint, location loc,
       .emit(dh);
     return None{};
   }
-  if (endpoint.front() == '[') {
-    auto const close = endpoint.find(']');
-    if (close == std::string_view::npos) {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto const host = endpoint.substr(1, close - 1);
-    auto const rest = endpoint.substr(close + 1);
-    if (rest.empty() or rest.front() != ':') {
-      diagnostic::error("invalid IPv6 endpoint syntax")
-        .primary(loc)
-        .hint("expected `[host]:port`")
-        .emit(dh);
-      return None{};
-    }
-    auto port = parse_number<uint16_t>(rest.substr(1));
-    if (not port) {
-      diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
-      return None{};
-    }
-    return server_endpoint{
-      .host = std::string{host},
-      .port = *port,
-      .scheme_tls = None{},
-    };
-  }
-  auto const colon = endpoint.rfind(':');
-  if (colon == std::string_view::npos) {
+  auto parsed = tenzir::endpoint{};
+  if (not parsers::endpoint(endpoint, parsed)) {
     diagnostic::error("failed to parse endpoint")
       .primary(loc)
       .hint("expected `host:port`, `[host]:port`, or URL")
       .emit(dh);
     return None{};
   }
-  auto const host = endpoint.substr(0, colon);
-  auto port = parse_number<uint16_t>(endpoint.substr(colon + 1));
-  if (not port) {
-    diagnostic::error("failed to parse endpoint port").primary(loc).emit(dh);
+  if (not parsed.port) {
+    diagnostic::error("endpoint port is missing").primary(loc).emit(dh);
     return None{};
   }
   return server_endpoint{
-    .host = std::string{host},
-    .port = *port,
+    .host = std::move(parsed.host),
+    .port = parsed.port->number(),
     .scheme_tls = None{},
   };
 }

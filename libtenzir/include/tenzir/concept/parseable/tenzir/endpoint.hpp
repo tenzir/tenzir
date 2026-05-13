@@ -10,7 +10,7 @@
 
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/numeric/integral.hpp"
-#include "tenzir/concept/parseable/string/char_class.hpp"
+#include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/port.hpp"
 #include "tenzir/endpoint.hpp"
 
@@ -23,23 +23,81 @@ struct endpoint_parser : parser_base<endpoint_parser> {
   using attribute = endpoint;
 
   template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
+    auto result = endpoint{};
+    return parse(f, l, result);
+  }
+
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, endpoint& e) const {
     using namespace parsers;
-    using namespace parser_literals;
-    auto hostname = +(alnum | chr{'-'} | chr{'_'} | chr{'.'});
-    auto host = hostname->*[&](std::string x) {
-      e.host = std::move(x);
+    auto first = f;
+    if (first == l) {
+      return false;
+    }
+    auto input
+      = std::string_view{&*f, static_cast<size_t>(std::distance(f, l))};
+    auto parse_port = [](std::string_view value) -> Option<tenzir::port> {
+      auto parsed = tenzir::port{};
+      if (parsers::port(value, parsed)) {
+        return parsed;
+      }
+      auto number = uint16_t{};
+      if (u16(value, number)) {
+        return tenzir::port{number};
+      }
+      return None{};
     };
-    auto port = (parsers::port->*
-                 [&](tenzir::port x) {
-                   e.port = x;
-                 })
-                | (u16->*[&](uint16_t x) {
-                    e.port = tenzir::port{x};
-                  });
-    auto port_part = ':' >> port;
-    auto p = (host >> ~port_part) | port_part;
-    return p(f, l, unused);
+    auto result = endpoint{};
+    if (input.front() == '[') {
+      auto close = input.find(']');
+      if (close == std::string_view::npos) {
+        return false;
+      }
+      auto host = input.substr(1, close - 1);
+      if (host.empty() or not parsers::ipv6(host)) {
+        return false;
+      }
+      result.host = std::string{host};
+      auto rest = input.substr(close + 1);
+      if (rest.empty()) {
+        e = std::move(result);
+        f = l;
+        return true;
+      }
+      if (not rest.starts_with(':')) {
+        return false;
+      }
+      auto parsed_port = parse_port(rest.substr(1));
+      if (not parsed_port) {
+        return false;
+      }
+      result.port = *parsed_port;
+      e = std::move(result);
+      f = l;
+      return true;
+    }
+    if (parsers::ipv6(input)) {
+      result.host = std::string{input};
+      e = std::move(result);
+      f = l;
+      return true;
+    }
+    if (auto colon = input.rfind(':'); colon != std::string_view::npos) {
+      auto parsed_port = parse_port(input.substr(colon + 1));
+      if (not parsed_port or input.substr(0, colon).contains(':')) {
+        return false;
+      }
+      result.host = std::string{input.substr(0, colon)};
+      result.port = *parsed_port;
+      e = std::move(result);
+      f = l;
+      return true;
+    }
+    result.host = std::string{input};
+    e = std::move(result);
+    f = l;
+    return true;
   }
 };
 

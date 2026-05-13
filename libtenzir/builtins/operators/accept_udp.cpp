@@ -13,6 +13,7 @@
 #include <tenzir/async/notify.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -194,10 +195,10 @@ public:
     // `dcheckIsInEventBaseThread` holds and access to `SocketReadCallback`'s
     // members needs no synchronization.
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto bind_endpoint
-      = parse_socket_address(args_.endpoint.inner, SocketAddressKind::bind)
-          .expect("accept_udp endpoint should be valid after "
-                  "operator validation");
+    auto bind_endpoint = endpoint{};
+    auto parsed = parsers::endpoint(args_.endpoint.inner, bind_endpoint)
+                  and bind_endpoint.port;
+    TENZIR_ASSERT(parsed);
     auto bind_address
       = co_await forward_dns_.resolve_bind_address(std::move(bind_endpoint));
     if (bind_address.is_err()) {
@@ -503,8 +504,9 @@ public:
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      if (not parse_socket_address(endpoint_str.inner,
-                                   SocketAddressKind::bind)) {
+      auto endpoint = tenzir::endpoint{};
+      if (not parsers::endpoint(endpoint_str.inner, endpoint)
+          or not endpoint.port) {
         diagnostic::error("failed to parse endpoint")
           .primary(location)
           .emit(ctx);
