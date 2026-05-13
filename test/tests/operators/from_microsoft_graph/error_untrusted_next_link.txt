@@ -1,0 +1,8 @@
+error: OData `@odata.nextLink` URL points to an untrusted origin
+ --> tests/operators/from_microsoft_graph/error_untrusted_next_link.tql:7:1
+  |
+7 | from_microsoft_graph "users/untrusted-next-link",
+  | ^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: current origin: https://graph.microsoft.com
+  = note: next origin: https://example.invalid

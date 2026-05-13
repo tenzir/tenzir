@@ -185,6 +185,21 @@ def _write_config(config_dir: Path) -> None:
                 },
             },
             {
+                "request": {
+                    "url": f"{base}/v1.0/users/untrusted-next-link",
+                    "method": "GET",
+                },
+                "response": {
+                    "statusCode": 200,
+                    "headers": _mock_headers(),
+                    "body": {
+                        "@odata.context": f"{base}/v1.0/$metadata#users",
+                        "@odata.nextLink": "https://example.invalid/v1.0/users",
+                        "value": [],
+                    },
+                },
+            },
+            {
                 "request": {"url": f"{base}/v1.0/groups", "method": "GET"},
                 "response": {
                     "statusCode": 200,
