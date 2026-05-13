@@ -549,6 +549,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   increment_instances();
   TENZIR_ASSERT(not chunk_ or chunk_->unique());
+  TENZIR_ASSERT(is<record_type>(schema));
   if (chunk_) {
     auto f = detail::overload{
       []() noexcept {
@@ -593,6 +594,7 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
                          type schema, enum serialize serialize) {
   increment_instances();
   TENZIR_ASSERT_EXPENSIVE(verify_record_batch(*record_batch));
+  TENZIR_ASSERT(is<record_type>(schema));
   auto builder = flatbuffers::FlatBufferBuilder{};
   *this
     = create_table_slice(record_batch, builder, std::move(schema), serialize);
@@ -601,6 +603,7 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
 auto table_slice::try_from(
   const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
   enum serialize serialize) -> std::expected<table_slice, creation_error> {
+  TENZIR_ASSERT(is<record_type>(schema));
   auto converted_batch = upgrade_record_batch(record_batch);
   auto valid = verify_record_batch(*converted_batch);
   if (not valid) {
@@ -678,7 +681,7 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 const type& table_slice::schema() const noexcept {
   auto f = detail::overload{
     []() noexcept {
-      static const auto schema = type{};
+      static const auto schema = type{record_type{}};
       return &schema;
     },
     [&](const auto& encoded) noexcept {
