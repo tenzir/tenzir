@@ -43,6 +43,10 @@ WITH_FIXTURE(fixture) {
   }
 
   TEST("parseable - host and port") {
+    CHECK(parsers::endpoint("localhost:6553", x));
+    CHECK_EQUAL(x.host, "localhost");
+    CHECK_EQUAL(*x.port, 6553);
+    CHECK_EQUAL(x.port->type(), port_type::unknown);
     CHECK(parsers::endpoint("10.0.0.1:80", x));
     CHECK_EQUAL(x.host, "10.0.0.1");
     CHECK_EQUAL(*x.port, 80);
@@ -69,6 +73,9 @@ WITH_FIXTURE(fixture) {
     CHECK(parsers::endpoint("[2001:db8::1]:443/tcp", x));
     CHECK_EQUAL(x.host, "2001:db8::1");
     CHECK_EQUAL(*x.port, (tenzir::port{443, port_type::tcp}));
+    CHECK(parsers::endpoint("[::ffff:192.0.2.1]:443", x));
+    CHECK_EQUAL(x.host, "::ffff:192.0.2.1");
+    CHECK_EQUAL(*x.port, 443);
   }
 
   TEST("parseable - malformed endpoints") {
@@ -77,9 +84,28 @@ WITH_FIXTURE(fixture) {
     CHECK(not parsers::endpoint("[localhost]:443"));
     CHECK(not parsers::endpoint("localhost:"));
     CHECK(not parsers::endpoint("localhost:http"));
+    CHECK(not parsers::endpoint("localhost:65536"));
+    CHECK(not parsers::endpoint("localhost:443/http"));
     CHECK(not parsers::endpoint("bad host"));
     CHECK(not parsers::endpoint("foo/bar"));
     CHECK(not parsers::endpoint("foo/bar:443"));
+  }
+
+  TEST("parseable - incremental") {
+    auto input = "localhost:6553/rest"s;
+    auto first = input.begin();
+    auto last = input.end();
+    CHECK(parsers::endpoint(first, last, x));
+    CHECK_EQUAL(x.host, "localhost");
+    CHECK_EQUAL(*x.port, 6553);
+    CHECK_EQUAL((std::string{first, last}), "/rest");
+    input = "[::1]443"s;
+    first = input.begin();
+    last = input.end();
+    CHECK(parsers::endpoint(first, last, x));
+    CHECK_EQUAL(x.host, "::1");
+    CHECK(not x.port);
+    CHECK_EQUAL((std::string{first, last}), "443");
   }
 
   TEST("printable - IPv6 with port") {
