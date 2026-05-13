@@ -77,6 +77,9 @@ WITH_FIXTURE(fixture) {
     CHECK(not parsers::endpoint("[localhost]:443"));
     CHECK(not parsers::endpoint("localhost:"));
     CHECK(not parsers::endpoint("localhost:http"));
+    CHECK(not parsers::endpoint("bad host"));
+    CHECK(not parsers::endpoint("foo/bar"));
+    CHECK(not parsers::endpoint("foo/bar:443"));
   }
 
   TEST("printable - IPv6 with port") {

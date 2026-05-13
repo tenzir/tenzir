@@ -14,6 +14,7 @@
 #include "tenzir/concept/parseable/tenzir/port.hpp"
 #include "tenzir/endpoint.hpp"
 
+#include <cctype>
 #include <cstdint>
 #include <string>
 
@@ -47,6 +48,12 @@ struct endpoint_parser : parser_base<endpoint_parser> {
         return tenzir::port{number};
       }
       return None{};
+    };
+    auto is_hostname = [](std::string_view value) {
+      return std::ranges::all_of(value, [](auto c) {
+        return std::isalnum(static_cast<unsigned char>(c)) != 0 or c == '-'
+               or c == '_' or c == '.';
+      });
     };
     auto result = endpoint{};
     if (input.front() == '[') {
@@ -88,11 +95,18 @@ struct endpoint_parser : parser_base<endpoint_parser> {
       if (not parsed_port or input.substr(0, colon).contains(':')) {
         return false;
       }
-      result.host = std::string{input.substr(0, colon)};
+      auto host = input.substr(0, colon);
+      if (not is_hostname(host)) {
+        return false;
+      }
+      result.host = std::string{host};
       result.port = *parsed_port;
       e = std::move(result);
       f = l;
       return true;
+    }
+    if (not is_hostname(input)) {
+      return false;
     }
     result.host = std::string{input};
     e = std::move(result);
