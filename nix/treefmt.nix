@@ -15,6 +15,14 @@
 
   # CMake
   programs.cmake-format.enable = true;
+  # treefmt-nix's default includes ["*.cmake", "CMakeLists.txt"] silently
+  # skip every nested CMakeLists.txt because patterns without wildcards
+  # are anchored at the project root.
+  programs.cmake-format.includes = [
+    "CMakeLists.txt"
+    "**/CMakeLists.txt"
+    "*.cmake"
+  ];
 
   # Markdown
   settings.formatter.markdownlint = {
