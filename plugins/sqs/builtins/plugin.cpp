@@ -24,25 +24,17 @@ namespace {
 constexpr auto max_visibility_timeout = 12h;
 
 auto parse_connector_args(const std::string& name,
-                          operator_factory_invocation& inv, session ctx,
-                          bool supports_delete = false)
+                          operator_factory_invocation& inv, session ctx)
   -> failure_or<connector_args> {
   auto args = connector_args{};
-  auto batch_size = std::optional<located<uint64_t>>{};
   auto dur = std::optional<located<duration>>{};
-  auto visibility_timeout = std::optional<located<duration>>{};
   auto iam_opts = std::optional<located<record>>{};
-  auto parser = argument_parser2::operator_(name)
-                  .positional("queue", args.queue)
-                  .named("poll_time", dur)
-                  .named("aws_region", args.aws_region)
-                  .named("aws_iam", iam_opts);
-  if (supports_delete) {
-    parser.named("delete", args.delete_messages);
-    parser.named("batch_size", batch_size);
-    parser.named("visibility_timeout", visibility_timeout);
-  }
-  TRY(parser.parse(inv, ctx));
+  TRY(argument_parser2::operator_(name)
+        .positional("queue", args.queue)
+        .named("poll_time", dur)
+        .named("aws_region", args.aws_region)
+        .named("aws_iam", iam_opts)
+        .parse(inv, ctx));
   if (iam_opts) {
     TRY(args.aws,
         aws_iam_options::from_record(std::move(iam_opts).value(), ctx));
@@ -62,49 +54,14 @@ auto parse_connector_args(const std::string& name,
       = located{std::chrono::duration_cast<std::chrono::seconds>(dur->inner),
                 dur->source};
   }
-  if (visibility_timeout) {
-    args.visibility_timeout = located{
-      std::chrono::duration_cast<std::chrono::seconds>(
-        visibility_timeout->inner),
-      visibility_timeout->source,
-    };
-  }
-  if (batch_size) {
-    args.batch_size = batch_size->inner;
-  }
-  auto failed = false;
-  if (batch_size) {
-    if (batch_size->inner < 1 or batch_size->inner > 10) {
-      diagnostic::error("invalid batch size: {}", batch_size->inner)
-        .primary(batch_size->source)
-        .hint("batch size must be in the interval [1, 10]")
-        .emit(ctx);
-      failed = true;
-    }
-  }
   if (args.poll_time) {
     if (args.poll_time->inner < 1s or args.poll_time->inner > 20s) {
       diagnostic::error("invalid poll time: {}", args.poll_time->inner)
         .primary(args.poll_time->source)
         .hint("poll time must be in the interval [1s, 20s]")
         .emit(ctx);
-      failed = true;
+      return failure::promise();
     }
-  }
-  if (visibility_timeout) {
-    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(
-      visibility_timeout->inner);
-    if (seconds < 0s or seconds > max_visibility_timeout) {
-      diagnostic::error("invalid visibility timeout: {}",
-                        visibility_timeout->inner)
-        .primary(visibility_timeout->source)
-        .hint("visibility timeout must be in the interval [0s, 12h]")
-        .emit(ctx);
-      failed = true;
-    }
-  }
-  if (failed) {
-    return failure::promise();
   }
   return args;
 }
@@ -114,7 +71,7 @@ class load_plugin final : public virtual operator_plugin2<sqs_loader>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    TRY(auto args, parse_connector_args(name(), inv, ctx, true));
+    TRY(auto args, parse_connector_args(name(), inv, ctx));
     return std::make_unique<sqs_loader>(std::move(args));
   }
 

@@ -94,9 +94,7 @@ public:
   }
 
   /// Receives N messages from the queue.
-  auto
-  receive_messages(size_t num_messages, std::chrono::seconds poll_time,
-                   std::optional<std::chrono::seconds> visibility_timeout) {
+  auto receive_messages(size_t num_messages, std::chrono::seconds poll_time) {
     TENZIR_ASSERT(num_messages > 0);
     TENZIR_ASSERT(num_messages <= 10);
     TENZIR_DEBUG("receiving {} messages from {}", num_messages, url_);
@@ -106,10 +104,6 @@ public:
     // because we eagerly fetch them without waiting for ACKs from downstream.
     request.SetMaxNumberOfMessages(detail::narrow_cast<int>(num_messages));
     request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time.count()));
-    if (visibility_timeout) {
-      request.SetVisibilityTimeout(
-        detail::narrow_cast<int>(visibility_timeout->count()));
-    }
     auto outcome = client_.ReceiveMessage(request);
     if (not outcome.IsSuccess()) {
       diagnostic::error("failed receiving message from SQS queue")
@@ -181,10 +175,7 @@ private:
 
 struct connector_args {
   located<std::string> queue;
-  bool delete_messages = true;
-  uint64_t batch_size = 1;
   std::optional<located<std::chrono::seconds>> poll_time;
-  std::optional<located<std::chrono::seconds>> visibility_timeout;
   std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
 
@@ -192,11 +183,7 @@ struct connector_args {
   friend auto inspect(Inspector& f, connector_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.sqs.connector_args")
-      .fields(f.field("queue", x.queue),
-              f.field("delete_messages", x.delete_messages),
-              f.field("batch_size", x.batch_size),
-              f.field("poll_time", x.poll_time),
-              f.field("visibility_timeout", x.visibility_timeout),
+      .fields(f.field("queue", x.queue), f.field("poll_time", x.poll_time),
               f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
@@ -229,11 +216,8 @@ public:
       auto queue = sqs_queue{args_.queue, poll_time, region, resolved_creds};
       co_yield {};
       while (true) {
-        auto messages = queue.receive_messages(
-          detail::narrow_cast<size_t>(args_.batch_size), poll_time,
-          args_.visibility_timeout
-            ? std::optional{args_.visibility_timeout->inner}
-            : std::nullopt);
+        constexpr auto num_messages = size_t{1};
+        auto messages = queue.receive_messages(num_messages, poll_time);
         if (messages.empty()) {
           co_yield {};
         } else {
@@ -245,9 +229,7 @@ public:
             const auto& body = message.GetBody();
             auto str = std::string_view{body.data(), body.size()};
             co_yield chunk::copy(str);
-            if (args_.delete_messages) {
-              queue.delete_message(message);
-            }
+            queue.delete_message(message);
           }
         }
       }
