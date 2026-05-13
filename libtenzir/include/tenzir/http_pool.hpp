@@ -17,9 +17,11 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace folly {
 class EventBase;
@@ -51,6 +53,8 @@ struct HttpPoolConfig {
   std::chrono::milliseconds connection_timeout = std::chrono::seconds{5};
   uint32_t max_retry_count = 0;
   std::chrono::milliseconds retry_delay = std::chrono::seconds{1};
+  /// callback invoked before each retry sleep with a preformatted message
+  std::function<void(std::string_view message)> on_retry;
 };
 
 /// Registers well-known system CA bundle paths for Proxygen HTTPS clients.

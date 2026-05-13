@@ -1,3 +1,9 @@
 {
   error: b"{\"error\":\"service-unavailable\"}\n",
 }
+warning: HTTP error 503, attempt 1/2, retrying after 0s
+  --> tests/operators/from_http/error_field_retry_exhausted_503.tql:11:1
+   |
+11 | from_http env("HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL"), error_field=error, max_retry_count=1, retry_delay=1ms, tls=false { read_json }
+   | ~~~~~~~~~
+   |
