@@ -37,6 +37,10 @@ automatically. It requires either Podman or Docker to be available in the
 environment (Podman is preferred if both are present).
 """
 
+# /// script
+# dependencies = ["boto3"]
+# ///
+
 from __future__ import annotations
 
 import json
@@ -47,12 +51,10 @@ import subprocess
 import threading
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 import uuid
-import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
+from typing import Any, Iterator
 
 from tenzir_test import fixture
 
@@ -215,114 +217,62 @@ def _wait_for_localstack(endpoint: str, timeout: float) -> bool:
     return False
 
 
-def _xml_text(root: ET.Element, name: str) -> str:
-    for element in root.iter():
-        if element.tag.rsplit("}", 1)[-1] == name and element.text:
-            return element.text
-    raise RuntimeError(f"LocalStack response did not contain XML element {name}")
-
-
-def _aws_query(endpoint: str, service: str, params: dict[str, str]) -> ET.Element:
-    body = urllib.parse.urlencode(params).encode()
-    request = urllib.request.Request(
-        endpoint,
-        data=body,
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-            "Host": urllib.parse.urlparse(endpoint).netloc,
-            "X-Amz-Date": "19700101T000000Z",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=10) as response:
-        payload = response.read()
+def _aws_client(endpoint: str, service: str, region: str) -> Any:
     try:
-        return ET.fromstring(payload)
-    except ET.ParseError as e:
+        import boto3
+    except ModuleNotFoundError as e:
         raise RuntimeError(
-            f"LocalStack {service} response was not valid XML: {payload!r}"
+            "The localstack fixture requires boto3. Run tenzir-test from a uv "
+            "environment that includes boto3, for example with "
+            "`uvx --with boto3 tenzir-test ...`."
         ) from e
-
-
-def _s3_create_bucket(endpoint: str, bucket: str) -> None:
-    request = urllib.request.Request(f"{endpoint}/{bucket}", method="PUT")
-    with urllib.request.urlopen(request, timeout=10):
-        pass
-
-
-def _s3_put_object(endpoint: str, bucket: str, key: str, body: bytes) -> None:
-    request = urllib.request.Request(
-        f"{endpoint}/{bucket}/{urllib.parse.quote(key)}",
-        data=body,
-        headers={"Content-Type": "application/octet-stream"},
-        method="PUT",
+    return boto3.client(
+        service,
+        endpoint_url=endpoint,
+        region_name=region,
+        aws_access_key_id=TEST_ACCESS_KEY,
+        aws_secret_access_key=TEST_SECRET_KEY,
     )
-    with urllib.request.urlopen(request, timeout=10):
-        pass
+
+
+def _s3_create_bucket(s3: Any, bucket: str) -> None:
+    s3.create_bucket(Bucket=bucket)
+
+
+def _s3_put_object(s3: Any, bucket: str, key: str, body: bytes) -> None:
+    s3.put_object(Bucket=bucket, Key=key, Body=body)
 
 
 def _sqs_create_queue(
-    endpoint: str,
+    sqs: Any,
     name: str,
     *,
     attributes: dict[str, str] | None = None,
 ) -> str:
-    params = {
-        "Action": "CreateQueue",
-        "Version": "2012-11-05",
-        "QueueName": name,
-    }
-    for index, (key, value) in enumerate((attributes or {}).items(), start=1):
-        params[f"Attribute.{index}.Name"] = key
-        params[f"Attribute.{index}.Value"] = value
-    root = _aws_query(endpoint, "sqs", params)
-    return _xml_text(root, "QueueUrl")
+    response = sqs.create_queue(QueueName=name, Attributes=attributes or {})
+    return response["QueueUrl"]
 
 
-def _sqs_send_message(endpoint: str, queue_url: str, body: str) -> None:
-    _aws_query(
-        endpoint,
-        "sqs",
-        {
-            "Action": "SendMessage",
-            "Version": "2012-11-05",
-            "QueueUrl": queue_url,
-            "MessageBody": body,
-        },
-    )
+def _sqs_send_message(sqs: Any, queue_url: str, body: str) -> None:
+    sqs.send_message(QueueUrl=queue_url, MessageBody=body)
 
 
 def _iam_create_role(
-    endpoint: str,
+    iam: Any,
     role_name: str,
     assume_role_policy: str,
     description: str,
 ) -> str:
-    root = _aws_query(
-        endpoint,
-        "iam",
-        {
-            "Action": "CreateRole",
-            "Version": "2010-05-08",
-            "RoleName": role_name,
-            "AssumeRolePolicyDocument": assume_role_policy,
-            "Description": description,
-        },
+    response = iam.create_role(
+        RoleName=role_name,
+        AssumeRolePolicyDocument=assume_role_policy,
+        Description=description,
     )
-    return _xml_text(root, "Arn")
+    return response["Role"]["Arn"]
 
 
-def _iam_attach_role_policy(endpoint: str, role_name: str, policy_arn: str) -> None:
-    _aws_query(
-        endpoint,
-        "iam",
-        {
-            "Action": "AttachRolePolicy",
-            "Version": "2010-05-08",
-            "RoleName": role_name,
-            "PolicyArn": policy_arn,
-        },
-    )
+def _iam_attach_role_policy(iam: Any, role_name: str, policy_arn: str) -> None:
+    iam.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
 
 
 def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
@@ -331,14 +281,17 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     suffix = uuid.uuid4().hex[:8]
     bucket_name = f"tenzir-test-bucket-{suffix}"
     role_name = f"tenzir-test-role-{suffix}"
+    s3 = _aws_client(endpoint, "s3", region)
+    sqs = _aws_client(endpoint, "sqs", region)
+    iam = _aws_client(endpoint, "iam", region)
 
     # Create S3 bucket
     logger.info("Creating S3 bucket: %s", bucket_name)
-    _s3_create_bucket(endpoint, bucket_name)
+    _s3_create_bucket(s3, bucket_name)
 
     # Upload a test file
     test_content = b'{"message": "Hello from LocalStack test!"}\n'
-    _s3_put_object(endpoint, bucket_name, "test.json", test_content)
+    _s3_put_object(s3, bucket_name, "test.json", test_content)
     logger.info("Uploaded test file to s3://%s/test.json", bucket_name)
 
     # Create separate queues for each test scenario to avoid message consumption
@@ -365,16 +318,16 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         (queue_wi_token_name, "wi_token"),
     ]:
         logger.info("Creating SQS queue: %s", name)
-        queue_url = _sqs_create_queue(endpoint, name)
+        queue_url = _sqs_create_queue(sqs, name)
         logger.info("Created SQS queue: %s", queue_url)
         queues[key] = {"name": name, "url": queue_url}
         # Send test messages to this queue
         for msg in test_messages:
-            _sqs_send_message(endpoint, queue_url, msg)
+            _sqs_send_message(sqs, queue_url, msg)
         logger.info("Sent %d test messages to queue %s", len(test_messages), name)
     logger.info("Creating SQS queue: %s", queue_no_delete_name)
     queue_no_delete_url = _sqs_create_queue(
-        endpoint,
+        sqs,
         queue_no_delete_name,
         attributes={"VisibilityTimeout": "30"},
     )
@@ -384,12 +337,12 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         "url": queue_no_delete_url,
     }
     _sqs_send_message(
-        endpoint,
+        sqs,
         queue_no_delete_url,
         '{"id": 100, "message": "No delete test message"}',
     )
     _sqs_send_message(
-        endpoint,
+        sqs,
         queue_no_delete_url,
         '{"id": 101, "message": "No delete test message 2"}',
     )
@@ -410,7 +363,7 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     )
     logger.info("Creating IAM role: %s", role_name)
     role_arn = _iam_create_role(
-        endpoint,
+        iam,
         role_name,
         assume_role_policy,
         "Test role for Tenzir LocalStack tests",
@@ -419,12 +372,12 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
 
     # Attach policies to the role (full access for testing)
     _iam_attach_role_policy(
-        endpoint,
+        iam,
         role_name,
         "arn:aws:iam::aws:policy/AmazonS3FullAccess",
     )
     _iam_attach_role_policy(
-        endpoint,
+        iam,
         role_name,
         "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
     )
@@ -450,7 +403,7 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     )
     logger.info("Creating web identity IAM role: %s", web_identity_role_name)
     web_identity_role_arn = _iam_create_role(
-        endpoint,
+        iam,
         web_identity_role_name,
         web_identity_assume_role_policy,
         "Test role for Tenzir LocalStack web identity tests",
@@ -459,12 +412,12 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
 
     # Attach policies to the web identity role
     _iam_attach_role_policy(
-        endpoint,
+        iam,
         web_identity_role_name,
         "arn:aws:iam::aws:policy/AmazonS3FullAccess",
     )
     _iam_attach_role_policy(
-        endpoint,
+        iam,
         web_identity_role_name,
         "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
     )
