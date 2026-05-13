@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/bounded_queue.hpp"
 #include "tenzir/async/future_util.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/chunk.hpp"
@@ -27,7 +28,6 @@
 #include <arrow/result.h>
 #include <arrow/util/future.h>
 #include <arrow/util/uri.h>
-#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/FutureUtil.h>
 #include <folly/coro/Task.h>
 #include <folly/coro/UnboundedQueue.h>
@@ -306,7 +306,7 @@ private:
   std::array<Option<TrackedFile>, max_jobs> processing_{};
   uint64_t next_job_id_ = 0;
   std::vector<std::string> cleanup_pending_;
-  mutable Box<folly::coro::BoundedQueue<AwaitResult>> results_{
+  mutable Box<BoundedQueue<AwaitResult>> results_{
     std::in_place,
     max_jobs + 1,
   };

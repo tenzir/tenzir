@@ -266,7 +266,8 @@ auto FromArrowFsOperator::process_sub(SubKeyView key, table_slice slice,
 
 auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
   -> Task<void> {
-  co_await results_->enqueue(SubFinished{as<uint64_t>(key)});
+  results_->force_enqueue(SubFinished{as<uint64_t>(key)});
+  co_return;
 }
 
 auto FromArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
