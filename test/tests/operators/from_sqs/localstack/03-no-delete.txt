@@ -1,0 +1,8 @@
+{
+  id: 100,
+  message: "No delete test message",
+}
+{
+  id: 101,
+  message: "No delete test message 2",
+}

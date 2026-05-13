@@ -245,8 +245,9 @@ auto AsyncSqsQueue::init() -> Task<void> {
   url_ = result.GetQueueUrl();
 }
 
-auto AsyncSqsQueue::receive_messages(size_t num_messages,
-                                     std::chrono::seconds poll_time)
+auto AsyncSqsQueue::receive_messages(
+  size_t num_messages, std::chrono::seconds poll_time,
+  Option<std::chrono::seconds> visibility_timeout)
   -> Task<Aws::Vector<Aws::SQS::Model::Message>> {
   TENZIR_ASSERT(num_messages > 0);
   TENZIR_ASSERT(num_messages <= 10);
@@ -254,6 +255,10 @@ auto AsyncSqsQueue::receive_messages(size_t num_messages,
   request.SetQueueUrl(url_);
   request.SetMaxNumberOfMessages(detail::narrow_cast<int>(num_messages));
   request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time.count()));
+  if (visibility_timeout) {
+    request.SetVisibilityTimeout(
+      detail::narrow_cast<int>(visibility_timeout->count()));
+  }
   // Request all system attributes so events can expose metadata such as
   // `sent_time`, `receive_count`, and `sender_id`.
   request.AddMessageSystemAttributeNames(

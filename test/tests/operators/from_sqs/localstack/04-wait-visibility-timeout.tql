@@ -1,0 +1,4 @@
+// Wait until the receive-level one-second visibility timeout expires.
+from {ts: 2s.from_epoch()}
+delay ts, start=0s.from_epoch()
+discard

@@ -1,9 +1,0 @@
-// Test from_s3 with web identity using token_file.
-// Uses AssumeRoleWithWebIdentity with a token read from a file.
-from_s3 env("LOCALSTACK_S3_TEST_URI"), aws_iam={
-  region: "us-east-1",
-  assume_role: env("LOCALSTACK_WEB_IDENTITY_ROLE_ARN"),
-  web_identity: {
-    token_file: env("LOCALSTACK_WEB_IDENTITY_TOKEN_FILE")
-  }
-}

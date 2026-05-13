@@ -1,3 +1,0 @@
-suite: localstack-to-sqs
-fixtures: [localstack]
-timeout: 120

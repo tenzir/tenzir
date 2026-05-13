@@ -1,3 +1,0 @@
-suite: localstack-from-s3-web-identity
-fixtures: [localstack]
-timeout: 120

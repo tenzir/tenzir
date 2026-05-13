@@ -1,0 +1,15 @@
+// Test from_sqs without deleting received messages.
+from_sqs env("LOCALSTACK_SQS_QUEUE_NO_DELETE"),
+         delete=false,
+         batch_size=2,
+         poll_time=1s,
+         visibility_timeout=1s,
+         aws_iam={
+           access_key_id: "test",
+           secret_access_key: "test",
+           region: "us-east-1"
+         }
+head 2
+this = message.parse_json()
+select id, message
+sort id
