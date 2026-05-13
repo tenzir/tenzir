@@ -7,12 +7,16 @@ glob_matcher: doublestar
 pre-push:
   parallel: true
   commands:
+    changelog:
+      files: &branch_files 'git diff --name-only --diff-filter=ACMR "$(git merge-base origin/main HEAD)" HEAD'
+      glob: "changelog/**"
+      run: uvx tenzir-ship validate
     ruff-format:
       env:
         RUFF_VERSION: &ruff_version "0.15.12"
       # {push_files} returns every tracked file when the branch is new
       # (remote sha is all zeros); compute the actual branch diff instead.
-      files: &branch_files 'git diff --name-only --diff-filter=ACMR "$(git merge-base origin/main HEAD)" HEAD'
+      files: *branch_files
       glob: "**/*.py"
       exclude:
         - "^scripts/splunk-search\\.py$"

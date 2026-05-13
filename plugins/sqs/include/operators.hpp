@@ -23,7 +23,7 @@ namespace tenzir::plugins::sqs {
 
 struct FromSqsArgs {
   located<std::string> queue;
-  bool delete_messages = true;
+  bool keep_messages = false;
   Option<located<uint64_t>> batch_size;
   Option<located<duration>> poll_time;
   Option<located<duration>> visibility_timeout;

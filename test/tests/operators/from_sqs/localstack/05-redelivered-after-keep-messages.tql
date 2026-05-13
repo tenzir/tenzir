@@ -1,4 +1,4 @@
-// Test that the message received with delete=false becomes visible again.
+// Test that messages received with keep_messages=true become visible again.
 from_sqs env("LOCALSTACK_SQS_QUEUE_NO_DELETE"),
          batch_size=2,
          poll_time=1s,
