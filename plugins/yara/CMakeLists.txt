@@ -12,9 +12,7 @@ project(
 include(CTest)
 
 find_package(Tenzir REQUIRED)
-TenzirRegisterPlugin(
-  TARGET yara ENTRYPOINT src/plugin.cpp
-)
+TenzirRegisterPlugin(TARGET yara ENTRYPOINT src/plugin.cpp)
 
 find_package(PkgConfig REQUIRED QUIET)
 pkg_check_modules(yara REQUIRED IMPORTED_TARGET yara)

@@ -9,7 +9,8 @@ find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(cnats CONFIG QUIET)
 if (NOT cnats_FOUND)
-  message(WARNING "Disabling NATS plugin because the nats.c library was not found")
+  message(
+    WARNING "Disabling NATS plugin because the nats.c library was not found")
   return()
 endif ()
 if (TARGET cnats::nats)
@@ -62,6 +63,6 @@ TenzirRegisterPlugin(
   INCLUDE_DIRECTORIES include)
 
 target_link_libraries(nats PUBLIC ${nats_library})
-target_include_directories(nats BEFORE
-                           PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/compat/libevent2")
+target_include_directories(
+  nats BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/compat/libevent2")
 target_link_libraries(nats PUBLIC PkgConfig::Libevent)

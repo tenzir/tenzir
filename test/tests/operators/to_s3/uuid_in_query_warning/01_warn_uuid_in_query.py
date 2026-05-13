@@ -38,10 +38,10 @@ def main() -> None:
         f"&tls_ca_file_path={{uuid}}"
     )
     pipeline = (
-        "from {msg: \"hello\"}\n"
-        f"to_s3 \"{url}\",\n"
-        "  aws_iam={access_key_id: \"test\", secret_access_key: \"test\","
-        " region: \"us-east-1\"} {\n"
+        'from {msg: "hello"}\n'
+        f'to_s3 "{url}",\n'
+        '  aws_iam={access_key_id: "test", secret_access_key: "test",'
+        ' region: "us-east-1"} {\n'
         "  write_ndjson\n"
         "}\n"
     )

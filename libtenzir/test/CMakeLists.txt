@@ -25,7 +25,8 @@ TenzirTargetEnableTooling(tenzir-unit-test)
 target_link_libraries(
   tenzir-unit-test PRIVATE tenzir::test tenzir::libtenzir tenzir::internal
                            ${CMAKE_THREAD_LIBS_INIT})
-TenzirTargetLinkWholeArchive(tenzir-unit-test PRIVATE tenzir::libtenzir_builtins)
+TenzirTargetLinkWholeArchive(tenzir-unit-test PRIVATE
+                             tenzir::libtenzir_builtins)
 
 add_test(NAME build-tenzir-unit-test
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config

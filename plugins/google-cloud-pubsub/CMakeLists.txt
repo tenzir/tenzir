@@ -2,14 +2,17 @@ cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
 project(
   google-cloud-pubsub
-   DESCRIPTION "Google Cloud Pub/Sub plugin for Tenzir"
+  DESCRIPTION "Google Cloud Pub/Sub plugin for Tenzir"
   LANGUAGES CXX)
 
 find_package(google_cloud_cpp_pubsub CONFIG)
 if (NOT google_cloud_cpp_pubsub_FOUND)
-  message(WARNING "Disabling Google Cloud Pub/Sub plugin because the google-could-cpp library was not found")
+  message(
+    WARNING
+      "Disabling Google Cloud Pub/Sub plugin because the google-could-cpp library was not found"
+  )
   return()
-endif()
+endif ()
 
 include(CTest)
 
