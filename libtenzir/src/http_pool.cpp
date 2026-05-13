@@ -16,7 +16,6 @@
 #include <folly/ScopeGuard.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/async/AsyncSocketException.h>
-#include <folly/portability/Time.h>
 #include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
@@ -24,7 +23,6 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
-#include <charconv>
 #include <chrono>
 #include <filesystem>
 #include <mutex>
@@ -100,71 +98,6 @@ auto make_request_source(proxygen::URL const& host_url, std::string path,
   return source;
 }
 
-using std::chrono::system_clock;
-
-/// Parses an HTTP date and returns a `system_clock` time point.
-auto parse_http_date(std::string_view value)
-  -> Option<system_clock::time_point> {
-  if (value.empty()) {
-    return None{};
-  }
-  auto tm = std::tm{};
-  auto parsed = std::string{value};
-  if (::strptime(parsed.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) != nullptr
-      or ::strptime(parsed.c_str(), "%a, %d-%b-%y %H:%M:%S GMT", &tm) != nullptr
-      or ::strptime(parsed.c_str(), "%a %b %d %H:%M:%S %Y", &tm) != nullptr) {
-    return system_clock::time_point{
-      std::chrono::seconds{int64_t{timegm(&tm)}},
-    };
-  }
-  return None{};
-}
-
-auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds> {
-  if (value.empty()) {
-    return None{};
-  }
-  // try parse a number of seconds
-  auto seconds = uint64_t{};
-  auto* begin = value.data();
-  auto* end = value.data() + value.size();
-  if (auto [ptr, ec] = std::from_chars(begin, end, seconds);
-      ec == std::errc{} and ptr == end) {
-    return std::chrono::seconds{seconds};
-  }
-  // try parse as HTTP date
-  auto retry_at = parse_http_date(value);
-  if (not retry_at) {
-    return None{};
-  }
-  auto now = system_clock::now();
-  return std::chrono::duration_cast<std::chrono::seconds>(
-    retry_at <= now ? system_clock::duration::zero() : *retry_at - now);
-}
-
-auto retry_delay_for_attempt(HttpPoolConfig const& config, uint32_t attempt,
-                             Option<std::chrono::seconds> retry_after)
-  -> std::chrono::milliseconds {
-  if (retry_after) {
-    // explict Retry-After header
-    return *retry_after;
-  }
-  // exponential backoff with upper bound
-  auto delay = config.retry_delay;
-  auto max_delay = config.retry_delay * 16;
-  for (auto i = uint32_t{0}; i < attempt; ++i) {
-    auto next_delay = delay * 2;
-    if (next_delay <= delay) {
-      return max_delay;
-    }
-    delay = next_delay;
-    if (delay > max_delay) {
-      return max_delay;
-    }
-  }
-  return delay;
-}
-
 template <class F>
 auto retry_request(HttpPoolConfig const& config, F&& f)
   -> Task<Result<HttpResponse, std::string>> {
@@ -188,7 +121,7 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       }
       // retryable HTTP status
       retry_reason = fmt::format("HTTP error {}", status);
-      retry_after = parse_retry_after(
+      retry_after = http::parse_retry_after(
         resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
     } else {
       // transport error
@@ -207,7 +140,8 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       retry_reason = "connection error";
     }
     // will retry, compute delay and notify caller
-    auto delay = retry_delay_for_attempt(config, attempt, retry_after);
+    auto delay
+      = http::retry_delay_for_attempt(config.retry_delay, attempt, retry_after);
     ++attempt;
     if (config.on_retry) {
       auto const delay_secs

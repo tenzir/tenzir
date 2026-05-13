@@ -1,0 +1,9 @@
+{
+  ok: true,
+}
+warning: HTTP error 429, attempt 1/2, retrying after 1s
+  --> tests/operators/from_http/retry_status_429_retry_after.tql:11:1
+   |
+11 | from_http env("HTTP_FIXTURE_RETRY_429_AFTER_URL"), max_retry_count=1, retry_delay=1ms {
+   | ~~~~~~~~~ 
+   |

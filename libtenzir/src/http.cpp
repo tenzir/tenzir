@@ -16,11 +16,15 @@
 
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
+#include <folly/portability/Time.h>
 #include <proxygen/lib/http/coro/HTTPError.h>
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <string_view>
 
 namespace tenzir::http {
@@ -38,6 +42,26 @@ auto is_retryable_http_status(uint16_t status_code) -> bool {
 
 namespace {
 
+using std::chrono::system_clock;
+
+/// Parses an HTTP date and returns a `system_clock` time point.
+auto parse_http_date(std::string_view value)
+  -> Option<system_clock::time_point> {
+  if (value.empty()) {
+    return None{};
+  }
+  auto tm = std::tm{};
+  auto parsed = std::string{value};
+  if (::strptime(parsed.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) != nullptr
+      or ::strptime(parsed.c_str(), "%a, %d-%b-%y %H:%M:%S GMT", &tm) != nullptr
+      or ::strptime(parsed.c_str(), "%a %b %d %H:%M:%S %Y", &tm) != nullptr) {
+    return system_clock::time_point{
+      std::chrono::seconds{int64_t{timegm(&tm)}},
+    };
+  }
+  return None{};
+}
+
 auto normalize_content_encoding(std::string_view encoding) -> std::string {
   auto result = std::string{detail::trim(encoding)};
   std::transform(result.begin(), result.end(), result.begin(), [](char c) {
@@ -46,6 +70,52 @@ auto normalize_content_encoding(std::string_view encoding) -> std::string {
   });
   return result;
 }
+
+} // namespace
+
+auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds> {
+  if (value.empty()) {
+    return None{};
+  }
+  auto seconds = uint64_t{};
+  auto* begin = value.data();
+  auto* end = value.data() + value.size();
+  if (auto [ptr, ec] = std::from_chars(begin, end, seconds);
+      ec == std::errc{} and ptr == end) {
+    return std::chrono::seconds{seconds};
+  }
+  auto retry_at = parse_http_date(value);
+  if (not retry_at) {
+    return None{};
+  }
+  auto now = system_clock::now();
+  return std::chrono::duration_cast<std::chrono::seconds>(
+    retry_at <= now ? system_clock::duration::zero() : *retry_at - now);
+}
+
+auto retry_delay_for_attempt(std::chrono::milliseconds retry_delay,
+                             uint32_t attempt,
+                             Option<std::chrono::seconds> retry_after)
+  -> std::chrono::milliseconds {
+  if (retry_after) {
+    return *retry_after;
+  }
+  auto delay = retry_delay;
+  auto max_delay = retry_delay * 16;
+  for (auto i = uint32_t{0}; i < attempt; ++i) {
+    auto next_delay = delay * 2;
+    if (next_delay <= delay) {
+      return max_delay;
+    }
+    delay = next_delay;
+    if (delay > max_delay) {
+      return max_delay;
+    }
+  }
+  return delay;
+}
+
+namespace {
 
 // Splits a raw HTTP Link header value into individual link-value items at
 // top-level commas (not inside <...> or quoted strings).
