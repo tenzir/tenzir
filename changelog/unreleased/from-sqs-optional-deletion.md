@@ -1,17 +1,18 @@
 ---
-title: Optional deletion for `from_sqs`
+title: SQS receive controls
 type: feature
 authors:
   - mavam
   - codex
+pr: 6167
 created: 2026-05-13T00:00:00Z
 ---
 
-The `from_sqs` operator now accepts `delete=false` to receive messages without
-deleting them from the SQS queue. It also accepts `batch_size=<1..10>` to
-control the maximum number of messages per receive request and
-`visibility_timeout=<duration>` to override the queue visibility timeout for
-received messages:
+The `from_sqs` operator now gives you explicit control over how messages are
+received from SQS. Use `delete=false` to inspect or replay messages without
+removing them from the queue, `batch_size=<1..10>` to control how many messages
+each receive request may return, and `visibility_timeout=<duration>` to override
+the queue visibility timeout for received messages:
 
 ```tql
 from_sqs "events", delete=false, batch_size=10, visibility_timeout=30s
