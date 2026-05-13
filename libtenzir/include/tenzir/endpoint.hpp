@@ -38,18 +38,13 @@ struct formatter<tenzir::Endpoint> {
 
   template <class FormatContext>
   auto format(::tenzir::Endpoint const& value, FormatContext& ctx) const {
-    auto out = ctx.out();
-    if (value.port) {
-      if (value.host.contains(':')) {
-        out = fmt::format_to(out, "[{}]", value.host);
-      } else {
-        out = fmt::format_to(out, "{}", value.host);
-      }
-      out = fmt::format_to(out, ":{}", *value.port);
-    } else {
-      out = fmt::format_to(out, "{}", value.host);
+    if (not value.port) {
+      return fmt::format_to(ctx.out(), "{}", value.host);
     }
-    return out;
+    if (value.host.contains(':')) {
+      return fmt::format_to(ctx.out(), "[{}]:{}", value.host, *value.port);
+    }
+    return fmt::format_to(ctx.out(), "{}:{}", value.host, *value.port);
   }
 };
 
