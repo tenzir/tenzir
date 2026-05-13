@@ -130,7 +130,7 @@ public:
     auto d = Describer<FromSqsArgs, FromSqs>{};
     d.operator_location(&FromSqsArgs::operator_location);
     auto queue = d.positional("queue", &FromSqsArgs::queue);
-    d.named("delete", &FromSqsArgs::delete_messages);
+    d.named("keep_messages", &FromSqsArgs::keep_messages);
     auto batch_size = d.named("batch_size", &FromSqsArgs::batch_size);
     d.named("aws_region", &FromSqsArgs::aws_region);
     d.named("aws_iam", &FromSqsArgs::aws_iam);

@@ -243,7 +243,7 @@ auto FromSqs::process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
   for (auto&& slice : msb.finalize_as_table_slice()) {
     co_await push(std::move(slice));
   }
-  if (not args_.delete_messages) {
+  if (args_.keep_messages) {
     co_return;
   }
   for (const auto& message : messages) {

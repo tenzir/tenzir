@@ -1,6 +1,6 @@
-// Test from_sqs without deleting received messages.
+// Test from_sqs while keeping received messages.
 from_sqs env("LOCALSTACK_SQS_QUEUE_NO_DELETE"),
-         delete=false,
+         keep_messages=true,
          batch_size=2,
          poll_time=1s,
          visibility_timeout=1s,
