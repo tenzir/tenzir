@@ -10,6 +10,7 @@
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/aws_iam.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -109,10 +110,18 @@ FromSqs::FromSqs(FromSqsArgs args) : args_{std::move(args)} {
 }
 
 auto FromSqs::start(OpCtx& ctx) -> Task<void> {
+  batch_size_ = args_.batch_size
+                  ? detail::narrow_cast<size_t>(args_.batch_size->inner)
+                  : size_t{1};
   poll_time_ = args_.poll_time
                  ? std::chrono::duration_cast<std::chrono::seconds>(
                      args_.poll_time->inner)
                  : default_poll_time;
+  visibility_timeout_
+    = args_.visibility_timeout
+        ? Option{std::chrono::duration_cast<std::chrono::seconds>(
+            args_.visibility_timeout->inner)}
+        : std::nullopt;
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
@@ -121,10 +130,10 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
 
 auto FromSqs::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  constexpr auto num_messages = size_t{1};
   auto error = std::exception_ptr{};
   try {
-    auto messages = co_await queue_->receive_messages(num_messages, poll_time_);
+    auto messages = co_await queue_->receive_messages(batch_size_, poll_time_,
+                                                      visibility_timeout_);
     co_return std::move(messages);
   } catch (...) {
     error = std::current_exception();
@@ -233,6 +242,9 @@ auto FromSqs::process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
   }
   for (auto&& slice : msb.finalize_as_table_slice()) {
     co_await push(std::move(slice));
+  }
+  if (not args_.delete_messages) {
+    co_return;
   }
   for (const auto& message : messages) {
     auto diag = co_await queue_->delete_message(message);

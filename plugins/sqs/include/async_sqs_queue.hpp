@@ -49,7 +49,8 @@ public:
   auto init() -> Task<void>;
 
   /// Receives messages from the queue.
-  auto receive_messages(size_t num_messages, std::chrono::seconds poll_time)
+  auto receive_messages(size_t num_messages, std::chrono::seconds poll_time,
+                        Option<std::chrono::seconds> visibility_timeout)
     -> Task<Aws::Vector<Aws::SQS::Model::Message>>;
 
   /// Sends a message to the queue.

@@ -13,6 +13,7 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/tql2/ast.hpp>
 
+#include <cstddef>
 #include <memory>
 
 #include "async_sqs_queue.hpp"
@@ -22,7 +23,10 @@ namespace tenzir::plugins::sqs {
 
 struct FromSqsArgs {
   located<std::string> queue;
+  bool delete_messages = true;
+  Option<located<uint64_t>> batch_size;
   Option<located<duration>> poll_time;
+  Option<located<duration>> visibility_timeout;
   Option<located<std::string>> aws_region;
   Option<located<record>> aws_iam;
   location operator_location;
@@ -51,7 +55,9 @@ public:
 
 private:
   FromSqsArgs args_;
+  size_t batch_size_ = 1;
   std::chrono::seconds poll_time_ = default_poll_time;
+  Option<std::chrono::seconds> visibility_timeout_;
   std::shared_ptr<AsyncSqsQueue> queue_;
   MetricsCounter bytes_read_counter_;
 };

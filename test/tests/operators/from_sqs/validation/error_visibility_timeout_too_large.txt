@@ -1,0 +1,7 @@
+error: invalid visibility timeout: 43201000000000ns
+ --> tests/operators/from_sqs/validation/error_visibility_timeout_too_large.tql:5:38
+  |
+5 | from_sqs "queue", visibility_timeout=43201s
+  |                                      ^^^^^^ 
+  |
+  = hint: visibility timeout must be in the interval [0s, 12h]

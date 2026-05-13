@@ -1,0 +1,7 @@
+error: invalid batch size: 0
+ --> tests/operators/from_sqs/validation/error_batch_size_zero.tql:5:30
+  |
+5 | from_sqs "queue", batch_size=0
+  |                              ^ 
+  |
+  = hint: batch size must be in the interval [1, 10]
