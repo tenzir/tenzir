@@ -1,4 +1,4 @@
-Tenzir v6.0.0-rc.3 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
+Tenzir v6.0.0-rc.4 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
 
 ## 💥 Breaking changes
 
@@ -203,6 +203,23 @@ dns_lookup host
 If Tenzir cannot initialize DNS resolution at all, the operator now emits an error and stops instead of writing `null` results for every event. Individual failed or timed-out lookups still produce `null`, as before.
 
 *By @mavam in #6034.*
+
+### from_amqp queue arguments
+
+`from_amqp` now accepts a `queue_arguments` record for RabbitMQ queue declaration arguments:
+
+```tql
+from_amqp "amqp://broker/vhost",
+          queue="events",
+          queue_arguments={
+            "x-queue-type": "quorum",
+            "x-quorum-initial-group-size": 3
+          }
+```
+
+Use this to declare queues with broker-specific settings such as quorum queues, maximum lengths, message TTLs, single active consumers, and dead-letter exchanges.
+
+*By @mavam and @codex in #6139.*
 
 ### HEC metadata and raw endpoint support in `to_splunk`
 
@@ -507,6 +524,18 @@ This is useful for pushing alerts to webhooks, forwarding events to SIEMs, and c
 
 *By @aljazerzen in #6019.*
 
+### SQS receive controls
+
+The `from_sqs` operator now gives you explicit control over how messages are received from SQS. Use `keep_messages=true` to inspect or replay messages without removing them from the queue, `batch_size=<1..10>` to control how many messages each receive request may return, and `visibility_timeout=<duration>` to override the queue visibility timeout for received messages:
+
+```tql
+from_sqs "events", keep_messages=true, batch_size=10, visibility_timeout=30s
+```
+
+By default, `from_sqs` keeps deleting each received message after emitting it. With `keep_messages=true`, SQS makes the message visible again after the queue's visibility timeout.
+
+*By @mavam and @codex in #6167 and #6174.*
+
 ### Stream pipeline output with `serve_http`
 
 The new `serve_http` operator starts an HTTP server and broadcasts the bytes produced by a nested pipeline to all connected clients:
@@ -567,7 +596,19 @@ The `timeout` argument now defaults to `1min` instead of an infinite duration, s
 
 *By @aljazerzen in #5878 and #5906.*
 
+### Preserve categorical order in `chart_bar`
+
+The `chart_bar` and `chart_pie` operators now preserve the incoming row order for categorical x-axis values such as strings, IP addresses, and subnets. This allows users to control bar order with regular TQL operators such as `sort` before charting.
+
+*By @mavam.*
+
 ## 🐞 Bug fixes
+
+### Faster drop_null_fields on heterogeneous data
+
+The `drop_null_fields` operator is now much faster on heterogeneous input with many changing null patterns.
+
+*By @jachris, @mavam, and @codex in #5963.*
 
 ### SentinelOne Data Lake sink support in the new executor
 
