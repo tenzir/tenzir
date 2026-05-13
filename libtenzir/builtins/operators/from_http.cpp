@@ -94,8 +94,12 @@ struct FetchError {
   std::string message;
 };
 struct FetchDone {};
+struct RetryWarning {
+  std::string message;
+};
 
-using Message = variant<ResponseHeader, ResponseBody, FetchError, FetchDone>;
+using Message
+  = variant<ResponseHeader, ResponseBody, FetchError, FetchDone, RetryWarning>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 // Builds a Proxygen request source, working around a bug in Proxygen's
@@ -533,12 +537,11 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
         }
         auto sess_params = proxygen::coro::HTTPClient::getSessionParams(
           config.request_timeout);
-        // Retry only on socket-level failures (connect refused, reset, …).
-        // HTTP-level errors (non-2xx) are not retried.
+        // Retry on socket-level failures and retryable HTTP status codes.
+        // A diagnostic warning is emitted before each retry attempt.
         auto emitted_messages = false;
-        co_await folly::coro::retryWithExponentialBackoff(
-          config.max_retry_count, config.retry_delay, config.retry_delay * 16,
-          0.0 /* no jitter */,
+        auto retries_done = uint32_t{0};
+        co_await folly::coro::retryWhen(
           [&]() -> Task<void> {
             emitted_messages = false;
             // Resolve DNS and establish the TCP connection.
@@ -625,24 +628,51 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
               throw std::move(*retryable_response);
             }
           },
-          [&](folly::exception_wrapper const& ew) {
+          [&](folly::exception_wrapper&& ew) -> Task<void> {
             // Once an attempt emitted response messages, do not retry.
             // Retrying after partial output can duplicate/corrupt downstream
             // parser and pagination state.
             if (emitted_messages) {
-              return false;
+              co_yield folly::coro::co_error(std::move(ew));
             }
+            auto retryable = false;
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
-              return true;
+              retryable = true;
             }
             if (ew.is_compatible_with<retryable_http_response>()) {
-              return true;
+              retryable = true;
             }
-            auto retryable_http_error = false;
             ew.with_exception([&](proxygen::coro::HTTPError const& err) {
-              retryable_http_error = http::is_retryable_http_error(err.code);
+              retryable = http::is_retryable_http_error(err.code);
             });
-            return retryable_http_error;
+            if (not retryable or retries_done >= config.max_retry_count) {
+              co_yield folly::coro::co_error(std::move(ew));
+            }
+            // Compute exponential backoff (same schedule as the previous
+            // retryWithExponentialBackoff call, no jitter).
+            auto delay = config.retry_delay;
+            auto const max_delay = config.retry_delay * 16;
+            for (auto i = uint32_t{0}; i < retries_done; ++i) {
+              delay *= 2;
+              if (delay > max_delay) {
+                delay = max_delay;
+                break;
+              }
+            }
+            // Build the retry reason string.
+            auto reason = std::string{"connection error"};
+            ew.with_exception([&](retryable_http_response const& e) {
+              reason = fmt::format("HTTP error {}", e.status_code);
+            });
+            // Emit a warning diagnostic before sleeping.
+            auto const delay_secs
+              = std::chrono::duration_cast<std::chrono::seconds>(delay);
+            co_await mq->enqueue(RetryWarning{
+              fmt::format("{}, attempt {}/{}, retrying after {}s", reason,
+                          retries_done + 1u, config.max_retry_count + 1u,
+                          delay_secs.count())});
+            co_await folly::coro::sleep(delay);
+            ++retries_done;
           });
       }());
       if (result.hasException()) {
@@ -792,6 +822,13 @@ public:
           .emit(ctx);
         pagination_.next_url = None{};
         lifecycle_ = Lifecycle::done;
+        co_return;
+      },
+      // --- RetryWarning ---
+      [&](RetryWarning warn) -> Task<void> {
+        diagnostic::warning("{}", warn.message)
+          .primary(args_.operator_location)
+          .emit(ctx);
         co_return;
       },
       // --- FetchDone ---

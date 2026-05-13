@@ -8,6 +8,6 @@ fixtures:
 timeout: 60
 ---
 
-from_http env("HTTP_FIXTURE_RETRY_503_URL"), max_retry_count=2, retry_delay=1ms {
+from_http env("HTTP_FIXTURE_RETRY_503_URL"), max_retry_count=2, retry_delay=1s {
   read_json
 }

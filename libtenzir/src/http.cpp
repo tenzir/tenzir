@@ -246,6 +246,7 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
     .tls = tls_enabled,
     .ssl_context = nullptr,
     .request_timeout = request_timeout,
+    .on_retry = {},
   };
   if (tls_enabled) {
     auto tls_opts = tls_options::from_optional(tls, options);

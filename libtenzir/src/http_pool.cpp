@@ -171,6 +171,7 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
   auto attempt = uint32_t{0};
   while (true) {
     auto retry_after = Option<std::chrono::seconds>{};
+    auto retry_reason = std::string{};
     auto attempt_res
       = co_await async_try([&]() -> Task<proxygen::coro::HTTPClient::Response> {
           co_return co_await f();
@@ -179,13 +180,14 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       // got response
       proxygen::coro::HTTPClient::Response resp
         = std::move(attempt_res).unwrap();
+      auto const status = resp.headers->getStatusCode();
       if (attempt >= config.max_retry_count
-          or (not http::is_retryable_http_status(
-            resp.headers->getStatusCode()))) {
+          or not http::is_retryable_http_status(status)) {
         // not retryable
         co_return to_http_response(resp);
       }
-      // retryable
+      // retryable HTTP status
+      retry_reason = fmt::format("HTTP error {}", status);
       retry_after = parse_retry_after(
         resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
     } else {
@@ -202,10 +204,18 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
         // will not retry, return error
         co_return Err{std::move(attempt_err).what().toStdString()};
       }
+      retry_reason = "connection error";
     }
-    // will retry, compute delay
+    // will retry, compute delay and notify caller
     auto delay = retry_delay_for_attempt(config, attempt, retry_after);
     ++attempt;
+    if (config.on_retry) {
+      auto const delay_secs
+        = std::chrono::duration_cast<std::chrono::seconds>(delay);
+      config.on_retry(
+        fmt::format("{}, attempt {}/{}, retrying after {}s", retry_reason,
+                    attempt, config.max_retry_count + 1u, delay_secs.count()));
+    }
     co_await folly::coro::sleep(delay);
   }
 }

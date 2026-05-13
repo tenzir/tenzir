@@ -1,0 +1,13 @@
+warning: connection error, attempt 1/3, retrying after 0s
+  --> tests/operators/to_http/options/retry_connection_error.tql:8:1
+   |
+ 8 | to_http env("HTTP_FIXTURE_RETRY_FLAKY_URL"),
+   | ~~~~~~~
+   |
+
+warning: connection error, attempt 2/3, retrying after 0s
+  --> tests/operators/to_http/options/retry_connection_error.tql:8:1
+   |
+ 8 | to_http env("HTTP_FIXTURE_RETRY_FLAKY_URL"),
+   | ~~~~~~~
+   |
