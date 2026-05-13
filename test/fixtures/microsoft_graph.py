@@ -363,10 +363,11 @@ def _plugin_env() -> dict[str, str]:
 
 @fixture(name="microsoft_graph")
 def run() -> Iterator[dict[str, str]]:
-    try:
-        runtime = detect_runtime()
-    except FixtureUnavailable:
-        raise
+    runtime = detect_runtime()
+    if runtime is None:
+        raise FixtureUnavailable(
+            "container runtime (docker/podman) required but not found"
+        )
     token_server = _TokenServer((_HOST, 0), _TokenHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     proxy_port = find_free_port()
