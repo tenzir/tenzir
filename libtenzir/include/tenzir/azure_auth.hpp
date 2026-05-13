@@ -25,6 +25,7 @@
 namespace tenzir {
 
 class OpCtx;
+struct HttpPoolConfig;
 
 /// Resolved Microsoft Entra ID OAuth client-credentials configuration.
 struct resolved_azure_auth {
@@ -84,14 +85,16 @@ public:
   AzureTokenProvider(resolved_azure_auth auth, location loc);
 
   /// Adds an `Authorization: Bearer ...` header, refreshing the token if needed.
-  auto authorize(std::map<std::string, std::string>& headers, OpCtx& ctx)
-    -> Task<failure_or<void>>;
+  auto authorize(std::map<std::string, std::string>& headers, OpCtx& ctx,
+                 HttpPoolConfig const& config) -> Task<failure_or<void>>;
 
   /// Returns a valid bearer token, refreshing it if needed.
-  auto token(OpCtx& ctx) -> Task<failure_or<std::string>>;
+  auto token(OpCtx& ctx, HttpPoolConfig const& config)
+    -> Task<failure_or<std::string>>;
 
 private:
-  auto refresh(OpCtx& ctx) -> Task<Result<void, diagnostic>>;
+  auto refresh(OpCtx& ctx, HttpPoolConfig const& config)
+    -> Task<Result<void, diagnostic>>;
 
   resolved_azure_auth auth_;
   location loc_ = location::unknown;

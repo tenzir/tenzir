@@ -229,18 +229,20 @@ AzureTokenProvider::AzureTokenProvider(resolved_azure_auth auth, location loc)
 }
 
 auto AzureTokenProvider::authorize(std::map<std::string, std::string>& headers,
-                                   OpCtx& ctx) -> Task<failure_or<void>> {
-  CO_TRY(auto token, co_await this->token(ctx));
+                                   OpCtx& ctx, HttpPoolConfig const& config)
+  -> Task<failure_or<void>> {
+  CO_TRY(auto token, co_await this->token(ctx, config));
   headers["Authorization"] = fmt::format("Bearer {}", token);
   co_return {};
 }
 
-auto AzureTokenProvider::token(OpCtx& ctx) -> Task<failure_or<std::string>> {
+auto AzureTokenProvider::token(OpCtx& ctx, HttpPoolConfig const& config)
+  -> Task<failure_or<std::string>> {
   const auto now = std::chrono::steady_clock::now();
   if (not token_.empty() and now < refresh_at_) {
     co_return token_;
   }
-  auto result = co_await refresh(ctx);
+  auto result = co_await refresh(ctx, config);
   if (result.is_err()) {
     auto diag = std::move(result).unwrap_err();
     if (not token_.empty() and std::chrono::steady_clock::now() < expires_at_) {
@@ -255,7 +257,8 @@ auto AzureTokenProvider::token(OpCtx& ctx) -> Task<failure_or<std::string>> {
   co_return token_;
 }
 
-auto AzureTokenProvider::refresh(OpCtx& ctx) -> Task<Result<void, diagnostic>> {
+auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
+  -> Task<Result<void, diagnostic>> {
   const auto url = token_endpoint(auth_);
   const auto body = curl::escape(record{
     {"client_id", auth_.client_id},
@@ -267,8 +270,15 @@ auto AzureTokenProvider::refresh(OpCtx& ctx) -> Task<Result<void, diagnostic>> {
     {"Content-Type", "application/x-www-form-urlencoded"},
     {"Content-Length", fmt::to_string(body.size())},
   };
+  auto token_config = config;
+  token_config.tls = url.starts_with("https://");
+  if (not token_config.tls) {
+    token_config.ssl_context.reset();
+    token_config.ca_info.reset();
+    token_config.skip_peer_verification = false;
+  }
   auto result = co_await http_post(ctx.io_executor()->getEventBase(), url, body,
-                                   std::move(headers));
+                                   std::move(headers), std::move(token_config));
   if (result.is_err()) {
     co_return Err{diagnostic::error("failed to fetch Azure access token: {}",
                                     std::move(result).unwrap_err())
