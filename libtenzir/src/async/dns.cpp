@@ -711,11 +711,11 @@ auto ForwardDnsResolver::startup_error() const -> Option<DnsError> {
   return make_dns_error(impl_->channel_.status());
 }
 
-auto ForwardDnsResolver::resolve_socket_address(Endpoint address)
+auto ForwardDnsResolver::resolve_socket_address(Endpoint endpoint)
   -> Task<Result<folly::SocketAddress, ResolveAddressError>> {
-  TENZIR_ASSERT(address.port);
-  TENZIR_ASSERT(not address.host.empty());
-  auto resolved = co_await resolve(std::move(address.host));
+  TENZIR_ASSERT(endpoint.port);
+  TENZIR_ASSERT(not endpoint.host.empty());
+  auto resolved = co_await resolve(std::move(endpoint.host));
   auto* addresses = resolved->is_err()
                       ? nullptr
                       : try_as<ForwardDnsResolved>(&resolved->unwrap());
@@ -740,19 +740,19 @@ auto ForwardDnsResolver::resolve_socket_address(Endpoint address)
   }();
   auto result = folly::SocketAddress{};
   result.setFromIpAddrPort(to_folly_ip(selected.address),
-                           address.port->number());
+                           endpoint.port->number());
   co_return result;
 }
 
-auto ForwardDnsResolver::resolve_bind_address(Endpoint address)
+auto ForwardDnsResolver::resolve_bind_address(Endpoint endpoint)
   -> Task<Result<folly::SocketAddress, ResolveAddressError>> {
-  TENZIR_ASSERT(address.port);
-  if (address.host.empty()) {
+  TENZIR_ASSERT(endpoint.port);
+  if (endpoint.host.empty()) {
     auto result = folly::SocketAddress{};
-    result.setFromLocalPort(address.port->number());
+    result.setFromLocalPort(endpoint.port->number());
     co_return result;
   }
-  co_return co_await resolve_socket_address(std::move(address));
+  co_return co_await resolve_socket_address(std::move(endpoint));
 }
 
 struct ReverseDnsResolver::Impl {
