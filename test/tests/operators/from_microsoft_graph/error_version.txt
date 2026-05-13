@@ -1,0 +1,7 @@
+error: unsupported Microsoft Graph API version `1.0`
+  --> tests/operators/from_microsoft_graph/error_version.tql:12:11
+   |
+12 |   version="1.0"
+   |           ^^^^^ 
+   |
+   = hint: supported versions are `v1.0` and `beta`

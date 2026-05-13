@@ -10,4 +10,5 @@ from_microsoft_graph "groups",
     client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
+  odata={filter: "securityEnabled eq true"},
   tls={cacert: env("MS_GRAPH_FIXTURE_TLS_CACERT")}

@@ -49,6 +49,8 @@ struct HttpResponse {
 struct HttpPoolConfig {
   bool tls = true;
   std::shared_ptr<folly::SSLContext> ssl_context;
+  std::optional<std::string> ca_info;
+  bool skip_peer_verification = false;
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
   std::chrono::milliseconds connection_timeout = std::chrono::seconds{5};
   uint32_t max_retry_count = 0;
@@ -118,10 +120,23 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::chrono::milliseconds timeout = std::chrono::seconds{90})
   -> Task<Result<HttpResponse, std::string>>;
 
+/// One-shot HTTP POST without a connection pool.
+///
+/// Automatically dispatches the request on the given event base thread.
+auto http_post(folly::EventBase* evb, std::string url, std::string body,
+               std::map<std::string, std::string> headers,
+               HttpPoolConfig config)
+  -> Task<Result<HttpResponse, std::string>>;
+
 /// One-shot HTTP GET without a connection pool.
 auto http_get(folly::EventBase* evb, std::string url,
               std::map<std::string, std::string> headers,
               std::chrono::milliseconds timeout = std::chrono::seconds{90})
+  -> Task<Result<HttpResponse, std::string>>;
+
+/// One-shot HTTP GET without a connection pool.
+auto http_get(folly::EventBase* evb, std::string url,
+              std::map<std::string, std::string> headers, HttpPoolConfig config)
   -> Task<Result<HttpResponse, std::string>>;
 
 } // namespace tenzir

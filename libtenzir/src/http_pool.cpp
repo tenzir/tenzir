@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/result.hpp>
+#include <tenzir/curl.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
@@ -14,16 +15,21 @@
 
 #include <fmt/format.h>
 #include <folly/ScopeGuard.h>
+#include <folly/SocketAddress.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
+#include <proxygen/lib/http/coro/client/HTTPCoroConnector.h>
 #include <proxygen/lib/http/coro/client/HTTPCoroSessionPool.h>
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <mutex>
 #include <system_error>
@@ -154,6 +160,206 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
   }
 }
 
+auto trim(std::string_view value) -> std::string_view {
+  while (not value.empty()
+         and std::isspace(static_cast<unsigned char>(value.front())) != 0) {
+    value.remove_prefix(1);
+  }
+  while (not value.empty()
+         and std::isspace(static_cast<unsigned char>(value.back())) != 0) {
+    value.remove_suffix(1);
+  }
+  return value;
+}
+
+auto host_matches_no_proxy(std::string_view host, std::string_view pattern)
+  -> bool {
+  pattern = trim(pattern);
+  if (pattern.empty()) {
+    return false;
+  }
+  if (pattern == "*") {
+    return true;
+  }
+  if (auto colon = pattern.find(':'); colon != std::string_view::npos) {
+    pattern = pattern.substr(0, colon);
+  }
+  if (host == pattern) {
+    return true;
+  }
+  if (pattern.starts_with('.')) {
+    pattern.remove_prefix(1);
+  }
+  return host.size() > pattern.size() and host.ends_with(pattern)
+         and host[host.size() - pattern.size() - 1] == '.';
+}
+
+auto bypass_proxy(std::string_view host) -> bool {
+  auto const* no_proxy = std::getenv("NO_PROXY");
+  if (not no_proxy) {
+    no_proxy = std::getenv("no_proxy");
+  }
+  if (not no_proxy) {
+    return false;
+  }
+  auto value = std::string_view{no_proxy};
+  while (not value.empty()) {
+    auto comma = value.find(',');
+    auto pattern = value.substr(0, comma);
+    if (host_matches_no_proxy(host, pattern)) {
+      return true;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    value.remove_prefix(comma + 1);
+  }
+  return false;
+}
+
+auto https_proxy_for(proxygen::URL const& url) -> std::optional<proxygen::URL> {
+  if (not url.isSecure() or bypass_proxy(url.getHost())) {
+    return std::nullopt;
+  }
+  auto const* proxy = std::getenv("HTTPS_PROXY");
+  if (not proxy) {
+    proxy = std::getenv("https_proxy");
+  }
+  if (not proxy or std::string_view{proxy}.empty()) {
+    return std::nullopt;
+  }
+  auto parsed = proxygen::URL{proxy};
+  if (not parsed.isValid() or not parsed.hasHost()) {
+    throw std::runtime_error(fmt::format("invalid HTTPS proxy URL: {}", proxy));
+  }
+  return parsed;
+}
+
+auto https_proxy_string_for(proxygen::URL const& url)
+  -> std::optional<std::string> {
+  auto proxy = https_proxy_for(url);
+  if (not proxy) {
+    return std::nullopt;
+  }
+  return std::string{proxy->getUrl()};
+}
+
+auto curl_http_request(proxygen::HTTPMethod method, std::string const& url,
+                       Option<std::string> const& body,
+                       std::map<std::string, std::string> const& headers,
+                       HttpPoolConfig const& config,
+                       std::optional<std::string> const& proxy)
+  -> Result<HttpResponse, std::string> {
+  auto easy = curl::easy{};
+  auto response_body = std::string{};
+  auto write_callback = [&](std::span<std::byte const> data) {
+    response_body.append(reinterpret_cast<char const*>(data.data()),
+                         data.size());
+  };
+  if (auto code = easy.set(write_callback); code != curl::easy::code::ok) {
+    return Err{fmt::format("failed to configure HTTP response body: {}",
+                           to_string(code))};
+  }
+  if (auto code = easy.set(CURLOPT_URL, url); code != curl::easy::code::ok) {
+    return Err{
+      fmt::format("failed to configure HTTP URL: {}", to_string(code))};
+  }
+  if (method == proxygen::HTTPMethod::POST) {
+    if (auto code = easy.set(CURLOPT_POST, 1); code != curl::easy::code::ok) {
+      return Err{
+        fmt::format("failed to configure HTTP method: {}", to_string(code))};
+    }
+    auto const& request_body = body ? *body : std::string{};
+    if (auto code = easy.set(CURLOPT_POSTFIELDS, request_body);
+        code != curl::easy::code::ok) {
+      return Err{
+        fmt::format("failed to configure HTTP body: {}", to_string(code))};
+    }
+    auto body_size = static_cast<long>(request_body.size());
+    if (auto code = easy.set_postfieldsize(body_size);
+        code != curl::easy::code::ok) {
+      return Err{
+        fmt::format("failed to configure HTTP body size: {}", to_string(code))};
+    }
+  }
+  for (auto const& [name, value] : headers) {
+    if (auto code = easy.set_http_header(name, value);
+        code != curl::easy::code::ok) {
+      return Err{
+        fmt::format("failed to configure HTTP header: {}", to_string(code))};
+    }
+  }
+  if (proxy) {
+    if (auto code = easy.set(CURLOPT_PROXY, *proxy);
+        code != curl::easy::code::ok) {
+      return Err{
+        fmt::format("failed to configure HTTPS proxy: {}", to_string(code))};
+    }
+  }
+  if (config.ca_info) {
+    if (auto code = easy.set(CURLOPT_CAINFO, *config.ca_info);
+        code != curl::easy::code::ok) {
+      return Err{
+        fmt::format("failed to configure TLS CA: {}", to_string(code))};
+    }
+  }
+  if (config.skip_peer_verification) {
+    static_cast<void>(easy.set(CURLOPT_SSL_VERIFYPEER, 0));
+    static_cast<void>(easy.set(CURLOPT_SSL_VERIFYHOST, 0));
+  }
+  static_cast<void>(easy.set(
+    CURLOPT_TIMEOUT_MS, static_cast<long>(config.request_timeout.count())));
+  static_cast<void>(
+    easy.set(CURLOPT_CONNECTTIMEOUT_MS,
+             static_cast<long>(config.connection_timeout.count())));
+  if (auto code = easy.perform(); code != curl::easy::code::ok) {
+    return Err{fmt::format("curl error: {}", to_string(code))};
+  }
+  auto [code, status] = easy.get<curl::easy::info::response_code>();
+  if (code != curl::easy::code::ok) {
+    return Err{
+      fmt::format("failed to read HTTP response code: {}", to_string(code))};
+  }
+  return HttpResponse{.status_code = static_cast<uint16_t>(status),
+                      .body = std::move(response_body)};
+}
+
+auto make_session_params(std::chrono::milliseconds timeout)
+  -> proxygen::coro::HTTPCoroConnector::SessionParams {
+  auto params = proxygen::coro::HTTPClient::getSessionParams(timeout);
+  return params;
+}
+
+auto make_connection_params(proxygen::URL const& url,
+                            HttpPoolConfig const& config)
+  -> proxygen::coro::HTTPCoroConnector::ConnectionParams {
+  auto params = proxygen::coro::HTTPCoroConnector::defaultConnectionParams();
+  params.serverName = url.getHost();
+  if (url.isSecure()) {
+    if (config.ssl_context) {
+      params.sslContext = config.ssl_context;
+    } else {
+      auto tls_params = proxygen::coro::HTTPCoroConnector::TLSParams{};
+      tls_params.caPaths = proxygen::coro::HTTPClient::getDefaultCAPaths();
+      params.sslContext
+        = proxygen::coro::HTTPCoroConnector::makeSSLContext(tls_params);
+    }
+  }
+  return params;
+}
+
+auto connect_direct(folly::EventBase* evb, proxygen::URL const& url,
+                    HttpPoolConfig const& config)
+  -> Task<proxygen::coro::HTTPCoroSession*> {
+  auto address = folly::SocketAddress{};
+  address.setFromHostPort(url.getHost(), url.getPort());
+  auto conn_params = make_connection_params(url, config);
+  auto session_params = make_session_params(config.request_timeout);
+  co_return co_await proxygen::coro::HTTPCoroConnector::connect(
+    evb, std::move(address), config.connection_timeout, conn_params,
+    session_params);
+}
+
 /// Custom deleter that ensures the session pool is destroyed on its event base
 /// thread, which proxygen requires for safe cleanup.
 struct SessionPoolDeleter {
@@ -279,14 +485,13 @@ namespace {
 auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
                   std::string url, Option<std::string> body,
                   std::map<std::string, std::string> headers,
-                  std::chrono::milliseconds timeout)
+                  HttpPoolConfig config)
   -> Task<Result<HttpResponse, std::string>> {
   co_return co_await co_withExecutor(
     evb,
     [](folly::EventBase* evb, proxygen::HTTPMethod method, std::string url,
        Option<std::string> body, std::map<std::string, std::string> headers,
-       std::chrono::milliseconds timeout)
-      -> Task<Result<HttpResponse, std::string>> {
+       HttpPoolConfig config) -> Task<Result<HttpResponse, std::string>> {
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
         auto url_parsed = proxygen::URL{url};
         if (not url_parsed.isValid() or not url_parsed.hasHost()) {
@@ -295,9 +500,16 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         if (url_parsed.isSecure()) {
           ensure_http_default_ca_paths();
         }
-        auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
-          evb, url_parsed.getHost(), url_parsed.getPort(),
-          url_parsed.isSecure(), false, timeout, timeout);
+        auto proxy = https_proxy_string_for(url_parsed);
+        if (proxy or config.ca_info or config.skip_peer_verification) {
+          auto response
+            = curl_http_request(method, url, body, headers, config, proxy);
+          if (response.is_err()) {
+            throw std::runtime_error{std::move(response).unwrap_err()};
+          }
+          co_return std::move(response).unwrap();
+        }
+        auto* session = co_await connect_direct(evb, url_parsed, config);
         auto holder = session->acquireKeepAlive();
         SCOPE_EXIT {
           if (auto* s = holder.get()) {
@@ -314,7 +526,8 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
           session, std::move(*reservation), source,
-          proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
+          proxygen::coro::HTTPClient::makeDefaultReader(resp),
+          config.request_timeout);
         co_return to_http_response(resp);
       }());
       if (result.is_err()) {
@@ -322,7 +535,7 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
       }
       co_return std::move(result).unwrap();
     }(evb, method, std::move(url), std::move(body), std::move(headers),
-      timeout));
+                              std::move(config)));
 }
 
 } // namespace
@@ -331,16 +544,34 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
                std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
+  auto config
+    = HttpPoolConfig{.request_timeout = timeout, .connection_timeout = timeout};
+  return http_post(evb, std::move(url), std::move(body), std::move(headers),
+                   std::move(config));
+}
+
+auto http_post(folly::EventBase* evb, std::string url, std::string body,
+               std::map<std::string, std::string> headers,
+               HttpPoolConfig config)
+  -> Task<Result<HttpResponse, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::POST, std::move(url),
-                      std::move(body), std::move(headers), timeout);
+                      std::move(body), std::move(headers), std::move(config));
 }
 
 auto http_get(folly::EventBase* evb, std::string url,
               std::map<std::string, std::string> headers,
               std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
+  auto config
+    = HttpPoolConfig{.request_timeout = timeout, .connection_timeout = timeout};
+  return http_get(evb, std::move(url), std::move(headers), std::move(config));
+}
+
+auto http_get(folly::EventBase* evb, std::string url,
+              std::map<std::string, std::string> headers, HttpPoolConfig config)
+  -> Task<Result<HttpResponse, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::GET, std::move(url), None{},
-                      std::move(headers), timeout);
+                      std::move(headers), std::move(config));
 }
 
 } // namespace tenzir

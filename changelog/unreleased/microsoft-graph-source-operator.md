@@ -7,7 +7,7 @@ authors:
 created: 2026-05-12T19:40:09.318698Z
 ---
 
-Tenzir now includes a Microsoft Graph source operator for one-shot reads from Microsoft Graph `v1.0` collections with app-only Microsoft Entra authentication and OData pagination.
+Tenzir now includes a Microsoft Graph source operator for one-shot reads from Microsoft Graph `v1.0` and `beta` collections with app-only Microsoft Entra authentication and OData pagination.
 
 For example, you can read Entra ID sign-in logs with client credentials and push down OData query options:
 

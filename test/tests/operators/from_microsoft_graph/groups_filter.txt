@@ -1,0 +1,5 @@
+{
+  id: "group-1",
+  displayName: "Security",
+  securityEnabled: true,
+}
