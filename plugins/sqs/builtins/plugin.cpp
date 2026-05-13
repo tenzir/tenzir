@@ -206,9 +206,8 @@ public:
         }
       }
       if (auto visibility_timeout = ctx.get(vt)) {
-        auto secs = std::chrono::duration_cast<std::chrono::seconds>(
-          visibility_timeout->inner);
-        if (secs < 0s or secs > max_visibility_timeout) {
+        if (visibility_timeout->inner < 0s
+            or visibility_timeout->inner > max_visibility_timeout) {
           diagnostic::error("invalid visibility timeout: {}",
                             visibility_timeout->inner)
             .primary(visibility_timeout->source)
