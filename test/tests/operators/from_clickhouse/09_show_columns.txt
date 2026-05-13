@@ -1,0 +1,12 @@
+{
+  name: "id",
+  type: "Int64",
+}
+{
+  name: "meta",
+  type: "Tuple(source Nullable(String), location Tuple(building Nullable(String), floor Nullable(Int64)))",
+}
+{
+  name: "tags",
+  type: "Array(Nullable(String))",
+}

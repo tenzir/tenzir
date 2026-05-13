@@ -1,0 +1,9 @@
+from {id: 0, v: 42}
+repeat 100
+batch
+enumerate id
+to_clickhouse uri=f"clickhouse://default:{env("CLICKHOUSE_PASSWORD")}@{env("CLICKHOUSE_HOST")}:{env("CLICKHOUSE_PORT")}/uri_created_db",
+              table="fc_uri_auto_create",
+              tls=false,
+              primary=id,
+              mode="create"

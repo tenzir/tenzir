@@ -1,0 +1,5 @@
+from_clickhouse sql="SELECT CAST(toDate32('2263-01-01'), 'LowCardinality(Date32)') AS too_late_lc, toUInt64(7) AS ok",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

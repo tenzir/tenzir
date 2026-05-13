@@ -15,7 +15,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "clickhouse-cpp";
-  version = "2.5.1-unstable-2025-02-26";
+  version = "2.6.1-unstable-2026-05-11";
 
   outputs = [
     "out"
@@ -23,13 +23,11 @@ stdenv.mkDerivation {
     #"dev"
   ];
 
-  # https://github.com/ClickHouse/clickhouse-cpp/pull/411 for easier
-  # integration.
   src = fetchFromGitHub {
-    owner = "ClickHouse";
+    owner = "IyeOnline";
     repo = "clickhouse-cpp";
-    rev = "6b5109cf8d12525bc7d9ae6ba423ec3e23de2b33";
-    hash = "sha256-DAvJNaSKFS2HYHtJh4Q7x91fdmonFt3KITLeZKaOayw=";
+    rev = "95bc002b1747fb2c675470372314c1f1fc64f807";
+    hash = "sha256-vsMeF33MFn8vMtnQwCDK0qZGY1GhyT5FgPgdylbM9dg=";
   };
 
   nativeBuildInputs = [
@@ -59,11 +57,12 @@ stdenv.mkDerivation {
     "-DWITH_SYSTEM_LZ4=ON"
     "-DWITH_SYSTEM_ZSTD=ON"
     "-DDISABLE_CLANG_LIBC_WORKAROUND=ON"
+    "-DCH_MAP_BOOL_TO_UINT8=OFF"
   ];
 
   meta = {
     description = "C++ client library for ClickHouse";
-    homepage = "https://github.com/ClickHouse/clickhouse-cpp";
+    homepage = "https://github.com/IyeOnline/clickhouse-cpp/tree/topic/bool-type";
     license = lib.licenses.asl20;
     maintainers = with lib.maintainers; [ tobim ];
     platforms = lib.platforms.all;

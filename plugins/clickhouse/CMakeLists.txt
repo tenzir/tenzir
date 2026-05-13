@@ -70,6 +70,9 @@ else ()
       OFF
       CACHE BOOL "Disable bundled clickhouse-cpp debug helper targets"
       FORCE)
+  set(CH_MAP_BOOL_TO_UINT8
+      OFF
+      CACHE BOOL "")
   set(_build_shared_libs_before "${BUILD_SHARED_LIBS}")
   set(BUILD_SHARED_LIBS OFF)
   add_subdirectory(aux/clickhouse-cpp)

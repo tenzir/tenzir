@@ -26,11 +26,21 @@ auto easy_client::make(arguments args, const caf::actor_system_config& cfg,
   return std::make_shared<easy_client>(std::move(args), cfg, dh, ctor_token{});
 }
 
+auto easy_client::effective_table_name(std::string_view table_name) const
+  -> std::string {
+  if (not args_.default_database
+      or table_name_quoting.split_at_unquoted(table_name, '.')) {
+    return std::string{table_name};
+  }
+  return fmt::format(
+    "{}.{}", quote_identifier_component(*args_.default_database), table_name);
+}
+
 auto easy_client::remote_check_exists(std::string_view object_kind,
                                       std::string_view object_name)
   -> failure_or<bool> {
   auto query = Query{fmt::format("EXISTS {} {}", object_kind, object_name)};
-  auto exists = std::optional<bool>{};
+  auto exists = Option<bool>{};
   auto ok = true;
   auto emit_unexpected = [&](std::string_view note) {
     diagnostic::error("unexpected clickhouse response")
@@ -186,12 +196,33 @@ auto easy_client::ensure_transformations(const tenzir::record_type& schema,
       it != transformations_.end()) {
     return &it.value();
   }
-  auto qualified_database = std::optional<std::string_view>{};
+  auto qualified_database = Option<std::string_view>{};
   if (auto split
       = split_table_name<true>(table_name, args_.table.get_location(), dh_)) {
     qualified_database = split->database;
+    if (not qualified_database and args_.default_database) {
+      qualified_database = std::string_view{*args_.default_database};
+    }
   } else {
     return failure::promise();
+  }
+  if (qualified_database) {
+    TRY(const auto database_existed,
+        remote_check_exists("DATABASE", *qualified_database));
+    TENZIR_TRACE("database exists: {}", database_existed);
+    if (not database_existed) {
+      if (args_.mode.inner == mode::append) {
+        diagnostic::error("mode is `append`, but database `{}` does not exist",
+                          *qualified_database)
+          .primary(args_.mode)
+          .primary(args_.table)
+          .emit(dh_);
+        return failure::promise();
+      }
+      TENZIR_DEBUG("creating database `{}`", *qualified_database);
+      remote_create_database(*qualified_database);
+      TENZIR_DEBUG("created database `{}`", *qualified_database);
+    }
   }
   // Note that technically, we have a ToCToU bug here. The table could be
   // created or deleted in between this, the `get` call below and the potential
@@ -226,23 +257,15 @@ auto easy_client::ensure_transformations(const tenzir::record_type& schema,
   if (table_existed) {
     return remote_fetch_schema_transformations(table_name);
   }
-  if (qualified_database) {
-    TRY(const auto database_existed,
-        remote_check_exists("DATABASE", *qualified_database));
-    TENZIR_TRACE("database exists: {}", database_existed);
-    if (not database_existed) {
-      TENZIR_DEBUG("creating database `{}`", *qualified_database);
-      remote_create_database(*qualified_database);
-      TENZIR_DEBUG("created database `{}`", *qualified_database);
-    }
-  }
   return remote_create_table(schema, table_name);
 }
 
 auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                          std::string_view query_id) -> failure_or<void> {
+  auto resolved_table_name = effective_table_name(table_name);
   const auto& schema = as<record_type>(slice.schema());
-  TRY(auto transformations, ensure_transformations(schema, table_name));
+  TRY(auto transformations,
+      ensure_transformations(schema, resolved_table_name));
   dropmask_.clear();
   dropmask_.resize(slice.rows());
   std::ranges::fill(transformations->found_column, false);
@@ -310,9 +333,10 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                 block.GetRowCount(), slice.rows(), dropcount);
   if (block.GetRowCount() > 0 and block.GetColumnCount() > 0) {
     if (query_id.empty()) {
-      client_.Insert(std::string{table_name}, block);
+      client_.Insert(std::string{resolved_table_name}, block);
     } else {
-      client_.Insert(std::string{table_name}, std::string{query_id}, block);
+      client_.Insert(std::string{resolved_table_name}, std::string{query_id},
+                     block);
     }
   }
   return {};
