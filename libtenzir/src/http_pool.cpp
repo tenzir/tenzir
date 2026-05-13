@@ -14,16 +14,15 @@
 
 #include <fmt/format.h>
 #include <folly/ScopeGuard.h>
-#include <folly/SocketAddress.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
-#include <proxygen/lib/http/coro/client/HTTPCoroConnector.h>
 #include <proxygen/lib/http/coro/client/HTTPCoroSessionPool.h>
 #include <proxygen/lib/utils/URL.h>
 
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <filesystem>
@@ -156,42 +155,6 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
   }
 }
 
-auto make_session_params(std::chrono::milliseconds timeout)
-  -> proxygen::coro::HTTPCoroConnector::SessionParams {
-  auto params = proxygen::coro::HTTPClient::getSessionParams(timeout);
-  return params;
-}
-
-auto make_connection_params(proxygen::URL const& url,
-                            HttpPoolConfig const& config)
-  -> proxygen::coro::HTTPCoroConnector::ConnectionParams {
-  auto params = proxygen::coro::HTTPCoroConnector::defaultConnectionParams();
-  params.serverName = url.getHost();
-  if (url.isSecure()) {
-    if (config.ssl_context) {
-      params.sslContext = config.ssl_context;
-    } else {
-      auto tls_params = proxygen::coro::HTTPCoroConnector::TLSParams{};
-      tls_params.caPaths = proxygen::coro::HTTPClient::getDefaultCAPaths();
-      params.sslContext
-        = proxygen::coro::HTTPCoroConnector::makeSSLContext(tls_params);
-    }
-  }
-  return params;
-}
-
-auto connect_direct(folly::EventBase* evb, proxygen::URL const& url,
-                    HttpPoolConfig const& config)
-  -> Task<proxygen::coro::HTTPCoroSession*> {
-  auto address = folly::SocketAddress{};
-  address.setFromHostPort(url.getHost(), url.getPort());
-  auto conn_params = make_connection_params(url, config);
-  auto session_params = make_session_params(config.request_timeout);
-  co_return co_await proxygen::coro::HTTPCoroConnector::connect(
-    evb, std::move(address), config.connection_timeout, conn_params,
-    session_params);
-}
-
 /// Custom deleter that ensures the session pool is destroyed on its event base
 /// thread, which proxygen requires for safe cleanup.
 struct SessionPoolDeleter {
@@ -317,13 +280,14 @@ namespace {
 auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
                   std::string url, Option<std::string> body,
                   std::map<std::string, std::string> headers,
-                  HttpPoolConfig config)
+                  std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
   co_return co_await co_withExecutor(
     evb,
     [](folly::EventBase* evb, proxygen::HTTPMethod method, std::string url,
        Option<std::string> body, std::map<std::string, std::string> headers,
-       HttpPoolConfig config) -> Task<Result<HttpResponse, std::string>> {
+       std::chrono::milliseconds timeout)
+      -> Task<Result<HttpResponse, std::string>> {
       auto result = co_await async_try([&]() -> Task<HttpResponse> {
         auto url_parsed = proxygen::URL{url};
         if (not url_parsed.isValid() or not url_parsed.hasHost()) {
@@ -332,7 +296,9 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         if (url_parsed.isSecure()) {
           ensure_http_default_ca_paths();
         }
-        auto* session = co_await connect_direct(evb, url_parsed, config);
+        auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
+          evb, url_parsed.getHost(), url_parsed.getPort(),
+          url_parsed.isSecure(), false, timeout, timeout);
         auto holder = session->acquireKeepAlive();
         SCOPE_EXIT {
           if (auto* s = holder.get()) {
@@ -349,8 +315,7 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxygen::coro::HTTPClient::request(
           session, std::move(*reservation), source,
-          proxygen::coro::HTTPClient::makeDefaultReader(resp),
-          config.request_timeout);
+          proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
         co_return to_http_response(resp);
       }());
       if (result.is_err()) {
@@ -358,24 +323,25 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
       }
       co_return std::move(result).unwrap();
     }(evb, method, std::move(url), std::move(body), std::move(headers),
-                              std::move(config)));
+      timeout));
 }
 
 } // namespace
 
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
-               HttpPoolConfig config)
+               std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::POST, std::move(url),
-                      std::move(body), std::move(headers), std::move(config));
+                      std::move(body), std::move(headers), timeout);
 }
 
 auto http_get(folly::EventBase* evb, std::string url,
-              std::map<std::string, std::string> headers, HttpPoolConfig config)
+              std::map<std::string, std::string> headers,
+              std::chrono::milliseconds timeout)
   -> Task<Result<HttpResponse, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::GET, std::move(url), None{},
-                      std::move(headers), std::move(config));
+                      std::move(headers), timeout);
 }
 
 } // namespace tenzir

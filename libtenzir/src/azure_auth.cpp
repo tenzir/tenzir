@@ -274,8 +274,8 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
   if (not token_config.tls) {
     token_config.ssl_context.reset();
   }
-  auto result = co_await http_post(ctx.io_executor()->getEventBase(), url, body,
-                                   std::move(headers), std::move(token_config));
+  auto pool = HttpPool::make(ctx.io_executor(), url, std::move(token_config));
+  auto result = co_await pool->post(body, std::move(headers));
   if (result.is_err()) {
     co_return Err{diagnostic::error("failed to fetch Azure access token: {}",
                                     std::move(result).unwrap_err())

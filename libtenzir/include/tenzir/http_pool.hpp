@@ -115,13 +115,13 @@ private:
 /// Automatically dispatches the request on the given event base thread.
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
-               HttpPoolConfig config = {})
+               std::chrono::milliseconds timeout = std::chrono::seconds{90})
   -> Task<Result<HttpResponse, std::string>>;
 
 /// One-shot HTTP GET without a connection pool.
 auto http_get(folly::EventBase* evb, std::string url,
               std::map<std::string, std::string> headers,
-              HttpPoolConfig config = {})
+              std::chrono::milliseconds timeout = std::chrono::seconds{90})
   -> Task<Result<HttpResponse, std::string>>;
 
 } // namespace tenzir
