@@ -12,13 +12,13 @@
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/secret_resolution.hpp"
 
 #include <chrono>
 #include <map>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,7 +28,7 @@ class OpCtx;
 struct HttpPoolConfig;
 
 /// Resolved Microsoft Entra ID OAuth client-credentials configuration.
-struct resolved_azure_auth {
+struct ResolvedAzureAuth {
   std::string tenant_id;
   std::string client_id;
   std::string client_secret;
@@ -41,15 +41,15 @@ struct resolved_azure_auth {
 /// Operators that are already Microsoft/Azure-specific expose this as an
 /// `auth` record. The shared implementation keeps the provider-specific name
 /// to make reuse across such operators explicit.
-struct azure_auth_options {
-  std::optional<secret> tenant_id;
-  std::optional<secret> client_id;
-  std::optional<secret> client_secret;
-  std::optional<secret> scope;
-  std::optional<secret> authority;
+struct AzureAuthOptions {
+  Option<secret> tenant_id;
+  Option<secret> client_id;
+  Option<secret> client_secret;
+  Option<secret> scope;
+  Option<secret> authority;
   location loc;
 
-  friend auto inspect(auto& f, azure_auth_options& x) -> bool {
+  friend auto inspect(auto& f, AzureAuthOptions& x) -> bool {
     return f.object(x).fields(
       f.field("tenant_id", x.tenant_id), f.field("client_id", x.client_id),
       f.field("client_secret", x.client_secret), f.field("scope", x.scope),
@@ -66,23 +66,23 @@ struct azure_auth_options {
   /// - `authority`: OAuth authority. Defaults to
   ///   `https://login.microsoftonline.com`.
   static auto from_record(located<record> config, diagnostic_handler& dh)
-    -> failure_or<azure_auth_options>;
+    -> failure_or<AzureAuthOptions>;
 
   /// Creates secret requests for resolving credentials.
   auto
-  make_secret_requests(resolved_azure_auth& resolved, std::string default_scope,
+  make_secret_requests(ResolvedAzureAuth& resolved, std::string default_scope,
                        diagnostic_handler& dh) const
     -> std::vector<secret_request>;
 };
 
 /// Resolves already-parsed Azure auth options through an operator context.
-auto resolve_azure_auth(azure_auth_options options, std::string default_scope,
-                        OpCtx& ctx) -> Task<std::optional<resolved_azure_auth>>;
+auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
+                        OpCtx& ctx) -> Task<Option<ResolvedAzureAuth>>;
 
 /// Lazily fetches and refreshes Microsoft Entra ID OAuth access tokens.
 class AzureTokenProvider {
 public:
-  AzureTokenProvider(resolved_azure_auth auth, location loc);
+  AzureTokenProvider(ResolvedAzureAuth auth, location loc);
 
   /// Adds an `Authorization: Bearer ...` header, refreshing the token if needed.
   auto authorize(std::map<std::string, std::string>& headers, OpCtx& ctx,
@@ -96,7 +96,7 @@ private:
   auto refresh(OpCtx& ctx, HttpPoolConfig const& config)
     -> Task<Result<void, diagnostic>>;
 
-  resolved_azure_auth auth_;
+  ResolvedAzureAuth auth_;
   location loc_ = location::unknown;
   std::string token_;
   std::chrono::steady_clock::time_point refresh_at_{};

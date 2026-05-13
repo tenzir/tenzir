@@ -56,7 +56,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto endpoint = tenzir::endpoint{};
+    auto endpoint = tenzir::Endpoint{};
     auto parsed = parsers::endpoint(args_.endpoint.inner, endpoint)
                   and endpoint.port and not endpoint.host.empty();
     TENZIR_ASSERT(parsed);
@@ -262,7 +262,7 @@ public:
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      auto endpoint = tenzir::endpoint{};
+      auto endpoint = tenzir::Endpoint{};
       if (not parsers::endpoint(endpoint_str.inner, endpoint)
           or not endpoint.port or endpoint.host.empty()) {
         diagnostic::error("failed to parse endpoint")

@@ -17,7 +17,7 @@ using namespace std::string_literals;
 namespace {
 
 struct fixture {
-  endpoint x;
+  Endpoint x;
 };
 
 } // namespace

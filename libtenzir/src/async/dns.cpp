@@ -711,7 +711,7 @@ auto ForwardDnsResolver::startup_error() const -> Option<DnsError> {
   return make_dns_error(impl_->channel_.status());
 }
 
-auto ForwardDnsResolver::resolve_socket_address(endpoint address)
+auto ForwardDnsResolver::resolve_socket_address(Endpoint address)
   -> Task<Result<folly::SocketAddress, ResolveAddressError>> {
   TENZIR_ASSERT(address.port);
   TENZIR_ASSERT(not address.host.empty());
@@ -744,7 +744,7 @@ auto ForwardDnsResolver::resolve_socket_address(endpoint address)
   co_return result;
 }
 
-auto ForwardDnsResolver::resolve_bind_address(endpoint address)
+auto ForwardDnsResolver::resolve_bind_address(Endpoint address)
   -> Task<Result<folly::SocketAddress, ResolveAddressError>> {
   TENZIR_ASSERT(address.port);
   if (address.host.empty()) {

@@ -141,11 +141,11 @@ public:
   [[nodiscard]] auto startup_error() const -> Option<DnsError>;
 
   /// Resolve a previously parsed remote socket address.
-  auto resolve_socket_address(endpoint address)
+  auto resolve_socket_address(Endpoint address)
     -> Task<Result<folly::SocketAddress, ResolveAddressError>>;
 
   /// Resolve a previously parsed bind address.
-  auto resolve_bind_address(endpoint address)
+  auto resolve_bind_address(Endpoint address)
     -> Task<Result<folly::SocketAddress, ResolveAddressError>>;
 
 private:

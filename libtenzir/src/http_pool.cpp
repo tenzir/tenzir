@@ -169,7 +169,7 @@ auto host_matches_no_proxy(std::string_view host, std::string_view pattern)
   if (pattern == "*") {
     return true;
   }
-  auto parsed = endpoint{};
+  auto parsed = Endpoint{};
   if (parsers::endpoint(pattern, parsed)) {
     pattern = parsed.host;
   }
@@ -199,16 +199,16 @@ auto bypass_proxy(std::string_view host) -> bool {
   return false;
 }
 
-auto https_proxy_for(proxygen::URL const& url) -> std::optional<proxygen::URL> {
+auto https_proxy_for(proxygen::URL const& url) -> Option<proxygen::URL> {
   if (not url.isSecure() or bypass_proxy(url.getHost())) {
-    return std::nullopt;
+    return None{};
   }
   auto const* proxy = std::getenv("HTTPS_PROXY");
   if (not proxy) {
     proxy = std::getenv("https_proxy");
   }
   if (not proxy or std::string_view{proxy}.empty()) {
-    return std::nullopt;
+    return None{};
   }
   auto parsed = proxygen::URL{proxy};
   if (not parsed.isValid() or not parsed.hasHost()) {
@@ -217,11 +217,10 @@ auto https_proxy_for(proxygen::URL const& url) -> std::optional<proxygen::URL> {
   return parsed;
 }
 
-auto https_proxy_string_for(proxygen::URL const& url)
-  -> std::optional<std::string> {
+auto https_proxy_string_for(proxygen::URL const& url) -> Option<std::string> {
   auto proxy = https_proxy_for(url);
   if (not proxy) {
-    return std::nullopt;
+    return None{};
   }
   return std::string{proxy->getUrl()};
 }
@@ -230,7 +229,7 @@ auto curl_http_request(proxygen::HTTPMethod method, std::string const& url,
                        Option<std::string> const& body,
                        std::map<std::string, std::string> const& headers,
                        HttpPoolConfig const& config,
-                       std::optional<std::string> const& proxy)
+                       Option<std::string> const& proxy)
   -> Result<HttpResponse, std::string> {
   auto easy = curl::easy{};
   auto response_body = std::string{};

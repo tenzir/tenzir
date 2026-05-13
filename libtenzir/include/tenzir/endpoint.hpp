@@ -16,11 +16,11 @@
 namespace tenzir {
 
 /// A transport-layer endpoint consisting of host and port.
-struct endpoint {
+struct Endpoint {
   std::string host;          ///< The hostname or IP address.
   Option<class port> port{}; ///< The transport-layer port.
 
-  friend auto inspect(auto& f, endpoint& x) -> bool {
+  friend auto inspect(auto& f, Endpoint& x) -> bool {
     return f.object(x).fields(f.field("host", x.host), f.field("port", x.port));
   }
 };
@@ -30,14 +30,14 @@ struct endpoint {
 namespace fmt {
 
 template <>
-struct formatter<tenzir::endpoint> {
-  template <typename ParseContext>
+struct formatter<tenzir::Endpoint> {
+  template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const ::tenzir::endpoint& value, FormatContext& ctx) const {
+  auto format(::tenzir::Endpoint const& value, FormatContext& ctx) const {
     auto out = ctx.out();
     if (value.port) {
       if (value.host.contains(':')) {

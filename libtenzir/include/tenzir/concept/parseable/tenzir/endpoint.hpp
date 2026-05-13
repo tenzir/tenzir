@@ -20,17 +20,17 @@
 
 namespace tenzir {
 
-struct endpoint_parser : parser_base<endpoint_parser> {
-  using attribute = endpoint;
+struct EndpointParser : parser_base<EndpointParser> {
+  using attribute = Endpoint;
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    auto result = endpoint{};
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+    auto result = Endpoint{};
     return parse(f, l, result);
   }
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, endpoint& e) const {
+  bool parse(Iterator& f, Iterator const& l, Endpoint& e) const {
     using namespace parsers;
     auto first = f;
     if (first == l) {
@@ -55,7 +55,7 @@ struct endpoint_parser : parser_base<endpoint_parser> {
                or c == '_' or c == '.';
       });
     };
-    auto result = endpoint{};
+    auto result = Endpoint{};
     if (input.front() == '[') {
       auto close = input.find(']');
       if (close == std::string_view::npos) {
@@ -116,13 +116,13 @@ struct endpoint_parser : parser_base<endpoint_parser> {
 };
 
 template <>
-struct parser_registry<endpoint> {
-  using type = endpoint_parser;
+struct parser_registry<Endpoint> {
+  using type = EndpointParser;
 };
 
 namespace parsers {
 
-auto const endpoint = make_parser<tenzir::endpoint>();
+auto const endpoint = make_parser<tenzir::Endpoint>();
 
 } // namespace parsers
 } // namespace tenzir

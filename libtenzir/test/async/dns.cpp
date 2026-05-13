@@ -129,7 +129,7 @@ TEST("forward dns resolves remote socket addresses") {
         }},
       }};
     });
-  auto endpoint = tenzir::endpoint{};
+  auto endpoint = tenzir::Endpoint{};
   require(parsers::endpoint("dns.test:9000", endpoint));
   auto result = folly::coro::blockingWait(
     resolver.resolve_socket_address(std::move(endpoint)));
@@ -160,7 +160,7 @@ TEST("forward dns prefers ipv4 answer over preceding ipv6 answer") {
         },
       }};
     });
-  auto endpoint = tenzir::endpoint{};
+  auto endpoint = tenzir::Endpoint{};
   require(parsers::endpoint("dual.test:1234", endpoint));
   auto result = folly::coro::blockingWait(
     resolver.resolve_socket_address(std::move(endpoint)));
@@ -184,7 +184,7 @@ TEST("forward dns falls back to ipv6 answer when no ipv4 is present") {
         }},
       }};
     });
-  auto endpoint = tenzir::endpoint{};
+  auto endpoint = tenzir::Endpoint{};
   require(parsers::endpoint("v6only.test:5555", endpoint));
   auto result = folly::coro::blockingWait(
     resolver.resolve_socket_address(std::move(endpoint)));
@@ -194,7 +194,7 @@ TEST("forward dns falls back to ipv6 answer when no ipv4 is present") {
 
 TEST("forward dns resolves bind socket addresses with empty host") {
   auto resolver = ForwardDnsResolver{};
-  auto endpoint = tenzir::endpoint{};
+  auto endpoint = tenzir::Endpoint{};
   require(parsers::endpoint(":4242", endpoint));
   auto result = folly::coro::blockingWait(
     resolver.resolve_bind_address(std::move(endpoint)));
@@ -204,7 +204,7 @@ TEST("forward dns resolves bind socket addresses with empty host") {
 }
 
 TEST("forward dns remote socket addresses require a port") {
-  auto endpoint = tenzir::endpoint{};
+  auto endpoint = tenzir::Endpoint{};
   require(parsers::endpoint("missing-port", endpoint));
   check(not endpoint.port);
 }

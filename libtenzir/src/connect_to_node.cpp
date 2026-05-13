@@ -57,8 +57,8 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
   return timeout;
 }
 
-auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint> {
-  endpoint node_endpoint;
+auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint> {
+  Endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
   if (not parsers::endpoint(endpoint_str, node_endpoint)) {
@@ -147,8 +147,8 @@ std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
   return retry_delay;
 }
 
-caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
-  endpoint node_endpoint;
+caf::expected<Endpoint> get_node_endpoint(const caf::settings& opts) {
+  Endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
   if (not parsers::endpoint(endpoint_str, node_endpoint)) {
@@ -172,7 +172,7 @@ caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
   return node_endpoint;
 }
 
-auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
+auto connect_to_node(caf::scoped_actor& self, Endpoint endpoint,
                      caf::timespan timeout,
                      std::optional<caf::timespan> retry_delay,
                      bool internal_connection) -> caf::expected<node_actor> {

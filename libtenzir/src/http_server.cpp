@@ -129,7 +129,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
       .emit(dh);
     return None{};
   }
-  auto parsed = tenzir::endpoint{};
+  auto parsed = tenzir::Endpoint{};
   if (not parsers::endpoint(endpoint, parsed)) {
     diagnostic::error("failed to parse endpoint")
       .primary(loc)

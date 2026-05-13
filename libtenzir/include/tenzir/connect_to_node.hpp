@@ -25,7 +25,7 @@ namespace detail {
 /// `tenzir.connection-timeout` from the given settings.
 auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 
-auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint>;
+auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint>;
 
 auto get_retry_delay(const caf::settings& settings)
   -> std::optional<caf::timespan>;
@@ -39,7 +39,7 @@ check_version(const record& remote_version, const record& cfg) -> bool;
 } // namespace detail
 
 /// Connects to a remote Tenzir server.
-auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
+auto connect_to_node(caf::scoped_actor& self, Endpoint endpoint,
                      caf::timespan timeout,
                      std::optional<caf::timespan> retry_delay = std::nullopt,
                      bool internal_connection = false)

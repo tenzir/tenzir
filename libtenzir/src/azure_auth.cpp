@@ -33,8 +33,8 @@ using namespace std::chrono_literals;
 constexpr auto default_authority = "https://login.microsoftonline.com";
 
 /// Helper to assign a secret from a record field.
-auto assign_secret(const located<record>& config, std::string_view key,
-                   std::optional<secret>& x, diagnostic_handler& dh)
+auto assign_secret(located<record> const& config, std::string_view key,
+                   Option<secret>& x, diagnostic_handler& dh)
   -> failure_or<void> {
   if (auto it = config.inner.find(key); it != config.inner.end()) {
     if (auto* s = try_as<secret>(it->second.get_data())) {
@@ -99,7 +99,7 @@ auto validate_authority(std::string_view authority, location loc,
   return {};
 }
 
-auto token_endpoint(resolved_azure_auth const& auth) -> std::string {
+auto token_endpoint(ResolvedAzureAuth const& auth) -> std::string {
   return fmt::format("{}/{}/oauth2/v2.0/token", auth.authority, auth.tenant_id);
 }
 
@@ -133,13 +133,13 @@ auto refresh_time(std::chrono::steady_clock::time_point now,
 
 } // namespace
 
-auto azure_auth_options::from_record(located<record> config,
-                                     diagnostic_handler& dh)
-  -> failure_or<azure_auth_options> {
+auto AzureAuthOptions::from_record(located<record> config,
+                                   diagnostic_handler& dh)
+  -> failure_or<AzureAuthOptions> {
   constexpr auto known = std::array{
     "tenant_id", "client_id", "client_secret", "scope", "authority",
   };
-  const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
+  auto const unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
   });
   if (unknown != std::ranges::end(config.inner)) {
@@ -148,7 +148,7 @@ auto azure_auth_options::from_record(located<record> config,
       .emit(dh);
     return failure::promise();
   }
-  auto opts = azure_auth_options{};
+  auto opts = AzureAuthOptions{};
   opts.loc = config.source;
   TRY(assign_secret(config, "tenant_id", opts.tenant_id, dh));
   TRY(assign_secret(config, "client_id", opts.client_id, dh));
@@ -172,9 +172,9 @@ auto azure_auth_options::from_record(located<record> config,
   return opts;
 }
 
-auto azure_auth_options::make_secret_requests(resolved_azure_auth& resolved,
-                                              std::string default_scope,
-                                              diagnostic_handler& dh) const
+auto AzureAuthOptions::make_secret_requests(ResolvedAzureAuth& resolved,
+                                            std::string default_scope,
+                                            diagnostic_handler& dh) const
   -> std::vector<secret_request> {
   auto requests = std::vector<secret_request>{};
   requests.emplace_back(make_secret_request("auth.tenant_id", *tenant_id, loc,
@@ -198,15 +198,14 @@ auto azure_auth_options::make_secret_requests(resolved_azure_auth& resolved,
   return requests;
 }
 
-auto resolve_azure_auth(azure_auth_options options, std::string default_scope,
-                        OpCtx& ctx)
-  -> Task<std::optional<resolved_azure_auth>> {
-  auto resolved = resolved_azure_auth{};
+auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
+                        OpCtx& ctx) -> Task<Option<ResolvedAzureAuth>> {
+  auto resolved = ResolvedAzureAuth{};
   auto requests = options.make_secret_requests(
     resolved, std::move(default_scope), ctx.dh());
   if (auto result = co_await ctx.resolve_secrets(std::move(requests));
       result.is_error()) {
-    co_return std::nullopt;
+    co_return None{};
   }
   auto& dh = ctx.dh();
   if (not check_resolved("tenant_id", resolved.tenant_id, options.loc, dh)
@@ -215,16 +214,16 @@ auto resolve_azure_auth(azure_auth_options options, std::string default_scope,
                             options.loc, dh)
       or not check_resolved("scope", resolved.scope, options.loc, dh)
       or not check_resolved("authority", resolved.authority, options.loc, dh)) {
-    co_return std::nullopt;
+    co_return None{};
   }
   resolved.authority = normalize_authority(std::move(resolved.authority));
   if (not validate_authority(resolved.authority, options.loc, dh)) {
-    co_return std::nullopt;
+    co_return None{};
   }
   co_return resolved;
 }
 
-AzureTokenProvider::AzureTokenProvider(resolved_azure_auth auth, location loc)
+AzureTokenProvider::AzureTokenProvider(ResolvedAzureAuth auth, location loc)
   : auth_{std::move(auth)}, loc_{loc} {
 }
 
@@ -238,7 +237,7 @@ auto AzureTokenProvider::authorize(std::map<std::string, std::string>& headers,
 
 auto AzureTokenProvider::token(OpCtx& ctx, HttpPoolConfig const& config)
   -> Task<failure_or<std::string>> {
-  const auto now = std::chrono::steady_clock::now();
+  auto const now = std::chrono::steady_clock::now();
   if (not token_.empty() and now < refresh_at_) {
     co_return token_;
   }
@@ -259,8 +258,8 @@ auto AzureTokenProvider::token(OpCtx& ctx, HttpPoolConfig const& config)
 
 auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
   -> Task<Result<void, diagnostic>> {
-  const auto url = token_endpoint(auth_);
-  const auto body = curl::escape(record{
+  auto const url = token_endpoint(auth_);
+  auto const body = curl::escape(record{
     {"client_id", auth_.client_id},
     {"client_secret", auth_.client_secret},
     {"grant_type", "client_credentials"},
@@ -274,7 +273,7 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
   token_config.tls = url.starts_with("https://");
   if (not token_config.tls) {
     token_config.ssl_context.reset();
-    token_config.ca_info.reset();
+    token_config.ca_info = None{};
     token_config.skip_peer_verification = false;
   }
   auto result = co_await http_post(ctx.io_executor()->getEventBase(), url, body,
@@ -297,26 +296,26 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
       fmt::format("failed to fetch Azure access token: HTTP code `{}`",
                   response.status_code));
   }
-  const auto json = from_json(response.body);
+  auto const json = from_json(response.body);
   if (not json.has_value()) {
     co_return fail("received no JSON when fetching Azure access token");
   }
-  const auto* object = try_as<record>(json.value());
+  auto const* object = try_as<record>(json.value());
   if (not object) {
     co_return fail("Azure token response body is not a JSON object");
   }
-  const auto it = object->find("access_token");
+  auto const it = object->find("access_token");
   if (it == object->end()) {
     co_return fail("Azure token response does not contain `access_token`");
   }
-  const auto* token = try_as<std::string>(it->second);
+  auto const* token = try_as<std::string>(it->second);
   if (not token) {
     co_return fail(
       fmt::format("expected Azure `access_token` to be `string`, got `{}`",
                   type::infer(it->second).value_or(type{}).kind()));
   }
-  const auto expires_in = parse_expires_in(*object);
-  const auto now = std::chrono::steady_clock::now();
+  auto const expires_in = parse_expires_in(*object);
+  auto const now = std::chrono::steady_clock::now();
   token_ = *token;
   refresh_at_ = refresh_time(now, expires_in);
   expires_at_ = now + expires_in;

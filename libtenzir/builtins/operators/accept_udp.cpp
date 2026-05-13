@@ -131,7 +131,7 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
   }
 
   void
-  onDataAvailable(const folly::SocketAddress& client, size_t len,
+  onDataAvailable(folly::SocketAddress const& client, size_t len,
                   bool truncated, OnDataAvailableParams) noexcept override {
     // The buffer is sized to fit any valid UDP datagram payload (max 65,527
     // bytes), so the kernel should never truncate.
@@ -195,7 +195,7 @@ public:
     // `dcheckIsInEventBaseThread` holds and access to `SocketReadCallback`'s
     // members needs no synchronization.
     evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
-    auto bind_endpoint = endpoint{};
+    auto bind_endpoint = Endpoint{};
     auto parsed = parsers::endpoint(args_.endpoint.inner, bind_endpoint)
                   and bind_endpoint.port;
     TENZIR_ASSERT(parsed);
@@ -504,7 +504,7 @@ public:
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto location
         = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      auto endpoint = tenzir::endpoint{};
+      auto endpoint = tenzir::Endpoint{};
       if (not parsers::endpoint(endpoint_str.inner, endpoint)
           or not endpoint.port) {
         diagnostic::error("failed to parse endpoint")
