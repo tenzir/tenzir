@@ -257,13 +257,12 @@ public:
     if (tls_needed.is_error()) {
       co_return;
     }
-    auto* dh = &ctx.dh();
     auto loc = args_.operator_location;
     auto config = HttpPoolConfig{
       .tls = *tls_needed,
       .ssl_context = nullptr,
       .on_retry =
-        [dh, loc](std::string_view message) {
+        [dh = &ctx.dh(), loc](std::string_view message) {
           diagnostic::warning("{}", message).primary(loc).emit(*dh);
         },
     };
