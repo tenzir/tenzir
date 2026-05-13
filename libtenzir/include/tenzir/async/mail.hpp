@@ -16,57 +16,67 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/message.hpp>
 #include <caf/response_type.hpp>
+#include <caf/send.hpp>
 #include <caf/timespan.hpp>
 #include <caf/unit.hpp>
+#include <folly/ExceptionWrapper.h>
 #include <folly/futures/Future.h>
 
 #include <atomic>
-#include <functional>
 #include <memory>
-#include <source_location>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 
 namespace tenzir {
 
-template <class Result, class Handle, class F, class... Ts>
-void mail_with_callback(Handle receiver, caf::timespan timeout,
-                        std::source_location location, F f, Ts&&... xs) {
-  struct state_t {
-    explicit state_t(F fn) : callback{std::move(fn)} {
-    }
+template <class Result>
+struct AsyncMailRequestState {
+  using FutureResult = caf::expected<Result>;
 
-    auto finish(caf::expected<Result> result) -> void {
-      auto expected = false;
-      if (not completed.compare_exchange_strong(expected, true,
-                                                std::memory_order_relaxed)) {
-        return;
-      }
-      std::invoke(callback, std::move(result));
-    }
-
-    std::atomic<bool> completed = false;
-    F callback;
-  };
-  if (not receiver) {
-    std::invoke(f, caf::expected<Result>{caf::make_error(
-                     ec::remote_node_down, "async_mail receiver down")});
-    return;
+  explicit AsyncMailRequestState(folly::Promise<FutureResult> promise)
+    : promise{std::move(promise)} {
   }
-  auto state = std::make_shared<state_t>(std::move(f));
-  receiver->home_system().template spawn<caf::hidden>(
-    [receiver = std::move(receiver), timeout, location,
-     state = std::move(state), args = std::make_tuple(std::forward<Ts>(xs)...)](
+
+  auto finish(FutureResult result) -> void {
+    auto expected = false;
+    if (not completed.compare_exchange_strong(expected, true,
+                                              std::memory_order_relaxed)) {
+      return;
+    }
+    promise.setValue(std::move(result));
+  }
+
+  auto cancel(folly::exception_wrapper const& exception) -> void {
+    auto expected = false;
+    if (not completed.compare_exchange_strong(expected, true,
+                                              std::memory_order_relaxed)) {
+      return;
+    }
+    promise.setException(exception);
+    if (helper) {
+      caf::anon_send_exit(helper, caf::exit_reason::user_shutdown);
+    }
+  }
+
+  std::atomic<bool> completed = false;
+  folly::Promise<FutureResult> promise;
+  caf::actor helper;
+};
+
+template <class Result, class Handle, class... Ts>
+auto mail_with_callback(Handle receiver, caf::timespan timeout,
+                        std::shared_ptr<AsyncMailRequestState<Result>> state,
+                        Ts&&... xs) -> caf::actor {
+  if (not receiver) {
+    state->finish(caf::expected<Result>{
+      caf::make_error(ec::remote_node_down, "async_mail receiver down")});
+    return {};
+  }
+  return receiver->home_system().template spawn<caf::hidden>(
+    [receiver = std::move(receiver), timeout, state = std::move(state),
+     args = std::make_tuple(std::forward<Ts>(xs)...)](
       caf::event_based_actor* self) mutable -> caf::behavior {
-      self->attach_functor([location, state] {
-        state->finish(caf::expected<Result>{
-          caf::make_error(ec::logic_error,
-                          fmt::format("async_mail helper terminated before "
-                                      "producing a response for request at "
-                                      "{}:{}",
-                                      location.file_name(), location.line()))});
-      });
       std::apply(
         [self, &receiver, &state, timeout](auto&&... ys) mutable {
           if constexpr (std::is_void_v<Result>) {
@@ -112,18 +122,23 @@ public:
 
   template <class Handle, class Result = AsyncMailResult<Handle, Args...>>
   auto
-  request(Handle receiver, caf::timespan timeout = caf::infinite,
-          std::source_location location
-          = std::source_location::current()) && -> folly::coro::Task<Result> {
+  request(Handle receiver, caf::timespan timeout
+                           = caf::infinite) && -> folly::coro::Task<Result> {
     auto [promise, future] = folly::makePromiseContract<Result>();
+    auto state
+      = std::make_shared<AsyncMailRequestState<typename Result::value_type>>(
+        std::move(promise));
+    state->promise.setInterruptHandler(
+      [weak_state = std::weak_ptr{state}](
+        folly::exception_wrapper const& exception) mutable {
+        if (auto state = weak_state.lock()) {
+          state->cancel(exception);
+        }
+      });
     std::apply(
       [&](auto&&... xs) mutable {
-        mail_with_callback<typename Result::value_type>(
-          receiver, timeout, location,
-          [promise = std::move(promise)](Result result) mutable {
-            promise.setValue(std::move(result));
-          },
-          std::move(xs)...);
+        state->helper = mail_with_callback<typename Result::value_type>(
+          receiver, timeout, state, std::move(xs)...);
       },
       std::move(args_));
     return to_task_interrupt_on_cancel(std::move(future));
