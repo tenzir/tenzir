@@ -25,6 +25,7 @@
 #include "tenzir/concept/parseable/core/optional.hpp"     // IWYU pragma: export
 #include "tenzir/concept/parseable/core/parse_as.hpp"     // IWYU pragma: export
 #include "tenzir/concept/parseable/core/plus.hpp"         // IWYU pragma: export
+#include "tenzir/concept/parseable/core/raw.hpp"          // IWYU pragma: export
 #include "tenzir/concept/parseable/core/repeat.hpp"       // IWYU pragma: export
 #include "tenzir/concept/parseable/core/rule.hpp"         // IWYU pragma: export
 #include "tenzir/concept/parseable/core/sequence.hpp"     // IWYU pragma: export

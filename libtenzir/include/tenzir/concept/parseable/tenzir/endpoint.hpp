@@ -18,7 +18,6 @@
 
 #include <optional>
 #include <string>
-#include <tuple>
 #include <utility>
 
 namespace tenzir {
@@ -41,7 +40,7 @@ struct EndpointParser : parser_base<EndpointParser> {
     auto host_char = alnum | ch<'-'> | ch<'_'> | ch<'.'>;
     auto endpoint_host = +host_char;
     auto ipv6_char = xdigit | ch<':'> | ch<'.'>;
-    auto ipv6_host = &(parsers::ipv6 >> ! ipv6_char) >> +ipv6_char;
+    auto ipv6_host = raw(parsers::ipv6 >> ! ipv6_char);
     auto bracketed_ipv6
       = ('['_p >> ipv6_host >> ']'_p >> -(':'_p >> endpoint_port))
           .then([=](std::string host, std::optional<tenzir::port> port) {

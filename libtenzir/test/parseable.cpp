@@ -138,6 +138,17 @@ TEST("parseable action - tuple unpack") {
   CHECK_EQUAL(result, 3);
 }
 
+TEST("raw parser") {
+  auto p = raw(parsers::i32);
+  auto input = "123abc"s;
+  auto first = input.begin();
+  auto const last = input.end();
+  auto result = std::string{};
+  CHECK(p(first, last, result));
+  CHECK_EQUAL(result, "123");
+  CHECK_EQUAL((std::string{first, last}), "abc");
+}
+
 TEST("end of input") {
   auto input = "foo"s;
   CHECK(not parsers::eoi(input));
