@@ -552,29 +552,10 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
 
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
-               std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
-  auto config
-    = HttpPoolConfig{.request_timeout = timeout, .connection_timeout = timeout};
-  return http_post(evb, std::move(url), std::move(body), std::move(headers),
-                   std::move(config));
-}
-
-auto http_post(folly::EventBase* evb, std::string url, std::string body,
-               std::map<std::string, std::string> headers,
                HttpPoolConfig config)
   -> Task<Result<HttpResponse, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::POST, std::move(url),
                       std::move(body), std::move(headers), std::move(config));
-}
-
-auto http_get(folly::EventBase* evb, std::string url,
-              std::map<std::string, std::string> headers,
-              std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
-  auto config
-    = HttpPoolConfig{.request_timeout = timeout, .connection_timeout = timeout};
-  return http_get(evb, std::move(url), std::move(headers), std::move(config));
 }
 
 auto http_get(folly::EventBase* evb, std::string url,
