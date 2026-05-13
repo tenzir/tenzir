@@ -49,7 +49,9 @@ find_package(fmt REQUIRED)
 
 # Set CMAKE_CONFIGURATION_TYPES to bypass llhttp's build type validation
 set(CMAKE_CONFIGURATION_TYPES_BACKUP "${CMAKE_CONFIGURATION_TYPES}")
-set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING "" FORCE)
+set(CMAKE_CONFIGURATION_TYPES
+    "${CMAKE_BUILD_TYPE}"
+    CACHE STRING "" FORCE)
 # Force llhttp to build as static library to avoid runtime dependency issues
 set(BUILD_SHARED_LIBS_BACKUP "${BUILD_SHARED_LIBS}")
 set(BUILD_STATIC_LIBS_BACKUP "${BUILD_STATIC_LIBS}")
@@ -63,13 +65,14 @@ add_subdirectory(llhttp EXCLUDE_FROM_ALL)
 set(CMAKE_POSITION_INDEPENDENT_CODE "${CMAKE_POSITION_INDEPENDENT_CODE_BACKUP}")
 set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_BACKUP}")
 set(BUILD_STATIC_LIBS "${BUILD_STATIC_LIBS_BACKUP}")
-set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES_BACKUP}" CACHE STRING "" FORCE)
+set(CMAKE_CONFIGURATION_TYPES
+    "${CMAKE_CONFIGURATION_TYPES_BACKUP}"
+    CACHE STRING "" FORCE)
 
 # Create an interface library for the modified restinio sources.
 target_include_directories(
   restinio INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
-target_link_libraries(
-  restinio INTERFACE fmt::fmt Boost::headers OpenSSL::SSL OpenSSL::Crypto
-                     llhttp::llhttp)
+target_link_libraries(restinio INTERFACE fmt::fmt Boost::headers OpenSSL::SSL
+                                         OpenSSL::Crypto llhttp::llhttp)
 
 add_library(restinio::restinio ALIAS restinio)

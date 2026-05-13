@@ -7,7 +7,10 @@ project(
 
 include(CTest)
 
-find_package(AWSSDK COMPONENTS sqs REQUIRED CONFIG)
+find_package(
+  AWSSDK
+  COMPONENTS sqs
+  REQUIRED CONFIG)
 find_package(Tenzir REQUIRED)
 
 TenzirRegisterPlugin(

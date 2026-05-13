@@ -16,7 +16,12 @@ ngtcp2.overrideAttrs (orig: {
   # ngtcp2's CMake only looks for libev and nghttp3 when building examples.
   # nixpkgs still injects them for lib-only static builds, which leaks libev's
   # headers into downstream consumers.
-  buildInputs = lib.subtractLists (lib.optionals enableLibOnly [ libev nghttp3 ]) (orig.buildInputs or [ ]);
-  propagatedBuildInputs =
-    lib.subtractLists (lib.optionals enableLibOnly [ libev nghttp3 ]) (orig.propagatedBuildInputs or [ ]);
+  buildInputs = lib.subtractLists (lib.optionals enableLibOnly [
+    libev
+    nghttp3
+  ]) (orig.buildInputs or [ ]);
+  propagatedBuildInputs = lib.subtractLists (lib.optionals enableLibOnly [
+    libev
+    nghttp3
+  ]) (orig.propagatedBuildInputs or [ ]);
 })

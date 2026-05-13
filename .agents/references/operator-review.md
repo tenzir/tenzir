@@ -20,7 +20,7 @@ Pay special attention to the following questions:
 - Do we support backpressure handling?
 
 - Are there any operators that were already ported to the new executor
-  framework that need to solve the same 
+  framework that need to solve the same
 
 # Backwards Compatibility
 
@@ -44,7 +44,7 @@ for destroying it and where/when that happens.
 # Source Operators
 
 - Walk through the operation in high-traffic and low-traffic mode:
-  -  In high-traffic mode, are there any unbounded buffers that could
+  - In high-traffic mode, are there any unbounded buffers that could
      kill our memory? Any blocking calls that
 
   - In low-traffic mode, are there any unbounded waits that could kill
@@ -59,4 +59,3 @@ for destroying it and where/when that happens.
   after all currently pending events are processed, to ensure correctness
   when the snapshot "flows back" along the pipeline. Is that already
   implemented correctly?
-    

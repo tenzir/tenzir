@@ -147,7 +147,9 @@ def s3_fail_complete() -> FixtureHandle:
     """LocalStack behind a proxy that fails CompleteMultipartUpload."""
     runtime = detect_runtime()
     if runtime is None:
-        raise FixtureUnavailable("container runtime (docker/podman) required but not found")
+        raise FixtureUnavailable(
+            "container runtime (docker/podman) required but not found"
+        )
     upstream_port = find_free_port()
     container = _start_localstack(runtime, upstream_port)
     try:

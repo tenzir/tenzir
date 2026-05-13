@@ -37,12 +37,12 @@ def main() -> None:
     )
     pipeline = (
         "from "
-        "{time: 2024-01-01T00:00:00, msg: \"a\"}, "
-        "{time: 2024-01-02T00:00:00, msg: \"b\"}, "
-        "{time: 2024-01-03T00:00:00, msg: \"c\"}\n"
+        '{time: 2024-01-01T00:00:00, msg: "a"}, '
+        '{time: 2024-01-02T00:00:00, msg: "b"}, '
+        '{time: 2024-01-03T00:00:00, msg: "c"}\n'
         f"to_amazon_security_lake {json.dumps(url)},\n"
-        "  region=\"us-east-1\",\n"
-        "  account_id=\"123456789012\",\n"
+        '  region="us-east-1",\n'
+        '  account_id="123456789012",\n'
         "  role=null"
     )
     # Disable IMDS to avoid the 7s hang on non-EC2 hosts (see SESSION.md).

@@ -7,9 +7,12 @@ project(
 
 find_package(Arrow QUIET REQUIRED CONFIG)
 if (NOT ARROW_GCS OR NOT ${ARROW_GCS} STREQUAL "ON")
-  message(WARNING "Disabling gcs plugin because the ARROW_GCS flag is not found/enabled. You probably need to enable ARROW_GCS when installing Apache Arrow.")
+  message(
+    WARNING
+      "Disabling gcs plugin because the ARROW_GCS flag is not found/enabled. You probably need to enable ARROW_GCS when installing Apache Arrow."
+  )
   return()
-endif()
+endif ()
 
 include(CTest)
 

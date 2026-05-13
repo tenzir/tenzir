@@ -35,8 +35,8 @@ def main() -> None:
     pipeline = (
         "from {x: 1}, {x: 2}\n"
         f"to_amazon_security_lake {json.dumps(url)},\n"
-        "  region=\"us-east-1\",\n"
-        "  account_id=\"123456789012\",\n"
+        '  region="us-east-1",\n'
+        '  account_id="123456789012",\n'
         "  role=null"
     )
     env = os.environ.copy()

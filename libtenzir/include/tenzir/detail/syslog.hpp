@@ -667,8 +667,7 @@ struct cisco_datetime_parser : parser_base<cisco_datetime_parser> {
 /// Parser for Cisco date-time fields like:
 /// `Apr 14 08:45:52.113 UTC`
 /// `Apr 14 08:45:52.113`
-struct cisco_short_datetime_parser
-  : parser_base<cisco_short_datetime_parser> {
+struct cisco_short_datetime_parser : parser_base<cisco_short_datetime_parser> {
   using attribute = cisco_short_datetime;
 
   template <class Iterator, class Attribute>
@@ -952,8 +951,7 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
         auto save = it2;
         if (cisco_datetime_parser{}(it2, l, ts)) {
           out = fmt::format("{} {} {} {:02}:{:02}:{:02} {}", ts.year, ts.month,
-                            ts.day, ts.hour, ts.minute, ts.second,
-                            ts.timezone);
+                            ts.day, ts.hour, ts.minute, ts.second, ts.timezone);
           cursor = it2;
           return true;
         }
@@ -966,11 +964,10 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
           auto const subsecond = ts.subsecond.empty()
                                    ? std::string{}
                                    : fmt::format(".{}", ts.subsecond);
-          auto const timezone = ts.timezone ? fmt::format(" {}", *ts.timezone)
-                                            : std::string{};
+          auto const timezone
+            = ts.timezone ? fmt::format(" {}", *ts.timezone) : std::string{};
           out = fmt::format("{} {} {:02}:{:02}:{:02}{}{}", ts.month, ts.day,
-                            ts.hour, ts.minute, ts.second, subsecond,
-                            timezone);
+                            ts.hour, ts.minute, ts.second, subsecond, timezone);
           cursor = it2;
           return true;
         }
@@ -991,8 +988,7 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
         auto ts = cisco_uptime_short_datetime{};
         auto save = it2;
         if (cisco_uptime_short_datetime_parser{}(it2, l, ts)) {
-          out = fmt::format("{:02}:{:02}:{:02}", ts.hour, ts.minute,
-                            ts.second);
+          out = fmt::format("{:02}:{:02}:{:02}", ts.hour, ts.minute, ts.second);
           cursor = it2;
           return true;
         }

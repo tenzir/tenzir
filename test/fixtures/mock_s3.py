@@ -163,9 +163,7 @@ class _Handler(BaseHTTPRequestHandler):
 
         if is_dir_marker:
             # Create the directory; do not write a file.
-            (self.state.data_dir / bucket / key).mkdir(
-                parents=True, exist_ok=True
-            )
+            (self.state.data_dir / bucket / key).mkdir(parents=True, exist_ok=True)
             self.send_response(200)
             self.end_headers()
             return
@@ -230,9 +228,9 @@ class _Handler(BaseHTTPRequestHandler):
                 resp = (
                     f'<?xml version="1.0"?>'
                     f"<CompleteMultipartUploadResult>"
-                    f'<Location>http://localhost/{upload["bucket"]}/{upload["key"]}</Location>'
-                    f'<Bucket>{upload["bucket"]}</Bucket>'
-                    f'<Key>{upload["key"]}</Key>'
+                    f"<Location>http://localhost/{upload['bucket']}/{upload['key']}</Location>"
+                    f"<Bucket>{upload['bucket']}</Bucket>"
+                    f"<Key>{upload['key']}</Key>"
                     f"</CompleteMultipartUploadResult>"
                 )
                 self.send_response(200)
@@ -302,18 +300,12 @@ def mock_s3() -> FixtureHandle:
             journal = {
                 "completed": list(state.completed),
                 "aborted": list(state.aborted),
-                "pending": {
-                    uid: info["key"]
-                    for uid, info in state.uploads.items()
-                },
+                "pending": {uid: info["key"] for uid, info in state.uploads.items()},
             }
         journal_path.write_text(json.dumps(journal, indent=2))
         if assertions.all_uploads_completed:
             with state.lock:
-                pending = {
-                    uid: info["key"]
-                    for uid, info in state.uploads.items()
-                }
+                pending = {uid: info["key"] for uid, info in state.uploads.items()}
                 aborted = list(state.aborted)
             problems = []
             if pending:
@@ -336,6 +328,7 @@ def mock_s3() -> FixtureHandle:
         server.shutdown()
         thread.join(timeout=5)
         import shutil
+
         shutil.rmtree(data_dir, ignore_errors=True)
         logger.info("mock_s3 shut down")
 
