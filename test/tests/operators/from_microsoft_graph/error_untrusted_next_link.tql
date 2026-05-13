@@ -13,4 +13,5 @@ from_microsoft_graph "users/untrusted-next-link",
     client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
-  tls={cacert: env("MS_GRAPH_FIXTURE_TLS_CACERT")}
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false

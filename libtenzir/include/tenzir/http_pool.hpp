@@ -49,8 +49,6 @@ struct HttpResponse {
 struct HttpPoolConfig {
   bool tls = true;
   std::shared_ptr<folly::SSLContext> ssl_context;
-  Option<std::string> ca_info;
-  bool skip_peer_verification = false;
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
   std::chrono::milliseconds connection_timeout = std::chrono::seconds{5};
   uint32_t max_retry_count = 0;

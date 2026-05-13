@@ -4,5 +4,4 @@ error: OData `@odata.nextLink` URL points to an untrusted origin
 9 | from_microsoft_graph "users/untrusted-next-link",
   | ^^^^^^^^^^^^^^^^^^^^ 
   |
-  = note: current origin: https://graph.microsoft.com
   = note: next origin: https://example.invalid

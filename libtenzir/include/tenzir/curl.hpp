@@ -318,9 +318,6 @@ public:
   /// Sets a write callback with explicit return codes.
   auto set_write_result_callback(write_result_callback fun) -> code;
 
-  /// Sets a header callback.
-  auto set_header_callback(write_callback fun) -> code;
-
   /// Sets a read callback.
   auto set(read_callback fun) -> code;
 
@@ -376,7 +373,6 @@ private:
 
   std::unique_ptr<CURL, curl_deleter> easy_;
   std::unique_ptr<write_callback_base> on_write_{};
-  std::unique_ptr<write_callback_base> on_header_{};
   std::unique_ptr<read_callback> on_read_{};
   std::unique_ptr<mime> mime_{};
   slist http_headers_;

@@ -12,8 +12,9 @@ from_microsoft_graph "users",
     client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
   odata={
     select: ["id", "displayName", "userPrincipalName"],
     top: 2,
   },
-  tls={cacert: env("MS_GRAPH_FIXTURE_TLS_CACERT")}
+  tls=false

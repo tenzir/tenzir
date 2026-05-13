@@ -320,11 +320,6 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
   };
   if (tls_enabled) {
     auto tls_opts = tls_options::from_optional(tls, options);
-    if (auto cacert = tls_opts.get_cacert(cfg)) {
-      config.ca_info = cacert->inner;
-    }
-    config.skip_peer_verification
-      = tls_opts.get_skip_peer_verification(cfg).inner;
     TRY(auto ssl_context, tls_opts.make_folly_ssl_context(dh, cfg, true));
     config.ssl_context = std::move(ssl_context);
   }

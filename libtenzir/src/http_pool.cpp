@@ -7,10 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/result.hpp>
-#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
-#include <tenzir/curl.hpp>
 #include <tenzir/detail/assert.hpp>
-#include <tenzir/detail/string.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/logger.hpp>
@@ -29,7 +26,6 @@
 
 #include <charconv>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <mutex>
 #include <system_error>
@@ -158,180 +154,6 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
     }
     co_await folly::coro::sleep(delay);
   }
-}
-
-auto host_matches_no_proxy(std::string_view host, std::string_view pattern)
-  -> bool {
-  pattern = detail::trim(pattern);
-  if (pattern.empty()) {
-    return false;
-  }
-  if (pattern == "*") {
-    return true;
-  }
-  auto parsed = Endpoint{};
-  if (parsers::endpoint(pattern, parsed)) {
-    pattern = parsed.host;
-  }
-  if (host == pattern) {
-    return true;
-  }
-  if (pattern.starts_with('.')) {
-    pattern.remove_prefix(1);
-  }
-  return host.size() > pattern.size() and host.ends_with(pattern)
-         and host[host.size() - pattern.size() - 1] == '.';
-}
-
-auto bypass_proxy(std::string_view host) -> bool {
-  auto const* no_proxy = std::getenv("NO_PROXY");
-  if (not no_proxy) {
-    no_proxy = std::getenv("no_proxy");
-  }
-  if (not no_proxy) {
-    return false;
-  }
-  for (auto pattern : detail::split(no_proxy, ",")) {
-    if (host_matches_no_proxy(host, pattern)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-auto https_proxy_for(proxygen::URL const& url) -> Option<proxygen::URL> {
-  if (not url.isSecure() or bypass_proxy(url.getHost())) {
-    return None{};
-  }
-  auto const* proxy = std::getenv("HTTPS_PROXY");
-  if (not proxy) {
-    proxy = std::getenv("https_proxy");
-  }
-  if (not proxy or std::string_view{proxy}.empty()) {
-    return None{};
-  }
-  auto parsed = proxygen::URL{proxy};
-  if (not parsed.isValid() or not parsed.hasHost()) {
-    throw std::runtime_error(fmt::format("invalid HTTPS proxy URL: {}", proxy));
-  }
-  return parsed;
-}
-
-auto https_proxy_string_for(proxygen::URL const& url) -> Option<std::string> {
-  auto proxy = https_proxy_for(url);
-  if (not proxy) {
-    return None{};
-  }
-  return std::string{proxy->getUrl()};
-}
-
-auto curl_http_request(proxygen::HTTPMethod method, std::string const& url,
-                       Option<std::string> const& body,
-                       std::map<std::string, std::string> const& headers,
-                       HttpPoolConfig const& config,
-                       Option<std::string> const& proxy)
-  -> Result<HttpResponse, std::string> {
-  auto easy = curl::easy{};
-  auto response_body = std::string{};
-  auto response_headers = std::map<std::string, std::string>{};
-  auto write_callback = [&](std::span<std::byte const> data) {
-    response_body.append(reinterpret_cast<char const*>(data.data()),
-                         data.size());
-  };
-  if (auto code = easy.set(write_callback); code != curl::easy::code::ok) {
-    return Err{fmt::format("failed to configure HTTP response body: {}",
-                           to_string(code))};
-  }
-  auto header_callback = [&](std::span<std::byte const> data) {
-    auto header = std::string_view{reinterpret_cast<char const*>(data.data()),
-                                   data.size()};
-    header = detail::trim(header);
-    if (header.empty()) {
-      return;
-    }
-    if (header.starts_with("HTTP/")) {
-      response_headers.clear();
-      return;
-    }
-    auto colon = header.find(':');
-    if (colon == std::string_view::npos) {
-      return;
-    }
-    auto [name, value] = detail::split_once(header, ":");
-    name = detail::trim(name);
-    value = detail::trim(value);
-    if (not name.empty()) {
-      response_headers[std::string{name}] = std::string{value};
-    }
-  };
-  if (auto code = easy.set_header_callback(header_callback);
-      code != curl::easy::code::ok) {
-    return Err{fmt::format("failed to configure HTTP response headers: {}",
-                           to_string(code))};
-  }
-  if (auto code = easy.set(CURLOPT_URL, url); code != curl::easy::code::ok) {
-    return Err{
-      fmt::format("failed to configure HTTP URL: {}", to_string(code))};
-  }
-  if (method == proxygen::HTTPMethod::POST) {
-    if (auto code = easy.set(CURLOPT_POST, 1); code != curl::easy::code::ok) {
-      return Err{
-        fmt::format("failed to configure HTTP method: {}", to_string(code))};
-    }
-    auto const& request_body = body ? *body : std::string{};
-    if (auto code = easy.set(CURLOPT_POSTFIELDS, request_body);
-        code != curl::easy::code::ok) {
-      return Err{
-        fmt::format("failed to configure HTTP body: {}", to_string(code))};
-    }
-    auto body_size = static_cast<long>(request_body.size());
-    if (auto code = easy.set_postfieldsize(body_size);
-        code != curl::easy::code::ok) {
-      return Err{
-        fmt::format("failed to configure HTTP body size: {}", to_string(code))};
-    }
-  }
-  for (auto const& [name, value] : headers) {
-    if (auto code = easy.set_http_header(name, value);
-        code != curl::easy::code::ok) {
-      return Err{
-        fmt::format("failed to configure HTTP header: {}", to_string(code))};
-    }
-  }
-  if (proxy) {
-    if (auto code = easy.set(CURLOPT_PROXY, *proxy);
-        code != curl::easy::code::ok) {
-      return Err{
-        fmt::format("failed to configure HTTPS proxy: {}", to_string(code))};
-    }
-  }
-  if (config.ca_info) {
-    if (auto code = easy.set(CURLOPT_CAINFO, *config.ca_info);
-        code != curl::easy::code::ok) {
-      return Err{
-        fmt::format("failed to configure TLS CA: {}", to_string(code))};
-    }
-  }
-  if (config.skip_peer_verification) {
-    static_cast<void>(easy.set(CURLOPT_SSL_VERIFYPEER, 0));
-    static_cast<void>(easy.set(CURLOPT_SSL_VERIFYHOST, 0));
-  }
-  static_cast<void>(easy.set(
-    CURLOPT_TIMEOUT_MS, static_cast<long>(config.request_timeout.count())));
-  static_cast<void>(
-    easy.set(CURLOPT_CONNECTTIMEOUT_MS,
-             static_cast<long>(config.connection_timeout.count())));
-  if (auto code = easy.perform(); code != curl::easy::code::ok) {
-    return Err{fmt::format("curl error: {}", to_string(code))};
-  }
-  auto [code, status] = easy.get<curl::easy::info::response_code>();
-  if (code != curl::easy::code::ok) {
-    return Err{
-      fmt::format("failed to read HTTP response code: {}", to_string(code))};
-  }
-  return HttpResponse{.status_code = static_cast<uint16_t>(status),
-                      .headers = std::move(response_headers),
-                      .body = std::move(response_body)};
 }
 
 auto make_session_params(std::chrono::milliseconds timeout)
@@ -509,15 +331,6 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         }
         if (url_parsed.isSecure()) {
           ensure_http_default_ca_paths();
-        }
-        auto proxy = https_proxy_string_for(url_parsed);
-        if (proxy or config.ca_info or config.skip_peer_verification) {
-          auto response
-            = curl_http_request(method, url, body, headers, config, proxy);
-          if (response.is_err()) {
-            throw std::runtime_error{std::move(response).unwrap_err()};
-          }
-          co_return std::move(response).unwrap();
         }
         auto* session = co_await connect_direct(evb, url_parsed, config);
         auto holder = session->acquireKeepAlive();

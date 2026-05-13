@@ -273,8 +273,6 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
   token_config.tls = url.starts_with("https://");
   if (not token_config.tls) {
     token_config.ssl_context.reset();
-    token_config.ca_info = None{};
-    token_config.skip_peer_verification = false;
   }
   auto result = co_await http_post(ctx.io_executor()->getEventBase(), url, body,
                                    std::move(headers), std::move(token_config));

@@ -1,14 +1,13 @@
 """Microsoft Graph fixture for integration testing.
 
-The Graph API side runs through Dev Proxy with mocked Microsoft Graph
-responses. The auth side emulates the Microsoft identity platform client
-credentials token endpoint used by app-only Graph access.
+The fixture emulates the Microsoft identity platform client-credentials token
+endpoint and a small subset of Microsoft Graph resources used by the operator
+integration tests.
 
 Environment variables yielded:
-- HTTPS_PROXY: Dev Proxy HTTP proxy URL.
-- NO_PROXY: bypass list for local token-server traffic.
-- MS_GRAPH_FIXTURE_TLS_CACERT: Dev Proxy root CA certificate.
-- MS_GRAPH_FIXTURE_AUTHORITY: authority URL for auth.authority.
+- MS_GRAPH_FIXTURE_BASE_URL_V1
+- MS_GRAPH_FIXTURE_BASE_URL_BETA
+- MS_GRAPH_FIXTURE_AUTHORITY
 - MS_GRAPH_FIXTURE_TENANT_ID
 - MS_GRAPH_FIXTURE_CLIENT_ID
 - MS_GRAPH_FIXTURE_CLIENT_SECRET
@@ -18,38 +17,18 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import threading
-import urllib.error
-import urllib.request
-import uuid
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from typing import Iterator, cast
 from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import fixture
-from tenzir_test.fixtures import FixtureUnavailable
-from tenzir_test.fixtures.container_runtime import (
-    ContainerReadinessTimeout,
-    ManagedContainer,
-    RuntimeSpec,
-    detect_runtime,
-    start_detached,
-    wait_until_ready,
-)
 
 from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
-
-DEV_PROXY_IMAGE = "ghcr.io/dotnet/dev-proxy:0.26.0"
-DEV_PROXY_PORT = 8000
-DEV_PROXY_API_PORT = 8897
-STARTUP_TIMEOUT = 60
-HEALTH_CHECK_INTERVAL = 1
 
 _HOST = "127.0.0.1"
 _TENANT_ID = "test-tenant"
@@ -57,7 +36,7 @@ _CLIENT_ID = "test-client"
 _CLIENT_SECRET = "test-secret"
 _ACCESS_TOKEN = "test-ms-graph-token"
 _SKIPTOKEN = "page-2"
-_FIRST_PAGE_DELAY_SECONDS = 2100
+_FIRST_PAGE_DELAY_SECONDS = 2.1
 
 
 def _json_response(handler: BaseHTTPRequestHandler, code: int, obj: object) -> None:
@@ -120,256 +99,125 @@ class _TokenHandler(BaseHTTPRequestHandler):
         return
 
 
-def _mock_headers() -> list[dict[str, str]]:
-    return [{"name": "Content-Type", "value": "application/json"}]
-
-
-def _write_config(config_dir: Path) -> None:
-    base = "https://graph.microsoft.com"
-    first_page = {
-        "@odata.context": f"{base}/v1.0/$metadata#users",
-        "@odata.nextLink": f"{base}/v1.0/users?$skiptoken={_SKIPTOKEN}",
-        "value": [
-            {
-                "@odata.etag": 'W/"user-1"',
-                "id": "user-1",
-                "displayName": "Ada Lovelace",
-                "userPrincipalName": "ada@example.com",
-                "manager": {
-                    "@odata.type": "#microsoft.graph.user",
-                    "id": "manager-1",
+class _GraphHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802
+        if self.headers.get("Authorization") != f"Bearer {_ACCESS_TOKEN}":
+            _json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
+            return
+        parts = urlsplit(self.path)
+        query = parse_qs(parts.query, keep_blank_values=True)
+        base_url = f"http://{_HOST}:{self.server.server_port}"
+        if parts.path == "/v1.0/users/untrusted-next-link":
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                    "@odata.nextLink": "https://example.invalid/v1.0/users",
+                    "value": [],
                 },
-            },
-            {
-                "@odata.type": "#microsoft.graph.user",
-                "id": "user-2",
-                "displayName": "Grace Hopper",
-                "userPrincipalName": "grace@example.com",
-            },
-        ],
-    }
-    second_page = {
-        "@odata.context": f"{base}/v1.0/$metadata#users",
-        "value": [
-            {
-                "@odata.etag": 'W/"user-3"',
-                "id": "user-3",
-                "displayName": "Katherine Johnson",
-                "userPrincipalName": "katherine@example.com",
-            }
-        ],
-    }
-    mocks = {
-        "$schema": (
-            "https://raw.githubusercontent.com/dotnet/dev-proxy/main/"
-            "schemas/v2.4.0/mockresponseplugin.mocksfile.schema.json"
-        ),
-        "mocks": [
-            {
-                "request": {
-                    "url": f"{base}/v1.0/users?$skiptoken={_SKIPTOKEN}",
-                    "method": "GET",
-                },
-                "response": {
-                    "statusCode": 200,
-                    "headers": _mock_headers(),
-                    "body": second_page,
-                },
-            },
-            {
-                "request": {"url": f"{base}/v1.0/users?*", "method": "GET"},
-                "response": {
-                    "statusCode": 200,
-                    "headers": _mock_headers(),
-                    "body": first_page,
-                },
-            },
-            {
-                "request": {
-                    "url": f"{base}/v1.0/users/untrusted-next-link",
-                    "method": "GET",
-                },
-                "response": {
-                    "statusCode": 200,
-                    "headers": _mock_headers(),
-                    "body": {
-                        "@odata.context": f"{base}/v1.0/$metadata#users",
-                        "@odata.nextLink": "https://example.invalid/v1.0/users",
-                        "value": [],
-                    },
-                },
-            },
-            {
-                "request": {"url": f"{base}/v1.0/groups", "method": "GET"},
-                "response": {
-                    "statusCode": 200,
-                    "headers": _mock_headers(),
-                    "body": {
-                        "@odata.context": f"{base}/v1.0/$metadata#groups",
-                        "value": [{"id": "group-1", "displayName": "Security"}],
-                    },
-                },
-            },
-            {
-                "request": {"url": f"{base}/v1.0/groups?*", "method": "GET"},
-                "response": {
-                    "statusCode": 200,
-                    "headers": _mock_headers(),
-                    "body": {
-                        "@odata.context": f"{base}/v1.0/$metadata#groups",
+            )
+            return
+        if parts.path == "/v1.0/users":
+            if query.get("$skiptoken") == [_SKIPTOKEN]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
                         "value": [
                             {
-                                "id": "group-1",
-                                "displayName": "Security",
-                                "securityEnabled": True,
+                                "@odata.etag": 'W/"user-3"',
+                                "id": "user-3",
+                                "displayName": "Katherine Johnson",
+                                "userPrincipalName": "katherine@example.com",
                             }
                         ],
                     },
+                )
+                return
+            time.sleep(_FIRST_PAGE_DELAY_SECONDS)
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                    "@odata.nextLink": f"{base_url}/v1.0/users?$skiptoken={_SKIPTOKEN}",
+                    "value": [
+                        {
+                            "@odata.etag": 'W/"user-1"',
+                            "id": "user-1",
+                            "displayName": "Ada Lovelace",
+                            "userPrincipalName": "ada@example.com",
+                            "manager": {
+                                "@odata.type": "#microsoft.graph.user",
+                                "id": "manager-1",
+                            },
+                        },
+                        {
+                            "@odata.type": "#microsoft.graph.user",
+                            "id": "user-2",
+                            "displayName": "Grace Hopper",
+                            "userPrincipalName": "grace@example.com",
+                        },
+                    ],
                 },
-            },
-            {
-                "request": {"url": f"{base}/beta/users?*", "method": "GET"},
-                "response": {
-                    "statusCode": 200,
-                    "headers": _mock_headers(),
-                    "body": {
-                        "@odata.context": f"{base}/beta/$metadata#users",
-                        "value": [
-                            {
-                                "id": "beta-user-1",
-                                "displayName": "Beta User",
-                                "signInActivity": {
-                                    "lastSignInDateTime": "2026-05-13T12:00:00Z"
-                                },
-                            }
-                        ],
-                    },
+            )
+            return
+        if parts.path == "/v1.0/groups":
+            if parts.query:
+                body = {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#groups",
+                    "value": [
+                        {
+                            "id": "group-1",
+                            "displayName": "Security",
+                            "securityEnabled": True,
+                        }
+                    ],
+                }
+            else:
+                body = {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#groups",
+                    "value": [{"id": "group-1", "displayName": "Security"}],
+                }
+            _json_response(self, HTTPStatus.OK, body)
+            return
+        if parts.path == "/beta/users":
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.context": f"{base_url}/beta/$metadata#users",
+                    "value": [
+                        {
+                            "id": "beta-user-1",
+                            "displayName": "Beta User",
+                            "signInActivity": {
+                                "lastSignInDateTime": "2026-05-13T12:00:00Z"
+                            },
+                        }
+                    ],
                 },
-            },
-        ],
-    }
-    devproxyrc = {
-        "$schema": (
-            "https://raw.githubusercontent.com/dotnet/dev-proxy/main/"
-            "schemas/v2.4.0/rc.schema.json"
-        ),
-        "plugins": [
-            {
-                "name": "GraphMockResponsePlugin",
-                "enabled": True,
-                "pluginPath": "~appFolder/plugins/dev-proxy-plugins.dll",
-                "configSection": "mocksPlugin",
-            },
-            {
-                "name": "LatencyPlugin",
-                "enabled": True,
-                "pluginPath": "~appFolder/plugins/dev-proxy-plugins.dll",
-                "configSection": "latencyPlugin",
-            },
-        ],
-        "urlsToWatch": ["https://graph.microsoft.com/*"],
-        "mocksPlugin": {
-            "$schema": (
-                "https://raw.githubusercontent.com/dotnet/dev-proxy/main/"
-                "schemas/v2.4.0/mockresponseplugin.schema.json"
-            ),
-            "mocksFile": "/config/mocks.json",
-            "blockUnmockedRequests": True,
-        },
-        "latencyPlugin": {
-            "$schema": (
-                "https://raw.githubusercontent.com/dotnet/dev-proxy/main/"
-                "schemas/v2.4.0/latencyplugin.schema.json"
-            ),
-            "minMs": _FIRST_PAGE_DELAY_SECONDS,
-            "maxMs": _FIRST_PAGE_DELAY_SECONDS,
-        },
-        "logLevel": "information",
-        "newVersionNotification": "none",
-        "showSkipMessages": False,
-    }
-    (config_dir / "mocks.json").write_text(json.dumps(mocks), encoding="utf-8")
-    (config_dir / "devproxyrc.json").write_text(
-        json.dumps(devproxyrc), encoding="utf-8"
-    )
+            )
+            return
+        _json_response(self, HTTPStatus.NOT_FOUND, {"error": "not found"})
 
-
-def _start_dev_proxy(
-    runtime: RuntimeSpec,
-    *,
-    proxy_port: int,
-    api_port: int,
-    config_dir: Path,
-) -> ManagedContainer:
-    container_name = f"tenzir-test-dev-proxy-{uuid.uuid4().hex[:8]}"
-    run_args = [
-        "--rm",
-        "--name",
-        container_name,
-        "-p",
-        f"{proxy_port}:{DEV_PROXY_PORT}",
-        "-p",
-        f"{api_port}:{DEV_PROXY_API_PORT}",
-        "-v",
-        f"{config_dir}:/config:ro",
-        DEV_PROXY_IMAGE,
-        "--config-file",
-        "/config/devproxyrc.json",
-    ]
-    logger.info("Starting Dev Proxy with %s", runtime.binary)
-    container = start_detached(runtime, run_args)
-    logger.info("Dev Proxy started: %s", container.container_id[:12])
-    return container
-
-
-def _stop_dev_proxy(container: ManagedContainer) -> None:
-    logger.info("Stopping Dev Proxy container: %s", container.container_id[:12])
-    result = container.stop()
-    if result.returncode != 0:
-        logger.warning(
-            "Failed to stop Dev Proxy container %s: %s",
-            container.container_id[:12],
-            (result.stderr or result.stdout or "").strip() or "no output",
-        )
-
-
-def _wait_for_dev_proxy(api_port: int) -> None:
-    url = f"http://127.0.0.1:{api_port}/proxy/rootCertificate?format=crt"
-
-    def _probe() -> tuple[bool, dict[str, str]]:
-        try:
-            with urllib.request.urlopen(url, timeout=3) as response:
-                response.read()
-            return True, {"api": "ready"}
-        except (urllib.error.URLError, OSError) as exc:
-            return False, {"error": str(exc)}
-
-    try:
-        wait_until_ready(
-            _probe,
-            timeout_seconds=STARTUP_TIMEOUT,
-            poll_interval_seconds=HEALTH_CHECK_INTERVAL,
-            timeout_context="Dev Proxy startup",
-        )
-    except ContainerReadinessTimeout as exc:
-        raise RuntimeError(str(exc)) from exc
-    logger.info("Dev Proxy is ready")
-
-
-def _download_root_certificate(api_port: int, dest: Path) -> None:
-    url = f"http://127.0.0.1:{api_port}/proxy/rootCertificate?format=crt"
-    with urllib.request.urlopen(url, timeout=10) as response:
-        dest.write_bytes(response.read())
+    def log_message(self, *_: object) -> None:
+        return
 
 
 def _plugin_env() -> dict[str, str]:
+    import os
+    from pathlib import Path
+
     env: dict[str, str] = {}
     if binary := os.environ.get("TENZIR_BINARY"):
         build_dir = Path(binary).resolve().parent.parent
         plugin_dir = build_dir / "lib" / "tenzir" / "plugins"
         if plugin_dir.is_dir():
             env["TENZIR_PLUGIN_DIRS"] = str(plugin_dir)
-            env["TENZIR_PLUGINS"] = "all"
+            env["TENZIR_PLUGINS"] = "microsoft_graph"
         lib_dir = build_dir / "lib"
         if lib_dir.is_dir():
             env["DYLD_LIBRARY_PATH"] = str(lib_dir)
@@ -378,49 +226,26 @@ def _plugin_env() -> dict[str, str]:
 
 @fixture(name="microsoft_graph")
 def run() -> Iterator[dict[str, str]]:
-    runtime = detect_runtime()
-    if runtime is None:
-        raise FixtureUnavailable(
-            "container runtime (docker/podman) required but not found"
-        )
     token_server = _TokenServer((_HOST, 0), _TokenHandler)
+    graph_server = ThreadingHTTPServer((_HOST, find_free_port()), _GraphHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
-    proxy_port = find_free_port()
-    api_port = find_free_port()
-    container: ManagedContainer | None = None
-    with tempfile.TemporaryDirectory(prefix="tenzir-ms-graph-") as temp:
-        temp_dir = Path(temp)
-        config_dir = temp_dir / "config"
-        config_dir.mkdir()
-        cert_path = temp_dir / "dev-proxy-ca.crt"
-        _write_config(config_dir)
-        token_thread.start()
-        try:
-            container = _start_dev_proxy(
-                runtime,
-                proxy_port=proxy_port,
-                api_port=api_port,
-                config_dir=config_dir,
-            )
-            _wait_for_dev_proxy(api_port)
-            _download_root_certificate(api_port, cert_path)
-            env = {
-                "HTTPS_PROXY": f"http://127.0.0.1:{proxy_port}",
-                "https_proxy": f"http://127.0.0.1:{proxy_port}",
-                "NO_PROXY": "127.0.0.1,localhost",
-                "no_proxy": "127.0.0.1,localhost",
-                "MS_GRAPH_FIXTURE_TLS_CACERT": str(cert_path),
-                "MS_GRAPH_FIXTURE_AUTHORITY": (
-                    f"http://{_HOST}:{token_server.server_port}"
-                ),
-                "MS_GRAPH_FIXTURE_TENANT_ID": _TENANT_ID,
-                "MS_GRAPH_FIXTURE_CLIENT_ID": _CLIENT_ID,
-                "MS_GRAPH_FIXTURE_CLIENT_SECRET": _CLIENT_SECRET,
-            }
-            env.update(_plugin_env())
-            yield env
-        finally:
-            token_server.shutdown()
-            token_thread.join(timeout=2)
-            if container is not None:
-                _stop_dev_proxy(container)
+    graph_thread = threading.Thread(target=graph_server.serve_forever, daemon=True)
+    token_thread.start()
+    graph_thread.start()
+    try:
+        base_url = f"http://{_HOST}:{graph_server.server_port}"
+        env = {
+            "MS_GRAPH_FIXTURE_BASE_URL_V1": f"{base_url}/v1.0/",
+            "MS_GRAPH_FIXTURE_BASE_URL_BETA": f"{base_url}/beta/",
+            "MS_GRAPH_FIXTURE_AUTHORITY": f"http://{_HOST}:{token_server.server_port}",
+            "MS_GRAPH_FIXTURE_TENANT_ID": _TENANT_ID,
+            "MS_GRAPH_FIXTURE_CLIENT_ID": _CLIENT_ID,
+            "MS_GRAPH_FIXTURE_CLIENT_SECRET": _CLIENT_SECRET,
+        }
+        env.update(_plugin_env())
+        yield env
+    finally:
+        token_server.shutdown()
+        graph_server.shutdown()
+        token_thread.join(timeout=2)
+        graph_thread.join(timeout=2)
