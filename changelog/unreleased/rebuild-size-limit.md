@@ -11,7 +11,8 @@ pr: 6155
 Rebuilds now avoid loading too much data into memory at once. Partitions store
 their approximate in-memory size in metadata, and the new
 `tenzir.rebuild.max-size` setting and `tenzir rebuild --max-size` option make
-rebuild admit only partitions that still fit into the current memory budget:
+rebuild admit only partitions whose estimated input and output buffers still
+fit into the current memory budget:
 
 ```sh
 tenzir rebuild --max-size=512MiB

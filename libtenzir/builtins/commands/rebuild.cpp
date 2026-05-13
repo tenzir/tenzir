@@ -259,6 +259,12 @@ auto estimate_approx_bytes(
   return partition.events * legacy_approx_bytes_per_event;
 }
 
+auto estimate_rebuild_memory_requirement(uint64_t approx_bytes) -> uint64_t {
+  // The transformer buffers both the input slices and the slices emitted by the
+  // rebatch pipeline, so the admission check must budget for both sides.
+  return saturating_add(approx_bytes, approx_bytes);
+}
+
 auto fits_size_limit(uint64_t current, uint64_t next, uint64_t limit) -> bool {
   if (limit == 0) {
     return true;
@@ -553,7 +559,7 @@ struct rebuilder_state {
     }
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
-    auto current_run_approx_bytes = uint64_t{0};
+    auto current_run_memory_requirement = uint64_t{0};
     auto skipped_partitions = size_t{0};
     // Take the first partition and collect as many of the same
     // type as possible to create new paritions. The approach used may
@@ -570,27 +576,31 @@ struct rebuilder_state {
             and current_run_events < max_partition_size) {
           const auto approx_bytes
             = estimate_approx_bytes(run->schema_size_estimates, partition);
-          if (not fits_size_limit(current_run_approx_bytes, approx_bytes,
-                                  run->options.max_size)) {
+          const auto memory_requirement
+            = estimate_rebuild_memory_requirement(approx_bytes);
+          if (not fits_size_limit(current_run_memory_requirement,
+                                  memory_requirement, run->options.max_size)) {
             if (current_run_partitions.empty()) {
-              TENZIR_WARN(
-                "{} skips partition {} because its estimated in-memory size "
-                "of {} bytes exceeds the rebuild size limit of {} bytes",
-                *self, partition.uuid, approx_bytes, run->options.max_size);
+              TENZIR_WARN("{} skips partition {} because its estimated memory "
+                          "requirement "
+                          "of {} bytes exceeds the rebuild size limit of {} "
+                          "bytes",
+                          *self, partition.uuid, memory_requirement,
+                          run->options.max_size);
               ++skipped_partitions;
               return true;
             }
             return false;
           }
           current_run_events += partition.events;
-          current_run_approx_bytes
-            = saturating_add(current_run_approx_bytes, approx_bytes);
+          current_run_memory_requirement = saturating_add(
+            current_run_memory_requirement, memory_requirement);
           current_run_partitions.push_back(partition);
           TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
                        "{} events and {} bytes (total: {} events, {} bytes)",
                        *self, partition.uuid, partition.version,
-                       partition.schema, partition.events, approx_bytes,
-                       current_run_events, current_run_approx_bytes);
+                       partition.schema, partition.events, memory_requirement,
+                       current_run_events, current_run_memory_requirement);
           return true;
         }
         return false;
