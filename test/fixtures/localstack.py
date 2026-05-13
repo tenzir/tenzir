@@ -57,6 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Iterator
 
 from tenzir_test import fixture
+from tenzir_test.fixtures import FixtureUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +222,7 @@ def _aws_client(endpoint: str, service: str, region: str) -> Any:
     try:
         import boto3
     except ModuleNotFoundError as e:
-        raise RuntimeError(
+        raise FixtureUnavailable(
             "The localstack fixture requires boto3. Run tenzir-test from a uv "
             "environment that includes boto3, for example with "
             "`uvx --with boto3 tenzir-test ...`."
@@ -436,7 +437,7 @@ def run() -> Iterator[dict[str, str]]:
     """Start LocalStack and yield environment variables for AWS access."""
     runtime = _find_container_runtime()
     if runtime is None:
-        raise RuntimeError(
+        raise FixtureUnavailable(
             "A container runtime (podman or docker) is required for LocalStack "
             "fixture but none was found. Please install podman or docker and "
             "ensure it's in your PATH."

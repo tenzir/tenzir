@@ -1,3 +1,6 @@
 suite: localstack-to-s3
 fixtures: [localstack]
 timeout: 120
+skip:
+  on:
+    - fixture-unavailable
