@@ -1,0 +1,5 @@
+suite:
+  name: localstack-from-sqs
+  mode: sequential
+fixtures: [localstack]
+timeout: 120

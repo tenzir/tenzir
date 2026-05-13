@@ -16,6 +16,7 @@ from . import google_secops  # noqa: F401
 from . import http  # noqa: F401
 from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
+from . import localstack  # noqa: F401
 from . import mysql  # noqa: F401
 from . import nats  # noqa: F401
 from . import s3  # noqa: F401
@@ -48,6 +49,7 @@ __all__ = [
     "http_server",
     "kafka",
     "local_files",
+    "localstack",
     "mock_s3",
     "mysql",
     "nats",

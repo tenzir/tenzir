@@ -18,6 +18,8 @@ Usage overview:
 - **LOCALSTACK_SQS_QUEUE_ROLE_URL** – Full URL of the role assumption queue.
 - **LOCALSTACK_SQS_QUEUE_SAVE** – SQS queue name for save_sqs tests.
 - **LOCALSTACK_SQS_QUEUE_SAVE_URL** – Full URL of the save_sqs queue.
+- **LOCALSTACK_SQS_QUEUE_NO_DELETE** – SQS queue name for from_sqs delete=false tests.
+- **LOCALSTACK_SQS_QUEUE_NO_DELETE_URL** – Full URL of the from_sqs delete=false queue.
 - **LOCALSTACK_ROLE_ARN** – ARN of a test IAM role for assume role tests.
 - **LOCALSTACK_EXTERNAL_ID** – External ID for assume role tests.
 - **LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE** – SQS queue name for web identity token_file tests.
@@ -44,7 +46,11 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Iterator
 
@@ -173,9 +179,6 @@ def _stop_localstack(runtime: str, container_id: str) -> None:
 
 def _wait_for_localstack(endpoint: str, timeout: float) -> bool:
     """Wait for LocalStack to become healthy."""
-    import urllib.request
-    import urllib.error
-
     health_url = f"{endpoint}/_localstack/health"
     deadline = time.time() + timeout
 
@@ -212,52 +215,131 @@ def _wait_for_localstack(endpoint: str, timeout: float) -> bool:
     return False
 
 
-def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
-    """Create test resources, return dict of resource identifiers."""
+def _xml_text(root: ET.Element, name: str) -> str:
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] == name and element.text:
+            return element.text
+    raise RuntimeError(f"LocalStack response did not contain XML element {name}")
+
+
+def _aws_query(endpoint: str, service: str, params: dict[str, str]) -> ET.Element:
+    body = urllib.parse.urlencode(params).encode()
+    request = urllib.request.Request(
+        endpoint,
+        data=body,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+            "Host": urllib.parse.urlparse(endpoint).netloc,
+            "X-Amz-Date": "19700101T000000Z",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
+        payload = response.read()
     try:
-        import boto3
-        from botocore.config import Config
-    except ImportError as e:
+        return ET.fromstring(payload)
+    except ET.ParseError as e:
         raise RuntimeError(
-            "boto3 is required for LocalStack fixture. Install with: pip install boto3"
+            f"LocalStack {service} response was not valid XML: {payload!r}"
         ) from e
 
-    config = Config(
-        region_name=region,
-        signature_version="v4",
-        retries={"max_attempts": 3, "mode": "standard"},
+
+def _s3_create_bucket(endpoint: str, bucket: str) -> None:
+    request = urllib.request.Request(f"{endpoint}/{bucket}", method="PUT")
+    with urllib.request.urlopen(request, timeout=10):
+        pass
+
+
+def _s3_put_object(endpoint: str, bucket: str, key: str, body: bytes) -> None:
+    request = urllib.request.Request(
+        f"{endpoint}/{bucket}/{urllib.parse.quote(key)}",
+        data=body,
+        headers={"Content-Type": "application/octet-stream"},
+        method="PUT",
+    )
+    with urllib.request.urlopen(request, timeout=10):
+        pass
+
+
+def _sqs_create_queue(
+    endpoint: str,
+    name: str,
+    *,
+    attributes: dict[str, str] | None = None,
+) -> str:
+    params = {
+        "Action": "CreateQueue",
+        "Version": "2012-11-05",
+        "QueueName": name,
+    }
+    for index, (key, value) in enumerate((attributes or {}).items(), start=1):
+        params[f"Attribute.{index}.Name"] = key
+        params[f"Attribute.{index}.Value"] = value
+    root = _aws_query(endpoint, "sqs", params)
+    return _xml_text(root, "QueueUrl")
+
+
+def _sqs_send_message(endpoint: str, queue_url: str, body: str) -> None:
+    _aws_query(
+        endpoint,
+        "sqs",
+        {
+            "Action": "SendMessage",
+            "Version": "2012-11-05",
+            "QueueUrl": queue_url,
+            "MessageBody": body,
+        },
     )
 
+
+def _iam_create_role(
+    endpoint: str,
+    role_name: str,
+    assume_role_policy: str,
+    description: str,
+) -> str:
+    root = _aws_query(
+        endpoint,
+        "iam",
+        {
+            "Action": "CreateRole",
+            "Version": "2010-05-08",
+            "RoleName": role_name,
+            "AssumeRolePolicyDocument": assume_role_policy,
+            "Description": description,
+        },
+    )
+    return _xml_text(root, "Arn")
+
+
+def _iam_attach_role_policy(endpoint: str, role_name: str, policy_arn: str) -> None:
+    _aws_query(
+        endpoint,
+        "iam",
+        {
+            "Action": "AttachRolePolicy",
+            "Version": "2010-05-08",
+            "RoleName": role_name,
+            "PolicyArn": policy_arn,
+        },
+    )
+
+
+def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
+    """Create test resources, return dict of resource identifiers."""
     # Generate unique resource names
     suffix = uuid.uuid4().hex[:8]
     bucket_name = f"tenzir-test-bucket-{suffix}"
     role_name = f"tenzir-test-role-{suffix}"
 
     # Create S3 bucket
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=endpoint,
-        aws_access_key_id=TEST_ACCESS_KEY,
-        aws_secret_access_key=TEST_SECRET_KEY,
-        config=config,
-    )
     logger.info("Creating S3 bucket: %s", bucket_name)
-    # LocalStack doesn't enforce location constraints strictly
-    s3.create_bucket(Bucket=bucket_name)
+    _s3_create_bucket(endpoint, bucket_name)
 
     # Upload a test file
     test_content = b'{"message": "Hello from LocalStack test!"}\n'
-    s3.put_object(Bucket=bucket_name, Key="test.json", Body=test_content)
+    _s3_put_object(endpoint, bucket_name, "test.json", test_content)
     logger.info("Uploaded test file to s3://%s/test.json", bucket_name)
-
-    # Create SQS client
-    sqs = boto3.client(
-        "sqs",
-        endpoint_url=endpoint,
-        aws_access_key_id=TEST_ACCESS_KEY,
-        aws_secret_access_key=TEST_SECRET_KEY,
-        config=config,
-    )
 
     # Create separate queues for each test scenario to avoid message consumption
     # conflicts (load_sqs consumes all messages regardless of head limit).
@@ -270,6 +352,7 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     queue_basic_name = f"tenzir-test-queue-basic-{suffix}"
     queue_role_name = f"tenzir-test-queue-role-{suffix}"
     queue_save_name = f"tenzir-test-queue-save-{suffix}"
+    queue_no_delete_name = f"tenzir-test-queue-no-delete-{suffix}"
     queue_wi_file_name = f"tenzir-test-queue-wi-file-{suffix}"
     queue_wi_token_name = f"tenzir-test-queue-wi-token-{suffix}"
 
@@ -282,23 +365,36 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         (queue_wi_token_name, "wi_token"),
     ]:
         logger.info("Creating SQS queue: %s", name)
-        response = sqs.create_queue(QueueName=name)
-        queue_url = response["QueueUrl"]
+        queue_url = _sqs_create_queue(endpoint, name)
         logger.info("Created SQS queue: %s", queue_url)
         queues[key] = {"name": name, "url": queue_url}
         # Send test messages to this queue
         for msg in test_messages:
-            sqs.send_message(QueueUrl=queue_url, MessageBody=msg)
+            _sqs_send_message(endpoint, queue_url, msg)
         logger.info("Sent %d test messages to queue %s", len(test_messages), name)
-
-    # Create IAM role for assume role tests
-    iam = boto3.client(
-        "iam",
-        endpoint_url=endpoint,
-        aws_access_key_id=TEST_ACCESS_KEY,
-        aws_secret_access_key=TEST_SECRET_KEY,
-        config=config,
+    logger.info("Creating SQS queue: %s", queue_no_delete_name)
+    queue_no_delete_url = _sqs_create_queue(
+        endpoint,
+        queue_no_delete_name,
+        attributes={"VisibilityTimeout": "30"},
     )
+    logger.info("Created SQS queue: %s", queue_no_delete_url)
+    queues["no_delete"] = {
+        "name": queue_no_delete_name,
+        "url": queue_no_delete_url,
+    }
+    _sqs_send_message(
+        endpoint,
+        queue_no_delete_url,
+        '{"id": 100, "message": "No delete test message"}',
+    )
+    _sqs_send_message(
+        endpoint,
+        queue_no_delete_url,
+        '{"id": 101, "message": "No delete test message 2"}',
+    )
+    logger.info("Sent no-delete test message to queue %s", queue_no_delete_name)
+
     assume_role_policy = json.dumps(
         {
             "Version": "2012-10-17",
@@ -313,22 +409,24 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         }
     )
     logger.info("Creating IAM role: %s", role_name)
-    response = iam.create_role(
-        RoleName=role_name,
-        AssumeRolePolicyDocument=assume_role_policy,
-        Description="Test role for Tenzir LocalStack tests",
+    role_arn = _iam_create_role(
+        endpoint,
+        role_name,
+        assume_role_policy,
+        "Test role for Tenzir LocalStack tests",
     )
-    role_arn = response["Role"]["Arn"]
     logger.info("Created IAM role: %s", role_arn)
 
     # Attach policies to the role (full access for testing)
-    iam.attach_role_policy(
-        RoleName=role_name,
-        PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess",
+    _iam_attach_role_policy(
+        endpoint,
+        role_name,
+        "arn:aws:iam::aws:policy/AmazonS3FullAccess",
     )
-    iam.attach_role_policy(
-        RoleName=role_name,
-        PolicyArn="arn:aws:iam::aws:policy/AmazonSQSFullAccess",
+    _iam_attach_role_policy(
+        endpoint,
+        role_name,
+        "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
     )
     logger.info("Attached S3 and SQS policies to role")
 
@@ -351,22 +449,24 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         }
     )
     logger.info("Creating web identity IAM role: %s", web_identity_role_name)
-    response = iam.create_role(
-        RoleName=web_identity_role_name,
-        AssumeRolePolicyDocument=web_identity_assume_role_policy,
-        Description="Test role for Tenzir LocalStack web identity tests",
+    web_identity_role_arn = _iam_create_role(
+        endpoint,
+        web_identity_role_name,
+        web_identity_assume_role_policy,
+        "Test role for Tenzir LocalStack web identity tests",
     )
-    web_identity_role_arn = response["Role"]["Arn"]
     logger.info("Created web identity IAM role: %s", web_identity_role_arn)
 
     # Attach policies to the web identity role
-    iam.attach_role_policy(
-        RoleName=web_identity_role_name,
-        PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess",
+    _iam_attach_role_policy(
+        endpoint,
+        web_identity_role_name,
+        "arn:aws:iam::aws:policy/AmazonS3FullAccess",
     )
-    iam.attach_role_policy(
-        RoleName=web_identity_role_name,
-        PolicyArn="arn:aws:iam::aws:policy/AmazonSQSFullAccess",
+    _iam_attach_role_policy(
+        endpoint,
+        web_identity_role_name,
+        "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
     )
     logger.info("Attached S3 and SQS policies to web identity role")
 
@@ -451,6 +551,10 @@ def run() -> Iterator[dict[str, str]]:
             "LOCALSTACK_SQS_QUEUE_ROLE_URL": resources["queues"]["role"]["url"],
             "LOCALSTACK_SQS_QUEUE_SAVE": resources["queues"]["save"]["name"],
             "LOCALSTACK_SQS_QUEUE_SAVE_URL": resources["queues"]["save"]["url"],
+            "LOCALSTACK_SQS_QUEUE_NO_DELETE": resources["queues"]["no_delete"]["name"],
+            "LOCALSTACK_SQS_QUEUE_NO_DELETE_URL": resources["queues"]["no_delete"][
+                "url"
+            ],
             "LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE": resources["queues"]["wi_file"][
                 "name"
             ],

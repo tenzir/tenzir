@@ -1,0 +1,13 @@
+// Test that the message received with delete=false becomes visible again.
+from_sqs env("LOCALSTACK_SQS_QUEUE_NO_DELETE"),
+         batch_size=2,
+         poll_time=1s,
+         aws_iam={
+           access_key_id: "test",
+           secret_access_key: "test",
+           region: "us-east-1"
+         }
+head 2
+this = message.parse_json()
+select id, message
+sort id
