@@ -9,29 +9,44 @@ pre-push:
   commands:
     ruff-format:
       env:
-        RUFF_VERSION: &ruff_version "0.15.6"
+        RUFF_VERSION: &ruff_version "0.15.12"
+      # {push_files} returns every tracked file when the branch is new
+      # (remote sha is all zeros); compute the actual branch diff instead.
+      files: &branch_files 'git diff --name-only --diff-filter=ACMR "$(git merge-base origin/main HEAD)" HEAD'
       glob: "**/*.py"
-      run: uvx ruff==$RUFF_VERSION format --check --diff {push_files}
+      exclude:
+        - "^scripts/splunk-search\\.py$"
+      run: uvx ruff==$RUFF_VERSION format --check --diff {files}
     clang-format:
       env:
         CLANG_FORMAT_VERSION: &clang_format_version "21.1.8"
-      glob: "**/*.{cpp,cpp.in,hpp,hpp.in}"
-      run: uvx clang-format@$CLANG_FORMAT_VERSION --dry-run --Werror {push_files}
+      files: *branch_files
+      # .cpp.in/.hpp.in are CMake templates with @VAR@ placeholders that
+      # clang-format mangles into "@VAR @"; skip them.
+      glob: "**/*.{cpp,hpp}"
+      exclude:
+        - "^libtenzir/aux/"
+      run: uvx clang-format@$CLANG_FORMAT_VERSION --dry-run --Werror {files}
     cmake-format:
       env:
         CMAKE_FORMAT_VERSION: &cmake_format_version "0.6.13"
+      files: *branch_files
       glob: "**/{CMakeLists.txt,*.cmake,*.cmake.in}"
-      run: uvx --from cmakelang==$CMAKE_FORMAT_VERSION cmake-format --check {push_files}
+      exclude:
+        - "^libtenzir/aux/"
+      run: uvx --from cmakelang==$CMAKE_FORMAT_VERSION cmake-format --check {files}
     shfmt:
       env:
         SHFMT_PY_VERSION: &shfmt_py_version "3.12.0.2"
+      files: *branch_files
       glob: "**/*.{sh,bash}"
-      run: uvx --from shfmt-py==$SHFMT_PY_VERSION shfmt -d {push_files}
+      run: uvx --from shfmt-py==$SHFMT_PY_VERSION shfmt -d {files}
     yamllint:
       env:
         YAMLLINT_VERSION: &yamllint_version "1.37.1"
+      files: *branch_files
       glob: "**/*.{yaml,yml}"
-      run: uvx yamllint==$YAMLLINT_VERSION {push_files}
+      run: uvx yamllint==$YAMLLINT_VERSION {files}
 
 # This hook is for automated local fixes with pinned non-Nix tools.
 # YAML remains check-only here; CI/treefmt is the broader style authority.
@@ -42,16 +57,22 @@ fix:
       env:
         RUFF_VERSION: *ruff_version
       glob: "**/*.py"
+      exclude:
+        - "^scripts/splunk-search\\.py$"
       run: uvx ruff==$RUFF_VERSION format {files}
     clang-format:
       env:
         CLANG_FORMAT_VERSION: *clang_format_version
-      glob: "**/*.{cpp,cpp.in,hpp,hpp.in}"
+      glob: "**/*.{cpp,hpp}"
+      exclude:
+        - "^libtenzir/aux/"
       run: uvx clang-format@$CLANG_FORMAT_VERSION -i {files}
     cmake-format:
       env:
         CMAKE_FORMAT_VERSION: *cmake_format_version
       glob: "**/{CMakeLists.txt,*.cmake,*.cmake.in}"
+      exclude:
+        - "^libtenzir/aux/"
       run: uvx --from cmakelang==$CMAKE_FORMAT_VERSION cmake-format -i {files}
     shfmt:
       env:
