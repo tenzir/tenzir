@@ -32,6 +32,10 @@ using namespace std::chrono_literals;
 
 constexpr auto default_authority = "https://login.microsoftonline.com";
 
+/// Fallback token lifetime for Azure token responses without a usable
+/// `expires_in` field.
+constexpr auto default_token_lifetime = 50min;
+
 /// Helper to assign a secret from a record field.
 auto assign_secret(located<record> const& config, std::string_view key,
                    Option<secret>& x, diagnostic_handler& dh)
@@ -106,7 +110,7 @@ auto token_endpoint(ResolvedAzureAuth const& auth) -> std::string {
 auto parse_expires_in(record const& response) -> std::chrono::seconds {
   auto it = response.find("expires_in");
   if (it == response.end()) {
-    return 50min;
+    return default_token_lifetime;
   }
   auto seconds = uint64_t{};
   if (auto* value = try_as<uint64_t>(it->second)) {
@@ -116,7 +120,7 @@ auto parse_expires_in(record const& response) -> std::chrono::seconds {
   } else if (auto* value = try_as<double>(it->second); value and *value > 0) {
     seconds = static_cast<uint64_t>(*value);
   } else {
-    return 50min;
+    return default_token_lifetime;
   }
   return std::chrono::seconds{seconds};
 }
