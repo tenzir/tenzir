@@ -16,9 +16,8 @@
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
-#include <folly/io/async/EventBase.h>
-
 #include <boost/url/parse.hpp>
+#include <folly/io/async/EventBase.h>
 
 #include <algorithm>
 #include <array>

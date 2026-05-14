@@ -1,0 +1,6 @@
+error: invalid `auth.authority` URL: need more
+ --> tests/operators/from_microsoft_graph/error_authority.tql:9:22
+  |
+9 | from_microsoft_graph "users",
+  |                      ^^^^^^^ 
+  |
