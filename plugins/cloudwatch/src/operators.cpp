@@ -28,7 +28,6 @@
 #include <aws/logs/model/OutputLogEvent.h>
 #include <aws/logs/model/PutLogEventsRequest.h>
 #include <aws/logs/model/StartLiveTailRequest.h>
-#include <proxygen/lib/http/HTTPMethod.h>
 
 #include <algorithm>
 #include <chrono>
