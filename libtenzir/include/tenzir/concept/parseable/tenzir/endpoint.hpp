@@ -13,7 +13,6 @@
 #include "tenzir/concept/parseable/string/char.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
-#include "tenzir/concept/parseable/tenzir/port.hpp"
 #include "tenzir/endpoint.hpp"
 
 #include <optional>
@@ -34,7 +33,7 @@ struct EndpointParser : parser_base<EndpointParser> {
   static auto make() {
     using namespace parsers;
     using namespace parser_literals;
-    auto endpoint_port = parsers::port | u16.then([](port::number_type number) {
+    auto endpoint_port = u16.then([](port::number_type number) {
       return tenzir::port{number};
     });
     auto host_char = alnum | ch<'-'> | ch<'_'> | ch<'.'>;

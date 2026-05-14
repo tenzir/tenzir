@@ -37,9 +37,7 @@ WITH_FIXTURE(fixture) {
     CHECK(parsers::endpoint(":5158", x));
     CHECK_EQUAL(x.host, "");
     CHECK_EQUAL(*x.port, 5158);
-    CHECK(parsers::endpoint(":12345/tcp", x));
-    CHECK_EQUAL(x.host, "");
-    CHECK_EQUAL(*x.port, (tenzir::port{12345, port_type::tcp}));
+    CHECK(not parsers::endpoint(":12345/tcp", x));
   }
 
   TEST("parseable - host and port") {
@@ -51,10 +49,7 @@ WITH_FIXTURE(fixture) {
     CHECK_EQUAL(x.host, "10.0.0.1");
     CHECK_EQUAL(*x.port, 80);
     CHECK_EQUAL(x.port->type(), port_type::unknown);
-    CHECK(parsers::endpoint("10.0.0.1:9995/udp", x));
-    CHECK_EQUAL(x.host, "10.0.0.1");
-    CHECK_EQUAL(x.port->number(), 9995);
-    CHECK_EQUAL(x.port->type(), port_type::udp);
+    CHECK(not parsers::endpoint("10.0.0.1:9995/udp", x));
   }
 
   TEST("parseable - IPv6") {
@@ -70,9 +65,7 @@ WITH_FIXTURE(fixture) {
     CHECK(parsers::endpoint("::1:443", x));
     CHECK_EQUAL(x.host, "::1:443");
     CHECK(not x.port);
-    CHECK(parsers::endpoint("[2001:db8::1]:443/tcp", x));
-    CHECK_EQUAL(x.host, "2001:db8::1");
-    CHECK_EQUAL(*x.port, (tenzir::port{443, port_type::tcp}));
+    CHECK(not parsers::endpoint("[2001:db8::1]:443/tcp", x));
     CHECK(parsers::endpoint("[::ffff:192.0.2.1]:443", x));
     CHECK_EQUAL(x.host, "::ffff:192.0.2.1");
     CHECK_EQUAL(*x.port, 443);
