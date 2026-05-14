@@ -12,6 +12,7 @@
 #include "tenzir/component_registry.hpp"
 #include "tenzir/endpoint.hpp"
 #include "tenzir/http_api.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <caf/actor.hpp>
@@ -93,7 +94,7 @@ struct node_state {
   bool tearing_down = false;
 
   /// Listening endpoint.
-  std::optional<tenzir::endpoint> endpoint;
+  Option<tenzir::Endpoint> endpoint;
 
   /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
   /// node shutdown.

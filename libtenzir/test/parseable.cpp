@@ -128,6 +128,27 @@ TEST("parseable action") {
   CHECK_EQUAL(x, unbox(to<ip>("10.0.0.1")));
 }
 
+TEST("parseable action - tuple unpack") {
+  auto p
+    = (parsers::i32 >> ','_p >> parsers::i32).then([](int32_t lhs, int32_t rhs) {
+        return lhs + rhs;
+      });
+  auto result = int32_t{};
+  CHECK(p("1,2", result));
+  CHECK_EQUAL(result, 3);
+}
+
+TEST("raw parser") {
+  auto p = raw(parsers::i32);
+  auto input = "123abc"s;
+  auto first = input.begin();
+  auto const last = input.end();
+  auto result = std::string{};
+  CHECK(p(first, last, result));
+  CHECK_EQUAL(result, "123");
+  CHECK_EQUAL((std::string{first, last}), "abc");
+}
+
 TEST("end of input") {
   auto input = "foo"s;
   CHECK(not parsers::eoi(input));

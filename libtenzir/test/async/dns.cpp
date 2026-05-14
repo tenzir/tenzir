@@ -10,6 +10,7 @@
 
 #include "tenzir/async/notify.hpp"
 #include "tenzir/atomic.hpp"
+#include "tenzir/concept/parseable/tenzir/endpoint.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <folly/CancellationToken.h>
@@ -128,11 +129,10 @@ TEST("forward dns resolves remote socket addresses") {
         }},
       }};
     });
-  auto endpoint
-    = parse_socket_address("dns.test:9000", SocketAddressKind::remote);
-  require(static_cast<bool>(endpoint));
+  auto endpoint = tenzir::Endpoint{};
+  require(parsers::endpoint("dns.test:9000", endpoint));
   auto result = folly::coro::blockingWait(
-    resolver.resolve_socket_address(std::move(*endpoint)));
+    resolver.resolve_socket_address(std::move(endpoint)));
   require(not result.is_err());
   check_eq(result.unwrap().describe(), std::string{"127.0.0.42:9000"});
 }
@@ -160,11 +160,10 @@ TEST("forward dns prefers ipv4 answer over preceding ipv6 answer") {
         },
       }};
     });
-  auto endpoint
-    = parse_socket_address("dual.test:1234", SocketAddressKind::remote);
-  require(static_cast<bool>(endpoint));
+  auto endpoint = tenzir::Endpoint{};
+  require(parsers::endpoint("dual.test:1234", endpoint));
   auto result = folly::coro::blockingWait(
-    resolver.resolve_socket_address(std::move(*endpoint)));
+    resolver.resolve_socket_address(std::move(endpoint)));
   require(not result.is_err());
   check_eq(result.unwrap().describe(), std::string{"127.0.0.7:1234"});
 }
@@ -185,29 +184,29 @@ TEST("forward dns falls back to ipv6 answer when no ipv4 is present") {
         }},
       }};
     });
-  auto endpoint
-    = parse_socket_address("v6only.test:5555", SocketAddressKind::remote);
-  require(static_cast<bool>(endpoint));
+  auto endpoint = tenzir::Endpoint{};
+  require(parsers::endpoint("v6only.test:5555", endpoint));
   auto result = folly::coro::blockingWait(
-    resolver.resolve_socket_address(std::move(*endpoint)));
+    resolver.resolve_socket_address(std::move(endpoint)));
   require(not result.is_err());
   check_eq(result.unwrap().describe(), std::string{"[::1]:5555"});
 }
 
 TEST("forward dns resolves bind socket addresses with empty host") {
   auto resolver = ForwardDnsResolver{};
-  auto endpoint = parse_socket_address(":4242", SocketAddressKind::bind);
-  require(static_cast<bool>(endpoint));
+  auto endpoint = tenzir::Endpoint{};
+  require(parsers::endpoint(":4242", endpoint));
   auto result = folly::coro::blockingWait(
-    resolver.resolve_bind_address(std::move(*endpoint)));
+    resolver.resolve_bind_address(std::move(endpoint)));
   require(not result.is_err());
   check(result.unwrap().getIPAddress().isZero());
   check_eq(result.unwrap().getPort(), uint16_t{4242});
 }
 
-TEST("forward dns socket address helper rejects malformed endpoints") {
-  auto result = parse_socket_address("missing-port", SocketAddressKind::remote);
-  check(not result);
+TEST("forward dns remote socket addresses require a port") {
+  auto endpoint = tenzir::Endpoint{};
+  require(parsers::endpoint("missing-port", endpoint));
+  check(not endpoint.port);
 }
 
 TEST("reverse dns resolves loopback addresses without network access") {

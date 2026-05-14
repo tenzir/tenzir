@@ -119,7 +119,7 @@ public:
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit FromTcpConnector(FromTcpArgs args) : args_{std::move(args)} {
-    auto ep = to<struct endpoint>(args_.endpoint.inner);
+    auto ep = to<Endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     TENZIR_ASSERT(not ep->host.empty());
@@ -375,7 +375,7 @@ public:
                                    {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
-      auto ep = to<struct endpoint>(ep_str.inner);
+      auto ep = to<Endpoint>(ep_str.inner);
       auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
       if (not ep) {
         diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);

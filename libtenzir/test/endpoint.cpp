@@ -17,7 +17,7 @@ using namespace std::string_literals;
 namespace {
 
 struct fixture {
-  endpoint x;
+  Endpoint x;
 };
 
 } // namespace
@@ -26,32 +26,98 @@ WITH_FIXTURE(fixture) {
   TEST("parseable - host only") {
     CHECK(parsers::endpoint("localhost", x));
     CHECK_EQUAL(x.host, "localhost");
-    CHECK_EQUAL(x.port, std::nullopt);
-    MESSAGE("keep defaults");
-    x.port = 42;
+    CHECK(not x.port);
     CHECK(parsers::endpoint("foo-bar_baz.test", x));
     CHECK_EQUAL(x.host, "foo-bar_baz.test");
-    CHECK_EQUAL(*x.port, 42);
+    CHECK(not x.port);
   }
 
   TEST("parseable - port only") {
     x.host = "foo";
     CHECK(parsers::endpoint(":5158", x));
-    CHECK_EQUAL(x.host, "foo");
+    CHECK_EQUAL(x.host, "");
     CHECK_EQUAL(*x.port, 5158);
-    CHECK(parsers::endpoint(":12345/tcp", x));
-    CHECK_EQUAL(x.host, "foo");
-    CHECK_EQUAL(*x.port, (tenzir::port{12345, port_type::tcp}));
+    CHECK(not parsers::endpoint(":12345/tcp", x));
   }
 
   TEST("parseable - host and port") {
+    CHECK(parsers::endpoint("localhost:6553", x));
+    CHECK_EQUAL(x.host, "localhost");
+    CHECK_EQUAL(*x.port, 6553);
+    CHECK_EQUAL(x.port->type(), port_type::unknown);
     CHECK(parsers::endpoint("10.0.0.1:80", x));
     CHECK_EQUAL(x.host, "10.0.0.1");
     CHECK_EQUAL(*x.port, 80);
     CHECK_EQUAL(x.port->type(), port_type::unknown);
-    CHECK(parsers::endpoint("10.0.0.1:9995/udp", x));
-    CHECK_EQUAL(x.host, "10.0.0.1");
-    CHECK_EQUAL(x.port->number(), 9995);
-    CHECK_EQUAL(x.port->type(), port_type::udp);
+    CHECK(not parsers::endpoint("10.0.0.1:9995/udp", x));
+  }
+
+  TEST("parseable - IPv6") {
+    CHECK(parsers::endpoint("::1", x));
+    CHECK_EQUAL(x.host, "::1");
+    CHECK(not x.port);
+    CHECK(parsers::endpoint("[::1]", x));
+    CHECK_EQUAL(x.host, "::1");
+    CHECK(not x.port);
+    CHECK(parsers::endpoint("[::1]:443", x));
+    CHECK_EQUAL(x.host, "::1");
+    CHECK_EQUAL(*x.port, 443);
+    CHECK(parsers::endpoint("::1:443", x));
+    CHECK_EQUAL(x.host, "::1:443");
+    CHECK(not x.port);
+    CHECK(not parsers::endpoint("[2001:db8::1]:443/tcp", x));
+    CHECK(parsers::endpoint("[::ffff:192.0.2.1]:443", x));
+    CHECK_EQUAL(x.host, "::ffff:192.0.2.1");
+    CHECK_EQUAL(*x.port, 443);
+  }
+
+  TEST("parseable - malformed endpoints") {
+    CHECK(not parsers::endpoint("[::1"));
+    CHECK(not parsers::endpoint("[::1]443"));
+    CHECK(not parsers::endpoint("[localhost]:443"));
+    CHECK(not parsers::endpoint("localhost:"));
+    CHECK(not parsers::endpoint("localhost:http"));
+    CHECK(not parsers::endpoint("localhost:65536"));
+    CHECK(not parsers::endpoint("localhost:443/http"));
+    CHECK(not parsers::endpoint("bad host"));
+    CHECK(not parsers::endpoint("foo/bar"));
+    CHECK(not parsers::endpoint("foo/bar:443"));
+  }
+
+  TEST("parseable - incremental") {
+    auto input = "localhost:6553/rest"s;
+    auto first = input.begin();
+    auto last = input.end();
+    CHECK(parsers::endpoint(first, last, x));
+    CHECK_EQUAL(x.host, "localhost");
+    CHECK_EQUAL(*x.port, 6553);
+    CHECK_EQUAL((std::string{first, last}), "/rest");
+    input = "[::ffff:192.0.2.1]:443/rest"s;
+    first = input.begin();
+    last = input.end();
+    CHECK(parsers::endpoint(first, last, x));
+    CHECK_EQUAL(x.host, "::ffff:192.0.2.1");
+    CHECK_EQUAL(*x.port, 443);
+    CHECK_EQUAL((std::string{first, last}), "/rest");
+    input = "2001:db8::1/rest"s;
+    first = input.begin();
+    last = input.end();
+    CHECK(parsers::endpoint(first, last, x));
+    CHECK_EQUAL(x.host, "2001:db8::1");
+    CHECK(not x.port);
+    CHECK_EQUAL((std::string{first, last}), "/rest");
+    input = "[::1]443"s;
+    first = input.begin();
+    last = input.end();
+    CHECK(parsers::endpoint(first, last, x));
+    CHECK_EQUAL(x.host, "::1");
+    CHECK(not x.port);
+    CHECK_EQUAL((std::string{first, last}), "443");
+  }
+
+  TEST("printable - IPv6 with port") {
+    x.host = "::1";
+    x.port = 443;
+    CHECK_EQUAL(fmt::to_string(x), "[::1]:443");
   }
 }

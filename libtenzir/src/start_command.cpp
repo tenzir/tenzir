@@ -68,8 +68,8 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   -> caf::message {
   TENZIR_TRACE("{} {}", TENZIR_ARG(inv.options),
                TENZIR_ARG("args", inv.arguments.begin(), inv.arguments.end()));
-  auto node_endpoint = std::optional<endpoint>{};
-  auto listen_endpoint = std::optional<std::string>{};
+  auto node_endpoint = Option<Endpoint>{};
+  auto listen_endpoint = Option<std::string>{};
   const auto* endpoint_enabled = get_if<bool>(&inv.options, "tenzir.endpoint");
   if (endpoint_enabled) {
     if (*endpoint_enabled) {
@@ -135,7 +135,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     }
     node_endpoint->port.emplace(*bound_port, port_type::tcp);
     self->mail(atom::set_v, *node_endpoint).send(node);
-    listen_endpoint = fmt::format("{}:{}", node_endpoint->host, *bound_port);
+    listen_endpoint = fmt::format("{}", *node_endpoint);
     TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
                 *listen_endpoint);
     // A single line of output to publish out address for scripts.

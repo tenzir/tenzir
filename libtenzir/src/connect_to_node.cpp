@@ -57,15 +57,15 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
   return timeout;
 }
 
-auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint> {
-  endpoint node_endpoint;
+auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint> {
+  Endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
   if (not parsers::endpoint(endpoint_str, node_endpoint)) {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
   }
-  // Default to port 5158/tcp if none is set.
+  // Default to port 5158 if none is set.
   if (not node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
   }
@@ -147,15 +147,15 @@ std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
   return retry_delay;
 }
 
-caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
-  endpoint node_endpoint;
+caf::expected<Endpoint> get_node_endpoint(const caf::settings& opts) {
+  Endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
   if (not parsers::endpoint(endpoint_str, node_endpoint)) {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
   }
-  // Default to port 5158/tcp if none is set.
+  // Default to port 5158 if none is set.
   if (not node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
   }
@@ -172,7 +172,7 @@ caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
   return node_endpoint;
 }
 
-auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
+auto connect_to_node(caf::scoped_actor& self, Endpoint endpoint,
                      caf::timespan timeout,
                      std::optional<caf::timespan> retry_delay,
                      bool internal_connection) -> caf::expected<node_actor> {
@@ -180,7 +180,7 @@ auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
     connector, retry_delay, detail::get_deadline(timeout), internal_connection);
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
-  TENZIR_ASSERT(endpoint.port.has_value());
+  TENZIR_ASSERT(endpoint.port);
   self
     ->mail(atom::connect_v, connect_request{.port = endpoint.port->number(),
                                             .host = endpoint.host})

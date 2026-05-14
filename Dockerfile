@@ -304,6 +304,16 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
     DESTDIR=/plugin/from_sentinelone_data_lake cmake --install build-from_sentinelone_data_lake --component Runtime && \
     rm -rf build-from_sentinelone_data_lake
 
+FROM plugins-source AS microsoft_graph-plugin
+
+COPY contrib/tenzir-plugins/microsoft_graph ./contrib/tenzir-plugins/microsoft_graph
+RUN --mount=target=/ccache,type=cache,from=cache-context \
+    cmake -S contrib/tenzir-plugins/microsoft_graph -B build-microsoft_graph -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+    cmake --build build-microsoft_graph --parallel && \
+    DESTDIR=/plugin/microsoft_graph cmake --install build-microsoft_graph --component Runtime && \
+    rm -rf build-microsoft_graph
+
 FROM plugins-source AS pipeline-manager-plugin
 
 COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-manager
@@ -424,6 +434,7 @@ FROM tenzir-de AS tenzir-ce-untested
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=from_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/from_sentinelone_data_lake /
+COPY --from=microsoft_graph-plugin --chown=tenzir:tenzir /plugin/microsoft_graph /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /

@@ -153,7 +153,7 @@ public:
                      .max_in_flight = detail::narrow<size_t>(max_connections_),
                    }},
       connection_slots_{detail::narrow<size_t>(max_connections_)} {
-    auto ep = to<struct endpoint>(args_.endpoint.inner);
+    auto ep = to<Endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     bind_host_ = ep->host;
@@ -781,7 +781,7 @@ public:
                                    {{"peer", &AcceptTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
-      auto ep = to<struct endpoint>(ep_str.inner);
+      auto ep = to<Endpoint>(ep_str.inner);
       auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
       if (not ep) {
         diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);

@@ -396,7 +396,7 @@ struct node_actor_traits {
     // Retrieve the version of the process running the NODE.
     auto(atom::get, atom::version)->caf::result<record>,
     // Set the listening endpoint of the tenzir-node.
-    auto(atom::set, endpoint)->caf::result<void>,
+    auto(atom::set, Endpoint)->caf::result<void>,
     // Spawn a pipeline_shell subprocess.
     auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
     // Spawn an export bridge for querying stored data.

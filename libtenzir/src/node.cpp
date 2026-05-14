@@ -351,7 +351,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
 } // namespace
 
 auto node_state::create_pipeline_shell() -> void {
-  TENZIR_ASSERT(endpoint.has_value());
+  TENZIR_ASSERT(endpoint);
   static const auto tenzir_ctl
     = detail::objectpath()->parent_path().parent_path() / "bin" / "tenzir-ctl";
   auto proc = reproc::process{};
@@ -789,7 +789,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
             core_shutdown_sequence();
           });
     },
-    [self](atom::set, endpoint endpoint) {
+    [self](atom::set, Endpoint endpoint) {
       TENZIR_ASSERT(endpoint.port != 0);
       self->state().endpoint = std::move(endpoint);
       if (self->state().pipeline_subprocesses) {

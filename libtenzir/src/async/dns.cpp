@@ -32,7 +32,6 @@
 
 #include <algorithm>
 #include <ares.h>
-#include <charconv>
 #include <chrono>
 #include <cstring>
 #include <limits>
@@ -63,53 +62,6 @@ auto normalize_config(DnsResolverConfig config) -> DnsResolverConfig {
     = std::max(config.literal_ttl, std::chrono::seconds::zero());
   return config;
 }
-
-} // namespace
-
-auto parse_socket_address(std::string_view endpoint, SocketAddressKind kind)
-  -> Option<ParsedSocketAddress> {
-  auto host = std::string_view{};
-  auto port = std::string_view{};
-  if (endpoint.empty()) {
-    return None{};
-  }
-  if (endpoint.front() == '[') {
-    auto close = endpoint.find(']');
-    if (close == std::string_view::npos or close + 1 >= endpoint.size()
-        or endpoint[close + 1] != ':') {
-      return None{};
-    }
-    host = endpoint.substr(1, close - 1);
-    port = endpoint.substr(close + 2);
-  } else {
-    auto colon = endpoint.rfind(':');
-    if (colon == std::string_view::npos) {
-      return None{};
-    }
-    host = endpoint.substr(0, colon);
-    port = endpoint.substr(colon + 1);
-    if (host.find(':') != std::string_view::npos) {
-      return None{};
-    }
-  }
-  if (port.empty()) {
-    return None{};
-  }
-  if (kind == SocketAddressKind::remote and host.empty()) {
-    return None{};
-  }
-  auto parsed_port = uint64_t{};
-  auto [ptr, ec]
-    = std::from_chars(port.data(), port.data() + port.size(), parsed_port);
-  if (ec != std::errc{} or ptr != port.data() + port.size()
-      or parsed_port > std::numeric_limits<uint16_t>::max()) {
-    return None{};
-  }
-  return ParsedSocketAddress{std::string{host},
-                             static_cast<uint16_t>(parsed_port)};
-}
-
-namespace {
 
 auto to_folly_ip(ip address) -> folly::IPAddress {
   if (address.is_v4()) {
@@ -759,8 +711,10 @@ auto ForwardDnsResolver::startup_error() const -> Option<DnsError> {
   return make_dns_error(impl_->channel_.status());
 }
 
-auto ForwardDnsResolver::resolve_socket_address(ParsedSocketAddress endpoint)
+auto ForwardDnsResolver::resolve_socket_address(Endpoint endpoint)
   -> Task<Result<folly::SocketAddress, ResolveAddressError>> {
+  TENZIR_ASSERT(endpoint.port);
+  TENZIR_ASSERT(not endpoint.host.empty());
   auto resolved = co_await resolve(std::move(endpoint.host));
   auto* addresses = resolved->is_err()
                       ? nullptr
@@ -784,17 +738,19 @@ auto ForwardDnsResolver::resolve_socket_address(ParsedSocketAddress endpoint)
     }
     return addresses->answers.front();
   }();
-  auto address = folly::SocketAddress{};
-  address.setFromIpAddrPort(to_folly_ip(selected.address), endpoint.port);
-  co_return address;
+  auto result = folly::SocketAddress{};
+  result.setFromIpAddrPort(to_folly_ip(selected.address),
+                           endpoint.port->number());
+  co_return result;
 }
 
-auto ForwardDnsResolver::resolve_bind_address(ParsedSocketAddress endpoint)
+auto ForwardDnsResolver::resolve_bind_address(Endpoint endpoint)
   -> Task<Result<folly::SocketAddress, ResolveAddressError>> {
+  TENZIR_ASSERT(endpoint.port);
   if (endpoint.host.empty()) {
-    auto address = folly::SocketAddress{};
-    address.setFromLocalPort(endpoint.port);
-    co_return address;
+    auto result = folly::SocketAddress{};
+    result.setFromLocalPort(endpoint.port->number());
+    co_return result;
   }
   co_return co_await resolve_socket_address(std::move(endpoint));
 }

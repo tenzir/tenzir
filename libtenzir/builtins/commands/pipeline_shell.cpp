@@ -87,7 +87,7 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
     return caf::make_message(ec::silent);
   }
   auto self = caf::scoped_actor{sys};
-  auto endpoint = to<tenzir::endpoint>(inv.arguments[0]);
+  auto endpoint = to<tenzir::Endpoint>(inv.arguments[0]);
   TENZIR_ASSERT(endpoint);
   auto identifier
     = static_cast<std::uint32_t>(std::stoul(inv.arguments[1], nullptr));

@@ -1,0 +1,14 @@
+---
+error: true
+fixtures: [microsoft_graph]
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+from_microsoft_graph "beta/users",
+  auth={
+    tenant_id: "tenant",
+    client_id: "client",
+    client_secret: "secret",
+  }

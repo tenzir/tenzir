@@ -23,6 +23,7 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <filesystem>
 #include <mutex>

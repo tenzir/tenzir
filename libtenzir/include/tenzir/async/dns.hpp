@@ -11,6 +11,7 @@
 #include "tenzir/arc.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
+#include "tenzir/endpoint.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
@@ -97,32 +98,10 @@ using ForwardDnsResult = Result<ForwardDnsLookup, DnsError>;
 /// Result of a reverse DNS lookup.
 using ReverseDnsResult = Result<ReverseDnsLookup, DnsError>;
 
-/// The parsed host and port components of a socket address string.
-struct ParsedSocketAddress {
-  ParsedSocketAddress(std::string host, uint16_t port)
-    : host{std::move(host)}, port{port} {
-  }
-
-  std::string host;
-  uint16_t port;
-};
-
-/// The socket address form that a parser should accept.
-enum class SocketAddressKind {
-  remote,
-  bind,
-};
-
 /// Socket address parsing succeeded, but resolving the host failed.
 struct ResolveAddressError : variant<DnsError, DnsNotFound> {
   using variant<DnsError, DnsNotFound>::variant;
 };
-
-/// Parse a socket address string of the form `<host>:<port>`.
-///
-/// Bind addresses additionally accept `:<port>` when `kind` is `bind`.
-auto parse_socket_address(std::string_view endpoint, SocketAddressKind kind)
-  -> Option<ParsedSocketAddress>;
 
 namespace detail {
 
@@ -162,11 +141,11 @@ public:
   [[nodiscard]] auto startup_error() const -> Option<DnsError>;
 
   /// Resolve a previously parsed remote socket address.
-  auto resolve_socket_address(ParsedSocketAddress endpoint)
+  auto resolve_socket_address(Endpoint endpoint)
     -> Task<Result<folly::SocketAddress, ResolveAddressError>>;
 
   /// Resolve a previously parsed bind address.
-  auto resolve_bind_address(ParsedSocketAddress endpoint)
+  auto resolve_bind_address(Endpoint endpoint)
     -> Task<Result<folly::SocketAddress, ResolveAddressError>>;
 
 private:

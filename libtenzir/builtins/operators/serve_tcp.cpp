@@ -83,7 +83,7 @@ public:
       max_connections_{args_.max_connections ? args_.max_connections->inner
                                              : uint64_t{128}},
       connection_slots_{detail::narrow<size_t>(max_connections_)} {
-    auto ep = to<struct endpoint>(args_.endpoint.inner);
+    auto ep = to<Endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
     if (ep->host.empty()) {
@@ -417,7 +417,7 @@ public:
     auto printer_arg = d.pipeline(&ServeTcpArgs::printer);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
-      auto ep = to<struct endpoint>(endpoint_str.inner);
+      auto ep = to<Endpoint>(endpoint_str.inner);
       auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
       if (not ep) {
         diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);

@@ -175,6 +175,7 @@ rec {
             ps.packages
             ps.pipeline-manager
             ps.platform
+            ps.microsoft_graph
             ps.to_amazon_security_lake
             ps.to_azure_log_analytics
             ps.to_splunk

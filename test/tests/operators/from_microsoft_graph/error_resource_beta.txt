@@ -1,0 +1,7 @@
+error: resource path must not include a Graph API version
+ --> tests/operators/from_microsoft_graph/error_resource_beta.tql:9:22
+  |
+9 | from_microsoft_graph "beta/users",
+  |                      ^^^^^^^^^^^^ 
+  |
+  = hint: use `version="v1.0"` or `version="beta"` instead
