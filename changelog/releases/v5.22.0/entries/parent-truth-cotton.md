@@ -3,7 +3,10 @@ title: "Run pipelines with uvx tenzir"
 type: feature
 author: tobim
 created: 2025-10-27T19:05:00Z
-pr: 5482, 5588, 5589
+prs:
+  - 5482
+  - 5588
+  - 5589
 ---
 
 The `tenzir` binary is now bundled directly with the `tenzir` Python wheel.
