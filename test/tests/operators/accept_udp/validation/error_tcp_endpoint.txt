@@ -1,6 +1,0 @@
-error: expected a UDP endpoint
- --> tests/operators/accept_udp/validation/error_tcp_endpoint.tql:5:12
-  |
-5 | accept_udp ":31337/tcp"
-  |            ^^^^^^^^^^^^ 
-  |

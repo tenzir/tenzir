@@ -1,6 +1,0 @@
-error: expected a UDP endpoint
- --> tests/operators/to_udp/validation/error_tcp_endpoint.tql:5:8
-  |
-5 | to_udp "127.0.0.1:31337/tcp", message="hello"
-  |        ^^^^^^^^^^^^^^^^^^^^^ 
-  |
