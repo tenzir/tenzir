@@ -1,0 +1,15 @@
+---
+fixtures: [http_paginate]
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_RETRY_FLAKY_URL"),
+        method="GET",
+        max_retry_count=2,
+        retry_delay=1s,
+        connection_timeout=200ms,
+        tls=false {
+  write_ndjson
+}

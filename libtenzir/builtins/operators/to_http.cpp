@@ -102,6 +102,11 @@ public:
       config->connection_timeout = get_connection_timeout();
       config->max_retry_count = get_max_retry_count();
       config->retry_delay = get_retry_delay();
+      auto* dh = &ctx.dh();
+      auto loc = args_.operator_location;
+      config->on_retry = [dh, loc](std::string_view message) {
+        diagnostic::warning("{}", message).primary(loc).emit(*dh);
+      };
     }
     if (config.is_error()) {
       lifecycle_ = Lifecycle::done;

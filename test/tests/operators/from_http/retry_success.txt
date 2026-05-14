@@ -1,3 +1,16 @@
 {
   attempt: 3,
 }
+warning: connection error, attempt 1/3, retrying after 0s
+ --> tests/operators/from_http/retry_success.tql:5:1
+  |
+5 | from_http env("HTTP_FIXTURE_RETRY_FLAKY_URL"), max_retry_count=2, retry_delay=1ms, connection_timeout=200ms, tls=false { read_json }
+  | ~~~~~~~~~ 
+  |
+
+warning: connection error, attempt 2/3, retrying after 0s
+ --> tests/operators/from_http/retry_success.tql:5:1
+  |
+5 | from_http env("HTTP_FIXTURE_RETRY_FLAKY_URL"), max_retry_count=2, retry_delay=1ms, connection_timeout=200ms, tls=false { read_json }
+  | ~~~~~~~~~ 
+  |

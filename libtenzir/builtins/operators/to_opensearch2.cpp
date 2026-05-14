@@ -257,9 +257,14 @@ public:
     if (tls_needed.is_error()) {
       co_return;
     }
+    auto loc = args_.operator_location;
     auto config = HttpPoolConfig{
       .tls = *tls_needed,
       .ssl_context = nullptr,
+      .on_retry =
+        [dh = &ctx.dh(), loc](std::string_view message) {
+          diagnostic::warning("{}", message).primary(loc).emit(*dh);
+        },
     };
     if (*tls_needed) {
       auto tls_opts = tls_options::from_optional(args_.tls);
