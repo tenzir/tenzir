@@ -65,7 +65,7 @@ auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint> {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
   }
-  // Default to port 5158/tcp if none is set.
+  // Default to port 5158 if none is set.
   if (not node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
   }
@@ -155,7 +155,7 @@ caf::expected<Endpoint> get_node_endpoint(const caf::settings& opts) {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
   }
-  // Default to port 5158/tcp if none is set.
+  // Default to port 5158 if none is set.
   if (not node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
   }

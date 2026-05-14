@@ -192,7 +192,7 @@ inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{10};
 /// Hostname or IP address and port of a remote node.
 //  (explicitly use IPv4 here to get predictable behavior even on
 //   weird dual-stack setups)
-inline constexpr std::string_view endpoint = "127.0.0.1:5158/tcp";
+inline constexpr std::string_view endpoint = "127.0.0.1:5158";
 
 /// Default port of a remote node.
 inline constexpr std::string_view endpoint_host = "127.0.0.1";
