@@ -1,0 +1,6 @@
+error: expected a TCP endpoint
+ --> tests/operators/accept_http/error_udp_endpoint.tql:5:13
+  |
+5 | accept_http "127.0.0.1:8080/udp" {
+  |             ^^^^^^^^^^^^^^^^^^^^ 
+  |

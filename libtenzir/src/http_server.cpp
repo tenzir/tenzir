@@ -141,6 +141,11 @@ auto parse_endpoint(std::string_view endpoint, location loc,
     diagnostic::error("endpoint port is missing").primary(loc).emit(dh);
     return None{};
   }
+  if (parsed.port->type() != port_type::unknown
+      and parsed.port->type() != port_type::tcp) {
+    diagnostic::error("expected a TCP endpoint").primary(loc).emit(dh);
+    return None{};
+  }
   return server_endpoint{
     .host = std::move(parsed.host),
     .port = parsed.port->number(),

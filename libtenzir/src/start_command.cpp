@@ -135,7 +135,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     }
     node_endpoint->port.emplace(*bound_port, port_type::tcp);
     self->mail(atom::set_v, *node_endpoint).send(node);
-    listen_endpoint = fmt::format("{}:{}", node_endpoint->host, *bound_port);
+    listen_endpoint = fmt::format("{}", *node_endpoint);
     TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
                 *listen_endpoint);
     // A single line of output to publish out address for scripts.

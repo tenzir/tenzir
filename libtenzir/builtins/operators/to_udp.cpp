@@ -268,6 +268,9 @@ public:
         diagnostic::error("failed to parse endpoint")
           .primary(location)
           .emit(ctx);
+      } else if (endpoint.port->type() != port_type::unknown
+                 and endpoint.port->type() != port_type::udp) {
+        diagnostic::error("expected a UDP endpoint").primary(location).emit(ctx);
       }
       return {};
     });
