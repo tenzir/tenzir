@@ -48,8 +48,37 @@ def _json_response(handler: BaseHTTPRequestHandler, code: int, obj: object) -> N
     handler.wfile.write(body)
 
 
+def _json_response_with_headers(
+    handler: BaseHTTPRequestHandler,
+    code: int,
+    obj: object,
+    headers: list[tuple[str, str]],
+) -> None:
+    body = json.dumps(obj).encode()
+    handler.send_response(code)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    for name, value in headers:
+        handler.send_header(name, value)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 class _TokenServer(ThreadingHTTPServer):
     token_requests: int = 0
+
+
+class _GraphServer(ThreadingHTTPServer):
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.lock = threading.Lock()
+        self.requests: dict[str, int] = {}
+
+    def record_request(self, path: str) -> int:
+        with self.lock:
+            count = self.requests.get(path, 0) + 1
+            self.requests[path] = count
+            return count
 
 
 class _TokenHandler(BaseHTTPRequestHandler):
@@ -116,6 +145,40 @@ class _GraphHandler(BaseHTTPRequestHandler):
                     "@odata.nextLink": "https://example.invalid/v1.0/users",
                     "value": [],
                 },
+            )
+            return
+        if parts.path == "/v1.0/users/retry-after":
+            server = cast(_GraphServer, self.server)
+            if server.record_request(parts.path) == 1:
+                _json_response_with_headers(
+                    self,
+                    HTTPStatus.TOO_MANY_REQUESTS,
+                    {"error": "too many requests"},
+                    [("Retry-After", "1")],
+                )
+                return
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                    "value": [{"id": "retry-user-1", "displayName": "Retry User"}],
+                },
+            )
+            return
+        if parts.path == "/v1.0/users/retry-exhausted":
+            _json_response_with_headers(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "service unavailable", "request": "final"},
+                [("Retry-After", "0")],
+            )
+            return
+        if parts.path == "/v1.0/users/permanent-error":
+            _json_response(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                {"error": "bad request"},
             )
             return
         if parts.path == "/v1.0/users":
@@ -227,7 +290,7 @@ def _plugin_env() -> dict[str, str]:
 @fixture(name="microsoft_graph")
 def run() -> Iterator[dict[str, str]]:
     token_server = _TokenServer((_HOST, 0), _TokenHandler)
-    graph_server = ThreadingHTTPServer((_HOST, find_free_port()), _GraphHandler)
+    graph_server = _GraphServer((_HOST, find_free_port()), _GraphHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     graph_thread = threading.Thread(target=graph_server.serve_forever, daemon=True)
     token_thread.start()
