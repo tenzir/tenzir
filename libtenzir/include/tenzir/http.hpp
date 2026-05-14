@@ -42,6 +42,13 @@ auto is_retryable_http_error(proxygen::coro::HTTPErrorCode code) -> bool;
 
 auto is_retryable_http_status(uint16_t status_code) -> bool;
 
+auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds>;
+
+auto retry_delay_for_attempt(std::chrono::milliseconds retry_delay,
+                             uint32_t attempt,
+                             Option<std::chrono::seconds> retry_after)
+  -> std::chrono::milliseconds;
+
 inline constexpr auto default_timeout = std::chrono::seconds{90};
 inline constexpr auto default_connection_timeout = std::chrono::seconds{5};
 inline constexpr auto default_max_retry_count = 5;

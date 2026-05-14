@@ -501,14 +501,17 @@ auto find_content_encoding(
 struct retryable_http_response : std::runtime_error {
   retryable_http_response(
     uint16_t status_code,
-    std::vector<std::pair<std::string, std::string>> headers)
+    std::vector<std::pair<std::string, std::string>> headers,
+    Option<std::chrono::seconds> retry_after)
     : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
       status_code{status_code},
-      headers{std::move(headers)} {
+      headers{std::move(headers)},
+      retry_after{retry_after} {
   }
 
   uint16_t status_code = 0;
   std::vector<std::pair<std::string, std::string>> headers;
+  Option<std::chrono::seconds> retry_after;
   blob body;
 };
 
@@ -584,8 +587,10 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                 });
                 auto status = msg->getStatusCode();
                 if (http::is_retryable_http_status(status)) {
-                  retryable_response
-                    = retryable_http_response{status, std::move(hdrs)};
+                  auto retry_after = http::parse_retry_after(
+                    msg->getHeaders().getSingleOrEmpty("Retry-After"));
+                  retryable_response = retryable_http_response{
+                    status, std::move(hdrs), retry_after};
                   if (not buffer_retryable_body) {
                     throw std::move(*retryable_response);
                   }
@@ -648,22 +653,14 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             if (not retryable or retries_done >= config.max_retry_count) {
               co_yield folly::coro::co_error(std::move(ew));
             }
-            // Compute exponential backoff (same schedule as the previous
-            // retryWithExponentialBackoff call, no jitter).
-            auto delay = config.retry_delay;
-            auto const max_delay = config.retry_delay * 16;
-            for (auto i = uint32_t{0}; i < retries_done; ++i) {
-              delay *= 2;
-              if (delay > max_delay) {
-                delay = max_delay;
-                break;
-              }
-            }
-            // Build the retry reason string.
+            auto retry_after = Option<std::chrono::seconds>{};
             auto reason = std::string{"connection error"};
             ew.with_exception([&](retryable_http_response const& e) {
               reason = fmt::format("HTTP error {}", e.status_code);
+              retry_after = e.retry_after;
             });
+            auto delay = http::retry_delay_for_attempt(
+              config.retry_delay, retries_done, retry_after);
             // Emit a warning diagnostic before sleeping.
             auto const delay_secs
               = std::chrono::duration_cast<std::chrono::seconds>(delay);
