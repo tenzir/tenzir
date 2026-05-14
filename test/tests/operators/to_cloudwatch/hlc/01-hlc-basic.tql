@@ -1,0 +1,7 @@
+from {message: "hlc-one"}
+to_cloudwatch "ignored", "ignored",
+  method="hlc",
+  message=message,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ENDPOINT"),
+  batch_size=2

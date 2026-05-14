@@ -1,0 +1,9 @@
+from {message: "cw-split-1"},
+     {message: "cw-split-2"},
+     {message: "cw-split-3"}
+to_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_WRITE"),
+  message=message,
+  batch_size=1,
+  aws_region="us-east-1"
+
