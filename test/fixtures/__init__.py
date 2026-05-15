@@ -24,6 +24,7 @@ from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401
 from . import platform_ws  # noqa: F401
+from . import prometheus_remote_write  # noqa: F401
 from . import http_request  # noqa: F401
 from . import http_paginate  # noqa: F401
 from . import http_server  # noqa: F401
@@ -56,6 +57,7 @@ __all__ = [
     "mysql",
     "nats",
     "platform_ws",
+    "prometheus_remote_write",
     "s3",
     "s3_proxy",
     "sentinelone",
