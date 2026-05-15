@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {data: 42}
+to_stdout {
+  write_all data
+}

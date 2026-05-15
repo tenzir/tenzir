@@ -1,0 +1,6 @@
+error: type `string` has no field `value`
+ --> tests/operators/write_all/10_error_non_record.tql:7:18
+  |
+7 |   write_all data.value
+  |                  ^^^^^ 
+  |

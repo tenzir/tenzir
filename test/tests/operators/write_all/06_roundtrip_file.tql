@@ -1,0 +1,6 @@
+from_file env("FILE_ROOT") + "/out/write_all_blob.bin" {
+  read_all binary=true
+}
+to_file env("FILE_ROOT") + "/out/write_all_blob_copy.bin" {
+  write_all data
+}

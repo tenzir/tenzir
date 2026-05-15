@@ -1,0 +1,4 @@
+from {data: b"\x00foo"}, {data: b"\x01bar\x00"}
+to_file env("FILE_ROOT") + "/out/write_all_blob.bin" {
+  write_all data
+}
