@@ -7,10 +7,11 @@ authors:
 prs:
   - 6165
   - 6179
+  - 6182
 created: 2026-05-12T19:40:09.318698Z
 ---
 
-Tenzir now includes a Microsoft Graph source operator for one-shot reads from Microsoft Graph `v1.0` and `beta` collections with app-only Microsoft Entra authentication and OData pagination.
+Tenzir now includes a Microsoft Graph source operator for reads from Microsoft Graph `v1.0` and `beta` collections with app-only Microsoft Entra authentication and OData pagination.
 
 For example, you can read Entra ID sign-in logs with client credentials and push down OData query options:
 
@@ -29,5 +30,7 @@ from_microsoft_graph "auditLogs/signIns",
 ```
 
 The operator emits each object from the response `value` array as a separate event and follows `@odata.nextLink` until the collection is exhausted.
+
+The operator can also use Microsoft Graph delta queries with `delta=true`, storing the returned `@odata.deltaLink` in memory and polling it with a configurable `poll_interval`. OData query options apply to the initial delta request only, and subsequent polls use the opaque delta link exactly as Microsoft Graph returned it.
 
 It also retries throttled and transient Microsoft Graph requests, respecting `Retry-After` when present.
