@@ -26,6 +26,7 @@
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/utils/Array.h>
 #include <aws/core/utils/DateTime.h>
+#include <aws/kinesis/KinesisErrors.h>
 #include <aws/kinesis/model/EncryptionType.h>
 #include <aws/kinesis/model/GetRecordsRequest.h>
 #include <aws/kinesis/model/GetShardIteratorRequest.h>
@@ -74,6 +75,7 @@ struct ReadResult {
   std::string next_iterator;
   std::string next_sequence_number;
   bool shard_closed = false;
+  bool iterator_expired = false;
 };
 
 struct PutRecordsResult {
@@ -217,7 +219,13 @@ auto read_from_shard(Aws::Kinesis::KinesisClient& client,
   request.SetShardIterator(Aws::String{iterator.data(), iterator.size()});
   request.SetLimit(limit);
   auto outcome = client.GetRecords(request);
-  throw_if_error(outcome, "GetRecords");
+  if (not outcome.IsSuccess()) {
+    const auto& error = outcome.GetError();
+    if (error.GetErrorType() == Aws::Kinesis::KinesisErrors::EXPIRED_ITERATOR) {
+      return {.shard_index = shard_index, .iterator_expired = true};
+    }
+    throw_if_error(outcome, "GetRecords");
+  }
   const auto& result = outcome.GetResult();
   auto output = ReadResult{};
   output.shard_index = shard_index;
@@ -538,11 +546,21 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   auto batch = std::move(result).as<ReadResult>();
   if (batch.shard_index < shards_.size()) {
     auto& shard = shards_[batch.shard_index];
-    shard.iterator = std::move(batch.next_iterator);
-    shard.closed = batch.shard_closed;
-    shard.idle = batch.records.empty();
-    if (not batch.next_sequence_number.empty()) {
-      shard.next_sequence_number = batch.next_sequence_number;
+    if (batch.iterator_expired) {
+      shard.iterator = co_await spawn_blocking(
+        [client = client_, stream = args_.stream.inner, id = shard.id,
+         start = args_.start, sequence = shard.next_sequence_number] {
+          return make_shard_iterator(*client, stream, id, start, sequence);
+        });
+      shard.closed = false;
+      shard.idle = true;
+    } else {
+      shard.iterator = std::move(batch.next_iterator);
+      shard.closed = batch.shard_closed;
+      shard.idle = batch.records.empty();
+      if (not batch.next_sequence_number.empty()) {
+        shard.next_sequence_number = batch.next_sequence_number;
+      }
     }
     next_shard_ = (batch.shard_index + 1) % shards_.size();
     if (batch.shard_closed) {
