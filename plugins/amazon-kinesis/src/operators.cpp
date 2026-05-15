@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
 #include <ranges>
 #include <thread>
 #include <utility>
@@ -50,6 +51,7 @@ namespace {
 
 constexpr auto max_record_size = size_t{10 * 1024 * 1024};
 constexpr auto max_put_records_request_size = max_record_size;
+constexpr auto max_put_records_entries = size_t{500};
 constexpr auto max_partition_key_size = size_t{256};
 constexpr auto put_records_attempts = size_t{5};
 
@@ -66,7 +68,7 @@ struct ReadRecord {
 
 struct ReadResult {
   std::vector<ReadRecord> records;
-  size_t shard_index = 0;
+  size_t shard_index = std::numeric_limits<size_t>::max();
   std::string next_iterator;
   std::string next_sequence_number;
   bool shard_closed = false;
@@ -248,8 +250,9 @@ auto record_size(const ToAmazonKinesis::PendingRecord& record) -> size_t {
   return record.message.size() + record.partition_key.size();
 }
 
-auto append_messages(std::vector<blob>& out, const ast::expression& expr,
-                     table_slice input, diagnostic_handler& dh) -> void {
+auto append_messages(std::vector<Option<blob>>& out,
+                     const ast::expression& expr, table_slice input,
+                     diagnostic_handler& dh) -> void {
   for (const auto& messages : eval(expr, input, dh)) {
     const auto append = [&](const auto& array) {
       for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -258,11 +261,11 @@ auto append_messages(std::vector<blob>& out, const ast::expression& expr,
             .primary(expr)
             .note("event is skipped")
             .emit(dh);
-          out.emplace_back();
+          out.emplace_back(None{});
           continue;
         }
         auto bytes = as_bytes(array.Value(i));
-        out.emplace_back(bytes);
+        out.emplace_back(blob{bytes});
       }
     };
     if (auto strings = messages.template as<string_type>()) {
@@ -453,7 +456,7 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
     co_await folly::coro::sleep(std::chrono::milliseconds{10});
     co_return ReadResult{};
   }
-  auto index = next_shard_;
+  auto index = std::optional<size_t>{};
   for (auto i = size_t{0}; i < shards_.size(); ++i) {
     auto candidate = (next_shard_ + i) % shards_.size();
     if (not shards_[candidate].closed
@@ -462,10 +465,14 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
       break;
     }
   }
-  const auto& shard = shards_[index];
+  if (not index) {
+    co_await folly::coro::sleep(std::chrono::milliseconds{10});
+    co_return ReadResult{};
+  }
+  const auto& shard = shards_[*index];
   auto result = co_await spawn_blocking(
-    [client = client_, stream = args_.stream.inner, index, id = shard.id,
-     iterator = shard.iterator, limit = records_per_call_] {
+    [client = client_, stream = args_.stream.inner, index = *index,
+     id = shard.id, iterator = shard.iterator, limit = records_per_call_] {
       return read_from_shard(*client, stream, index, id, iterator, limit);
     });
   if (result.records.empty()) {
@@ -562,7 +569,7 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
   if (input.rows() == 0 or not client_) {
     co_return;
   }
-  auto messages = std::vector<blob>{};
+  auto messages = std::vector<Option<blob>>{};
   append_messages(messages, args_.message, input, ctx.dh());
   auto partition_keys = std::vector<std::string>{};
   if (args_.partition_key) {
@@ -571,7 +578,7 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
   }
   for (auto i = size_t{0}; i < messages.size(); ++i) {
     auto& message = messages[i];
-    if (message.empty()) {
+    if (not message) {
       continue;
     }
     auto key = std::string{};
@@ -587,7 +594,7 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     if (not validate_partition_key(key, key_loc, ctx.dh())) {
       continue;
     }
-    if (message.size() + key.size() > max_record_size) {
+    if (message->size() + key.size() > max_record_size) {
       diagnostic::warning("Kinesis record payload and partition key must be at "
                           "most {} bytes",
                           max_record_size)
@@ -596,8 +603,8 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
         .emit(ctx);
       continue;
     }
-    bytes_write_counter_.add(message.size());
-    batch_.push_back(PendingRecord{std::move(message), std::move(key)});
+    bytes_write_counter_.add(message->size());
+    batch_.push_back(PendingRecord{std::move(*message), std::move(key)});
     const auto timed_out
       = std::chrono::steady_clock::now() - last_flush_ >= batch_timeout_;
     if (batch_.size() >= batch_size_ or timed_out) {
@@ -617,8 +624,8 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   auto chunk_size = size_t{0};
   for (auto& record : records) {
     const auto size = record_size(record);
-    if (not chunk.empty()
-        and chunk_size + size > max_put_records_request_size) {
+    if ((not chunk.empty() and chunk_size + size > max_put_records_request_size)
+        or chunk.size() >= max_put_records_entries) {
       chunks.push_back(std::move(chunk));
       chunk_size = 0;
     }
