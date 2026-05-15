@@ -51,6 +51,7 @@ _INFER_HEADER_OVERRIDES_EXTENSION = "/infer/header-overrides.csv"
 _INFER_EXPLICIT_OVERRIDE = "/infer/explicit.txt"
 _INFER_UNKNOWN_EXTENSION = "/infer/unknown.bin"
 _INFER_UNSUPPORTED_HEADER = "/infer/unsupported.json"
+_INFER_HTTP_ERROR = "/infer/http-error.bin"
 
 
 def _make_handler(capture_path: Path):
@@ -227,6 +228,13 @@ def _make_handler(capture_path: Path):
                     content_type="application/octet-stream",
                 )
                 return
+            if path == _INFER_HTTP_ERROR:
+                self._reply(
+                    b'{"error":"not-found"}\n',
+                    status=HTTPStatus.NOT_FOUND,
+                    content_type="application/octet-stream",
+                )
+                return
             self._reply(body)
 
         def log_message(self, *_: object) -> None:  # noqa: D401
@@ -278,6 +286,7 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_INFER_EXPLICIT_OVERRIDE_URL": f"{base_url}{_INFER_EXPLICIT_OVERRIDE}",
             "HTTP_FIXTURE_INFER_UNKNOWN_EXTENSION_URL": f"{base_url}{_INFER_UNKNOWN_EXTENSION}",
             "HTTP_FIXTURE_INFER_UNSUPPORTED_HEADER_URL": f"{base_url}{_INFER_UNSUPPORTED_HEADER}",
+            "HTTP_FIXTURE_INFER_HTTP_ERROR_URL": f"{base_url}{_INFER_HTTP_ERROR}",
             "HTTP_CAPTURE_FILE": str(capture_path),
         }
     finally:

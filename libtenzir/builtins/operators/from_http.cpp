@@ -786,11 +786,11 @@ public:
             response_->content_encoding = None{};
           }
         }
-        co_await spawn_parser(ctx);
-        if (lifecycle_ == Lifecycle::done) {
-          co_return;
-        }
         if (response_->is_success()) {
+          co_await spawn_parser(ctx);
+          if (lifecycle_ == Lifecycle::done) {
+            co_return;
+          }
           if (auto mode = builtin_pagination_mode(paginate_);
               mode and *mode == http::PaginationMode::link) {
             TENZIR_ASSERT(paginate_);
@@ -871,6 +871,8 @@ public:
         if (auto sub = ctx.get_sub(pagination_.page_count)) {
           auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
           co_await pipeline.close();
+        } else {
+          lifecycle_ = Lifecycle::done;
         }
         co_return;
       });
