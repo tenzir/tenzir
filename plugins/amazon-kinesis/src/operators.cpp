@@ -705,6 +705,9 @@ ToAmazonKinesis::ToAmazonKinesis(ToAmazonKinesisArgs args)
 auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   client_ = co_await make_kinesis_client(args_.aws_region, args_.aws_iam,
                                          args_.endpoint, ctx);
+  if (not client_) {
+    throw std::runtime_error{"failed to initialize Kinesis client"};
+  }
   batch_size_
     = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
   batch_timeout_ = args_.batch_timeout ? args_.batch_timeout->inner : 1s;
@@ -715,7 +718,7 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
 }
 
 auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
-  if (input.rows() == 0 or not client_) {
+  if (input.rows() == 0) {
     co_return;
   }
   auto messages = std::vector<Option<blob>>{};
