@@ -891,6 +891,7 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
     };
     if (auto result = co_await ctx.resolve_secrets(std::move(requests));
         result.is_error()) {
+      done_ = true;
       co_return;
     }
     auto url = args_.endpoint
