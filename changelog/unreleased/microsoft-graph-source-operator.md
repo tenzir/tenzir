@@ -1,5 +1,5 @@
 ---
-title: Microsoft Graph source operator
+title: Microsoft Graph source operator (#6165, #6179)
 type: feature
 authors:
   - mavam
@@ -26,3 +26,5 @@ from_microsoft_graph "auditLogs/signIns",
 ```
 
 The operator emits each object from the response `value` array as a separate event and follows `@odata.nextLink` until the collection is exhausted.
+
+It also retries throttled and transient Microsoft Graph requests, respecting `Retry-After` when present.
