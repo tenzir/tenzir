@@ -1,12 +1,5 @@
-// FIXME: Replace the Python shell workaround with the TQL string `repeat`
-// function once it is available.
-shell r#"python3 - <<'PY'
-import json
-
-print(json.dumps({"message": "x" * (1_048_576 + 1)}))
-print(json.dumps({"message": "cw-after-large"}))
-PY"#
-read_ndjson
+from {message: "x".repeat(1048577)},
+     {message: "cw-after-large"}
 to_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
   env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_WRITE"),
   message=message,

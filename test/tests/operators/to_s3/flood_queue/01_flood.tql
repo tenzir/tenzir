@@ -7,7 +7,7 @@
 // when `finalize()` closes the sub and the executor begins shutdown,
 // the final `close_stream` must still run or the multipart upload is
 // left pending on the server.
-from {padding: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+from {padding: "x".repeat(256)}
 repeat 5000
 enumerate seq
 to_s3 env("S3_BUCKET") + "/flood_test/output.json?endpoint_override=" + env("S3_ENDPOINT") + "&scheme=http", aws_iam={access_key_id: env("S3_ACCESS_KEY"), secret_access_key: env("S3_SECRET_KEY")} {

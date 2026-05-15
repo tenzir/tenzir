@@ -2,8 +2,7 @@
 timeout: 10
 ---
 
-from {payload: ""}
-payload = pad_end(payload, 300000, "x")
+from {payload: "x".repeat(300000)}
 write_ndjson
 shell "cat"
 read_json
