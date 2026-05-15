@@ -76,6 +76,12 @@ struct ReadResult {
   std::string next_sequence_number;
   bool shard_closed = false;
   bool iterator_expired = false;
+  bool throttled = false;
+};
+
+struct ShardInfo {
+  std::string id;
+  std::vector<std::string> parents;
 };
 
 struct PutRecordsResult {
@@ -190,8 +196,8 @@ auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
 }
 
 auto list_shards(Aws::Kinesis::KinesisClient& client, std::string_view stream)
-  -> std::vector<std::string> {
-  auto result = std::vector<std::string>{};
+  -> std::vector<ShardInfo> {
+  auto result = std::vector<ShardInfo>{};
   auto next = Aws::String{};
   do {
     auto request = Aws::Kinesis::Model::ListShardsRequest{};
@@ -204,7 +210,14 @@ auto list_shards(Aws::Kinesis::KinesisClient& client, std::string_view stream)
     throw_if_error(outcome, "ListShards");
     const auto& page = outcome.GetResult();
     for (const auto& shard : page.GetShards()) {
-      result.push_back(aws_string(shard.GetShardId()));
+      auto info = ShardInfo{.id = aws_string(shard.GetShardId())};
+      if (shard.ParentShardIdHasBeenSet()) {
+        info.parents.push_back(aws_string(shard.GetParentShardId()));
+      }
+      if (shard.AdjacentParentShardIdHasBeenSet()) {
+        info.parents.push_back(aws_string(shard.GetAdjacentParentShardId()));
+      }
+      result.push_back(std::move(info));
     }
     next = page.GetNextToken();
   } while (not next.empty());
@@ -223,6 +236,10 @@ auto read_from_shard(Aws::Kinesis::KinesisClient& client,
     const auto& error = outcome.GetError();
     if (error.GetErrorType() == Aws::Kinesis::KinesisErrors::EXPIRED_ITERATOR) {
       return {.shard_index = shard_index, .iterator_expired = true};
+    }
+    if (error.GetErrorType()
+        == Aws::Kinesis::KinesisErrors::PROVISIONED_THROUGHPUT_EXCEEDED) {
+      return {.shard_index = shard_index, .throttled = true};
     }
     throw_if_error(outcome, "GetRecords");
   }
@@ -464,13 +481,14 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                         : 1000;
   poll_idle_ = args_.poll_idle ? args_.poll_idle->inner : 1s;
   if (shards_.empty()) {
-    auto shard_ids = co_await spawn_blocking(
+    auto shard_infos = co_await spawn_blocking(
       [client = client_, stream = args_.stream.inner] {
         return list_shards(*client, stream);
       });
-    shards_.reserve(shard_ids.size());
-    for (auto& id : shard_ids) {
-      shards_.push_back(ShardState{.id = std::move(id)});
+    shards_.reserve(shard_infos.size());
+    for (auto& info : shard_infos) {
+      shards_.push_back(ShardState{.id = std::move(info.id),
+                                   .parents = std::move(info.parents)});
     }
   }
   for (auto& shard : shards_) {
@@ -489,26 +507,27 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
 }
 
 auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
-  auto shard_ids
+  auto shard_infos
     = co_await spawn_blocking([client = client_, stream = args_.stream.inner] {
         return list_shards(*client, stream);
       });
-  for (auto& id : shard_ids) {
+  for (auto& info : shard_infos) {
     const auto known
       = std::ranges::any_of(shards_, [&](const ShardState& shard) {
-          return shard.id == id;
+          return shard.id == info.id;
         });
     if (known) {
       continue;
     }
     auto iterator = co_await spawn_blocking(
-      [client = client_, stream = args_.stream.inner, id = id] {
+      [client = client_, stream = args_.stream.inner, id = info.id] {
         return make_shard_iterator(
           *client, stream, id,
           Aws::Kinesis::Model::ShardIteratorType::TRIM_HORIZON);
       });
-    shards_.push_back(
-      ShardState{.id = std::move(id), .iterator = std::move(iterator)});
+    shards_.push_back(ShardState{.id = std::move(info.id),
+                                 .parents = std::move(info.parents),
+                                 .iterator = std::move(iterator)});
   }
   if (next_shard_ >= shards_.size()) {
     next_shard_ = 0;
@@ -522,10 +541,17 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
     co_return ReadResult{};
   }
   auto index = std::optional<size_t>{};
+  const auto parents_closed = [&](const ShardState& shard) {
+    return std::ranges::all_of(shard.parents, [&](const std::string& parent) {
+      auto it = std::ranges::find(shards_, parent, &ShardState::id);
+      return it == shards_.end() or it->closed;
+    });
+  };
   for (auto i = size_t{0}; i < shards_.size(); ++i) {
     auto candidate = (next_shard_ + i) % shards_.size();
     if (not shards_[candidate].closed
-        and not shards_[candidate].iterator.empty()) {
+        and not shards_[candidate].iterator.empty()
+        and parents_closed(shards_[candidate])) {
       index = candidate;
       break;
     }
@@ -552,7 +578,9 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   auto batch = std::move(result).as<ReadResult>();
   if (batch.shard_index < shards_.size()) {
     auto& shard = shards_[batch.shard_index];
-    if (batch.iterator_expired) {
+    if (batch.throttled) {
+      shard.idle = false;
+    } else if (batch.iterator_expired) {
       shard.iterator = co_await spawn_blocking(
         [client = client_, stream = args_.stream.inner, id = shard.id,
          start = args_.start, sequence = shard.next_sequence_number] {

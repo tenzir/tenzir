@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace tenzir::plugins::amazon_kinesis {
 
@@ -72,6 +73,7 @@ private:
 
   struct ShardState {
     std::string id;
+    std::vector<std::string> parents;
     std::string iterator;
     std::string next_sequence_number;
     bool closed = false;
@@ -79,7 +81,8 @@ private:
 
     friend auto inspect(auto& f, ShardState& x) -> bool {
       return f.object(x).fields(
-        f.field("id", x.id), f.field("iterator", x.iterator),
+        f.field("id", x.id), f.field("parents", x.parents),
+        f.field("iterator", x.iterator),
         f.field("next_sequence_number", x.next_sequence_number),
         f.field("closed", x.closed), f.field("idle", x.idle));
     }
