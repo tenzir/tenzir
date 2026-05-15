@@ -1,0 +1,9 @@
+{
+  x: null,
+}
+warning: `repeat` expected non-negative count, but got -1
+ --> tests/functions/string/repeat_negative.tql:2:17
+  |
+2 |   x: "x".repeat(-1),
+  |                 ~~ 
+  |

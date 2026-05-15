@@ -18,6 +18,7 @@
 #include <re2/re2.h>
 
 #include <iterator>
+#include <limits>
 #include <string_view>
 
 namespace tenzir::plugins::string {
@@ -347,6 +348,111 @@ public:
 private:
   std::string name_;
   bool pad_left_;
+};
+
+class repeat : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.repeat_fn";
+  }
+
+  auto function_name() const -> std::string override {
+    return "tql2.repeat";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto count_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "string")
+          .positional("n", count_expr, "int")
+          .parse(inv, ctx));
+    return function_use::make([subject_expr = std::move(subject_expr),
+                               count_expr = std::move(count_expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+      for (auto [subject, count] :
+           split_multi_series(eval(subject_expr), eval(count_expr))) {
+        TENZIR_ASSERT(subject.length() == count.length());
+        auto f = detail::overload{
+          [&](arrow::StringArray const& subject_array,
+              concepts::one_of<arrow::Int64Array,
+                               arrow::UInt64Array> auto const& count_array) {
+            for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
+              if (subject_array.IsNull(i) or count_array.IsNull(i)) {
+                check(b.AppendNull());
+                continue;
+              }
+              auto str = subject_array.GetView(i);
+              auto n = uint64_t{};
+              if constexpr (std::same_as<std::decay_t<decltype(count_array)>,
+                                         arrow::Int64Array>) {
+                auto value = count_array.Value(i);
+                if (value < 0) {
+                  diagnostic::warning("`repeat` expected non-negative count, "
+                                      "but got {}",
+                                      value)
+                    .primary(count_expr)
+                    .emit(ctx);
+                  check(b.AppendNull());
+                  continue;
+                }
+                n = static_cast<uint64_t>(value);
+              } else {
+                n = count_array.Value(i);
+              }
+              if (n == 0 or str.empty()) {
+                check(b.Append(""));
+                continue;
+              }
+              auto max_string_size
+                = static_cast<size_t>(std::numeric_limits<int32_t>::max());
+              if (n > max_string_size / str.size()) {
+                diagnostic::warning(
+                  "`repeat` result exceeds maximum string size")
+                  .primary(count_expr)
+                  .emit(ctx);
+                check(b.AppendNull());
+                continue;
+              }
+              auto size = static_cast<size_t>(n) * str.size();
+              auto result = std::string{};
+              result.reserve(size);
+              for (auto j = uint64_t{0}; j < n; ++j) {
+                result += str;
+              }
+              check(b.Append(result));
+            }
+          },
+          [&]<class T, class U>(T const&, U const&) {
+            if constexpr (not detail::is_any_v<T, arrow::StringArray,
+                                               arrow::NullArray>) {
+              diagnostic::warning("`repeat` expected `string`, but got `{}`",
+                                  subject.type.kind())
+                .primary(subject_expr)
+                .emit(ctx);
+            }
+            if constexpr (not detail::is_any_v<U, arrow::Int64Array,
+                                               arrow::UInt64Array,
+                                               arrow::NullArray>) {
+              diagnostic::warning("`repeat` expected `int`, but got `{}`",
+                                  count.type.kind())
+                .primary(count_expr)
+                .emit(ctx);
+            }
+            check(b.AppendNulls(subject.length()));
+          },
+        };
+        match(std::tie(*subject.array, *count.array), f);
+      }
+      return series{string_type{}, finish(b)};
+    });
+  }
 };
 
 class nullary_method : public virtual function_plugin {
@@ -752,6 +858,7 @@ TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
 
 TENZIR_REGISTER_PLUGIN(pad{"pad_start", true})
 TENZIR_REGISTER_PLUGIN(pad{"pad_end", false})
+TENZIR_REGISTER_PLUGIN(repeat)
 
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})

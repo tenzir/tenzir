@@ -1,0 +1,8 @@
+from {
+  one: "x".repeat(1),
+  many: "x".repeat(4),
+  word: "ab".repeat(3),
+  empty_subject: "".repeat(5),
+  zero_count: "x".repeat(0),
+  unicode: "🔥".repeat(3),
+}

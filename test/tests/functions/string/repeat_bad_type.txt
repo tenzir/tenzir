@@ -1,0 +1,17 @@
+{
+  wrong_subject: null,
+  wrong_count: null,
+}
+warning: `repeat` expected `string`, but got `int64`
+ --> tests/functions/string/repeat_bad_type.tql:2:18
+  |
+2 |   wrong_subject: 42.repeat(3),
+  |                  ~~ 
+  |
+
+warning: `repeat` expected `int`, but got `string`
+ --> tests/functions/string/repeat_bad_type.tql:3:27
+  |
+3 |   wrong_count: "x".repeat("3"),
+  |                           ~~~ 
+  |
