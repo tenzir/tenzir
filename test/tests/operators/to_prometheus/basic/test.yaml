@@ -1,0 +1,5 @@
+suite:
+  name: to-prometheus-basic
+  mode: sequential
+fixtures: [prometheus_remote_write]
+timeout: 60

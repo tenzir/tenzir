@@ -1,0 +1,45 @@
+// Copyright 2024 Prometheus Team
+// Licensed under the Apache License, Version 2.0.
+//
+// Sanitized for Tenzir: gogoproto options/imports and native histogram/exemplar
+// fields unused by the Remote Write MVP were removed without changing package
+// names, message names, or field numbers used by scalar samples.
+
+syntax = "proto3";
+package io.prometheus.write.v2;
+
+message Request {
+  reserved 1 to 3;
+  repeated string symbols = 4;
+  repeated TimeSeries timeseries = 5;
+}
+
+message TimeSeries {
+  repeated uint32 labels_refs = 1;
+  repeated Sample samples = 2;
+  reserved 3, 4;
+  Metadata metadata = 5;
+  reserved 6;
+}
+
+message Sample {
+  double value = 1;
+  int64 timestamp = 2;
+  int64 start_timestamp = 3;
+}
+
+message Metadata {
+  enum MetricType {
+    METRIC_TYPE_UNSPECIFIED = 0;
+    METRIC_TYPE_COUNTER = 1;
+    METRIC_TYPE_GAUGE = 2;
+    METRIC_TYPE_HISTOGRAM = 3;
+    METRIC_TYPE_GAUGEHISTOGRAM = 4;
+    METRIC_TYPE_SUMMARY = 5;
+    METRIC_TYPE_INFO = 6;
+    METRIC_TYPE_STATESET = 7;
+  }
+  MetricType type = 1;
+  uint32 help_ref = 3;
+  uint32 unit_ref = 4;
+}
