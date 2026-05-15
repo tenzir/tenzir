@@ -275,6 +275,12 @@ auto HttpPool::post(std::string path, std::string body,
                              std::move(body), std::move(headers));
 }
 
+auto HttpPool::get(std::string path, std::map<std::string, std::string> headers)
+  -> Task<Result<HttpResponse, std::string>> {
+  co_return co_await request(proxygen::HTTPMethod::GET, std::move(path), "",
+                             std::move(headers));
+}
+
 namespace {
 
 auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
