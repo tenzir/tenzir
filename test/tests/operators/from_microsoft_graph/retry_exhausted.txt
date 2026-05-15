@@ -1,0 +1,42 @@
+warning: HTTP error 503, attempt 1/6, retrying after 0s
+ --> tests/operators/from_microsoft_graph/retry_exhausted.tql:9:1
+  |
+9 | from_microsoft_graph "users/retry-exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+warning: HTTP error 503, attempt 2/6, retrying after 0s
+ --> tests/operators/from_microsoft_graph/retry_exhausted.tql:9:1
+  |
+9 | from_microsoft_graph "users/retry-exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+warning: HTTP error 503, attempt 3/6, retrying after 0s
+ --> tests/operators/from_microsoft_graph/retry_exhausted.tql:9:1
+  |
+9 | from_microsoft_graph "users/retry-exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+warning: HTTP error 503, attempt 4/6, retrying after 0s
+ --> tests/operators/from_microsoft_graph/retry_exhausted.tql:9:1
+  |
+9 | from_microsoft_graph "users/retry-exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+warning: HTTP error 503, attempt 5/6, retrying after 0s
+ --> tests/operators/from_microsoft_graph/retry_exhausted.tql:9:1
+  |
+9 | from_microsoft_graph "users/retry-exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+error: Microsoft Graph request failed: HTTP code `503`
+ --> tests/operators/from_microsoft_graph/retry_exhausted.tql:9:1
+  |
+9 | from_microsoft_graph "users/retry-exhausted",
+  | ^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: response body: {"error": "service unavailable", "request": "final"}

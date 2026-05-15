@@ -1,0 +1,10 @@
+{
+  id: "retry-user-1",
+  displayName: "Retry User",
+}
+warning: HTTP error 429, attempt 1/6, retrying after 1s
+ --> tests/operators/from_microsoft_graph/retry_after.tql:8:1
+  |
+8 | from_microsoft_graph "users/retry-after",
+  | ~~~~~~~~~~~~~~~~~~~~ 
+  |

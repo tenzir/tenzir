@@ -4,6 +4,9 @@ type: feature
 authors:
   - mavam
   - codex
+prs:
+  - 6165
+  - 6179
 created: 2026-05-12T19:40:09.318698Z
 ---
 
@@ -26,3 +29,5 @@ from_microsoft_graph "auditLogs/signIns",
 ```
 
 The operator emits each object from the response `value` array as a separate event and follows `@odata.nextLink` until the collection is exhausted.
+
+It also retries throttled and transient Microsoft Graph requests, respecting `Retry-After` when present.

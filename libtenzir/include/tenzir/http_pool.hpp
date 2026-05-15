@@ -102,6 +102,10 @@ public:
             std::map<std::string, std::string> headers)
     -> Task<Result<HttpResponse, std::string>>;
 
+  /// GET through the session pool to a path.
+  auto get(std::string path, std::map<std::string, std::string> headers)
+    -> Task<Result<HttpResponse, std::string>>;
+
 private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                     std::string url, HttpPoolConfig config);

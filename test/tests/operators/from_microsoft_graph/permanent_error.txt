@@ -1,0 +1,7 @@
+error: Microsoft Graph request failed: HTTP code `400`
+ --> tests/operators/from_microsoft_graph/permanent_error.tql:9:1
+  |
+9 | from_microsoft_graph "users/permanent-error",
+  | ^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: response body: {"error": "bad request"}
