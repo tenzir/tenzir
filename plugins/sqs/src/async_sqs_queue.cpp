@@ -149,11 +149,12 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
         if (resp.status_code < 200 or resp.status_code >= 300) {
           auto error_msg = extract_sqs_error_message(resp.body);
           if (is_retriable_status(resp.status_code)) {
-            TENZIR_WARN("SQS API returned HTTP {} (retrying): {}",
-                        resp.status_code, error_msg);
+            TENZIR_WARN("SQS API at {} returned HTTP {} (retrying): {}",
+                        endpoint_url, resp.status_code, error_msg);
             throw sqs_retriable_error{resp.status_code, std::move(error_msg)};
           }
           diagnostic::error("SQS API returned HTTP {}", resp.status_code)
+            .note("endpoint: {}", endpoint_url)
             .note("{}", error_msg)
             .throw_();
         }
@@ -177,11 +178,13 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
     if (e.status_code != 0) {
       diagnostic::error("SQS API returned HTTP {} after {} retries",
                         e.status_code, retry_max_retries)
+        .note("endpoint {}", endpoint_url)
         .note("{}", e.detail)
         .throw_();
     }
     diagnostic::error("SQS HTTP request failed after {} retries",
                       retry_max_retries)
+      .note("endpoint {}", endpoint_url)
       .note("{}", e.detail)
       .throw_();
   }
@@ -193,6 +196,34 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
 
 auto is_sqs_queue_url(std::string_view s) -> bool {
   return s.starts_with("http://") or s.starts_with("https://");
+}
+
+auto region_from_sqs_url(std::string_view url) -> Option<std::string> {
+  auto scheme_end = url.find("://");
+  if (scheme_end == std::string_view::npos) {
+    return None{};
+  }
+  auto host_start = scheme_end + 3;
+  auto host_end = url.find('/', host_start);
+  auto host = url.substr(host_start, host_end - host_start);
+  if (auto colon = host.find(':'); colon != std::string_view::npos) {
+    host = host.substr(0, colon);
+  }
+  constexpr auto prefix = std::string_view{"sqs."};
+  if (not host.starts_with(prefix)) {
+    return None{};
+  }
+  host.remove_prefix(prefix.size());
+  for (auto suffix : {std::string_view{".amazonaws.com.cn"},
+                      std::string_view{".amazonaws.com"}}) {
+    if (host.ends_with(suffix)) {
+      auto region = host.substr(0, host.size() - suffix.size());
+      if (not region.empty()) {
+        return std::string{region};
+      }
+    }
+  }
+  return None{};
 }
 
 // --- AsyncSqsQueue ---
