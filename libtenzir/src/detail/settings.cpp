@@ -66,7 +66,13 @@ get_bytesize(caf::settings opts, std::string_view key, uint64_t defval) {
   size_t result = 0;
   caf::put_missing(opts, key, defval);
   if (caf::holds_alternative<caf::config_value::integer>(opts, key)) {
-    result = caf::get<caf::config_value::integer>(opts, key);
+    const auto integer = caf::get<caf::config_value::integer>(opts, key);
+    if (integer < 0) {
+      return caf::make_error(ec::parse_error,
+                             "invalid negative byte size for key '"
+                               + std::string{key} + "'");
+    }
+    result = static_cast<size_t>(integer);
   } else if (caf::holds_alternative<std::string>(opts, key)) {
     auto result_str = caf::get<std::string>(opts, key);
     if (not parsers::bytesize(result_str, result)) {

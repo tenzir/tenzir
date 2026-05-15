@@ -57,3 +57,10 @@ TEST("unpack nested settings properly") {
   REQUIRE_EQUAL(out->size(), std::size_t{1});
   CHECK_EQUAL(out->front(), 20);
 }
+
+TEST("negative byte size is rejected") {
+  caf::settings settings;
+  caf::put(settings, "bytes", caf::config_value::integer{-1});
+  const auto out = tenzir::detail::get_bytesize(settings, "bytes", 0);
+  CHECK(not out);
+}

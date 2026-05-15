@@ -226,6 +226,10 @@ inline constexpr caf::timespan active_partition_timeout
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 
+/// Fallback approximate number of input or output bytes per rebuild
+/// transformation when the dynamic default cannot be determined.
+inline constexpr uint64_t rebuild_size_limit = 1ull << 30; // 1 GiB
+
 /// Maximum number of in-memory INDEX partitions.
 inline constexpr size_t max_in_mem_partitions = 1;
 

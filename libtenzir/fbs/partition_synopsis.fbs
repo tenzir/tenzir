@@ -23,6 +23,10 @@ table LegacyPartitionSynopsis {
   /// The schema of this partition. Note that this field was not present for
   /// partition synopses with a version number of 0.
   schema: [ubyte] (nested_flatbuffer: "tenzir.fbs.Type");
+
+  /// The approximate number of bytes required to materialize this partition as
+  /// table slices in memory.
+  approx_bytes: ulong;
 }
 
 union PartitionSynopsis {
