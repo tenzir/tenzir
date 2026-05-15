@@ -1,0 +1,6 @@
+error: cannot write all of `this`
+ --> tests/operators/write_all/09_error_this.tql:7:13
+  |
+7 |   write_all this
+  |             ^^^^ 
+  |

@@ -1,0 +1,4 @@
+from {nested: {data: "foo"}}, {nested: {data: "bar"}}
+to_stdout {
+  write_all nested.data
+}

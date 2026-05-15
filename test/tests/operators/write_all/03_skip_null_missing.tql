@@ -1,0 +1,4 @@
+from {data: "a"}, {other: "skip"}, {data: null}, {data: "b"}
+to_stdout {
+  write_all data
+}
