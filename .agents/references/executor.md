@@ -110,15 +110,15 @@ members.
   visibility only for executor-internal handoff accounting.
 - Use `MetricsUnit::bytes` for encoded bytes read or written and
   `MetricsUnit::events` for event rows.
-- If an operator emits `table_slice`s directly and it does not accept a parsing
-  (`chunk_ptr -> table_slice`) pipeline, increment the events counter by
-  `slice.rows()` immediately before pushing the slice downstream.
-- If an operator consumes `table_slice`s directly and it does not accept a
+- If a source operator emits `table_slice`s directly, increment the events
+  counter by `slice.rows()` immediately before pushing the slice downstream.
+- If a source operator accepts a parsing (`chunk_ptr -> table_slice`) pipeline,
+  increment the events counter in `process_sub()` by the rows that the operator
+  actually pushes downstream. This counts the rows entering the parent pipeline
+  after the full nested parsing pipeline has run.
+- If a sink operator consumes `table_slice`s directly or forwards them into a
   printing (`table_slice -> chunk_ptr`) pipeline, increment the events counter
   by `slice.rows()` when accepting the slice for output.
-- Operators that run parser or printer subpipelines should not count the rows
-  flowing through those subpipelines. The nested parser or printer operators own
-  those event counters.
 - Message-oriented connectors that produce or consume one event per message may
   increment the events counter by `1`; slice-oriented code should use
   `slice.rows()`.

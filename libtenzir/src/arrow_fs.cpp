@@ -94,6 +94,10 @@ auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
     = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
                        MetricsDirection::read, MetricsVisibility::external_,
                        MetricsUnit::bytes);
+  events_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsUnit::events);
   co_await restore(ctx);
   auto ndh = null_diagnostic_handler{};
   co_await cleanup_files(ndh);
@@ -251,7 +255,9 @@ auto FromArrowFsOperator::process_sub(SubKeyView key, table_slice slice,
                                       Push<table_slice>& push, OpCtx& ctx)
   -> Task<void> {
   TENZIR_UNUSED(key, ctx);
+  auto const rows = slice.rows();
   co_await push(std::move(slice));
+  events_read_counter_.add(rows);
 }
 
 auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)

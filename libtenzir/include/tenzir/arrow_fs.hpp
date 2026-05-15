@@ -303,6 +303,7 @@ private:
     max_jobs + 1,
   };
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 /// Common arguments for Arrow filesystem-based sink operators.

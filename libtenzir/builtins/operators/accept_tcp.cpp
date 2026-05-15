@@ -212,6 +212,10 @@ public:
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
     accept_loop_finished_ = false;
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_tcp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     ctx.spawn_task([this, &ctx]() -> Task<void> {
       auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
         ctx.spawn_task([this]() -> Task<void> {
@@ -345,6 +349,13 @@ public:
         maybe_finish_draining();
         co_return;
       });
+  }
+
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
+                   OpCtx&) -> Task<void> override {
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
@@ -756,6 +767,7 @@ private:
                                            message_queue_capacity};
   Semaphore connection_slots_;
   std::unordered_map<uint64_t, Connection> connections_;
+  MetricsCounter events_read_counter_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   bool accept_loop_finished_ = true;
   bool peer_resolution_warning_emitted_ = false;

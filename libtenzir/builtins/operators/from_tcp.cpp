@@ -168,6 +168,10 @@ public:
                            port_);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_tcp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     co_return;
   }
 
@@ -283,6 +287,13 @@ public:
       });
   }
 
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
+                   OpCtx&) -> Task<void> override {
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    events_read_counter_.add(rows);
+  }
+
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
@@ -358,6 +369,7 @@ private:
                                            message_queue_capacity};
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
+  MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
   bool startup_failed_ = false;
 };
