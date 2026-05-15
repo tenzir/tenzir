@@ -1,0 +1,4 @@
+from {
+  null_subject: null.repeat(3),
+  null_count: "x".repeat(null),
+}

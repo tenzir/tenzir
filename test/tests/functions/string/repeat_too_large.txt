@@ -1,0 +1,9 @@
+{
+  x: null,
+}
+warning: `repeat` result exceeds maximum string size
+ --> tests/functions/string/repeat_too_large.tql:2:17
+  |
+2 |   x: "x".repeat(2147483648),
+  |                 ~~~~~~~~~~ 
+  |

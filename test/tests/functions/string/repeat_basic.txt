@@ -1,0 +1,8 @@
+{
+  one: "x",
+  many: "xxxx",
+  word: "ababab",
+  empty_subject: "",
+  zero_count: "",
+  unicode: "🔥🔥🔥",
+}
