@@ -12,6 +12,7 @@
 #include <tenzir/plugin/register.hpp>
 
 #include <chrono>
+#include <limits>
 
 namespace tenzir::plugins::cloudwatch {
 
@@ -95,6 +96,38 @@ public:
             .primary(option->source)
             .emit(ctx);
         }
+      }
+      if (auto value = ctx.get(limit);
+          value and value->inner > std::numeric_limits<int>::max()) {
+        diagnostic::error("limit must not exceed {}",
+                          std::numeric_limits<int>::max())
+          .primary(value->source)
+          .emit(ctx);
+        return std::nullopt;
+      }
+      if (effective_mode != "get" and ctx.get(log_stream)
+          and ctx.get(log_streams)) {
+        diagnostic::error("`log_stream` and `log_streams` are mutually "
+                          "exclusive")
+          .primary(ctx.get(log_streams)->source)
+          .emit(ctx);
+        return std::nullopt;
+      }
+      if (effective_mode != "get" and ctx.get(log_streams)
+          and ctx.get(log_stream_prefix)) {
+        diagnostic::error("`log_streams` and `log_stream_prefix` are "
+                          "mutually exclusive")
+          .primary(ctx.get(log_stream_prefix)->source)
+          .emit(ctx);
+        return std::nullopt;
+      }
+      if (effective_mode != "get" and ctx.get(log_stream)
+          and ctx.get(log_stream_prefix)) {
+        diagnostic::error("`log_stream` and `log_stream_prefix` are "
+                          "mutually exclusive")
+          .primary(ctx.get(log_stream_prefix)->source)
+          .emit(ctx);
+        return std::nullopt;
       }
       if (effective_mode == "get") {
         if (not ctx.get(log_stream)) {

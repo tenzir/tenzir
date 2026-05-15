@@ -1,0 +1,6 @@
+error: limit must not exceed 2147483647
+ --> tests/operators/from_cloudwatch/validation/error_limit_too_large.tql:7:9
+  |
+7 |   limit=3000000000
+  |         ^^^^^^^^^^ 
+  |

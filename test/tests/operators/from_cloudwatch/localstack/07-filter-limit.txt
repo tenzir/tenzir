@@ -8,8 +8,3 @@
   level: "ERROR",
   msg: "boom",
 }
-{
-  id: 3,
-  level: "INFO",
-  msg: "done",
-}

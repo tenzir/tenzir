@@ -28,6 +28,7 @@
 #include <aws/logs/model/OutputLogEvent.h>
 #include <aws/logs/model/PutLogEventsRequest.h>
 #include <aws/logs/model/StartLiveTailRequest.h>
+#include <folly/coro/BlockingWait.h>
 
 #include <algorithm>
 #include <chrono>
@@ -110,6 +111,17 @@ auto strings_from_data(located<data> const& value) -> std::vector<std::string> {
   return result;
 }
 
+auto selected_log_streams(FromCloudWatchArgs const& args)
+  -> std::vector<std::string> {
+  if (args.log_streams) {
+    return strings_from_data(*args.log_streams);
+  }
+  if (args.log_stream) {
+    return {args.log_stream->inner};
+  }
+  return {};
+}
+
 struct CloudWatchEvent {
   time timestamp;
   time ingestion_time;
@@ -171,9 +183,9 @@ auto append_filter_options(
   if (args.limit) {
     request.SetLimit(detail::narrow<int>(args.limit->inner));
   }
-  if (args.log_streams) {
-    request.SetLogStreamNames(
-      make_aws_vector(strings_from_data(*args.log_streams)));
+  auto log_streams = selected_log_streams(args);
+  if (not log_streams.empty()) {
+    request.SetLogStreamNames(make_aws_vector(log_streams));
   }
   if (args.log_stream_prefix) {
     request.SetLogStreamNamePrefix(args.log_stream_prefix->inner);
@@ -283,9 +295,9 @@ auto live_tail_request(FromCloudWatchArgs const& args)
   if (args.filter) {
     request.SetLogEventFilterPattern(args.filter->inner);
   }
-  if (args.log_streams) {
-    request.SetLogStreamNames(
-      make_aws_vector(strings_from_data(*args.log_streams)));
+  auto log_streams = selected_log_streams(args);
+  if (not log_streams.empty()) {
+    request.SetLogStreamNames(make_aws_vector(log_streams));
   }
   if (args.log_stream_prefix) {
     request.SetLogStreamNamePrefixes(
@@ -375,10 +387,11 @@ auto filter_log_events_body(FromCloudWatchArgs const& args,
     out += ",\"nextToken\":";
     out += detail::json_escape(next_token);
   }
-  if (args.log_streams) {
+  auto log_streams = selected_log_streams(args);
+  if (not log_streams.empty()) {
     out += ",\"logStreamNames\":[";
     auto first = true;
-    for (auto const& stream : strings_from_data(*args.log_streams)) {
+    for (auto const& stream : log_streams) {
       if (not first) {
         out += ",";
       }
@@ -459,9 +472,9 @@ auto int_from_json(simdjson::dom::element obj, std::string_view key)
   return result;
 }
 
-auto parse_filter_log_events_response(
-  std::string const& body, std::string const& log_group,
-  Option<located<std::string>> const& filter) -> SourcePage {
+auto parse_filter_log_events_response(std::string const& body,
+                                      std::string const& log_group)
+  -> SourcePage {
   auto parser = simdjson::dom::parser{};
   auto doc = parser.parse(body);
   if (doc.error()) {
@@ -480,9 +493,6 @@ auto parse_filter_log_events_response(
   }
   for (auto event : events) {
     auto message = string_from_json(event, "message");
-    if (filter and not message.contains(filter->inner)) {
-      continue;
-    }
     page.events.push_back(CloudWatchEvent{
       .timestamp = from_epoch_ms(int_from_json(event, "timestamp")),
       .ingestion_time = from_epoch_ms(int_from_json(event, "ingestionTime")),
@@ -550,6 +560,39 @@ FromCloudWatch::FromCloudWatch(FromCloudWatchArgs args)
 
 auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
   mode_ = to_mode(args_.mode.inner);
+  if (args_.limit
+      and args_.limit->inner > uint64_t{std::numeric_limits<int>::max()}) {
+    diagnostic::error("limit must not exceed {}",
+                      std::numeric_limits<int>::max())
+      .primary(args_.limit->source)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
+  if (mode_ != FromMode::get and args_.log_stream and args_.log_streams) {
+    diagnostic::error("`log_stream` and `log_streams` are mutually exclusive")
+      .primary(args_.log_streams->source)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
+  if (mode_ != FromMode::get and args_.log_streams
+      and args_.log_stream_prefix) {
+    diagnostic::error("`log_streams` and `log_stream_prefix` are mutually "
+                      "exclusive")
+      .primary(args_.log_stream_prefix->source)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
+  if (mode_ != FromMode::get and args_.log_stream and args_.log_stream_prefix) {
+    diagnostic::error("`log_stream` and `log_stream_prefix` are mutually "
+                      "exclusive")
+      .primary(args_.log_stream_prefix->source)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
   auto client = co_await make_cloudwatch_client(args_.aws_iam, args_.aws_region,
                                                 args_.log_group.source, ctx);
   if (not client) {
@@ -588,25 +631,26 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
         handler.SetLiveTailSessionUpdateCallback(
           [sender](Aws::CloudWatchLogs::Model::LiveTailSessionUpdate const&
                      update) mutable {
-            std::ignore = sender->try_send(Any{live_tail_page(update)});
+            folly::coro::blockingWait(
+              sender->send(Any{live_tail_page(update)}));
           });
         handler.SetOnErrorCallback(
           [sender](
             Aws::Client::AWSError<
               Aws::CloudWatchLogs::CloudWatchLogsErrors> const& error) mutable {
-            std::ignore = sender->try_send(Any{SourcePage{
+            folly::coro::blockingWait(sender->send(Any{SourcePage{
               .error = aws_error("StartLiveTail", error),
               .done = true,
-            }});
+            }}));
           });
         request.SetEventStreamHandler(handler);
         return client->StartLiveTail(request);
       });
       if (not outcome.IsSuccess()) {
-        std::ignore = sender->try_send(Any{SourcePage{
+        folly::coro::blockingWait(sender->send(Any{SourcePage{
           .error = aws_error("StartLiveTail", outcome.GetError()),
           .done = true,
-        }});
+        }}));
       }
     });
   }
@@ -646,8 +690,8 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
       auto http_response = std::move(response).unwrap();
       if (http_response.is_status_success()) {
         co_return mode == FromMode::filter
-          ? parse_filter_log_events_response(
-              http_response.body, args_.log_group.inner, args_.filter)
+          ? parse_filter_log_events_response(http_response.body,
+                                             args_.log_group.inner)
           : parse_get_log_events_response(http_response.body,
                                           args_.log_group.inner,
                                           args_.log_stream->inner, token);
@@ -678,8 +722,8 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
       if (http_response.is_status_success()) {
         page
           = mode == FromMode::filter
-              ? parse_filter_log_events_response(
-                  http_response.body, args_.log_group.inner, args_.filter)
+              ? parse_filter_log_events_response(http_response.body,
+                                                 args_.log_group.inner)
               : parse_get_log_events_response(http_response.body,
                                               args_.log_group.inner,
                                               args_.log_stream->inner, token);
@@ -701,6 +745,17 @@ auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
   }
   next_token_ = std::move(page.next_token);
   done_ = page.done;
+  if (args_.limit) {
+    auto remaining = args_.limit->inner - emitted_;
+    if (remaining == 0) {
+      done_ = true;
+      co_return;
+    }
+    if (page.events.size() > remaining) {
+      page.events.resize(detail::narrow<size_t>(remaining));
+      done_ = true;
+    }
+  }
   for (auto const& event : page.events) {
     bytes_read_counter_.add(event.message.size());
   }
@@ -921,7 +976,7 @@ auto ToCloudWatch::send_put_batch(std::vector<Event> events,
         {"x-amz-target", "Logs_20140328.PutLogEvents"},
       };
       auto response = co_await (*http_pool_)
-                        ->post(std::move(fallback_body), std::move(headers));
+                        ->post(std::string{fallback_body}, std::move(headers));
       if (response.is_ok() and response.unwrap().is_status_success()) {
         co_return;
       }
@@ -939,7 +994,7 @@ auto ToCloudWatch::send_put_batch(std::vector<Event> events,
         {"x-amz-target", "Logs_20140328.PutLogEvents"},
       };
       auto response = co_await (*http_pool_)
-                        ->post(std::move(fallback_body), std::move(headers));
+                        ->post(std::string{fallback_body}, std::move(headers));
       if (response.is_ok() and response.unwrap().is_status_success()) {
         co_return;
       }
@@ -960,8 +1015,17 @@ auto ToCloudWatch::send_hlc_batch(std::vector<Event> events,
   for (auto i = size_t{}; i < events.size(); ++i) {
     auto const& event = events[i];
     auto event_json = json_event(event);
-    if (not first
-        and body.size() + event_json.size() + 2 > max_put_request_bytes) {
+    auto separator_size = first ? size_t{0} : size_t{1};
+    if (body.size() + separator_size + event_json.size() + 2
+        > max_put_request_bytes) {
+      if (first) {
+        diagnostic::warning(
+          "CloudWatch HLC log event exceeds maximum request size")
+          .primary(args_.message)
+          .note("event is skipped")
+          .emit(dh);
+        continue;
+      }
       body += "]}";
       auto headers = std::map<std::string, std::string>{
         {"authorization", fmt::format("Bearer {}", token_)},
@@ -998,6 +1062,9 @@ auto ToCloudWatch::send_hlc_batch(std::vector<Event> events,
     first = false;
     body += event_json;
     bytes_write_counter_.add(event.message.size());
+  }
+  if (first) {
+    co_return;
   }
   body += "]}";
   auto headers = std::map<std::string, std::string>{

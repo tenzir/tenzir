@@ -22,6 +22,10 @@ auto make_cloudwatch_client(Option<located<record>> aws_iam,
   -> Task<std::optional<CloudWatchClient>> {
   auto iam = aws_iam ? std::optional<located<record>>{*std::move(aws_iam)}
                      : std::nullopt;
+  auto region = std::optional<std::string>{};
+  if (aws_region) {
+    region = aws_region->inner;
+  }
   auto region_arg
     = aws_region ? std::optional<located<std::string>>{*std::move(aws_region)}
                  : std::nullopt;
@@ -33,10 +37,8 @@ auto make_cloudwatch_client(Option<located<record>> aws_iam,
       .emit(ctx);
     co_return std::nullopt;
   }
-  auto region = std::optional<std::string>{};
-  if (aws_region) {
-    region = aws_region->inner;
-  } else if (auth->credentials and not auth->credentials->region.empty()) {
+  if (not region and auth->credentials
+      and not auth->credentials->region.empty()) {
     region = auth->credentials->region;
   }
   auto provider = make_aws_credentials_provider(auth->credentials, region);
