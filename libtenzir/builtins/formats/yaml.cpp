@@ -517,7 +517,7 @@ public:
 
   auto read_properties() const -> read_properties_t override {
     return {
-      .extensions = {"yaml"},
+      .extensions = {"yaml", "yml"},
       .mime_types = {"application/yaml", "text/yaml", "text/x-yaml"},
     };
   }

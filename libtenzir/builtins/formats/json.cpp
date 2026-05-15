@@ -1700,6 +1700,13 @@ public:
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {
+      .extensions = {"gelf"},
+      .mime_types = {"application/gelf", "application/x-gelf"},
+    };
+  }
 };
 
 template <detail::string_literal Name, detail::string_literal Selector,
@@ -1772,6 +1779,16 @@ public:
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
+  }
+
+  auto read_properties() const -> read_properties_t override {
+    if constexpr (std::string_view{Name.str()} == "suricata") {
+      return {.extensions = {"eve.json"}};
+    }
+    if constexpr (std::string_view{Name.str()} == "zeek_json") {
+      return {.extensions = {"zeek.json"}};
+    }
+    return {};
   }
 };
 

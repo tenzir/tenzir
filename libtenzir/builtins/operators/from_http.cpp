@@ -11,11 +11,13 @@
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/ir.hpp>
@@ -49,6 +51,7 @@
 #include <proxygen/lib/http/coro/client/HTTPCoroConnector.h>
 #include <proxygen/lib/utils/URL.h>
 
+#include <algorithm>
 #include <chrono>
 #include <iterator>
 #include <limits>
@@ -77,7 +80,7 @@ struct FromHttpArgs {
   Option<located<duration>> retry_delay;
   Option<located<std::string>> encode;
   Option<location> server;
-  located<ir::pipeline> parser;
+  Option<located<ir::pipeline>> parser;
   let_id response;
   location operator_location = location::unknown;
 };
@@ -498,6 +501,37 @@ auto find_content_encoding(
   return None{};
 }
 
+auto find_content_type(
+  std::vector<std::pair<std::string, std::string>> const& headers)
+  -> Option<std::string> {
+  for (auto const& [name, value] : headers) {
+    if (detail::ascii_icase_equal(name, "content-type")) {
+      auto type = std::string{detail::trim(value)};
+      if (not type.empty()) {
+        return type;
+      }
+    }
+  }
+  return None{};
+}
+
+auto path_from_url(std::string_view url) -> std::string {
+  auto parsed = boost::urls::parse_uri_reference(url);
+  if (not parsed) {
+    return {};
+  }
+  return std::string{parsed->path()};
+}
+
+auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
+                          diagnostic_handler& dh) -> failure_or<ir::pipeline> {
+  auto ast = ast::pipeline{};
+  ast.body.emplace_back(invocation_for_plugin(plugin, loc));
+  auto reg = global_registry();
+  auto root = compile_ctx::make_root(base_ctx{dh, *reg});
+  return std::move(ast).compile(root);
+}
+
 struct retryable_http_response : std::runtime_error {
   retryable_http_response(
     uint16_t status_code,
@@ -752,11 +786,11 @@ public:
             response_->content_encoding = None{};
           }
         }
-        co_await spawn_parser(ctx);
-        if (lifecycle_ == Lifecycle::done) {
-          co_return;
-        }
         if (response_->is_success()) {
+          co_await spawn_parser(ctx);
+          if (lifecycle_ == Lifecycle::done) {
+            co_return;
+          }
           if (auto mode = builtin_pagination_mode(paginate_);
               mode and *mode == http::PaginationMode::link) {
             TENZIR_ASSERT(paginate_);
@@ -837,6 +871,8 @@ public:
         if (auto sub = ctx.get_sub(pagination_.page_count)) {
           auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
           co_await pipeline.close();
+        } else {
+          lifecycle_ = Lifecycle::done;
         }
         co_return;
       });
@@ -946,14 +982,50 @@ private:
   // be set.
   auto spawn_parser(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(response_);
-    auto pipeline = args_.parser.inner;
-    auto env = substitute_ctx::env_t{};
-    env[args_.response] = make_response_context(*response_);
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
-    if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
-      lifecycle_ = Lifecycle::done;
-      co_return;
+    auto pipeline = ir::pipeline{};
+    if (args_.parser) {
+      pipeline = args_.parser->inner;
+      auto env = substitute_ctx::env_t{};
+      env[args_.response] = make_response_context(*response_);
+      auto reg = global_registry();
+      auto b_ctx = base_ctx{ctx, *reg};
+      if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+    } else {
+      auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
+      if (auto content_type = find_content_type(response_->headers)) {
+        plugin = read_plugin_for_content_type(*content_type);
+        if (not plugin) {
+          diagnostic::error("unsupported Content-Type `{}`", *content_type)
+            .primary(args_.operator_location)
+            .hint("pass an explicit parser pipeline")
+            .emit(ctx);
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+      } else {
+        auto path = path_from_url(pagination_.current_url);
+        plugin = read_plugin_for_url_path(path);
+        if (not plugin) {
+          diagnostic::error("could not infer parser for URL path `{}`", path)
+            .primary(args_.operator_location)
+            .hint("pass an explicit parser pipeline")
+            .emit(ctx);
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+      }
+      auto inferred
+        = make_parser_pipeline(*plugin, args_.operator_location, ctx.dh());
+      if (inferred.is_error()) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      pipeline = std::move(*inferred);
+      TENZIR_TRACE("from_http inferred parser `{}` for `{}`", plugin->name(),
+                   pagination_.current_url);
     }
     co_await ctx.spawn_sub(pagination_.page_count, std::move(pipeline),
                            tag_v<chunk_ptr>);
@@ -1141,14 +1213,15 @@ public:
           return {};
         }
       }
-      // Validate that the parser pipeline is present and produces events.
-      TRY(auto parser, ctx.get(parser_arg));
-      auto output = parser.inner.infer_type(tag_v<chunk_ptr>, ctx);
-      if (not output.is_error()) {
-        if (not *output or (*output)->is_not<table_slice>()) {
-          diagnostic::error("pipeline must return events")
-            .primary(parser.source.subloc(0, 1))
-            .emit(ctx);
+      // Validate that an explicit parser pipeline produces events.
+      if (auto parser = ctx.get(parser_arg)) {
+        auto output = parser->inner.infer_type(tag_v<chunk_ptr>, ctx);
+        if (not output.is_error()) {
+          if (not *output or (*output)->is_not<table_slice>()) {
+            diagnostic::error("pipeline must return events")
+              .primary(parser->source.subloc(0, 1))
+              .emit(ctx);
+          }
         }
       }
       return {};
