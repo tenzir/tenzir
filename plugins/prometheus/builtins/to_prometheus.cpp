@@ -688,13 +688,6 @@ private:
         }
         auto value_string
           = to_string_value(label_value, args_.labels, ctx.dh()).value_or("");
-        if (value_string.empty()) {
-          diagnostic::warning("label `{}` has an empty value, skipping event",
-                              final_name)
-            .primary(args_.labels)
-            .emit(ctx);
-          return {};
-        }
         result.labels.emplace_back(std::move(final_name),
                                    std::move(value_string));
       }
