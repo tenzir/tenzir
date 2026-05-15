@@ -287,11 +287,11 @@ public:
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_amqp"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_amqp"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     ctx.spawn_task(consume_loop(std::move(engine), queue_));
   }
 

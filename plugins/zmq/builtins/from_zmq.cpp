@@ -91,20 +91,20 @@ public:
       bytes_read_counter_
         = ctx.make_counter(MetricsLabel{"operator", "from_zmq"},
                            MetricsDirection::read, MetricsVisibility::external_,
-                           MetricsType::bytes);
+                           MetricsUnit::bytes);
       events_read_counter_
         = ctx.make_counter(MetricsLabel{"operator", "from_zmq"},
                            MetricsDirection::read, MetricsVisibility::external_,
-                           MetricsType::events);
+                           MetricsUnit::events);
     } else {
       bytes_read_counter_
         = ctx.make_counter(MetricsLabel{"operator", "accept_zmq"},
                            MetricsDirection::read, MetricsVisibility::external_,
-                           MetricsType::bytes);
+                           MetricsUnit::bytes);
       events_read_counter_
         = ctx.make_counter(MetricsLabel{"operator", "accept_zmq"},
                            MetricsDirection::read, MetricsVisibility::external_,
-                           MetricsType::events);
+                           MetricsUnit::events);
     }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.prefix) {

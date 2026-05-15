@@ -45,14 +45,14 @@ public:
         "import",
       },
       MetricsDirection::write, MetricsVisibility::internal_,
-      MetricsType::bytes);
+      MetricsUnit::bytes);
     write_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
         "import",
       },
       MetricsDirection::write, MetricsVisibility::internal_,
-      MetricsType::events);
+      MetricsUnit::events);
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;

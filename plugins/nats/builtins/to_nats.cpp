@@ -200,11 +200,11 @@ public:
     write_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_nats"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     write_events_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_nats"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     auto resolved
       = co_await resolve_connection_config(ctx, args_.url, args_.auth);
     if (not resolved) {

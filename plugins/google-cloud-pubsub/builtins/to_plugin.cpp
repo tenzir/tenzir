@@ -208,11 +208,11 @@ public:
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_google_cloud_pubsub"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_google_cloud_pubsub"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
     publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
     co_return;

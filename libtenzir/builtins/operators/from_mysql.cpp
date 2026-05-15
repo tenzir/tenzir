@@ -2144,11 +2144,11 @@ public:
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_mysql"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_mysql"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config),
                                               bytes_read_counter_);

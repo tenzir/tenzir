@@ -124,20 +124,20 @@ public:
       bytes_write_counter_
         = ctx.make_counter(MetricsLabel{"operator", "to_zmq"},
                            MetricsDirection::write,
-                           MetricsVisibility::external_, MetricsType::bytes);
+                           MetricsVisibility::external_, MetricsUnit::bytes);
       events_write_counter_
         = ctx.make_counter(MetricsLabel{"operator", "to_zmq"},
                            MetricsDirection::write,
-                           MetricsVisibility::external_, MetricsType::events);
+                           MetricsVisibility::external_, MetricsUnit::events);
     } else {
       bytes_write_counter_
         = ctx.make_counter(MetricsLabel{"operator", "serve_zmq"},
                            MetricsDirection::write,
-                           MetricsVisibility::external_, MetricsType::bytes);
+                           MetricsVisibility::external_, MetricsUnit::bytes);
       events_write_counter_
         = ctx.make_counter(MetricsLabel{"operator", "serve_zmq"},
                            MetricsDirection::write,
-                           MetricsVisibility::external_, MetricsType::events);
+                           MetricsVisibility::external_, MetricsUnit::events);
     }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.monitor) {

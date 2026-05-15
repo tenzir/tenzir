@@ -37,13 +37,13 @@ public:
   /// Pushes one ready slice and schedules the next timeout.
   auto push(series_builder::YieldReadyResult result,
             Push<table_slice>& push) const -> Task<void> {
-    co_await this->push(std::move(result), push, [](uint64_t) {});
+    co_await this->push(std::move(result), push, [](table_slice const&) {});
   }
 
   auto push(series_builder::YieldReadyResult result, Push<table_slice>& push,
             MetricsCounter& counter) const -> Task<void> {
-    co_await this->push(std::move(result), push, [&](uint64_t rows) {
-      counter.add(rows);
+    co_await this->push(std::move(result), push, [&](table_slice const& slice) {
+      counter.add(slice.rows());
     });
   }
 
@@ -51,14 +51,8 @@ public:
   auto push(series_builder::YieldReadyResult result, Push<table_slice>& push,
             OnSlice&& on_slice) const -> Task<void> {
     for (auto&& slice : result.slices) {
-      if constexpr (std::is_invocable_v<OnSlice, uint64_t>) {
-        auto rows = slice.rows();
-        co_await push(std::move(slice));
-        std::invoke(on_slice, rows);
-      } else {
-        std::invoke(on_slice, slice);
-        co_await push(std::move(slice));
-      }
+      std::invoke(on_slice, slice);
+      co_await push(std::move(slice));
     }
     if (result.wait_for) {
       set_wait_for(result.wait_for.unwrap());

@@ -351,11 +351,11 @@ public:
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     co_return;
   }
 

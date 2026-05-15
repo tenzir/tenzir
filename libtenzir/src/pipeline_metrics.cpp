@@ -51,7 +51,7 @@ template class Metric<MetricsInstrument::gauge>;
 
 template <MetricsInstrument Instrument>
 auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
-                           MetricsVisibility visibility, MetricsType type)
+                           MetricsVisibility visibility, MetricsUnit type)
   -> Metric<Instrument> {
   auto lock = std::lock_guard{mutex_};
   for (auto& e : entries_) {
@@ -76,13 +76,13 @@ auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
 }
 
 template auto PipelineMetrics::make<MetricsInstrument::counter>(
-  MetricsLabel, MetricsDirection, MetricsVisibility, MetricsType)
+  MetricsLabel, MetricsDirection, MetricsVisibility, MetricsUnit)
   -> Metric<MetricsInstrument::counter>;
 
 template auto PipelineMetrics::make<MetricsInstrument::gauge>(MetricsLabel,
                                                               MetricsDirection,
                                                               MetricsVisibility,
-                                                              MetricsType)
+                                                              MetricsUnit)
   -> Metric<MetricsInstrument::gauge>;
 
 auto PipelineMetrics::Entry::snapshot() const -> MetricsSnapshotEntry {

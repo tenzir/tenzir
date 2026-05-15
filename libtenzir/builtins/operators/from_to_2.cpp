@@ -100,14 +100,14 @@ public:
         "operator",
         "from_events",
       },
-      MetricsDirection::read, MetricsVisibility::internal_, MetricsType::bytes);
+      MetricsDirection::read, MetricsVisibility::internal_, MetricsUnit::bytes);
     read_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
         "from_events",
       },
       MetricsDirection::read, MetricsVisibility::internal_,
-      MetricsType::events);
+      MetricsUnit::events);
     co_return;
   }
 

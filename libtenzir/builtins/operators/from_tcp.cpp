@@ -228,7 +228,7 @@ public:
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     fmt::to_string(peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_,
-          MetricsType::bytes);
+          MetricsUnit::bytes);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;
         auto env = substitute_ctx::env_t{};

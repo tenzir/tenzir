@@ -74,11 +74,11 @@ public:
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     auto [startup_sender, startup_receiver]
       = channel<diagnostic>(request_queue_capacity);
     TENZIR_ASSERT(write_sender_);

@@ -445,14 +445,14 @@ public:
         "operator",
         "from_kafka",
       },
-      MetricsDirection::read, MetricsVisibility::external_, MetricsType::bytes);
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
     read_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
         "from_kafka",
       },
       MetricsDirection::read, MetricsVisibility::external_,
-      MetricsType::events);
+      MetricsUnit::events);
     initialize_perf_tracking();
     auto aws_iam = args_.aws_iam
                      ? std::optional<located<record>>{*args_.aws_iam}

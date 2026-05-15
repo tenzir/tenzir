@@ -302,11 +302,11 @@ public:
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {

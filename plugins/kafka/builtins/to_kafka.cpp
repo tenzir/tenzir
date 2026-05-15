@@ -359,14 +359,14 @@ public:
         "to_kafka",
       },
       MetricsDirection::write, MetricsVisibility::external_,
-      MetricsType::bytes);
+      MetricsUnit::bytes);
     write_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
         "to_kafka",
       },
       MetricsDirection::write, MetricsVisibility::external_,
-      MetricsType::events);
+      MetricsUnit::events);
     auto aws_iam = args_.aws_iam
                      ? std::optional<located<record>>{*args_.aws_iam}
                      : std::nullopt;

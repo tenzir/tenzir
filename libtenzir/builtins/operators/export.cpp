@@ -86,7 +86,7 @@ public:
         "export",
       },
       MetricsDirection::read, MetricsVisibility::internal_,
-      MetricsType::events);
+      MetricsUnit::events);
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;

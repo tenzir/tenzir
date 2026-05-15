@@ -168,11 +168,11 @@ public:
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     if (auto error = stdout_nonblocking_.activate()) {
       diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
       done_ = true;
@@ -287,7 +287,7 @@ public:
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "save_stdout"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     if (auto error = stdout_nonblocking_.activate()) {
       diagnostic::error("{}", *error).primary(args_.self).emit(ctx);
       done_ = true;
