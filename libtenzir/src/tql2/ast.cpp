@@ -219,6 +219,14 @@ public:
     enter(const_cast<ast::index_expr&>(x));
   }
 
+  void visit(const ast::this_& x) {
+    if (auto path = ast::field_path::try_from(ast::expression{x})) {
+      paths_.push_back(std::move(*path));
+      return;
+    }
+    ambiguous_ = true;
+  }
+
   template <class T>
   void visit(const T& x)
     requires concepts::one_of<T, ast::root_field, ast::field_access>

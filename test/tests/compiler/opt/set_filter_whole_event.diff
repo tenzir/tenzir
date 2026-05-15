@@ -41,7 +41,8 @@
            }
          }
        ],
-       order: "ordered"
+-      order: "ordered"
++      order: "unordered"
      },
      where_ir {
 -      self: 26..31,

@@ -242,8 +242,8 @@ public:
           touched_fields.push_back(std::move(*field));
         }
       }
-      auto [f_upstream, f_self] = ir::split_filter_by_dependents(
-        std::move(filter), touched_fields);
+      auto [f_upstream, f_self]
+        = ir::split_filter_by_dependents(std::move(filter), touched_fields);
       return {
         // invariant order
         .order = order,
