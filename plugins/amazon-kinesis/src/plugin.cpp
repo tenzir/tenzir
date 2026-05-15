@@ -8,28 +8,15 @@
 
 #include <tenzir/plugin.hpp>
 
-#include <aws/core/Aws.h>
-
 namespace tenzir::plugins::amazon_kinesis {
 
 namespace {
 
 class registrar final : public plugin {
 public:
-  registrar() {
-    Aws::InitAPI(options_);
-  }
-
-  ~registrar() override {
-    Aws::ShutdownAPI(options_);
-  }
-
   auto name() const -> std::string override {
     return "amazon-kinesis";
   }
-
-private:
-  Aws::SDKOptions options_;
 };
 
 } // namespace
