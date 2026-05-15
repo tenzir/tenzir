@@ -1,9 +1,12 @@
 ---
-title: Microsoft Graph source operator (#6165, #6179)
+title: Microsoft Graph source operator
 type: feature
 authors:
   - mavam
   - codex
+prs:
+  - 6165
+  - 6179
 created: 2026-05-12T19:40:09.318698Z
 ---
 
