@@ -48,6 +48,9 @@ namespace {
 
 constexpr auto default_protobuf_message = "prometheus.WriteRequest";
 constexpr auto v2_protobuf_message = "io.prometheus.write.v2.Request";
+constexpr auto v1_content_type = "application/x-protobuf";
+constexpr auto v2_content_type
+  = "application/x-protobuf;proto=io.prometheus.write.v2.Request";
 constexpr auto max_uncompressed_bytes_default = uint64_t{4 * 1024 * 1024};
 
 using Headers = std::vector<std::pair<std::string, std::string>>;
@@ -550,7 +553,8 @@ public:
       }
       add_sample(std::move(*sample));
       if (pending_sample_count_ >= args_.max_samples_per_request.inner
-          or uncompressed_size() >= args_.max_uncompressed_bytes.inner) {
+          or pending_uncompressed_bytes_
+               >= args_.max_uncompressed_bytes.inner) {
         co_await send_request(ctx);
       } else if (next_flush_.is_none()) {
         next_flush_
@@ -732,6 +736,7 @@ private:
   }
 
   auto add_sample(PendingSample sample) -> void {
+    auto contribution = sample_uncompressed_size(sample);
     auto key = labels_key(sample.labels);
     auto& series = pending_[key];
     if (series.labels.empty()) {
@@ -740,6 +745,24 @@ private:
     }
     series.samples.push_back(sample.sample);
     ++pending_sample_count_;
+    if (std::numeric_limits<uint64_t>::max() - pending_uncompressed_bytes_
+        < contribution) {
+      pending_uncompressed_bytes_ = std::numeric_limits<uint64_t>::max();
+    } else {
+      pending_uncompressed_bytes_ += contribution;
+    }
+  }
+
+  auto sample_uncompressed_size(PendingSample const& sample) const -> uint64_t {
+    auto series = std::vector<Series>{};
+    auto& entry = series.emplace_back();
+    entry.labels = sample.labels;
+    entry.samples.push_back(sample.sample);
+    entry.metadata = sample.metadata;
+    auto serialized = protocol_ == Protocol::v1
+                        ? serialize_v1(std::move(series))
+                        : serialize_v2(std::move(series));
+    return serialized.size();
   }
 
   auto
@@ -763,25 +786,8 @@ private:
     }
     pending_.clear();
     pending_sample_count_ = 0;
+    pending_uncompressed_bytes_ = 0;
     return result;
-  }
-
-  auto copy_pending() const -> std::vector<Series> {
-    auto result = std::vector<Series>{};
-    result.reserve(pending_.size());
-    for (auto const& [_, series] : pending_) {
-      result.push_back(series);
-    }
-    return result;
-  }
-
-  auto uncompressed_size() const -> uint64_t {
-    if (pending_.empty()) {
-      return 0;
-    }
-    auto serialized = protocol_ == Protocol::v1 ? serialize_v1(copy_pending())
-                                                : serialize_v2(copy_pending());
-    return serialized.size();
   }
 
   auto send_request(OpCtx& ctx) -> Task<void> {
@@ -801,7 +807,8 @@ private:
     for (auto const& [name, value] : headers_) {
       headers[name] = value;
     }
-    headers["Content-Type"] = "application/x-protobuf";
+    headers["Content-Type"]
+      = protocol_ == Protocol::v1 ? v1_content_type : v2_content_type;
     headers["Content-Encoding"] = "snappy";
     headers["Content-Length"] = fmt::to_string(compressed->size());
     headers["User-Agent"] = fmt::format("Tenzir/{}", version::version);
@@ -866,6 +873,7 @@ private:
   Option<Box<HttpPool>> pool_;
   std::map<std::string, Series> pending_;
   uint64_t pending_sample_count_ = 0;
+  uint64_t pending_uncompressed_bytes_ = 0;
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
   mutable Option<std::chrono::steady_clock::time_point> next_flush_;

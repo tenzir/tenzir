@@ -211,12 +211,19 @@ def _make_handler(capture: Capture):
             if self.headers.get("Content-Encoding") != "snappy":
                 self.send_error(HTTPStatus.BAD_REQUEST, "missing snappy encoding")
                 return
-            if self.headers.get("Content-Type") != "application/x-protobuf":
+            version = self.headers.get("X-Prometheus-Remote-Write-Version", "")
+            content_type = self.headers.get("Content-Type")
+            expected_content_type = (
+                "application/x-protobuf;proto=io.prometheus.write.v2.Request"
+                if version == "2.0.0"
+                else "application/x-protobuf"
+            )
+            if content_type != expected_content_type:
                 self.send_error(HTTPStatus.BAD_REQUEST, "wrong content type")
                 return
-            version = self.headers.get("X-Prometheus-Remote-Write-Version", "")
             decoded = _snappy_decompress(body)
             parsed = _parse_v2(decoded) if version == "2.0.0" else _parse_v1(decoded)
+            parsed["content_type"] = content_type
             parsed["version"] = version
             with capture.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(parsed, sort_keys=True) + "\n")
