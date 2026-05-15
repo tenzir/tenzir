@@ -123,8 +123,6 @@ Common `tenzir-test` options:
 - `--debug`: Show detailed test information
 - `--match`: Filter test paths with substring or glob matching
 
-Reference documentation: https://docs.tenzir.com/reference/test-framework.md
-
 ### Run unit tests
 
 Run unit tests using the `tenzir-unit-test` binary:
@@ -204,3 +202,25 @@ when they model the same concept.
 - [hashing.md](.agents/references/hashing.md): Hashing infrastructure
 - [parser-combinators.md](.agents/references/parser-combinators.md): Parser combinator framework
 - [common-types.md](.agents/references/common-types.md): Reusable types and abstractions
+
+## Writing tests
+
+Choose the narrowest test that exercises the behavior users rely on:
+
+- Add an integration test under `test/tests/...` when the behavior is visible
+  from TQL, packages, connectors, formats, functions, operators, or command-line
+  workflows.
+- Add a C++ unit test under `libtenzir/test/...` or the plugin's `tests/`
+  directory when the behavior is an internal algorithm, data structure, parser
+  helper, or error path that is hard to drive through TQL.
+- For `from_*`, `to_*`, and external-service plugins, test against a fixture in
+  `test/fixtures/...` instead of a live service.
+- Use fixture assertions for reverse testing when pipeline output is not enough.
+  For example, assert that a `to_*` operator sent the expected request, body,
+  headers, topic, object key, or retry pattern to the fixture.
+- Keep test data small and deterministic. Avoid sleeps, live network services,
+  ambient credentials, wall-clock assumptions, and order-dependent assertions
+  unless the behavior under test requires them.
+- Use `--update` only after checking that the new reference output is correct.
+
+Load the `tenzir-docs` skill for the complete `tenzir-test` documentation.
