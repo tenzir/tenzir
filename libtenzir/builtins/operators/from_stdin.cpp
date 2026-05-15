@@ -237,6 +237,10 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_stdin"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_stdin"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipe));
     ctx.spawn_task(folly::coro::co_withExecutor(
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
@@ -294,7 +298,9 @@ public:
 
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx&) -> Task<void> override {
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   auto state() -> OperatorState override {
@@ -306,6 +312,7 @@ private:
   bool done_ = false;
   bool stdin_closed_ = false;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
   mutable Arc<Notify> sub_finished_{std::in_place};
   mutable Arc<ChunkQueue> chunk_queue_{std::in_place, queue_capacity};
 };

@@ -877,7 +877,9 @@ public:
                                NextUrlSource::odata_next_link)
             : None{};
       for (auto& event_slice : page->events) {
+        auto const rows = event_slice.rows();
         co_await push(std::move(event_slice));
+        events_read_.add(rows);
       }
       co_return;
     }
@@ -887,7 +889,9 @@ public:
         pagination_.next_url = std::move(*next);
       }
     }
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_.add(rows);
   }
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx& ctx)
