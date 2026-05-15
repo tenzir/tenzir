@@ -1,0 +1,5 @@
+from {message: "hello", key: "custom"}
+to_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                  message=message,
+                  partition_key=key,
+                  batch_size=1

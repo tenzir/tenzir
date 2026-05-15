@@ -1,0 +1,6 @@
+error: `batch_size` must be in the interval [1, 500]
+ --> tests/operators/to_amazon_kinesis/validation/error_batch_size_zero.tql:5:40
+  |
+5 | to_amazon_kinesis "stream", batch_size=0
+  |                                        ^ 
+  |

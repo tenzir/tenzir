@@ -23,6 +23,7 @@
       "sts"
       "transfer"
       # Additional apis used by tenzir.
+      "kinesis"
       "sqs"
     ];
   }

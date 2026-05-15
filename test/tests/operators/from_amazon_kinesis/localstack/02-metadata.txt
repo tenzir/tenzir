@@ -1,0 +1,7 @@
+{
+  stream_ok: true,
+  shard_id: "shardId-000000000000",
+  partition_key: "input-1",
+  has_sequence_number: true,
+  millis_behind_latest: 0,
+}
