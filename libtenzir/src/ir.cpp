@@ -12,6 +12,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/ir_match.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
@@ -21,8 +22,9 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/user_defined_operator.hpp"
+#include "tenzir/view3.hpp"
 
-#include <ranges>
+#include <algorithm>
 
 namespace tenzir {
 
@@ -420,6 +422,34 @@ auto make_set_ir(std::vector<ast::assignment> assignments)
   return ir::SetIr{std::move(assignments)};
 }
 
+auto combine_branch_types(std::optional<element_type_tag> lhs,
+                          std::optional<element_type_tag> rhs, location primary,
+                          diagnostic_handler& dh)
+  -> failure_or<std::optional<element_type_tag>> {
+  if (not lhs) {
+    return rhs;
+  }
+  if (not rhs) {
+    return lhs;
+  }
+  if (*lhs == *rhs) {
+    return lhs;
+  }
+  if (lhs->is<void>()) {
+    return rhs;
+  }
+  if (rhs->is<void>()) {
+    return lhs;
+  }
+  diagnostic::error("incompatible branch output types: {} and {}",
+                    operator_type_name(*lhs), operator_type_name(*rhs))
+    .primary(primary)
+    .emit(dh);
+  return failure::promise();
+}
+
+namespace {
+
 class IfIr final : public ir::Operator {
 public:
   IfIr() = default;
@@ -546,14 +576,13 @@ private:
   IfArgs args_;
 };
 
-namespace {
-
 // TODO: Clean this up. We might want to be able to just use
 // `TENZIR_REGISTER_PLUGINS` also from `libtenzir` itself.
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
     new inspection_plugin<ir::Operator, ir::SetIr>{},
+    make_match_ir_inspection_plugin(),
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -687,8 +716,9 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         return {};
       },
       [&](ast::match_stmt x) -> failure_or<void> {
-        diagnostic::error("`match` is not implemented yet").primary(x).emit(ctx);
-        return failure::promise();
+        TRY(auto op, make_match_ir(std::move(x), ctx));
+        operators.push_back(std::move(op));
+        return {};
       },
       [&](ast::type_stmt x) -> failure_or<void> {
         diagnostic::error(

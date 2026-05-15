@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {x: 1}
+write_json
+match x {
+  _ => {
+    read_json
+  }
+}

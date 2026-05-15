@@ -1,0 +1,7 @@
+error: match arms must be exhaustive
+ --> tests/operators/match/no_wildcard.tql:6:1
+  |
+6 | match x {
+  | ^^^^^ 
+  |
+  = hint: add a final `_` arm

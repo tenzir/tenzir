@@ -1,0 +1,6 @@
+error: expected at least one match arm
+ --> tests/operators/match/error_empty.tql:6:10
+  |
+6 | match x {}
+  |          ^ 
+  |

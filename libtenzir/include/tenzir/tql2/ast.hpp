@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/box.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
@@ -15,6 +16,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
@@ -686,6 +688,11 @@ auto substitute_named_expressions(
   const std::unordered_map<std::string, ast::expression>& replacements,
   diagnostic_handler& dh) -> failure_or<ast::pipeline>;
 
+auto substitute_named_expressions(
+  expression expr,
+  const std::unordered_map<std::string, ast::expression>& replacements,
+  diagnostic_handler& dh) -> failure_or<ast::expression>;
+
 struct let_stmt {
   let_stmt() = default;
 
@@ -750,13 +757,81 @@ struct if_stmt {
   }
 };
 
+struct match_pattern;
+
+struct wildcard_pattern {
+  location source;
+
+  friend auto inspect(auto& f, wildcard_pattern& x) -> bool {
+    return f.object(x).fields(f.field("source", x.source));
+  }
+
+  auto get_location() const -> location {
+    return source;
+  }
+};
+
+struct expression_pattern {
+  expression expr;
+
+  friend auto inspect(auto& f, expression_pattern& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr));
+  }
+
+  auto get_location() const -> location {
+    return expr.get_location();
+  }
+};
+
+struct range_pattern {
+  expression lower;
+  expression upper;
+  location dots;
+
+  friend auto inspect(auto& f, range_pattern& x) -> bool {
+    return f.object(x).fields(f.field("lower", x.lower),
+                              f.field("upper", x.upper),
+                              f.field("dots", x.dots));
+  }
+
+  auto get_location() const -> location {
+    return lower.get_location();
+  }
+};
+
+using match_pattern_kind
+  = variant<wildcard_pattern, expression_pattern, range_pattern>;
+
+struct match_pattern {
+  match_pattern();
+  explicit match_pattern(wildcard_pattern pattern);
+  explicit match_pattern(expression_pattern pattern);
+  explicit match_pattern(range_pattern pattern);
+  ~match_pattern();
+  match_pattern(const match_pattern& other);
+  match_pattern(match_pattern&& other) noexcept;
+  auto operator=(const match_pattern& other) -> match_pattern&;
+  auto operator=(match_pattern&& other) noexcept -> match_pattern&;
+
+  Box<match_pattern_kind> kind;
+
+  friend auto inspect(auto& f, match_pattern& x) -> bool {
+    return f.object(x).fields(f.field("kind", x.kind));
+  }
+
+  auto get_location() const -> location;
+  auto is_wildcard() const -> bool;
+};
+
 struct match_stmt {
   struct arm {
-    std::vector<expression> filter;
+    std::vector<match_pattern> patterns;
+    Option<expression> guard;
     pipeline pipe;
 
     friend auto inspect(auto& f, arm& x) -> bool {
-      return f.object(x).fields(f.field("filter", x.filter),
+      return f.object(x).fields(f.field("patterns", x.patterns),
+                                f.field("guard", x.guard),
                                 f.field("pipe", x.pipe));
     }
   };
@@ -954,6 +1029,44 @@ inline expression::~expression() = default;
 inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
   -> expression& = default;
+
+inline match_pattern::match_pattern()
+  : kind{std::in_place, wildcard_pattern{}} {
+}
+
+inline match_pattern::match_pattern(wildcard_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::match_pattern(expression_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::match_pattern(range_pattern pattern)
+  : kind{std::in_place, std::move(pattern)} {
+}
+
+inline match_pattern::~match_pattern() = default;
+
+inline match_pattern::match_pattern(const match_pattern& other) = default;
+
+inline match_pattern::match_pattern(match_pattern&& other) noexcept = default;
+
+inline auto match_pattern::operator=(const match_pattern& other)
+  -> match_pattern& = default;
+
+inline auto match_pattern::operator=(match_pattern&& other) noexcept
+  -> match_pattern& = default;
+
+inline auto match_pattern::get_location() const -> location {
+  return kind->match([](auto const& pattern) {
+    return pattern.get_location();
+  });
+}
+
+inline auto match_pattern::is_wildcard() const -> bool {
+  return std::holds_alternative<wildcard_pattern>(*kind);
+}
 
 inline type_def::~type_def() = default;
 inline type_def::type_def(type_def&&) noexcept = default;
@@ -1155,8 +1268,22 @@ protected:
   }
 
   void enter(ast::match_stmt::arm& x) {
-    go(x.filter);
+    go(x.patterns);
+    if (x.guard) {
+      go(*x.guard);
+    }
     go(x.pipe);
+  }
+
+  void enter(ast::match_pattern& x) {
+    x.kind->match([&](ast::wildcard_pattern&) {},
+                  [&](ast::expression_pattern& pattern) {
+                    go(pattern.expr);
+                  },
+                  [&](ast::range_pattern& pattern) {
+                    go(pattern.lower);
+                    go(pattern.upper);
+                  });
   }
 
   void enter(ast::selector& x) {

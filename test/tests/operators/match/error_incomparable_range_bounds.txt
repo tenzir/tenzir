@@ -1,0 +1,6 @@
+error: range pattern bounds are not comparable
+ --> tests/operators/match/error_incomparable_range_bounds.tql:7:4
+  |
+7 |   1.."upper" => {
+  |    ^^ 
+  |

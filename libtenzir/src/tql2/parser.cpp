@@ -21,7 +21,6 @@
 
 #include <ranges>
 #include <string_view>
-
 namespace tenzir {
 
 namespace {
@@ -208,21 +207,35 @@ public:
   }
 
   auto parse_match_stmt() -> match_stmt {
-    // TODO: Decide exact syntax, useable for both single-line and
-    // multi-line TQL, and for expressions and statements.
-    //    match foo {
-    //      "ok", 42 => { ... }
-    //    }
     auto begin = expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
     auto scope = ignore_newlines(true);
-    // TODO: Restrict this.
+    auto saw_wildcard = false;
     while (not peek(tk::rbrace)) {
-      arms.push_back(parse_match_stmt_arm());
-      // TODO: require comma or newline?
+      auto arm = parse_match_stmt_arm();
+      auto is_wildcard = not arm.guard and arm.patterns.size() == 1
+                         and arm.patterns.front().is_wildcard();
+      if (is_wildcard) {
+        if (saw_wildcard) {
+          diagnostic::error("wildcard match arm appears more than once")
+            .primary(arm.patterns.front())
+            .throw_();
+        }
+        saw_wildcard = true;
+      }
       (void)accept(tk::comma);
+      // `_` is the fallback for all remaining rows. Since `match` evaluates
+      // arms in source order and the first matching arm wins, any arm after a
+      // wildcard would be unreachable. Reject this in the parser instead of
+      // accepting Rust-like unreachable-arm diagnostics for the MVP.
+      if (saw_wildcard and not peek(tk::rbrace)) {
+        diagnostic::error("wildcard match arm must be last")
+          .primary(arm.patterns.front())
+          .throw_();
+      }
+      arms.push_back(std::move(arm));
     }
     auto end = expect(tk::rbrace);
     return match_stmt{
@@ -234,21 +247,57 @@ public:
   }
 
   auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto filter = std::vector<ast::expression>{};
+    auto patterns = std::vector<ast::match_pattern>{};
     while (true) {
-      filter.push_back(parse_expression(1));
-      if (accept(tk::fat_arrow)) {
+      patterns.push_back(parse_match_pattern());
+      auto& pattern = patterns.back();
+      if (pattern.is_wildcard()
+          and (patterns.size() != 1
+               or (not peek(tk::fat_arrow) and not peek(tk::if_)))) {
+        diagnostic::error("wildcard `_` must be the only pattern in an arm")
+          .primary(pattern)
+          .throw_();
+      }
+      if (peek(tk::fat_arrow) or peek(tk::if_)) {
         break;
       }
-      expect(tk::comma);
+      if (accept(tk::comma)) {
+        diagnostic::error("use `|` to separate match arm alternatives")
+          .primary(pattern)
+          .hint("commas are not separators for match arm alternatives")
+          .throw_();
+      }
+      expect(tk::pipe);
     }
+    auto guard = Option<ast::expression>{None{}};
+    if (accept(tk::if_)) {
+      guard = parse_expression(1);
+    }
+    expect(tk::fat_arrow);
     expect(tk::lbrace);
     auto pipe = parse_pipeline();
     expect(tk::rbrace);
     return match_stmt::arm{
-      std::move(filter),
+      std::move(patterns),
+      std::move(guard),
       std::move(pipe),
     };
+  }
+
+  auto parse_match_pattern() -> ast::match_pattern {
+    if (auto wildcard = accept(tk::underscore)) {
+      return ast::match_pattern{ast::wildcard_pattern{wildcard.location}};
+    }
+    auto lower = parse_expression(1, true);
+    if (auto dots = accept(tk::dot_dot)) {
+      auto upper = parse_expression(1, true);
+      return ast::match_pattern{ast::range_pattern{
+        std::move(lower),
+        std::move(upper),
+        dots.location,
+      }};
+    }
+    return ast::match_pattern{ast::expression_pattern{std::move(lower)}};
   }
 
   auto parse_invocation_or_assignment() -> statement {
@@ -432,9 +481,14 @@ public:
       });
   }
 
-  auto parse_expression(ast::expression expr, int min_prec = 0)
-    -> ast::expression {
+  auto parse_expression(ast::expression expr, int min_prec = 0,
+                        bool stop_at_if = false) -> ast::expression {
     while (true) {
+      if (min_prec > 0
+          and ((stop_at_if and peek(tk::if_)) or peek(tk::fat_arrow)
+               or peek(tk::pipe))) {
+        break;
+      }
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
           auto left = to_selector(expr);
@@ -471,7 +525,7 @@ public:
         if (new_prec >= min_prec) {
           auto location = advance();
           consume_trivia_with_newlines();
-          auto right = parse_expression(new_prec + 1);
+          auto right = parse_expression(new_prec + 1, stop_at_if);
           expr = binary_expr{
             std::move(expr),
             located{*bin_op, location},
@@ -490,8 +544,9 @@ public:
     return expr;
   }
 
-  auto parse_expression(int min_prec = 0) -> ast::expression {
-    return parse_expression(parse_unary_expression(), min_prec);
+  auto parse_expression(int min_prec = 0, bool stop_at_if = false)
+    -> ast::expression {
+    return parse_expression(parse_unary_expression(), min_prec, stop_at_if);
   }
 
   // TODO: Future us/ast problem with type expressions

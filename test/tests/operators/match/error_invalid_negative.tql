@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {x: null}
+match x {
+  -"foo" => {
+    y = "bad"
+  }
+  _ => {}
+}

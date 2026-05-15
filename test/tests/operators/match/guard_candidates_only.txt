@@ -1,0 +1,10 @@
+{
+  kind: "a",
+  x: 1,
+  result: "matched",
+}
+{
+  kind: "b",
+  x: null,
+  result: "fallback",
+}

@@ -1,0 +1,14 @@
+---
+name: match_vs_if
+description: >-
+  Compare statement-level match dispatch against an equivalent if/else chain
+  over repeated synthetic events.
+tags:
+  operators: match
+  baseline: if
+env:
+  TENZIR_CONSOLE_FORMAT: none
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 900

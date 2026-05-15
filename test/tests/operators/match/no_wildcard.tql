@@ -1,0 +1,14 @@
+---
+error: true
+---
+
+from {x: 1}, {x: 2}, {x: 3}
+match x {
+  1 => {
+    y = "one"
+  }
+  3 => {
+    y = "three"
+  }
+}
+sort x

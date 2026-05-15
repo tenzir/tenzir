@@ -1,0 +1,7 @@
+error: match patterns must be constant expressions
+ --> tests/operators/match/error_invalid_negative.tql:7:3
+  |
+7 |   -"foo" => {
+  |   ^^^^^^ 
+  |
+  = hint: use a literal, a constant expression, or `_`

@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from {action: "accept"}
+match action {
+  _ => {
+    verdict = "any"
+  }
+  "accept" => {
+    verdict = "allowed"
+  }
+}
