@@ -88,7 +88,7 @@ let
         "plugins/amqp"
         "plugins/azure-blob-storage"
         "plugins/clickhouse"
-        "plugins/cloudwatch"
+        "plugins/amazon-cloudwatch"
         "plugins/fluent-bit"
         "plugins/from_velociraptor"
         "plugins/gcs"
