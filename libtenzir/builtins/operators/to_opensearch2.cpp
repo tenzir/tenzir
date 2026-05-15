@@ -144,6 +144,7 @@ public:
         body_ += element_text_;
         element_text_.clear();
       }
+      event_count_ += 1;
       return state::ok;
     }
     return state::full;
@@ -157,8 +158,13 @@ public:
     return last_element_size_;
   }
 
+  auto event_count() const -> uint64_t {
+    return event_count_;
+  }
+
   auto yield(diagnostic_handler& dh) -> std::string_view {
     TENZIR_ASSERT(not body_.empty());
+    auto const pending_event = not element_text_.empty();
     if (not codec_) {
       std::swap(body_, result_);
     } else {
@@ -179,6 +185,7 @@ public:
     }
     std::swap(body_, element_text_);
     element_text_.clear();
+    event_count_ = pending_event ? 1 : 0;
     return result_;
   }
 
@@ -190,6 +197,7 @@ private:
   std::string result_;
   std::unique_ptr<arrow::util::Codec> codec_;
   uint64_t last_element_size_{};
+  uint64_t event_count_{};
 };
 
 auto to_option_string_view(
@@ -293,7 +301,12 @@ public:
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -424,6 +437,7 @@ private:
 
   auto send_request(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(pool_);
+    auto const events = builder_.event_count();
     auto body = builder_.yield(ctx.dh());
     if (body.empty()) {
       co_return;
@@ -467,6 +481,7 @@ private:
         .emit(ctx);
     }
     bytes_write_counter_.add(body.size());
+    events_write_counter_.add(events);
   }
 
   ToOpenSearchArgs args_;
@@ -475,6 +490,7 @@ private:
   std::string url_;
   std::map<std::string, std::string> headers_;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
   mutable Box<Notify> buffer_ready_{std::in_place};
 };

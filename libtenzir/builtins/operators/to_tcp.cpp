@@ -103,6 +103,10 @@ public:
       finish();
       co_return;
     }
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_tcp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
     co_return;
   }
@@ -116,11 +120,14 @@ public:
       finish();
       co_return;
     }
+    auto const rows = input.rows();
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
       finish();
+      co_return;
     }
+    events_write_counter_.add(rows);
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
@@ -239,7 +246,8 @@ private:
     bytes_write_counter_ = ctx.make_counter(
       MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                 peer_addr.getAddressStr())},
-      MetricsDirection::write, MetricsVisibility::external_);
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::bytes);
     TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
   }
 
@@ -296,6 +304,7 @@ private:
                                            message_queue_capacity};
   Option<folly::coro::Transport> transport_;
   MetricsCounter bytes_write_counter_ = {};
+  MetricsCounter events_write_counter_ = {};
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 

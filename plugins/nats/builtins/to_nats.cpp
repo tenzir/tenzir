@@ -199,7 +199,12 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     write_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_nats"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    write_events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_nats"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto resolved
       = co_await resolve_connection_config(ctx, args_.url, args_.auth);
     if (not resolved) {
@@ -313,6 +318,7 @@ private:
       return false;
     }
     written_bytes += bytes.size();
+    write_events_counter_.add(1);
     return true;
   }
 
@@ -349,6 +355,7 @@ private:
       return false;
     }
     written_bytes += bytes.size();
+    write_events_counter_.add(1);
     return true;
   }
 
@@ -462,6 +469,7 @@ private:
   nats_connection_ptr connection_;
   js_ctx_ptr js_;
   MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
   bool done_ = false;
 };
 

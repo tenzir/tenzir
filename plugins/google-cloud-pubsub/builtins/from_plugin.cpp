@@ -266,7 +266,12 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_google_cloud_pubsub"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_google_cloud_pubsub"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto subscription = pubsub::Subscription(args_.project_id.inner,
                                              args_.subscription_id.inner);
     // Detect whether the subscription has message ordering enabled.
@@ -371,7 +376,9 @@ public:
         }
       }
       for (auto&& slice : msb.finalize_as_table_slice()) {
+        auto const rows = slice.rows();
         co_await push(std::move(slice));
+        events_read_counter_.add(rows);
       }
     }
 
@@ -401,6 +408,7 @@ private:
   Option<SessionHandle> session_;
   std::shared_ptr<SharedState> shared_ = std::make_shared<SharedState>();
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 } // namespace

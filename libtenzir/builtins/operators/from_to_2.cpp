@@ -100,7 +100,14 @@ public:
         "operator",
         "from_events",
       },
-      MetricsDirection::read, MetricsVisibility::internal_);
+      MetricsDirection::read, MetricsVisibility::internal_, MetricsUnit::bytes);
+    read_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_events",
+      },
+      MetricsDirection::read, MetricsVisibility::internal_,
+      MetricsUnit::events);
     co_return;
   }
 
@@ -121,8 +128,11 @@ public:
     auto slice = table_slice{
       record_batch_from_struct_array(schema.to_arrow_schema(), *cast->array),
       schema};
-    read_bytes_counter_.add(slice.approx_bytes());
+    auto const bytes = slice.approx_bytes();
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    read_bytes_counter_.add(bytes);
+    read_events_counter_.add(rows);
     next_ += 1;
   }
 
@@ -141,6 +151,7 @@ private:
   size_t next_ = 0;
   std::vector<ast::expression> events_;
   MetricsCounter read_bytes_counter_;
+  MetricsCounter read_events_counter_;
 };
 
 class from_ir final : public ir::Operator {

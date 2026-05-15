@@ -10,6 +10,7 @@
 
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/box.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <folly/coro/BoundedQueue.h>
@@ -37,6 +38,13 @@ public:
   auto push(series_builder::YieldReadyResult result,
             Push<table_slice>& push) const -> Task<void> {
     co_await this->push(std::move(result), push, [](table_slice const&) {});
+  }
+
+  auto push(series_builder::YieldReadyResult result, Push<table_slice>& push,
+            MetricsCounter& counter) const -> Task<void> {
+    co_await this->push(std::move(result), push, [&](table_slice const& slice) {
+      counter.add(slice.rows());
+    });
   }
 
   template <class OnSlice>

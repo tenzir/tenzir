@@ -68,7 +68,17 @@ public:
         "operator",
         "discard",
       },
-      MetricsDirection::write, MetricsVisibility::internal_);
+      MetricsDirection::write, MetricsVisibility::internal_,
+      MetricsUnit::bytes);
+    if constexpr (std::same_as<Input, table_slice>) {
+      write_events_counter_ = ctx.make_counter(
+        MetricsLabel{
+          "operator",
+          "discard",
+        },
+        MetricsDirection::write, MetricsVisibility::internal_,
+        MetricsUnit::events);
+    }
     co_return;
   }
 
@@ -82,11 +92,15 @@ public:
       }
     }
     write_bytes_counter_.add(static_cast<uint64_t>(bytes));
+    if constexpr (std::same_as<Input, table_slice>) {
+      write_events_counter_.add(input.rows());
+    }
     co_return;
   }
 
 private:
   MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
 };
 
 class plugin final : public virtual operator_plugin<discard_operator>,

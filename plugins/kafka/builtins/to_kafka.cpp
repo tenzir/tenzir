@@ -162,14 +162,16 @@ public:
                      std::optional<ResolvedAwsIamAuth> auth,
                      producer_configuration cfg,
                      Box<RdKafka::Producer> producer,
-                     MetricsCounter write_bytes_counter)
+                     MetricsCounter write_bytes_counter,
+                     MetricsCounter write_events_counter)
     : topic_{std::move(topic)},
       message_expr_{std::move(message_expr)},
       auth_{std::move(auth)},
       cfg_{std::move(cfg)},
       producer_{std::move(producer)},
       printer_{try_make_json_printer(message_expr_)},
-      write_bytes_counter_{std::move(write_bytes_counter)} {
+      write_bytes_counter_{std::move(write_bytes_counter)},
+      write_events_counter_{std::move(write_events_counter)} {
   }
 
   /// Serializes and produces all rows from `input` as Kafka messages.
@@ -273,6 +275,7 @@ private:
       switch (result) {
         case RdKafka::ERR_NO_ERROR: {
           write_bytes_counter_.add(static_cast<uint64_t>(bytes.size()));
+          write_events_counter_.add(1);
           ++produced_since_poll_;
           if (produced_since_poll_ >= producer_poll_interval) {
             producer_->poll(0);
@@ -339,6 +342,7 @@ private:
   Box<RdKafka::Producer> producer_; // destroyed first (declared after cfg_)
   std::optional<json_printer2> printer_;
   MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
   size_t produced_since_poll_ = 0;
 };
 
@@ -354,7 +358,15 @@ public:
         "operator",
         "to_kafka",
       },
-      MetricsDirection::write, MetricsVisibility::external_);
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::bytes);
+    write_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_kafka",
+      },
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::events);
     auto aws_iam = args_.aws_iam
                      ? std::optional<located<record>>{*args_.aws_iam}
                      : std::nullopt;
@@ -403,7 +415,7 @@ public:
       producer_.emplace(args_.topic, args_.message, auth_, std::move(*cfg),
                         Box<RdKafka::Producer>::from_non_null(
                           std::unique_ptr<RdKafka::Producer>{raw_producer}),
-                        write_bytes_counter_);
+                        write_bytes_counter_, write_events_counter_);
       co_return;
     }
     // Multi-worker path: feed a bounded queue from process() and drain it with
@@ -426,7 +438,7 @@ public:
         args_.topic, args_.message, auth_, std::move(worker_cfg),
         Box<RdKafka::Producer>::from_non_null(
           std::unique_ptr<RdKafka::Producer>{raw_producer}),
-        write_bytes_counter_})));
+        write_bytes_counter_, write_events_counter_})));
     }
   }
 
@@ -508,6 +520,7 @@ private:
   std::optional<ResolvedAwsIamAuth> auth_;
   std::optional<AsyncKafkaProducer> producer_;
   MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
   std::shared_ptr<InputQueue> input_queue_;
   std::vector<AsyncHandle<void>> worker_handles_;
   OpCtx* ctx_ = nullptr;

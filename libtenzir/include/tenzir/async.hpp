@@ -205,12 +205,14 @@ public:
 
   /// Create a throughput counter with the given label.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility) -> MetricsCounter
+                            MetricsVisibility visibility, MetricsUnit type)
+    -> MetricsCounter
     = 0;
 
   /// Create a throughput gauge with the given label.
   virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                          MetricsVisibility visibility) -> MetricsGauge
+                          MetricsVisibility visibility, MetricsUnit type)
+    -> MetricsGauge
     = delete;
 
   /// Returns the metrics receiver actor handle, if available.
