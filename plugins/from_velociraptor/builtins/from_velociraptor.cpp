@@ -255,11 +255,11 @@ public:
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     auto normalized = normalize_args(args_, ctx);
     TENZIR_ASSERT(normalized);
     auto config = select_client_config(args_, ctx.dh());

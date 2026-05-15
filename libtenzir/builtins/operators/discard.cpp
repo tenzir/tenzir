@@ -69,7 +69,7 @@ public:
         "discard",
       },
       MetricsDirection::write, MetricsVisibility::internal_,
-      MetricsType::bytes);
+      MetricsUnit::bytes);
     if constexpr (std::same_as<Input, table_slice>) {
       write_events_counter_ = ctx.make_counter(
         MetricsLabel{
@@ -77,7 +77,7 @@ public:
           "discard",
         },
         MetricsDirection::write, MetricsVisibility::internal_,
-        MetricsType::events);
+        MetricsUnit::events);
     }
     co_return;
   }

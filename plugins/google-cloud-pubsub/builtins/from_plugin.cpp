@@ -267,11 +267,11 @@ public:
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_google_cloud_pubsub"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_google_cloud_pubsub"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     auto subscription = pubsub::Subscription(args_.project_id.inner,
                                              args_.subscription_id.inner);
     // Detect whether the subscription has message ordering enabled.

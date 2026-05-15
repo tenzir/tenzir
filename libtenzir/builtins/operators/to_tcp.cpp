@@ -106,7 +106,7 @@ public:
     events_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_tcp"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
     co_return;
   }
@@ -247,7 +247,7 @@ private:
       MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                 peer_addr.getAddressStr())},
       MetricsDirection::write, MetricsVisibility::external_,
-      MetricsType::bytes);
+      MetricsUnit::bytes);
     TENZIR_DEBUG("to_tcp: connected to {}", address_.describe());
   }
 

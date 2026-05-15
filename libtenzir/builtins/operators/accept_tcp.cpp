@@ -280,7 +280,7 @@ public:
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     fmt::to_string(accepted.peer_ip))},
           MetricsDirection::read, MetricsVisibility::external_,
-          MetricsType::bytes);
+          MetricsUnit::bytes);
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
         auto sub_result

@@ -365,20 +365,14 @@ public:
           MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
                                       msg.metadata.client_ip)},
           MetricsDirection::read, MetricsVisibility::external_,
-          MetricsType::bytes);
-        auto events_read = ctx.make_counter(
-          MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
-                                      msg.metadata.client_ip)},
-          MetricsDirection::read, MetricsVisibility::external_,
-          MetricsType::events);
+          MetricsUnit::bytes);
         {
           auto active_requests = co_await active_requests_.lock();
           active_requests->emplace(
             request_id, ActiveRequest{.metadata = std::move(msg.metadata),
                                       .decompressor = std::move(decompressor),
                                       .finished = msg.response_signal,
-                                      .bytes_read = std::move(bytes_read),
-                                      .events_read = std::move(events_read)});
+                                      .bytes_read = std::move(bytes_read)});
         }
         co_await ctx.spawn_sub<chunk_ptr>(request_id, std::move(pipeline),
                                           DiagnosticBehavior::ErrorToWarning);
@@ -448,14 +442,8 @@ public:
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    auto const request_id = as<uint64_t>(key);
-    auto const rows = slice.rows();
+    TENZIR_UNUSED(key);
     co_await push(std::move(slice));
-    auto active_requests = co_await active_requests_.lock();
-    if (auto it = active_requests->find(request_id);
-        it != active_requests->end()) {
-      it->second.events_read.add(rows);
-    }
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
@@ -505,7 +493,6 @@ private:
     bool drop_body = false;
     Arc<ResponseSignal> finished;
     MetricsCounter bytes_read;
-    MetricsCounter events_read;
   };
 
   void force_stop() {

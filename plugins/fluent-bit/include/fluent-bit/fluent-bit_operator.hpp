@@ -1115,14 +1115,14 @@ public:
         "operator",
         "from_fluent_bit",
       },
-      MetricsDirection::read, MetricsVisibility::external_, MetricsType::bytes);
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
     read_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
         "from_fluent_bit",
       },
       MetricsDirection::read, MetricsVisibility::external_,
-      MetricsType::events);
+      MetricsUnit::events);
     builder_.emplace(args_.builder_options, ctx.dh());
     auto [sender, receiver]
       = channel<FluentBitSourceTaskResult>(source_channel_capacity);
@@ -1266,14 +1266,14 @@ public:
         "to_fluent_bit",
       },
       MetricsDirection::write, MetricsVisibility::external_,
-      MetricsType::bytes);
+      MetricsUnit::bytes);
     write_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
         "to_fluent_bit",
       },
       MetricsDirection::write, MetricsVisibility::external_,
-      MetricsType::events);
+      MetricsUnit::events);
     auto operator_args = make_operator_args(args_, ctx);
     if (not operator_args) {
       done_ = true;

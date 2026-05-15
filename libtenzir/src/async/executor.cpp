@@ -325,7 +325,7 @@ public:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsType type)
+                    MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter override {
     return inner_.make_counter(label, direction, visibility, type);
   }
@@ -583,7 +583,7 @@ private:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsType type)
+                    MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter override {
     return exec_ctx_.make_counter(label, direction, visibility, type);
   }

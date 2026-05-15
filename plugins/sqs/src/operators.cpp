@@ -126,11 +126,11 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
                        MetricsDirection::read, MetricsVisibility::external_,
-                       MetricsType::bytes);
+                       MetricsUnit::bytes);
   events_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
                        MetricsDirection::read, MetricsVisibility::external_,
-                       MetricsType::events);
+                       MetricsUnit::events);
 }
 
 auto FromSqs::await_task(diagnostic_handler& dh) const -> Task<Any> {
@@ -271,11 +271,11 @@ auto ToSqs::start(OpCtx& ctx) -> Task<void> {
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
                        MetricsDirection::write, MetricsVisibility::external_,
-                       MetricsType::bytes);
+                       MetricsUnit::bytes);
   events_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
                        MetricsDirection::write, MetricsVisibility::external_,
-                       MetricsType::events);
+                       MetricsUnit::events);
 }
 
 auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {

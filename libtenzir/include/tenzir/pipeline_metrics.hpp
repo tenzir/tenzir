@@ -26,7 +26,7 @@ namespace tenzir {
 enum class MetricsDirection : std::uint8_t { read, write };
 enum class MetricsVisibility : std::uint8_t { external_, internal_ };
 enum class MetricsInstrument : std::uint8_t { counter, gauge };
-enum class MetricsType : std::uint8_t { bytes, events };
+enum class MetricsUnit : std::uint8_t { bytes, events };
 
 /// A (key, value) label attached to a counter.
 /// Key and value are bounded to `max_length` characters.
@@ -110,7 +110,7 @@ struct MetricsSnapshotEntry {
   MetricsDirection direction = {};
   MetricsVisibility visibility = {};
   MetricsInstrument instrument = {};
-  MetricsType type = {};
+  MetricsUnit type = {};
   uint64_t value = {};
 };
 
@@ -126,7 +126,7 @@ class PipelineMetrics {
 public:
   /// Create and register a new counter.
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsType type)
+                    MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter {
     return make<MetricsInstrument::counter>(label, direction, visibility, type);
   }
@@ -137,7 +137,7 @@ public:
   /// `direction` and `visibility`, which should probably be labels. And label
   /// values should be set in a step that is separate from the metric creation.
   auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                  MetricsVisibility visibility, MetricsType type)
+                  MetricsVisibility visibility, MetricsUnit type)
     -> MetricsGauge
     = delete;
 
@@ -147,7 +147,7 @@ public:
 private:
   template <MetricsInstrument Instrument>
   auto make(MetricsLabel label, MetricsDirection direction,
-            MetricsVisibility visibility, MetricsType type)
+            MetricsVisibility visibility, MetricsUnit type)
     -> Metric<Instrument>;
 
   struct Entry {
@@ -155,7 +155,7 @@ private:
     MetricsDirection direction;
     MetricsVisibility visibility;
     MetricsInstrument instrument;
-    MetricsType type;
+    MetricsUnit type;
     std::shared_ptr<std::atomic<uint64_t>> value;
 
     auto snapshot() const -> MetricsSnapshotEntry;

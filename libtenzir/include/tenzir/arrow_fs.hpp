@@ -303,7 +303,6 @@ private:
     max_jobs + 1,
   };
   MetricsCounter bytes_read_counter_;
-  MetricsCounter events_read_counter_;
 };
 
 /// Common arguments for Arrow filesystem-based sink operators.
@@ -543,7 +542,6 @@ private:
 
   bool finalized_ = false;
   MetricsCounter bytes_written_counter_;
-  MetricsCounter events_written_counter_;
 };
 
 } // namespace tenzir

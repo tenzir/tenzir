@@ -241,7 +241,7 @@ public:
 
   /// Create and register a new counter for the pipeline.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility, MetricsType type)
+                            MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter
     = 0;
 

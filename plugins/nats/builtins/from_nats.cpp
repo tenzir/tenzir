@@ -422,11 +422,11 @@ public:
     read_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     read_events_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     auto resolved
       = co_await resolve_connection_config(ctx, args_.url, args_.auth);
     if (not resolved) {

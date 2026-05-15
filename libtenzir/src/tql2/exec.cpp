@@ -1043,7 +1043,7 @@ public:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsType type)
+                    MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter override {
     return metrics_->make_counter(label, direction, visibility, type);
   }
@@ -1858,10 +1858,10 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
   auto internal_write = TrafficMetrics{};
   auto add = [](TrafficMetrics& metrics, MetricsSnapshotEntry const& entry) {
     switch (entry.type) {
-      case MetricsType::bytes:
+      case MetricsUnit::bytes:
         metrics.bytes += entry.value;
         break;
-      case MetricsType::events:
+      case MetricsUnit::events:
         metrics.events += entry.value;
         break;
     }
@@ -1883,71 +1883,57 @@ void emit_node_metrics(NodeProfiler const& node, TestExecCtx& exec_ctx,
     }
   }
   auto elapsed = now - start_time;
-  auto select_bytes = [](TrafficMetrics external, TrafficMetrics internal) {
-    return std::pair{external.bytes > 0 ? external.bytes : internal.bytes,
-                     external.bytes == 0};
+  struct SelectedMetrics {
+    uint64_t count = 0;
+    bool internal = false;
   };
-  auto select_events = [](TrafficMetrics external, TrafficMetrics internal) {
-    return std::pair{external.events > 0 ? external.events : internal.events,
-                     external.events == 0};
+  auto select = [](uint64_t external, uint64_t internal) {
+    return external > 0 ? SelectedMetrics{external, false}
+                        : SelectedMetrics{internal, true};
   };
-  auto send_source_metrics = [&](TrafficMetrics external,
-                                 TrafficMetrics internal) {
-    auto [bytes_count, bytes_internal] = select_bytes(external, internal);
-    auto [events_count, events_internal] = select_events(external, internal);
-    if (bytes_count == 0 and events_count == 0) {
-      return;
+  auto make_metric
+    = [&](uint64_t index, std::string_view name, SelectedMetrics selected) {
+        auto metric = operator_metric{};
+        metric.operator_index = index;
+        metric.operator_name = name;
+        metric.internal = selected.internal;
+        metric.time_total = elapsed;
+        metric.time_running = elapsed;
+        return metric;
+      };
+  auto send_metric = [&](operator_metric metric, bool inbound,
+                         SelectedMetrics selected, std::string_view unit) {
+    if (inbound) {
+      metric.inbound_measurement.unit = unit;
+      metric.inbound_measurement.num_elements = selected.count;
+    } else {
+      metric.outbound_measurement.unit = unit;
+      metric.outbound_measurement.num_elements = selected.count;
     }
-    auto bytes = operator_metric{};
-    bytes.operator_index = 0;
-    bytes.operator_name = "source";
-    bytes.internal = bytes_internal;
-    bytes.outbound_measurement.unit = "bytes";
-    bytes.outbound_measurement.num_elements = bytes_count;
-    bytes.time_total = elapsed;
-    bytes.time_running = elapsed;
-    caf::anon_mail(std::move(bytes)).send(node.metrics);
-    auto events = operator_metric{};
-    events.operator_index = 2;
-    events.operator_name = "source";
-    events.internal = events_internal;
-    events.outbound_measurement.unit = "events";
-    events.outbound_measurement.num_elements = events_count;
-    events.time_total = elapsed;
-    events.time_running = elapsed;
-    caf::anon_mail(std::move(events)).send(node.metrics);
+    caf::anon_mail(std::move(metric)).send(node.metrics);
   };
-  auto send_sink_metrics = [&](TrafficMetrics external,
-                               TrafficMetrics internal) {
-    auto [bytes_count, bytes_internal] = select_bytes(external, internal);
-    auto [events_count, events_internal] = select_events(external, internal);
-    if (bytes_count == 0 and events_count == 0) {
-      return;
-    }
-    auto bytes = operator_metric{};
-    // We use operator index 1 such that a pipeline with a single operator will
-    // still use two different operator indices for ingress and egress. The code
-    // in the pipeline manager cannot handle the case where it's the same.
-    bytes.operator_index = 1;
-    bytes.operator_name = "sink";
-    bytes.internal = bytes_internal;
-    bytes.inbound_measurement.unit = "bytes";
-    bytes.inbound_measurement.num_elements = bytes_count;
-    bytes.time_total = elapsed;
-    bytes.time_running = elapsed;
-    caf::anon_mail(std::move(bytes)).send(node.metrics);
-    auto events = operator_metric{};
-    events.operator_index = 3;
-    events.operator_name = "sink";
-    events.internal = events_internal;
-    events.inbound_measurement.unit = "events";
-    events.inbound_measurement.num_elements = events_count;
-    events.time_total = elapsed;
-    events.time_running = elapsed;
-    caf::anon_mail(std::move(events)).send(node.metrics);
-  };
-  send_source_metrics(external_read, internal_read);
-  send_sink_metrics(external_write, internal_write);
+  auto send_edge_metrics
+    = [&](std::string_view name, uint64_t bytes_index, uint64_t events_index,
+          bool inbound, TrafficMetrics external, TrafficMetrics internal) {
+        auto bytes = select(external.bytes, internal.bytes);
+        auto events = select(external.events, internal.events);
+        if (bytes.count == 0 and events.count == 0) {
+          return;
+        }
+        if (bytes.count > 0) {
+          send_metric(make_metric(bytes_index, name, bytes), inbound, bytes,
+                      "bytes");
+        }
+        if (events.count > 0) {
+          send_metric(make_metric(events_index, name, events), inbound, events,
+                      "events");
+        }
+      };
+  send_edge_metrics("source", 0, 2, false, external_read, internal_read);
+  // We use operator index 1 such that a pipeline with a single operator will
+  // still use two different operator indices for ingress and egress. The code
+  // in the pipeline manager cannot handle the case where it's the same.
+  send_edge_metrics("sink", 1, 3, true, external_write, internal_write);
   // Always drain profiles to prune dead channels/executors, even when there
   // is no importer to send snapshots to. Without this, the profile vectors
   // would grow unboundedly for long-running pipelines with dynamic

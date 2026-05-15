@@ -174,11 +174,11 @@ public:
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     worker_handle_ = ctx.spawn_task(
       publish_loop(engine_, engine_mutex_, queue_, args_, channel_, dh,
                    bytes_write_counter_, events_write_counter_));

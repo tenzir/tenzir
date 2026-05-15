@@ -353,11 +353,11 @@ public:
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
                          MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();

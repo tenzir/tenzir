@@ -238,11 +238,11 @@ public:
     state_->bytes_write_counter
       = ctx.make_counter(MetricsLabel{"operator", "to_clickhouse"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::bytes);
+                         MetricsUnit::bytes);
     state_->events_write_counter
       = ctx.make_counter(MetricsLabel{"operator", "to_clickhouse"},
                          MetricsDirection::write, MetricsVisibility::external_,
-                         MetricsType::events);
+                         MetricsUnit::events);
     state_->worker_handles.reserve(args_.jobs);
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
       auto client = std::shared_ptr<easy_client>{};

@@ -205,13 +205,13 @@ public:
 
   /// Create a throughput counter with the given label.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility, MetricsType type)
+                            MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter
     = 0;
 
   /// Create a throughput gauge with the given label.
   virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                          MetricsVisibility visibility, MetricsType type)
+                          MetricsVisibility visibility, MetricsUnit type)
     -> MetricsGauge
     = delete;
 
