@@ -522,9 +522,14 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     if (starts_at_latest(args_.start) and not shard.latest_start_time) {
       shard.latest_start_time = time::clock::now();
     }
+    auto latest_start_time = shard.latest_start_time;
     shard.iterator = co_await spawn_blocking(
       [client = client_, stream = args_.stream.inner, id = shard.id,
-       start = args_.start, sequence = shard.next_sequence_number] {
+       start = args_.start, sequence = shard.next_sequence_number,
+       latest_start_time] {
+        if (sequence.empty() and latest_start_time) {
+          return make_shard_iterator(*client, stream, id, *latest_start_time);
+        }
         return make_shard_iterator(*client, stream, id, start, sequence);
       });
   }
