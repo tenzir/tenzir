@@ -1,0 +1,6 @@
+error: `log_stream_prefix` requires exactly one log group
+ --> tests/operators/from_cloudwatch/validation/error_live_prefix_multiple_groups.tql:8:21
+  |
+8 |   log_stream_prefix="prefix"
+  |                     ^^^^^^^^ 
+  |

@@ -29,14 +29,17 @@ auto is_method(std::string_view value) -> bool {
   return value == "put_log_events" or value == "hlc";
 }
 
-auto is_string_list(located<data> const& value) -> bool {
+auto string_list_size(located<data> const& value) -> Option<size_t> {
   auto const* values = try_as<list>(&value.inner);
   if (not values) {
-    return false;
+    return None{};
   }
-  return std::ranges::all_of(*values, [](auto const& item) {
-    return try_as<std::string>(&item) != nullptr;
-  });
+  if (not std::ranges::all_of(*values, [](auto const& item) {
+        return try_as<std::string>(&item) != nullptr;
+      })) {
+    return None{};
+  }
+  return values->size();
 }
 
 class from_plugin final : public virtual OperatorPlugin {
@@ -82,14 +85,17 @@ public:
           .primary(group.source)
           .emit(ctx);
       }
-      if (auto value = ctx.get(log_group_identifiers);
-          value and not is_string_list(*value)) {
-        diagnostic::error("`log_group_identifiers` must be a list of strings")
-          .primary(value->source)
-          .emit(ctx);
+      auto log_group_identifier_count = Option<size_t>{};
+      if (auto value = ctx.get(log_group_identifiers)) {
+        log_group_identifier_count = string_list_size(*value);
+        if (not log_group_identifier_count) {
+          diagnostic::error("`log_group_identifiers` must be a list of strings")
+            .primary(value->source)
+            .emit(ctx);
+        }
       }
       if (auto value = ctx.get(log_streams);
-          value and not is_string_list(*value)) {
+          value and not string_list_size(*value)) {
         diagnostic::error("`log_streams` must be a list of strings")
           .primary(value->source)
           .emit(ctx);
@@ -150,6 +156,14 @@ public:
           and ctx.get(log_stream_prefix)) {
         diagnostic::error("`log_stream` and `log_stream_prefix` are "
                           "mutually exclusive")
+          .primary(ctx.get(log_stream_prefix)->source)
+          .emit(ctx);
+        return std::nullopt;
+      }
+      if (effective_mode == "live" and ctx.get(log_stream_prefix)
+          and log_group_identifier_count
+          and *log_group_identifier_count > size_t{1}) {
+        diagnostic::error("`log_stream_prefix` requires exactly one log group")
           .primary(ctx.get(log_stream_prefix)->source)
           .emit(ctx);
         return std::nullopt;

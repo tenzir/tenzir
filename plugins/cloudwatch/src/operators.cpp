@@ -619,6 +619,15 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
     done_ = true;
     co_return;
   }
+  if (mode_ == FromMode::live and args_.log_stream_prefix
+      and args_.log_group_identifiers
+      and strings_from_data(*args_.log_group_identifiers).size() > size_t{1}) {
+    diagnostic::error("`log_stream_prefix` requires exactly one log group")
+      .primary(args_.log_stream_prefix->source)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
   if (args_.limit
       and args_.limit->inner > uint64_t{std::numeric_limits<int>::max()}) {
     diagnostic::error("limit must not exceed {}",
@@ -664,11 +673,19 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
     endpoint = detail::getenv("AWS_ENDPOINT_URL");
   }
   if (endpoint) {
-    auto config = HttpPoolConfig{};
-    config.tls = endpoint->starts_with("https://");
-    http_pool_
-      = HttpPool::make(ctx.io_executor(), *endpoint, std::move(config));
-    use_local_http_read_ = true;
+    try {
+      auto config = HttpPoolConfig{};
+      config.tls = endpoint->starts_with("https://");
+      http_pool_
+        = HttpPool::make(ctx.io_executor(), *endpoint, std::move(config));
+      use_local_http_read_ = true;
+    } catch (std::exception const& e) {
+      diagnostic::error("failed to initialize HTTP client: {}", e.what())
+        .primary(args_.operator_location)
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
   }
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_cloudwatch"},
@@ -881,11 +898,19 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
     endpoint = detail::getenv("AWS_ENDPOINT_URL");
   }
   if (endpoint) {
-    auto config = HttpPoolConfig{};
-    config.tls = endpoint->starts_with("https://");
-    http_pool_
-      = HttpPool::make(ctx.io_executor(), *endpoint, std::move(config));
-    use_local_http_put_ = true;
+    try {
+      auto config = HttpPoolConfig{};
+      config.tls = endpoint->starts_with("https://");
+      http_pool_
+        = HttpPool::make(ctx.io_executor(), *endpoint, std::move(config));
+      use_local_http_put_ = true;
+    } catch (std::exception const& e) {
+      diagnostic::error("failed to initialize HTTP client: {}", e.what())
+        .primary(args_.operator_location)
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
   }
 }
 
