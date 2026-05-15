@@ -1416,7 +1416,7 @@ public:
         return {};
       });
     d.optimization_order(&ReadXsvArgs::order);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 

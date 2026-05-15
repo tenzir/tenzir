@@ -538,7 +538,7 @@ public:
     d.validate(add_msb_to_describer(d, &ReadCefArgs::msb_options));
     d.operator_location(&ReadCefArgs::operator_location);
     d.optimization_order(&ReadCefArgs::order);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
