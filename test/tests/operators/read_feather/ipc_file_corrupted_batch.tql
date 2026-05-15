@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_file f"{env("TENZIR_INPUTS")}/feather/ipc_file_corrupted_batch.feather" {
+  read_feather
+}
