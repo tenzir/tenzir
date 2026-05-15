@@ -547,6 +547,18 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
       return it == shards_.end() or it->closed;
     });
   };
+  auto any_eligible = false;
+  auto all_eligible_idle = true;
+  for (const auto& shard : shards_) {
+    const auto eligible = not shard.closed and not shard.iterator.empty()
+                          and parents_closed(shard);
+    any_eligible = any_eligible or eligible;
+    all_eligible_idle = all_eligible_idle and (not eligible or shard.idle);
+  }
+  if (any_eligible and all_eligible_idle) {
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<folly::HighResDuration>(poll_idle_));
+  }
   for (auto i = size_t{0}; i < shards_.size(); ++i) {
     auto candidate = (next_shard_ + i) % shards_.size();
     if (not shards_[candidate].closed
@@ -566,7 +578,7 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
      id = shard.id, iterator = shard.iterator, limit = records_per_call_] {
       return read_from_shard(*client, stream, index, id, iterator, limit);
     });
-  if (result.records.empty()) {
+  if (result.throttled) {
     co_await folly::coro::sleep(
       std::chrono::duration_cast<folly::HighResDuration>(poll_idle_));
   }
@@ -802,6 +814,13 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
 
 auto ToAmazonKinesis::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
   co_await flush(ctx);
+  if (not batch_.empty()) {
+    diagnostic::error("failed to write all records to Kinesis")
+      .primary(args_.stream.source)
+      .note("{} records remain unsent", batch_.size())
+      .emit(ctx);
+    throw std::runtime_error{"failed to write all records to Kinesis"};
+  }
   co_return FinalizeBehavior::done;
 }
 
