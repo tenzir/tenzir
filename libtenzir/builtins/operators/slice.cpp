@@ -618,11 +618,8 @@ public:
     }};
     return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
       // when downstream does not care about the order, this is a noop
-      if (order == event_order::unordered) {
-        return {.order = event_order::unordered, .drop = true};
-      }
-      // reverse changes event positions, same reasoning as slice.
-      return {.order = event_order::ordered, .propagate_filter = true};
+      auto drop = order == event_order::unordered;
+      return {.order = order, .propagate_filter = true, .drop = drop};
     });
   }
 };

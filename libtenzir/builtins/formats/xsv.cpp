@@ -986,6 +986,7 @@ public:
       msb_opts.policy = std::move(*parsed);
     }
     // ── Build xsv_parser_options from args_ ───────────────────────────────────
+    msb_opts.settings.ordered = args_.order == event_order::ordered;
     opts_ = xsv_parser_options{
       .name = args_.name,
       .field_separator = args_.field_separator.inner,
@@ -995,11 +996,7 @@ public:
       .auto_expand = args_.auto_expand,
       .allow_comments = args_.allow_comments,
       .header = {},
-      .builder_options =
-        [&] {
-          msb_opts.settings.ordered = args_.order == event_order::ordered;
-          return std::move(msb_opts);
-        }(),
+      .builder_options = std::move(msb_opts),
     };
     // ── Eagerly evaluate the header expression if provided ───────────────────
     if (args_.header) {

@@ -11,6 +11,7 @@
 #include "tenzir/any.hpp"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/concepts.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/ir.hpp"
@@ -948,15 +949,12 @@ public:
   /// The callback receives the current description context and the weakest
   /// ordering guarantee required by downstream operators. The returned
   /// `Optimization` controls the required upstream order, whether the operator
-  /// may be dropped, and whether the incoming filter is blocked here (via
-  /// `stop_filter`) instead of being propagated further upstream.
+  /// may be dropped, and whether the incoming filter is blocked instead of
+  /// being propagated further upstream.
   ///
-  /// Filters are propagated upstream automatically unless `stop_filter` is set
-  /// or `optimize_filter` was called to absorb the filter into the operator.
+  /// Filters are propagated upstream if `propagate_filter` is set.
   template <class F>
-    requires requires(F& f, DescribeCtx& ctx, event_order order) {
-      { f(ctx, order) } -> std::same_as<Optimization>;
-    }
+    requires concepts::invokable_r<Optimization, F&, DescribeCtx&, event_order>
   auto optimize(F&& f) -> Description {
     desc_.optimizer = std::forward<F>(f);
     return std::move(desc_);

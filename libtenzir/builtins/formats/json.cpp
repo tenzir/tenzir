@@ -2101,7 +2101,7 @@ public:
         return {};
       });
     }
-    return d.invariant_order_filter();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -2172,7 +2172,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order_filter();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

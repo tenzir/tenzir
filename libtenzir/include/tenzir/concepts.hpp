@@ -19,6 +19,11 @@
 
 namespace tenzir::concepts {
 
+template <class Result, class F, class... Args>
+concept invokable_r
+  = std::invocable<F, Args...>
+    and std::same_as<std::invoke_result_t<F, Args...>, Result>;
+
 template <class T, class... Us>
 concept sameish = (std::same_as<std::decay_t<T>, std::decay_t<Us>> or ...);
 

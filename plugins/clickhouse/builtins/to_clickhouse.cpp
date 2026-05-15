@@ -477,7 +477,7 @@ public:
         }
         return {};
       });
-    return d.unordered();
+    return d.without_optimize();
   }
 };
 
