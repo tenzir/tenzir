@@ -1,1 +1,7 @@
-large_skip_warning: True
+warning: CloudWatch log event exceeds maximum payload size
+  --> tests/operators/to_cloudwatch/localstack/08-put-skips-too-large-event.tql:12:11
+   |
+12 |   message=message,
+   |           ~~~~~~~ 
+   |
+   = note: event is skipped

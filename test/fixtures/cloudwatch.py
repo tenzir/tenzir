@@ -10,11 +10,8 @@ import json
 import logging
 import os
 import shutil
-import socket
-import subprocess
 import tempfile
 import threading
-import time
 import urllib.error
 import urllib.request
 import uuid
@@ -24,6 +21,16 @@ from typing import Any, Iterator
 
 from tenzir_test import fixture
 from tenzir_test.fixtures import FixtureUnavailable
+from tenzir_test.fixtures.container_runtime import (
+    ContainerReadinessTimeout,
+    ManagedContainer,
+    RuntimeSpec,
+    detect_runtime,
+    start_detached,
+    wait_until_ready,
+)
+
+from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
@@ -35,25 +42,9 @@ TEST_SECRET_KEY = "test"
 TEST_EXTERNAL_ID = "tenzir-test-external-id"
 
 
-def _find_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _find_container_runtime() -> str | None:
-    for runtime in ("podman", "docker"):
-        if shutil.which(runtime) is not None:
-            return runtime
-    return None
-
-
-def _start_localstack(runtime: str, port: int) -> str:
+def _start_localstack(runtime: RuntimeSpec, port: int) -> ManagedContainer:
     container_name = f"tenzir-test-cloudwatch-{uuid.uuid4().hex[:8]}"
-    cmd = [
-        runtime,
-        "run",
-        "-d",
+    run_args = [
         "--rm",
         "--name",
         container_name,
@@ -67,31 +58,43 @@ def _start_localstack(runtime: str, port: int) -> str:
         "EAGER_SERVICE_LOADING=1",
         LOCALSTACK_IMAGE,
     ]
-    return subprocess.run(
-        cmd, capture_output=True, text=True, check=True
-    ).stdout.strip()
+    return start_detached(runtime, run_args)
 
 
-def _stop_localstack(runtime: str, container_id: str) -> None:
-    subprocess.run([runtime, "stop", container_id], capture_output=True, check=False)
+def _stop_localstack(container: ManagedContainer) -> None:
+    result = container.stop()
+    if result.returncode != 0:
+        logger.warning(
+            "failed to stop CloudWatch LocalStack container %s: %s",
+            container.container_id[:12],
+            (result.stderr or result.stdout or "").strip() or "no output",
+        )
 
 
-def _wait_for_localstack(endpoint: str, timeout: float = 60.0) -> None:
-    health_url = f"{endpoint}/_localstack/health"
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+def _wait_for_localstack(port: int, timeout: float = 60.0) -> None:
+    health_url = f"http://127.0.0.1:{port}/_localstack/health"
+
+    def _probe() -> tuple[bool, dict[str, str]]:
         try:
             with urllib.request.urlopen(health_url, timeout=5) as response:
                 services = json.loads(response.read().decode()).get("services", {})
-                if all(
-                    services.get(s) in ("available", "running")
-                    for s in ("logs", "iam", "sts")
-                ):
-                    return
-        except (urllib.error.URLError, OSError, json.JSONDecodeError):
-            pass
-        time.sleep(1)
-    raise RuntimeError("LocalStack CloudWatch services did not become ready")
+                statuses = {s: services.get(s, "") for s in ("logs", "iam", "sts")}
+                ready = all(
+                    value in ("available", "running") for value in statuses.values()
+                )
+                return ready, statuses
+        except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+            return False, {"error": str(e)}
+
+    try:
+        wait_until_ready(
+            _probe,
+            timeout_seconds=timeout,
+            poll_interval_seconds=1.0,
+            timeout_context="CloudWatch LocalStack startup",
+        )
+    except ContainerReadinessTimeout as e:
+        raise RuntimeError(str(e)) from e
 
 
 def _aws_client(endpoint: str, service: str) -> Any:
@@ -171,7 +174,7 @@ def _start_hlc_server(
         def log_message(self, fmt: str, *args: object) -> None:
             logger.debug("cloudwatch hlc: %s", fmt % args if args else fmt)
 
-    port = _find_free_port()
+    port = find_free_port()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -180,20 +183,20 @@ def _start_hlc_server(
 
 @fixture(name="cloudwatch", log_teardown=True)
 def run() -> Iterator[dict[str, str]]:
-    runtime = _find_container_runtime()
+    runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
             "A container runtime is required for CloudWatch tests."
         )
-    port = _find_free_port()
+    port = find_free_port()
     endpoint = f"http://127.0.0.1:{port}"
-    container_id = None
+    container = None
     temp_dir = tempfile.mkdtemp(prefix="tenzir-cloudwatch-")
     hlc_server = None
     hlc_thread = None
     try:
-        container_id = _start_localstack(runtime, port)
-        _wait_for_localstack(endpoint)
+        container = _start_localstack(runtime, port)
+        _wait_for_localstack(port)
         logs = _aws_client(endpoint, "logs")
         iam = _aws_client(endpoint, "iam")
         suffix = uuid.uuid4().hex[:8]
@@ -264,6 +267,6 @@ def run() -> Iterator[dict[str, str]]:
             hlc_server.server_close()
         if hlc_thread is not None:
             hlc_thread.join(timeout=5)
-        if container_id:
-            _stop_localstack(runtime, container_id)
+        if container is not None:
+            _stop_localstack(container)
         shutil.rmtree(temp_dir, ignore_errors=True)

@@ -575,7 +575,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
     auto [sender, receiver] = channel<Any>(16);
     live_rx_ = std::move(receiver);
     auto sender_ptr = std::make_shared<Sender<Any>>(std::move(sender));
-    auto client = client_;
+    auto client = *client_;
     auto args = args_;
     ctx.spawn_task([client = std::move(client), args = std::move(args),
                     sender = std::move(sender_ptr)]() mutable -> Task<void> {
@@ -658,9 +658,9 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
     [client = std::move(client), args = std::move(args),
      token = std::move(token), mode]() mutable -> SourcePage {
       if (mode == FromMode::filter) {
-        return filter_page(*client, std::move(args), std::move(token));
+        return filter_page(**client, std::move(args), std::move(token));
       }
-      return get_page(*client, std::move(args), std::move(token));
+      return get_page(**client, std::move(args), std::move(token));
     });
   if (not page.error.empty() and use_local_http_read_ and http_pool_) {
     auto headers = std::map<std::string, std::string>{
@@ -927,7 +927,7 @@ auto ToCloudWatch::send_put_batch(std::vector<Event> events,
       }
     }
   }
-  auto client = client_;
+  auto client = *client_;
   auto outcome = co_await spawn_blocking(
     [client = std::move(client), request = std::move(request)] {
       return client->PutLogEvents(request);

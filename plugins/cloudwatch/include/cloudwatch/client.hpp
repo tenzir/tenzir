@@ -8,18 +8,18 @@
 
 #pragma once
 
+#include <tenzir/arc.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/fwd.hpp>
 
 #include <aws/logs/CloudWatchLogsClient.h>
 
-#include <memory>
 #include <optional>
 
 namespace tenzir::plugins::cloudwatch {
 
 struct CloudWatchClient {
-  std::shared_ptr<Aws::CloudWatchLogs::CloudWatchLogsClient> logs;
+  Arc<Aws::CloudWatchLogs::CloudWatchLogsClient> logs;
 };
 
 auto make_cloudwatch_client(Option<located<record>> aws_iam,

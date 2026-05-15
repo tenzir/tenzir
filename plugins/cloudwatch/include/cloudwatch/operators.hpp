@@ -85,7 +85,7 @@ public:
 private:
   FromCloudWatchArgs args_;
   FromMode mode_ = FromMode::live;
-  std::shared_ptr<Aws::CloudWatchLogs::CloudWatchLogsClient> client_;
+  Option<Arc<Aws::CloudWatchLogs::CloudWatchLogsClient>> client_;
   mutable Option<Box<HttpPool>> http_pool_;
   bool use_local_http_read_ = false;
   Option<Sender<Any>> live_tx_;
@@ -119,7 +119,7 @@ private:
 
   ToCloudWatchArgs args_;
   ToMethod method_ = ToMethod::put_log_events;
-  std::shared_ptr<Aws::CloudWatchLogs::CloudWatchLogsClient> client_;
+  Option<Arc<Aws::CloudWatchLogs::CloudWatchLogsClient>> client_;
   Option<Box<HttpPool>> http_pool_;
   bool use_local_http_put_ = false;
   std::string token_;

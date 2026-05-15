@@ -57,8 +57,8 @@ auto make_cloudwatch_client(Option<located<record>> aws_iam,
     config.endpointOverride = *endpoint;
   }
   co_return CloudWatchClient{
-    .logs = std::make_shared<Aws::CloudWatchLogs::CloudWatchLogsClient>(
-      *provider, config),
+    .logs = Arc<Aws::CloudWatchLogs::CloudWatchLogsClient>{std::in_place,
+                                                           *provider, config},
   };
 }
 
