@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {message: "will-not-drop"}
+to_amazon_cloudwatch "ignored", "ignored",
+  method="hlc",
+  message=message,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint="invalid-url"

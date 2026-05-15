@@ -1,0 +1,30 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
+#include <tenzir/arc.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/fwd.hpp>
+#include <tenzir/option.hpp>
+
+#include <aws/logs/CloudWatchLogsClient.h>
+
+namespace tenzir::plugins::cloudwatch {
+
+struct CloudWatchClient {
+  Arc<Aws::CloudWatchLogs::CloudWatchLogsClient> logs;
+};
+
+auto make_cloudwatch_client(Option<located<record>> aws_iam,
+                            Option<located<std::string>> aws_region,
+                            Option<std::string> endpoint_override,
+                            location primary, OpCtx& ctx)
+  -> Task<Option<CloudWatchClient>>;
+
+} // namespace tenzir::plugins::cloudwatch

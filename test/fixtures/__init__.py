@@ -7,6 +7,7 @@ from . import abs  # noqa: F401
 from . import abs_proxy  # noqa: F401
 from . import amqp  # noqa: F401
 from . import clickhouse  # noqa: F401
+from . import cloudwatch  # noqa: F401
 from . import http_request_chunked  # noqa: F401
 from . import files_permission_tree  # noqa: F401
 from . import ftp  # noqa: F401
@@ -38,6 +39,7 @@ __all__ = [
     "abs_proxy",
     "amqp",
     "clickhouse",
+    "cloudwatch",
     "http_request_chunked",
     "files_permission_tree",
     "ftp",

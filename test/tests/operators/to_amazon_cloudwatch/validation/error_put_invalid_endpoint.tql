@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {message: "will-not-send"}
+to_amazon_cloudwatch "ignored", "ignored",
+  message=message,
+  endpoint="invalid-url"

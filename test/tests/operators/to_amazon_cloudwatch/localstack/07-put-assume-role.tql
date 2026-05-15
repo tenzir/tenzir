@@ -1,0 +1,10 @@
+from {message: "cw-role"}
+to_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_WRITE"),
+  message=message,
+  aws_iam={
+    assume_role: env("LOCALSTACK_CLOUDWATCH_ROLE_ARN"),
+    external_id: env("LOCALSTACK_CLOUDWATCH_EXTERNAL_ID"),
+    region: "us-east-1",
+  }
+

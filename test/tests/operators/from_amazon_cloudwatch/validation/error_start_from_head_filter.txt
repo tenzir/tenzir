@@ -1,0 +1,6 @@
+error: option is only valid for `mode="get"`
+ --> tests/operators/from_amazon_cloudwatch/validation/error_start_from_head_filter.tql:7:19
+  |
+7 |   start_from_head=true
+  |                   ^^^^ 
+  |
