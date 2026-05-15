@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_amazon_kinesis "stream", records_per_call=0

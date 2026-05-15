@@ -86,6 +86,7 @@ let
       extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
       bundledPlugins = [
         "plugins/amqp"
+        "plugins/amazon-kinesis"
         "plugins/azure-blob-storage"
         "plugins/clickhouse"
         "plugins/fluent-bit"
