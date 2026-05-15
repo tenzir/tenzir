@@ -68,6 +68,8 @@ public:
   auto snapshot(Serde& serde) -> void override;
 
 private:
+  auto discover_new_shards(OpCtx& ctx) -> Task<void>;
+
   struct ShardState {
     std::string id;
     std::string iterator;

@@ -22,6 +22,7 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/array/array_binary.h>
+#include <aws/core/Aws.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/utils/Array.h>
 #include <aws/core/utils/DateTime.h>
@@ -39,6 +40,7 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <mutex>
 #include <ranges>
 #include <thread>
 #include <utility>
@@ -126,6 +128,14 @@ auto throw_if_error(const auto& outcome, std::string_view operation) -> void {
     fmt::format("Kinesis {} failed: {}", operation, error.GetMessage())};
 }
 
+auto ensure_aws_sdk_initialized() -> void {
+  static auto options = Aws::SDKOptions{};
+  static auto once = std::once_flag{};
+  std::call_once(once, [] {
+    Aws::InitAPI(options);
+  });
+}
+
 auto configure_iterator_start(Aws::Kinesis::Model::GetShardIteratorRequest& req,
                               const Option<located<data>>& start,
                               const std::string& sequence_number) -> void {
@@ -159,6 +169,19 @@ auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
   request.SetStreamName(Aws::String{stream.data(), stream.size()});
   request.SetShardId(Aws::String{shard_id.data(), shard_id.size()});
   configure_iterator_start(request, start, sequence_number);
+  auto outcome = client.GetShardIterator(request);
+  throw_if_error(outcome, "GetShardIterator");
+  return aws_string(outcome.GetResult().GetShardIterator());
+}
+
+auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
+                         std::string_view stream, std::string_view shard_id,
+                         Aws::Kinesis::Model::ShardIteratorType type)
+  -> std::string {
+  auto request = Aws::Kinesis::Model::GetShardIteratorRequest{};
+  request.SetStreamName(Aws::String{stream.data(), stream.size()});
+  request.SetShardId(Aws::String{shard_id.data(), shard_id.size()});
+  request.SetShardIteratorType(type);
   auto outcome = client.GetShardIterator(request);
   throw_if_error(outcome, "GetShardIterator");
   return aws_string(outcome.GetResult().GetShardIterator());
@@ -378,6 +401,7 @@ auto make_kinesis_client(const Option<located<std::string>>& aws_region,
                          const Option<located<std::string>>& endpoint,
                          OpCtx& ctx)
   -> Task<std::shared_ptr<Aws::Kinesis::KinesisClient>> {
+  ensure_aws_sdk_initialized();
   auto auth = co_await resolve_aws_iam_auth(
     aws_iam ? std::optional<located<record>>{*aws_iam} : std::nullopt,
     aws_region ? std::optional<located<std::string>>{*aws_region}
@@ -450,6 +474,33 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                        MetricsDirection::read, MetricsVisibility::external_);
 }
 
+auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
+  auto shard_ids
+    = co_await spawn_blocking([client = client_, stream = args_.stream.inner] {
+        return list_shards(*client, stream);
+      });
+  for (auto& id : shard_ids) {
+    const auto known
+      = std::ranges::any_of(shards_, [&](const ShardState& shard) {
+          return shard.id == id;
+        });
+    if (known) {
+      continue;
+    }
+    auto iterator = co_await spawn_blocking(
+      [client = client_, stream = args_.stream.inner, id = id] {
+        return make_shard_iterator(
+          *client, stream, id,
+          Aws::Kinesis::Model::ShardIteratorType::TRIM_HORIZON);
+      });
+    shards_.push_back(
+      ShardState{.id = std::move(id), .iterator = std::move(iterator)});
+  }
+  if (next_shard_ >= shards_.size()) {
+    next_shard_ = 0;
+  }
+}
+
 auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
   if (done_ or shards_.empty()) {
@@ -494,6 +545,9 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
       shard.next_sequence_number = batch.next_sequence_number;
     }
     next_shard_ = (batch.shard_index + 1) % shards_.size();
+    if (batch.shard_closed) {
+      co_await discover_new_shards(ctx);
+    }
   }
   if (batch.records.empty()) {
     if (args_.exit) {
