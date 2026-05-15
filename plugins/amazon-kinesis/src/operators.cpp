@@ -33,8 +33,11 @@
 #include <aws/kinesis/model/PutRecordsRequestEntry.h>
 #include <aws/kinesis/model/ShardIteratorType.h>
 #include <folly/ExceptionString.h>
+#include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 
+#include <algorithm>
+#include <iterator>
 #include <ranges>
 #include <thread>
 #include <utility>
@@ -66,6 +69,11 @@ struct ReadResult {
   std::string next_iterator;
   std::string next_sequence_number;
   bool shard_closed = false;
+};
+
+struct PutRecordsResult {
+  std::vector<ToAmazonKinesis::PendingRecord> failed_records;
+  std::optional<std::string> error;
 };
 
 auto aws_string_view(const Aws::String& s) -> std::string_view {
@@ -299,7 +307,7 @@ auto append_partition_keys(std::vector<std::string>& out,
 
 auto put_records(Aws::Kinesis::KinesisClient& client, std::string_view stream,
                  std::vector<ToAmazonKinesis::PendingRecord> records)
-  -> std::optional<std::string> {
+  -> PutRecordsResult {
   for (auto attempt = size_t{0}; attempt < put_records_attempts; ++attempt) {
     auto request = Aws::Kinesis::Model::PutRecordsRequest{};
     request.SetStreamName(Aws::String{stream.data(), stream.size()});
@@ -315,14 +323,15 @@ auto put_records(Aws::Kinesis::KinesisClient& client, std::string_view stream,
     auto outcome = client.PutRecords(request);
     if (not outcome.IsSuccess()) {
       if (attempt + 1 == put_records_attempts) {
-        return outcome.GetError().GetMessage();
+        return {.failed_records = std::move(records),
+                .error = outcome.GetError().GetMessage()};
       }
       std::this_thread::sleep_for(100ms * (1 << attempt));
       continue;
     }
     const auto& result = outcome.GetResult();
     if (result.GetFailedRecordCount() == 0) {
-      return std::nullopt;
+      return {};
     }
     auto retry = std::vector<ToAmazonKinesis::PendingRecord>{};
     const auto& statuses = result.GetRecords();
@@ -333,11 +342,12 @@ auto put_records(Aws::Kinesis::KinesisClient& client, std::string_view stream,
     }
     records = std::move(retry);
     if (records.empty()) {
-      return std::nullopt;
+      return {};
     }
     std::this_thread::sleep_for(100ms * (1 << attempt));
   }
-  return "retry attempts exhausted";
+  return {.failed_records = std::move(records),
+          .error = "retry attempts exhausted"};
 }
 
 } // namespace
@@ -418,7 +428,7 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     }
   }
   for (auto& shard : shards_) {
-    if (shard.closed or not shard.iterator.empty()) {
+    if (shard.closed) {
       continue;
     }
     shard.iterator = co_await spawn_blocking(
@@ -591,21 +601,38 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
 }
 
 auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
-  TENZIR_UNUSED(parallel_);
   if (batch_.empty() or not client_) {
     co_return;
   }
   last_flush_ = std::chrono::steady_clock::now();
   auto records = std::exchange(batch_, {});
-  auto error
-    = co_await spawn_blocking([client = client_, stream = args_.stream.inner,
-                               records = std::move(records)]() mutable {
+  auto tasks = std::vector<Task<PutRecordsResult>>{};
+  const auto task_count = std::min<size_t>(parallel_, records.size());
+  const auto chunk_size = (records.size() + task_count - 1) / task_count;
+  tasks.reserve(task_count);
+  for (auto offset = size_t{0}; offset < records.size(); offset += chunk_size) {
+    auto end = std::min(records.size(), offset + chunk_size);
+    auto chunk = std::vector<PendingRecord>{
+      std::make_move_iterator(records.begin() + detail::narrow<int>(offset)),
+      std::make_move_iterator(records.begin() + detail::narrow<int>(end))};
+    tasks.push_back(
+      spawn_blocking([client = client_, stream = args_.stream.inner,
+                      records = std::move(chunk)]() mutable {
         return put_records(*client, stream, std::move(records));
-      });
-  if (error) {
+      }));
+  }
+  auto results = co_await folly::coro::collectAllRange(std::move(tasks));
+  auto errors = std::vector<std::string>{};
+  for (auto& result : results) {
+    if (result.error) {
+      errors.push_back(std::move(*result.error));
+    }
+    std::ranges::move(result.failed_records, std::back_inserter(batch_));
+  }
+  if (not errors.empty()) {
     diagnostic::error("failed to write records to Kinesis")
       .primary(args_.stream.source)
-      .note("{}", *error)
+      .note("{}", fmt::join(errors, "; "))
       .emit(ctx);
   }
 }
