@@ -1,5 +1,4 @@
 {
-  "@odata.etag": "W/\"user-1\"",
   id: "user-1",
   displayName: "Ada Lovelace",
   userPrincipalName: "ada@example.com",
@@ -11,7 +10,6 @@
   "@odata.type": "#microsoft.graph.user",
 }
 {
-  "@odata.etag": "W/\"user-3\"",
   id: "user-3",
   displayName: "Katherine Johnson",
   userPrincipalName: "katherine@example.com",
