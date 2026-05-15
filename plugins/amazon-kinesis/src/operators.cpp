@@ -169,6 +169,16 @@ auto configure_iterator_start(Aws::Kinesis::Model::GetShardIteratorRequest& req,
   req.SetTimestamp(time_to_date_time(*value));
 }
 
+auto starts_at_latest(const Option<located<data>>& start) -> bool {
+  if (not start) {
+    return true;
+  }
+  if (auto value = try_as<std::string>(start->inner)) {
+    return *value != "trim_horizon";
+  }
+  return false;
+}
+
 auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
                          std::string_view stream, std::string_view shard_id,
                          const Option<located<data>>& start,
@@ -177,6 +187,20 @@ auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
   request.SetStreamName(Aws::String{stream.data(), stream.size()});
   request.SetShardId(Aws::String{shard_id.data(), shard_id.size()});
   configure_iterator_start(request, start, sequence_number);
+  auto outcome = client.GetShardIterator(request);
+  throw_if_error(outcome, "GetShardIterator");
+  return aws_string(outcome.GetResult().GetShardIterator());
+}
+
+auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
+                         std::string_view stream, std::string_view shard_id,
+                         time timestamp) -> std::string {
+  auto request = Aws::Kinesis::Model::GetShardIteratorRequest{};
+  request.SetStreamName(Aws::String{stream.data(), stream.size()});
+  request.SetShardId(Aws::String{shard_id.data(), shard_id.size()});
+  request.SetShardIteratorType(
+    Aws::Kinesis::Model::ShardIteratorType::AT_TIMESTAMP);
+  request.SetTimestamp(time_to_date_time(timestamp));
   auto outcome = client.GetShardIterator(request);
   throw_if_error(outcome, "GetShardIterator");
   return aws_string(outcome.GetResult().GetShardIterator());
@@ -495,6 +519,9 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     if (shard.closed) {
       continue;
     }
+    if (starts_at_latest(args_.start) and not shard.latest_start_time) {
+      shard.latest_start_time = time::clock::now();
+    }
     shard.iterator = co_await spawn_blocking(
       [client = client_, stream = args_.stream.inner, id = shard.id,
        start = args_.start, sequence = shard.next_sequence_number] {
@@ -593,9 +620,14 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
     if (batch.throttled) {
       shard.idle = false;
     } else if (batch.iterator_expired) {
+      auto latest_start_time = shard.latest_start_time;
       shard.iterator = co_await spawn_blocking(
         [client = client_, stream = args_.stream.inner, id = shard.id,
-         start = args_.start, sequence = shard.next_sequence_number] {
+         start = args_.start, sequence = shard.next_sequence_number,
+         latest_start_time] {
+          if (sequence.empty() and latest_start_time) {
+            return make_shard_iterator(*client, stream, id, *latest_start_time);
+          }
           return make_shard_iterator(*client, stream, id, start, sequence);
         });
       shard.closed = false;

@@ -76,6 +76,7 @@ private:
     std::vector<std::string> parents;
     std::string iterator;
     std::string next_sequence_number;
+    Option<time> latest_start_time;
     bool closed = false;
     bool idle = false;
 
@@ -84,6 +85,7 @@ private:
         f.field("id", x.id), f.field("parents", x.parents),
         f.field("iterator", x.iterator),
         f.field("next_sequence_number", x.next_sequence_number),
+        f.field("latest_start_time", x.latest_start_time),
         f.field("closed", x.closed), f.field("idle", x.idle));
     }
   };
