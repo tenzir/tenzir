@@ -1,0 +1,4 @@
+{
+  id: "device-1",
+  displayName: "Laptop",
+}

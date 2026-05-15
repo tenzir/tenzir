@@ -31,6 +31,6 @@ from_microsoft_graph "auditLogs/signIns",
 
 The operator emits each object from the response `value` array as a separate event and follows `@odata.nextLink` until the collection is exhausted.
 
-The operator can also use Microsoft Graph delta queries with `delta=true`, storing the returned `@odata.deltaLink` in memory and polling it with a configurable `poll_interval`. OData query options apply to the initial delta request only, and subsequent polls use the opaque delta link exactly as Microsoft Graph returned it.
+The operator can also use Microsoft Graph delta queries with `delta=true`, storing the returned `@odata.deltaLink` in memory and polling it with a configurable `poll_interval`. OData query options apply to the initial delta request only, subject to Microsoft Graph's resource-specific support, and subsequent polls use the opaque delta link exactly as Microsoft Graph returned it.
 
 It also retries throttled and transient Microsoft Graph requests, respecting `Retry-After` when present.
