@@ -25,6 +25,9 @@ namespace tenzir::plugins::string {
 
 namespace {
 
+constexpr auto max_string_size
+  = static_cast<size_t>(std::numeric_limits<int32_t>::max());
+
 class starts_or_ends_with : public virtual function_plugin {
 public:
   explicit starts_or_ends_with(bool starts_with) : starts_with_{starts_with} {
@@ -376,6 +379,7 @@ public:
                                count_expr = std::move(count_expr)](
                                 evaluator eval, session ctx) -> multi_series {
       auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+      auto total_size = size_t{0};
       for (auto [subject, count] :
            split_multi_series(eval(subject_expr), eval(count_expr))) {
         TENZIR_ASSERT(subject.length() == count.length());
@@ -410,8 +414,6 @@ public:
                 check(b.Append(""));
                 continue;
               }
-              auto max_string_size
-                = static_cast<size_t>(std::numeric_limits<int32_t>::max());
               if (n > max_string_size / str.size()) {
                 diagnostic::warning(
                   "`repeat` result exceeds maximum string size")
@@ -421,12 +423,21 @@ public:
                 continue;
               }
               auto size = static_cast<size_t>(n) * str.size();
+              if (size > max_string_size - total_size) {
+                diagnostic::warning(
+                  "`repeat` result exceeds maximum string array size")
+                  .primary(count_expr)
+                  .emit(ctx);
+                check(b.AppendNull());
+                continue;
+              }
               auto result = std::string{};
               result.reserve(size);
               for (auto j = uint64_t{0}; j < n; ++j) {
                 result += str;
               }
               check(b.Append(result));
+              total_size += size;
             }
           },
           [&]<class T, class U>(T const&, U const&) {
