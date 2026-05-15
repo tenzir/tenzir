@@ -48,7 +48,8 @@ namespace tenzir::plugins::amazon_kinesis {
 
 namespace {
 
-constexpr auto max_payload_size = size_t{1024 * 1024};
+constexpr auto max_record_size = size_t{10 * 1024 * 1024};
+constexpr auto max_put_records_request_size = max_record_size;
 constexpr auto max_partition_key_size = size_t{256};
 constexpr auto put_records_attempts = size_t{5};
 
@@ -241,6 +242,10 @@ auto validate_partition_key(std::string_view key, const location& loc,
     return false;
   }
   return true;
+}
+
+auto record_size(const ToAmazonKinesis::PendingRecord& record) -> size_t {
+  return record.message.size() + record.partition_key.size();
 }
 
 auto append_messages(std::vector<blob>& out, const ast::expression& expr,
@@ -569,14 +574,6 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     if (message.empty()) {
       continue;
     }
-    if (message.size() > max_payload_size) {
-      diagnostic::warning("Kinesis record payload must be at most {} bytes",
-                          max_payload_size)
-        .primary(args_.message)
-        .note("event is skipped")
-        .emit(ctx);
-      continue;
-    }
     auto key = std::string{};
     if (args_.partition_key) {
       if (i >= partition_keys.size()) {
@@ -588,6 +585,15 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     }
     const auto key_loc = args_.operator_location;
     if (not validate_partition_key(key, key_loc, ctx.dh())) {
+      continue;
+    }
+    if (message.size() + key.size() > max_record_size) {
+      diagnostic::warning("Kinesis record payload and partition key must be at "
+                          "most {} bytes",
+                          max_record_size)
+        .primary(args_.message)
+        .note("event is skipped")
+        .emit(ctx);
       continue;
     }
     bytes_write_counter_.add(message.size());
@@ -606,28 +612,41 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   }
   last_flush_ = std::chrono::steady_clock::now();
   auto records = std::exchange(batch_, {});
-  auto tasks = std::vector<Task<PutRecordsResult>>{};
-  const auto task_count = std::min<size_t>(parallel_, records.size());
-  const auto chunk_size = (records.size() + task_count - 1) / task_count;
-  tasks.reserve(task_count);
-  for (auto offset = size_t{0}; offset < records.size(); offset += chunk_size) {
-    auto end = std::min(records.size(), offset + chunk_size);
-    auto chunk = std::vector<PendingRecord>{
-      std::make_move_iterator(records.begin() + detail::narrow<int>(offset)),
-      std::make_move_iterator(records.begin() + detail::narrow<int>(end))};
-    tasks.push_back(
-      spawn_blocking([client = client_, stream = args_.stream.inner,
-                      records = std::move(chunk)]() mutable {
-        return put_records(*client, stream, std::move(records));
-      }));
-  }
-  auto results = co_await folly::coro::collectAllRange(std::move(tasks));
-  auto errors = std::vector<std::string>{};
-  for (auto& result : results) {
-    if (result.error) {
-      errors.push_back(std::move(*result.error));
+  auto chunks = std::vector<std::vector<PendingRecord>>{};
+  auto chunk = std::vector<PendingRecord>{};
+  auto chunk_size = size_t{0};
+  for (auto& record : records) {
+    const auto size = record_size(record);
+    if (not chunk.empty()
+        and chunk_size + size > max_put_records_request_size) {
+      chunks.push_back(std::move(chunk));
+      chunk_size = 0;
     }
-    std::ranges::move(result.failed_records, std::back_inserter(batch_));
+    chunk_size += size;
+    chunk.push_back(std::move(record));
+  }
+  if (not chunk.empty()) {
+    chunks.push_back(std::move(chunk));
+  }
+  auto errors = std::vector<std::string>{};
+  for (auto offset = size_t{0}; offset < chunks.size(); offset += parallel_) {
+    auto tasks = std::vector<Task<PutRecordsResult>>{};
+    const auto end = std::min<size_t>(chunks.size(), offset + parallel_);
+    tasks.reserve(end - offset);
+    for (auto index = offset; index < end; ++index) {
+      tasks.push_back(
+        spawn_blocking([client = client_, stream = args_.stream.inner,
+                        records = std::move(chunks[index])]() mutable {
+          return put_records(*client, stream, std::move(records));
+        }));
+    }
+    auto results = co_await folly::coro::collectAllRange(std::move(tasks));
+    for (auto& result : results) {
+      if (result.error) {
+        errors.push_back(std::move(*result.error));
+      }
+      std::ranges::move(result.failed_records, std::back_inserter(batch_));
+    }
   }
   if (not errors.empty()) {
     diagnostic::error("failed to write records to Kinesis")
