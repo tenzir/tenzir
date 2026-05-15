@@ -23,10 +23,24 @@
 #include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
+#include <utility>
 
 namespace tenzir {
 
-namespace {} // namespace
+auto ir::split_filter_by_dependents(ir::optimize_filter filter,
+                                    std::span<const ast::field_path> fields)
+  -> std::pair<ir::optimize_filter, ir::optimize_filter> {
+  auto independent = ir::optimize_filter{};
+  auto dependent = ir::optimize_filter{};
+  for (auto& expr : filter) {
+    if (references_any_field_path(expr, fields)) {
+      dependent.push_back(std::move(expr));
+    } else {
+      independent.push_back(std::move(expr));
+    }
+  }
+  return {std::move(independent), std::move(dependent)};
+}
 
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   // TODO: This should just be a `where_ir{std::move(filter)}`.
@@ -212,17 +226,41 @@ auto ir::SetIr::spawn(element_type_tag input) && -> AnyOperator {
   return Set{std::move(assignments_), order_};
 }
 
+namespace {
+
+auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
+  -> Option<std::vector<ast::field_path>> {
+  auto result = std::vector<ast::field_path>{};
+  for (const auto& assignment : assignments) {
+    auto [resolved, moved_fields] = resolve_move_keyword(assignment);
+    std::ranges::move(moved_fields, std::back_inserter(result));
+    const auto* path = try_as<ast::field_path>(&resolved.left);
+    if (path == nullptr or path->path().empty()) {
+      return None{};
+    }
+    result.push_back(*path);
+  }
+  return result;
+}
+
+} // namespace
+
 auto ir::SetIr::optimize(ir::optimize_filter filter,
                          event_order order) && -> ir::optimize_result {
   order_ = weaker_event_order(order_, order);
+  auto touched = touched_fields_for_set(assignments_);
+  auto split = touched
+                 ? ir::split_filter_by_dependents(std::move(filter), *touched)
+                 : std::pair{ir::optimize_filter{}, std::move(filter)};
+  auto [filter_upstream, filter_self] = std::move(split);
   auto ops = std::vector<Box<ir::Operator>>{};
-  ops.reserve(1 + filter.size());
+  ops.reserve(1 + filter_self.size());
   ops.emplace_back(ir::SetIr{std::move(*this)});
-  for (auto& expr : filter) {
+  for (auto& expr : filter_self) {
     ops.push_back(make_where_ir(expr));
   }
   return {
-    ir::optimize_filter{},
+    std::move(filter_upstream),
     order_,
     ir::pipeline{{}, std::move(ops)},
   };

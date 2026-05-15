@@ -1,0 +1,4 @@
+from {foo: {bar: 1}, x: 1}
+drop foo.bar
+where this == {foo: {}, x: 1}
+discard

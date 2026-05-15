@@ -616,10 +616,15 @@ public:
       .end = None{},
       .stride = int64_t{-1},
     }};
-    return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
-      // when downstream does not care about the order, this is a noop
-      auto drop = order == event_order::unordered;
-      return {.order = order, .propagate_filter = true, .drop = drop};
+    return d.optimize([](DescribeCtx&, event_order order,
+                         ir::optimize_filter filter) -> Optimization {
+      return {
+        // invariant to order and filters
+        .order = order,
+        .filter_upstream = std::move(filter),
+        // drop if downstream does not care about order
+        .drop = order == event_order::unordered,
+      };
     });
   }
 };

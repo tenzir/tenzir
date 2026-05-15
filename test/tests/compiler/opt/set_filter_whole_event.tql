@@ -1,0 +1,4 @@
+from {x: 1}
+this = {x: 2}
+where x == 2
+discard

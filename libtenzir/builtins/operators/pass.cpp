@@ -87,10 +87,11 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<PassArgs, PassTableSlice, PassChunk>{};
-    return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
+    return d.optimize([](DescribeCtx&, event_order order,
+                         ir::optimize_filter filter) -> Optimization {
       return {
         .order = order,
-        .propagate_filter = true,
+        .filter_upstream = std::move(filter),
         .drop = true,
       };
     });

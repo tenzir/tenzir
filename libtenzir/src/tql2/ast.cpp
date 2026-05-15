@@ -199,6 +199,103 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
     });
 }
 
+namespace {
+
+class field_path_extractor final : public ast::visitor<field_path_extractor> {
+public:
+  template <class T>
+  void visit(const T& x) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<T&>(x));
+  }
+
+  void visit(const ast::index_expr& x) {
+    if (auto path = ast::field_path::try_from(x)) {
+      paths_.push_back(std::move(*path));
+      return;
+    }
+    ambiguous_ = true;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<ast::index_expr&>(x));
+  }
+
+  void visit(const ast::this_& x) {
+    if (auto path = ast::field_path::try_from(ast::expression{x})) {
+      paths_.push_back(std::move(*path));
+      return;
+    }
+    ambiguous_ = true;
+  }
+
+  template <class T>
+  void visit(const T& x)
+    requires concepts::one_of<T, ast::root_field, ast::field_access>
+  {
+    if (auto path = ast::field_path::try_from(x)) {
+      paths_.push_back(std::move(*path));
+      return;
+    }
+    ambiguous_ = true;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<T&>(x));
+  }
+
+  auto ambiguous() const -> bool {
+    return ambiguous_;
+  }
+
+  auto result() && -> std::vector<ast::field_path> {
+    return std::move(paths_);
+  }
+
+private:
+  std::vector<ast::field_path> paths_;
+  bool ambiguous_ = false;
+};
+
+auto field_paths_overlap(const field_path& lhs, const field_path& rhs) -> bool {
+  const auto lhs_path = lhs.path();
+  const auto rhs_path = rhs.path();
+  if (lhs_path.empty() or rhs_path.empty()) {
+    return true;
+  }
+  const auto [lhs_it, rhs_it] = std::ranges::mismatch(
+    lhs_path, rhs_path, {},
+    [](const field_path::segment& segment) {
+      return std::string_view{segment.id.name};
+    },
+    [](const field_path::segment& segment) {
+      return std::string_view{segment.id.name};
+    });
+  return lhs_it == lhs_path.end() or rhs_it == rhs_path.end();
+}
+
+} // namespace
+
+auto referenced_field_paths(const expression& expr) -> std::vector<field_path> {
+  auto visitor = field_path_extractor{};
+  visitor.visit(expr);
+  return std::move(visitor).result();
+}
+
+auto references_any_field_path(const expression& expr,
+                               std::span<const field_path> paths) -> bool {
+  if (paths.empty()) {
+    return false;
+  }
+  auto visitor = field_path_extractor{};
+  visitor.visit(expr);
+  if (visitor.ambiguous()) {
+    return true;
+  }
+  auto references = std::move(visitor).result();
+  return std::ranges::any_of(references, [&](const auto& reference) {
+    return std::ranges::any_of(paths, [&](const auto& path) {
+      return field_paths_overlap(reference, path);
+    });
+  });
+}
+
 auto expression::get_location() const -> location {
   auto result = location::unknown;
   auto stack = std::vector<expression const*>{};

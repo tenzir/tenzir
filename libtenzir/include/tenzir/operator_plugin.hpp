@@ -140,15 +140,18 @@ using Spawner = std::function<
 using Validator = std::function<auto(DescribeCtx&)->Empty>;
 
 struct Optimization {
+  /// Ordering requirement of the upstream.
   event_order order = event_order::ordered;
-  /// When true, the incoming downstream filter is pushed into upstream.
-  /// When false, filter is emitted as `where` operators after this operator.
-  bool propagate_filter = false;
+  /// Filter that should be pushed into upstream.
+  ir::optimize_filter filter_upstream = {};
+  /// Filter that remains after this operator.
+  ir::optimize_filter filter_self = {};
   /// Removes the operator.
   bool drop = false;
 };
 
-using Optimizer = std::function<auto(DescribeCtx&, event_order)->Optimization>;
+using Optimizer = std::function<
+  auto(DescribeCtx&, event_order, ir::optimize_filter)->Optimization>;
 
 struct Description {
   std::string name;
@@ -939,55 +942,63 @@ public:
   /// filter, instead of keeping it as a separate `where` after the operator.
   auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
     desc_.set_filter = make_setter(ptr);
-    return optimize([](DescribeCtx&, event_order) -> Optimization {
-      return {.order = event_order::ordered};
-    });
+    return optimize(
+      [](DescribeCtx&, event_order, ir::optimize_filter) -> Optimization {
+        return {.order = event_order::ordered};
+      });
   }
 
   /// Overrides the default optimization behavior.
   ///
-  /// The callback receives the current description context and the weakest
-  /// ordering guarantee required by downstream operators. The returned
-  /// `Optimization` controls the required upstream order, whether the operator
-  /// may be dropped, and whether the incoming filter is blocked instead of
-  /// being propagated further upstream.
-  ///
-  /// Filters are propagated upstream if `propagate_filter` is set.
+  /// The callback receives the current description context, ordering required
+  /// by downstream operators, and incoming downstream filter chain. The
+  /// returned `Optimization` controls the required upstream order, whether the
+  /// operator may be dropped, and how the filter chain is split into a pushed
+  /// and remaining part.
   template <class F>
-    requires concepts::invokable_r<Optimization, F&, DescribeCtx&, event_order>
+    requires concepts::invokable_r<Optimization, F&, DescribeCtx&, event_order,
+                                   ir::optimize_filter>
   auto optimize(F&& f) -> Description {
     desc_.optimizer = std::forward<F>(f);
     return std::move(desc_);
   }
 
-  /// Makes this operator an optimization barrier.
+  /// Declares this operator an optimization barrier.
   ///
-  /// The filters are not propagated and upstream is required to produce
-  /// ordered events.
+  /// The filters are not propagated.
+  /// Upstream is required to produce ordered events.
   auto without_optimize() -> Description {
-    return optimize([](DescribeCtx&, event_order) -> Optimization {
+    return optimize([](DescribeCtx&, event_order,
+                       ir::optimize_filter filter) -> Optimization {
       return {
         .order = event_order::ordered,
+        .filter_self = std::move(filter),
       };
     });
   }
 
-  /// Declares that the operator is invariant to filtering. That is, the
-  /// filter from downstream may pass through this operator to upstream
-  /// without changing semantics. Requires upstream to produce ordered events.
+  /// Declares that the operator is invariant to filtering.
+  ///
+  /// Filter from downstream will be pushed upstream.
+  /// Upstream is required to produce ordered events.
   auto invariant_filter() -> Description {
-    return optimize([](DescribeCtx&, event_order) -> Optimization {
-      return {.order = event_order::ordered, .propagate_filter = true};
+    return optimize([](DescribeCtx&, event_order,
+                       ir::optimize_filter filter) -> Optimization {
+      return {
+        .order = event_order::ordered,
+        .filter_upstream = std::move(filter),
+      };
     });
   }
 
   /// Declares that the operator is invariant to ordering and filtering.
-  ///
-  /// Filters are propagated upstream and the downstream order requirement is
-  /// forwarded unchanged to upstream operators.
   auto invariant_order_filter() -> Description {
-    return optimize([](DescribeCtx&, event_order order) -> Optimization {
-      return {.order = order, .propagate_filter = true};
+    return optimize([](DescribeCtx&, event_order order,
+                       ir::optimize_filter filter) -> Optimization {
+      return {
+        .order = order,
+        .filter_upstream = std::move(filter),
+      };
     });
   }
 
@@ -995,8 +1006,12 @@ public:
   ///
   /// Filters are not propagated upstream.
   auto invariant_order() -> Description {
-    return optimize([](DescribeCtx&, event_order order) -> Optimization {
-      return {.order = order};
+    return optimize([](DescribeCtx&, event_order order,
+                       ir::optimize_filter filter) -> Optimization {
+      return {
+        .order = order,
+        .filter_self = std::move(filter),
+      };
     });
   }
 
@@ -1004,8 +1019,12 @@ public:
   ///
   /// Filters are not propagated upstream.
   auto unordered() -> Description {
-    return optimize([](DescribeCtx&, event_order) -> Optimization {
-      return {.order = event_order::unordered};
+    return optimize([](DescribeCtx&, event_order,
+                       ir::optimize_filter filter) -> Optimization {
+      return {
+        .order = event_order::unordered,
+        .filter_self = std::move(filter),
+      };
     });
   }
 
