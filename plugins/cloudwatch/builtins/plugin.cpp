@@ -119,6 +119,11 @@ public:
             .primary(option->source)
             .emit(ctx);
         }
+      } else if (auto option = ctx.get(log_group_identifiers)) {
+        diagnostic::error("`log_group_identifiers` is only valid for "
+                          "`mode=\"live\"`")
+          .primary(option->source)
+          .emit(ctx);
       }
       if (effective_mode != "get") {
         if (auto option = ctx.get(start_from_head)) {

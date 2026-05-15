@@ -14,12 +14,15 @@
 
 #include <aws/core/client/ClientConfiguration.h>
 
+#include <optional>
+
 namespace tenzir::plugins::cloudwatch {
 
 auto make_cloudwatch_client(Option<located<record>> aws_iam,
                             Option<located<std::string>> aws_region,
+                            Option<std::string> endpoint_override,
                             location primary, OpCtx& ctx)
-  -> Task<std::optional<CloudWatchClient>> {
+  -> Task<Option<CloudWatchClient>> {
   auto iam = aws_iam ? std::optional<located<record>>{*std::move(aws_iam)}
                      : std::nullopt;
   auto region = std::optional<std::string>{};
@@ -35,7 +38,7 @@ auto make_cloudwatch_client(Option<located<record>> aws_iam,
     diagnostic::error("failed to initialize CloudWatch Logs client")
       .primary(primary)
       .emit(ctx);
-    co_return std::nullopt;
+    co_return None{};
   }
   if (not region and auth->credentials
       and not auth->credentials->region.empty()) {
@@ -47,13 +50,15 @@ auto make_cloudwatch_client(Option<located<record>> aws_iam,
                       provider.error())
       .primary(primary)
       .emit(ctx);
-    co_return std::nullopt;
+    co_return None{};
   }
   auto config = Aws::Client::ClientConfiguration{};
   if (region) {
     config.region = *region;
   }
-  if (auto endpoint = detail::getenv("AWS_ENDPOINT_URL_LOGS")) {
+  if (endpoint_override) {
+    config.endpointOverride = *endpoint_override;
+  } else if (auto endpoint = detail::getenv("AWS_ENDPOINT_URL_LOGS")) {
     config.endpointOverride = *endpoint;
   } else if (auto endpoint = detail::getenv("AWS_ENDPOINT_URL")) {
     config.endpointOverride = *endpoint;

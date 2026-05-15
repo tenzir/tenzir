@@ -94,6 +94,24 @@ auto make_aws_vector(std::vector<std::string> const& values)
   return result;
 }
 
+auto endpoint_override() -> Option<std::string> {
+  if (auto endpoint = detail::getenv("AWS_ENDPOINT_URL_LOGS")) {
+    return *endpoint;
+  }
+  if (auto endpoint = detail::getenv("AWS_ENDPOINT_URL")) {
+    return *endpoint;
+  }
+  return None{};
+}
+
+auto endpoint_override(Option<located<std::string>> const& endpoint)
+  -> Option<std::string> {
+  if (endpoint) {
+    return endpoint->inner;
+  }
+  return endpoint_override();
+}
+
 auto strings_from_data(located<data> const& value) -> std::vector<std::string> {
   auto result = std::vector<std::string>{};
   auto const* values = try_as<list>(&value.inner);
@@ -628,6 +646,14 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
     done_ = true;
     co_return;
   }
+  if (mode_ != FromMode::live and args_.log_group_identifiers) {
+    diagnostic::error(
+      "`log_group_identifiers` is only valid for `mode=\"live\"`")
+      .primary(args_.log_group_identifiers->source)
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
   if (args_.limit
       and args_.limit->inner > uint64_t{std::numeric_limits<int>::max()}) {
     diagnostic::error("limit must not exceed {}",
@@ -661,17 +687,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
     done_ = true;
     co_return;
   }
-  auto client = co_await make_cloudwatch_client(args_.aws_iam, args_.aws_region,
-                                                args_.log_group.source, ctx);
-  if (not client) {
-    done_ = true;
-    co_return;
-  }
-  client_ = std::move(client->logs);
-  auto endpoint = detail::getenv("AWS_ENDPOINT_URL_LOGS");
-  if (not endpoint) {
-    endpoint = detail::getenv("AWS_ENDPOINT_URL");
-  }
+  auto endpoint = endpoint_override();
   if (endpoint) {
     try {
       auto config = HttpPoolConfig{};
@@ -687,6 +703,13 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
       co_return;
     }
   }
+  auto client = co_await make_cloudwatch_client(
+    args_.aws_iam, args_.aws_region, endpoint, args_.log_group.source, ctx);
+  if (not client) {
+    done_ = true;
+    co_return;
+  }
+  client_ = std::move(client->logs);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_cloudwatch"},
                        MetricsDirection::read, MetricsVisibility::external_);
@@ -886,17 +909,7 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
     }
     co_return;
   }
-  auto client = co_await make_cloudwatch_client(args_.aws_iam, args_.aws_region,
-                                                args_.log_group.source, ctx);
-  if (client) {
-    client_ = std::move(client->logs);
-  } else {
-    done_ = true;
-  }
-  auto endpoint = detail::getenv("AWS_ENDPOINT_URL_LOGS");
-  if (not endpoint) {
-    endpoint = detail::getenv("AWS_ENDPOINT_URL");
-  }
+  auto endpoint = endpoint_override(args_.endpoint);
   if (endpoint) {
     try {
       auto config = HttpPoolConfig{};
@@ -911,6 +924,13 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
       done_ = true;
       co_return;
     }
+  }
+  auto client = co_await make_cloudwatch_client(
+    args_.aws_iam, args_.aws_region, endpoint, args_.log_group.source, ctx);
+  if (client) {
+    client_ = std::move(client->logs);
+  } else {
+    done_ = true;
   }
 }
 

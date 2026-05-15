@@ -11,10 +11,9 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/option.hpp>
 
 #include <aws/logs/CloudWatchLogsClient.h>
-
-#include <optional>
 
 namespace tenzir::plugins::cloudwatch {
 
@@ -24,7 +23,8 @@ struct CloudWatchClient {
 
 auto make_cloudwatch_client(Option<located<record>> aws_iam,
                             Option<located<std::string>> aws_region,
+                            Option<std::string> endpoint_override,
                             location primary, OpCtx& ctx)
-  -> Task<std::optional<CloudWatchClient>>;
+  -> Task<Option<CloudWatchClient>>;
 
 } // namespace tenzir::plugins::cloudwatch
