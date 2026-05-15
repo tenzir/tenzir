@@ -1,0 +1,6 @@
+from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                    start="trim_horizon",
+                    count=2,
+                    exit=true
+where partition_key == "custom"
+this = {message: string(message)}

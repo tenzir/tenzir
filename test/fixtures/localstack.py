@@ -7,6 +7,7 @@ Usage overview:
 - **AWS_ENDPOINT_URL** – Base endpoint URL for all AWS services.
 - **AWS_ENDPOINT_URL_S3** – S3-specific endpoint URL.
 - **AWS_ENDPOINT_URL_SQS** – SQS-specific endpoint URL.
+- **AWS_ENDPOINT_URL_KINESIS** – Kinesis-specific endpoint URL.
 - **AWS_ENDPOINT_URL_STS** – STS-specific endpoint URL (for role assumption).
 - **AWS_ACCESS_KEY_ID** – Test AWS access key (always "test").
 - **AWS_SECRET_ACCESS_KEY** – Test AWS secret key (always "test").
@@ -63,7 +64,7 @@ logger = logging.getLogger(__name__)
 
 # LocalStack configuration
 LOCALSTACK_IMAGE = "localstack/localstack:4.4"
-SERVICES = "s3,sqs,iam,sts"
+SERVICES = "s3,sqs,kinesis,iam,sts"
 TEST_REGION = "us-east-1"
 TEST_ACCESS_KEY = "test"
 TEST_SECRET_KEY = "test"
@@ -193,21 +194,24 @@ def _wait_for_localstack(endpoint: str, timeout: float) -> bool:
                 # Check if required services are running
                 s3_ready = services.get("s3") in ("available", "running")
                 sqs_ready = services.get("sqs") in ("available", "running")
+                kinesis_ready = services.get("kinesis") in ("available", "running")
                 iam_ready = services.get("iam") in ("available", "running")
                 sts_ready = services.get("sts") in ("available", "running")
-                if s3_ready and sqs_ready and iam_ready and sts_ready:
+                if s3_ready and sqs_ready and kinesis_ready and iam_ready and sts_ready:
                     logger.info(
-                        "LocalStack is ready (S3: %s, SQS: %s, IAM: %s, STS: %s)",
+                        "LocalStack is ready (S3: %s, SQS: %s, Kinesis: %s, IAM: %s, STS: %s)",
                         services.get("s3"),
                         services.get("sqs"),
+                        services.get("kinesis"),
                         services.get("iam"),
                         services.get("sts"),
                     )
                     return True
                 logger.debug(
-                    "Waiting for services: S3=%s, SQS=%s, IAM=%s, STS=%s",
+                    "Waiting for services: S3=%s, SQS=%s, Kinesis=%s, IAM=%s, STS=%s",
                     services.get("s3"),
                     services.get("sqs"),
+                    services.get("kinesis"),
                     services.get("iam"),
                     services.get("sts"),
                 )
@@ -258,6 +262,25 @@ def _sqs_send_message(sqs: Any, queue_url: str, body: str) -> None:
     sqs.send_message(QueueUrl=queue_url, MessageBody=body)
 
 
+def _kinesis_create_stream(kinesis: Any, name: str) -> None:
+    kinesis.create_stream(StreamName=name, ShardCount=1)
+    waiter = kinesis.get_waiter("stream_exists")
+    waiter.wait(StreamName=name, WaiterConfig={"Delay": 1, "MaxAttempts": 30})
+
+
+def _kinesis_put_record(
+    kinesis: Any,
+    stream_name: str,
+    data: bytes,
+    partition_key: str,
+) -> None:
+    kinesis.put_record(
+        StreamName=stream_name,
+        Data=data,
+        PartitionKey=partition_key,
+    )
+
+
 def _iam_create_role(
     iam: Any,
     role_name: str,
@@ -284,6 +307,7 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     role_name = f"tenzir-test-role-{suffix}"
     s3 = _aws_client(endpoint, "s3", region)
     sqs = _aws_client(endpoint, "sqs", region)
+    kinesis = _aws_client(endpoint, "kinesis", region)
     iam = _aws_client(endpoint, "iam", region)
 
     # Create S3 bucket
@@ -349,6 +373,23 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     )
     logger.info("Sent no-delete test message to queue %s", queue_no_delete_name)
 
+    kinesis_input_stream = f"tenzir-test-kinesis-input-{suffix}"
+    kinesis_output_stream = f"tenzir-test-kinesis-output-{suffix}"
+    logger.info("Creating Kinesis stream: %s", kinesis_input_stream)
+    _kinesis_create_stream(kinesis, kinesis_input_stream)
+    logger.info("Creating Kinesis stream: %s", kinesis_output_stream)
+    _kinesis_create_stream(kinesis, kinesis_output_stream)
+    for index, msg in enumerate(test_messages, start=1):
+        _kinesis_put_record(
+            kinesis,
+            kinesis_input_stream,
+            msg.encode(),
+            f"input-{index}",
+        )
+    logger.info(
+        "Sent %d test records to stream %s", len(test_messages), kinesis_input_stream
+    )
+
     assume_role_policy = json.dumps(
         {
             "Version": "2012-10-17",
@@ -381,6 +422,11 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         iam,
         role_name,
         "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
+    )
+    _iam_attach_role_policy(
+        iam,
+        role_name,
+        "arn:aws:iam::aws:policy/AmazonKinesisFullAccess",
     )
     logger.info("Attached S3 and SQS policies to role")
 
@@ -422,11 +468,18 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         web_identity_role_name,
         "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
     )
+    _iam_attach_role_policy(
+        iam,
+        web_identity_role_name,
+        "arn:aws:iam::aws:policy/AmazonKinesisFullAccess",
+    )
     logger.info("Attached S3 and SQS policies to web identity role")
 
     return {
         "bucket_name": bucket_name,
         "queues": queues,
+        "kinesis_input_stream": kinesis_input_stream,
+        "kinesis_output_stream": kinesis_output_stream,
         "role_arn": role_arn,
         "web_identity_role_arn": web_identity_role_arn,
     }
@@ -488,6 +541,7 @@ def run() -> Iterator[dict[str, str]]:
             "AWS_ENDPOINT_URL": endpoint,
             "AWS_ENDPOINT_URL_S3": endpoint,
             "AWS_ENDPOINT_URL_SQS": endpoint,
+            "AWS_ENDPOINT_URL_KINESIS": endpoint,
             "AWS_ENDPOINT_URL_STS": endpoint,
             "AWS_ACCESS_KEY_ID": TEST_ACCESS_KEY,
             "AWS_SECRET_ACCESS_KEY": TEST_SECRET_KEY,
@@ -521,6 +575,8 @@ def run() -> Iterator[dict[str, str]]:
             "LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_TOKEN_URL": resources["queues"][
                 "wi_token"
             ]["url"],
+            "LOCALSTACK_KINESIS_STREAM_INPUT": resources["kinesis_input_stream"],
+            "LOCALSTACK_KINESIS_STREAM_OUTPUT": resources["kinesis_output_stream"],
             # IAM role for assume role tests
             "LOCALSTACK_ROLE_ARN": resources["role_arn"],
             "LOCALSTACK_EXTERNAL_ID": TEST_EXTERNAL_ID,

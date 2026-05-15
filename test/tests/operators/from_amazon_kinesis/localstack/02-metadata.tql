@@ -1,0 +1,11 @@
+from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_INPUT"),
+                    start="trim_horizon",
+                    count=1,
+                    exit=true
+this = {
+  stream_ok: stream == env("LOCALSTACK_KINESIS_STREAM_INPUT"),
+  shard_id: shard_id,
+  partition_key: partition_key,
+  has_sequence_number: sequence_number != "",
+  millis_behind_latest: millis_behind_latest,
+}

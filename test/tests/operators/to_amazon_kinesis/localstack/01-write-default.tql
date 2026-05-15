@@ -1,0 +1,8 @@
+version
+to_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                  partition_key="default",
+                  aws_iam={
+                    access_key_id: "test",
+                    secret_access_key: "test",
+                    region: "us-east-1"
+                  }

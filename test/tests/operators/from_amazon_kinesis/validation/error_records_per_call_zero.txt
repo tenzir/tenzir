@@ -1,0 +1,6 @@
+error: `records_per_call` must be in the interval [1, 10000]
+ --> tests/operators/from_amazon_kinesis/validation/error_records_per_call_zero.tql:5:48
+  |
+5 | from_amazon_kinesis "stream", records_per_call=0
+  |                                                ^ 
+  |

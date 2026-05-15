@@ -1,0 +1,6 @@
+error: `parallel` must be greater than zero
+ --> tests/operators/to_amazon_kinesis/validation/error_parallel_zero.tql:5:38
+  |
+5 | to_amazon_kinesis "stream", parallel=0
+  |                                      ^ 
+  |

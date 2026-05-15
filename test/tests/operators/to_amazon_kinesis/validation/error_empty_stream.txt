@@ -1,0 +1,7 @@
+error: stream must not be empty
+ --> tests/operators/to_amazon_kinesis/validation/error_empty_stream.tql:5:19
+  |
+5 | to_amazon_kinesis ""
+  |                   ^^ 
+  |
+  = hint: provide a non-empty Kinesis stream name
