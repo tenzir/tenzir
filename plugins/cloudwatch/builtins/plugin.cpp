@@ -11,6 +11,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <limits>
 
@@ -28,6 +29,16 @@ auto is_method(std::string_view value) -> bool {
   return value == "put_log_events" or value == "hlc";
 }
 
+auto is_string_list(located<data> const& value) -> bool {
+  auto const* values = try_as<list>(&value.inner);
+  if (not values) {
+    return false;
+  }
+  return std::ranges::all_of(*values, [](auto const& item) {
+    return try_as<std::string>(&item) != nullptr;
+  });
+}
+
 class from_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -39,8 +50,8 @@ public:
     d.operator_location(&FromCloudWatchArgs::operator_location);
     auto log_group = d.positional("log_group", &FromCloudWatchArgs::log_group);
     auto mode = d.named_optional("mode", &FromCloudWatchArgs::mode);
-    d.named("log_group_identifiers",
-            &FromCloudWatchArgs::log_group_identifiers);
+    auto log_group_identifiers = d.named(
+      "log_group_identifiers", &FromCloudWatchArgs::log_group_identifiers);
     auto log_stream = d.named("log_stream", &FromCloudWatchArgs::log_stream);
     auto log_streams = d.named("log_streams", &FromCloudWatchArgs::log_streams);
     auto log_stream_prefix
@@ -69,6 +80,18 @@ public:
       if (group.inner.empty()) {
         diagnostic::error("log group must not be empty")
           .primary(group.source)
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(log_group_identifiers);
+          value and not is_string_list(*value)) {
+        diagnostic::error("`log_group_identifiers` must be a list of strings")
+          .primary(value->source)
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(log_streams);
+          value and not is_string_list(*value)) {
+        diagnostic::error("`log_streams` must be a list of strings")
+          .primary(value->source)
           .emit(ctx);
       }
       if (effective_mode == "live") {

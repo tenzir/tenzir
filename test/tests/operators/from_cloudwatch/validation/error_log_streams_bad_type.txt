@@ -1,0 +1,6 @@
+error: `log_streams` must be a list of strings
+ --> tests/operators/from_cloudwatch/validation/error_log_streams_bad_type.tql:7:15
+  |
+7 |   log_streams="stream"
+  |               ^^^^^^^^ 
+  |

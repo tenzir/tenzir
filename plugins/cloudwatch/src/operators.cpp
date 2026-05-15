@@ -97,18 +97,34 @@ auto make_aws_vector(std::vector<std::string> const& values)
 auto strings_from_data(located<data> const& value) -> std::vector<std::string> {
   auto result = std::vector<std::string>{};
   auto const* values = try_as<list>(&value.inner);
-  if (not values) {
-    return result;
-  }
+  TENZIR_ASSERT(values);
   result.reserve(values->size());
   for (auto const& item : *values) {
-    if (auto const* str = try_as<std::string>(&item)) {
-      result.push_back(*str);
-    } else {
-      return {};
-    }
+    auto const* str = try_as<std::string>(&item);
+    TENZIR_ASSERT(str);
+    result.push_back(*str);
   }
   return result;
+}
+
+auto validate_string_list(located<data> const& value, std::string_view name,
+                          diagnostic_handler& dh) -> bool {
+  auto const* values = try_as<list>(&value.inner);
+  if (not values) {
+    diagnostic::error("`{}` must be a list of strings", name)
+      .primary(value.source)
+      .emit(dh);
+    return false;
+  }
+  for (auto const& item : *values) {
+    if (not try_as<std::string>(&item)) {
+      diagnostic::error("`{}` must be a list of strings", name)
+        .primary(value.source)
+        .emit(dh);
+      return false;
+    }
+  }
+  return true;
 }
 
 auto selected_log_streams(FromCloudWatchArgs const& args)
@@ -591,6 +607,18 @@ FromCloudWatch::FromCloudWatch(FromCloudWatchArgs args)
 
 auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
   mode_ = to_mode(args_.mode.inner);
+  if (args_.log_group_identifiers
+      and not validate_string_list(*args_.log_group_identifiers,
+                                   "log_group_identifiers", ctx.dh())) {
+    done_ = true;
+    co_return;
+  }
+  if (args_.log_streams
+      and not validate_string_list(*args_.log_streams, "log_streams",
+                                   ctx.dh())) {
+    done_ = true;
+    co_return;
+  }
   if (args_.limit
       and args_.limit->inner > uint64_t{std::numeric_limits<int>::max()}) {
     diagnostic::error("limit must not exceed {}",
@@ -836,6 +864,8 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
       diagnostic::error("failed to initialize HTTP client: {}", e.what())
         .primary(args_.operator_location)
         .emit(ctx);
+      done_ = true;
+      co_return;
     }
     co_return;
   }
