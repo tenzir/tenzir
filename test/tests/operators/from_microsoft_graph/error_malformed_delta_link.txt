@@ -1,0 +1,6 @@
+error: invalid OData `@odata.deltaLink` URL: mismatch
+ --> tests/operators/from_microsoft_graph/error_malformed_delta_link.tql:9:1
+  |
+9 | from_microsoft_graph "users",
+  | ^^^^^^^^^^^^^^^^^^^^ 
+  |

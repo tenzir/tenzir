@@ -1,0 +1,6 @@
+error: `poll_interval` is only supported with `delta=true`
+  --> tests/operators/from_microsoft_graph/error_delta_poll_interval_without_delta.tql:15:17
+   |
+15 |   poll_interval=1s
+   |                 ^^ 
+   |
