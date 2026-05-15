@@ -106,9 +106,12 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override;
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override;
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
 
 private:
+  auto flush_if_timed_out(OpCtx& ctx) -> Task<void>;
   auto flush(OpCtx& ctx) -> Task<void>;
 
   ToAmazonKinesisArgs args_;
@@ -116,7 +119,7 @@ private:
   std::vector<PendingRecord> batch_;
   size_t batch_size_ = 500;
   duration batch_timeout_ = std::chrono::seconds{1};
-  std::chrono::steady_clock::time_point last_flush_ = {};
+  Option<std::chrono::steady_clock::time_point> batch_started_ = None{};
   uint64_t parallel_ = 1;
   MetricsCounter bytes_write_counter_;
 };

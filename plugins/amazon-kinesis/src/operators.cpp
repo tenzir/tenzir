@@ -558,7 +558,6 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   batch_size_
     = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
   batch_timeout_ = args_.batch_timeout ? args_.batch_timeout->inner : 1s;
-  last_flush_ = std::chrono::steady_clock::now();
   parallel_ = args_.parallel ? args_.parallel->inner : 1;
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_amazon_kinesis"},
@@ -604,21 +603,50 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
       continue;
     }
     bytes_write_counter_.add(message->size());
+    const auto was_empty = batch_.empty();
+    const auto now = std::chrono::steady_clock::now();
     batch_.push_back(PendingRecord{std::move(*message), std::move(key)});
-    const auto timed_out
-      = std::chrono::steady_clock::now() - last_flush_ >= batch_timeout_;
-    if (batch_.size() >= batch_size_ or timed_out) {
-      co_await flush(ctx);
+    if (was_empty) {
+      batch_started_ = now;
     }
+    if (batch_.size() >= batch_size_) {
+      co_await flush(ctx);
+    } else {
+      co_await flush_if_timed_out(ctx);
+    }
+  }
+}
+
+auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  co_await folly::coro::sleep(
+    std::chrono::ceil<folly::HighResDuration>(batch_timeout_));
+  co_return true;
+}
+
+auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
+  TENZIR_UNUSED(result);
+  co_await flush_if_timed_out(ctx);
+}
+
+auto ToAmazonKinesis::flush_if_timed_out(OpCtx& ctx) -> Task<void> {
+  if (batch_.empty()) {
+    batch_started_ = None{};
+    co_return;
+  }
+  TENZIR_ASSERT(batch_started_);
+  if (std::chrono::steady_clock::now() - *batch_started_ >= batch_timeout_) {
+    co_await flush(ctx);
   }
 }
 
 auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   if (batch_.empty() or not client_) {
+    batch_started_ = None{};
     co_return;
   }
-  last_flush_ = std::chrono::steady_clock::now();
   auto records = std::exchange(batch_, {});
+  batch_started_ = None{};
   auto chunks = std::vector<std::vector<PendingRecord>>{};
   auto chunk = std::vector<PendingRecord>{};
   auto chunk_size = size_t{0};
@@ -654,6 +682,9 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
       }
       std::ranges::move(result.failed_records, std::back_inserter(batch_));
     }
+  }
+  if (not batch_.empty()) {
+    batch_started_ = std::chrono::steady_clock::now();
   }
   if (not errors.empty()) {
     diagnostic::error("failed to write records to Kinesis")
