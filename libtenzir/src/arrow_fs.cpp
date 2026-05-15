@@ -615,6 +615,10 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
     = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
                        MetricsDirection::write, MetricsVisibility::external_,
                        MetricsUnit::bytes);
+  events_written_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsUnit::events);
 }
 
 auto ToArrowFsOperator::preprocess(table_slice input, OpCtx&)
@@ -705,6 +709,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
       co_return;
     }
     auto slice = filter(input, arrow::BooleanArray{rows, bitmap});
+    auto const slice_rows = slice.rows();
     // `push` runs without the guard. If it suspends on a full input
     // channel and we still hold the guard, `process_sub` on the draining
     // side cannot acquire the guard to look up the partition, and
@@ -717,6 +722,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
         .emit(ctx.dh());
       co_return;
     }
+    events_written_counter_.add(slice_rows);
   }
 }
 
