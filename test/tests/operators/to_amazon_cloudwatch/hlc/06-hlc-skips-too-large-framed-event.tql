@@ -1,0 +1,6 @@
+from {message: "x".repeat(1048550)}
+to_amazon_cloudwatch "ignored", "ignored",
+  method="hlc",
+  message=message,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ENDPOINT")

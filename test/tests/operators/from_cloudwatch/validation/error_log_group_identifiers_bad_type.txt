@@ -1,6 +1,0 @@
-error: `log_group_identifiers` must be a list of strings
- --> tests/operators/from_cloudwatch/validation/error_log_group_identifiers_bad_type.tql:7:25
-  |
-7 |   log_group_identifiers=[null]
-  |                         ^^^^^^ 
-  |

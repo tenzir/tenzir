@@ -1,6 +1,0 @@
-error: failed to initialize HTTP client: invalid url: invalid-url
- --> tests/operators/to_cloudwatch/hlc/08-hlc-invalid-endpoint.tql:6:1
-  |
-6 | to_cloudwatch "ignored", "ignored",
-  | ^^^^^^^^^^^^^ 
-  |

@@ -1,6 +1,0 @@
-error: `log_group_identifiers` is only valid for `mode="live"`
- --> tests/operators/from_cloudwatch/validation/error_log_group_identifiers_filter.tql:7:25
-  |
-7 |   log_group_identifiers=["group-a"]
-  |                         ^^^^^^^^^^^ 
-  |

@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from_amazon_cloudwatch "group",
+  mode="filter",
+  log_streams=["stream"],
+  log_stream_prefix="prefix"

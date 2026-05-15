@@ -1,8 +1,0 @@
-suite:
-  name: localstack-to-cloudwatch
-  mode: sequential
-fixtures: [cloudwatch]
-timeout: 120
-skip:
-  on:
-    - fixture-unavailable

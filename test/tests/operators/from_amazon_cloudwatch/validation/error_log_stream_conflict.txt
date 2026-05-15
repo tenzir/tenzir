@@ -1,0 +1,6 @@
+error: `log_stream` and `log_stream_prefix` are mutually exclusive
+ --> tests/operators/from_amazon_cloudwatch/validation/error_log_stream_conflict.tql:8:21
+  |
+8 |   log_stream_prefix="prefix"
+  |                     ^^^^^^^^ 
+  |

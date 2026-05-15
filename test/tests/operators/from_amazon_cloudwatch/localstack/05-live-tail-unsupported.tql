@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+from_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  mode="live",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+head 1

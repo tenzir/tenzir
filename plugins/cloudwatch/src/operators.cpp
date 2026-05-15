@@ -606,7 +606,7 @@ auto parse_get_log_events_response(std::string const& body,
 
 } // namespace
 
-auto default_to_cloudwatch_message_expression() -> ast::expression {
+auto default_to_amazon_cloudwatch_message_expression() -> ast::expression {
   auto function
     = ast::entity{{ast::identifier{"print_ndjson", location::unknown}}};
   function.ref
@@ -711,7 +711,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
   }
   client_ = std::move(client->logs);
   bytes_read_counter_
-    = ctx.make_counter(MetricsLabel{"operator", "from_cloudwatch"},
+    = ctx.make_counter(MetricsLabel{"operator", "from_amazon_cloudwatch"},
                        MetricsDirection::read, MetricsVisibility::external_);
   if (mode_ == FromMode::live) {
     auto [sender, receiver] = channel<Any>(16);
@@ -883,7 +883,7 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
   parallel_ = args_.parallel ? args_.parallel->inner : uint64_t{1};
   request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
   bytes_write_counter_
-    = ctx.make_counter(MetricsLabel{"operator", "to_cloudwatch"},
+    = ctx.make_counter(MetricsLabel{"operator", "to_amazon_cloudwatch"},
                        MetricsDirection::write, MetricsVisibility::external_);
   if (method_ == ToMethod::hlc) {
     auto requests = std::vector<secret_request>{

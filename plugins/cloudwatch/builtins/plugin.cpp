@@ -45,7 +45,7 @@ auto string_list_size(located<data> const& value) -> Option<size_t> {
 class from_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "from_cloudwatch";
+    return "from_amazon_cloudwatch";
   }
 
   auto describe() const -> Description override {
@@ -204,12 +204,12 @@ public:
 class to_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "to_cloudwatch";
+    return "to_amazon_cloudwatch";
   }
 
   auto describe() const -> Description override {
     auto initial = ToCloudWatchArgs{};
-    initial.message = default_to_cloudwatch_message_expression();
+    initial.message = default_to_amazon_cloudwatch_message_expression();
     initial.timestamp = ast::expression{
       ast::root_field{ast::identifier{"timestamp", location::unknown}},
     };

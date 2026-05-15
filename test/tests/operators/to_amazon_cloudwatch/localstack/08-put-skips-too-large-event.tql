@@ -1,0 +1,6 @@
+from {message: "x".repeat(1048577)},
+     {message: "cw-after-large"}
+to_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_WRITE"),
+  message=message,
+  aws_region="us-east-1"

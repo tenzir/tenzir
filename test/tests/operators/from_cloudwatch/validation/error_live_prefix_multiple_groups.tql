@@ -1,8 +1,0 @@
----
-error: true
----
-
-from_cloudwatch "group",
-  mode="live",
-  log_group_identifiers=["group-a", "group-b"],
-  log_stream_prefix="prefix"

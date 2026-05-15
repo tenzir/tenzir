@@ -1,0 +1,6 @@
+error: CloudWatch HLC request returned status 500
+ --> tests/operators/to_amazon_cloudwatch/hlc/04-hlc-error.tql:6:1
+  |
+6 | to_amazon_cloudwatch "ignored", "ignored",
+  | ^^^^^^^^^^^^^ 
+  |

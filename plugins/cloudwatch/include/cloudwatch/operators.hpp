@@ -70,7 +70,7 @@ struct ToCloudWatchArgs {
   location operator_location;
 };
 
-auto default_to_cloudwatch_message_expression() -> ast::expression;
+auto default_to_amazon_cloudwatch_message_expression() -> ast::expression;
 
 class FromCloudWatch final : public Operator<void, table_slice> {
 public:

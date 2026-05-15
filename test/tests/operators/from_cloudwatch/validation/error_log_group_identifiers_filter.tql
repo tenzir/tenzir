@@ -1,7 +1,0 @@
----
-error: true
----
-
-from_cloudwatch "group",
-  mode="filter",
-  log_group_identifiers=["group-a"]
