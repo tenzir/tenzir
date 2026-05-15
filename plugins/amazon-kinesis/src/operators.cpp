@@ -219,14 +219,19 @@ auto make_shard_iterator(Aws::Kinesis::KinesisClient& client,
   return aws_string(outcome.GetResult().GetShardIterator());
 }
 
-auto list_shards(Aws::Kinesis::KinesisClient& client, std::string_view stream)
-  -> std::vector<ShardInfo> {
+auto list_shards(Aws::Kinesis::KinesisClient& client, std::string_view stream,
+                 bool latest_only = false) -> std::vector<ShardInfo> {
   auto result = std::vector<ShardInfo>{};
   auto next = Aws::String{};
   do {
     auto request = Aws::Kinesis::Model::ListShardsRequest{};
     if (next.empty()) {
       request.SetStreamName(Aws::String{stream.data(), stream.size()});
+      if (latest_only) {
+        auto filter = Aws::Kinesis::Model::ShardFilter{};
+        filter.SetType(Aws::Kinesis::Model::ShardFilterType::AT_LATEST);
+        request.SetShardFilter(std::move(filter));
+      }
     } else {
       request.SetNextToken(next);
     }
@@ -505,10 +510,11 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                         : 1000;
   poll_idle_ = args_.poll_idle ? args_.poll_idle->inner : 1s;
   if (shards_.empty()) {
-    auto shard_infos = co_await spawn_blocking(
-      [client = client_, stream = args_.stream.inner] {
-        return list_shards(*client, stream);
-      });
+    auto shard_infos
+      = co_await spawn_blocking([client = client_, stream = args_.stream.inner,
+                                 latest_only = starts_at_latest(args_.start)] {
+          return list_shards(*client, stream, latest_only);
+        });
     shards_.reserve(shard_infos.size());
     for (auto& info : shard_infos) {
       shards_.push_back(ShardState{.id = std::move(info.id),
@@ -540,8 +546,9 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
 
 auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
   auto shard_infos
-    = co_await spawn_blocking([client = client_, stream = args_.stream.inner] {
-        return list_shards(*client, stream);
+    = co_await spawn_blocking([client = client_, stream = args_.stream.inner,
+                               latest_only = starts_at_latest(args_.start)] {
+        return list_shards(*client, stream, latest_only);
       });
   for (auto& info : shard_infos) {
     const auto known
