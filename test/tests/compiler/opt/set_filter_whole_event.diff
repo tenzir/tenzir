@@ -1,0 +1,78 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `x` @ 6..7,
+               expr: constant int64 1 @ 9..10
+             }
+           ],
+           end: 10..11
+         }
+       ],
+       self: 0..4
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: this_ 12..16,
+             has_this: true,
+             path: [
+               
+             ]
+           },
+           equals: 17..18,
+           right: record {
+             begin: 19..20,
+             items: [
+               field {
+                 name: `x` @ 20..21,
+                 expr: constant int64 2 @ 23..24
+               }
+             ],
+             end: 24..25
+           }
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+-      self: 26..31,
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `x` @ 32..33,
+           has_question_mark: false
+         },
+         op: "eq" @ 34..36,
+         right: constant int64 2 @ 37..38
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 39..46
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

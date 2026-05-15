@@ -18,6 +18,7 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
+#include <span>
 #include <type_traits>
 #include <unordered_map>
 
@@ -296,6 +297,14 @@ private:
   bool has_this_{};
   std::vector<segment> path_;
 };
+
+/// Returns all field paths referenced by an expression.
+auto referenced_field_paths(const expression& expr) -> std::vector<field_path>;
+
+/// Returns whether an expression may reference any of the given field paths.
+/// This is conservative and returns true for ambiguous field accesses.
+auto references_any_field_path(const expression& expr,
+                               std::span<const field_path> paths) -> bool;
 
 /// A selector is something that can be assigned.
 ///
@@ -1290,7 +1299,7 @@ auto inspect(Inspector& f, expression& x) -> bool {
     x.kind = std::make_unique<expression_kind>();
   } else {
     if (auto dbg = as_debug_writer(f);
-        dbg && not detail::make_dependent<Inspector>(x.kind)) {
+        dbg and not detail::make_dependent<Inspector>(x.kind)) {
       return dbg->fmt_value("<invalid>");
     }
     TENZIR_ASSERT(x.kind);

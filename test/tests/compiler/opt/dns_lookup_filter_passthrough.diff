@@ -15,7 +15,15 @@
          
        ],
        filter: [
-         
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ 42..43,
++            has_question_mark: false
++          },
++          op: "eq" @ 44..46,
++          right: constant int64 1 @ 47..48
++        }
        ],
 -      order: "ordered",
 +      order: "unordered",
@@ -52,28 +60,16 @@
                
              ]
 -          },
-+          }
-+        ]
-+      },
-+      loc: 7..16
-+    },
-+    UnorderedIr {
-+      pipeline: {
-+        lets: [
-+          
-+        ],
-+        operators: [
-           where_ir {
+-          where_ir {
 -            self: 36..41,
-+            self: 0..0,
-             predicate: binary_expr {
-               left: root_field {
-                 id: `x` @ 42..43,
-                 has_question_mark: false
-               },
-               op: "eq" @ 44..46,
-               right: constant int64 1 @ 47..48
-             }
+-            predicate: binary_expr {
+-              left: root_field {
+-                id: `x` @ 42..43,
+-                has_question_mark: false
+-              },
+-              op: "eq" @ 44..46,
+-              right: constant int64 1 @ 47..48
+-            }
            }
          ]
        },
