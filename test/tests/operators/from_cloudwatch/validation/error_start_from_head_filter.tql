@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_cloudwatch "group",
+  mode="filter",
+  start_from_head=true

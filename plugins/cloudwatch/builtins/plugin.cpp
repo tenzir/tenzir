@@ -90,11 +90,13 @@ public:
             .primary(option->source)
             .emit(ctx);
         }
+      }
+      if (effective_mode != "get") {
         if (auto option = ctx.get(start_from_head)) {
-          diagnostic::error("historical read option is not valid for "
-                            "`mode=\"live\"`")
+          diagnostic::error("option is only valid for `mode=\"get\"`")
             .primary(option->source)
             .emit(ctx);
+          return std::nullopt;
         }
       }
       if (auto value = ctx.get(limit);

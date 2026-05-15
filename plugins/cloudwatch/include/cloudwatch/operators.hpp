@@ -103,6 +103,7 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override;
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override;
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
+  auto state() -> OperatorState override;
 
 public:
   struct Event {
@@ -130,6 +131,7 @@ private:
   uint64_t parallel_ = 1;
   Semaphore request_slots_{1};
   MetricsCounter bytes_write_counter_;
+  bool done_ = false;
 };
 
 } // namespace tenzir::plugins::cloudwatch

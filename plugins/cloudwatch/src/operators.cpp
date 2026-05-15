@@ -363,6 +363,37 @@ auto put_log_events_body(
   return out;
 }
 
+auto warn_rejected_events(
+  Aws::CloudWatchLogs::Model::RejectedLogEventsInfo const& rejected,
+  location primary, diagnostic_handler& dh) -> void {
+  if (not rejected.TooNewLogEventStartIndexHasBeenSet()
+      and not rejected.TooOldLogEventEndIndexHasBeenSet()
+      and not rejected.ExpiredLogEventEndIndexHasBeenSet()) {
+    return;
+  }
+  if (rejected.TooNewLogEventStartIndexHasBeenSet()) {
+    diagnostic::warning("CloudWatch rejected too-new log events")
+      .primary(primary)
+      .note("events start at batch index {}",
+            rejected.GetTooNewLogEventStartIndex())
+      .emit(dh);
+  }
+  if (rejected.TooOldLogEventEndIndexHasBeenSet()) {
+    diagnostic::warning("CloudWatch rejected too-old log events")
+      .primary(primary)
+      .note("events end before batch index {}",
+            rejected.GetTooOldLogEventEndIndex())
+      .emit(dh);
+  }
+  if (rejected.ExpiredLogEventEndIndexHasBeenSet()) {
+    diagnostic::warning("CloudWatch rejected expired log events")
+      .primary(primary)
+      .note("events end before batch index {}",
+            rejected.GetExpiredLogEventEndIndex())
+      .emit(dh);
+  }
+}
+
 auto filter_log_events_body(FromCloudWatchArgs const& args,
                             std::string_view next_token) -> std::string {
   auto out = std::string{"{\"logGroupName\":"};
@@ -812,6 +843,8 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
                                                 args_.log_group.source, ctx);
   if (client) {
     client_ = std::move(client->logs);
+  } else {
+    done_ = true;
   }
   auto endpoint = detail::getenv("AWS_ENDPOINT_URL_LOGS");
   if (not endpoint) {
@@ -827,6 +860,9 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
 }
 
 auto ToCloudWatch::process(table_slice input, OpCtx& ctx) -> Task<void> {
+  if (done_) {
+    co_return;
+  }
   if (input.rows() == 0) {
     co_return;
   }
@@ -987,7 +1023,10 @@ auto ToCloudWatch::send_put_batch(std::vector<Event> events,
     [client = std::move(client), request = std::move(request)] {
       return client->PutLogEvents(request);
     });
-  if (not outcome.IsSuccess()) {
+  if (outcome.IsSuccess()) {
+    warn_rejected_events(outcome.GetResult().GetRejectedLogEventsInfo(),
+                         args_.operator_location, dh);
+  } else {
     if (use_local_http_put_ and http_pool_) {
       auto headers = std::map<std::string, std::string>{
         {"content-type", "application/x-amz-json-1.1"},
@@ -1090,12 +1129,19 @@ auto ToCloudWatch::send_hlc_batch(std::vector<Event> events,
 }
 
 auto ToCloudWatch::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+  if (done_) {
+    co_return FinalizeBehavior::done;
+  }
   co_await flush(ctx);
   for (auto i = uint64_t{}; i < parallel_; ++i) {
     auto permit = co_await request_slots_.acquire();
     permit.forget();
   }
   co_return FinalizeBehavior::done;
+}
+
+auto ToCloudWatch::state() -> OperatorState {
+  return done_ ? OperatorState::done : OperatorState::normal;
 }
 
 } // namespace tenzir::plugins::cloudwatch
