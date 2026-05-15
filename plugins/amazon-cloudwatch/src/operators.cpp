@@ -797,9 +797,10 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
       }
     }
   }
+  auto request_token = token;
   auto page = co_await spawn_blocking(
     [client = std::move(client), args = std::move(args),
-     token = std::move(token), mode]() mutable -> SourcePage {
+     token = std::move(request_token), mode]() mutable -> SourcePage {
       if (mode == FromMode::filter) {
         return filter_page(**client, std::move(args), std::move(token));
       }
