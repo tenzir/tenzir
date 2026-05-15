@@ -543,6 +543,7 @@ private:
 
   bool finalized_ = false;
   MetricsCounter bytes_written_counter_;
+  MetricsCounter events_written_counter_;
 };
 
 } // namespace tenzir
