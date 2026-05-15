@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "cloudwatch/operators.hpp"
+#include "cloudwatch/client.hpp"
 
 #include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>

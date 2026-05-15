@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "cloudwatch/client.hpp"
+
 #include <tenzir/async.hpp>
 #include <tenzir/async/channel.hpp>
 #include <tenzir/async/semaphore.hpp>
@@ -16,11 +18,8 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/tql2/ast.hpp>
 
-#include <aws/logs/CloudWatchLogsClient.h>
-
 #include <chrono>
 #include <cstddef>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -71,16 +70,7 @@ struct ToCloudWatchArgs {
   location operator_location;
 };
 
-struct CloudWatchClient {
-  std::shared_ptr<Aws::CloudWatchLogs::CloudWatchLogsClient> logs;
-};
-
 auto default_to_cloudwatch_message_expression() -> ast::expression;
-
-auto make_cloudwatch_client(Option<located<record>> aws_iam,
-                            Option<located<std::string>> aws_region,
-                            location primary, OpCtx& ctx)
-  -> Task<std::optional<CloudWatchClient>>;
 
 class FromCloudWatch final : public Operator<void, table_slice> {
 public:
