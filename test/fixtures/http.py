@@ -45,6 +45,12 @@ _LINK_MULTI_MULTI_PAGE_1 = "/link-pagination/multi-multi/1"
 _LINK_MULTI_MULTI_PAGE_2 = "/link-pagination/multi-multi/2"
 _LINK_MULTI_MULTI_PAGE_3 = "/link-pagination/multi-multi/3"
 _LINK_NONE_PAGE_1 = "/link-pagination/no-link/1"
+_INFER_JSON_HEADER = "/infer/header-only"
+_INFER_CSV_EXTENSION = "/infer/extension.csv"
+_INFER_HEADER_OVERRIDES_EXTENSION = "/infer/header-overrides.csv"
+_INFER_EXPLICIT_OVERRIDE = "/infer/explicit.txt"
+_INFER_UNKNOWN_EXTENSION = "/infer/unknown.bin"
+_INFER_UNSUPPORTED_HEADER = "/infer/unsupported.json"
 
 
 def _make_handler(capture_path: Path):
@@ -86,12 +92,15 @@ def _make_handler(capture_path: Path):
             payload: bytes,
             extra_headers: list[tuple[str, str]] | None = None,
             status: HTTPStatus = HTTPStatus.OK,
+            content_type: str | None = None,
         ) -> None:
-            content_type = self.headers.get("Content-Type", "application/json")
-            if not content_type:
-                content_type = "application/json"
+            if content_type is None:
+                content_type = self.headers.get("Content-Type", "application/json")
+                if not content_type:
+                    content_type = "application/json"
             self.send_response(status)
-            self.send_header("Content-Type", content_type)
+            if content_type:
+                self.send_header("Content-Type", content_type)
             if extra_headers:
                 for key, value in extra_headers:
                     self.send_header(key, value)
@@ -194,6 +203,30 @@ def _make_handler(capture_path: Path):
             if path == _LINK_NONE_PAGE_1:
                 self._reply(self._page_payload(1))
                 return
+            if path == _INFER_JSON_HEADER:
+                self._reply(
+                    b'{"answer":42}\n',
+                    content_type="Application/JSON; charset=utf-8",
+                )
+                return
+            if path == _INFER_CSV_EXTENSION:
+                self._reply(b"answer\n42\n", content_type="")
+                return
+            if path == _INFER_HEADER_OVERRIDES_EXTENSION:
+                self._reply(b'{"answer":42}\n', content_type="application/json")
+                return
+            if path == _INFER_EXPLICIT_OVERRIDE:
+                self._reply(b"answer\n42\n", content_type="text/plain")
+                return
+            if path == _INFER_UNKNOWN_EXTENSION:
+                self._reply(b"answer\n42\n", content_type="")
+                return
+            if path == _INFER_UNSUPPORTED_HEADER:
+                self._reply(
+                    b'{"answer":42}\n',
+                    content_type="application/octet-stream",
+                )
+                return
             self._reply(body)
 
         def log_message(self, *_: object) -> None:  # noqa: D401
@@ -239,6 +272,12 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_LINK_MULTI_SINGLE_URL": f"{base_url}{_LINK_MULTI_SINGLE_PAGE_1}",
             "HTTP_FIXTURE_LINK_MULTI_MULTI_URL": f"{base_url}{_LINK_MULTI_MULTI_PAGE_1}",
             "HTTP_FIXTURE_LINK_NONE_URL": f"{base_url}{_LINK_NONE_PAGE_1}",
+            "HTTP_FIXTURE_INFER_JSON_HEADER_URL": f"{base_url}{_INFER_JSON_HEADER}",
+            "HTTP_FIXTURE_INFER_CSV_EXTENSION_URL": f"{base_url}{_INFER_CSV_EXTENSION}",
+            "HTTP_FIXTURE_INFER_HEADER_OVERRIDES_EXTENSION_URL": f"{base_url}{_INFER_HEADER_OVERRIDES_EXTENSION}",
+            "HTTP_FIXTURE_INFER_EXPLICIT_OVERRIDE_URL": f"{base_url}{_INFER_EXPLICIT_OVERRIDE}",
+            "HTTP_FIXTURE_INFER_UNKNOWN_EXTENSION_URL": f"{base_url}{_INFER_UNKNOWN_EXTENSION}",
+            "HTTP_FIXTURE_INFER_UNSUPPORTED_HEADER_URL": f"{base_url}{_INFER_UNSUPPORTED_HEADER}",
             "HTTP_CAPTURE_FILE": str(capture_path),
         }
     finally:

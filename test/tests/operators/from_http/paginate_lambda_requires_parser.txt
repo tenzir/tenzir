@@ -1,8 +1,7 @@
-error: required subpipeline was not provided
- --> tests/operators/from_http/paginate_lambda_requires_parser.tql:5:1
+error: could not infer parser for URL path `/infer/unknown.bin`
+ --> tests/operators/from_http/paginate_lambda_requires_parser.tql:7:1
   |
-5 | from_http "http://example.com", paginate=(x => x.next)
+7 | from_http env("HTTP_FIXTURE_INFER_UNKNOWN_EXTENSION_URL"),
   | ^^^^^^^^^ 
   |
-  = usage: from_http url:secret, [method=string, body=any, headers=record, tls=record, timeout=duration, error_field=field, metadata_field=any, paginate=any, paginate_delay=duration, connection_timeout=duration, max_retry_count=int, retry_delay=duration, encode=string, server=bool]
-  = docs: https://docs.tenzir.com/reference/operators/from_http
+  = hint: pass an explicit parser pipeline
