@@ -264,7 +264,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ImportArgs, Import>{};
-    return d.unordered();
+    return d.invariant_order();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

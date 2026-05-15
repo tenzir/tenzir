@@ -1,0 +1,115 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     UnorderedIr {
+       pipeline: {
+         lets: [
+           
+         ],
+         operators: [
+-          GenericIr {
+-            op: {
+-              path: [
+-                `sort` @ 21..25
+-              ],
+-              ref: std::sort/op
+-            },
+-            desc: "tql2.sort",
+-            args: [
+-              expression root_field {
+-                id: `x` @ 26..27,
+-                has_question_mark: false
+-              }
+-            ],
+-            filter: [
+-              
+-            ],
+-            order: "ordered",
+-            named_args: [
+-              
+-            ]
+-          },
+           GenericIr {
+             op: {
+               path: [
+                 `to_file` @ 30..37
+               ],
+               ref: std::to_file/op
+             },
+             desc: "tql2.to_file",
+             args: [
+               located {
+                 buffer: {
+                   chunk: chunk(size=60),
+                   table-offset: 12
+                 }
+               } @ 38..53
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ],
+             pipeline: {
+               pipeline: {
+                 lets: [
+                   
+                 ],
+                 operators: [
+                   GenericIr {
+                     op: {
+                       path: [
+                         `write_ndjson` @ 60..72
+                       ],
+                       ref: std::write_ndjson/op
+                     },
+                     desc: "write_ndjson",
+                     args: [
+                       
+                     ],
+                     filter: [
+                       
+                     ],
+                     order: "ordered",
+                     named_args: [
+                       
+                     ]
+                   }
+                 ]
+               } @ 54..76,
+               let_ids: {
+                 
+               }
+             }
+           }
+         ]
+       },
+       loc: 7..16
+     }
+   ]
+ }

@@ -1,0 +1,115 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+-          `sort` @ 7..11
+-        ],
+-        ref: std::sort/op
+-      },
+-      desc: "tql2.sort",
+-      args: [
+-        expression root_field {
+-          id: `x` @ 12..13,
+-          has_question_mark: false
+-        }
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     UnorderedIr {
+       pipeline: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `to_file` @ 28..35
+               ],
+               ref: std::to_file/op
+             },
+             desc: "tql2.to_file",
+             args: [
+               located {
+                 buffer: {
+                   chunk: chunk(size=60),
+                   table-offset: 12
+                 }
+               } @ 36..51
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ],
+             pipeline: {
+               pipeline: {
+                 lets: [
+                   
+                 ],
+                 operators: [
+                   GenericIr {
+                     op: {
+                       path: [
+                         `write_ndjson` @ 58..70
+                       ],
+                       ref: std::write_ndjson/op
+                     },
+                     desc: "write_ndjson",
+                     args: [
+                       
+                     ],
+                     filter: [
+                       
+                     ],
+                     order: "ordered",
+                     named_args: [
+                       
+                     ]
+                   }
+                 ]
+               } @ 52..74,
+               let_ids: {
+                 
+               }
+             }
+           }
+         ]
+       },
+       loc: 14..23
+     }
+   ]
+ }
