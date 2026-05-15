@@ -1,0 +1,3 @@
+from { domain: "tenzir.com" }
+dns_lookup domain, result=resolved
+where resolved != null

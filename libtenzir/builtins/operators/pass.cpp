@@ -87,7 +87,13 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<PassArgs, PassTableSlice, PassChunk>{};
-    return d.without_optimize();
+    return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
+      return {
+        .order = order,
+        .propagate_filter = true,
+        .drop = true,
+      };
+    });
   }
 };
 

@@ -130,7 +130,7 @@ public:
     auto d = Describer<AssertArgs, Assert>{};
     d.positional("invariant", &AssertArgs::invariant, "bool");
     d.named("message", &AssertArgs::message, "string");
-    return d.order_invariant();
+    return d.invariant_order();
   }
 };
 

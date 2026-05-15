@@ -259,7 +259,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<RepeatArgs, Repeat>{};
     d.optional_positional("count", &RepeatArgs::count);
-    return d.without_optimize();
+    return d.invariant_order_filter();
   }
 };
 

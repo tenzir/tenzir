@@ -321,7 +321,6 @@ public:
       return failure::promise();
     }
     result.desc_ = std::move(desc);
-    result.order_ = result.desc_->initial_order;
     return result;
   }
 
@@ -602,21 +601,29 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
+    TENZIR_ASSERT(desc_->optimizer);
     order_ = weaker_event_order(order_, order);
-    // Only forward downstream order when the operator opted in via
-    // `order_invariant()` or `unordered()`. Otherwise keep the safe
-    // `ordered` barrier.
-    auto result_order = desc_->propagate_order ? order_ : event_order::ordered;
     if (desc_->set_filter) {
       filter_.append_range(filter | std::views::as_rvalue);
       filter = ir::optimize_filter{};
     }
+    auto noop_dh = null_diagnostic_handler{};
+    auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
+                           *desc_, main_location(), noop_dh};
+    auto optimization = (*desc_->optimizer)(ctx, order_);
     auto replacement = std::vector<Box<Operator>>{};
-    replacement.emplace_back(std::move(*this));
-    for (auto& expr : filter) {
-      replacement.push_back(make_where_ir(expr));
+    if (not optimization.drop) {
+      replacement.emplace_back(std::move(*this));
     }
-    return {ir::optimize_filter{}, result_order,
+    if (not optimization.propagate_filter) {
+      // Barrier: re-emit the filter as `where` operators right after this
+      // operator instead of propagating it further upstream.
+      for (auto& expr : filter) {
+        replacement.push_back(make_where_ir(expr));
+      }
+      filter = ir::optimize_filter{};
+    }
+    return {std::move(filter), optimization.order,
             ir::pipeline{{}, std::move(replacement)}};
   }
 

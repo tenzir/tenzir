@@ -76,7 +76,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ToFileArgs, ToFileOperator>{};
     ToArrowFsArgs::describe_to(d);
-    return d.without_optimize();
+    return d.invariant_order();
   }
 };
 

@@ -595,7 +595,7 @@ public:
     d.positional("field", &DnsLookupArgs::field, "string|ip");
     d.named_optional("result", &DnsLookupArgs::result);
     d.operator_location(&DnsLookupArgs::operator_location);
-    return d.without_optimize();
+    return d.invariant_order();
   }
 };
 

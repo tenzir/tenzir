@@ -1,0 +1,7 @@
+export
+sort x
+unordered {
+  to_file "/tmp/out.json" {
+    write_ndjson
+  }
+}

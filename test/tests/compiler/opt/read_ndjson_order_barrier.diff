@@ -1,0 +1,99 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `from_tcp` @ 0..8
+         ],
+         ref: std::from_tcp/op
+       },
+       desc: "tql2.from_tcp",
+       args: [
+         located "127.0.0.1:8000" @ 9..25
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               op: {
+                 path: [
+                   `read_ndjson` @ 30..41
+                 ],
+                 ref: std::read_ndjson/op
+               },
+               desc: "read_ndjson",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 26..43,
+         let_ids: {
+           "0": 1
+         }
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+-          `sort` @ 44..48
+-        ],
+-        ref: std::sort/op
+-      },
+-      desc: "tql2.sort",
+-      args: [
+-        expression root_field {
+-          id: `x` @ 49..50,
+-          has_question_mark: false
+-        }
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+           `discard` @ 51..58
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

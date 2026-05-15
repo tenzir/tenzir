@@ -234,7 +234,7 @@ public:
       }
       return {};
     });
-    return d.order_invariant();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

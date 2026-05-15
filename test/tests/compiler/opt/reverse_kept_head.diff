@@ -1,0 +1,83 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `reverse` @ 7..14
+         ],
+         ref: std::reverse/op
+       },
+       desc: "tql2.reverse",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ 15..19
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 1 @ 20..21
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

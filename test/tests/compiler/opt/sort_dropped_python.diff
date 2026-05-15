@@ -1,0 +1,93 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `sort` @ 7..11
+         ],
+         ref: std::sort/op
+       },
+       desc: "tql2.sort",
+       args: [
+         expression root_field {
+           id: `x` @ 12..13,
+           has_question_mark: false
+         }
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `python` @ 14..20
+         ],
+         ref: std::python/op
+       },
+       desc: "python",
+       args: [
+         located {
+           buffer: {
+             chunk: chunk(size=52),
+             table-offset: 12
+           }
+         } @ 21..27
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 28..35
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

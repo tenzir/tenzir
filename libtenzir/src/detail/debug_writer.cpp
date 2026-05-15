@@ -53,6 +53,7 @@ bool debug_writer::number(T x) {
       add('"');
       caf::detail::print(buf_, x);
       add("\": ");
+      pop();
       return true;
     case type::array:
       sep();
@@ -283,6 +284,7 @@ bool debug_writer::value(bool x) {
       add('"');
       add_str();
       add("\": ");
+      pop();
       return true;
     case type::array:
       sep();

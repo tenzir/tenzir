@@ -1,0 +1,65 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+-          `pass` @ 7..11
+-        ],
+-        ref: std::pass/op
+-      },
+-      desc: "pass",
+-      args: [
+-        
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 12..19
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

@@ -616,7 +616,11 @@ public:
       .end = None{},
       .stride = int64_t{-1},
     }};
-    return d.without_optimize();
+    return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
+      // when downstream does not care about the order, this is a noop
+      auto drop = order == event_order::unordered;
+      return {.order = order, .propagate_filter = true, .drop = drop};
+    });
   }
 };
 
