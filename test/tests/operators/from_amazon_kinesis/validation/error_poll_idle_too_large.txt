@@ -1,0 +1,7 @@
+error: `poll_idle` must be less than 5min
+ --> tests/operators/from_amazon_kinesis/validation/error_poll_idle_too_large.tql:5:41
+  |
+5 | from_amazon_kinesis "stream", poll_idle=5min
+  |                                         ^^^^ 
+  |
+  = hint: Kinesis shard iterators expire after 5min

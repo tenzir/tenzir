@@ -20,6 +20,7 @@ namespace {
 
 constexpr auto max_batch_size = uint64_t{500};
 constexpr auto max_records_per_call = uint64_t{10'000};
+constexpr auto max_poll_idle = 5min;
 
 auto validate_stream(const located<std::string>& stream, diagnostic_handler& dh)
   -> void {
@@ -96,6 +97,11 @@ public:
         if (value->inner < duration::zero()) {
           diagnostic::error("`poll_idle` must be non-negative")
             .primary(value->source)
+            .emit(ctx);
+        } else if (value->inner >= max_poll_idle) {
+          diagnostic::error("`poll_idle` must be less than 5min")
+            .primary(value->source)
+            .hint("Kinesis shard iterators expire after 5min")
             .emit(ctx);
         }
       }
