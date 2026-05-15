@@ -259,6 +259,12 @@ auto read_from_shard(Aws::Kinesis::KinesisClient& client,
 
 auto validate_partition_key(std::string_view key, const location& loc,
                             diagnostic_handler& dh) -> bool {
+  auto characters = size_t{0};
+  for (auto byte : key) {
+    if ((static_cast<unsigned char>(byte) & 0b1100'0000) != 0b1000'0000) {
+      ++characters;
+    }
+  }
   if (key.empty()) {
     diagnostic::warning("partition key must not be empty")
       .primary(loc)
@@ -266,8 +272,8 @@ auto validate_partition_key(std::string_view key, const location& loc,
       .emit(dh);
     return false;
   }
-  if (key.size() > max_partition_key_size) {
-    diagnostic::warning("partition key must be at most {} bytes",
+  if (characters > max_partition_key_size) {
+    diagnostic::warning("partition key must be at most {} characters",
                         max_partition_key_size)
       .primary(loc)
       .note("event is skipped")
@@ -553,7 +559,7 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
           return make_shard_iterator(*client, stream, id, start, sequence);
         });
       shard.closed = false;
-      shard.idle = true;
+      shard.idle = false;
     } else {
       shard.iterator = std::move(batch.next_iterator);
       shard.closed = batch.shard_closed;
