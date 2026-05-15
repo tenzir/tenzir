@@ -1,0 +1,6 @@
+error: Microsoft Graph delta response did not contain `@odata.deltaLink`
+ --> tests/operators/from_microsoft_graph/error_missing_delta_link.tql:9:1
+  |
+9 | from_microsoft_graph "users",
+  | ^^^^^^^^^^^^^^^^^^^^ 
+  |

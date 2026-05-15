@@ -2,10 +2,6 @@
   id: "user-1",
   displayName: "Ada Lovelace",
   userPrincipalName: "ada@example.com",
-  manager: {
-    "@odata.type": "#microsoft.graph.user",
-    id: "manager-1",
-  },
 }
 {
   id: "user-2",

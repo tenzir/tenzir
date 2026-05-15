@@ -36,6 +36,9 @@ _CLIENT_ID = "test-client"
 _CLIENT_SECRET = "test-secret"
 _ACCESS_TOKEN = "test-ms-graph-token"
 _SKIPTOKEN = "page-2"
+_DELTA_SKIPTOKEN = "delta-page-2"
+_DELTA_TOKEN_INITIAL = "initial-token"
+_DELTA_TOKEN_SECOND = "second-token"
 _FIRST_PAGE_DELAY_SECONDS = 2.1
 
 
@@ -181,6 +184,119 @@ class _GraphHandler(BaseHTTPRequestHandler):
                 {"error": "bad request"},
             )
             return
+        if parts.path == "/v1.0/users/delta":
+            if query.get("$filter") == ["malformed-delta-link"]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                        "@odata.deltaLink": "http://[::1",
+                        "value": [],
+                    },
+                )
+                return
+            if query.get("$filter") == ["missing-delta-link"]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                        "value": [],
+                    },
+                )
+                return
+            if query.get("$filter") == ["untrusted-delta-link"]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                        "@odata.deltaLink": "https://example.invalid/v1.0/users/delta",
+                        "value": [],
+                    },
+                )
+                return
+            if query.get("$deltatoken") == [_DELTA_TOKEN_INITIAL]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                        "@odata.deltaLink": (
+                            f"{base_url}/v1.0/users/delta?"
+                            f"$deltatoken={_DELTA_TOKEN_SECOND}"
+                        ),
+                        "value": [
+                            {
+                                "id": "user-4",
+                                "displayName": "Dorothy Vaughan",
+                                "userPrincipalName": "dorothy@example.com",
+                            }
+                        ],
+                    },
+                )
+                return
+            if query.get("$deltatoken") == [_DELTA_TOKEN_SECOND]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                        "@odata.deltaLink": (
+                            f"{base_url}/v1.0/users/delta?"
+                            f"$deltatoken={_DELTA_TOKEN_SECOND}"
+                        ),
+                        "value": [],
+                    },
+                )
+                return
+            if query.get("$skiptoken") == [_DELTA_SKIPTOKEN]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                        "@odata.deltaLink": (
+                            f"{base_url}/v1.0/users/delta?"
+                            f"$deltatoken={_DELTA_TOKEN_INITIAL}"
+                        ),
+                        "value": [
+                            {
+                                "@odata.etag": 'W/"user-3"',
+                                "id": "user-3",
+                                "displayName": "Katherine Johnson",
+                                "userPrincipalName": "katherine@example.com",
+                            }
+                        ],
+                    },
+                )
+                return
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#users",
+                    "@odata.nextLink": (
+                        f"{base_url}/v1.0/users/delta?$skiptoken={_DELTA_SKIPTOKEN}"
+                    ),
+                    "value": [
+                        {
+                            "@odata.etag": 'W/"user-1"',
+                            "id": "user-1",
+                            "displayName": "Ada Lovelace",
+                            "userPrincipalName": "ada@example.com",
+                        },
+                        {
+                            "@odata.type": "#microsoft.graph.user",
+                            "id": "user-2",
+                            "displayName": "Grace Hopper",
+                            "userPrincipalName": "grace@example.com",
+                        },
+                    ],
+                },
+            )
+            return
         if parts.path == "/v1.0/users":
             if query.get("$skiptoken") == [_SKIPTOKEN]:
                 _json_response(
@@ -245,6 +361,20 @@ class _GraphHandler(BaseHTTPRequestHandler):
                     "value": [{"id": "group-1", "displayName": "Security"}],
                 }
             _json_response(self, HTTPStatus.OK, body)
+            return
+        if parts.path == "/v1.0/devices/delta":
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.context": f"{base_url}/v1.0/$metadata#devices",
+                    "@odata.deltaLink": (
+                        f"{base_url}/v1.0/devices/delta?"
+                        f"$deltatoken={_DELTA_TOKEN_SECOND}"
+                    ),
+                    "value": [{"id": "device-1", "displayName": "Laptop"}],
+                },
+            )
             return
         if parts.path == "/beta/users":
             _json_response(
