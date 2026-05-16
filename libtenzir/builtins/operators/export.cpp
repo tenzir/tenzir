@@ -82,8 +82,8 @@ auto uses_prometheus_shape(const ExportArgs& args) -> bool {
          and parse_metrics_shape(args.shape) == metrics_shape::prometheus;
 }
 
-auto add_remainder(std::optional<ast::expression>& remainder,
-                   ast::expression expr) -> void {
+auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
+  -> void {
   if (is_true_literal(expr)) {
     return;
   }
@@ -257,7 +257,7 @@ private:
   ExportArgs args_;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
-  std::optional<ast::expression> remainder_ = std::nullopt;
+  Option<ast::expression> remainder_ = None{};
   MetricsCounter read_events_counter_;
   bool done_ = false;
 };
@@ -266,9 +266,8 @@ class export_operator final : public crtp_operator<export_operator> {
 public:
   export_operator() = default;
 
-  explicit export_operator(expression expr, export_mode mode,
-                           metrics_shape shape = metrics_shape::raw)
-    : expr_{std::move(expr)}, mode_{mode}, shape_{shape} {
+  explicit export_operator(expression expr, export_mode mode)
+    : expr_{std::move(expr)}, mode_{mode} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
@@ -311,13 +310,7 @@ public:
       if (result.rows() == 0) {
         co_return;
       }
-      if (shape_ == metrics_shape::prometheus) {
-        for (auto&& output : detail::shape_metrics_for_prometheus(result)) {
-          co_yield std::move(output);
-        }
-      } else {
-        co_yield std::move(result);
-      }
+      co_yield std::move(result);
     }
   }
 
@@ -340,9 +333,6 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)order;
-    if (shape_ == metrics_shape::prometheus) {
-      return optimize_result{std::nullopt, event_order::ordered, copy()};
-    }
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);
@@ -356,19 +346,17 @@ public:
                                          : conjunction{std::move(clauses)});
     return optimize_result{trivially_true_expression(), event_order::ordered,
                            std::make_unique<export_operator>(std::move(expr),
-                                                             mode_, shape_)};
+                                                             mode_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
     return f.object(x).fields(f.field("expression", x.expr_),
-                              f.field("mode", x.mode_),
-                              f.field("shape", x.shape_));
+                              f.field("mode", x.mode_));
   }
 
 private:
   expression expr_;
   export_mode mode_;
-  metrics_shape shape_ = metrics_shape::raw;
 };
 
 class export_plugin final : public virtual operator_plugin<export_operator>,
@@ -618,25 +606,13 @@ public:
     auto retro = false;
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
-    auto shape = std::optional<located<std::string>>{};
     parser.add(name, "<name>");
     parser.add("--live", live);
     parser.add("--retro", retro);
     parser.add("--parallel", parallel, "<level>");
-    parser.add("--shape", shape, "<raw|prometheus>");
     parser.parse(p);
     if (not live) {
       retro = true;
-    }
-    auto parsed_shape = metrics_shape::raw;
-    if (shape) {
-      auto result = from_string<metrics_shape>(shape->inner);
-      if (not result) {
-        diagnostic::error("shape must be 'raw' or 'prometheus'")
-          .primary(shape->source)
-          .throw_();
-      }
-      parsed_shape = *result;
     }
     static const auto all_metrics = [] {
       auto result = pattern::make("tenzir\\.metrics\\..*");
@@ -659,8 +635,7 @@ public:
           },
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3},
-      parsed_shape);
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -670,27 +645,14 @@ public:
     auto retro = false;
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
-    auto shape = std::optional<located<std::string>>{};
     TRY(argument_parser2::operator_("metrics")
           .positional("name", name)
           .named("live", live)
           .named("retro", retro)
           .named("parallel", parallel)
-          .named("shape", shape)
           .parse(inv, ctx));
     if (not live) {
       retro = true;
-    }
-    auto parsed_shape = metrics_shape::raw;
-    if (shape) {
-      auto result = from_string<metrics_shape>(shape->inner);
-      if (not result) {
-        diagnostic::error("shape must be 'raw' or 'prometheus'")
-          .primary(*shape)
-          .emit(ctx);
-        return failure::promise();
-      }
-      parsed_shape = *result;
     }
     static const auto all_metrics = [] {
       auto result = pattern::make("tenzir\\.metrics\\..*");
@@ -719,8 +681,7 @@ public:
           },
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3},
-      parsed_shape);
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 };
 
