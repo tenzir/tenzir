@@ -348,7 +348,10 @@ auto to_timestamp_ms(data_view3 value) -> std::optional<int64_t> {
       return x;
     },
     [](uint64_t x) -> std::optional<int64_t> {
-      return detail::narrow<int64_t>(x);
+      if (x > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        return {};
+      }
+      return static_cast<int64_t>(x);
     },
     [](auto const&) -> std::optional<int64_t> {
       return {};
