@@ -29,6 +29,8 @@ namespace tenzir::detail {
 
 namespace {
 
+using namespace std::string_view_literals;
+
 struct metric_descriptor {
   std::string_view type = "gauge";
   std::string_view unit = "";
@@ -59,7 +61,7 @@ auto prometheus_schema() -> const type& {
 }
 
 auto metric_source(std::string_view schema) -> std::string_view {
-  constexpr auto prefix = std::string_view{"tenzir.metrics."};
+  constexpr auto prefix = "tenzir.metrics."sv;
   if (schema.starts_with(prefix)) {
     return schema.substr(prefix.size());
   }
@@ -112,11 +114,8 @@ auto sanitize_label_name(std::string_view input) -> std::string {
 
 auto is_dimension_field(std::string_view field) -> bool {
   static constexpr auto fields = std::array{
-    std::string_view{"pipeline_id"}, std::string_view{"operator_id"},
-    std::string_view{"name"},        std::string_view{"path"},
-    std::string_view{"schema"},      std::string_view{"schema_id"},
-    std::string_view{"handle"},      std::string_view{"method"},
-    std::string_view{"status_code"},
+    "pipeline_id"sv, "operator_id"sv, "name"sv,   "path"sv,        "schema"sv,
+    "schema_id"sv,   "handle"sv,      "method"sv, "status_code"sv,
   };
   return std::ranges::find(fields, field) != fields.end();
 }
