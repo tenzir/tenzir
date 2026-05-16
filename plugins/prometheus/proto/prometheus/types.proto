@@ -1,0 +1,41 @@
+// Copyright 2017 Prometheus Team
+// Licensed under the Apache License, Version 2.0.
+//
+// Sanitized for Tenzir: gogoproto options/imports and messages unused by the
+// Remote Write MVP were removed without changing package names, message names,
+// or field numbers used on the wire.
+
+syntax = "proto3";
+package prometheus;
+
+message MetricMetadata {
+  enum MetricType {
+    UNKNOWN = 0;
+    COUNTER = 1;
+    GAUGE = 2;
+    HISTOGRAM = 3;
+    GAUGEHISTOGRAM = 4;
+    SUMMARY = 5;
+    INFO = 6;
+    STATESET = 7;
+  }
+  MetricType type = 1;
+  string metric_family_name = 2;
+  string help = 4;
+  string unit = 5;
+}
+
+message Sample {
+  double value = 1;
+  int64 timestamp = 2;
+}
+
+message TimeSeries {
+  repeated Label labels = 1;
+  repeated Sample samples = 2;
+}
+
+message Label {
+  string name = 1;
+  string value = 2;
+}

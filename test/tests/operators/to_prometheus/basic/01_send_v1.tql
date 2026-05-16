@@ -1,0 +1,17 @@
+from {
+  metric: "http.requests-total",
+  value: 42,
+  timestamp: 2026-05-15T10:00:00Z,
+  labels: {
+    method: "GET",
+    path: "",
+    status: 200,
+  },
+  type: "counter",
+  help: "HTTP requests",
+  unit: "requests",
+  family: "http_requests",
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

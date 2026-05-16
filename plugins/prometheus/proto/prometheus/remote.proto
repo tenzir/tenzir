@@ -1,0 +1,17 @@
+// Copyright 2016 Prometheus Team
+// Licensed under the Apache License, Version 2.0.
+//
+// Sanitized for Tenzir: gogoproto options/imports and read-side messages were
+// removed without changing package names, message names, or field numbers used
+// by Remote Write.
+
+syntax = "proto3";
+package prometheus;
+
+import "prometheus/types.proto";
+
+message WriteRequest {
+  repeated prometheus.TimeSeries timeseries = 1;
+  reserved 2;
+  repeated prometheus.MetricMetadata metadata = 3;
+}

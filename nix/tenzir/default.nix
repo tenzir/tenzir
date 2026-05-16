@@ -96,6 +96,7 @@ let
         "plugins/nats"
         "plugins/nic"
         "plugins/parquet"
+        "plugins/prometheus"
         "plugins/s3"
         "plugins/sigma"
         "plugins/sqs"
