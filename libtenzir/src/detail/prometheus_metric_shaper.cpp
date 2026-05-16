@@ -239,11 +239,7 @@ auto describe_metric(std::string_view source,
 auto make_metric_name(std::string_view source,
                       const std::vector<std::string>& path,
                       metric_descriptor descriptor) -> std::string {
-  auto raw = fmt::format("tenzir_{}", source);
-  for (const auto& segment : path) {
-    raw += '_';
-    raw += segment;
-  }
+  auto raw = fmt::format("tenzir_{}_{}", source, fmt::join(path, "_"));
   auto result = sanitize_metric_name(raw);
   if (descriptor.suffix_seconds and not result.ends_with("_seconds")) {
     result += "_seconds";
