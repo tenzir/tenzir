@@ -10,7 +10,6 @@
 #include "prometheus/remote.pb.h"
 
 #include <tenzir/async/notify.hpp>
-#include <tenzir/checked_math.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -562,9 +561,7 @@ public:
         continue;
       }
       add_sample(std::move(*sample));
-      if (pending_sample_count_ >= args_.max_samples_per_request.inner
-          or pending_uncompressed_bytes_
-               >= args_.max_uncompressed_bytes.inner) {
+      if (pending_sample_count_ >= args_.max_samples_per_request.inner) {
         co_await send_request(ctx);
       } else if (next_flush_.is_none()) {
         next_flush_
@@ -739,7 +736,6 @@ private:
   }
 
   auto add_sample(PendingSample sample) -> void {
-    auto contribution = sample_uncompressed_size(sample);
     auto key = labels_key(sample.labels);
     auto& series = pending_[key];
     if (series.labels.empty()) {
@@ -748,21 +744,6 @@ private:
     }
     series.samples.push_back(sample.sample);
     ++pending_sample_count_;
-    pending_uncompressed_bytes_
-      = checked_add(pending_uncompressed_bytes_, contribution)
-          .value_or(std::numeric_limits<uint64_t>::max());
-  }
-
-  auto sample_uncompressed_size(PendingSample const& sample) const -> uint64_t {
-    auto series = std::vector<Series>{};
-    auto& entry = series.emplace_back();
-    entry.labels = sample.labels;
-    entry.samples.push_back(sample.sample);
-    entry.metadata = sample.metadata;
-    auto serialized = protocol_ == Protocol::v1
-                        ? serialize_v1(std::move(series))
-                        : serialize_v2(std::move(series));
-    return serialized.size();
   }
 
   auto
@@ -786,7 +767,43 @@ private:
     }
     pending_.clear();
     pending_sample_count_ = 0;
-    pending_uncompressed_bytes_ = 0;
+    return result;
+  }
+
+  auto serialize(std::vector<Series> series) const -> std::string {
+    return protocol_ == Protocol::v1 ? serialize_v1(std::move(series))
+                                     : serialize_v2(std::move(series));
+  }
+
+  auto can_split(std::vector<Series> const& series) -> bool {
+    return series.size() > 1
+           or (series.size() == 1 and series.front().samples.size() > 1);
+  }
+
+  auto split_series(std::vector<Series>& series) -> std::vector<Series> {
+    TENZIR_ASSERT(can_split(series));
+    if (series.size() > 1) {
+      auto result = std::vector<Series>{};
+      auto half = series.size() / 2;
+      result.reserve(series.size() - half);
+      std::move(series.begin() + detail::narrow<int64_t>(half), series.end(),
+                std::back_inserter(result));
+      series.erase(series.begin() + detail::narrow<int64_t>(half),
+                   series.end());
+      return result;
+    }
+    auto& entry = series.front();
+    auto result = std::vector<Series>{};
+    auto half = entry.samples.size() / 2;
+    auto split = Series{};
+    split.labels = entry.labels;
+    split.metadata = entry.metadata;
+    split.samples.reserve(entry.samples.size() - half);
+    std::move(entry.samples.begin() + detail::narrow<int64_t>(half),
+              entry.samples.end(), std::back_inserter(split.samples));
+    entry.samples.erase(entry.samples.begin() + detail::narrow<int64_t>(half),
+                        entry.samples.end());
+    result.push_back(std::move(split));
     return result;
   }
 
@@ -794,10 +811,28 @@ private:
     if (pending_.empty() or not pool_) {
       co_return;
     }
-    auto series = take_pending();
-    auto uncompressed = protocol_ == Protocol::v1
-                          ? serialize_v1(std::move(series))
-                          : serialize_v2(std::move(series));
+    co_await send_series(take_pending(), ctx);
+  }
+
+  auto send_series(std::vector<Series> series, OpCtx& ctx) -> Task<void> {
+    if (series.empty()) {
+      co_return;
+    }
+    auto uncompressed = serialize(series);
+    if (uncompressed.size() > args_.max_uncompressed_bytes.inner) {
+      if (not can_split(series)) {
+        diagnostic::error(
+          "Prometheus remote write request with a single sample exceeds "
+          "`max_uncompressed_bytes`")
+          .primary(args_.max_uncompressed_bytes)
+          .emit(ctx);
+        co_return;
+      }
+      auto second_half = split_series(series);
+      co_await send_series(std::move(series), ctx);
+      co_await send_series(std::move(second_half), ctx);
+      co_return;
+    }
     auto compressed = snappy_compress(std::move(uncompressed), ctx.dh(),
                                       args_.operator_location);
     if (not compressed) {
@@ -873,7 +908,6 @@ private:
   Option<Box<HttpPool>> pool_;
   std::map<std::string, Series> pending_;
   uint64_t pending_sample_count_ = 0;
-  uint64_t pending_uncompressed_bytes_ = 0;
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
   mutable Option<std::chrono::steady_clock::time_point> next_flush_;
