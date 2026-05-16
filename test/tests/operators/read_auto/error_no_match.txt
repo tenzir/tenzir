@@ -1,0 +1,6 @@
+error: read_auto could not detect an input format
+ --> tests/operators/read_auto/error_no_match.tql:6:3
+  |
+6 |   read_auto
+  |   ^^^^^^^^^ 
+  |

@@ -8,6 +8,7 @@
 
 #include "tenzir/json_parser.hpp"
 
+#include "tenzir/detail/string.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/try_simdjson.hpp"
 
@@ -16,30 +17,6 @@
 namespace tenzir::json {
 
 namespace {
-
-// Returns the number of bytes at the end of the view that are part of an
-// incomplete UTF-8 sequence. This mirrors simdjson's trim_partial_utf8().
-auto count_trailing_partial_utf8(std::string_view view) -> size_t {
-  if (view.empty()) {
-    return 0;
-  }
-  const auto* buf = reinterpret_cast<const uint8_t*>(view.data());
-  const auto len = view.size();
-  // Check for incomplete multi-byte sequences at the end:
-  // - 0xC0-0xFF at end: lead byte of 2-4 byte sequence with only 1 byte
-  // - 0xE0-0xFF at len-2: lead byte of 3-4 byte sequence with only 2 bytes
-  // - 0xF0-0xFF at len-3: lead byte of 4 byte sequence with only 3 bytes
-  if (buf[len - 1] >= 0xC0) {
-    return 1;
-  }
-  if (len >= 2 and buf[len - 2] >= 0xE0) {
-    return 2;
-  }
-  if (len >= 3 and buf[len - 3] >= 0xF0) {
-    return 3;
-  }
-  return 0;
-}
 
 auto parse_ndjson_lines(ndjson_parser& parser, SimdjsonPaddedBuffer const& buf,
                         size_t begin, size_t end) -> void {
@@ -401,7 +378,7 @@ auto default_parser::handle_truncated_bytes() -> void {
   // sequences from the end of the input. We need to add those bytes back to
   // avoid losing them, which would cause UTF-8 validation errors when the
   // continuation bytes arrive in the next chunk.
-  auto partial_utf8_bytes = count_trailing_partial_utf8(view);
+  auto partial_utf8_bytes = detail::count_trailing_partial_utf8(view);
   auto bytes_to_keep
     = std::min(truncated_bytes + partial_utf8_bytes, view.size());
   if (bytes_to_keep == 0) {

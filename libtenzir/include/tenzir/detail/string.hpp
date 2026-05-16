@@ -349,6 +349,17 @@ replace_all(std::string str, std::string_view search, std::string_view replace);
 std::vector<std::string_view>
 split(std::string_view str, std::string_view sep, size_t max_splits = -1);
 
+/// Splits a character sequence into lines.
+/// Treats CRLF as a single line separator by trimming a trailing '\r' from
+/// every returned line.
+/// @param str The string to split.
+/// @param max_lines The maximum number of lines to return.
+/// @warning The lifetime of the returned substrings are bound to the lifetime
+/// of the string pointed to by `str`.
+/// @returns A vector of line substrings.
+std::vector<std::string_view>
+split_lines(std::string_view str, size_t max_lines = -1);
+
 /// Splits a character sequence into two substrings.
 /// If `sep` does not occur in `str`, the second substring will be empty.
 /// @param str The string to split.
@@ -373,6 +384,16 @@ split_once(std::string_view str, std::string_view sep);
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits = -1);
+
+/// Validates whether a string contains well-formed UTF-8.
+auto is_valid_utf8(std::string_view bytes) -> bool;
+
+/// Returns the number of trailing bytes that form an incomplete UTF-8 sequence.
+auto count_trailing_partial_utf8(std::string_view bytes) -> size_t;
+
+/// Validates whether a string is well-formed UTF-8 after ignoring one trailing
+/// incomplete UTF-8 sequence.
+auto is_valid_utf8_prefix(std::string_view bytes) -> bool;
 
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
