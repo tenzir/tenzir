@@ -7,13 +7,13 @@ import shutil
 import struct
 import tempfile
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Iterator
+from typing import Any
 
-from tenzir_test import fixture
+from tenzir_test import FixtureHandle, fixture
 
 
 def _read_varint(buf: bytes, pos: int) -> tuple[int, int]:
@@ -203,6 +203,12 @@ class Capture:
     path: Path
 
 
+@dataclass(frozen=True)
+class PrometheusRemoteWriteAssertions:
+    requests: list[dict[str, object]] = field(default_factory=list)
+    after: str | None = None
+
+
 def _make_handler(capture: Capture):
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:  # noqa: N802
@@ -237,21 +243,43 @@ def _make_handler(capture: Capture):
     return Handler
 
 
-@fixture(name="prometheus_remote_write")
-def run() -> Iterator[dict[str, str]]:
+@fixture(name="prometheus_remote_write", assertions=PrometheusRemoteWriteAssertions)
+def run() -> FixtureHandle:
     temp_dir = Path(tempfile.mkdtemp(prefix="prometheus-remote-write-"))
     capture = Capture(temp_dir / "requests.jsonl")
     capture.path.touch()
     server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(capture))
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
-    try:
-        port = server.server_address[1]
-        yield {
-            "PROMETHEUS_REMOTE_WRITE_URL": f"http://127.0.0.1:{port}/api/v1/write",
-            "PROMETHEUS_REMOTE_WRITE_CAPTURE": str(capture.path),
-        }
-    finally:
+    port = server.server_address[1]
+
+    def teardown() -> None:
         server.shutdown()
         worker.join()
+        server.server_close()
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def assert_test(
+        *, test: Path, assertions: PrometheusRemoteWriteAssertions, **_: Any
+    ) -> None:
+        if assertions.after is not None and test.name != assertions.after:
+            return
+        if not assertions.requests:
+            return
+        observed = [json.loads(line) for line in capture.path.read_text().splitlines()]
+        if observed != assertions.requests:
+            expected = json.dumps(assertions.requests, indent=2, sort_keys=True)
+            actual = json.dumps(observed, indent=2, sort_keys=True)
+            raise AssertionError(
+                "Prometheus remote write capture mismatch\n"
+                f"expected:\n{expected}\nactual:\n{actual}"
+            )
+
+    return FixtureHandle(
+        env={
+            "PROMETHEUS_REMOTE_WRITE_URL": f"http://127.0.0.1:{port}/api/v1/write",
+            "PROMETHEUS_REMOTE_WRITE_CAPTURE": str(capture.path),
+        },
+        teardown=teardown,
+        hooks={"assert_test": assert_test},
+    )
