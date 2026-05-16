@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
+#include <simdjson.h>
 #include <string_view>
 #include <vector>
 
@@ -415,6 +417,23 @@ split(std::string_view str, std::string_view sep, size_t max_splits) {
   return out;
 }
 
+std::vector<std::string_view>
+split_lines(std::string_view str, size_t max_lines) {
+  if (max_lines == 0) {
+    return {};
+  }
+  auto result
+    = split(str, "\n",
+            max_lines == std::numeric_limits<size_t>::max() ? max_lines
+                                                            : max_lines - 1);
+  for (auto& line : result) {
+    if (not line.empty() and line.back() == '\r') {
+      line.remove_suffix(1);
+    }
+  }
+  return result;
+}
+
 std::pair<std::string_view, std::string_view>
 split_once(std::string_view str, std::string_view sep) {
   auto parts = split(str, sep, 1);
@@ -467,6 +486,37 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
     out.emplace_back(std::move(current));
   }
   return out;
+}
+
+auto is_valid_utf8(std::string_view bytes) -> bool {
+  return simdjson::validate_utf8(bytes.data(), bytes.size());
+}
+
+auto count_trailing_partial_utf8(std::string_view bytes) -> size_t {
+  if (bytes.empty()) {
+    return 0;
+  }
+  auto buf = reinterpret_cast<const uint8_t*>(bytes.data());
+  auto len = bytes.size();
+  if (buf[len - 1] >= 0xC0) {
+    return 1;
+  }
+  if (len >= 2 and buf[len - 2] >= 0xE0) {
+    return 2;
+  }
+  if (len >= 3 and buf[len - 3] >= 0xF0) {
+    return 3;
+  }
+  return 0;
+}
+
+auto is_valid_utf8_prefix(std::string_view bytes) -> bool {
+  auto partial = count_trailing_partial_utf8(bytes);
+  if (partial == 0) {
+    return is_valid_utf8(bytes);
+  }
+  bytes.remove_suffix(partial);
+  return is_valid_utf8(bytes);
 }
 
 std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {

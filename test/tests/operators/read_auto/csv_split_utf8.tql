@@ -1,0 +1,4 @@
+from_stdin {
+  split_bytes 15
+  read_auto
+}
