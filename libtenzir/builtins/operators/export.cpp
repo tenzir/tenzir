@@ -218,7 +218,9 @@ public:
           output = filter2(output, *remainder_, ctx, false);
         }
         if (output.rows() > 0) {
+          auto const rows = output.rows();
           co_await push(std::move(output));
+          read_events_counter_.add(rows);
         }
       }
       co_return;
