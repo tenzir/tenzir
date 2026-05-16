@@ -757,27 +757,13 @@ private:
   }
 
   auto add_sample(PendingSample sample) -> void {
-    auto key = labels_key(sample.labels);
-    auto& series = pending_[key];
+    auto& series = pending_[sample.labels];
     if (series.labels.empty()) {
       series.labels = std::move(sample.labels);
       series.metadata = std::move(sample.metadata);
     }
     series.samples.push_back(sample.sample);
     ++pending_sample_count_;
-  }
-
-  auto
-  labels_key(std::vector<std::pair<std::string, std::string>> const& labels)
-    -> std::string {
-    auto result = std::string{};
-    for (auto const& [name, value] : labels) {
-      result += name;
-      result += '\0';
-      result += value;
-      result += '\0';
-    }
-    return result;
   }
 
   auto take_pending() -> std::vector<Series> {
@@ -927,7 +913,7 @@ private:
   std::string url_;
   Headers headers_;
   Option<Box<HttpPool>> pool_;
-  std::map<std::string, Series> pending_;
+  std::map<std::vector<std::pair<std::string, std::string>>, Series> pending_;
   uint64_t pending_sample_count_ = 0;
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
