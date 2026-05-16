@@ -17,9 +17,35 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 
+#include <functional>
 #include <optional>
 
 namespace tenzir {
+
+struct read_detection_input {
+  std::string_view bytes;
+  bool eof = false;
+};
+
+struct read_detection_result {
+  enum class result_state {
+    reject,
+    need_more,
+    match,
+  };
+
+  result_state state = result_state::reject;
+  uint64_t confidence = 0;
+  std::string reason = {};
+};
+
+struct read_detection_candidate {
+  std::string id = {};
+  std::string operator_name = {};
+  std::vector<ast::expression> args = {};
+  int64_t priority = 0;
+  std::function<read_detection_result(read_detection_input)> detect = {};
+};
 
 class operator_factory_plugin : public virtual plugin {
 public:
@@ -100,6 +126,11 @@ public:
     return {};
   }
   virtual auto write_properties() const -> write_properties_t {
+    return {};
+  }
+
+  virtual auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> {
     return {};
   }
 };
