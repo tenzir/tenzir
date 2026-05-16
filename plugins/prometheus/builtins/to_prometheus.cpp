@@ -10,7 +10,9 @@
 #include "prometheus/remote.pb.h"
 
 #include <tenzir/async/notify.hpp>
+#include <tenzir/checked_math.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
@@ -27,6 +29,7 @@
 #include <arrow/util/compression.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -45,6 +48,8 @@
 namespace tenzir::plugins::prometheus {
 
 namespace {
+
+using namespace std::string_view_literals;
 
 constexpr auto default_protobuf_message = "prometheus.WriteRequest";
 constexpr auto v2_protobuf_message = "io.prometheus.write.v2.Request";
@@ -148,23 +153,25 @@ struct Series {
   Metadata metadata;
 };
 
-auto lower(std::string_view input) -> std::string {
+auto lower_ascii(std::string_view input) -> std::string {
   auto result = std::string{input};
   std::ranges::transform(result, result.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
+    return static_cast<char>(detail::ascii_tolower(c));
   });
   return result;
 }
 
 auto is_reserved_header(std::string_view name) -> bool {
-  static const auto reserved = std::set<std::string>{
-    "content-encoding",
-    "content-length",
-    "content-type",
-    "user-agent",
-    "x-prometheus-remote-write-version",
+  constexpr auto reserved = std::array{
+    "content-encoding"sv,
+    "content-length"sv,
+    "content-type"sv,
+    "user-agent"sv,
+    "x-prometheus-remote-write-version"sv,
   };
-  return reserved.contains(lower(name));
+  return std::ranges::any_of(reserved, [name](std::string_view header) {
+    return detail::ascii_icase_equal(name, header);
+  });
 }
 
 auto sanitize_metric_name(std::string name) -> std::string {
@@ -236,7 +243,7 @@ auto valid_label_name(std::string_view name) -> bool {
 }
 
 auto to_metric_type(std::string_view type) -> MetricType {
-  auto normalized = lower(type);
+  auto normalized = lower_ascii(type);
   if (normalized == "counter") {
     return MetricType::counter;
   }
@@ -741,12 +748,9 @@ private:
     }
     series.samples.push_back(sample.sample);
     ++pending_sample_count_;
-    if (std::numeric_limits<uint64_t>::max() - pending_uncompressed_bytes_
-        < contribution) {
-      pending_uncompressed_bytes_ = std::numeric_limits<uint64_t>::max();
-    } else {
-      pending_uncompressed_bytes_ += contribution;
-    }
+    pending_uncompressed_bytes_
+      = checked_add(pending_uncompressed_bytes_, contribution)
+          .value_or(std::numeric_limits<uint64_t>::max());
   }
 
   auto sample_uncompressed_size(PendingSample const& sample) const -> uint64_t {
