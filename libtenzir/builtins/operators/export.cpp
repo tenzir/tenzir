@@ -19,6 +19,7 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/prometheus_metric_shaper.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
@@ -52,6 +53,7 @@
 namespace tenzir::plugins::export_ {
 
 TENZIR_ENUM(export_special_filter, none, diagnostics, metrics);
+TENZIR_ENUM(metrics_shape, raw, prometheus);
 
 namespace {
 
@@ -67,7 +69,36 @@ struct ExportArgs {
   export_special_filter special_filter;
   /// A metric name to use in the `metrics` version
   Option<std::string> metrics_name;
+  /// The output shape for the `metrics` version.
+  std::string shape = "raw";
 };
+
+auto parse_metrics_shape(std::string_view shape) -> metrics_shape {
+  return from_string<metrics_shape>(shape).value_or(metrics_shape::raw);
+}
+
+auto uses_prometheus_shape(const ExportArgs& args) -> bool {
+  return args.special_filter == export_special_filter::metrics
+         and parse_metrics_shape(args.shape) == metrics_shape::prometheus;
+}
+
+auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
+  -> void {
+  if (is_true_literal(expr)) {
+    return;
+  }
+  if (not remainder) {
+    remainder = std::move(expr);
+    return;
+  }
+  remainder = ast::expression{
+    ast::binary_expr{
+      std::move(*remainder),
+      {ast::binary_op::and_, location::unknown},
+      std::move(expr),
+    },
+  };
+}
 
 class Export final : public Operator<void, table_slice> {
 public:
@@ -100,23 +131,17 @@ public:
         data{args_.internal},
       },
     });
-    for (const auto& filter : args_.filter) {
-      auto [legacy, remainder] = split_legacy_expression(filter);
-      if (legacy != trivially_true_expression()) {
-        legacy_clauses.push_back(std::move(legacy));
+    if (uses_prometheus_shape(args_)) {
+      for (const auto& filter : args_.filter) {
+        add_remainder(remainder_, filter);
       }
-      if (not is_true_literal(remainder)) {
-        if (not remainder_) {
-          remainder_ = std::move(remainder);
-        } else {
-          remainder_ = ast::expression{
-            ast::binary_expr{
-              std::move(*remainder_),
-              {ast::binary_op::and_, location::unknown},
-              std::move(remainder),
-            },
-          };
+    } else {
+      for (const auto& filter : args_.filter) {
+        auto [legacy, remainder] = split_legacy_expression(filter);
+        if (legacy != trivially_true_expression()) {
+          legacy_clauses.push_back(std::move(legacy));
         }
+        add_remainder(remainder_, std::move(remainder));
       }
     }
     switch (args_.special_filter) {
@@ -187,6 +212,19 @@ public:
       done_ = true;
       co_return;
     }
+    if (uses_prometheus_shape(args_)) {
+      for (auto&& output : detail::shape_metrics_for_prometheus(*expected)) {
+        if (remainder_) {
+          output = filter2(output, *remainder_, ctx, false);
+        }
+        if (output.rows() > 0) {
+          auto const rows = output.rows();
+          co_await push(std::move(output));
+          read_events_counter_.add(rows);
+        }
+      }
+      co_return;
+    }
     if (not remainder_) {
       auto const rows = expected->rows();
       co_await push(std::move(*expected));
@@ -219,7 +257,7 @@ private:
   ExportArgs args_;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
-  std::optional<ast::expression> remainder_ = std::nullopt;
+  Option<ast::expression> remainder_ = None{};
   MetricsCounter read_events_counter_;
   bool done_ = false;
 };
@@ -535,6 +573,8 @@ public:
     auto name = d.positional("name", &ExportArgs::metrics_name);
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
+    auto shape
+      = d.named_optional("shape", &ExportArgs::shape, "raw|prometheus");
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(parallel); value and value == 0) {
@@ -545,6 +585,12 @@ public:
       if (auto value = ctx.get(name); value and value == "operator") {
         diagnostic::error("operator metrics have been removed")
           .primary(ctx.get_location(name).value())
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(shape);
+          value and not from_string<metrics_shape>(*value)) {
+        diagnostic::error("shape must be 'raw' or 'prometheus'")
+          .primary(ctx.get_location(shape).value())
           .emit(ctx);
       }
       return {};

@@ -8,14 +8,15 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
+#include "tenzir/atomic.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/panic.hpp"
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <span>
 #include <string_view>
@@ -96,9 +97,9 @@ public:
 private:
   friend class PipelineMetrics;
 
-  explicit Metric(std::shared_ptr<std::atomic<uint64_t>> value);
+  explicit Metric(Arc<Atomic<uint64_t>> value);
 
-  std::shared_ptr<std::atomic<uint64_t>> value_;
+  Option<Arc<Atomic<uint64_t>>> value_ = None{};
 };
 
 using MetricsCounter = Metric<MetricsInstrument::counter>;
@@ -156,7 +157,7 @@ private:
     MetricsVisibility visibility;
     MetricsInstrument instrument;
     MetricsUnit type;
-    std::shared_ptr<std::atomic<uint64_t>> value;
+    Arc<Atomic<uint64_t>> value;
 
     auto snapshot() const -> MetricsSnapshotEntry;
   };

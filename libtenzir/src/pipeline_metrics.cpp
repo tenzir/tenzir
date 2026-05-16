@@ -11,14 +11,14 @@
 namespace tenzir {
 
 template <MetricsInstrument Instrument>
-Metric<Instrument>::Metric(std::shared_ptr<std::atomic<uint64_t>> value)
+Metric<Instrument>::Metric(Arc<Atomic<uint64_t>> value)
   : value_{std::move(value)} {
 }
 
 template <MetricsInstrument Instrument>
 void Metric<Instrument>::add(uint64_t value) {
   if (value_) {
-    value_->fetch_add(value, std::memory_order_relaxed);
+    (*value_)->fetch_add(value, std::memory_order_relaxed);
   }
 }
 
@@ -27,7 +27,7 @@ void Metric<Instrument>::remove(uint64_t value)
   requires(Instrument == MetricsInstrument::gauge)
 {
   if (value_) {
-    value_->fetch_sub(value, std::memory_order_relaxed);
+    (*value_)->fetch_sub(value, std::memory_order_relaxed);
   }
 }
 
@@ -36,13 +36,13 @@ void Metric<Instrument>::set(uint64_t value)
   requires(Instrument == MetricsInstrument::gauge)
 {
   if (value_) {
-    value_->store(value, std::memory_order_relaxed);
+    (*value_)->store(value, std::memory_order_relaxed);
   }
 }
 
 template <MetricsInstrument Instrument>
 Metric<Instrument>::operator bool() const {
-  return value_ != nullptr;
+  return value_.is_some();
 }
 
 template class Metric<MetricsInstrument::counter>;
@@ -63,7 +63,7 @@ auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
       return Metric<Instrument>{e.value};
     }
   }
-  auto value = std::make_shared<std::atomic<uint64_t>>(0);
+  auto value = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
   entries_.push_back(Entry{
     .label = label,
     .direction = direction,
