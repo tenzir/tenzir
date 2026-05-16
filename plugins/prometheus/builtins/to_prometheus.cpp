@@ -695,6 +695,14 @@ private:
         }
         auto value_string
           = to_string_value(label_value, args_.labels, ctx.dh()).value_or("");
+        if (protocol_ == Protocol::v2 and value_string.empty()) {
+          diagnostic::warning("Remote Write v2 label `{}` has an empty value, "
+                              "skipping event",
+                              final_name)
+            .primary(args_.labels)
+            .emit(ctx);
+          return {};
+        }
         result.labels.emplace_back(std::move(final_name),
                                    std::move(value_string));
       }
