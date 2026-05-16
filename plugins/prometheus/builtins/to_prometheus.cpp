@@ -398,7 +398,12 @@ auto serialize_v1(std::vector<Series> series) -> std::string {
       out->set_value(sample.value);
       out->set_timestamp(sample.timestamp_ms);
     }
-    auto family = entry.metadata.family.empty() ? entry.labels.front().second
+    auto metric_name
+      = std::ranges::find(entry.labels, "__name__", [](auto const& label) {
+          return label.first;
+        });
+    TENZIR_ASSERT(metric_name != entry.labels.end());
+    auto family = entry.metadata.family.empty() ? metric_name->second
                                                 : entry.metadata.family;
     if (metadata_seen.insert(family).second
         and (entry.metadata.type != MetricType::unknown
