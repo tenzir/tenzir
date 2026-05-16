@@ -9,6 +9,7 @@
 #include "tenzir/detail/prometheus_metric_shaper.hpp"
 
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/time.hpp"
@@ -19,7 +20,6 @@
 
 #include <array>
 #include <cctype>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -121,44 +121,44 @@ auto is_dimension_field(std::string_view field) -> bool {
   return std::ranges::find(fields, field) != fields.end();
 }
 
-auto stringify_label_value(data_view3 value) -> std::optional<std::string> {
+auto stringify_label_value(data_view3 value) -> Option<std::string> {
   return match(
     value,
-    [](caf::none_t) -> std::optional<std::string> {
-      return std::nullopt;
+    [](caf::none_t) -> Option<std::string> {
+      return None{};
     },
-    [](bool value) -> std::optional<std::string> {
-      return value ? "true" : "false";
+    [](bool value) -> Option<std::string> {
+      return value ? std::string{"true"} : std::string{"false"};
     },
-    [](int64_t value) -> std::optional<std::string> {
+    [](int64_t value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](uint64_t value) -> std::optional<std::string> {
+    [](uint64_t value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](double value) -> std::optional<std::string> {
+    [](double value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](duration value) -> std::optional<std::string> {
+    [](duration value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](time value) -> std::optional<std::string> {
+    [](time value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](std::string_view value) -> std::optional<std::string> {
+    [](std::string_view value) -> Option<std::string> {
       return std::string{value};
     },
-    [](enumeration value) -> std::optional<std::string> {
+    [](enumeration value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](ip value) -> std::optional<std::string> {
+    [](ip value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](subnet value) -> std::optional<std::string> {
+    [](subnet value) -> Option<std::string> {
       return fmt::format("{}", value);
     },
-    [](auto) -> std::optional<std::string> {
-      return std::nullopt;
+    [](auto) -> Option<std::string> {
+      return None{};
     });
 }
 
@@ -253,7 +253,7 @@ auto make_metric_name(std::string_view source,
 
 auto append_metric(series_builder& builder, std::string_view source,
                    const std::vector<std::string>& path, double value,
-                   std::optional<time> timestamp, const labels& labels,
+                   Option<time> timestamp, const labels& labels,
                    metric_descriptor descriptor) -> void {
   auto metric = builder.record();
   metric.field("metric", make_metric_name(source, path, descriptor));
@@ -277,12 +277,11 @@ auto duration_to_seconds(duration value) -> double {
 
 auto flatten_value(series_builder& builder, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
-                   std::optional<time> timestamp, const labels& labels) -> void;
+                   Option<time> timestamp, const labels& labels) -> void;
 
 auto flatten_record(series_builder& builder, std::string_view source,
                     std::vector<std::string>& path, view3<record> record,
-                    std::optional<time> timestamp, const labels& inherited)
-  -> void {
+                    Option<time> timestamp, const labels& inherited) -> void {
   auto scoped_labels = collect_labels(record, inherited);
   for (auto [key, value] : record) {
     if (key == "timestamp" or is_dimension_field(key)) {
@@ -296,7 +295,7 @@ auto flatten_record(series_builder& builder, std::string_view source,
 
 auto flatten_list(series_builder& builder, std::string_view source,
                   std::vector<std::string>& path, view3<list> list,
-                  std::optional<time> timestamp, const labels& labels) -> void {
+                  Option<time> timestamp, const labels& labels) -> void {
   for (auto item : list) {
     if (const auto* item_record = try_as<view3<record>>(item)) {
       flatten_record(builder, source, path, *item_record, timestamp, labels);
@@ -306,8 +305,7 @@ auto flatten_list(series_builder& builder, std::string_view source,
 
 auto flatten_value(series_builder& builder, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
-                   std::optional<time> timestamp, const labels& labels)
-  -> void {
+                   Option<time> timestamp, const labels& labels) -> void {
   match(
     value, [&](caf::none_t) {},
     [&](int64_t value) {
@@ -335,7 +333,7 @@ auto flatten_value(series_builder& builder, std::string_view source,
     [](auto) {});
 }
 
-auto find_timestamp(view3<record> record) -> std::optional<time> {
+auto find_timestamp(view3<record> record) -> Option<time> {
   for (auto [key, value] : record) {
     if (key != "timestamp") {
       continue;
@@ -343,9 +341,9 @@ auto find_timestamp(view3<record> record) -> std::optional<time> {
     if (auto* result = try_as<time>(value)) {
       return *result;
     }
-    return std::nullopt;
+    return None{};
   }
-  return std::nullopt;
+  return None{};
 }
 
 } // namespace
