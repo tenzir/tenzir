@@ -189,11 +189,6 @@ auto collect_labels(view3<record> record, const labels& inherited) -> labels {
   return result;
 }
 
-auto contains_segment(const std::vector<std::string>& path,
-                      std::string_view needle) -> bool {
-  return std::ranges::find(path, needle) != path.end();
-}
-
 auto has_bytes_unit(std::string_view source,
                     const std::vector<std::string>& path) -> bool {
   for (const auto& segment : path) {
@@ -215,8 +210,8 @@ auto is_allocator_cumulative_counter(std::string_view source,
   if (source != "memory" or path.empty() or path.back() != "cumulative") {
     return false;
   }
-  return contains_segment(path, "bytes")
-         or contains_segment(path, "allocations");
+  return std::ranges::find(path, "bytes") != path.end()
+         or std::ranges::find(path, "allocations") != path.end();
 }
 
 auto describe_metric(std::string_view source,
@@ -266,10 +261,6 @@ auto append_metric(series_builder& builder, std::string_view source,
   metric.field("unit", descriptor.unit);
 }
 
-auto duration_to_seconds(duration value) -> double {
-  return std::chrono::duration_cast<double_seconds>(value).count();
-}
-
 auto flatten_value(series_builder& builder, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
                    Option<time> timestamp, const labels& labels) -> void;
@@ -316,7 +307,8 @@ auto flatten_value(series_builder& builder, std::string_view source,
                     describe_metric(source, path, false));
     },
     [&](duration value) {
-      append_metric(builder, source, path, duration_to_seconds(value),
+      append_metric(builder, source, path,
+                    std::chrono::duration_cast<double_seconds>(value).count(),
                     timestamp, labels, describe_metric(source, path, true));
     },
     [&](view3<record> value) {
