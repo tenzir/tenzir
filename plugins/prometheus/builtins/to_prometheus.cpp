@@ -711,13 +711,26 @@ private:
       return label.first;
     });
     result.sample.value = *value;
-    result.sample.timestamp_ms
-      = timestamps.is_null(row)
-          ? now_ms()
-          : to_timestamp_ms(timestamps.view3_at(row)).value_or(now_ms());
+    if (timestamps.is_null(row)) {
+      result.sample.timestamp_ms = now_ms();
+    } else if (auto timestamp = to_timestamp_ms(timestamps.view3_at(row))) {
+      result.sample.timestamp_ms = *timestamp;
+    } else {
+      diagnostic::warning("invalid metric timestamp, skipping event")
+        .primary(args_.timestamp)
+        .emit(ctx);
+      return {};
+    }
     if (not start_timestamps.is_null(row)) {
-      result.sample.start_timestamp_ms
-        = to_timestamp_ms(start_timestamps.view3_at(row)).value_or(0);
+      if (auto start_timestamp
+          = to_timestamp_ms(start_timestamps.view3_at(row))) {
+        result.sample.start_timestamp_ms = *start_timestamp;
+      } else {
+        diagnostic::warning("invalid metric start timestamp, skipping event")
+          .primary(args_.start_timestamp)
+          .emit(ctx);
+        return {};
+      }
     }
     result.metadata.family
       = families.is_null(row)
