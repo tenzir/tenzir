@@ -1,0 +1,12 @@
+every 1s {
+  metrics "operator_profile", shape="prometheus"
+  where metric == "tenzir_operator_profile_events_out"
+  where labels.pipeline_id == "00000000-0000-0000-0000-000000000001"
+}
+head 1
+select \
+  metric,
+  has_value=(value >= 0.0),
+  pipeline_id=labels.pipeline_id,
+  type,
+  unit

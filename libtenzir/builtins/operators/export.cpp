@@ -19,6 +19,7 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/prometheus_metric_shaper.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
@@ -52,6 +53,7 @@
 namespace tenzir::plugins::export_ {
 
 TENZIR_ENUM(export_special_filter, none, diagnostics, metrics);
+TENZIR_ENUM(metrics_shape, raw, prometheus);
 
 namespace {
 
@@ -67,7 +69,36 @@ struct ExportArgs {
   export_special_filter special_filter;
   /// A metric name to use in the `metrics` version
   Option<std::string> metrics_name;
+  /// The output shape for the `metrics` version.
+  std::string shape = "raw";
 };
+
+auto parse_metrics_shape(std::string_view shape) -> metrics_shape {
+  return from_string<metrics_shape>(shape).value_or(metrics_shape::raw);
+}
+
+auto uses_prometheus_shape(const ExportArgs& args) -> bool {
+  return args.special_filter == export_special_filter::metrics
+         and parse_metrics_shape(args.shape) == metrics_shape::prometheus;
+}
+
+auto add_remainder(std::optional<ast::expression>& remainder,
+                   ast::expression expr) -> void {
+  if (is_true_literal(expr)) {
+    return;
+  }
+  if (not remainder) {
+    remainder = std::move(expr);
+    return;
+  }
+  remainder = ast::expression{
+    ast::binary_expr{
+      std::move(*remainder),
+      {ast::binary_op::and_, location::unknown},
+      std::move(expr),
+    },
+  };
+}
 
 class Export final : public Operator<void, table_slice> {
 public:
@@ -100,23 +131,17 @@ public:
         data{args_.internal},
       },
     });
-    for (const auto& filter : args_.filter) {
-      auto [legacy, remainder] = split_legacy_expression(filter);
-      if (legacy != trivially_true_expression()) {
-        legacy_clauses.push_back(std::move(legacy));
+    if (uses_prometheus_shape(args_)) {
+      for (const auto& filter : args_.filter) {
+        add_remainder(remainder_, filter);
       }
-      if (not is_true_literal(remainder)) {
-        if (not remainder_) {
-          remainder_ = std::move(remainder);
-        } else {
-          remainder_ = ast::expression{
-            ast::binary_expr{
-              std::move(*remainder_),
-              {ast::binary_op::and_, location::unknown},
-              std::move(remainder),
-            },
-          };
+    } else {
+      for (const auto& filter : args_.filter) {
+        auto [legacy, remainder] = split_legacy_expression(filter);
+        if (legacy != trivially_true_expression()) {
+          legacy_clauses.push_back(std::move(legacy));
         }
+        add_remainder(remainder_, std::move(remainder));
       }
     }
     switch (args_.special_filter) {
@@ -187,6 +212,17 @@ public:
       done_ = true;
       co_return;
     }
+    if (uses_prometheus_shape(args_)) {
+      for (auto&& output : detail::shape_metrics_for_prometheus(*expected)) {
+        if (remainder_) {
+          output = filter2(output, *remainder_, ctx, false);
+        }
+        if (output.rows() > 0) {
+          co_await push(std::move(output));
+        }
+      }
+      co_return;
+    }
     if (not remainder_) {
       auto const rows = expected->rows();
       co_await push(std::move(*expected));
@@ -228,8 +264,9 @@ class export_operator final : public crtp_operator<export_operator> {
 public:
   export_operator() = default;
 
-  explicit export_operator(expression expr, export_mode mode)
-    : expr_{std::move(expr)}, mode_{mode} {
+  explicit export_operator(expression expr, export_mode mode,
+                           metrics_shape shape = metrics_shape::raw)
+    : expr_{std::move(expr)}, mode_{mode}, shape_{shape} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
@@ -272,7 +309,13 @@ public:
       if (result.rows() == 0) {
         co_return;
       }
-      co_yield std::move(result);
+      if (shape_ == metrics_shape::prometheus) {
+        for (auto&& output : detail::shape_metrics_for_prometheus(result)) {
+          co_yield std::move(output);
+        }
+      } else {
+        co_yield std::move(result);
+      }
     }
   }
 
@@ -295,6 +338,9 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)order;
+    if (shape_ == metrics_shape::prometheus) {
+      return optimize_result{std::nullopt, event_order::ordered, copy()};
+    }
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);
@@ -308,17 +354,19 @@ public:
                                          : conjunction{std::move(clauses)});
     return optimize_result{trivially_true_expression(), event_order::ordered,
                            std::make_unique<export_operator>(std::move(expr),
-                                                             mode_)};
+                                                             mode_, shape_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
     return f.object(x).fields(f.field("expression", x.expr_),
-                              f.field("mode", x.mode_));
+                              f.field("mode", x.mode_),
+                              f.field("shape", x.shape_));
   }
 
 private:
   expression expr_;
   export_mode mode_;
+  metrics_shape shape_ = metrics_shape::raw;
 };
 
 class export_plugin final : public virtual operator_plugin<export_operator>,
@@ -535,6 +583,8 @@ public:
     auto name = d.positional("name", &ExportArgs::metrics_name);
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
+    auto shape
+      = d.named_optional("shape", &ExportArgs::shape, "raw|prometheus");
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(parallel); value and value == 0) {
@@ -545,6 +595,12 @@ public:
       if (auto value = ctx.get(name); value and value == "operator") {
         diagnostic::error("operator metrics have been removed")
           .primary(ctx.get_location(name).value())
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(shape);
+          value and not from_string<metrics_shape>(*value)) {
+        diagnostic::error("shape must be 'raw' or 'prometheus'")
+          .primary(ctx.get_location(shape).value())
           .emit(ctx);
       }
       return {};
@@ -560,13 +616,25 @@ public:
     auto retro = false;
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
+    auto shape = std::optional<located<std::string>>{};
     parser.add(name, "<name>");
     parser.add("--live", live);
     parser.add("--retro", retro);
     parser.add("--parallel", parallel, "<level>");
+    parser.add("--shape", shape, "<raw|prometheus>");
     parser.parse(p);
     if (not live) {
       retro = true;
+    }
+    auto parsed_shape = metrics_shape::raw;
+    if (shape) {
+      auto result = from_string<metrics_shape>(shape->inner);
+      if (not result) {
+        diagnostic::error("shape must be 'raw' or 'prometheus'")
+          .primary(shape->source)
+          .throw_();
+      }
+      parsed_shape = *result;
     }
     static const auto all_metrics = [] {
       auto result = pattern::make("tenzir\\.metrics\\..*");
@@ -589,7 +657,8 @@ public:
           },
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3},
+      parsed_shape);
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -599,14 +668,27 @@ public:
     auto retro = false;
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
+    auto shape = std::optional<located<std::string>>{};
     TRY(argument_parser2::operator_("metrics")
           .positional("name", name)
           .named("live", live)
           .named("retro", retro)
           .named("parallel", parallel)
+          .named("shape", shape)
           .parse(inv, ctx));
     if (not live) {
       retro = true;
+    }
+    auto parsed_shape = metrics_shape::raw;
+    if (shape) {
+      auto result = from_string<metrics_shape>(shape->inner);
+      if (not result) {
+        diagnostic::error("shape must be 'raw' or 'prometheus'")
+          .primary(*shape)
+          .emit(ctx);
+        return failure::promise();
+      }
+      parsed_shape = *result;
     }
     static const auto all_metrics = [] {
       auto result = pattern::make("tenzir\\.metrics\\..*");
@@ -635,7 +717,8 @@ public:
           },
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3},
+      parsed_shape);
   }
 };
 
