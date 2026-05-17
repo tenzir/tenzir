@@ -1,0 +1,4 @@
+plugins
+where name in ["accept_elasticsearch", "tql2.to_elasticsearch"]
+sort name
+select name
