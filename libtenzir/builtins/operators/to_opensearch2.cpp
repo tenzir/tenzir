@@ -479,7 +479,7 @@ private:
   mutable Box<Notify> buffer_ready_{std::in_place};
 };
 
-class ToOpenSearchPlugin final : public virtual OperatorPlugin {
+class ToOpenSearchPlugin : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.to_opensearch";
@@ -525,7 +525,15 @@ public:
   }
 };
 
+class ToElasticsearchPlugin final : public ToOpenSearchPlugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.to_elasticsearch";
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::opensearch2
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::opensearch2::ToOpenSearchPlugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::opensearch2::ToElasticsearchPlugin)

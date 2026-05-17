@@ -598,7 +598,7 @@ private:
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
 };
 
-class AcceptOpenSearchPlugin final : public virtual OperatorPlugin {
+class AcceptOpenSearchPlugin : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "accept_opensearch";
@@ -639,9 +639,18 @@ public:
   }
 };
 
+class AcceptElasticsearchPlugin final : public AcceptOpenSearchPlugin {
+public:
+  auto name() const -> std::string override {
+    return "accept_elasticsearch";
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::accept_opensearch
 
 TENZIR_REGISTER_PLUGIN(
   tenzir::plugins::accept_opensearch::AcceptOpenSearchPlugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::accept_opensearch::AcceptElasticsearchPlugin)
