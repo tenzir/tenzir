@@ -1287,12 +1287,16 @@ public:
       }
       // Validate encode: requires a body and must be "json" or "form".
       auto body_loc = ctx.get_location(body_arg);
+      auto paginate_expr = ctx.get(paginate_arg);
+      auto paginate_is_lambda
+        = paginate_expr and try_as<ast::lambda_expr>(*paginate_expr);
       if (auto encode_loc = ctx.get_location(encode_arg)) {
-        if (not body_loc) {
+        if (not body_loc and not paginate_is_lambda) {
           diagnostic::error("`encode` requires a `body`")
             .primary(*encode_loc)
             .emit(ctx);
-        } else if (auto encode = ctx.get(encode_arg)) {
+        }
+        if (auto encode = ctx.get(encode_arg)) {
           if (encode->inner != "json" and encode->inner != "form") {
             diagnostic::error("unsupported encoding: `{}`", encode->inner)
               .hint(R"(`encode` must be `"json"` or `"form"`)")
@@ -1382,7 +1386,7 @@ public:
             .emit(ctx);
         }
       }
-      if (auto paginate_expr = ctx.get(paginate_arg)) {
+      if (paginate_expr) {
         auto validated
           = validate_paginate(Option<ast::expression>{*paginate_expr}, ctx);
         if (not validated) {

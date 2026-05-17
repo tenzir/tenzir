@@ -217,7 +217,7 @@ class _Handler(BaseHTTPRequestHandler):
         if path == _RECORD_GET_BODY_PAGE_1:
             next_value = {
                 "url": _RECORD_GET_BODY_PAGE_2,
-                "body": "hello-from-get",
+                "body": {"hello": "from-get"},
             }
             self._reply(self._observed_event(1, None, next_value))
             return

@@ -11,14 +11,16 @@
   },
   next: {
     url: "/paginate/record-get-body/2",
-    body: "hello-from-get",
+    body: {
+      hello: "from-get",
+    },
   },
 }
 {
   page: 2,
   method: "GET",
   path: "/paginate/record-get-body/2",
-  body: "hello-from-get",
+  body: "hello=from-get",
   headers: {
     x_secret: null,
     x_override: null,
