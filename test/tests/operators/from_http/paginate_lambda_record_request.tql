@@ -1,0 +1,18 @@
+---
+fixtures: [http_paginate]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_RECORD_URL"),
+  method="post",
+  body={page: 1},
+  encode="json",
+  headers={
+    "X-Secret": secret("keep", _literal=true),
+    "X-Override": "old",
+    "X-Delete": "gone",
+  },
+  paginate=(x => x.next),
+  tls=false {
+  read_json
+}

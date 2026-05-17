@@ -1,0 +1,15 @@
+{
+  page: 1,
+  next: "/paginate/lambda/2",
+}
+{
+  page: 2,
+  next: "/paginate/lambda/2",
+}
+warning: cannot paginate over multiple events
+ --> tests/operators/from_http/paginate_lambda_multi_event.tql:6:13
+  |
+6 |   paginate=(x => x.next),
+  |             ~~~~~~~~~~~ 
+  |
+  = note: stopping pagination

@@ -1,0 +1,20 @@
+{
+  page: 1,
+  method: "GET",
+  path: "/paginate/record-bad/empty",
+  body: null,
+  headers: {
+    x_secret: null,
+    x_override: null,
+    x_delete: null,
+    x_added: null,
+  },
+  next: {},
+}
+warning: `paginate` request record must not be empty
+ --> tests/operators/from_http/paginate_lambda_record_empty.tql:6:13
+  |
+6 |   paginate=(x => x.next),
+  |             ~~~~~~~~~~~ 
+  |
+  = note: stopping pagination
