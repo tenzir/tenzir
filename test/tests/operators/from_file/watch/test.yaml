@@ -1,0 +1,3 @@
+suite: from-file-watch
+fixtures: [local_files]
+timeout: 30

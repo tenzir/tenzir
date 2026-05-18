@@ -124,7 +124,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       }
       scan_complete_ = true;
       // NOTE: `previous_` can grow without bounds if neither `rename` nor
-      // `remove` are used with `watch=true`.
+      // `remove` are used with `watch`.
       std::swap(previous_, current_);
       current_.clear();
       while (not pending_.empty()) {
@@ -482,8 +482,11 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
                   continue;
                 }
                 // Clean up existing directory markers when `remove=true`.
-                // Directory markers are 0-sized objects with keys ending in '/'.
-                if (base_args_.remove and file.IsDirectory()) {
+                // Directory markers are 0-sized objects with keys ending in '/'
+                // that some object stores create. Real directories on local
+                // filesystems are not markers and must not be deleted.
+                if (base_args_.remove and file.IsDirectory()
+                    and fs_->type_name() != "local") {
                   co_await remove_file(file.path() + '/', dh);
                 }
               }
@@ -511,9 +514,10 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
         co_return;
       }
       auto elapsed = std::chrono::steady_clock::now() - start;
-      if (elapsed < watch_pause) {
+      auto interval = base_args_.watch->inner;
+      if (elapsed < interval) {
         auto dur = std::chrono::duration_cast<folly::HighResDuration>(
-          watch_pause - elapsed);
+          interval - elapsed);
         co_await folly::coro::sleep(dur);
       }
     }
