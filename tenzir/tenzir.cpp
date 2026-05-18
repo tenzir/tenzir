@@ -14,6 +14,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/folly_init.hpp"
 #include "tenzir/legacy_type.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
@@ -39,7 +40,6 @@
 #include <caf/telemetry/metric_family_impl.hpp>
 #include <caf/telemetry/metric_registry.hpp>
 #include <caf/thread_owner.hpp>
-#include <folly/init/Init.h>
 #include <sys/resource.h>
 
 #include <csignal>
@@ -124,10 +124,7 @@ auto main(int argc, char** argv) -> int try {
 #endif
   // Some Folly builds use strict mode, even though that is not the default. In
   // that case, we need to call `folly::Init` before using its singletons.
-  auto argc2 = 1;
-  auto argv2 = argv;
-  auto folly_init = folly::Init{
-    &argc2, &argv2, folly::InitOptions{}.useGFlags(false).removeFlags(false)};
+  auto folly_init = tenzir::folly_init_guard{argv};
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
