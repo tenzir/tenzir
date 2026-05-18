@@ -302,7 +302,7 @@ auto read_plugin_for_url_path(std::string_view path)
       TENZIR_ASSERT(not extension.empty());
       TENZIR_ASSERT(not extension.starts_with('.'));
       auto matches
-        = filename == extension
+        = (filename == extension and extension.find('.') != std::string::npos)
           or (filename.size() > extension.size()
               and filename[filename.size() - extension.size() - 1] == '.'
               and filename.ends_with(extension));

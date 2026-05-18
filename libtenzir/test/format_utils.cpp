@@ -50,5 +50,6 @@ TEST("read plugin lookup by URL path") {
   auto const* yaml = plugins::find<operator_factory_plugin>("read_yaml");
   REQUIRE(yaml);
   CHECK_EQUAL(read_plugin_for_url_path("/tmp/config.yml"), yaml);
+  CHECK_EQUAL(read_plugin_for_url_path("/tmp/json"), nullptr);
   CHECK_EQUAL(read_plugin_for_url_path("/tmp/events.log"), nullptr);
 }
