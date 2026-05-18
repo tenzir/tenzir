@@ -230,43 +230,11 @@ private:
     if (lifecycle_ == Lifecycle::done or transport_) {
       co_return;
     }
-    // `retryWithExponentialBackoff` rethrows the last attempt's exception once
-    // the configured retry budget is exhausted. With the default (unset)
-    // `max_retry_count`, the budget is effectively infinite so the catch only
-    // ever fires when the user opted into a finite retry count.
     auto const max_retry_count
       = args_.max_retry_count
           ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
           : default_connect_max_retry_count;
-    try {
-      transport_ = co_await folly::coro::retryWithExponentialBackoff(
-        max_retry_count, connect_initial_backoff, connect_max_backoff,
-        connect_retry_jitter,
-        [this, &ctx]() -> Task<folly::coro::Transport> {
-          TENZIR_DEBUG("to_tcp: connecting to {}", address_.describe());
-          try {
-            co_return co_await connect_tcp_client(
-              evb_, address_,
-              std::chrono::duration_cast<std::chrono::milliseconds>(
-                connect_timeout),
-              tls_context_, host_);
-          } catch (folly::AsyncSocketException const& ex) {
-            // TODO: Surface connect retries and failures as metrics in a
-            // follow-up that covers all TCP operators.
-            auto diag
-              = diagnostic::warning("failed to connect to {}: {}",
-                                    address_.describe(),
-                                    describe_socket_error(ex))
-                  .primary(args_.endpoint.source)
-                  .hint("ensure a TCP server is listening on this endpoint");
-            add_tls_client_diagnostic_hints(std::move(diag),
-                                            is_tls_enabled(ctx))
-              .emit(ctx.dh());
-            throw;
-          }
-        },
-        should_retry_connect);
-    } catch (folly::AsyncSocketException const& ex) {
+    auto emit_final_error = [&](folly::AsyncSocketException const& ex) {
       diagnostic::error("failed to connect to {}: {}", address_.describe(),
                         describe_socket_error(ex))
         .primary(args_.endpoint.source)
@@ -274,6 +242,44 @@ private:
               max_retry_count == 1 ? "retry" : "retries")
         .emit(ctx.dh());
       finish();
+    };
+    auto emit_retry_warning = [&](folly::AsyncSocketException const& ex) {
+      // TODO: Surface connect retries and failures as metrics in a follow-up
+      // that covers all TCP operators.
+      auto diag
+        = diagnostic::warning("failed to connect to {}: {}",
+                              address_.describe(), describe_socket_error(ex))
+            .primary(args_.endpoint.source)
+            .hint("ensure a TCP server is listening on this endpoint");
+      ctx.dh().emit(
+        add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
+          .done());
+    };
+    auto connect = [this]() -> Task<folly::coro::Transport> {
+      TENZIR_DEBUG("to_tcp: connecting to {}", address_.describe());
+      co_return co_await connect_tcp_client(
+        evb_, address_,
+        std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
+        tls_context_, host_);
+    };
+    try {
+      transport_ = co_await folly::coro::retryWithExponentialBackoff(
+        max_retry_count, connect_initial_backoff, connect_max_backoff,
+        connect_retry_jitter,
+        [this, &connect,
+         &emit_retry_warning]() -> Task<folly::coro::Transport> {
+          try {
+            co_return co_await connect();
+          } catch (folly::AsyncSocketException const& ex) {
+            if (not args_.max_retry_count) {
+              emit_retry_warning(ex);
+            }
+            throw;
+          }
+        },
+        should_retry_connect);
+    } catch (folly::AsyncSocketException const& ex) {
+      emit_final_error(ex);
       co_return;
     }
     auto peer_addr = transport_->getPeerAddress();
