@@ -16,3 +16,4 @@
 }
 warning: xsv parser found too few values in a line
  = note: line 0 has 1 values, but should have 3 values
+ = hint: use `auto_fill=true` to silently fill missing values with `null`

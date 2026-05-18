@@ -1,0 +1,22 @@
+{
+  a: 1,
+  b: 2,
+  c: 3,
+  d: 4,
+}
+{
+  a: 5,
+  b: 6,
+  c: null,
+  d: null,
+}
+{
+  a: 7,
+  b: null,
+  c: null,
+  d: null,
+}
+warning: csv parser: csv parser found too few values in a line
+ = note: line 3
+ = note: line 3 has 2 values, but should have 4 values
+ = hint: use `auto_fill=true` to silently fill missing values with `null`
