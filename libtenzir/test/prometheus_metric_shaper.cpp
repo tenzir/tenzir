@@ -77,7 +77,11 @@ TEST("prometheus metric shaper converts durations to seconds") {
   auto b = series_builder{};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
+  row.field("request_id", "abc123");
   row.field("method", "GET");
+  row.field("path", "/api/v0/status");
+  auto params = row.field("params").record();
+  params.field("limit", uint64_t{100});
   row.field("status_code", uint64_t{200});
   row.field("response_time", std::chrono::duration_cast<duration>(
                                std::chrono::milliseconds{1500}));
@@ -89,7 +93,9 @@ TEST("prometheus metric shaper converts durations to seconds") {
   CHECK_EQUAL(get<std::string>(rows[0], "unit"), "seconds");
   auto& labels = get<record>(rows[0], "labels");
   CHECK_EQUAL(get<std::string>(labels, "method"), "GET");
+  CHECK_EQUAL(get<std::string>(labels, "path"), "/api/v0/status");
   CHECK_EQUAL(get<std::string>(labels, "status_code"), "200");
+  CHECK(not get_if<std::string>(&labels, "request_id"));
 }
 
 TEST("prometheus metric shaper flattens lists of records with labels") {
@@ -129,8 +135,50 @@ TEST("prometheus metric shaper skips null and non-numeric fields") {
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_custom_count");
   CHECK_EQUAL(get<double>(rows[0], "value"), 7.0);
-  CHECK_EQUAL(get<std::string>(get<record>(rows[0], "labels"), "name"),
-              "custom");
+  CHECK(get<record>(rows[0], "labels").empty());
+}
+
+TEST("prometheus metric shaper drops schema ids and aggregates") {
+  auto b = series_builder{};
+  auto row0 = b.record();
+  row0.field("timestamp", test_timestamp());
+  row0.field("schema", "suricata.alert");
+  row0.field("schema_id", "aaaaaaaaaaaaaaaa");
+  row0.field("events", uint64_t{2});
+  auto row1 = b.record();
+  row1.field("timestamp", test_timestamp());
+  row1.field("schema", "suricata.alert");
+  row1.field("schema_id", "bbbbbbbbbbbbbbbb");
+  row1.field("events", uint64_t{3});
+  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.ingest"));
+  REQUIRE_EQUAL(rows.size(), size_t{1});
+  CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_ingest_events");
+  CHECK_EQUAL(get<double>(rows[0], "value"), 5.0);
+  auto& labels = get<record>(rows[0], "labels");
+  CHECK_EQUAL(get<std::string>(labels, "schema"), "suricata.alert");
+  CHECK(not get_if<std::string>(&labels, "schema_id"));
+}
+
+TEST("prometheus metric shaper skips operator metadata") {
+  auto b = series_builder{};
+  auto row = b.record();
+  row.field("timestamp", test_timestamp());
+  row.field("pipeline_id", "pipeline-1");
+  row.field("operator_id", uint64_t{7});
+  row.field("run", uint64_t{42});
+  row.field("hidden", false);
+  row.field("schema", "suricata.alert");
+  row.field("schema_id", "aaaaaaaaaaaaaaaa");
+  row.field("events", uint64_t{2});
+  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.import"));
+  REQUIRE_EQUAL(rows.size(), size_t{1});
+  CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_import_events");
+  auto& labels = get<record>(rows[0], "labels");
+  CHECK_EQUAL(get<std::string>(labels, "pipeline_id"), "pipeline-1");
+  CHECK_EQUAL(get<std::string>(labels, "operator_id"), "7");
+  CHECK_EQUAL(get<std::string>(labels, "schema"), "suricata.alert");
+  CHECK(not get_if<std::string>(&labels, "schema_id"));
+  CHECK(not get_if<std::string>(&labels, "run"));
 }
 
 } // namespace tenzir

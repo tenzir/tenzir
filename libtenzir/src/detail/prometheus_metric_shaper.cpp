@@ -20,6 +20,7 @@
 
 #include <array>
 #include <cctype>
+#include <initializer_list>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -43,6 +44,15 @@ struct label {
 };
 
 using labels = std::vector<label>;
+
+struct metric_sample {
+  std::string metric;
+  double value = {};
+  Option<time> timestamp = None{};
+  labels metric_labels;
+  std::string_view type = "gauge";
+  std::string_view unit = "";
+};
 
 auto prometheus_schema() -> const type& {
   static const auto result = type{
@@ -112,12 +122,113 @@ auto sanitize_label_name(std::string_view input) -> std::string {
   return sanitize_identifier(input, is_label_name_char, false);
 }
 
-auto is_dimension_field(std::string_view field) -> bool {
-  static constexpr auto fields = std::array{
-    "pipeline_id"sv, "operator_id"sv, "name"sv,   "path"sv,        "schema"sv,
-    "schema_id"sv,   "handle"sv,      "method"sv, "status_code"sv,
+template <size_t Size>
+auto contains(const std::array<std::string_view, Size>& values,
+              std::string_view value) -> bool {
+  return std::ranges::find(values, value) != values.end();
+}
+
+auto path_equals(const std::vector<std::string>& path,
+                 std::initializer_list<std::string_view> expected) -> bool {
+  if (path.size() != expected.size()) {
+    return false;
+  }
+  auto expected_it = expected.begin();
+  for (const auto& segment : path) {
+    if (segment != *expected_it) {
+      return false;
+    }
+    ++expected_it;
+  }
+  return true;
+}
+
+auto is_schema_metric_source(std::string_view source) -> bool {
+  static constexpr auto sources = std::array{
+    "export"sv, "import"sv, "ingest"sv, "publish"sv, "subscribe"sv,
   };
-  return std::ranges::find(fields, field) != fields.end();
+  return contains(sources, source);
+}
+
+auto is_operator_scoped_metric_source(std::string_view source) -> bool {
+  static constexpr auto sources = std::array{
+    "buffer"sv,           "enrich"sv,  "export"sv,
+    "import"sv,           "lookup"sv,  "operator"sv,
+    "operator_profile"sv, "publish"sv, "subscribe"sv,
+    "subscribe_buffer"sv, "tcp"sv,     "throttle"sv,
+  };
+  return contains(sources, source);
+}
+
+auto is_label_field(std::string_view source,
+                    const std::vector<std::string>& path,
+                    std::string_view field) -> bool {
+  if (not path.empty()) {
+    if (source == "caf") {
+      return field == "name"
+             and (path_equals(path, {"system", "running_actors_by_name"})
+                  or path_equals(path, {"system", "messages_by_actor"})
+                  or path_equals(path, {"actors"}));
+    }
+    if (source == "memory") {
+      return field == "name" and path_equals(path, {"actor"});
+    }
+    return false;
+  }
+  if (source == "api") {
+    static constexpr auto labels = std::array{
+      "method"sv,
+      "path"sv,
+      "status_code"sv,
+    };
+    return contains(labels, field);
+  }
+  if (source == "actor") {
+    return field == "name";
+  }
+  if (source == "disk") {
+    return field == "path";
+  }
+  if (source == "operator_buffers" or source == "pipeline") {
+    return field == "pipeline_id";
+  }
+  if (is_operator_scoped_metric_source(source)
+      and (field == "pipeline_id" or field == "operator_id")) {
+    return true;
+  }
+  if (is_schema_metric_source(source) and field == "schema") {
+    return true;
+  }
+  return false;
+}
+
+auto is_metadata_field(std::string_view source,
+                       const std::vector<std::string>& path,
+                       std::string_view field) -> bool {
+  if (field == "timestamp" or field == "schema_id"
+      or is_label_field(source, path, field)) {
+    return true;
+  }
+  if (not path.empty()) {
+    return false;
+  }
+  if (source == "actor") {
+    return field == "id";
+  }
+  if (source == "api") {
+    return field == "request_id" or field == "params";
+  }
+  if (is_operator_scoped_metric_source(source)) {
+    static constexpr auto fields = std::array{
+      "run"sv,  "hidden"sv,   "source"sv, "transformation"sv,
+      "sink"sv, "internal"sv,
+    };
+    return contains(fields, field);
+  }
+  if (source == "tcp") {
+    return field == "handle";
+  }
+  return false;
 }
 
 auto stringify_label_value(data_view3 value) -> Option<std::string> {
@@ -176,10 +287,12 @@ auto add_label(labels& result, std::string_view key, std::string value)
   });
 }
 
-auto collect_labels(view3<record> record, const labels& inherited) -> labels {
+auto collect_labels(std::string_view source,
+                    const std::vector<std::string>& path, view3<record> record,
+                    const labels& inherited) -> labels {
   auto result = inherited;
   for (auto [key, value] : record) {
-    if (not is_dimension_field(key)) {
+    if (not is_label_field(source, path, key)) {
       continue;
     }
     if (auto label_value = stringify_label_value(value)) {
@@ -241,81 +354,129 @@ auto make_metric_name(std::string_view source,
   return result;
 }
 
-auto append_metric(series_builder& builder, std::string_view source,
-                   const std::vector<std::string>& path, double value,
-                   Option<time> timestamp, const labels& labels,
-                   metric_descriptor descriptor) -> void {
+auto same_labels(const labels& lhs, const labels& rhs) -> bool {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (auto index = size_t{0}; index < lhs.size(); ++index) {
+    if (lhs[index].key != rhs[index].key
+        or lhs[index].value != rhs[index].value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto same_series(const metric_sample& lhs, const metric_sample& rhs) -> bool {
+  if (lhs.metric != rhs.metric or lhs.type != rhs.type or lhs.unit != rhs.unit
+      or static_cast<bool>(lhs.timestamp) != static_cast<bool>(rhs.timestamp)) {
+    return false;
+  }
+  if (lhs.timestamp and *lhs.timestamp != *rhs.timestamp) {
+    return false;
+  }
+  return same_labels(lhs.metric_labels, rhs.metric_labels);
+}
+
+auto add_metric_sample(std::vector<metric_sample>& samples,
+                       std::string_view source,
+                       const std::vector<std::string>& path, double value,
+                       Option<time> timestamp, const labels& metric_labels,
+                       metric_descriptor descriptor) -> void {
+  auto sample = metric_sample{
+    .metric = make_metric_name(source, path, descriptor),
+    .value = value,
+    .timestamp = timestamp,
+    .metric_labels = metric_labels,
+    .type = descriptor.type,
+    .unit = descriptor.unit,
+  };
+  for (auto& existing : samples) {
+    if (same_series(existing, sample)) {
+      existing.value += sample.value;
+      return;
+    }
+  }
+  samples.push_back(std::move(sample));
+}
+
+auto append_metric(series_builder& builder, const metric_sample& sample)
+  -> void {
   auto metric = builder.record();
-  metric.field("metric", make_metric_name(source, path, descriptor));
-  metric.field("value", value);
-  if (timestamp) {
-    metric.field("timestamp", *timestamp);
+  metric.field("metric", sample.metric);
+  metric.field("value", sample.value);
+  if (sample.timestamp) {
+    metric.field("timestamp", *sample.timestamp);
   } else {
     metric.field("timestamp", caf::none);
   }
   auto labels_record = metric.field("labels").record();
-  for (const auto& [key, label_value] : labels) {
+  for (const auto& [key, label_value] : sample.metric_labels) {
     labels_record.field(key, label_value);
   }
-  metric.field("type", descriptor.type);
-  metric.field("unit", descriptor.unit);
+  metric.field("type", sample.type);
+  metric.field("unit", sample.unit);
 }
 
-auto flatten_value(series_builder& builder, std::string_view source,
+auto flatten_value(std::vector<metric_sample>& samples, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
                    Option<time> timestamp, const labels& labels) -> void;
 
-auto flatten_record(series_builder& builder, std::string_view source,
-                    std::vector<std::string>& path, view3<record> record,
-                    Option<time> timestamp, const labels& inherited) -> void {
-  auto scoped_labels = collect_labels(record, inherited);
+auto flatten_record(std::vector<metric_sample>& samples,
+                    std::string_view source, std::vector<std::string>& path,
+                    view3<record> record, Option<time> timestamp,
+                    const labels& inherited) -> void {
+  auto scoped_labels = collect_labels(source, path, record, inherited);
   for (auto [key, value] : record) {
-    if (key == "timestamp" or is_dimension_field(key)) {
+    if (is_metadata_field(source, path, key)) {
       continue;
     }
     path.push_back(std::string{key});
-    flatten_value(builder, source, path, value, timestamp, scoped_labels);
+    flatten_value(samples, source, path, value, timestamp, scoped_labels);
     path.pop_back();
   }
 }
 
-auto flatten_list(series_builder& builder, std::string_view source,
+auto flatten_list(std::vector<metric_sample>& samples, std::string_view source,
                   std::vector<std::string>& path, view3<list> list,
                   Option<time> timestamp, const labels& labels) -> void {
   for (auto item : list) {
     if (const auto* item_record = try_as<view3<record>>(item)) {
-      flatten_record(builder, source, path, *item_record, timestamp, labels);
+      flatten_record(samples, source, path, *item_record, timestamp, labels);
     }
   }
 }
 
-auto flatten_value(series_builder& builder, std::string_view source,
+auto flatten_value(std::vector<metric_sample>& samples, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
                    Option<time> timestamp, const labels& labels) -> void {
   match(
     value, [&](caf::none_t) {},
     [&](int64_t value) {
-      append_metric(builder, source, path, static_cast<double>(value),
-                    timestamp, labels, describe_metric(source, path, false));
+      add_metric_sample(samples, source, path, static_cast<double>(value),
+                        timestamp, labels,
+                        describe_metric(source, path, false));
     },
     [&](uint64_t value) {
-      append_metric(builder, source, path, static_cast<double>(value),
-                    timestamp, labels, describe_metric(source, path, false));
+      add_metric_sample(samples, source, path, static_cast<double>(value),
+                        timestamp, labels,
+                        describe_metric(source, path, false));
     },
     [&](double value) {
-      append_metric(builder, source, path, value, timestamp, labels,
-                    describe_metric(source, path, false));
+      add_metric_sample(samples, source, path, value, timestamp, labels,
+                        describe_metric(source, path, false));
     },
     [&](duration value) {
-      append_metric(builder, source, path,
-                    std::chrono::duration_cast<double_seconds>(value).count(),
-                    timestamp, labels, describe_metric(source, path, true));
+      add_metric_sample(
+        samples, source, path,
+        std::chrono::duration_cast<double_seconds>(value).count(), timestamp,
+        labels, describe_metric(source, path, true));
     },
     [&](view3<record> value) {
-      flatten_record(builder, source, path, value, timestamp, labels);
+      flatten_record(samples, source, path, value, timestamp, labels);
     },
     [&](view3<list> value) {
-      flatten_list(builder, source, path, value, timestamp, labels);
+      flatten_list(samples, source, path, value, timestamp, labels);
     },
     [](auto) {});
 }
@@ -337,11 +498,15 @@ auto find_timestamp(view3<record> record) -> Option<time> {
 
 auto shape_metrics_for_prometheus(const table_slice& input)
   -> std::vector<table_slice> {
-  auto builder = series_builder{prometheus_schema()};
+  auto samples = std::vector<metric_sample>{};
   auto path = std::vector<std::string>{};
   const auto source = metric_source(input.schema().name());
   for (auto row : input.values()) {
-    flatten_record(builder, source, path, row, find_timestamp(row), {});
+    flatten_record(samples, source, path, row, find_timestamp(row), {});
+  }
+  auto builder = series_builder{prometheus_schema()};
+  for (const auto& sample : samples) {
+    append_metric(builder, sample);
   }
   return builder.finish_as_table_slice();
 }
