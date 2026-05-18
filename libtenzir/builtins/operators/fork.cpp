@@ -7,9 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/scope_linked.hpp>
@@ -310,8 +313,92 @@ private:
   bool started_ = false;
 };
 
+class ForkIr final : public ir::Operator {
+public:
+  ForkIr() = default;
+
+  explicit ForkIr(ir::pipeline pipeline, location op_loc, location pipe_loc)
+    : pipeline_{std::move(pipeline)}, op_loc_{op_loc}, pipe_loc_{pipe_loc} {
+  }
+
+  auto name() const -> std::string override {
+    return "ForkIr";
+  }
+
+  auto main_location() const -> location override {
+    return op_loc_;
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return pipeline_.substitute(ctx, instantiate);
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("`fork` expects events as input")
+        .primary(op_loc_)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto output = pipeline_.infer_type(tag_v<table_slice>, dh);
+    if (output.is_error() or not output->has_value()) {
+      return output;
+    }
+    if (output->value().is_not<void>()) {
+      diagnostic::error("subpipeline must end in a sink")
+        .primary(pipe_loc_)
+        .emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    // Optimize the subpipeline independently of downstream.
+    auto sub = std::move(pipeline_).optimize(ir::optimize_filter{},
+                                             event_order::ordered);
+    // Residual filters cannot escape; reinsert them as `where`.
+    sub.replacement.operators.insert_range(
+      sub.replacement.operators.begin(),
+      sub.filter | std::views::transform(make_where_ir));
+    pipeline_ = std::move(sub.replacement);
+    // Both downstream and the subpipeline receive the same input stream,
+    // so we require the stronger ordering of the two.
+    auto result_order = stronger_event_order(order, sub.order);
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.emplace_back(std::move(*this));
+    for (auto& expr : filter) {
+      // Never push filters upstream; keep them after fork.
+      replacement.push_back(make_where_ir(std::move(expr)));
+    }
+    return {
+      ir::optimize_filter{},
+      result_order,
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
+  auto spawn(element_type_tag /*input*/) && -> AnyOperator override {
+    return Fork{ForkArgs{located{std::move(pipeline_), pipe_loc_}}};
+  }
+
+  friend auto inspect(auto& f, ForkIr& x) -> bool {
+    return f.object(x).fields(f.field("pipeline", x.pipeline_),
+                              f.field("op_loc", x.op_loc_),
+                              f.field("pipe_loc", x.pipe_loc_));
+  }
+
+private:
+  ir::pipeline pipeline_;
+  location op_loc_;
+  location pipe_loc_;
+};
+
 class fork_plugin final : public virtual operator_plugin2<fork_operator>,
-                          public virtual OperatorPlugin {
+                          public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.fork";
@@ -326,23 +413,25 @@ public:
     return std::make_unique<fork_operator>(std::move(pipe));
   }
 
-  auto describe() const -> Description override {
-    auto d = Describer<ForkArgs, Fork>{};
-    auto pipe = d.pipeline(&ForkArgs::pipe, SubOptimize::off);
-    d.validate([pipe](DescribeCtx& ctx) -> Empty {
-      TRY(auto p, ctx.get(pipe));
-      auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error() or not output->has_value()) {
-        return {};
-      }
-      if (output->value().is_not<void>()) {
-        diagnostic::error("subpipeline must end in a sink")
-          .primary(p.source)
-          .emit(ctx);
-      }
-      return {};
-    });
-    return d.without_optimize();
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    auto loc = inv.op.get_location();
+    if (inv.args.size() != 1) {
+      diagnostic::error("`fork` expects a single pipeline argument")
+        .primary(loc)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto* pipe_expr = try_as<ast::pipeline_expr>(inv.args[0]);
+    if (not pipe_expr) {
+      diagnostic::error("`fork` expects a pipeline argument `{{ … }}`")
+        .primary(inv.args[0])
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto pipe_loc = pipe_expr->get_location();
+    TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+    return ForkIr{std::move(pipe_ir), loc, pipe_loc};
   }
 };
 
@@ -355,3 +444,5 @@ using internal_fork_source_plugin
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::internal_fork_source_plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::ir::Operator, tenzir::plugins::fork::ForkIr>)

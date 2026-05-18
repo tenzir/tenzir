@@ -1,0 +1,5 @@
+// Fork must not push filters upstream.
+export
+fork { discard }
+where x > 1
+discard

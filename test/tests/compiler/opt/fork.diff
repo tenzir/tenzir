@@ -1,0 +1,88 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 40..46
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     ForkIr {
+       pipeline: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `discard` @ 54..61
+               ],
+               ref: std::discard/op
+             },
+             desc: "discard",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+             order: "ordered",
+             named_args: [
+               
+             ]
+           }
+         ]
+       },
+       op_loc: 47..51,
+       pipe_loc: 52..63
+     },
+     where_ir {
+-      self: 64..69,
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `x` @ 70..71,
+           has_question_mark: false
+         },
+         op: "gt" @ 72..73,
+         right: constant int64 1 @ 74..75
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 76..83
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }
