@@ -26,9 +26,11 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
+#include <folly/String.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/Transport.h>
 
 #include <limits>
@@ -64,23 +66,12 @@ constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
   return ew.is_compatible_with<folly::AsyncSocketException>();
 };
 
-// Normalizes platform-specific socket error text for user-facing diagnostics.
-// In particular, `AsyncSocketException` embeds OS-dependent errno values
-// (e.g., 111 on Linux vs. 61 on macOS) that make error messages noisy and
-// non-portable in tests.
-auto strip_errno_from_error_message(std::string message) -> std::string {
-  auto needle = std::string_view{"errno = "};
-  auto pos = message.find(needle);
-  if (pos == std::string::npos) {
-    return message;
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
   }
-  auto end = message.find('(', pos);
-  if (end == std::string::npos) {
-    return message;
-  }
-  auto start = pos + needle.length();
-  message.erase(start, end - start);
-  return message;
+  return ex.what();
 }
 
 struct ToTcpArgs {
@@ -258,7 +249,7 @@ private:
             auto diag
               = diagnostic::warning("failed to connect to {}: {}",
                                     address_.describe(),
-                                    strip_errno_from_error_message(ex.what()))
+                                    describe_socket_error(ex))
                   .primary(args_.endpoint.source)
                   .hint("ensure a TCP server is listening on this endpoint");
             add_tls_client_diagnostic_hints(std::move(diag),
@@ -269,7 +260,8 @@ private:
         },
         should_retry_connect);
     } catch (folly::AsyncSocketException const& ex) {
-      diagnostic::error("{}", strip_errno_from_error_message(ex.what()))
+      diagnostic::error("failed to connect to {}: {}", address_.describe(),
+                        describe_socket_error(ex))
         .primary(args_.endpoint.source)
         .note("gave up after {} {}", max_retry_count,
               max_retry_count == 1 ? "retry" : "retries")
