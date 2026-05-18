@@ -52,7 +52,6 @@ public:
   auto optimize(ir::optimize_filter filter,
                 event_order /* order */) && -> ir::optimize_result override {
     // Optimize each sub-operator individually, always passing unordered.
-    // The UnorderedIr node dissolves; its operators are emitted directly.
     auto replacement = ir::pipeline{std::move(pipeline_.lets), {}};
     for (auto& op : std::ranges::reverse_view(pipeline_.operators)) {
       auto opt
@@ -63,16 +62,21 @@ public:
         std::move_iterator{opt.replacement.operators.begin()},
         std::move_iterator{opt.replacement.operators.end()});
     }
+    // Wrap the result back into UnorderedIr so that subsequent optimize()
+    // calls (e.g., the one inside spawn_sub_impl) re-apply unordered order
+    // to the inner operators.
+    auto wrapper = ir::pipeline{};
+    wrapper.operators.emplace_back(UnorderedIr{std::move(replacement), loc_});
     return {
       std::move(filter),
       event_order::unordered,
-      std::move(replacement),
+      std::move(wrapper),
     };
   }
 
-  auto spawn(element_type_tag /*input*/) && -> AnyOperator override {
-    // UnorderedIr dissolves during optimization; spawn should not be called.
-    panic("UnorderedIr::spawn called after optimization dissolved the node");
+  auto spawn(element_type_tag input) && -> AnyOperator override {
+    TENZIR_ASSERT(pipeline_.operators.size() == 1);
+    return std::move(*pipeline_.operators[0]).spawn(input);
   }
 
   friend auto inspect(auto& f, UnorderedIr& x) -> bool {

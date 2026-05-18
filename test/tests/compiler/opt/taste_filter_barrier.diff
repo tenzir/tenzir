@@ -17,40 +17,53 @@
        filter: [
          
        ],
+-      order: "ordered",
 +      order: "unordered",
-+      named_args: [
-+        
-+      ]
-+    },
-+    GenericIr {
-+      op: {
-+        path: [
-+          `taste` @ 21..26
-+        ],
-+        ref: std::taste/op
-+      },
-+      desc: "taste",
-+      args: [
-+        
-+      ],
-+      filter: [
-+        
-+      ],
-+      order: "unordered",
-+      named_args: [
-+        
-+      ]
-+    },
-+    where_ir {
-+      self: 0..0,
-+      predicate: binary_expr {
-+        left: root_field {
-+          id: `x` @ 35..36,
-+          has_question_mark: false
-+        },
-+        op: "eq" @ 37..39,
-+        right: constant int64 1 @ 40..41
-+      }
+       named_args: [
+         
+       ]
+     },
+     UnorderedIr {
+       pipeline: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `taste` @ 21..26
+               ],
+               ref: std::taste/op
+             },
+             desc: "taste",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ]
+           },
+           where_ir {
+-            self: 29..34,
++            self: 0..0,
+             predicate: binary_expr {
+               left: root_field {
+                 id: `x` @ 35..36,
+                 has_question_mark: false
+               },
+               op: "eq" @ 37..39,
+               right: constant int64 1 @ 40..41
+             }
+           }
+         ]
+       },
+       loc: 7..16
 +    },
 +    GenericIr {
 +      op: {
@@ -66,50 +79,10 @@
 +      filter: [
 +        
 +      ],
-       order: "ordered",
-       named_args: [
-         
-       ]
--    },
--    UnorderedIr {
--      pipeline: {
--        lets: [
--          
--        ],
--        operators: [
--          GenericIr {
--            op: {
--              path: [
--                `taste` @ 21..26
--              ],
--              ref: std::taste/op
--            },
--            desc: "taste",
--            args: [
--              
--            ],
--            filter: [
--              
--            ],
--            order: "ordered",
--            named_args: [
--              
--            ]
--          },
--          where_ir {
--            self: 29..34,
--            predicate: binary_expr {
--              left: root_field {
--                id: `x` @ 35..36,
--                has_question_mark: false
--              },
--              op: "eq" @ 37..39,
--              right: constant int64 1 @ 40..41
--            }
--          }
--        ]
--      },
--      loc: 7..16
++      order: "ordered",
++      named_args: [
++        
++      ]
      }
    ]
  }
