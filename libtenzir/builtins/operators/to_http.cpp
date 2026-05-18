@@ -7,9 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/channel.hpp>
 #include <tenzir/async/oneshot.hpp>
-#include <tenzir/async/semaphore.hpp>
+#include <tenzir/async/result.hpp>
 #include <tenzir/async/task.hpp>
+#include <tenzir/box.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
@@ -18,19 +20,28 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
+#include <folly/ScopeGuard.h>
+#include <folly/SocketAddress.h>
+#include <folly/coro/Sleep.h>
+#include <folly/io/IOBuf.h>
+#include <folly/io/async/AsyncSocketException.h>
 #include <proxygen/lib/http/HTTPMethod.h>
+#include <proxygen/lib/http/coro/HTTPFixedSource.h>
+#include <proxygen/lib/http/coro/HTTPSource.h>
+#include <proxygen/lib/http/coro/client/HTTPClient.h>
+#include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
-#include <exception>
-#include <iterator>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,8 +49,6 @@
 namespace tenzir::plugins::to_http {
 
 namespace {
-
-constexpr auto default_parallel = 1;
 
 using Headers = std::vector<http::Header>;
 
@@ -52,7 +61,6 @@ struct ToHttpArgs {
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
-  Option<located<uint64_t>> parallel;
   located<ir::pipeline> printer;
   location operator_location;
 };
@@ -75,10 +83,137 @@ auto resolve_secrets(OpCtx& ctx, ToHttpArgs& args, std::string& resolved_url,
   co_return {};
 }
 
+// -- streaming HTTP source ---------------------------------------------------
+
+/// Custom HTTPSource that streams body chunks from a Channel.
+///
+/// Proxygen pulls body data from this source via readBodyEvent(). The channel
+/// is fed by process_sub() on the executor thread; Proxygen reads from it on
+/// the event base thread.
+class StreamingHTTPSource final : public proxygen::coro::HTTPSource {
+public:
+  StreamingHTTPSource(std::unique_ptr<proxygen::HTTPMessage> msg,
+                      tenzir::Receiver<chunk_ptr> body_rx)
+    : msg_{std::move(msg)}, body_rx_{std::move(body_rx)} {
+  }
+
+  auto readHeaderEvent()
+    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
+    // Do not set Content-Length — the body size is unknown upfront, so
+    // proxygen will use chunked transfer encoding.
+    proxygen::coro::HTTPHeaderEvent event(std::move(msg_), /*eom=*/false);
+    auto guard = folly::makeGuard(lifetime(event));
+    co_return event;
+  }
+
+  auto readBodyEvent(uint32_t)
+    -> folly::coro::Task<proxygen::coro::HTTPBodyEvent> override {
+    TENZIR_ASSERT(body_rx_);
+    auto item = co_await body_rx_->recv();
+    body_read_started_ = true;
+    if (not item or not *item) {
+      // Channel closed or null sentinel: end of body.
+      proxygen::coro::HTTPBodyEvent event(nullptr, /*eom=*/true);
+      auto guard = folly::makeGuard(lifetime(event));
+      co_return event;
+    }
+    body_started_ = true;
+    auto buf = folly::IOBuf::copyBuffer((*item)->data(), (*item)->size());
+    proxygen::coro::HTTPBodyEvent event(std::move(buf), /*eom=*/false);
+    auto guard = folly::makeGuard(lifetime(event));
+    co_return event;
+  }
+
+  void
+  stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
+    if (heapAllocated_) {
+      delete this;
+    }
+  }
+
+  void setReadTimeout(std::chrono::milliseconds) override {
+  }
+
+  auto body_started() const -> bool {
+    return body_started_;
+  }
+
+  auto take_receiver_for_retry() -> Option<Receiver<chunk_ptr>> {
+    if (body_read_started_) {
+      return None{};
+    }
+    return std::exchange(body_rx_, None{});
+  }
+
+private:
+  std::unique_ptr<proxygen::HTTPMessage> msg_;
+  Option<Receiver<chunk_ptr>> body_rx_;
+  bool body_read_started_ = false;
+  bool body_started_ = false;
+};
+
+auto to_http_response(proxygen::coro::HTTPClient::Response& resp)
+  -> HttpResponse {
+  auto result = HttpResponse{};
+  TENZIR_ASSERT_ALWAYS(resp.headers);
+  result.status_code = resp.headers->getStatusCode();
+  resp.headers->getHeaders().forEach(
+    [&](std::string const& name, std::string const& value) {
+      result.headers[name] = value;
+    });
+  if (not resp.body.empty()) {
+    result.body = resp.body.move()->to<std::string>();
+  }
+  return result;
+}
+
+struct retryable_http_response : std::runtime_error {
+  retryable_http_response(uint16_t status_code,
+                          Option<std::chrono::seconds> retry_after)
+    : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
+      status_code{status_code},
+      retry_after{retry_after} {
+  }
+
+  uint16_t status_code = 0;
+  Option<std::chrono::seconds> retry_after;
+};
+
+struct retry_info {
+  std::string reason;
+  Option<std::chrono::seconds> retry_after;
+};
+
+auto get_retry_info(folly::exception_wrapper const& error)
+  -> Option<retry_info> {
+  if (error.is_compatible_with<folly::AsyncSocketException>()) {
+    return retry_info{.reason = "connection error", .retry_after = None{}};
+  }
+  auto result = Option<retry_info>{};
+  error.with_exception([&](proxygen::coro::HTTPError const& http_error) {
+    if (http::is_retryable_http_error(http_error.code)) {
+      result = retry_info{
+        .reason = "connection error",
+        .retry_after = None{},
+      };
+    }
+  });
+  error.with_exception([&](retryable_http_response const& response) {
+    result = retry_info{
+      .reason = fmt::format("HTTP error {}", response.status_code),
+      .retry_after = response.retry_after,
+    };
+  });
+  return result;
+}
+
+// -- operator ----------------------------------------------------------------
+
+constexpr auto body_channel_capacity = size_t{8};
+
 class ToHttp final : public Operator<table_slice, void> {
 public:
-  explicit ToHttp(ToHttpArgs args)
-    : args_{std::move(args)}, request_slots_{get_parallel()} {
+  explicit ToHttp(ToHttpArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -102,33 +237,50 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto config = http::make_http_pool_config(
-      args_.tls, url_, args_.url.source, ctx, get_timeout(),
+    auto tls_result = http::normalize_url_and_tls(
+      args_.tls, url_, args_.url.source, ctx.dh(),
       std::addressof(ctx.actor_system().config()));
-    if (config.is_success()) {
-      config->connection_timeout = get_connection_timeout();
-      config->max_retry_count = get_max_retry_count();
-      config->retry_delay = get_retry_delay();
-      auto* dh = &ctx.dh();
-      auto loc = args_.operator_location;
-      config->on_retry = [dh, loc](std::string_view message) {
-        diagnostic::warning("{}", message).primary(loc).emit(*dh);
-      };
-    }
-    if (config.is_error()) {
+    if (tls_result.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    try {
-      http_pool_ = HttpPool::make(ctx.io_executor(), url_, std::move(*config));
-    } catch (std::exception const& e) {
-      diagnostic::error("failed to initialize HTTP client: {}", e.what())
-        .primary(args_.url)
-        .emit(ctx);
+    auto tls_enabled = *tls_result;
+    if (tls_enabled) {
+      ensure_http_default_ca_paths();
+    }
+    auto ssl_context = std::shared_ptr<folly::SSLContext>{};
+    if (tls_enabled) {
+      auto tls_opts
+        = tls_options::from_optional(args_.tls, {.is_server = false});
+      auto ssl_result = tls_opts.make_folly_ssl_context(
+        ctx.dh(), std::addressof(ctx.actor_system().config()), true);
+      if (ssl_result.is_error()) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      ssl_context = std::move(*ssl_result);
+    }
+    parsed_url_ = proxygen::URL{url_};
+    if (not parsed_url_.isValid() or not parsed_url_.hasHost()) {
+      diagnostic::error("invalid URL: `{}`", url_).primary(args_.url).emit(ctx);
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    // spawn writer sub pipeline
+    evb_ = ctx.io_executor()->getEventBase();
+    auto secure = tls_enabled
+                    ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
+                    : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
+    conn_params_ = proxygen::coro::HTTPClient::getConnParams(
+      secure, parsed_url_.getHost());
+    if (ssl_context) {
+      conn_params_.sslContext = std::move(ssl_context);
+    }
+    // Create the body channel. The request task starts lazily on the first
+    // emitted body chunk so empty invocations do not send empty HTTP requests.
+    auto [tx, rx] = channel<chunk_ptr>(body_channel_capacity);
+    body_tx_.emplace(std::move(tx));
+    body_rx_.emplace(std::move(rx));
+    // Spawn writer sub-pipeline.
     auto pipeline = args_.printer.inner;
     co_await ctx.spawn_sub<table_slice>(sub_key(), std::move(pipeline));
   }
@@ -154,11 +306,15 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (not chunk or chunk->size() == 0 or error_signal_->has_sent()) {
+    if (not chunk or chunk->size() == 0 or lifecycle_ == Lifecycle::done
+        or not body_tx_) {
       co_return;
     }
-    TENZIR_ASSERT(http_pool_);
+    if (not request_started_) {
+      start_request_task(ctx);
+    }
     bytes_write_counter_.add(chunk->size());
+<<<<<<< HEAD
     auto permit = co_await request_slots_.acquire();
     if (error_signal_->has_sent()) {
       co_return;
@@ -187,38 +343,42 @@ public:
       }
       permit.release();
     });
+=======
+    co_await body_tx_->send(std::move(chunk));
+>>>>>>> d2d320fd33a (Stream to_http body from sub-pipeline)
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (error_signal_->has_received()) {
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
-    }
-    co_return co_await error_signal_->recv();
+    co_return co_await response_->recv();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    auto error = std::move(result).as<std::string>();
-    diagnostic::error("{}", error).primary(args_.operator_location).emit(ctx);
-    co_await begin_draining(ctx);
+    auto response = std::move(result).as<HttpResponse>();
+    if (response.status_code != 0 and not response.is_status_success()) {
+      diagnostic::error("HTTP request returned status {}", response.status_code)
+        .primary(args_.operator_location)
+        .emit(ctx);
+    }
+    // Close the sub-pipeline to stop process_sub() from blocking on
+    // the body queue. Then mark the operator as done.
+    auto sub = ctx.get_sub(sub_key());
+    if (sub) {
+      auto& pipeline = as<SubHandle<table_slice>>(*sub);
+      co_await pipeline.close();
+    }
+    lifecycle_ = Lifecycle::done;
   }
 
-  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
+  auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (request_started_) {
+      // Send a null chunk as end-of-body sentinel.
+      if (body_tx_) {
+        co_await body_tx_->send(chunk_ptr{});
+      }
+    } else {
+      std::ignore = response_->send(HttpResponse{});
     }
-    // Wait until all spawned request tasks have returned their permits before
-    // letting the executor tear down the operator scope.
-    for (auto i = uint64_t{0}; i < get_parallel(); ++i) {
-      auto permit = co_await request_slots_.acquire();
-      permit.forget();
-    }
-    // If a request error already fired, keep the operator draining until the
-    // pending `await_task()` result is consumed by `process_task()`.
-    if (not error_signal_->has_sent()) {
-      lifecycle_ = Lifecycle::done;
-    }
-    co_return;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -244,6 +404,16 @@ private:
     done,
   };
 
+  auto start_request_task(OpCtx& ctx) -> void {
+    TENZIR_ASSERT(body_rx_);
+    request_started_ = true;
+    ctx.spawn_task([this, dh = &ctx.dh(),
+                    body_rx = std::move(*body_rx_)]() mutable -> Task<void> {
+      co_await run_request(*dh, std::move(body_rx));
+    });
+    body_rx_.reset();
+  }
+
   auto begin_draining(OpCtx& ctx) -> Task<void> {
     if (lifecycle_ != Lifecycle::running) {
       co_return;
@@ -258,11 +428,124 @@ private:
     co_await pipeline.close();
   }
 
+  auto run_request(diagnostic_handler& dh, Receiver<chunk_ptr> body_rx_val)
+    -> Task<void> {
+    auto max_retries = get_max_retry_count();
+    auto attempt = uint32_t{0};
+    auto response = HttpResponse{};
+    auto body_rx = Option<Receiver<chunk_ptr>>{std::move(body_rx_val)};
+    while (true) {
+      auto attempt_result = co_await try_single_request(body_rx);
+      if (attempt_result.is_ok()) {
+        response = std::move(attempt_result).unwrap();
+        break;
+      }
+      auto error = std::move(attempt_result).unwrap_err();
+      auto error_message = error.what().toStdString();
+      auto retry = get_retry_info(error);
+      // Once the receiver has been moved into the streaming source,
+      // the body cannot be replayed and retries are impossible.
+      if (not body_rx or not retry or attempt >= max_retries) {
+        diagnostic::error("HTTP request to `{}` failed: {}", url_,
+                          error_message)
+          .primary(args_.operator_location)
+          .emit(dh);
+        break;
+      }
+      // Compute delay and emit a warning.
+      auto delay = http::retry_delay_for_attempt(get_retry_delay(), attempt,
+                                                 retry->retry_after);
+      ++attempt;
+      auto delay_secs = std::chrono::duration_cast<std::chrono::seconds>(delay);
+      diagnostic::warning("{} ({}), attempt {}/{}, retrying after {}s",
+                          retry->reason, error_message, attempt,
+                          max_retries + 1u, delay_secs.count())
+        .primary(args_.operator_location)
+        .emit(dh);
+      co_await folly::coro::sleep(delay);
+    }
+    std::ignore = response_->send(std::move(response));
+  }
+
+  /// Attempts a single HTTP request. On success, moves `body_rx` into the
+  /// streaming source (leaving it empty). On connection failure before
+  /// the source is created, `body_rx` remains valid for a retry.
+  auto try_single_request(Option<Receiver<chunk_ptr>>& body_rx)
+    -> Task<Result<HttpResponse, folly::exception_wrapper>> {
+    auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
+      folly::Executor::KeepAlive<>{evb_},
+      folly::coro::co_invoke([this, &body_rx]() -> Task<HttpResponse> {
+        // Connect a one-shot session.
+        auto addr = folly::SocketAddress{parsed_url_.getHost(),
+                                         parsed_url_.getPort(), true};
+        auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
+          evb_, addr, get_connection_timeout(), conn_params_);
+        auto holder = session->acquireKeepAlive();
+        SCOPE_EXIT {
+          if (auto* s = holder.get()) {
+            s->initiateDrain();
+          }
+        };
+        auto reservation = session->reserveRequest();
+        if (reservation.hasException()) {
+          co_yield folly::coro::co_error(std::move(reservation.exception()));
+        }
+        // Build the request message.
+        auto msg = std::make_unique<proxygen::HTTPMessage>();
+        msg->setURL(parsed_url_.makeRelativeURL());
+        msg->setMethod(get_method());
+        msg->setHTTPVersion(1, 1);
+        msg->setWantsKeepalive(true);
+        msg->setSecure(parsed_url_.isSecure());
+        for (auto const& [name, value] : headers_) {
+          msg->getHeaders().add(name, value);
+        }
+        if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
+          msg->getHeaders().add(proxygen::HTTP_HEADER_HOST,
+                                parsed_url_.getHostAndPortOmitDefault());
+        }
+        // Create the streaming source. If the request fails before the
+        // source starts reading body events, the receiver can still be reused
+        // for a retry.
+        auto source = StreamingHTTPSource{std::move(msg), std::move(*body_rx)};
+        body_rx.reset();
+        auto resp = proxygen::coro::HTTPClient::Response{};
+        auto request_result
+          = co_await async_try(proxygen::coro::HTTPClient::request(
+            session, std::move(*reservation), &source,
+            proxygen::coro::HTTPClient::makeDefaultReader(resp),
+            get_timeout()));
+        if (request_result.is_err()) {
+          if (auto retry_rx = source.take_receiver_for_retry()) {
+            body_rx = std::move(retry_rx);
+          }
+          co_yield folly::coro::co_error(
+            std::move(request_result).unwrap_err());
+        }
+        auto http_response = to_http_response(resp);
+        if (http::is_retryable_http_status(http_response.status_code)
+            and not source.body_started()) {
+          if (auto retry_rx = source.take_receiver_for_retry()) {
+            body_rx = std::move(retry_rx);
+          }
+          throw retryable_http_response{
+            http_response.status_code,
+            http::parse_retry_after(
+              resp.headers->getHeaders().getSingleOrEmpty("Retry-After")),
+          };
+        }
+        co_return http_response;
+      })));
+    if (attempt_res.is_err()) {
+      co_return Err{std::move(attempt_res).unwrap_err()};
+    }
+    co_return std::move(attempt_res).unwrap();
+  }
+
   auto get_method() const -> proxygen::HTTPMethod {
     if (not args_.method) {
       return proxygen::HTTPMethod::POST;
     }
-    // validated before (in Describer::validate)
     auto method_s = args_.method->inner;
     std::ranges::transform(method_s, method_s.begin(), [](unsigned char c) {
       return static_cast<char>(std::toupper(c));
@@ -301,10 +584,6 @@ private:
     return http::default_retry_delay;
   }
 
-  auto get_parallel() const -> uint64_t {
-    return args_.parallel ? args_.parallel->inner : default_parallel;
-  }
-
   static auto sub_key() -> int64_t {
     return int64_t{0};
   }
@@ -314,10 +593,14 @@ private:
   std::string url_;
   Headers headers_;
   // --- transient ---
-  Semaphore request_slots_;
+  proxygen::URL parsed_url_;
+  folly::EventBase* evb_ = nullptr;
+  proxygen::coro::HTTPCoroConnector::ConnectionParams conn_params_;
+  Option<Sender<chunk_ptr>> body_tx_;
+  Option<Receiver<chunk_ptr>> body_rx_;
+  mutable Arc<Oneshot<HttpResponse>> response_{std::in_place};
+  bool request_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
-  Option<Box<HttpPool>> http_pool_;
-  mutable Arc<Oneshot<std::string>> error_signal_{std::in_place};
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
 };
@@ -341,9 +624,13 @@ public:
     auto max_retry_count_arg
       = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
+<<<<<<< HEAD
     auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
     auto printer_arg
       = d.pipeline(&ToHttpArgs::printer, SubOptimize::from_downstream);
+=======
+    auto printer_arg = d.pipeline(&ToHttpArgs::printer);
+>>>>>>> d2d320fd33a (Stream to_http body from sub-pipeline)
     d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
@@ -385,13 +672,6 @@ public:
         if (retry_delay->inner < duration::zero()) {
           diagnostic::error("`retry_delay` must be a non-negative duration")
             .primary(retry_delay->source)
-            .emit(ctx);
-        }
-      }
-      if (auto parallel = ctx.get(parallel_arg)) {
-        if (parallel->inner == 0) {
-          diagnostic::error("`parallel` must be at least 1")
-            .primary(parallel->source)
             .emit(ctx);
         }
       }

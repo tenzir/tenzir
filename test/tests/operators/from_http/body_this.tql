@@ -1,10 +1,10 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        method: POST
-        path: /options/body
-        body: "{\n  \"x\": 42,\n  \"y\": \"foo\"\n}"
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      body: "{\n  \"x\": 42,\n  \"y\": \"foo\"\n}"
 timeout: 60
 ---
 

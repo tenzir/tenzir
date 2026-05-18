@@ -1,11 +1,12 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 1
-        method: POST
-        path: /options/body
-        body: "{\"value\":42}\n"
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      body: '{"value":42}
+
+        '
 timeout: 60
 ---
 

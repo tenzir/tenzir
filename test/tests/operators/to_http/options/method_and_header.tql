@@ -1,12 +1,11 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 1
-        method: PUT
-        path: /options/header
-        header_name: X-Test
-        header_value: from-to_http
+- http_server:
+    expected:
+    - method: PUT
+      path: /options/header
+      header_name: X-Test
+      header_value: from-to_http
 timeout: 60
 ---
 

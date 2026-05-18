@@ -40,7 +40,7 @@ import ssl
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field, replace
+import dataclasses
 from email.message import Message
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -64,11 +64,11 @@ _STATUS_401 = "/status/unauthorized"
 _STATUS_403 = "/status/forbidden"
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class HttpServerOptions:
-    @dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True)
     class ExpectedRequest:
-        count: int = 0
+        count: int = 1
         method: str = ""
         path: str = ""
         body: str = ""
@@ -77,8 +77,8 @@ class HttpServerOptions:
         header_value: str = ""
 
     tls: bool = False
-    expected_request: ExpectedRequest | dict[str, object] = field(
-        default_factory=ExpectedRequest
+    expected: list[ExpectedRequest | dict[str, object]] = dataclasses.field(
+        default_factory=list
     )
 
 
@@ -89,12 +89,12 @@ def _normalize_expected_request(
         return value
     if not isinstance(value, dict):
         return HttpServerOptions.ExpectedRequest()
-    count = value.get("count", 0)
+    count = value.get("count", 1)
     if not isinstance(count, int):
         try:
             count = int(count)
         except (TypeError, ValueError):
-            count = 0
+            count = 1
     return HttpServerOptions.ExpectedRequest(
         count=count,
         method=str(value.get("method", "")),
@@ -106,8 +106,19 @@ def _normalize_expected_request(
     )
 
 
+def _normalize_expected(
+    values: list[HttpServerOptions.ExpectedRequest | dict[str, object]],
+) -> list[HttpServerOptions.ExpectedRequest]:
+    result: list[HttpServerOptions.ExpectedRequest] = []
+    for value in values:
+        expected = _normalize_expected_request(value)
+        count = max(0, expected.count)
+        result.extend(dataclasses.replace(expected, count=1) for _ in range(count))
+    return result
+
+
 def _make_handler(
-    opts: HttpServerOptions,
+    expected_requests: list[HttpServerOptions.ExpectedRequest],
     errors: list[str],
     request_count: list[int],
 ):
@@ -121,7 +132,13 @@ def _make_handler(
     class RecordingEchoHandler(BaseHTTPRequestHandler):
         def _validate_request(self, path: str, body: bytes) -> None:
             request_count[0] += 1
-            expected_request = opts.expected_request
+            request_index = request_count[0] - 1
+            if not expected_requests:
+                return
+            if request_index >= len(expected_requests):
+                errors.append(f"received unexpected request #{request_index + 1}")
+                return
+            expected_request = expected_requests[request_index]
             if expected_request.method:
                 expected_method = expected_request.method.upper()
                 if self.command != expected_method:
@@ -132,8 +149,8 @@ def _make_handler(
                 errors.append(
                     f"expected request path {expected_request.path}, got {path}"
                 )
+            body_text = body.decode("utf-8", errors="replace")
             if expected_request.body:
-                body_text = body.decode("utf-8", errors="replace")
                 body_matches = body_text == expected_request.body
                 if expected_request.body_alt:
                     body_matches = body_matches or (
@@ -364,9 +381,9 @@ def _make_handler(
 @fixture(name="http_server", options=HttpServerOptions)
 def run() -> Iterator[dict[str, str]]:
     opts = current_options("http_server")
-    opts = replace(
+    opts = dataclasses.replace(
         opts,
-        expected_request=_normalize_expected_request(opts.expected_request),
+        expected=_normalize_expected(opts.expected),
     )
     temp_dir: Path | None = None
     tls_env: dict[str, str] = {}
@@ -384,7 +401,7 @@ def run() -> Iterator[dict[str, str]]:
         }
     errors: list[str] = []
     request_count = [0]
-    handler = _make_handler(opts, errors, request_count)
+    handler = _make_handler(opts.expected, errors, request_count)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     if opts.tls:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -424,11 +441,9 @@ def run() -> Iterator[dict[str, str]]:
         worker.join()
         if temp_dir is not None:
             shutil.rmtree(temp_dir, ignore_errors=True)
-        expected_request = opts.expected_request
-        if expected_request.count and request_count[0] != expected_request.count:
+        if opts.expected and request_count[0] != len(opts.expected):
             errors.append(
-                "expected request count "
-                f"{expected_request.count}, got {request_count[0]}"
+                f"expected request count {len(opts.expected)}, got {request_count[0]}"
             )
         if errors:
             raise RuntimeError(errors[0])

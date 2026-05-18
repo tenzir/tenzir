@@ -1,10 +1,10 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 2
-        method: GET
-        path: /status/retry-429-after
+- http_server:
+    expected:
+    - count: 2
+      method: GET
+      path: /status/retry-429-after
 timeout: 60
 ---
 

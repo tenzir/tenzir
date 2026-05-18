@@ -1,9 +1,9 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        method: POST
-        path: /options/body
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
 timeout: 60
 ---
 

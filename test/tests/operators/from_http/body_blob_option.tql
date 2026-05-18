@@ -1,8 +1,8 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        body: "hello-�-�"
+- http_server:
+    expected:
+    - body: "hello-\uFFFD-\uFFFD"
 timeout: 60
 ---
 

@@ -1,12 +1,11 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 1
-        method: POST
-        path: /
-        header_name: Content-Type
-        header_value: ""
+- http_server:
+    expected:
+    - method: POST
+      path: /
+      header_name: Content-Type
+      header_value: ''
 timeout: 60
 ---
 

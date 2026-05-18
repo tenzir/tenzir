@@ -1,11 +1,10 @@
 ---
 error: true
 fixtures:
-  - http_server:
-      expected_request:
-        count: 1
-        method: POST
-        path: /status/not-found
+- http_server:
+    expected:
+    - method: POST
+      path: /status/not-found
 timeout: 60
 ---
 

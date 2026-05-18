@@ -1,11 +1,11 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        method: POST
-        path: /options/body
-        header_name: Content-Type
-        header_value: application/json
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      header_name: Content-Type
+      header_value: application/json
 timeout: 60
 ---
 

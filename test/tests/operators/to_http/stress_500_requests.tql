@@ -1,16 +1,15 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 500
-        method: POST
-        path: /options/body
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
 timeout: 120
 ---
 
 from {value: 0}
 repeat 500
 enumerate value
-to_http env("HTTP_FIXTURE_BODY_URL"), parallel=32 {
+to_http env("HTTP_FIXTURE_BODY_URL") {
   write_ndjson
 }

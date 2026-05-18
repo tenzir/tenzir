@@ -1,9 +1,9 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        header_name: Content-Type
-        header_value: application/json
+- http_server:
+    expected:
+    - header_name: Content-Type
+      header_value: application/json
 timeout: 60
 ---
 

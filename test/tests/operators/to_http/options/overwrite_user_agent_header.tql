@@ -1,12 +1,11 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 1
-        method: POST
-        path: /
-        header_name: User-Agent
-        header_value: Test
+- http_server:
+    expected:
+    - method: POST
+      path: /
+      header_name: User-Agent
+      header_value: Test
 timeout: 60
 ---
 

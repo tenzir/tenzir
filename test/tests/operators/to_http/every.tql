@@ -1,0 +1,30 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      body: "{\"value\":0}\n{\"value\":1}\n"
+    - method: POST
+      path: /options/body
+      body: "{\"value\":2}\n"
+timeout: 40
+---
+
+from {
+  value: 0,
+  ts: 2025-03-03T12:00:01,
+}, {
+  value: 1,
+  ts: 2025-03-03T12:00:01,
+}, {
+  value: 2,
+  ts: 2025-03-03T12:00:04,
+}
+delay ts, start=2025-03-03T12:00:00, speed=1.0
+drop ts
+every 3s {
+  to_http env("HTTP_FIXTURE_BODY_URL") {
+    write_ndjson
+  }
+}

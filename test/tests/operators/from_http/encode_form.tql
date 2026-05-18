@@ -1,9 +1,9 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        header_name: Content-Type
-        header_value: application/x-www-form-urlencoded
+- http_server:
+    expected:
+    - header_name: Content-Type
+      header_value: application/x-www-form-urlencoded
 timeout: 60
 ---
 
