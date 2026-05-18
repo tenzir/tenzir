@@ -238,9 +238,8 @@ public:
                           ir::optimize_filter filter) -> Optimization {
       auto touched_fields = std::vector<ast::field_path>{};
       for (auto& field : ctx.get_all(fields)) {
-        if (field) {
-          touched_fields.push_back(std::move(*field));
-        }
+        TENZIR_ASSERT(field);
+        touched_fields.push_back(std::move(*field));
       }
       auto [f_upstream, f_self]
         = ir::split_filter_by_dependents(std::move(filter), touched_fields);

@@ -1,0 +1,117 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `foo` @ 6..9,
+               expr: record {
+                 begin: 11..12,
+                 items: [
+                   field {
+                     name: `bar` @ 12..15,
+                     expr: constant int64 1 @ 17..18
+                   }
+                 ],
+                 end: 18..19
+               }
+             },
+             field {
+               name: `x` @ 21..22,
+               expr: constant int64 1 @ 24..25
+             }
+           ],
+           end: 25..26
+         }
+       ],
+       self: 0..4
++    },
++    where_ir {
++      self: 0..0,
++      predicate: binary_expr {
++        left: meta {
++          kind: "name",
++          source: 46..51
++        },
++        op: "eq" @ 52..54,
++        right: constant string "test" @ 55..61
++      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `drop` @ 27..31
+         ],
+         ref: std::drop/op
+       },
+       desc: "tql2.drop",
+       args: [
+         field_path {
+           expr: field_access {
+             left: root_field {
+               id: `foo` @ 32..35,
+               has_question_mark: false
+             },
+             dot: 35..36,
+             has_question_mark: false,
+             name: `bar` @ 36..39
+           },
+           has_this: false,
+           path: [
+             {
+               id: `foo` @ 32..35,
+               has_question_mark: false
+             },
+             {
+               id: `bar` @ 36..39,
+               has_question_mark: false
+             }
+           ]
+         }
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+-    },
+-    where_ir {
+-      self: 40..45,
+-      predicate: binary_expr {
+-        left: meta {
+-          kind: "name",
+-          source: 46..51
+-        },
+-        op: "eq" @ 52..54,
+-        right: constant string "test" @ 55..61
+-      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 62..69
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

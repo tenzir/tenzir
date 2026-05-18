@@ -29,17 +29,16 @@ namespace tenzir {
 
 auto ir::split_filter_by_dependents(ir::optimize_filter filter,
                                     std::span<const ast::field_path> fields)
-  -> std::pair<ir::optimize_filter, ir::optimize_filter> {
-  auto independent = ir::optimize_filter{};
-  auto dependent = ir::optimize_filter{};
+  -> ir::split_filter_result {
+  auto result = ir::split_filter_result{};
   for (auto& expr : filter) {
     if (references_any_field_path(expr, fields)) {
-      dependent.push_back(std::move(expr));
+      result.dependent.push_back(std::move(expr));
     } else {
-      independent.push_back(std::move(expr));
+      result.independent.push_back(std::move(expr));
     }
   }
-  return {std::move(independent), std::move(dependent)};
+  return result;
 }
 
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
@@ -251,7 +250,7 @@ auto ir::SetIr::optimize(ir::optimize_filter filter,
   auto touched = touched_fields_for_set(assignments_);
   auto split = touched
                  ? ir::split_filter_by_dependents(std::move(filter), *touched)
-                 : std::pair{ir::optimize_filter{}, std::move(filter)};
+                 : ir::split_filter_result{{}, std::move(filter)};
   auto [filter_upstream, filter_self] = std::move(split);
   auto ops = std::vector<Box<ir::Operator>>{};
   ops.reserve(1 + filter_self.size());

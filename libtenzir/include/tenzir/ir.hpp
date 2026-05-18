@@ -168,11 +168,16 @@ struct optimize_result {
   pipeline replacement;
 };
 
+struct split_filter_result {
+  ir::optimize_filter independent;
+  ir::optimize_filter dependent;
+};
+
 /// Splits a filter chain by dependency on a set of fields.
-/// Returns independent and depended filers.
+/// Returns independent and dependent filters.
 auto split_filter_by_dependents(ir::optimize_filter filter,
                                 std::span<const ast::field_path> fields)
-  -> std::pair<ir::optimize_filter, ir::optimize_filter>;
+  -> split_filter_result;
 
 class SetIr final : public Operator {
 public:
