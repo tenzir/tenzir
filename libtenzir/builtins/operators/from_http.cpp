@@ -413,6 +413,23 @@ struct NextRequest {
   RequestConfig request;
 };
 
+struct PaginationState {
+  Option<pagination_spec> spec;
+  int64_t page_count = 0;
+  std::string current_url;
+  RequestConfig current_request;
+  Option<NextRequest> next_request;
+  bool odata_envelope_seen = false;
+};
+
+struct PaginationRequestContext {
+  pagination_spec const& spec;
+  std::string const& current_url;
+  RequestConfig const& current_request;
+  std::vector<std::pair<std::string, std::string>> const& paginated_headers;
+  Option<located<std::string>> const& encode;
+};
+
 auto emit_paginate_record_warning(std::string message, location paginate_loc,
                                   diagnostic_handler& dh) -> void {
   diagnostic::warning("{}", message)
@@ -426,35 +443,35 @@ auto is_paginate_request_field(std::string_view field) -> bool {
          or field == "body";
 }
 
-auto next_request_from_record(record const& patch, std::string const& base_url,
-                              RequestConfig const& current_request,
-                              Option<located<std::string>> const& encode,
-                              location paginate_loc, diagnostic_handler& dh)
-  -> Option<NextRequest> {
+auto next_request_from_record(record const& patch,
+                              PaginationRequestContext const& context,
+                              diagnostic_handler& dh) -> Option<NextRequest> {
   if (patch.empty()) {
     emit_paginate_record_warning("`paginate` request record must not be empty",
-                                 paginate_loc, dh);
+                                 context.spec.source, dh);
     return None{};
   }
   for (auto const& [field, _] : patch) {
     if (not is_paginate_request_field(field)) {
       emit_paginate_record_warning(
         fmt::format("unknown field `{}` in `paginate` request record", field),
-        paginate_loc, dh);
+        context.spec.source, dh);
       return None{};
     }
   }
-  auto url = base_url;
-  auto request = current_request;
+  auto url = context.current_url;
+  auto request = context.current_request;
   if (auto it = patch.find("url"); it != patch.end()) {
     auto const* next_url = try_as<std::string>(&it->second);
     if (not next_url) {
-      emit_paginate_record_warning(
-        "`paginate` request field `url` must be `string`", paginate_loc, dh);
+      emit_paginate_record_warning("`paginate` request field `url` must be "
+                                   "`string`",
+                                   context.spec.source, dh);
       return None{};
     }
-    if (auto resolved = resolve_next_url(*next_url, base_url, paginate_loc, dh,
-                                         NextUrlSource::paginate_lambda)) {
+    if (auto resolved
+        = resolve_next_url(*next_url, context.current_url, context.spec.source,
+                           dh, NextUrlSource::paginate_lambda)) {
       url = std::move(*resolved);
     } else {
       return None{};
@@ -463,8 +480,9 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
   if (auto it = patch.find("method"); it != patch.end()) {
     auto const* method_str = try_as<std::string>(&it->second);
     if (not method_str) {
-      emit_paginate_record_warning(
-        "`paginate` request field `method` must be `string`", paginate_loc, dh);
+      emit_paginate_record_warning("`paginate` request field `method` must be "
+                                   "`string`",
+                                   context.spec.source, dh);
       return None{};
     }
     auto method = parse_http_method(*method_str);
@@ -472,7 +490,7 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
       emit_paginate_record_warning(
         fmt::format("invalid HTTP method in `paginate` request record: `{}`",
                     *method_str),
-        paginate_loc, dh);
+        context.spec.source, dh);
       return None{};
     }
     request.method = *method;
@@ -480,7 +498,7 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
   if (auto it = patch.find("body"); it != patch.end()) {
     if (is<caf::none_t>(it->second)) {
       request.body.clear();
-    } else if (auto serialized = serialize_body(it->second, encode)) {
+    } else if (auto serialized = serialize_body(it->second, context.encode)) {
       request.body = std::move(serialized->body);
       add_default_content_type(request.headers,
                                std::move(serialized->content_type));
@@ -488,7 +506,7 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
       emit_paginate_record_warning("`paginate` request field `body` must be "
                                    "`blob`, `record`, `string`, "
                                    "or `null`",
-                                   paginate_loc, dh);
+                                   context.spec.source, dh);
       return None{};
     }
   }
@@ -497,7 +515,7 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
     if (not headers) {
       emit_paginate_record_warning("`paginate` request field `headers` must be "
                                    "`record`",
-                                   paginate_loc, dh);
+                                   context.spec.source, dh);
       return None{};
     }
     for (auto const& [name, value] : *headers) {
@@ -508,7 +526,7 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
       } else {
         emit_paginate_record_warning("`paginate` request header values must be "
                                      "`string` or `null`",
-                                     paginate_loc, dh);
+                                     context.spec.source, dh);
         return None{};
       }
     }
@@ -516,36 +534,30 @@ auto next_request_from_record(record const& patch, std::string const& base_url,
   return NextRequest{.url = std::move(url), .request = std::move(request)};
 }
 
-auto next_request_from_url(
-  std::string_view url, std::string const& base_url,
-  std::vector<std::pair<std::string, std::string>> const& headers,
-  location paginate_loc, diagnostic_handler& dh) -> Option<NextRequest> {
-  if (auto resolved = resolve_next_url(url, base_url, paginate_loc, dh,
-                                       NextUrlSource::paginate_lambda)) {
+auto next_request_from_url(std::string_view url,
+                           PaginationRequestContext const& context,
+                           diagnostic_handler& dh) -> Option<NextRequest> {
+  if (auto resolved
+      = resolve_next_url(url, context.current_url, context.spec.source, dh,
+                         NextUrlSource::paginate_lambda)) {
     return NextRequest{
       .url = std::move(*resolved),
-      .request = make_paginated_request_config(headers),
+      .request = make_paginated_request_config(context.paginated_headers),
     };
   }
   return None{};
 }
 
-auto next_request_from_lambda(
-  Option<pagination_spec> const& paginate, table_slice const& slice,
-  std::string const& base_url, RequestConfig const& current_request,
-  std::vector<std::pair<std::string, std::string>> const& paginated_headers,
-  Option<located<std::string>> const& encode, diagnostic_handler& dh)
+auto next_request_from_lambda(PaginationRequestContext const& context,
+                              table_slice const& slice, diagnostic_handler& dh)
   -> Option<NextRequest> {
-  if (not paginate) {
-    return None{};
-  }
-  auto const* lambda = try_as<ast::lambda_expr>(&paginate->inner);
+  auto const* lambda = try_as<ast::lambda_expr>(&context.spec.inner);
   if (not lambda) {
     return None{};
   }
   if (slice.rows() != 1) {
     diagnostic::warning("cannot paginate over multiple events")
-      .primary(*paginate)
+      .primary(context.spec)
       .note("stopping pagination")
       .emit(dh);
     return None{};
@@ -558,19 +570,16 @@ auto next_request_from_lambda(
       return None{};
     },
     [&](std::string_view url) -> Option<NextRequest> {
-      return next_request_from_url(url, base_url, paginated_headers,
-                                   paginate->source, dh);
+      return next_request_from_url(url, context, dh);
     },
     [&](view3<record> req) -> Option<NextRequest> {
-      return next_request_from_record(materialize(req), base_url,
-                                      current_request, encode, paginate->source,
-                                      dh);
+      return next_request_from_record(materialize(req), context, dh);
     },
     [&](auto const&) -> Option<NextRequest> {
       diagnostic::error("expected `paginate` to be `string`, `record`, or "
                         "`null`, got `{}`",
                         ms.parts().front().type.kind())
-        .primary(*paginate)
+        .primary(context.spec)
         .emit(dh);
       return None{};
     });
@@ -622,12 +631,6 @@ auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
   }
   return config;
 }
-
-struct PaginationState {
-  int64_t page_count = 0;
-  std::string current_url;
-  Option<NextRequest> next_request;
-};
 
 struct ResponseState {
   uint16_t status;
@@ -896,7 +899,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    paginate_ = std::move(*paginate);
+    pagination_.spec = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
     auto secret_resolution = co_await resolve_http_secrets(
@@ -910,8 +913,8 @@ public:
     fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
     ensure_http_default_ca_paths();
-    current_request_ = make_request_config(args_, resolved_headers_);
-    co_await start_fetch(ctx, current_request_);
+    pagination_.current_request = make_request_config(args_, resolved_headers_);
+    co_await start_fetch(ctx, pagination_.current_request);
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -954,13 +957,13 @@ public:
           if (lifecycle_ == Lifecycle::done) {
             co_return;
           }
-          if (auto mode = builtin_pagination_mode(paginate_);
+          if (auto mode = builtin_pagination_mode(pagination_.spec);
               mode and *mode == http::PaginationMode::link) {
-            TENZIR_ASSERT(paginate_);
+            TENZIR_ASSERT(pagination_.spec);
             // Extract the rel=next URL for link pagination.
             if (auto next_url = http::next_url_from_link_headers(
                   response_->headers, pagination_.current_url,
-                  paginate_->source, ctx.dh())) {
+                  pagination_.spec->source, ctx.dh())) {
               pagination_.next_request = NextRequest{
                 .url = std::move(*next_url),
                 .request = make_paginated_request_config(resolved_headers_),
@@ -1047,19 +1050,21 @@ public:
 
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
-    if (auto mode = builtin_pagination_mode(paginate_);
+    if (auto mode = builtin_pagination_mode(pagination_.spec);
         mode and *mode == http::PaginationMode::odata) {
-      TENZIR_ASSERT(paginate_);
-      auto page = http::extract_odata_page(slice, paginate_->source, ctx.dh());
+      TENZIR_ASSERT(pagination_.spec);
+      auto page
+        = http::extract_odata_page(slice, pagination_.spec->source, ctx.dh());
       if (not page) {
         lifecycle_ = Lifecycle::done;
         co_return;
       }
-      odata_envelope_seen_ = true;
+      pagination_.odata_envelope_seen = true;
       if (page->next_url) {
-        if (auto next_url = resolve_next_url(
-              *page->next_url, pagination_.current_url, paginate_->source,
-              ctx.dh(), NextUrlSource::odata_next_link)) {
+        if (auto next_url
+            = resolve_next_url(*page->next_url, pagination_.current_url,
+                               pagination_.spec->source, ctx.dh(),
+                               NextUrlSource::odata_next_link)) {
           pagination_.next_request = NextRequest{
             .url = std::move(*next_url),
             .request = make_paginated_request_config(resolved_headers_),
@@ -1071,10 +1076,15 @@ public:
       }
       co_return;
     }
-    if (not pagination_.next_request) {
-      if (auto next = next_request_from_lambda(
-            paginate_, slice, pagination_.current_url, current_request_,
-            resolved_headers_, args_.encode, ctx.dh())) {
+    if (not pagination_.next_request and pagination_.spec) {
+      auto context = PaginationRequestContext{
+        .spec = *pagination_.spec,
+        .current_url = pagination_.current_url,
+        .current_request = pagination_.current_request,
+        .paginated_headers = resolved_headers_,
+        .encode = args_.encode,
+      };
+      if (auto next = next_request_from_lambda(context, slice, ctx.dh())) {
         pagination_.next_request = std::move(*next);
       }
     }
@@ -1083,14 +1093,14 @@ public:
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    if (auto mode = builtin_pagination_mode(paginate_);
+    if (auto mode = builtin_pagination_mode(pagination_.spec);
         mode and *mode == http::PaginationMode::odata
-        and not odata_envelope_seen_ and response_
+        and not pagination_.odata_envelope_seen and response_
         and response_->is_success()) {
-      TENZIR_ASSERT(paginate_);
+      TENZIR_ASSERT(pagination_.spec);
       diagnostic::error(
         "expected OData response body to contain a top-level `value` array")
-        .primary(paginate_->source)
+        .primary(pagination_.spec->source)
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -1099,7 +1109,7 @@ public:
       // next page
       auto next = std::move(*pagination_.next_request);
       pagination_.current_url = std::move(next.url);
-      current_request_ = std::move(next.request);
+      pagination_.current_request = std::move(next.request);
       pagination_.next_request = None{};
       pagination_.page_count += 1;
       if (args_.paginate_delay
@@ -1108,7 +1118,7 @@ public:
           std::chrono::duration_cast<std::chrono::steady_clock::duration>(
             args_.paginate_delay->inner));
       }
-      co_await start_fetch(ctx, current_request_);
+      co_await start_fetch(ctx, pagination_.current_request);
     } else {
       lifecycle_ = Lifecycle::done;
     }
@@ -1126,7 +1136,7 @@ private:
   // Requires pagination_.current_url and pagination_.page_count to be set.
   auto start_fetch(OpCtx& ctx, RequestConfig request) -> Task<void> {
     response_ = None{};
-    odata_envelope_seen_ = false;
+    pagination_.odata_envelope_seen = false;
     auto parsed_url = proxygen::URL{pagination_.current_url};
     if (parsed_url.isSecure() and not fetch_config_.tls_context) {
       auto tls_opts
@@ -1228,14 +1238,11 @@ private:
   FromHttpArgs args_;
   FetchConfig fetch_config_;
   std::vector<std::pair<std::string, std::string>> resolved_headers_;
-  RequestConfig current_request_;
-  Option<pagination_spec> paginate_;
   // --- state ---
   Lifecycle lifecycle_{};
   PaginationState pagination_;
   // State collected per response page; absent before first response header.
   Option<ResponseState> response_;
-  bool odata_envelope_seen_ = false;
 };
 
 class from_http_plugin final : public virtual OperatorPlugin {
