@@ -1,0 +1,11 @@
+---
+timeout: 30
+error: true
+---
+
+from {
+  line: "hello-from-to_tcp",
+}
+to_tcp "127.0.0.1:9", max_retry_count=1 {
+  write_ndjson
+}
