@@ -714,9 +714,9 @@ auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {
   return None{};
 }
 
-auto next_url_from_link_headers(
-  std::vector<Header> const& response_headers,
-  std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
+auto next_url_from_link_headers(std::vector<Header> const& response_headers,
+                                std::string const& base_url,
+                                location paginate_loc, diagnostic_handler& dh)
   -> Option<std::string> {
   auto base = boost::urls::parse_uri_reference(base_url);
   if (not base) {

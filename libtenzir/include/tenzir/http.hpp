@@ -205,9 +205,9 @@ auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode>;
 /// Scans all Link response headers and returns the first resolved `rel=next`
 /// URL, or None if no such link is present. Emits a warning on malformed
 /// headers.
-auto next_url_from_link_headers(
-  std::vector<Header> const& response_headers,
-  std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
+auto next_url_from_link_headers(std::vector<Header> const& response_headers,
+                                std::string const& base_url,
+                                location paginate_loc, diagnostic_handler& dh)
   -> Option<std::string>;
 
 struct OdataPage {
