@@ -133,11 +133,14 @@ struct RequestConfig {
   std::vector<std::byte> body;
 };
 
-auto has_header(std::span<const std::pair<std::string, std::string>> headers,
-                std::string_view name) -> bool {
-  return std::ranges::any_of(headers, [&](auto const& kv) {
-    return detail::ascii_icase_equal(kv.first, name);
-  });
+auto find_header(std::span<const std::pair<std::string, std::string>> headers,
+                 std::string_view name) -> Option<std::string> {
+  for (auto const& [header_name, value] : headers) {
+    if (detail::ascii_icase_equal(header_name, name)) {
+      return value;
+    }
+  }
+  return None{};
 }
 
 // Builds the initial request configuration from the operator arguments.
@@ -189,10 +192,10 @@ auto make_request_config(
         // Other data types are rejected at describe() time.
       });
   }
-  if (content_type and not has_header(headers, "content-type")) {
+  if (content_type and not find_header(headers, "content-type")) {
     headers.emplace_back("Content-Type", content_type.unwrap());
   }
-  if (not has_header(headers, "accept")) {
+  if (not find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -206,7 +209,7 @@ auto make_request_config(
 // Always uses GET with the same headers as the original but no body.
 auto make_paginated_request_config(
   std::vector<std::pair<std::string, std::string>> headers) -> RequestConfig {
-  if (not has_header(headers, "accept")) {
+  if (not find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -487,34 +490,6 @@ auto strip_errno_from_error_message(std::string message) -> std::string {
   return message;
 }
 
-auto find_content_encoding(
-  std::vector<std::pair<std::string, std::string>> const& headers)
-  -> Option<std::string> {
-  for (auto const& [name, value] : headers) {
-    if (detail::ascii_icase_equal(name, "content-encoding")) {
-      auto trimmed = std::string{detail::trim(value)};
-      if (not trimmed.empty()) {
-        return trimmed;
-      }
-    }
-  }
-  return None{};
-}
-
-auto find_content_type(
-  std::vector<std::pair<std::string, std::string>> const& headers)
-  -> Option<std::string> {
-  for (auto const& [name, value] : headers) {
-    if (detail::ascii_icase_equal(name, "content-type")) {
-      auto type = std::string{detail::trim(value)};
-      if (not type.empty()) {
-        return type;
-      }
-    }
-  }
-  return None{};
-}
-
 auto path_from_url(std::string_view url) -> std::string {
   auto parsed = boost::urls::parse_uri_reference(url);
   if (not parsed) {
@@ -771,7 +746,13 @@ public:
       // --- ResponseHeader ---
       [&](ResponseHeader hdr) -> Task<void> {
         auto headers = std::move(hdr.headers);
-        auto content_encoding = find_content_encoding(headers);
+        auto content_encoding = Option<std::string>{};
+        if (auto value = find_header(headers, "content-encoding")) {
+          auto trimmed = std::string{detail::trim(*value)};
+          if (not trimmed.empty()) {
+            content_encoding = std::move(trimmed);
+          }
+        }
         response_ = ResponseState{
           .status = hdr.status,
           .headers = std::move(headers),
@@ -995,10 +976,12 @@ private:
       }
     } else {
       auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
-      if (auto content_type = find_content_type(response_->headers)) {
-        plugin = read_plugin_for_content_type(*content_type);
+      if (auto value = find_header(response_->headers, "content-type");
+          value and not detail::trim(*value).empty()) {
+        auto content_type = std::string{detail::trim(*value)};
+        plugin = read_plugin_for_content_type(content_type);
         if (not plugin) {
-          diagnostic::error("unsupported Content-Type `{}`", *content_type)
+          diagnostic::error("unsupported Content-Type `{}`", content_type)
             .primary(args_.operator_location)
             .hint("pass an explicit parser pipeline")
             .emit(ctx);
