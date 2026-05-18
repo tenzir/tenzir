@@ -235,11 +235,14 @@ private:
           ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
           : default_connect_max_retry_count;
     auto emit_final_error = [&](folly::AsyncSocketException const& ex) {
-      diagnostic::error("failed to connect to {}: {}", address_.describe(),
-                        describe_socket_error(ex))
-        .primary(args_.endpoint.source)
-        .note("gave up after {} {}", max_retry_count,
-              max_retry_count == 1 ? "retry" : "retries")
+      auto diag
+        = diagnostic::error("failed to connect to {}: {}", address_.describe(),
+                            describe_socket_error(ex))
+            .primary(args_.endpoint.source)
+            .note("gave up after {} {}", max_retry_count,
+                  max_retry_count == 1 ? "retry" : "retries")
+            .hint("ensure a TCP server is listening on this endpoint");
+      add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
         .emit(ctx.dh());
       finish();
     };

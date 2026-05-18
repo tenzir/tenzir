@@ -5,3 +5,6 @@ error: failed to connect to 127.0.0.1:9: Connection refused
   |        ^^^^^^^^^^^^^ 
   |
   = note: gave up after 1 retry
+  = hint: ensure a TCP server is listening on this endpoint
+  = note: `tls` is disabled for this connection
+  = hint: if the server requires TLS, set `tls=true`
