@@ -1060,8 +1060,14 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
       - name: Upload Artifact to GCS
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        timeout-minutes: 15
         run: |
-          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
+          artifact="${BUILD_DIR}/package/${PACKAGE_NAME}.tar.gz"
+          destination="gs://${{ vars.GCS_BUCKET }}/${PACKAGE_NAME}.tar.gz"
+          test -s "$artifact"
+          ls -lh "$artifact"
+          gcloud --quiet --verbosity=info storage cp "$artifact" "$destination"
+          gcloud --quiet storage ls "$destination"
 
   python:
     needs:
