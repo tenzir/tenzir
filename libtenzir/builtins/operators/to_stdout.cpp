@@ -380,7 +380,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ToStdoutArgs, ToStdout>{};
     d.operator_location(&ToStdoutArgs::self);
-    auto pipe_arg = d.pipeline(&ToStdoutArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ToStdoutArgs::pipe, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto pipe = ctx.get(pipe_arg);
       if (not pipe) {

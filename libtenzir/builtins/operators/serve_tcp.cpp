@@ -414,7 +414,8 @@ public:
     auto tls_arg = d.named("tls", &ServeTcpArgs::tls);
     auto max_connections_arg
       = d.named("max_connections", &ServeTcpArgs::max_connections);
-    auto printer_arg = d.pipeline(&ServeTcpArgs::printer);
+    auto printer_arg
+      = d.pipeline(&ServeTcpArgs::printer, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto ep = to<Endpoint>(endpoint_str.inner);

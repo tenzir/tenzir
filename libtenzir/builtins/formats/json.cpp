@@ -1581,7 +1581,7 @@ public:
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
     d.optimization_order(&ReadJsonArgs::order);
     d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -1633,7 +1633,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -1684,7 +1684,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -1754,7 +1754,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -2118,7 +2118,7 @@ public:
         return {};
       });
     }
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -2189,7 +2189,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

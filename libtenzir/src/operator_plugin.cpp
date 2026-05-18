@@ -602,11 +602,24 @@ public:
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
     TENZIR_ASSERT(desc_->optimizer);
+    // subpipeline
+    if (pipeline_ and desc_->pipeline
+        and desc_->pipeline->sub_optimize == SubOptimize::from_downstream) {
+      // apply downstream filter and order to the subpipeline directly
+      auto sub = std::move(pipeline_->pipeline.inner)
+                   .optimize(std::move(filter), order);
+      // use sub's filter and order instead of the downstream
+      filter = std::move(sub.filter);
+      order = sub.order;
+      pipeline_->pipeline.inner = std::move(sub.replacement);
+    }
     order_ = weaker_event_order(order_, order);
+    // extract filters into the operator
     if (desc_->set_filter) {
       filter_.append_range(filter | std::views::as_rvalue);
       filter = ir::optimize_filter{};
     }
+    // run optimizer
     auto noop_dh = null_diagnostic_handler{};
     auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
                            *desc_, main_location(), noop_dh};

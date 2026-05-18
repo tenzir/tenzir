@@ -505,7 +505,8 @@ public:
     auto iface = d.positional("iface", &FromNicArgs::iface);
     auto snaplen = d.named("snaplen", &FromNicArgs::snaplen);
     auto filter = d.named("filter", &FromNicArgs::filter);
-    auto parser = d.pipeline(&FromNicArgs::parser);
+    auto parser
+      = d.pipeline(&FromNicArgs::parser, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto iface_value, ctx.get(iface));
       if (iface_value.inner.empty()) {

@@ -1346,7 +1346,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadZeekTsvArgs, ReadZeekTsv>{};
     d.operator_location(&ReadZeekTsvArgs::operator_location);
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -1398,7 +1398,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

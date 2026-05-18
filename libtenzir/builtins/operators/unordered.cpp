@@ -52,13 +52,14 @@ public:
                 event_order /*order*/) && -> ir::optimize_result override {
     auto opt = std::move(pipeline_).optimize(std::move(filter),
                                              event_order::unordered);
-    // Wrap each replacement operator in its own single-operator UnorderedIr
-    // so that subsequent optimization passes still force unordered.
-    for (auto& op : opt.replacement.operators) {
-      auto inner = ir::pipeline{};
-      inner.operators.push_back(std::move(op));
-      op = UnorderedIr{std::move(inner), loc_};
-    }
+    // reconstruct unordered back from replacement
+    auto inner = ir::pipeline{};
+    inner.operators.insert(
+      inner.operators.begin(),
+      std::move_iterator{opt.replacement.operators.begin()},
+      std::move_iterator{opt.replacement.operators.end()});
+    opt.replacement = ir::pipeline{};
+    opt.replacement.operators.emplace_back(UnorderedIr{std::move(inner), loc_});
     return opt;
   }
 

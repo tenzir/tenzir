@@ -266,7 +266,8 @@ public:
     d.positional("url", &FromFtpArgs::url);
     auto tls_validator = tls_options{
       {.is_server = false}}.add_to_describer(d, &FromFtpArgs::tls);
-    auto parser_arg = d.pipeline(&FromFtpArgs::parser);
+    auto parser_arg
+      = d.pipeline(&FromFtpArgs::parser, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       TRY(auto parser, ctx.get(parser_arg));

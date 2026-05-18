@@ -323,7 +323,8 @@ public:
     auto endpoint_arg = d.positional("endpoint", &SourceArgs::endpoint);
     auto prefix_arg = d.named("prefix", &SourceArgs::prefix, "string");
     auto keep_prefix_arg = d.named("keep_prefix", &SourceArgs::keep_prefix);
-    auto parser_arg = d.pipeline(&SourceArgs::parser);
+    auto parser_arg
+      = d.pipeline(&SourceArgs::parser, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TENZIR_UNUSED(keep_prefix_arg);
       TRY(auto endpoint, ctx.get(endpoint_arg));

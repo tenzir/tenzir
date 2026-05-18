@@ -1052,7 +1052,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadFeatherArgs, ReadFeather>{};
     d.operator_location(&ReadFeatherArgs::operator_location);
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -1090,7 +1090,7 @@ public:
       std::ignore = make_feather_write_options(args, ctx);
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

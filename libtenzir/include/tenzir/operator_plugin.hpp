@@ -92,17 +92,29 @@ struct LetBinding {
   Setter<let_id> setter;
 };
 
+/// Declares how to optimize a subpipeline.
+enum class SubOptimize {
+  /// The subpipeline's output becomes the operator's output.
+  /// Example: `from_tcp { read_ndjson }`, `parallel { ... }`.
+  from_downstream,
+  /// Don't optimize at all. Should be used for work-in-progress operators only.
+  off,
+};
+
 struct Pipeline {
   Pipeline(Setter<located<ir::pipeline>> setter,
-           std::vector<LetBinding> let_bindings, bool required)
+           std::vector<LetBinding> let_bindings, bool required,
+           SubOptimize sub_optimize)
     : setter{std::move(setter)},
       let_bindings{std::move(let_bindings)},
-      required{required} {
+      required{required},
+      sub_optimize{sub_optimize} {
   }
 
   Setter<located<ir::pipeline>> setter;
   std::vector<LetBinding> let_bindings;
   bool required = false;
+  SubOptimize sub_optimize = SubOptimize::off;
 };
 
 template <class Args, class Input, class Output>
@@ -639,32 +651,35 @@ public:
     return Argument<Args, T>{ArgumentType::positional, index};
   }
 
-  auto pipeline(located<ir::pipeline> Args::* ptr)
+  auto pipeline(located<ir::pipeline> Args::* ptr, SubOptimize sub_optimize)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     desc_.pipeline = Pipeline{
       make_setter(ptr),
       {},
       true,
+      sub_optimize,
     };
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
-  auto pipeline(Option<located<ir::pipeline>> Args::* ptr)
+  auto
+  pipeline(Option<located<ir::pipeline>> Args::* ptr, SubOptimize sub_optimize)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     desc_.pipeline = Pipeline{
       make_setter(ptr),
       {},
       false,
+      sub_optimize,
     };
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
   /// Pipeline with let bindings that are injected into the subpipeline.
-  /// Usage: `d.pipeline(&Args::pipe, {{"var_name", &Args::var_let_id}, ...})`
+  /// Usage: `d.pipeline(&Args::pipe, sub_output, {{"var", &Args::let}, ...})`
   auto pipeline(
-    located<ir::pipeline> Args::* ptr,
+    located<ir::pipeline> Args::* ptr, SubOptimize sub_optimize,
     std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
@@ -679,12 +694,13 @@ public:
       make_setter(ptr),
       std::move(let_bindings),
       true,
+      sub_optimize,
     };
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
   auto pipeline(
-    Option<located<ir::pipeline>> Args::* ptr,
+    Option<located<ir::pipeline>> Args::* ptr, SubOptimize sub_optimize,
     std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
@@ -699,6 +715,7 @@ public:
       make_setter(ptr),
       std::move(let_bindings),
       false,
+      sub_optimize,
     };
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
@@ -1045,5 +1062,6 @@ using _::operator_plugin::Optimizer;
 using _::operator_plugin::Spawn;
 using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;
+using _::operator_plugin::SubOptimize;
 
 } // namespace tenzir

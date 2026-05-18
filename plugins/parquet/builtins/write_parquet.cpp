@@ -251,7 +251,7 @@ public:
       validate_args(type, level, ctx);
       return {};
     });
-    return d.without_optimize();
+    return d.invariant_order();
   }
 };
 

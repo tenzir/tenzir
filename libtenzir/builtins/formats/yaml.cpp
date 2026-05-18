@@ -500,7 +500,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadYamlArgs, ReadYaml>{};
     d.validate(add_msb_to_describer(d, &ReadYamlArgs::msb_options));
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -605,7 +605,7 @@ class write_yaml final
 public:
   auto describe() const -> Description override {
     auto d = Describer<WriteYamlArgs, WriteYaml>{};
-    return d.without_optimize();
+    return d.invariant_order();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

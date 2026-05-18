@@ -790,8 +790,9 @@ public:
     d.named("resolve_hostnames", &AcceptTcpArgs::resolve_hostnames);
     auto auto_detect_tls_arg
       = d.named("auto_detect_tls", &AcceptTcpArgs::auto_detect_tls);
-    auto pipeline_arg = d.pipeline(&AcceptTcpArgs::user_pipeline,
-                                   {{"peer", &AcceptTcpArgs::peer_info}});
+    auto pipeline_arg
+      = d.pipeline(&AcceptTcpArgs::user_pipeline, SubOptimize::from_downstream,
+                   {{"peer", &AcceptTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<Endpoint>(ep_str.inner);

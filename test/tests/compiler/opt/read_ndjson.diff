@@ -42,7 +42,8 @@
                filter: [
                  
                ],
-               order: "ordered",
+-              order: "ordered",
++              order: "unordered",
                named_args: [
                  
                ]
@@ -57,29 +58,7 @@
      GenericIr {
        op: {
          path: [
--          `sort` @ 44..48
--        ],
--        ref: std::sort/op
--      },
--      desc: "tql2.sort",
--      args: [
--        expression root_field {
--          id: `x` @ 49..50,
--          has_question_mark: false
--        }
--      ],
--      filter: [
--        
--      ],
--      order: "ordered",
--      named_args: [
--        
--      ]
--    },
--    GenericIr {
--      op: {
--        path: [
-           `discard` @ 51..58
+           `discard` @ 44..51
          ],
          ref: std::discard/op
        },

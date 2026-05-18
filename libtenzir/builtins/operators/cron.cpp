@@ -99,7 +99,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<CronArgs, Cron>{};
     auto schedule = d.positional("schedule", &CronArgs::schedule, "string");
-    auto pipe_arg = d.pipeline(&CronArgs::pipe);
+    auto pipe_arg = d.pipeline(&CronArgs::pipe, SubOptimize::from_downstream);
     d.validate([schedule, pipe_arg](DescribeCtx& ctx) -> Empty {
       if (auto v = ctx.get(schedule)) {
         try {

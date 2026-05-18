@@ -328,7 +328,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ForkArgs, Fork>{};
-    auto pipe = d.pipeline(&ForkArgs::pipe);
+    auto pipe = d.pipeline(&ForkArgs::pipe, SubOptimize::off);
     d.validate([pipe](DescribeCtx& ctx) -> Empty {
       TRY(auto p, ctx.get(pipe));
       auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
