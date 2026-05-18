@@ -54,7 +54,7 @@ constexpr auto connect_retry_jitter = 0.0;
 constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
 // Leave room for many queued payloads while still applying backpressure when
 // the remote peer falls behind or reconnects take time.
-constexpr auto message_queue_capacity = uint32_t{1_Ki};
+constexpr auto message_queue_capacity = uint32_t{10};
 
 constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
   return ew.is_compatible_with<folly::AsyncSocketException>();
