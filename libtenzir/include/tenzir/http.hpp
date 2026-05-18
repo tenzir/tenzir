@@ -26,7 +26,7 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
-#include <optional>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -74,59 +74,59 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            tls_options::options options = {.is_server = false})
   -> failure_or<HttpPoolConfig>;
 
-struct header {
+struct Header {
   std::string name;
   std::string value;
 };
 
 auto make_header_secret_requests(Option<located<data>> const& headers,
-                                 std::vector<header>& resolved_headers,
+                                 std::vector<Header>& resolved_headers,
                                  diagnostic_handler& dh)
   -> std::vector<secret_request>;
 
 /// Finds the first header by case-insensitive name.
-auto find_header(std::span<header const> headers, std::string_view name)
+auto find_header(std::span<Header const> headers, std::string_view name)
   -> Option<std::string>;
 
 /// Removes all headers matching the case-insensitive name.
-auto erase_header(std::vector<header>& headers, std::string_view name) -> void;
+auto erase_header(std::vector<Header>& headers, std::string_view name) -> void;
 
 /// Replaces all headers matching the case-insensitive name with one value.
-auto set_header(std::vector<header>& headers, std::string name,
+auto set_header(std::vector<Header>& headers, std::string name,
                 std::string value) -> void;
 
 /// Base for HTTP messages.
-struct message {
+struct Message {
   std::string protocol;
   double version;
-  std::vector<http::header> headers;
+  std::vector<http::Header> headers;
   std::string body;
 
   /// Retrieve a header with a case-insensitive lookup.
-  [[nodiscard]] auto header(const std::string& name) -> http::header*;
+  [[nodiscard]] auto header(const std::string& name) -> http::Header*;
 
   [[nodiscard]] auto header(const std::string& name) const
-    -> const http::header*;
+    -> const http::Header*;
 };
 
 /// A HTTP request message.
-struct request : message {
+struct Request : Message {
   std::string method;
   std::string uri;
 };
 
 /// A HTTP response message.
-struct response : message {
+struct Response : Message {
   uint32_t status_code;
   std::string status_text;
 };
 
 /// A HTTPie-inspired request item.
-struct request_item {
+struct RequestItem {
   /// Parses a request item like HTTPie.
-  static auto parse(std::string_view str) -> std::optional<request_item>;
+  static auto parse(std::string_view str) -> Option<RequestItem>;
 
-  enum item_type : uint8_t {
+  enum ItemType : uint8_t {
     file_data_json,
     data_json,
     url_param,
@@ -136,24 +136,24 @@ struct request_item {
     header,
   };
 
-  friend auto inspect(auto& f, request_item& x) -> bool {
-    using enum_type = std::underlying_type_t<item_type>;
+  friend auto inspect(auto& f, RequestItem& x) -> bool {
+    using EnumType = std::underlying_type_t<ItemType>;
     return f.object(x)
-      .pretty_name("tenzir.http.request_item")
-      .fields(f.field("type", reinterpret_cast<enum_type&>(x.type)),
+      .pretty_name("tenzir.http.RequestItem")
+      .fields(f.field("type", reinterpret_cast<EnumType&>(x.type)),
               f.field("key", x.key), f.field("value", x.value));
   }
 
-  item_type type;
+  ItemType type;
   std::string key;
   std::string value;
 };
 
 /// Applies a list of request items to a given HTTP request.
 /// We mimic HTTPie's behavior in processing request items.
-auto apply(std::vector<request_item> items, request& req) -> caf::error;
+auto apply(std::vector<RequestItem> items, Request& req) -> caf::error;
 
-struct encoded_request_body {
+struct EncodedRequestBody {
   std::string body;
   Option<std::string> content_encoding = None{};
 };
@@ -165,11 +165,11 @@ struct encoded_request_body {
 auto compress_request_body(std::string body, std::string_view encoding,
                            diagnostic_handler& dh,
                            location loc = location::unknown)
-  -> encoded_request_body;
+  -> EncodedRequestBody;
 
 /// Adds Content-Length and, when present, Content-Encoding headers.
 auto add_request_body_headers(std::map<std::string, std::string>& headers,
-                              encoded_request_body const& body) -> void;
+                              EncodedRequestBody const& body) -> void;
 
 /// Creates a streaming decompressor for the given Content-Encoding value.
 /// Emits a warning and returns None for unknown or unsupported encodings.
@@ -206,7 +206,7 @@ auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode>;
 /// URL, or None if no such link is present. Emits a warning on malformed
 /// headers.
 auto next_url_from_link_headers(
-  std::vector<http::header> const& response_headers,
+  std::vector<Header> const& response_headers,
   std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
   -> Option<std::string>;
 

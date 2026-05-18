@@ -23,8 +23,8 @@ using namespace std::string_literals;
 namespace {
 
 auto make_item = [](std::string_view str) {
-  auto result = http::request_item::parse(str);
-  REQUIRE_NOT_EQUAL(result, std::nullopt);
+  auto result = http::RequestItem::parse(str);
+  REQUIRE(result);
   return *result;
 };
 
@@ -33,22 +33,22 @@ auto make_item = [](std::string_view str) {
 TEST("parse HTTP request item") {
   auto separators = std::array{":=@", ":=", "==", "=@", "@", "=", ":"};
   auto types = std::array{
-    http::request_item::file_data_json, http::request_item::data_json,
-    http::request_item::url_param,      http::request_item::file_data,
-    http::request_item::file_form,      http::request_item::data,
-    http::request_item::header,
+    http::RequestItem::file_data_json, http::RequestItem::data_json,
+    http::RequestItem::url_param,      http::RequestItem::file_data,
+    http::RequestItem::file_form,      http::RequestItem::data,
+    http::RequestItem::header,
   };
   static_assert(separators.size() == types.size());
   for (auto i = 0u; i < types.size(); ++i) {
     auto sep = separators[i];
     auto str = fmt::format("foo{}bar", sep);
-    auto item = http::request_item::parse(str);
+    auto item = http::RequestItem::parse(str);
     REQUIRE(item);
     CHECK_EQUAL(item->key, "foo");
     CHECK_EQUAL(item->value, "bar");
     CHECK_EQUAL(item->type, types[i]);
     str = fmt::format("foo{}bar\\{}", sep, sep);
-    item = http::request_item::parse(str);
+    item = http::RequestItem::parse(str);
     REQUIRE(item);
     CHECK_EQUAL(item->key, "foo");
     auto value = fmt::format("bar\\{}", sep);
@@ -57,8 +57,8 @@ TEST("parse HTTP request item") {
 }
 
 TEST("HTTP request items - JSON") {
-  auto request = http::request{};
-  auto items = std::vector<http::request_item>{
+  auto request = http::Request{};
+  auto items = std::vector<http::RequestItem>{
     make_item("Content-Type:application/json"),
     make_item("foo:=42"),
   };
@@ -77,8 +77,8 @@ TEST("HTTP request items - JSON") {
 }
 
 TEST("HTTP request items - JSON without content type") {
-  auto request = http::request{};
-  auto items = std::vector<http::request_item>{
+  auto request = http::Request{};
+  auto items = std::vector<http::RequestItem>{
     make_item("foo:=42"),
   };
   auto err = apply(items, request);
@@ -95,8 +95,8 @@ TEST("HTTP request items - JSON without content type") {
 }
 
 TEST("HTTP request items - urlencoded") {
-  auto request = http::request{};
-  auto items = std::vector<http::request_item>{
+  auto request = http::Request{};
+  auto items = std::vector<http::RequestItem>{
     make_item("Content-Type:application/x-www-form-urlencoded"),
     make_item("foo:=42"),
     make_item("bar:=true"),
@@ -112,8 +112,8 @@ TEST("HTTP request items - urlencoded") {
 }
 
 TEST("HTTP request items - URL param") {
-  auto request = http::request{};
-  auto items = std::vector<http::request_item>{
+  auto request = http::Request{};
+  auto items = std::vector<http::RequestItem>{
     make_item("foo==42"),
     make_item("bar==true"),
   };
@@ -128,7 +128,7 @@ TEST("HTTP request items - URL param") {
 }
 
 TEST("HTTP response") {
-  http::response r;
+  http::Response r;
   r.status_code = 200;
   r.status_text = "OK";
   r.protocol = "HTTP";
@@ -142,11 +142,11 @@ TEST("HTTP response") {
 }
 
 TEST("HTTP header") {
-  auto p = make_parser<http::header>();
+  auto p = make_parser<http::Header>();
   auto str = "foo: bar"s;
   auto f = str.begin();
   auto l = str.end();
-  http::header hdr;
+  http::Header hdr;
   CHECK(p(f, l, hdr));
   CHECK(hdr.name == "FOO");
   CHECK(hdr.value == "bar");

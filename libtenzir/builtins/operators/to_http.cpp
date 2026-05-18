@@ -42,7 +42,7 @@ namespace {
 
 constexpr auto default_parallel = 1;
 
-using Headers = std::vector<http::header>;
+using Headers = std::vector<http::Header>;
 
 struct ToHttpArgs {
   located<secret> url;

@@ -64,17 +64,17 @@ struct connector_args {
 };
 
 auto make_items_wo_secrets(const connector_args& args, diagnostic_handler& dh)
-  -> std::vector<http::request_item> {
-  auto items = std::vector<http::request_item>{};
+  -> std::vector<http::RequestItem> {
+  auto items = std::vector<http::RequestItem>{};
   for (auto& [key, value] : args.http_opts.body.inner) {
     auto str = to_json(value);
     TENZIR_ASSERT(str);
-    items.emplace_back(tenzir::http::request_item::data_json, std::move(key),
+    items.emplace_back(tenzir::http::RequestItem::data_json, std::move(key),
                        std::move(*str));
   }
   for (auto& [key, value] : args.http_opts.params.inner) {
     if (auto* str = try_as<std::string>(value)) {
-      items.emplace_back(tenzir::http::request_item::url_param, std::move(key),
+      items.emplace_back(tenzir::http::RequestItem::url_param, std::move(key),
                          std::move(*str));
       continue;
     }
@@ -89,7 +89,7 @@ auto make_items_wo_secrets(const connector_args& args, diagnostic_handler& dh)
   }
   for (auto& [key, value] : args.http_opts.headers.inner) {
     if (auto* str = try_as<std::string>(value)) {
-      items.emplace_back(tenzir::http::request_item::header, std::move(key),
+      items.emplace_back(tenzir::http::RequestItem::header, std::move(key),
                          std::move(*str));
       continue;
     }
@@ -106,9 +106,9 @@ auto make_items_wo_secrets(const connector_args& args, diagnostic_handler& dh)
 }
 
 auto make_request(const connector_args& args, std::string_view url,
-                  std::vector<http::request_item> items)
-  -> caf::expected<http::request> {
-  auto result = http::request{};
+                  std::vector<http::RequestItem> items)
+  -> caf::expected<http::Request> {
+  auto result = http::Request{};
   // Set URL.
   result.uri = url;
   // Set method.
@@ -136,9 +136,9 @@ auto make_request(const connector_args& args, std::string_view url,
 }
 
 auto make_record_param_request(std::string name,
-                               http::request_item::item_type type,
+                               http::RequestItem::ItemType type,
                                const located<record>& r,
-                               std::vector<http::request_item>& items,
+                               std::vector<http::RequestItem>& items,
                                diagnostic_handler& dh) {
   return make_secret_request(
     r.inner, r.source,
@@ -172,9 +172,9 @@ public:
       ctrl,
       {
         make_secret_request("url", args_.url, url, dh),
-        make_record_param_request("parameter", http::request_item::url_param,
+        make_record_param_request("parameter", http::RequestItem::url_param,
                                   args_.http_opts.params, items, dh),
-        make_record_param_request("header", http::request_item::header,
+        make_record_param_request("header", http::RequestItem::header,
                                   args_.http_opts.headers, items, dh),
       });
     co_yield std::move(x);
@@ -284,9 +284,9 @@ public:
       ctrl,
       {
         make_secret_request("url", args_.url, url, dh),
-        make_record_param_request("parameter", http::request_item::url_param,
+        make_record_param_request("parameter", http::RequestItem::url_param,
                                   args_.http_opts.params, items, dh),
-        make_record_param_request("header", http::request_item::header,
+        make_record_param_request("header", http::RequestItem::header,
                                   args_.http_opts.headers, items, dh),
       });
     co_yield std::move(x);

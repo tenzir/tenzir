@@ -91,7 +91,7 @@ struct FromHttpArgs {
 // Messages from the fetch task to the operator.
 struct ResponseHeader {
   uint16_t status;
-  std::vector<http::header> headers;
+  std::vector<http::Header> headers;
 };
 struct ResponseBody {
   chunk_ptr data;
@@ -112,7 +112,7 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 // internal makeHTTPRequestSource where IOBuf::takeOwnership arguments are
 // evaluated in unspecified order.
 auto build_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
-                          const std::vector<http::header>& headers,
+                          const std::vector<http::Header>& headers,
                           std::unique_ptr<folly::IOBuf> body_buf)
   -> proxygen::coro::HTTPSourceHolder {
   auto* source = proxygen::coro::HTTPFixedSource::makeFixedRequest(
@@ -132,7 +132,7 @@ auto build_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
 
 struct RequestConfig {
   proxygen::HTTPMethod method = proxygen::HTTPMethod::GET;
-  std::vector<http::header> headers;
+  std::vector<http::Header> headers;
   std::vector<std::byte> body;
 };
 
@@ -193,7 +193,7 @@ auto serialize_body(data const& value,
   return result;
 }
 
-auto add_default_content_type(std::vector<http::header>& headers,
+auto add_default_content_type(std::vector<http::Header>& headers,
                               Option<std::string> content_type) -> void {
   if (content_type and not http::find_header(headers, "content-type")) {
     headers.emplace_back("Content-Type", content_type.unwrap());
@@ -204,7 +204,7 @@ auto add_default_content_type(std::vector<http::header>& headers,
 // Resolves method, serializes the body (records become JSON, blobs are sent
 // verbatim), and assembles request headers.
 auto make_request_config(FromHttpArgs const& args,
-                         std::vector<http::header> headers) -> RequestConfig {
+                         std::vector<http::Header> headers) -> RequestConfig {
   // Resolve HTTP method (validated at describe time).
   // Default to POST when a body is present, GET otherwise.
   auto method_str = args.method ? args.method->inner
@@ -233,7 +233,7 @@ auto make_request_config(FromHttpArgs const& args,
 
 // Builds the request configuration for a paginated follow-up request.
 // Always uses GET with the same headers as the original but no body.
-auto make_paginated_request_config(std::vector<http::header> headers)
+auto make_paginated_request_config(std::vector<http::Header> headers)
   -> RequestConfig {
   if (not http::find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
@@ -247,7 +247,7 @@ auto make_paginated_request_config(std::vector<http::header> headers)
 
 auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
                           std::string& resolved_url,
-                          std::vector<http::header>& resolved_headers)
+                          std::vector<http::Header>& resolved_headers)
   -> Task<failure_or<bool>> {
   resolved_url.clear();
   auto requests = std::vector<secret_request>{};
@@ -402,7 +402,7 @@ struct PaginationRequestContext {
   pagination_spec const& spec;
   std::string const& current_url;
   RequestConfig const& current_request;
-  std::vector<http::header> const& paginated_headers;
+  std::vector<http::Header> const& paginated_headers;
   Option<located<std::string>> const& encode;
 };
 
@@ -610,7 +610,7 @@ auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
 
 struct ResponseState {
   uint16_t status;
-  std::vector<http::header> headers;
+  std::vector<http::Header> headers;
   Option<std::string> content_encoding;
   std::shared_ptr<arrow::util::Decompressor> decompressor;
   blob error_body;
@@ -665,7 +665,7 @@ auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
 
 struct retryable_http_response : std::runtime_error {
   retryable_http_response(uint16_t status_code,
-                          std::vector<http::header> headers,
+                          std::vector<http::Header> headers,
                           Option<std::chrono::seconds> retry_after)
     : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
       status_code{status_code},
@@ -674,7 +674,7 @@ struct retryable_http_response : std::runtime_error {
   }
 
   uint16_t status_code = 0;
-  std::vector<http::header> headers;
+  std::vector<http::Header> headers;
   Option<std::chrono::seconds> retry_after;
   blob body;
 };
@@ -745,7 +745,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   // response headers.
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                auto hdrs = std::vector<http::header>{};
+                auto hdrs = std::vector<http::Header>{};
                 msg->getHeaders().forEach([&](std::string& k, std::string& v) {
                   hdrs.emplace_back(k, v);
                 });
@@ -1207,7 +1207,7 @@ private:
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
-  std::vector<http::header> resolved_headers_;
+  std::vector<http::Header> resolved_headers_;
   // --- state ---
   Lifecycle lifecycle_{};
   PaginationState pagination_;

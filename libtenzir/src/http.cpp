@@ -327,7 +327,7 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
 }
 
 auto make_header_secret_requests(Option<located<data>> const& headers,
-                                 std::vector<http::header>& resolved_headers,
+                                 std::vector<http::Header>& resolved_headers,
                                  diagnostic_handler& dh)
   -> std::vector<secret_request> {
   resolved_headers.clear();
@@ -357,7 +357,7 @@ auto make_header_secret_requests(Option<located<data>> const& headers,
   return result;
 }
 
-auto find_header(std::span<http::header const> headers, std::string_view name)
+auto find_header(std::span<http::Header const> headers, std::string_view name)
   -> Option<std::string> {
   for (auto const& [header_name, value] : headers) {
     if (detail::ascii_icase_equal(header_name, name)) {
@@ -367,20 +367,20 @@ auto find_header(std::span<http::header const> headers, std::string_view name)
   return None{};
 }
 
-auto erase_header(std::vector<http::header>& headers, std::string_view name)
+auto erase_header(std::vector<http::Header>& headers, std::string_view name)
   -> void {
   std::erase_if(headers, [&](auto const& kv) {
     return detail::ascii_icase_equal(kv.name, name);
   });
 }
 
-auto set_header(std::vector<http::header>& headers, std::string name,
+auto set_header(std::vector<http::Header>& headers, std::string name,
                 std::string value) -> void {
   erase_header(headers, name);
   headers.push_back({std::move(name), std::move(value)});
 }
 
-auto message::header(const std::string& name) -> struct header* {
+auto Message::header(const std::string& name) -> Header* {
   auto pred = [&](auto& x) -> bool {
     if (x.name.size() != name.size()) {
       return false;
@@ -396,13 +396,13 @@ auto message::header(const std::string& name) -> struct header* {
   return i == headers.end() ? nullptr : &*i;
 }
 
-auto message::header(const std::string& name) const -> const struct header* {
+auto Message::header(const std::string& name) const -> Header const* {
   // We use a const_cast to avoid duplicating logic.
-  auto* self = const_cast<message*>(this);
+  auto* self = const_cast<Message*>(this);
   return self->header(name);
 }
 
-auto request_item::parse(std::string_view str) -> std::optional<request_item> {
+auto RequestItem::parse(std::string_view str) -> Option<RequestItem> {
   auto is_valid_header_name = [](std::string_view name) {
     for (char c : name) {
       if (std::isalnum(static_cast<unsigned char>(c)) == 0 and c != '-'
@@ -414,51 +414,51 @@ auto request_item::parse(std::string_view str) -> std::optional<request_item> {
   };
   auto xs = detail::split_escaped(str, ":=@", "\\", 1);
   if (xs.size() == 2) {
-    return request_item{.type = file_data_json, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = file_data_json, .key = xs[0], .value = xs[1]};
   }
   xs = detail::split_escaped(str, ":=", "\\", 1);
   if (xs.size() == 2) {
-    return request_item{.type = data_json, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = data_json, .key = xs[0], .value = xs[1]};
   }
   xs = detail::split_escaped(str, ":", "\\", 1);
   if (xs.size() == 2 and is_valid_header_name(xs[0])) {
-    return request_item{.type = header, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = header, .key = xs[0], .value = xs[1]};
   }
   xs = detail::split_escaped(str, "==", "\\", 1);
   if (xs.size() == 2) {
-    return request_item{.type = url_param, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = url_param, .key = xs[0], .value = xs[1]};
   }
   xs = detail::split_escaped(str, "=@", "\\", 1);
   if (xs.size() == 2) {
-    return request_item{.type = file_data, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = file_data, .key = xs[0], .value = xs[1]};
   }
   xs = detail::split_escaped(str, "@", "\\", 1);
   if (xs.size() == 2) {
-    return request_item{.type = file_form, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = file_form, .key = xs[0], .value = xs[1]};
   }
   xs = detail::split_escaped(str, "=", "\\", 1);
   if (xs.size() == 2) {
-    return request_item{.type = data, .key = xs[0], .value = xs[1]};
+    return RequestItem{.type = data, .key = xs[0], .value = xs[1]};
   }
   return {};
 }
 
-auto apply(std::vector<request_item> items, request& req) -> caf::error {
+auto apply(std::vector<RequestItem> items, Request& req) -> caf::error {
   auto body = record{};
   for (auto& item : items) {
     switch (item.type) {
-      case request_item::header: {
+      case RequestItem::header: {
         req.headers.emplace_back(std::move(item.key), std::move(item.value));
         break;
       }
-      case request_item::data: {
+      case RequestItem::data: {
         if (req.method.empty()) {
           req.method = "POST";
         }
         body.emplace(std::move(item.key), std::move(item.value));
         break;
       }
-      case request_item::data_json: {
+      case RequestItem::data_json: {
         if (req.method.empty()) {
           req.method = "POST";
         }
@@ -469,7 +469,7 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
         body.emplace(std::move(item.key), std::move(*data));
         break;
       }
-      case request_item::url_param: {
+      case RequestItem::url_param: {
         auto pos = req.uri.find('?');
         if (pos == std::string::npos) {
           req.uri += '?';
@@ -494,9 +494,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   };
 
   // We assemble an Accept header as we go, unless we have one already.
-  auto accept = std::optional<std::vector<std::string>>{};
+  auto accept = Option<std::vector<std::string>>{};
   if (req.header("Accept") == nullptr) {
-    accept = {"*/*"};
+    accept = std::vector<std::string>{"*/*"};
   }
   // If the user provided any request body data, we default to JSON encoding.
   // The user can override this behavior by setting a Content-Type header.
@@ -542,7 +542,7 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
 
 auto compress_request_body(std::string body, std::string_view encoding,
                            diagnostic_handler& dh, location loc)
-  -> encoded_request_body {
+  -> EncodedRequestBody {
   auto normalized_encoding = normalize_content_encoding(encoding);
   if (normalized_encoding.empty()) {
     return {.body = std::move(body)};
@@ -590,7 +590,7 @@ auto compress_request_body(std::string body, std::string_view encoding,
 }
 
 auto add_request_body_headers(std::map<std::string, std::string>& headers,
-                              encoded_request_body const& body) -> void {
+                              EncodedRequestBody const& body) -> void {
   headers["Content-Length"] = fmt::to_string(body.body.size());
   if (body.content_encoding) {
     headers["Content-Encoding"] = *body.content_encoding;
@@ -715,7 +715,7 @@ auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {
 }
 
 auto next_url_from_link_headers(
-  std::vector<http::header> const& response_headers,
+  std::vector<Header> const& response_headers,
   std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
   -> Option<std::string> {
   auto base = boost::urls::parse_uri_reference(base_url);

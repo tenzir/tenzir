@@ -19,7 +19,7 @@
 namespace tenzir {
 
 struct http_header_parser : parser_base<http_header_parser> {
-  using attribute = http::header;
+  using attribute = http::Header;
 
   static auto make() {
     using namespace parser_literals;
@@ -40,7 +40,7 @@ struct http_header_parser : parser_base<http_header_parser> {
   }
 
   template <class Iterator>
-  auto parse(Iterator& f, const Iterator& l, http::header& a) const -> bool {
+  auto parse(Iterator& f, const Iterator& l, http::Header& a) const -> bool {
     static auto p = make();
     a.name.clear();
     a.value.clear();
@@ -49,7 +49,7 @@ struct http_header_parser : parser_base<http_header_parser> {
 };
 
 template <>
-struct parser_registry<http::header> {
+struct parser_registry<http::Header> {
   using type = http_header_parser;
 };
 
