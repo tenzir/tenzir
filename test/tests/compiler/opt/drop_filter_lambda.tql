@@ -1,0 +1,3 @@
+from {foo: {bar: 1}, xs: [1]}
+drop foo.bar
+where not xs.where(x => x == foo.bar).is_empty()

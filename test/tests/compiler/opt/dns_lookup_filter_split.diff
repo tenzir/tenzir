@@ -1,0 +1,112 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `domain` @ 6..12,
+               expr: constant string "tenzir.com" @ 14..26
+             }
+           ],
+           end: 26..27
+         }
+       ],
+       self: 0..4
++    },
++    where_ir {
++      self: 0..0,
++      predicate: binary_expr {
++        left: root_field {
++          id: `domain` @ 69..75,
++          has_question_mark: false
++        },
++        op: "eq" @ 76..78,
++        right: constant string "tenzir.com" @ 79..91
++      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `dns_lookup` @ 28..38
+         ],
+         ref: std::dns_lookup/op
+       },
+       desc: "dns_lookup",
+       args: [
+         expression root_field {
+           id: `domain` @ 39..45,
+           has_question_mark: false
+         }
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         {
+           index: 0,
+           value: field_path {
+             expr: root_field {
+               id: `resolved` @ 54..62,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `resolved` @ 54..62,
+                 has_question_mark: false
+               }
+             ]
+           }
+         }
+       ]
+     },
+     where_ir {
+-      self: 63..68,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `domain` @ 69..75,
+-          has_question_mark: false
+-        },
+-        op: "eq" @ 76..78,
+-        right: constant string "tenzir.com" @ 79..91
+-      }
+-    },
+-    where_ir {
+-      self: 92..97,
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `resolved` @ 98..106,
+           has_question_mark: false
+         },
+         op: "neq" @ 107..109,
+         right: constant none_t {} @ 110..114
+       }
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

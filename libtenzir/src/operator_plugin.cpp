@@ -610,20 +610,15 @@ public:
     auto noop_dh = null_diagnostic_handler{};
     auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
                            *desc_, main_location(), noop_dh};
-    auto optimization = (*desc_->optimizer)(ctx, order_);
+    auto optimization = (*desc_->optimizer)(ctx, order_, std::move(filter));
     auto replacement = std::vector<Box<Operator>>{};
     if (not optimization.drop) {
       replacement.emplace_back(std::move(*this));
     }
-    if (not optimization.propagate_filter) {
-      // Barrier: re-emit the filter as `where` operators right after this
-      // operator instead of propagating it further upstream.
-      for (auto& expr : filter) {
-        replacement.push_back(make_where_ir(expr));
-      }
-      filter = ir::optimize_filter{};
+    for (auto& expr : optimization.filter_self) {
+      replacement.push_back(make_where_ir(expr));
     }
-    return {std::move(filter), optimization.order,
+    return {std::move(optimization.filter_upstream), optimization.order,
             ir::pipeline{{}, std::move(replacement)}};
   }
 

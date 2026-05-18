@@ -1,0 +1,157 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `foo` @ 6..9,
+               expr: record {
+                 begin: 11..12,
+                 items: [
+                   field {
+                     name: `bar` @ 12..15,
+                     expr: constant int64 1 @ 17..18
+                   }
+                 ],
+                 end: 18..19
+               }
+             },
+             field {
+               name: `xs` @ 21..23,
+               expr: list {
+                 begin: 25..26,
+                 items: [
+                   expression constant int64 1 @ 26..27
+                 ],
+                 end: 27..28
+               }
+             }
+           ],
+           end: 28..29
+         }
+       ],
+       self: 0..4
+     },
+     GenericIr {
+       op: {
+         path: [
+           `drop` @ 30..34
+         ],
+         ref: std::drop/op
+       },
+       desc: "tql2.drop",
+       args: [
+         field_path {
+           expr: field_access {
+             left: root_field {
+               id: `foo` @ 35..38,
+               has_question_mark: false
+             },
+             dot: 38..39,
+             has_question_mark: false,
+             name: `bar` @ 39..42
+           },
+           has_this: false,
+           path: [
+             {
+               id: `foo` @ 35..38,
+               has_question_mark: false
+             },
+             {
+               id: `bar` @ 39..42,
+               has_question_mark: false
+             }
+           ]
+         }
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     where_ir {
+-      self: 43..48,
++      self: 0..0,
+       predicate: unary_expr {
+         op: "not_" @ 49..52,
+         expr: function_call {
+           fn: {
+             path: [
+               `is_empty` @ 81..89
+             ],
+             ref: std::is_empty/fn
+           },
+           args: [
+             function_call {
+               fn: {
+                 path: [
+                   `where` @ 56..61
+                 ],
+                 ref: std::where/fn
+               },
+               args: [
+                 root_field {
+                   id: `xs` @ 53..55,
+                   has_question_mark: false
+                 },
+                 lambda_expr {
+                   params: [
+                     `x` @ 62..63
+                   ],
+                   arrow: 64..66,
+                   body: binary_expr {
+                     left: root_field {
+                       id: `x` @ 67..68,
+                       has_question_mark: false
+                     },
+                     op: "eq" @ 69..71,
+                     right: field_access {
+                       left: root_field {
+                         id: `foo` @ 72..75,
+                         has_question_mark: false
+                       },
+                       dot: 75..76,
+                       has_question_mark: false,
+                       name: `bar` @ 76..79
+                     }
+                   }
+                 }
+               ],
+               rpar: 79..80,
+               method: true
+             }
+           ],
+           rpar: 90..91,
+           method: true
+         }
+       }
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

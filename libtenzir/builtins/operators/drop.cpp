@@ -234,7 +234,23 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.optimize([=](DescribeCtx& ctx, event_order order,
+                          ir::optimize_filter filter) -> Optimization {
+      auto touched_fields = std::vector<ast::field_path>{};
+      for (auto& field : ctx.get_all(fields)) {
+        TENZIR_ASSERT(field);
+        touched_fields.push_back(std::move(*field));
+      }
+      auto [f_upstream, f_self]
+        = ir::split_filter_by_dependents(std::move(filter), touched_fields);
+      return {
+        // invariant order
+        .order = order,
+        // split filters
+        .filter_upstream = std::move(f_upstream),
+        .filter_self = std::move(f_self),
+      };
+    });
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

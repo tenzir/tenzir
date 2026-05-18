@@ -13,6 +13,7 @@
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
+#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -166,6 +167,17 @@ struct optimize_result {
   /// What the operator shall be replaced with.
   pipeline replacement;
 };
+
+struct split_filter_result {
+  ir::optimize_filter independent;
+  ir::optimize_filter dependent;
+};
+
+/// Splits a filter chain by dependency on a set of fields.
+/// Returns independent and dependent filters.
+auto split_filter_by_dependents(ir::optimize_filter filter,
+                                std::span<const ast::field_path> fields)
+  -> split_filter_result;
 
 class SetIr final : public Operator {
 public:

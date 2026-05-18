@@ -1,0 +1,100 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `domain` @ 6..12,
+               expr: constant string "tenzir.com" @ 14..26
+             }
+           ],
+           end: 26..27
+         }
+       ],
+       self: 0..4
++    },
++    where_ir {
++      self: 0..0,
++      predicate: binary_expr {
++        left: root_field {
++          id: `domain` @ 56..62,
++          has_question_mark: false
++        },
++        op: "eq" @ 63..65,
++        right: constant string "tenzir.com" @ 66..78
++      }
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `resolved` @ 32..40,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `resolved` @ 32..40,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 41..42,
+           right: root_field {
+             id: `domain` @ 43..49,
+             has_question_mark: false
+           }
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+-      self: 50..55,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `domain` @ 56..62,
+-          has_question_mark: false
+-        },
+-        op: "eq" @ 63..65,
+-        right: constant string "tenzir.com" @ 66..78
+-      }
+-    },
+-    where_ir {
+-      self: 79..84,
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `resolved` @ 85..93,
+           has_question_mark: false
+         },
+         op: "neq" @ 94..96,
+         right: constant none_t {} @ 97..101
+       }
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
