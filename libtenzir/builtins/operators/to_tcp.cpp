@@ -64,6 +64,25 @@ constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
   return ew.is_compatible_with<folly::AsyncSocketException>();
 };
 
+// Normalizes platform-specific socket error text for user-facing diagnostics.
+// In particular, `AsyncSocketException` embeds OS-dependent errno values
+// (e.g., 111 on Linux vs. 61 on macOS) that make error messages noisy and
+// non-portable in tests.
+auto strip_errno_from_error_message(std::string message) -> std::string {
+  auto needle = std::string_view{"errno = "};
+  auto pos = message.find(needle);
+  if (pos == std::string::npos) {
+    return message;
+  }
+  auto end = message.find('(', pos);
+  if (end == std::string::npos) {
+    return message;
+  }
+  auto start = pos + needle.length();
+  message.erase(start, end - start);
+  return message;
+}
+
 struct ToTcpArgs {
   located<std::string> endpoint;
   Option<located<data>> tls;
@@ -238,7 +257,8 @@ private:
             // follow-up that covers all TCP operators.
             auto diag
               = diagnostic::warning("failed to connect to {}: {}",
-                                    address_.describe(), ex.what())
+                                    address_.describe(),
+                                    strip_errno_from_error_message(ex.what()))
                   .primary(args_.endpoint.source)
                   .hint("ensure a TCP server is listening on this endpoint");
             add_tls_client_diagnostic_hints(std::move(diag),
@@ -249,7 +269,7 @@ private:
         },
         should_retry_connect);
     } catch (folly::AsyncSocketException const& ex) {
-      diagnostic::error("{}", ex.what())
+      diagnostic::error("{}", strip_errno_from_error_message(ex.what()))
         .primary(args_.endpoint.source)
         .note("gave up after {} {}", max_retry_count,
               max_retry_count == 1 ? "retry" : "retries")
