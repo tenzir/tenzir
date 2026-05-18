@@ -33,10 +33,12 @@
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
 #include <tenzir/variant.hpp>
+#include <tenzir/view3.hpp>
 
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 #include <folly/ScopeGuard.h>
+#include <folly/String.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
@@ -52,6 +54,7 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <iterator>
 #include <limits>
@@ -88,7 +91,7 @@ struct FromHttpArgs {
 // Messages from the fetch task to the operator.
 struct ResponseHeader {
   uint16_t status;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::Header> headers;
 };
 struct ResponseBody {
   chunk_ptr data;
@@ -108,10 +111,10 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 // Builds a Proxygen request source, working around a bug in Proxygen's
 // internal makeHTTPRequestSource where IOBuf::takeOwnership arguments are
 // evaluated in unspecified order.
-auto build_request_source(
-  proxygen::URL const& url, proxygen::HTTPMethod method,
-  const std::vector<std::pair<std::string, std::string>>& headers,
-  std::unique_ptr<folly::IOBuf> body_buf) -> proxygen::coro::HTTPSourceHolder {
+auto build_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
+                          const std::vector<http::Header>& headers,
+                          std::unique_ptr<folly::IOBuf> body_buf)
+  -> proxygen::coro::HTTPSourceHolder {
   auto* source = proxygen::coro::HTTPFixedSource::makeFixedRequest(
     url.makeRelativeURL(), method, std::move(body_buf));
   for (auto const& [k, v] : headers) {
@@ -128,74 +131,97 @@ auto build_request_source(
 }
 
 struct RequestConfig {
-  proxygen::HTTPMethod method;
-  std::vector<std::pair<std::string, std::string>> headers;
+  proxygen::HTTPMethod method = proxygen::HTTPMethod::GET;
+  std::vector<http::Header> headers;
   std::vector<std::byte> body;
 };
 
-auto find_header(std::span<const std::pair<std::string, std::string>> headers,
-                 std::string_view name) -> Option<std::string> {
-  for (auto const& [header_name, value] : headers) {
-    if (detail::ascii_icase_equal(header_name, name)) {
-      return value;
-    }
+auto parse_http_method(std::string method_str) -> Option<proxygen::HTTPMethod> {
+  std::transform(method_str.begin(), method_str.end(), method_str.begin(),
+                 [](unsigned char c) {
+                   return static_cast<char>(std::toupper(c));
+                 });
+  if (auto method = proxygen::stringToMethod(method_str)) {
+    return *method;
   }
   return None{};
+}
+
+struct BodySerialization {
+  std::vector<std::byte> body;
+  Option<std::string> content_type;
+};
+
+auto serialize_body(data const& value,
+                    Option<located<std::string>> const& encode)
+  -> Option<BodySerialization> {
+  auto result = BodySerialization{};
+  auto valid = match(
+    value,
+    [&](std::string const& s) {
+      auto const* p = reinterpret_cast<std::byte const*>(s.data());
+      result.body.insert(result.body.end(), p, p + s.size());
+      return true;
+    },
+    [&](blob const& b) {
+      result.body.insert(result.body.end(), b.begin(), b.end());
+      return true;
+    },
+    [&](record const& r) {
+      if (encode and encode->inner == "form") {
+        auto buf = curl::escape(flatten(r));
+        auto const* p = reinterpret_cast<std::byte const*>(buf.data());
+        result.body.insert(result.body.end(), p, p + buf.size());
+        result.content_type = "application/x-www-form-urlencoded";
+      } else {
+        auto buf = std::string{};
+        auto printer = json_printer{{}};
+        auto out = std::back_inserter(buf);
+        printer.print(out, r);
+        auto const* p = reinterpret_cast<std::byte const*>(buf.data());
+        result.body.insert(result.body.end(), p, p + buf.size());
+        result.content_type = "application/json";
+      }
+      return true;
+    },
+    [](auto const&) {
+      return false;
+    });
+  if (not valid) {
+    return None{};
+  }
+  return result;
+}
+
+auto add_default_content_type(std::vector<http::Header>& headers,
+                              Option<std::string> content_type) -> void {
+  if (content_type and not http::find_header(headers, "content-type")) {
+    headers.emplace_back("Content-Type", content_type.unwrap());
+  }
 }
 
 // Builds the initial request configuration from the operator arguments.
 // Resolves method, serializes the body (records become JSON, blobs are sent
 // verbatim), and assembles request headers.
-auto make_request_config(
-  FromHttpArgs const& args,
-  std::vector<std::pair<std::string, std::string>> headers) -> RequestConfig {
+auto make_request_config(FromHttpArgs const& args,
+                         std::vector<http::Header> headers) -> RequestConfig {
   // Resolve HTTP method (validated at describe time).
   // Default to POST when a body is present, GET otherwise.
   auto method_str = args.method ? args.method->inner
                     : args.body ? "POST"
                                 : "GET";
-  std::transform(method_str.begin(), method_str.end(), method_str.begin(),
-                 ::toupper);
-  auto method = proxygen::stringToMethod(method_str);
+  auto method = parse_http_method(method_str);
   TENZIR_ASSERT(method);
   // Serialize the optional body. Records become JSON; blobs and strings are
   // sent verbatim.
   auto body = std::vector<std::byte>{};
-  Option<std::string> content_type;
   if (args.body) {
-    match(
-      args.body->inner,
-      [&](std::string const& s) {
-        auto const* p = reinterpret_cast<std::byte const*>(s.data());
-        body.insert(body.end(), p, p + s.size());
-      },
-      [&](blob const& b) {
-        body.insert(body.end(), b.begin(), b.end());
-      },
-      [&](record const& r) {
-        if (args.encode and args.encode->inner == "form") {
-          auto buf = curl::escape(flatten(r));
-          auto const* p = reinterpret_cast<std::byte const*>(buf.data());
-          body.insert(body.end(), p, p + buf.size());
-          content_type = "application/x-www-form-urlencoded";
-        } else {
-          auto buf = std::string{};
-          auto p = json_printer{{}};
-          auto it = std::back_inserter(buf);
-          p.print(it, r);
-          auto const* p2 = reinterpret_cast<std::byte const*>(buf.data());
-          body.insert(body.end(), p2, p2 + buf.size());
-          content_type = "application/json";
-        }
-      },
-      [](auto const&) {
-        // Other data types are rejected at describe() time.
-      });
+    auto serialized = serialize_body(args.body->inner, args.encode);
+    TENZIR_ASSERT(serialized);
+    body = std::move(serialized->body);
+    add_default_content_type(headers, std::move(serialized->content_type));
   }
-  if (content_type and not find_header(headers, "content-type")) {
-    headers.emplace_back("Content-Type", content_type.unwrap());
-  }
-  if (not find_header(headers, "accept")) {
+  if (not http::find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -207,9 +233,9 @@ auto make_request_config(
 
 // Builds the request configuration for a paginated follow-up request.
 // Always uses GET with the same headers as the original but no body.
-auto make_paginated_request_config(
-  std::vector<std::pair<std::string, std::string>> headers) -> RequestConfig {
-  if (not find_header(headers, "accept")) {
+auto make_paginated_request_config(std::vector<http::Header> headers)
+  -> RequestConfig {
+  if (not http::find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -219,9 +245,9 @@ auto make_paginated_request_config(
   };
 }
 
-auto resolve_http_secrets(
-  OpCtx& ctx, FromHttpArgs const& args, std::string& resolved_url,
-  std::vector<std::pair<std::string, std::string>>& resolved_headers)
+auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
+                          std::string& resolved_url,
+                          std::vector<http::Header>& resolved_headers)
   -> Task<failure_or<bool>> {
   resolved_url.clear();
   auto requests = std::vector<secret_request>{};
@@ -358,19 +384,156 @@ auto resolve_next_url(std::string_view next_url, std::string const& base_url,
   return Option<std::string>{std::string{resolved.buffer()}};
 }
 
-auto next_url_from_lambda(Option<pagination_spec> const& paginate,
-                          table_slice const& slice, std::string const& base_url,
-                          diagnostic_handler& dh) -> Option<std::string> {
-  if (not paginate) {
+struct NextRequest {
+  std::string url;
+  RequestConfig request;
+};
+
+struct PaginationState {
+  Option<pagination_spec> spec;
+  int64_t page_count = 0;
+  std::string current_url;
+  RequestConfig current_request;
+  Option<NextRequest> next_request;
+  bool odata_envelope_seen = false;
+};
+
+struct PaginationRequestContext {
+  pagination_spec const& spec;
+  std::string const& current_url;
+  RequestConfig const& current_request;
+  std::vector<http::Header> const& paginated_headers;
+  Option<located<std::string>> const& encode;
+};
+
+auto emit_paginate_record_warning(std::string message, location paginate_loc,
+                                  diagnostic_handler& dh) -> void {
+  diagnostic::warning("{}", message)
+    .primary(paginate_loc)
+    .note("stopping pagination")
+    .emit(dh);
+}
+
+auto is_paginate_request_field(std::string_view field) -> bool {
+  return field == "url" or field == "method" or field == "headers"
+         or field == "body";
+}
+
+auto next_request_from_record(record const& patch,
+                              PaginationRequestContext const& context,
+                              diagnostic_handler& dh) -> Option<NextRequest> {
+  if (patch.empty()) {
+    emit_paginate_record_warning("`paginate` request record must not be empty",
+                                 context.spec.source, dh);
     return None{};
   }
-  auto const* lambda = try_as<ast::lambda_expr>(&paginate->inner);
+  for (auto const& [field, _] : patch) {
+    if (not is_paginate_request_field(field)) {
+      emit_paginate_record_warning(
+        fmt::format("unknown field `{}` in `paginate` request record", field),
+        context.spec.source, dh);
+      return None{};
+    }
+  }
+  auto url = context.current_url;
+  auto request = context.current_request;
+  if (auto it = patch.find("url"); it != patch.end()) {
+    auto const* next_url = try_as<std::string>(&it->second);
+    if (not next_url) {
+      emit_paginate_record_warning("`paginate` request field `url` must be "
+                                   "`string`",
+                                   context.spec.source, dh);
+      return None{};
+    }
+    if (auto resolved
+        = resolve_next_url(*next_url, context.current_url, context.spec.source,
+                           dh, NextUrlSource::paginate_lambda)) {
+      url = std::move(*resolved);
+    } else {
+      return None{};
+    }
+  }
+  if (auto it = patch.find("method"); it != patch.end()) {
+    auto const* method_str = try_as<std::string>(&it->second);
+    if (not method_str) {
+      emit_paginate_record_warning("`paginate` request field `method` must be "
+                                   "`string`",
+                                   context.spec.source, dh);
+      return None{};
+    }
+    auto method = parse_http_method(*method_str);
+    if (not method) {
+      emit_paginate_record_warning(
+        fmt::format("invalid HTTP method in `paginate` request record: `{}`",
+                    *method_str),
+        context.spec.source, dh);
+      return None{};
+    }
+    request.method = *method;
+  }
+  if (auto it = patch.find("body"); it != patch.end()) {
+    if (is<caf::none_t>(it->second)) {
+      request.body.clear();
+    } else if (auto serialized = serialize_body(it->second, context.encode)) {
+      request.body = std::move(serialized->body);
+      add_default_content_type(request.headers,
+                               std::move(serialized->content_type));
+    } else {
+      emit_paginate_record_warning("`paginate` request field `body` must be "
+                                   "`blob`, `record`, `string`, "
+                                   "or `null`",
+                                   context.spec.source, dh);
+      return None{};
+    }
+  }
+  if (auto it = patch.find("headers"); it != patch.end()) {
+    auto const* headers = try_as<record>(&it->second);
+    if (not headers) {
+      emit_paginate_record_warning("`paginate` request field `headers` must be "
+                                   "`record`",
+                                   context.spec.source, dh);
+      return None{};
+    }
+    for (auto const& [name, value] : *headers) {
+      if (is<caf::none_t>(value)) {
+        http::erase_header(request.headers, name);
+      } else if (auto const* str = try_as<std::string>(&value)) {
+        http::set_header(request.headers, name, *str);
+      } else {
+        emit_paginate_record_warning("`paginate` request header values must be "
+                                     "`string` or `null`",
+                                     context.spec.source, dh);
+        return None{};
+      }
+    }
+  }
+  return NextRequest{.url = std::move(url), .request = std::move(request)};
+}
+
+auto next_request_from_url(std::string_view url,
+                           PaginationRequestContext const& context,
+                           diagnostic_handler& dh) -> Option<NextRequest> {
+  if (auto resolved
+      = resolve_next_url(url, context.current_url, context.spec.source, dh,
+                         NextUrlSource::paginate_lambda)) {
+    return NextRequest{
+      .url = std::move(*resolved),
+      .request = make_paginated_request_config(context.paginated_headers),
+    };
+  }
+  return None{};
+}
+
+auto next_request_from_lambda(PaginationRequestContext const& context,
+                              table_slice const& slice, diagnostic_handler& dh)
+  -> Option<NextRequest> {
+  auto const* lambda = try_as<ast::lambda_expr>(&context.spec.inner);
   if (not lambda) {
     return None{};
   }
   if (slice.rows() != 1) {
     diagnostic::warning("cannot paginate over multiple events")
-      .primary(*paginate)
+      .primary(context.spec)
       .note("stopping pagination")
       .emit(dh);
     return None{};
@@ -379,17 +542,20 @@ auto next_url_from_lambda(Option<pagination_spec> const& paginate,
   auto value = ms.view3_at(0);
   return match(
     value,
-    [](caf::none_t const&) -> Option<std::string> {
+    [](caf::none_t const&) -> Option<NextRequest> {
       return None{};
     },
-    [&](std::string_view url) -> Option<std::string> {
-      return resolve_next_url(url, base_url, paginate->source, dh,
-                              NextUrlSource::paginate_lambda);
+    [&](std::string_view url) -> Option<NextRequest> {
+      return next_request_from_url(url, context, dh);
     },
-    [&](auto const&) -> Option<std::string> {
-      diagnostic::error("expected `paginate` to be `string`, got `{}`",
+    [&](view3<record> req) -> Option<NextRequest> {
+      return next_request_from_record(materialize(req), context, dh);
+    },
+    [&](auto const&) -> Option<NextRequest> {
+      diagnostic::error("expected `paginate` to be `string`, `record`, or "
+                        "`null`, got `{}`",
                         ms.parts().front().type.kind())
-        .primary(*paginate)
+        .primary(context.spec)
         .emit(dh);
       return None{};
     });
@@ -442,15 +608,9 @@ auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
   return config;
 }
 
-struct PaginationState {
-  int64_t page_count = 0;
-  std::string current_url;
-  Option<std::string> next_url;
-};
-
 struct ResponseState {
   uint16_t status;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::Header> headers;
   Option<std::string> content_encoding;
   std::shared_ptr<arrow::util::Decompressor> decompressor;
   blob error_body;
@@ -471,23 +631,19 @@ auto make_response_context(ResponseState const& response) -> record {
   };
 }
 
-// Normalizes platform-specific socket error text for user-facing diagnostics.
-// In particular, `AsyncSocketException` embeds OS-dependent errno values
-// (e.g., 111 on Linux vs. 61 on macOS) that make error messages noisy and
-// non-portable in tests.
-auto strip_errno_from_error_message(std::string message) -> std::string {
-  auto needle = std::string_view{"errno = "};
-  auto pos = message.find(needle);
-  if (pos == std::string::npos) {
-    return message;
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
   }
-  auto end = message.find('(', pos);
-  if (end == std::string::npos) {
-    return message;
+  return ex.what();
+}
+
+auto describe_fetch_error(folly::exception_wrapper const& ew) -> std::string {
+  if (auto const* ex = ew.get_exception<folly::AsyncSocketException>()) {
+    return describe_socket_error(*ex);
   }
-  auto start = pos + needle.length();
-  message.erase(start, end - start);
-  return message;
+  return ew.what().toStdString();
 }
 
 auto path_from_url(std::string_view url) -> std::string {
@@ -508,10 +664,9 @@ auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
 }
 
 struct retryable_http_response : std::runtime_error {
-  retryable_http_response(
-    uint16_t status_code,
-    std::vector<std::pair<std::string, std::string>> headers,
-    Option<std::chrono::seconds> retry_after)
+  retryable_http_response(uint16_t status_code,
+                          std::vector<http::Header> headers,
+                          Option<std::chrono::seconds> retry_after)
     : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
       status_code{status_code},
       headers{std::move(headers)},
@@ -519,7 +674,7 @@ struct retryable_http_response : std::runtime_error {
   }
 
   uint16_t status_code = 0;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::Header> headers;
   Option<std::chrono::seconds> retry_after;
   blob body;
 };
@@ -590,7 +745,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   // response headers.
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                auto hdrs = std::vector<std::pair<std::string, std::string>>{};
+                auto hdrs = std::vector<http::Header>{};
                 msg->getHeaders().forEach([&](std::string& k, std::string& v) {
                   hdrs.emplace_back(k, v);
                 });
@@ -691,7 +846,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           }
         } else {
           co_await mq->enqueue(
-            FetchError{result.exception().what().toStdString()});
+            FetchError{describe_fetch_error(result.exception())});
         }
       }
       co_await mq->enqueue(FetchDone{});
@@ -715,7 +870,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    paginate_ = std::move(*paginate);
+    pagination_.spec = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
     auto secret_resolution = co_await resolve_http_secrets(
@@ -729,7 +884,8 @@ public:
     fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
     ensure_http_default_ca_paths();
-    co_await start_fetch(ctx, make_request_config(args_, resolved_headers_));
+    pagination_.current_request = make_request_config(args_, resolved_headers_);
+    co_await start_fetch(ctx, pagination_.current_request);
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -747,7 +903,7 @@ public:
       [&](ResponseHeader hdr) -> Task<void> {
         auto headers = std::move(hdr.headers);
         auto content_encoding = Option<std::string>{};
-        if (auto value = find_header(headers, "content-encoding")) {
+        if (auto value = http::find_header(headers, "content-encoding")) {
           auto trimmed = std::string{detail::trim(*value)};
           if (not trimmed.empty()) {
             content_encoding = std::move(trimmed);
@@ -772,14 +928,18 @@ public:
           if (lifecycle_ == Lifecycle::done) {
             co_return;
           }
-          if (auto mode = builtin_pagination_mode(paginate_);
+          if (auto mode = builtin_pagination_mode(pagination_.spec);
               mode and *mode == http::PaginationMode::link) {
-            TENZIR_ASSERT(paginate_);
+            TENZIR_ASSERT(pagination_.spec);
             // Extract the rel=next URL for link pagination.
-            pagination_.next_url
-              = http::next_url_from_link_headers(response_->headers,
-                                                 pagination_.current_url,
-                                                 paginate_->source, ctx.dh());
+            if (auto next_url = http::next_url_from_link_headers(
+                  response_->headers, pagination_.current_url,
+                  pagination_.spec->source, ctx.dh())) {
+              pagination_.next_request = NextRequest{
+                .url = std::move(*next_url),
+                .request = make_paginated_request_config(resolved_headers_),
+              };
+            }
           }
         } else {
           if (not args_.error_field) {
@@ -827,12 +987,11 @@ public:
       },
       // --- FetchError ---
       [&](FetchError err) -> Task<void> {
-        diagnostic::error(
-          "HTTP request to `{}` failed: {}", pagination_.current_url,
-          strip_errno_from_error_message(std::move(err.message)))
+        diagnostic::error("HTTP request to `{}` failed: {}",
+                          pagination_.current_url, err.message)
           .primary(args_.operator_location)
           .emit(ctx);
-        pagination_.next_url = None{};
+        pagination_.next_request = None{};
         lifecycle_ = Lifecycle::done;
         co_return;
       },
@@ -861,21 +1020,27 @@ public:
 
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
-    if (auto mode = builtin_pagination_mode(paginate_);
+    if (auto mode = builtin_pagination_mode(pagination_.spec);
         mode and *mode == http::PaginationMode::odata) {
-      TENZIR_ASSERT(paginate_);
-      auto page = http::extract_odata_page(slice, paginate_->source, ctx.dh());
+      TENZIR_ASSERT(pagination_.spec);
+      auto page
+        = http::extract_odata_page(slice, pagination_.spec->source, ctx.dh());
       if (not page) {
         lifecycle_ = Lifecycle::done;
         co_return;
       }
-      odata_envelope_seen_ = true;
-      pagination_.next_url
-        = page->next_url
-            ? resolve_next_url(*page->next_url, pagination_.current_url,
-                               paginate_->source, ctx.dh(),
-                               NextUrlSource::odata_next_link)
-            : None{};
+      pagination_.odata_envelope_seen = true;
+      if (page->next_url) {
+        if (auto next_url
+            = resolve_next_url(*page->next_url, pagination_.current_url,
+                               pagination_.spec->source, ctx.dh(),
+                               NextUrlSource::odata_next_link)) {
+          pagination_.next_request = NextRequest{
+            .url = std::move(*next_url),
+            .request = make_paginated_request_config(resolved_headers_),
+          };
+        }
+      }
       for (auto& event_slice : page->events) {
         auto const rows = event_slice.rows();
         co_await push(std::move(event_slice));
@@ -883,10 +1048,16 @@ public:
       }
       co_return;
     }
-    if (not pagination_.next_url) {
-      if (auto next = next_url_from_lambda(paginate_, slice,
-                                           pagination_.current_url, ctx.dh())) {
-        pagination_.next_url = std::move(*next);
+    if (not pagination_.next_request and pagination_.spec) {
+      auto context = PaginationRequestContext{
+        .spec = *pagination_.spec,
+        .current_url = pagination_.current_url,
+        .current_request = pagination_.current_request,
+        .paginated_headers = resolved_headers_,
+        .encode = args_.encode,
+      };
+      if (auto next = next_request_from_lambda(context, slice, ctx.dh())) {
+        pagination_.next_request = std::move(*next);
       }
     }
     auto const rows = slice.rows();
@@ -896,22 +1067,24 @@ public:
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    if (auto mode = builtin_pagination_mode(paginate_);
+    if (auto mode = builtin_pagination_mode(pagination_.spec);
         mode and *mode == http::PaginationMode::odata
-        and not odata_envelope_seen_ and response_
+        and not pagination_.odata_envelope_seen and response_
         and response_->is_success()) {
-      TENZIR_ASSERT(paginate_);
+      TENZIR_ASSERT(pagination_.spec);
       diagnostic::error(
         "expected OData response body to contain a top-level `value` array")
-        .primary(paginate_->source)
+        .primary(pagination_.spec->source)
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    if (pagination_.next_url) {
+    if (pagination_.next_request) {
       // next page
-      pagination_.current_url = std::move(*pagination_.next_url);
-      pagination_.next_url = None{};
+      auto next = std::move(*pagination_.next_request);
+      pagination_.current_url = std::move(next.url);
+      pagination_.current_request = std::move(next.request);
+      pagination_.next_request = None{};
       pagination_.page_count += 1;
       if (args_.paginate_delay
           and args_.paginate_delay->inner > duration::zero()) {
@@ -919,8 +1092,7 @@ public:
           std::chrono::duration_cast<std::chrono::steady_clock::duration>(
             args_.paginate_delay->inner));
       }
-      co_await start_fetch(ctx,
-                           make_paginated_request_config(resolved_headers_));
+      co_await start_fetch(ctx, pagination_.current_request);
     } else {
       lifecycle_ = Lifecycle::done;
     }
@@ -938,7 +1110,7 @@ private:
   // Requires pagination_.current_url and pagination_.page_count to be set.
   auto start_fetch(OpCtx& ctx, RequestConfig request) -> Task<void> {
     response_ = None{};
-    odata_envelope_seen_ = false;
+    pagination_.odata_envelope_seen = false;
     auto parsed_url = proxygen::URL{pagination_.current_url};
     if (parsed_url.isSecure() and not fetch_config_.tls_context) {
       auto tls_opts
@@ -985,7 +1157,7 @@ private:
       }
     } else {
       auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
-      if (auto value = find_header(response_->headers, "content-type");
+      if (auto value = http::find_header(response_->headers, "content-type");
           value and not detail::trim(*value).empty()) {
         auto content_type = std::string{detail::trim(*value)};
         plugin = read_plugin_for_content_type(content_type);
@@ -1047,14 +1219,12 @@ private:
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
-  std::vector<std::pair<std::string, std::string>> resolved_headers_;
-  Option<pagination_spec> paginate_;
+  std::vector<http::Header> resolved_headers_;
   // --- state ---
   Lifecycle lifecycle_{};
   PaginationState pagination_;
   // State collected per response page; absent before first response header.
   Option<ResponseState> response_;
-  bool odata_envelope_seen_ = false;
 };
 
 class from_http_plugin final : public virtual OperatorPlugin {
@@ -1106,12 +1276,16 @@ public:
       }
       // Validate encode: requires a body and must be "json" or "form".
       auto body_loc = ctx.get_location(body_arg);
+      auto paginate_expr = ctx.get(paginate_arg);
+      auto paginate_is_lambda
+        = paginate_expr and try_as<ast::lambda_expr>(*paginate_expr);
       if (auto encode_loc = ctx.get_location(encode_arg)) {
-        if (not body_loc) {
+        if (not body_loc and not paginate_is_lambda) {
           diagnostic::error("`encode` requires a `body`")
             .primary(*encode_loc)
             .emit(ctx);
-        } else if (auto encode = ctx.get(encode_arg)) {
+        }
+        if (auto encode = ctx.get(encode_arg)) {
           if (encode->inner != "json" and encode->inner != "form") {
             diagnostic::error("unsupported encoding: `{}`", encode->inner)
               .hint(R"(`encode` must be `"json"` or `"form"`)")
@@ -1201,7 +1375,7 @@ public:
             .emit(ctx);
         }
       }
-      if (auto paginate_expr = ctx.get(paginate_arg)) {
+      if (paginate_expr) {
         auto validated
           = validate_paginate(Option<ast::expression>{*paginate_expr}, ctx);
         if (not validated) {

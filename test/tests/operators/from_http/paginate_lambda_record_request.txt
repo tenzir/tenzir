@@ -1,0 +1,75 @@
+{
+  page: 1,
+  method: "POST",
+  path: "/paginate/record/1",
+  body: {
+    page: 1,
+  },
+  headers: {
+    x_secret: "keep",
+    x_override: "old",
+    x_delete: "gone",
+    x_added: null,
+  },
+  next: {
+    url: "/paginate/record/2",
+    body: {
+      page: 2,
+    },
+    headers: {
+      "x-override": "new",
+      "X-Added": "yes",
+      "X-Delete": null,
+    },
+  },
+}
+{
+  page: 2,
+  method: "POST",
+  path: "/paginate/record/2",
+  body: {
+    page: 2,
+  },
+  headers: {
+    x_secret: "keep",
+    x_override: "new",
+    x_delete: null,
+    x_added: "yes",
+  },
+  next: {
+    url: "/paginate/record/3",
+    headers: {
+      "x-added": null,
+    },
+  },
+}
+{
+  page: 3,
+  method: "POST",
+  path: "/paginate/record/3",
+  body: {
+    page: 2,
+  },
+  headers: {
+    x_secret: "keep",
+    x_override: "new",
+    x_delete: null,
+    x_added: null,
+  },
+  next: {
+    body: null,
+  },
+}
+{
+  page: 4,
+  method: "POST",
+  path: "/paginate/record/3",
+  body: null,
+  headers: {
+    x_secret: "keep",
+    x_override: "new",
+    x_delete: null,
+    x_added: null,
+  },
+  next: null,
+}

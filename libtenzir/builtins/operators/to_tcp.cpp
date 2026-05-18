@@ -26,9 +26,11 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/SocketAddress.h>
+#include <folly/String.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/Transport.h>
 
 #include <limits>
@@ -63,6 +65,14 @@ constexpr auto message_queue_capacity = uint32_t{10};
 constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
   return ew.is_compatible_with<folly::AsyncSocketException>();
 };
+
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
+  }
+  return ex.what();
+}
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -245,7 +255,8 @@ private:
             // follow-up that covers all TCP operators.
             auto diag
               = diagnostic::warning("failed to connect to {}: {}",
-                                    address_.describe(), ex.what())
+                                    address_.describe(),
+                                    describe_socket_error(ex))
                   .primary(args_.endpoint.source)
                   .hint("ensure a TCP server is listening on this endpoint");
             add_tls_client_diagnostic_hints(std::move(diag),
@@ -256,7 +267,8 @@ private:
         },
         should_retry_connect);
     } catch (folly::AsyncSocketException const& ex) {
-      diagnostic::error("{}", ex.what())
+      diagnostic::error("failed to connect to {}: {}", address_.describe(),
+                        describe_socket_error(ex))
         .primary(args_.endpoint.source)
         .note("gave up after {} {}", max_retry_count,
               max_retry_count == 1 ? "retry" : "retries")

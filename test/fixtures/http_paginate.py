@@ -11,7 +11,14 @@ Exports:
   HTTP_FIXTURE_LINK_UNREACHABLE_URL  — 204 with Link pointing to port 9 (always refused)
   HTTP_FIXTURE_RETRY_FLAKY_URL       — drops first 2 connections, then returns JSON
   HTTP_FIXTURE_LAMBDA_URL            — page chain where body carries `next` URL
+  HTTP_FIXTURE_RECORD_URL            — page chain where body carries next request records
+  HTTP_FIXTURE_RECORD_GET_BODY_URL   — next request record body inherits GET method
+  HTTP_FIXTURE_RECORD_METHOD_URL     — next request record explicitly changes method
   HTTP_FIXTURE_LARGE_ERROR_URL       — HTTP 500 with large streaming response body
+  HTTP_FIXTURE_RECORD_UNKNOWN_URL    — next request record with an unknown field
+  HTTP_FIXTURE_RECORD_TYPE_URL       — next request record with an invalid field type
+  HTTP_FIXTURE_RECORD_EMPTY_URL      — empty next request record
+  HTTP_FIXTURE_MULTI_EVENT_URL       — page body with multiple parsed events
   HTTP_FIXTURE_META_LAMBDA_URL        — next URL carried in X-Next-Page header (tests
                                         that pagination lambdas can read metadata_field)
   HTTP_FIXTURE_ODATA_USERS_URL        — Microsoft Graph-shaped OData collection pages
@@ -44,6 +51,17 @@ _UNREACHABLE_PAGE = "/paginate/unreachable/1"
 _RETRY_FLAKY_PAGE = "/paginate/retry/flaky"
 _LAMBDA_PAGE_1 = "/paginate/lambda/1"
 _LAMBDA_PAGE_2 = "/paginate/lambda/2"
+_RECORD_PAGE_1 = "/paginate/record/1"
+_RECORD_PAGE_2 = "/paginate/record/2"
+_RECORD_PAGE_3 = "/paginate/record/3"
+_RECORD_GET_BODY_PAGE_1 = "/paginate/record-get-body/1"
+_RECORD_GET_BODY_PAGE_2 = "/paginate/record-get-body/2"
+_RECORD_METHOD_PAGE_1 = "/paginate/record-method/1"
+_RECORD_METHOD_PAGE_2 = "/paginate/record-method/2"
+_RECORD_UNKNOWN_PAGE = "/paginate/record-bad/unknown"
+_RECORD_TYPE_PAGE = "/paginate/record-bad/type"
+_RECORD_EMPTY_PAGE = "/paginate/record-bad/empty"
+_MULTI_EVENT_PAGE = "/paginate/multi-event"
 _LARGE_ERROR_PAGE = "/paginate/error/large"
 _META_LAMBDA_PAGE_1 = "/paginate/meta-lambda/1"
 _META_LAMBDA_PAGE_2 = "/paginate/meta-lambda/2"
@@ -106,11 +124,132 @@ class _Handler(BaseHTTPRequestHandler):
         if body:
             self.wfile.write(body)
 
+    def _read_body(self) -> bytes:
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length == 0:
+            return b""
+        return self.rfile.read(length)
+
+    def _read_json_body(self) -> object:
+        body = self._read_body()
+        if not body:
+            return None
+        try:
+            return json.loads(body.decode())
+        except json.JSONDecodeError:
+            return body.decode(errors="replace")
+
+    def _observed_event(self, page: int, body: object, next_value: object) -> bytes:
+        event = {
+            "page": page,
+            "method": self.command,
+            "path": self.path.split("?", 1)[0],
+            "body": body,
+            "headers": {
+                "x_secret": self.headers.get("X-Secret"),
+                "x_override": self.headers.get("X-Override"),
+                "x_delete": self.headers.get("X-Delete"),
+                "x_added": self.headers.get("X-Added"),
+            },
+            "next": next_value,
+        }
+        return json.dumps(event).encode()
+
+    def _handle_record_page(self, path: str) -> bool:
+        if path == _RECORD_PAGE_1:
+            body = self._read_json_body()
+            next_value = {
+                "url": _RECORD_PAGE_2,
+                "body": {"page": 2},
+                "headers": {
+                    "x-override": "new",
+                    "X-Added": "yes",
+                    "X-Delete": None,
+                },
+            }
+            self._reply(self._observed_event(1, body, next_value))
+            return True
+        if path == _RECORD_PAGE_2:
+            body = self._read_json_body()
+            if body == {"page": 2}:
+                next_value = {
+                    "url": _RECORD_PAGE_3,
+                    "headers": {
+                        "x-added": None,
+                    },
+                }
+                self._reply(self._observed_event(2, body, next_value))
+                return True
+        if path == _RECORD_PAGE_3:
+            body = self._read_json_body()
+            if body == {"page": 2}:
+                next_value = {
+                    "body": None,
+                }
+                self._reply(self._observed_event(3, body, next_value))
+                return True
+            if body is None:
+                self._reply(self._observed_event(4, body, None))
+                return True
+        return False
+
+    def _handle_record_method_page(self, path: str) -> bool:
+        if path == _RECORD_METHOD_PAGE_1:
+            body = self._read_json_body()
+            next_value = {
+                "url": _RECORD_METHOD_PAGE_2,
+                "method": "post",
+                "body": "hello-from-post",
+            }
+            self._reply(self._observed_event(1, body, next_value))
+            return True
+        if path == _RECORD_METHOD_PAGE_2:
+            body = self._read_json_body()
+            self._reply(self._observed_event(2, body, None))
+            return True
+        return False
+
     def do_GET(self) -> None:  # noqa: N802
         from urllib.parse import parse_qs, urlsplit
 
         parts = urlsplit(self.path)
         path = parts.path
+        if path == _RECORD_GET_BODY_PAGE_1:
+            next_value = {
+                "url": _RECORD_GET_BODY_PAGE_2,
+                "body": {"hello": "from-get"},
+            }
+            self._reply(self._observed_event(1, None, next_value))
+            return
+        if path == _RECORD_GET_BODY_PAGE_2:
+            self._reply(self._observed_event(2, self._read_json_body(), None))
+            return
+        if self._handle_record_method_page(path):
+            return
+        if path == _RECORD_UNKNOWN_PAGE:
+            next_value = {
+                "url": _RECORD_PAGE_2,
+                "unexpected": "field",
+            }
+            self._reply(self._observed_event(1, None, next_value))
+            return
+        if path == _RECORD_TYPE_PAGE:
+            next_value = {
+                "url": 42,
+            }
+            self._reply(self._observed_event(1, None, next_value))
+            return
+        if path == _RECORD_EMPTY_PAGE:
+            self._reply(self._observed_event(1, None, {}))
+            return
+        if path == _MULTI_EVENT_PAGE:
+            self._reply(
+                (
+                    f'{{"page":1,"next":"{_LAMBDA_PAGE_2}"}}\n'
+                    f'{{"page":2,"next":"{_LAMBDA_PAGE_2}"}}\n'
+                ).encode()
+            )
+            return
         # Chain pagination: /paginate/chain/<n>
         if path.startswith(_CHAIN_PREFIX):
             page_str = path.removeprefix(_CHAIN_PREFIX)
@@ -272,6 +411,16 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def do_POST(self) -> None:  # noqa: N802
+        from urllib.parse import urlsplit
+
+        path = urlsplit(self.path).path
+        if self._handle_record_page(path):
+            return
+        if self._handle_record_method_page(path):
+            return
+        self.send_error(404)
+
     def log_message(self, *_: object) -> None:  # noqa: D401
         return
 
@@ -294,7 +443,14 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_LINK_UNREACHABLE_URL": f"{base}{_UNREACHABLE_PAGE}",
             "HTTP_FIXTURE_RETRY_FLAKY_URL": f"{base}{_RETRY_FLAKY_PAGE}",
             "HTTP_FIXTURE_LAMBDA_URL": f"{base}{_LAMBDA_PAGE_1}",
+            "HTTP_FIXTURE_RECORD_URL": f"{base}{_RECORD_PAGE_1}",
+            "HTTP_FIXTURE_RECORD_GET_BODY_URL": f"{base}{_RECORD_GET_BODY_PAGE_1}",
+            "HTTP_FIXTURE_RECORD_METHOD_URL": f"{base}{_RECORD_METHOD_PAGE_1}",
             "HTTP_FIXTURE_LARGE_ERROR_URL": f"{base}{_LARGE_ERROR_PAGE}",
+            "HTTP_FIXTURE_RECORD_UNKNOWN_URL": f"{base}{_RECORD_UNKNOWN_PAGE}",
+            "HTTP_FIXTURE_RECORD_TYPE_URL": f"{base}{_RECORD_TYPE_PAGE}",
+            "HTTP_FIXTURE_RECORD_EMPTY_URL": f"{base}{_RECORD_EMPTY_PAGE}",
+            "HTTP_FIXTURE_MULTI_EVENT_URL": f"{base}{_MULTI_EVENT_PAGE}",
             "HTTP_FIXTURE_META_LAMBDA_URL": f"{base}{_META_LAMBDA_PAGE_1}",
             "HTTP_FIXTURE_ODATA_USERS_URL": f"{base}{_ODATA_PAGE_1}",
             "HTTP_FIXTURE_ODATA_RELATIVE_USERS_URL": (
