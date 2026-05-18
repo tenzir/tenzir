@@ -1121,7 +1121,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadPcapArgs, ReadPcap>{};
     d.named("emit_file_headers", &ReadPcapArgs::emit_file_headers);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -1148,7 +1148,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WritePcapArgs, WritePcap>{};
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto write_properties() const -> write_properties_t override {

@@ -1428,7 +1428,7 @@ public:
         return {};
       });
     d.optimization_order(&ReadXsvArgs::order);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 
@@ -1499,7 +1499,7 @@ public:
       return {};
     });
     d.optimization_order(&ReadXsvArgs::order);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -1543,7 +1543,7 @@ public:
                                      {"null_value", nv}});
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 
@@ -1605,7 +1605,7 @@ public:
                                       {"null_value", effective_nv}});
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto write_properties() const -> write_properties_t override {

@@ -905,7 +905,7 @@ public:
       msb(ctx);
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -980,7 +980,7 @@ public:
       (void)check_non_empty("list_separator", ls, dh);
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

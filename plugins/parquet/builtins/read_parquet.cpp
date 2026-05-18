@@ -161,7 +161,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReadParquetArgs, ReadParquet>{};
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 

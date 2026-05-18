@@ -370,7 +370,7 @@ public:
     auto d = Describer<ReadTqlArgs, ReadTql>{};
     auto msb = add_msb_to_describer(d, &ReadTqlArgs::msb_options);
     d.validate(msb);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 

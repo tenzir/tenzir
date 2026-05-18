@@ -508,7 +508,7 @@ public:
     d.validate(add_msb_to_describer(d, &ReadLeefArgs::msb_options));
     d.operator_location(&ReadLeefArgs::operator_location);
     d.optimization_order(&ReadLeefArgs::order);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

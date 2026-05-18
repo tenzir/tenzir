@@ -933,7 +933,7 @@ public:
                            std::move(opts), ctx);
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

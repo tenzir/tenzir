@@ -535,7 +535,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadBitzArgs, ReadBitz>{};
     d.operator_location(&ReadBitzArgs::operator_location);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -559,7 +559,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<WriteBitzArgs, WriteBitz>{};
     d.operator_location(&WriteBitzArgs::operator_location);
-    return d.invariant_order();
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

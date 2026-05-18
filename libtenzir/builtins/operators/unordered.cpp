@@ -9,6 +9,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/panic.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -49,27 +50,29 @@ public:
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order /*order*/) && -> ir::optimize_result override {
-    auto opt = std::move(pipeline_).optimize(std::move(filter),
-                                             event_order::unordered);
-    // reconstruct unordered back from replacement
-    auto inner = ir::pipeline{};
-    inner.operators.insert(
-      inner.operators.begin(),
-      std::move_iterator{opt.replacement.operators.begin()},
-      std::move_iterator{opt.replacement.operators.end()});
-    opt.replacement = ir::pipeline{};
-    opt.replacement.operators.emplace_back(UnorderedIr{std::move(inner), loc_});
-    return opt;
+                event_order /* order */) && -> ir::optimize_result override {
+    // Optimize each sub-operator individually, always passing unordered.
+    // The UnorderedIr node dissolves; its operators are emitted directly.
+    auto replacement = ir::pipeline{std::move(pipeline_.lets), {}};
+    for (auto& op : std::ranges::reverse_view(pipeline_.operators)) {
+      auto opt
+        = std::move(*op).optimize(std::move(filter), event_order::unordered);
+      filter = std::move(opt.filter);
+      replacement.operators.insert(
+        replacement.operators.begin(),
+        std::move_iterator{opt.replacement.operators.begin()},
+        std::move_iterator{opt.replacement.operators.end()});
+    }
+    return {
+      std::move(filter),
+      event_order::unordered,
+      std::move(replacement),
+    };
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(pipeline_.operators.size() == 1);
-    return std::move(*pipeline_.operators[0]).spawn(input);
-  }
-
-  auto move() && -> Box<ir::Operator> override {
-    return UnorderedIr{std::move(*this)};
+  auto spawn(element_type_tag /*input*/) && -> AnyOperator override {
+    // UnorderedIr dissolves during optimization; spawn should not be called.
+    panic("UnorderedIr::spawn called after optimization dissolved the node");
   }
 
   friend auto inspect(auto& f, UnorderedIr& x) -> bool {

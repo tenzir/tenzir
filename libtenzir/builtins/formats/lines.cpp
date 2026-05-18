@@ -720,7 +720,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 
@@ -870,7 +870,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 
