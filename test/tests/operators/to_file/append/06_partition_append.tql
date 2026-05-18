@@ -1,0 +1,10 @@
+// Append into per-partition files. Two events for `region=us` and one for
+// `region=eu` land in separate stable paths (no `{uuid}`), so each partition
+// gets its own file.
+from {region: "us", val: "a"},
+     {region: "us", val: "b"},
+     {region: "eu", val: "c"}
+to_file env("FILE_ROOT") + "/out/append/by_region/**/data.json",
+        partition_by=[region], append=true {
+  write_ndjson
+}

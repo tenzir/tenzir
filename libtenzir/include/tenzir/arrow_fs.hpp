@@ -460,6 +460,18 @@ protected:
   virtual auto setup_args(ToArrowFsArgs& args, OpCtx& ctx)
     -> Task<failure_or<void>>;
 
+  /// Whether the operator should open output streams in append mode rather
+  /// than truncating. The returned `Option<location>` carries the source
+  /// location of the user-facing `append` argument so diagnostics can point
+  /// at it. Only derived operators that target filesystems with efficient
+  /// append support (currently local FS and Azure Blob) should override
+  /// this; Arrow's S3 and GCS backends reject `OpenAppendStream` with
+  /// `NotImplemented`. With a `{uuid}` placeholder in the path the flag is
+  /// effectively a no-op, since every rotation produces a fresh filename.
+  virtual auto append() const -> Option<location> {
+    return {};
+  }
+
   auto filesystem() const -> FileSystemPtr const& {
     return fs_;
   }

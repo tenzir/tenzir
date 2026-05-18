@@ -186,7 +186,7 @@ auto FsUrlTemplate::has_uuid() const -> bool {
 }
 
 void FsUrlTemplate::set_path(std::string path, location url_loc,
-                             diagnostic_handler& dh) {
+                             Option<location> append, diagnostic_handler& dh) {
   for (auto const& r : replacements_) {
     replace_all(path, r.token, r.original);
   }
@@ -203,7 +203,9 @@ void FsUrlTemplate::set_path(std::string path, location url_loc,
             "to produce unique files")
       .emit(dh);
   }
-  if (not partition_fields_.empty() and not has_uuid_) {
+  // In append mode each partition's stable file is extended on every push,
+  // so the overwrite warning is misleading.
+  if (not partition_fields_.empty() and not has_uuid_ and not append) {
     diagnostic::warning("URL has no `{{uuid}}` placeholder in its path; "
                         "files for the same partition key will overwrite "
                         "each other on rotation")

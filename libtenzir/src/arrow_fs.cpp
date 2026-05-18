@@ -596,7 +596,8 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   // `set_path` finalises `has_uuid()` based on the actual path portion and
   // emits any `{uuid}`-placement diagnostics.
   // TODO: Consider using separate types here to differentiate.
-  template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
+  template_.set_path(std::move(fs->path), base_args_.url.source, append(),
+                     ctx.dh());
   bytes_written_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
                        MetricsDirection::write, MetricsVisibility::external_);
@@ -866,7 +867,10 @@ auto ToArrowFsOperator::open_stream(Partition& part,
       co_return failure::promise();
     }
   }
-  auto result = co_await spawn_blocking([fs = fs_, path] {
+  auto result = co_await spawn_blocking([fs = fs_, path, append = append()] {
+    if (append) {
+      return fs->OpenAppendStream(path);
+    }
     return fs->OpenOutputStream(path);
   });
   if (not result.ok()) {

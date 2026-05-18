@@ -1,0 +1,7 @@
+// Writing to the same path without `append=true` truncates, so the row from
+// step 02 disappears. Then a final `append=true` write extends the now-fresh
+// file. Confirms the flag's behaviour is per-invocation.
+from {seq: 99, msg: "overwrite"}
+to_file env("FILE_ROOT") + "/out/append/log.json" {
+  write_ndjson
+}
