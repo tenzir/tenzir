@@ -29,6 +29,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -57,9 +58,16 @@ def error(msg: str) -> None:
     print(f"::error::{msg}")
 
 
+def format_command(cmd: object) -> str:
+    """Format a subprocess command for logs."""
+    if isinstance(cmd, list | tuple):
+        return shlex.join(str(arg) for arg in cmd)
+    return str(cmd)
+
+
 def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
     """Run a command, optionally capturing output."""
-    notice(f"Running: {' '.join(cmd)}")
+    notice(f"Running: {format_command(cmd)}")
     return subprocess.run(cmd, check=check, stdout=subprocess.PIPE, text=True)
 
 
@@ -1296,7 +1304,21 @@ def main() -> int:
     print_pkgutil_identifier_parser.set_defaults(func=cmd_print_pkgutil_identifier)
 
     args = parser.parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    except subprocess.CalledProcessError as exc:
+        error(
+            f"Command failed with exit code {exc.returncode}: {format_command(exc.cmd)}"
+        )
+        if exc.stdout:
+            print(exc.stdout, end="" if exc.stdout.endswith("\n") else "\n")
+        if exc.stderr:
+            print(
+                exc.stderr,
+                end="" if exc.stderr.endswith("\n") else "\n",
+                file=sys.stderr,
+            )
+        return exc.returncode
 
 
 if __name__ == "__main__":
