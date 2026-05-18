@@ -2107,11 +2107,11 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
                has_terminal, false)));
   });
 #if 0
-  TENZIR_INFO("running pipeline on a single thread");
+  TENZIR_DEBUG("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
 #else
-  TENZIR_INFO("running pipeline on {} threads",
-              folly::getGlobalCPUExecutorCounters().numThreads);
+  TENZIR_DEBUG("running pipeline on {} threads",
+               folly::getGlobalCPUExecutorCounters().numThreads);
   auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
     folly::getGlobalCPUExecutor(), std::move(task)));
 #endif
