@@ -603,15 +603,34 @@ public:
                 event_order order) && -> ir::optimize_result override {
     TENZIR_ASSERT(desc_->optimizer);
     // subpipeline
-    if (pipeline_ and desc_->pipeline
-        and desc_->pipeline->sub_optimize == SubOptimize::from_downstream) {
-      // apply downstream filter and order to the subpipeline directly
-      auto sub = std::move(pipeline_->pipeline.inner)
-                   .optimize(std::move(filter), order);
-      // use sub's filter and order instead of the downstream
-      filter = std::move(sub.filter);
-      order = sub.order;
-      pipeline_->pipeline.inner = std::move(sub.replacement);
+    if (pipeline_ and desc_->pipeline) {
+      switch (desc_->pipeline->sub_optimize) {
+        case SubOptimize::from_downstream: {
+          // apply downstream filter and order to the subpipeline directly
+          auto sub = std::move(pipeline_->pipeline.inner)
+                       .optimize(std::move(filter), order);
+          // use sub's filter and order instead of the downstream
+          filter = std::move(sub.filter);
+          order = sub.order;
+          pipeline_->pipeline.inner = std::move(sub.replacement);
+          break;
+        }
+        case SubOptimize::fork: {
+          // independent optimize
+          auto sub = std::move(pipeline_->pipeline.inner)
+                       .optimize(ir::optimize_filter{}, event_order::ordered);
+          // fork is filter barrier
+          sub.replacement.operators.insert_range(
+            sub.replacement.operators.begin(),
+            sub.filter | std::views::transform(make_where_ir));
+          pipeline_->pipeline.inner = std::move(sub.replacement);
+          // only relax upstream ordering if both branches are ok with unordered
+          order = stronger_event_order(order, sub.order);
+          break;
+        }
+        case SubOptimize::off:
+          break;
+      }
     }
     order_ = weaker_event_order(order_, order);
     // extract filters into the operator

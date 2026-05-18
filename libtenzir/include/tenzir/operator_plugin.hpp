@@ -97,6 +97,12 @@ enum class SubOptimize {
   /// The subpipeline's output becomes the operator's output.
   /// Example: `from_tcp { read_ndjson }`, `parallel { ... }`.
   from_downstream,
+  /// The subpipeline is a self-contained side-channel fed the same input
+  /// stream. Optimize independently (empty filter, ordered), reinsert
+  /// residual filters, and require the stronger ordering of downstream
+  /// and the subpipeline.
+  /// Example: `fork { discard }`.
+  fork,
   /// Don't optimize at all. Should be used for work-in-progress operators only.
   off,
 };

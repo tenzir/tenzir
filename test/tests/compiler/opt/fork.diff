@@ -23,35 +23,56 @@
          
        ]
      },
-     ForkIr {
-       pipeline: {
-         lets: [
-           
+     GenericIr {
+       op: {
+         path: [
+           `fork` @ 47..51
          ],
-         operators: [
-           GenericIr {
-             op: {
-               path: [
-                 `discard` @ 54..61
-               ],
-               ref: std::discard/op
-             },
-             desc: "discard",
-             args: [
-               
-             ],
-             filter: [
-               
-             ],
-             order: "ordered",
-             named_args: [
-               
-             ]
-           }
-         ]
+         ref: std::fork/op
        },
-       op_loc: 47..51,
-       pipe_loc: 52..63
+       desc: "tql2.fork",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               op: {
+                 path: [
+                   `discard` @ 54..61
+                 ],
+                 ref: std::discard/op
+               },
+               desc: "discard",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 52..63,
+         let_ids: {
+           
+         }
+       }
      },
      where_ir {
 -      self: 64..69,
