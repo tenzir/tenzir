@@ -38,6 +38,7 @@
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 #include <folly/ScopeGuard.h>
+#include <folly/String.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
@@ -90,7 +91,7 @@ struct FromHttpArgs {
 // Messages from the fetch task to the operator.
 struct ResponseHeader {
   uint16_t status;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::header> headers;
 };
 struct ResponseBody {
   chunk_ptr data;
@@ -110,10 +111,10 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 // Builds a Proxygen request source, working around a bug in Proxygen's
 // internal makeHTTPRequestSource where IOBuf::takeOwnership arguments are
 // evaluated in unspecified order.
-auto build_request_source(
-  proxygen::URL const& url, proxygen::HTTPMethod method,
-  const std::vector<std::pair<std::string, std::string>>& headers,
-  std::unique_ptr<folly::IOBuf> body_buf) -> proxygen::coro::HTTPSourceHolder {
+auto build_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
+                          const std::vector<http::header>& headers,
+                          std::unique_ptr<folly::IOBuf> body_buf)
+  -> proxygen::coro::HTTPSourceHolder {
   auto* source = proxygen::coro::HTTPFixedSource::makeFixedRequest(
     url.makeRelativeURL(), method, std::move(body_buf));
   for (auto const& [k, v] : headers) {
@@ -131,32 +132,9 @@ auto build_request_source(
 
 struct RequestConfig {
   proxygen::HTTPMethod method = proxygen::HTTPMethod::GET;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::header> headers;
   std::vector<std::byte> body;
 };
-
-auto find_header(std::span<const std::pair<std::string, std::string>> headers,
-                 std::string_view name) -> Option<std::string> {
-  for (auto const& [header_name, value] : headers) {
-    if (detail::ascii_icase_equal(header_name, name)) {
-      return value;
-    }
-  }
-  return None{};
-}
-
-auto erase_header(std::vector<std::pair<std::string, std::string>>& headers,
-                  std::string_view name) -> void {
-  std::erase_if(headers, [&](auto const& kv) {
-    return detail::ascii_icase_equal(kv.first, name);
-  });
-}
-
-auto set_header(std::vector<std::pair<std::string, std::string>>& headers,
-                std::string name, std::string value) -> void {
-  erase_header(headers, name);
-  headers.emplace_back(std::move(name), std::move(value));
-}
 
 auto parse_http_method(std::string method_str) -> Option<proxygen::HTTPMethod> {
   std::transform(method_str.begin(), method_str.end(), method_str.begin(),
@@ -215,10 +193,9 @@ auto serialize_body(data const& value,
   return result;
 }
 
-auto add_default_content_type(
-  std::vector<std::pair<std::string, std::string>>& headers,
-  Option<std::string> content_type) -> void {
-  if (content_type and not find_header(headers, "content-type")) {
+auto add_default_content_type(std::vector<http::header>& headers,
+                              Option<std::string> content_type) -> void {
+  if (content_type and not http::find_header(headers, "content-type")) {
     headers.emplace_back("Content-Type", content_type.unwrap());
   }
 }
@@ -226,9 +203,8 @@ auto add_default_content_type(
 // Builds the initial request configuration from the operator arguments.
 // Resolves method, serializes the body (records become JSON, blobs are sent
 // verbatim), and assembles request headers.
-auto make_request_config(
-  FromHttpArgs const& args,
-  std::vector<std::pair<std::string, std::string>> headers) -> RequestConfig {
+auto make_request_config(FromHttpArgs const& args,
+                         std::vector<http::header> headers) -> RequestConfig {
   // Resolve HTTP method (validated at describe time).
   // Default to POST when a body is present, GET otherwise.
   auto method_str = args.method ? args.method->inner
@@ -245,7 +221,7 @@ auto make_request_config(
     body = std::move(serialized->body);
     add_default_content_type(headers, std::move(serialized->content_type));
   }
-  if (not find_header(headers, "accept")) {
+  if (not http::find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -257,9 +233,9 @@ auto make_request_config(
 
 // Builds the request configuration for a paginated follow-up request.
 // Always uses GET with the same headers as the original but no body.
-auto make_paginated_request_config(
-  std::vector<std::pair<std::string, std::string>> headers) -> RequestConfig {
-  if (not find_header(headers, "accept")) {
+auto make_paginated_request_config(std::vector<http::header> headers)
+  -> RequestConfig {
+  if (not http::find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -269,9 +245,9 @@ auto make_paginated_request_config(
   };
 }
 
-auto resolve_http_secrets(
-  OpCtx& ctx, FromHttpArgs const& args, std::string& resolved_url,
-  std::vector<std::pair<std::string, std::string>>& resolved_headers)
+auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
+                          std::string& resolved_url,
+                          std::vector<http::header>& resolved_headers)
   -> Task<failure_or<bool>> {
   resolved_url.clear();
   auto requests = std::vector<secret_request>{};
@@ -426,7 +402,7 @@ struct PaginationRequestContext {
   pagination_spec const& spec;
   std::string const& current_url;
   RequestConfig const& current_request;
-  std::vector<std::pair<std::string, std::string>> const& paginated_headers;
+  std::vector<http::header> const& paginated_headers;
   Option<located<std::string>> const& encode;
 };
 
@@ -520,9 +496,9 @@ auto next_request_from_record(record const& patch,
     }
     for (auto const& [name, value] : *headers) {
       if (is<caf::none_t>(value)) {
-        erase_header(request.headers, name);
+        http::erase_header(request.headers, name);
       } else if (auto const* str = try_as<std::string>(&value)) {
-        set_header(request.headers, name, *str);
+        http::set_header(request.headers, name, *str);
       } else {
         emit_paginate_record_warning("`paginate` request header values must be "
                                      "`string` or `null`",
@@ -634,7 +610,7 @@ auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
 
 struct ResponseState {
   uint16_t status;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::header> headers;
   Option<std::string> content_encoding;
   std::shared_ptr<arrow::util::Decompressor> decompressor;
   blob error_body;
@@ -655,23 +631,19 @@ auto make_response_context(ResponseState const& response) -> record {
   };
 }
 
-// Normalizes platform-specific socket error text for user-facing diagnostics.
-// In particular, `AsyncSocketException` embeds OS-dependent errno values
-// (e.g., 111 on Linux vs. 61 on macOS) that make error messages noisy and
-// non-portable in tests.
-auto strip_errno_from_error_message(std::string message) -> std::string {
-  auto needle = std::string_view{"errno = "};
-  auto pos = message.find(needle);
-  if (pos == std::string::npos) {
-    return message;
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
   }
-  auto end = message.find('(', pos);
-  if (end == std::string::npos) {
-    return message;
+  return ex.what();
+}
+
+auto describe_fetch_error(folly::exception_wrapper const& ew) -> std::string {
+  if (auto const* ex = ew.get_exception<folly::AsyncSocketException>()) {
+    return describe_socket_error(*ex);
   }
-  auto start = pos + needle.length();
-  message.erase(start, end - start);
-  return message;
+  return ew.what().toStdString();
 }
 
 auto path_from_url(std::string_view url) -> std::string {
@@ -692,10 +664,9 @@ auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
 }
 
 struct retryable_http_response : std::runtime_error {
-  retryable_http_response(
-    uint16_t status_code,
-    std::vector<std::pair<std::string, std::string>> headers,
-    Option<std::chrono::seconds> retry_after)
+  retryable_http_response(uint16_t status_code,
+                          std::vector<http::header> headers,
+                          Option<std::chrono::seconds> retry_after)
     : std::runtime_error{fmt::format("retryable HTTP status {}", status_code)},
       status_code{status_code},
       headers{std::move(headers)},
@@ -703,7 +674,7 @@ struct retryable_http_response : std::runtime_error {
   }
 
   uint16_t status_code = 0;
-  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<http::header> headers;
   Option<std::chrono::seconds> retry_after;
   blob body;
 };
@@ -774,7 +745,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   // response headers.
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
-                auto hdrs = std::vector<std::pair<std::string, std::string>>{};
+                auto hdrs = std::vector<http::header>{};
                 msg->getHeaders().forEach([&](std::string& k, std::string& v) {
                   hdrs.emplace_back(k, v);
                 });
@@ -875,7 +846,7 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
           }
         } else {
           co_await mq->enqueue(
-            FetchError{result.exception().what().toStdString()});
+            FetchError{describe_fetch_error(result.exception())});
         }
       }
       co_await mq->enqueue(FetchDone{});
@@ -932,7 +903,7 @@ public:
       [&](ResponseHeader hdr) -> Task<void> {
         auto headers = std::move(hdr.headers);
         auto content_encoding = Option<std::string>{};
-        if (auto value = find_header(headers, "content-encoding")) {
+        if (auto value = http::find_header(headers, "content-encoding")) {
           auto trimmed = std::string{detail::trim(*value)};
           if (not trimmed.empty()) {
             content_encoding = std::move(trimmed);
@@ -1016,9 +987,8 @@ public:
       },
       // --- FetchError ---
       [&](FetchError err) -> Task<void> {
-        diagnostic::error(
-          "HTTP request to `{}` failed: {}", pagination_.current_url,
-          strip_errno_from_error_message(std::move(err.message)))
+        diagnostic::error("HTTP request to `{}` failed: {}",
+                          pagination_.current_url, err.message)
           .primary(args_.operator_location)
           .emit(ctx);
         pagination_.next_request = None{};
@@ -1178,7 +1148,7 @@ private:
       }
     } else {
       auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
-      if (auto value = find_header(response_->headers, "content-type");
+      if (auto value = http::find_header(response_->headers, "content-type");
           value and not detail::trim(*value).empty()) {
         auto content_type = std::string{detail::trim(*value)};
         plugin = read_plugin_for_content_type(content_type);
@@ -1237,7 +1207,7 @@ private:
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
-  std::vector<std::pair<std::string, std::string>> resolved_headers_;
+  std::vector<http::header> resolved_headers_;
   // --- state ---
   Lifecycle lifecycle_{};
   PaginationState pagination_;

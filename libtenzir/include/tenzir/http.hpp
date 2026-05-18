@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -73,15 +74,26 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            tls_options::options options = {.is_server = false})
   -> failure_or<HttpPoolConfig>;
 
-auto make_header_secret_requests(
-  Option<located<data>> const& headers,
-  std::vector<std::pair<std::string, std::string>>& resolved_headers,
-  diagnostic_handler& dh) -> std::vector<secret_request>;
-
 struct header {
   std::string name;
   std::string value;
 };
+
+auto make_header_secret_requests(Option<located<data>> const& headers,
+                                 std::vector<header>& resolved_headers,
+                                 diagnostic_handler& dh)
+  -> std::vector<secret_request>;
+
+/// Finds the first header by case-insensitive name.
+auto find_header(std::span<header const> headers, std::string_view name)
+  -> Option<std::string>;
+
+/// Removes all headers matching the case-insensitive name.
+auto erase_header(std::vector<header>& headers, std::string_view name) -> void;
+
+/// Replaces all headers matching the case-insensitive name with one value.
+auto set_header(std::vector<header>& headers, std::string name,
+                std::string value) -> void;
 
 /// Base for HTTP messages.
 struct message {
@@ -194,7 +206,7 @@ auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode>;
 /// URL, or None if no such link is present. Emits a warning on malformed
 /// headers.
 auto next_url_from_link_headers(
-  std::vector<std::pair<std::string, std::string>> const& response_headers,
+  std::vector<http::header> const& response_headers,
   std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
   -> Option<std::string>;
 

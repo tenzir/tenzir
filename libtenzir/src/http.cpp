@@ -326,10 +326,10 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
   return config;
 }
 
-auto make_header_secret_requests(
-  Option<located<data>> const& headers,
-  std::vector<std::pair<std::string, std::string>>& resolved_headers,
-  diagnostic_handler& dh) -> std::vector<secret_request> {
+auto make_header_secret_requests(Option<located<data>> const& headers,
+                                 std::vector<http::header>& resolved_headers,
+                                 diagnostic_handler& dh)
+  -> std::vector<secret_request> {
   resolved_headers.clear();
   auto result = std::vector<secret_request>{};
   if (not headers) {
@@ -342,11 +342,11 @@ auto make_header_secret_requests(
     match(
       value,
       [&](std::string const& literal) {
-        resolved_headers.emplace_back(header_name, literal);
+        resolved_headers.push_back({header_name, literal});
       },
       [&](secret const& sec) {
-        auto& out
-          = resolved_headers.emplace_back(header_name, std::string{}).second;
+        resolved_headers.push_back({header_name, std::string{}});
+        auto& out = resolved_headers.back().value;
         result.emplace_back(
           make_secret_request(header_name, sec, headers->source, out, dh));
       },
@@ -355,6 +355,29 @@ auto make_header_secret_requests(
       });
   }
   return result;
+}
+
+auto find_header(std::span<http::header const> headers, std::string_view name)
+  -> Option<std::string> {
+  for (auto const& [header_name, value] : headers) {
+    if (detail::ascii_icase_equal(header_name, name)) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+auto erase_header(std::vector<http::header>& headers, std::string_view name)
+  -> void {
+  std::erase_if(headers, [&](auto const& kv) {
+    return detail::ascii_icase_equal(kv.name, name);
+  });
+}
+
+auto set_header(std::vector<http::header>& headers, std::string name,
+                std::string value) -> void {
+  erase_header(headers, name);
+  headers.push_back({std::move(name), std::move(value)});
 }
 
 auto message::header(const std::string& name) -> struct header* {
@@ -692,7 +715,7 @@ auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {
 }
 
 auto next_url_from_link_headers(
-  std::vector<std::pair<std::string, std::string>> const& response_headers,
+  std::vector<http::header> const& response_headers,
   std::string const& base_url, location paginate_loc, diagnostic_handler& dh)
   -> Option<std::string> {
   auto base = boost::urls::parse_uri_reference(base_url);
