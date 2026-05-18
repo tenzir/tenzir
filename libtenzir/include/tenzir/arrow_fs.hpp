@@ -232,6 +232,8 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> final;
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> final;
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx) -> Task<void> final;
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> final;
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -301,6 +303,7 @@ private:
     max_jobs + 1,
   };
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 /// Common arguments for Arrow filesystem-based sink operators.
@@ -540,6 +543,7 @@ private:
 
   bool finalized_ = false;
   MetricsCounter bytes_written_counter_;
+  MetricsCounter events_written_counter_;
 };
 
 } // namespace tenzir

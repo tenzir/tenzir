@@ -96,6 +96,37 @@ For timeout-driven flushes, let `await_task()` sleep until the earliest deadline
 and let `process_task()` flush expired buffers. Do not poll time while processing
 each input item. Guard `duration::max()` sentinels before time arithmetic.
 
+### Metrics counters
+
+Operators that form an external pipeline edge should report both byte and event
+throughput when both quantities are meaningful. Create counters in `start()` with
+`ctx.make_counter(label, direction, visibility, type)` and keep them as operator
+members.
+
+- Use `MetricsDirection::read` for ingress/source-side data and
+  `MetricsDirection::write` for egress/sink-side data.
+- Use `MetricsVisibility::external_` for data crossing the pipeline boundary
+  (network, files, stdin/stdout, databases, message brokers). Use internal
+  visibility only for executor-internal handoff accounting.
+- Use `MetricsUnit::bytes` for encoded bytes read or written and
+  `MetricsUnit::events` for event rows.
+- If a source operator emits `table_slice`s directly, increment the events
+  counter by `slice.rows()` immediately before pushing the slice downstream.
+- If a source operator accepts a parsing (`chunk_ptr -> table_slice`) pipeline,
+  increment the events counter in `process_sub()` by the rows that the operator
+  actually pushes downstream. This counts the rows entering the parent pipeline
+  after the full nested parsing pipeline has run.
+- If a sink operator consumes `table_slice`s directly or forwards them into a
+  printing (`table_slice -> chunk_ptr`) pipeline, increment the events counter
+  by `slice.rows()` when accepting the slice for output.
+- Message-oriented connectors that produce or consume one event per message may
+  increment the events counter by `1`; slice-oriented code should use
+  `slice.rows()`.
+
+Do not register only a byte counter for an operator that produces or consumes
+rows directly. That causes node-level event throughput to report zero for that
+operator even though data is flowing.
+
 ### Per-chunk parser flushes
 
 If a `chunk_ptr -> table_slice` parser scans an input chunk incrementally,

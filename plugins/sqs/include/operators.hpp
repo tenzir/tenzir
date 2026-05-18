@@ -60,6 +60,7 @@ private:
   Option<std::chrono::seconds> visibility_timeout_;
   std::shared_ptr<AsyncSqsQueue> queue_;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 class ToSqs final : public Operator<table_slice, void> {
@@ -74,6 +75,7 @@ private:
   ToSqsArgs args_;
   std::shared_ptr<AsyncSqsQueue> queue_;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 } // namespace tenzir::plugins::sqs

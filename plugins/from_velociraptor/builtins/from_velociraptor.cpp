@@ -254,7 +254,12 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto normalized = normalize_args(args_, ctx);
     TENZIR_ASSERT(normalized);
     auto config = select_client_config(args_, ctx.dh());
@@ -303,7 +308,9 @@ public:
       }
       if (auto slices = parse(response)) {
         for (auto& slice : *slices) {
+          auto const rows = slice.rows();
           co_await push(std::move(slice));
+          events_read_counter_.add(rows);
         }
       } else {
         emit_parse_warning(response, ctx.dh(), slices.error(),
@@ -336,6 +343,7 @@ private:
   Option<Box<VelociraptorReadReactor>> reactor_;
   bool stream_finished_ = false;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 class FromVelociraptorPlugin final : public virtual OperatorPlugin {

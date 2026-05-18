@@ -352,7 +352,12 @@ public:
     }
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();
@@ -406,6 +411,13 @@ public:
     -> Task<void> override {
     sub_finished_->notify_one();
     co_return;
+  }
+
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
+                   OpCtx&) -> Task<void> override {
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   auto state() -> OperatorState override {
@@ -476,6 +488,7 @@ private:
   bool done_ = false;
   bool capture_closed_ = false;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
   mutable std::shared_ptr<Notify> sub_finished_ = std::make_shared<Notify>();
   mutable std::shared_ptr<ChunkQueue> chunk_queue_
     = std::make_shared<ChunkQueue>(queue_capacity);

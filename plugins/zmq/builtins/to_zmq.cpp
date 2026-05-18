@@ -124,12 +124,20 @@ public:
       bytes_write_counter_
         = ctx.make_counter(MetricsLabel{"operator", "to_zmq"},
                            MetricsDirection::write,
-                           MetricsVisibility::external_);
+                           MetricsVisibility::external_, MetricsUnit::bytes);
+      events_write_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "to_zmq"},
+                           MetricsDirection::write,
+                           MetricsVisibility::external_, MetricsUnit::events);
     } else {
       bytes_write_counter_
         = ctx.make_counter(MetricsLabel{"operator", "serve_zmq"},
                            MetricsDirection::write,
-                           MetricsVisibility::external_);
+                           MetricsVisibility::external_, MetricsUnit::bytes);
+      events_write_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "serve_zmq"},
+                           MetricsDirection::write,
+                           MetricsVisibility::external_, MetricsUnit::events);
     }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.monitor) {
@@ -211,6 +219,7 @@ public:
         if (framed->size() > 0) {
           bytes_write_counter_.add(framed->size());
         }
+        events_write_counter_.add(1);
         continue;
       }
       diagnostic::error("failed to send ZeroMQ message")
@@ -237,6 +246,7 @@ private:
   transport::Socket socket_{transport::SocketRole::publisher};
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 template <transport::ConnectionMode Mode>

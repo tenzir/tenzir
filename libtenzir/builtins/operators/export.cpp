@@ -80,6 +80,13 @@ public:
   Export& operator=(Export&&) = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    read_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "export",
+      },
+      MetricsDirection::read, MetricsVisibility::internal_,
+      MetricsUnit::events);
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -181,12 +188,16 @@ public:
       co_return;
     }
     if (not remainder_) {
+      auto const rows = expected->rows();
       co_await push(std::move(*expected));
+      read_events_counter_.add(rows);
       co_return;
     }
     auto output = filter2(*expected, *remainder_, ctx, false);
     if (output.rows() > 0) {
+      auto const rows = output.rows();
       co_await push(std::move(output));
+      read_events_counter_.add(rows);
     }
   }
 
@@ -209,6 +220,7 @@ private:
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   std::optional<ast::expression> remainder_ = std::nullopt;
+  MetricsCounter read_events_counter_;
   bool done_ = false;
 };
 

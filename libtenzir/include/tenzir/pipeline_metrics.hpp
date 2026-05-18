@@ -25,7 +25,8 @@ namespace tenzir {
 
 enum class MetricsDirection : std::uint8_t { read, write };
 enum class MetricsVisibility : std::uint8_t { external_, internal_ };
-enum class MetricsType : std::uint8_t { counter, gauge };
+enum class MetricsInstrument : std::uint8_t { counter, gauge };
+enum class MetricsUnit : std::uint8_t { bytes, events };
 
 /// A (key, value) label attached to a counter.
 /// Key and value are bounded to `max_length` characters.
@@ -77,18 +78,18 @@ private:
   FixedString value_;
 };
 
-template <MetricsType Type>
+template <MetricsInstrument Instrument>
 class Metric {
 public:
-  constexpr static auto type = Type;
+  constexpr static auto instrument = Instrument;
   /// Constructs a null counter where `add()` is a no-op.
   Metric() = default;
 
-  void add(uint64_t bytes);
-  void remove(uint64_t bytes)
-    requires(Type == MetricsType::gauge);
-  void set(uint64_t bytes)
-    requires(Type == MetricsType::gauge);
+  void add(uint64_t value);
+  void remove(uint64_t value)
+    requires(Instrument == MetricsInstrument::gauge);
+  void set(uint64_t value)
+    requires(Instrument == MetricsInstrument::gauge);
 
   explicit operator bool() const;
 
@@ -100,15 +101,16 @@ private:
   std::shared_ptr<std::atomic<uint64_t>> value_;
 };
 
-using MetricsCounter = Metric<MetricsType::counter>;
-using MetricsGauge = Metric<MetricsType::gauge>;
+using MetricsCounter = Metric<MetricsInstrument::counter>;
+using MetricsGauge = Metric<MetricsInstrument::gauge>;
 
 /// Snapshot of a single counter (plain values, no atomics).
 struct MetricsSnapshotEntry {
   MetricsLabel label;
   MetricsDirection direction = {};
   MetricsVisibility visibility = {};
-  MetricsType type = {};
+  MetricsInstrument instrument = {};
+  MetricsUnit type = {};
   uint64_t value = {};
 };
 
@@ -124,8 +126,9 @@ class PipelineMetrics {
 public:
   /// Create and register a new counter.
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility) -> MetricsCounter {
-    return make<MetricsType::counter>(label, direction, visibility);
+                    MetricsVisibility visibility, MetricsUnit type)
+    -> MetricsCounter {
+    return make<MetricsInstrument::counter>(label, direction, visibility, type);
   }
 
   /// Create and register a new gauge.
@@ -134,22 +137,25 @@ public:
   /// `direction` and `visibility`, which should probably be labels. And label
   /// values should be set in a step that is separate from the metric creation.
   auto make_gauge(MetricsLabel label, MetricsDirection direction,
-                  MetricsVisibility visibility) -> MetricsGauge
+                  MetricsVisibility visibility, MetricsUnit type)
+    -> MetricsGauge
     = delete;
 
   /// Read all counters into plain snapshots.
   auto take_snapshot() -> std::vector<MetricsSnapshotEntry>;
 
 private:
-  template <MetricsType Type>
+  template <MetricsInstrument Instrument>
   auto make(MetricsLabel label, MetricsDirection direction,
-            MetricsVisibility visibility) -> Metric<Type>;
+            MetricsVisibility visibility, MetricsUnit type)
+    -> Metric<Instrument>;
 
   struct Entry {
     MetricsLabel label;
     MetricsDirection direction;
     MetricsVisibility visibility;
-    MetricsType type;
+    MetricsInstrument instrument;
+    MetricsUnit type;
     std::shared_ptr<std::atomic<uint64_t>> value;
 
     auto snapshot() const -> MetricsSnapshotEntry;

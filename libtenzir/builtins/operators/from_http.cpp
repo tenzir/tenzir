@@ -877,7 +877,9 @@ public:
                                NextUrlSource::odata_next_link)
             : None{};
       for (auto& event_slice : page->events) {
+        auto const rows = event_slice.rows();
         co_await push(std::move(event_slice));
+        events_read_.add(rows);
       }
       co_return;
     }
@@ -887,7 +889,9 @@ public:
         pagination_.next_url = std::move(*next);
       }
     }
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_.add(rows);
   }
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx& ctx)
@@ -951,7 +955,12 @@ private:
     bytes_read_ = ctx.make_counter(
       MetricsLabel{"host",
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
-      MetricsDirection::read, MetricsVisibility::external_);
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
+    events_read_ = ctx.make_counter(
+      MetricsLabel{"host",
+                   MetricsLabel::FixedString::truncate(parsed_url.getHost())},
+      MetricsDirection::read, MetricsVisibility::external_,
+      MetricsUnit::events);
     ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
                          fetch_config_, static_cast<bool>(args_.error_field),
                          message_queue_));
@@ -1021,7 +1030,9 @@ private:
     error_sb.data(std::move(response_->error_body));
     auto slice = assign(*args_.error_field, error_sb.finish_assert_one_array(),
                         record_sb.finish_assert_one_slice(), ctx.dh());
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_.add(rows);
   }
 
   auto response_body_needed() const -> bool {
@@ -1032,6 +1043,7 @@ private:
   mutable Arc<MessageQueue> message_queue_;
   folly::EventBase* evb_{};
   MetricsCounter bytes_read_;
+  MetricsCounter events_read_;
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;

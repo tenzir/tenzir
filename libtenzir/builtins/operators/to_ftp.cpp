@@ -137,7 +137,12 @@ public:
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_ftp"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_ftp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto code = easy.set([](std::span<const std::byte>) {});
     if (code != curl::easy::code::ok) {
       diagnostic::error("failed to configure FTP upload")
@@ -163,6 +168,7 @@ public:
       co_await finish_upload_task();
       co_return;
     }
+    auto const rows = input.rows();
     auto& printer = as<SubHandle<table_slice>>(*sub);
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
@@ -170,7 +176,9 @@ public:
       // `head`. Let `finish_sub()` close the upload with EOF instead of
       // turning already-produced printer output into a local abort.
       lifecycle_ = Lifecycle::draining;
+      co_return;
     }
+    events_write_counter_.add(rows);
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
@@ -339,6 +347,7 @@ private:
   ToFtpArgs args_;
   std::string resolved_url_;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 

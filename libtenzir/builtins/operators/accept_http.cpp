@@ -327,6 +327,10 @@ public:
       co_await catch_cancellation(wait_forever());
       force_stop();
     });
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_http"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     co_return;
   }
 
@@ -364,7 +368,8 @@ public:
         auto bytes_read = ctx.make_counter(
           MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
                                       msg.metadata.client_ip)},
-          MetricsDirection::read, MetricsVisibility::external_);
+          MetricsDirection::read, MetricsVisibility::external_,
+          MetricsUnit::bytes);
         {
           auto active_requests = co_await active_requests_.lock();
           active_requests->emplace(
@@ -440,8 +445,10 @@ public:
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(key, ctx);
+    TENZIR_UNUSED(ctx, key);
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
@@ -492,6 +499,8 @@ private:
     Arc<ResponseSignal> finished;
     MetricsCounter bytes_read;
   };
+
+  MetricsCounter events_read_counter_;
 
   void force_stop() {
     if (server_) {

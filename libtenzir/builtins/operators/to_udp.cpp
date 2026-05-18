@@ -73,14 +73,19 @@ public:
     // `make_counter` always requires exactly one label pair.
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto [startup_sender, startup_receiver]
       = channel<diagnostic>(request_queue_capacity);
     TENZIR_ASSERT(write_sender_);
     ctx.spawn_task(folly::coro::co_withExecutor(
       evb_, write_loop(*evb_, std::move(address).unwrap(), args_.self,
                        std::move(write_receiver_), std::move(startup_sender),
-                       bytes_write_counter_)));
+                       bytes_write_counter_, events_write_counter_)));
     // Successful startup is signaled by closing the channel without errors.
     while (auto diagnostic = co_await startup_receiver.recv()) {
       std::move(*diagnostic).modify().emit(ctx);
@@ -178,7 +183,8 @@ private:
   static auto write_loop(folly::EventBase& evb, folly::SocketAddress address,
                          location self, Receiver<SendBatch> write_receiver,
                          Sender<diagnostic> startup_sender,
-                         MetricsCounter bytes_write_counter) -> Task<void> {
+                         MetricsCounter bytes_write_counter,
+                         MetricsCounter events_write_counter) -> Task<void> {
     auto socket = folly::AsyncUDPSocket{&evb};
     auto startup_diagnostics = collecting_diagnostic_handler{};
     try {
@@ -230,6 +236,7 @@ private:
           continue;
         }
         bytes_write_counter.add(payload->size());
+        events_write_counter.add(1);
       }
       // This single-shot channel of capacity 1 can always be written to since
       // we don't reuse it.
@@ -245,6 +252,7 @@ private:
   Option<Sender<SendBatch>> write_sender_;
   Receiver<SendBatch> write_receiver_;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 class ToUdpPlugin final : public OperatorPlugin {
