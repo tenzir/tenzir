@@ -235,6 +235,15 @@ def _make_handler(capture: Capture):
                 handle.write(json.dumps(parsed, sort_keys=True) + "\n")
             self.send_response(HTTPStatus.NO_CONTENT)
             self.send_header("Content-Length", "0")
+            if version == "2.0.0":
+                samples = sum(
+                    len(timeseries["samples"]) for timeseries in parsed["timeseries"]
+                )
+                self.send_header(
+                    "X-Prometheus-Remote-Write-Samples-Written", str(samples)
+                )
+                self.send_header("X-Prometheus-Remote-Write-Histograms-Written", "0")
+                self.send_header("X-Prometheus-Remote-Write-Exemplars-Written", "0")
             self.end_headers()
 
         def log_message(self, *_: object) -> None:

@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -55,6 +56,8 @@ constexpr auto v2_protobuf_message = "io.prometheus.write.v2.Request";
 constexpr auto v1_content_type = "application/x-protobuf";
 constexpr auto v2_content_type
   = "application/x-protobuf;proto=io.prometheus.write.v2.Request";
+constexpr auto v2_samples_written_header
+  = "X-Prometheus-Remote-Write-Samples-Written";
 constexpr auto max_uncompressed_bytes_default = uint64_t{4 * 1024 * 1024};
 
 using Headers = std::vector<std::pair<std::string, std::string>>;
@@ -368,6 +371,55 @@ auto now_ms() -> int64_t {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
            std::chrono::system_clock::now().time_since_epoch())
     .count();
+}
+
+auto response_header(HttpResponse const& response, std::string_view name)
+  -> std::optional<std::string_view> {
+  auto result = std::ranges::find_if(response.headers, [name](auto const& x) {
+    return detail::ascii_icase_equal(x.first, name);
+  });
+  if (result == response.headers.end()) {
+    return {};
+  }
+  return result->second;
+}
+
+auto parse_u64(std::string_view value) -> std::optional<uint64_t> {
+  auto result = uint64_t{};
+  auto const* begin = value.data();
+  auto const* end = value.data() + value.size();
+  auto [ptr, err] = std::from_chars(begin, end, result);
+  if (err != std::errc{} or ptr != end) {
+    return {};
+  }
+  return result;
+}
+
+auto check_v2_written_samples(HttpResponse const& response,
+                              uint64_t expected_samples, OpCtx& ctx,
+                              location loc) -> bool {
+  auto header = response_header(response, v2_samples_written_header);
+  auto written_samples
+    = header ? parse_u64(*header) : std::optional<uint64_t>{0};
+  if (not written_samples) {
+    diagnostic::error("HTTP response returned invalid `{}` header",
+                      v2_samples_written_header)
+      .note("header value: {}", *header)
+      .primary(loc)
+      .emit(ctx);
+    return false;
+  }
+  if (*written_samples != expected_samples) {
+    diagnostic::error("HTTP response wrote {} of {} Prometheus samples",
+                      *written_samples, expected_samples)
+      .note("Remote Write v2 receivers report successful writes via the `{}` "
+            "header",
+            v2_samples_written_header)
+      .primary(loc)
+      .emit(ctx);
+    return false;
+  }
+  return true;
 }
 
 auto add_symbol(std::vector<std::string>& symbols,
@@ -886,6 +938,11 @@ private:
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
+      co_return;
+    }
+    if (protocol_ == Protocol::v2
+        and not check_v2_written_samples(response, sample_count, ctx,
+                                         args_.operator_location)) {
       co_return;
     }
     bytes_write_counter_.add(compressed_size);
