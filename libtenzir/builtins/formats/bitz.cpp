@@ -64,6 +64,7 @@ public:
                  .note("expected {}",
                        std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()}),
                ctx.dh());
+          co_return;
         }
         state_ = State::header;
       }
@@ -384,6 +385,7 @@ public:
               .note("expected {}",
                     std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
               .emit(ctrl.diagnostics());
+            co_return;
           }
           auto header = byte_reader(sizeof(uint64_t));
           while (not header) {
