@@ -11,11 +11,13 @@
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/ir.hpp>
@@ -49,6 +51,7 @@
 #include <proxygen/lib/http/coro/client/HTTPCoroConnector.h>
 #include <proxygen/lib/utils/URL.h>
 
+#include <algorithm>
 #include <chrono>
 #include <iterator>
 #include <limits>
@@ -77,7 +80,7 @@ struct FromHttpArgs {
   Option<located<duration>> retry_delay;
   Option<located<std::string>> encode;
   Option<location> server;
-  located<ir::pipeline> parser;
+  Option<located<ir::pipeline>> parser;
   let_id response;
   location operator_location = location::unknown;
 };
@@ -130,11 +133,14 @@ struct RequestConfig {
   std::vector<std::byte> body;
 };
 
-auto has_header(std::span<const std::pair<std::string, std::string>> headers,
-                std::string_view name) -> bool {
-  return std::ranges::any_of(headers, [&](auto const& kv) {
-    return detail::ascii_icase_equal(kv.first, name);
-  });
+auto find_header(std::span<const std::pair<std::string, std::string>> headers,
+                 std::string_view name) -> Option<std::string> {
+  for (auto const& [header_name, value] : headers) {
+    if (detail::ascii_icase_equal(header_name, name)) {
+      return value;
+    }
+  }
+  return None{};
 }
 
 // Builds the initial request configuration from the operator arguments.
@@ -186,10 +192,10 @@ auto make_request_config(
         // Other data types are rejected at describe() time.
       });
   }
-  if (content_type and not has_header(headers, "content-type")) {
+  if (content_type and not find_header(headers, "content-type")) {
     headers.emplace_back("Content-Type", content_type.unwrap());
   }
-  if (not has_header(headers, "accept")) {
+  if (not find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -203,7 +209,7 @@ auto make_request_config(
 // Always uses GET with the same headers as the original but no body.
 auto make_paginated_request_config(
   std::vector<std::pair<std::string, std::string>> headers) -> RequestConfig {
-  if (not has_header(headers, "accept")) {
+  if (not find_header(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -484,18 +490,21 @@ auto strip_errno_from_error_message(std::string message) -> std::string {
   return message;
 }
 
-auto find_content_encoding(
-  std::vector<std::pair<std::string, std::string>> const& headers)
-  -> Option<std::string> {
-  for (auto const& [name, value] : headers) {
-    if (detail::ascii_icase_equal(name, "content-encoding")) {
-      auto trimmed = std::string{detail::trim(value)};
-      if (not trimmed.empty()) {
-        return trimmed;
-      }
-    }
+auto path_from_url(std::string_view url) -> std::string {
+  auto parsed = boost::urls::parse_uri_reference(url);
+  if (not parsed) {
+    return {};
   }
-  return None{};
+  return std::string{parsed->path()};
+}
+
+auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
+                          diagnostic_handler& dh) -> failure_or<ir::pipeline> {
+  auto ast = ast::pipeline{};
+  ast.body.emplace_back(invocation_for_plugin(plugin, loc));
+  auto reg = global_registry();
+  auto root = compile_ctx::make_root(base_ctx{dh, *reg});
+  return std::move(ast).compile(root);
 }
 
 struct retryable_http_response : std::runtime_error {
@@ -737,7 +746,13 @@ public:
       // --- ResponseHeader ---
       [&](ResponseHeader hdr) -> Task<void> {
         auto headers = std::move(hdr.headers);
-        auto content_encoding = find_content_encoding(headers);
+        auto content_encoding = Option<std::string>{};
+        if (auto value = find_header(headers, "content-encoding")) {
+          auto trimmed = std::string{detail::trim(*value)};
+          if (not trimmed.empty()) {
+            content_encoding = std::move(trimmed);
+          }
+        }
         response_ = ResponseState{
           .status = hdr.status,
           .headers = std::move(headers),
@@ -752,11 +767,11 @@ public:
             response_->content_encoding = None{};
           }
         }
-        co_await spawn_parser(ctx);
-        if (lifecycle_ == Lifecycle::done) {
-          co_return;
-        }
         if (response_->is_success()) {
+          co_await spawn_parser(ctx);
+          if (lifecycle_ == Lifecycle::done) {
+            co_return;
+          }
           if (auto mode = builtin_pagination_mode(paginate_);
               mode and *mode == http::PaginationMode::link) {
             TENZIR_ASSERT(paginate_);
@@ -837,6 +852,8 @@ public:
         if (auto sub = ctx.get_sub(pagination_.page_count)) {
           auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
           co_await pipeline.close();
+        } else {
+          lifecycle_ = Lifecycle::done;
         }
         co_return;
       });
@@ -946,14 +963,52 @@ private:
   // be set.
   auto spawn_parser(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(response_);
-    auto pipeline = args_.parser.inner;
-    auto env = substitute_ctx::env_t{};
-    env[args_.response] = make_response_context(*response_);
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
-    if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
-      lifecycle_ = Lifecycle::done;
-      co_return;
+    auto pipeline = ir::pipeline{};
+    if (args_.parser) {
+      pipeline = args_.parser->inner;
+      auto env = substitute_ctx::env_t{};
+      env[args_.response] = make_response_context(*response_);
+      auto reg = global_registry();
+      auto b_ctx = base_ctx{ctx, *reg};
+      if (not pipeline.substitute(substitute_ctx{b_ctx, &env}, true)) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+    } else {
+      auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
+      if (auto value = find_header(response_->headers, "content-type");
+          value and not detail::trim(*value).empty()) {
+        auto content_type = std::string{detail::trim(*value)};
+        plugin = read_plugin_for_content_type(content_type);
+        if (not plugin) {
+          diagnostic::error("unsupported Content-Type `{}`", content_type)
+            .primary(args_.operator_location)
+            .hint("pass an explicit parser pipeline")
+            .emit(ctx);
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+      } else {
+        auto path = path_from_url(pagination_.current_url);
+        plugin = read_plugin_for_url_path(path);
+        if (not plugin) {
+          diagnostic::error("could not infer parser for URL path `{}`", path)
+            .primary(args_.operator_location)
+            .hint("pass an explicit parser pipeline")
+            .emit(ctx);
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+      }
+      auto inferred
+        = make_parser_pipeline(*plugin, args_.operator_location, ctx.dh());
+      if (inferred.is_error()) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      pipeline = std::move(*inferred);
+      TENZIR_TRACE("from_http inferred parser `{}` for `{}`", plugin->name(),
+                   pagination_.current_url);
     }
     co_await ctx.spawn_sub(pagination_.page_count, std::move(pipeline),
                            tag_v<chunk_ptr>);
@@ -1141,14 +1196,15 @@ public:
           return {};
         }
       }
-      // Validate that the parser pipeline is present and produces events.
-      TRY(auto parser, ctx.get(parser_arg));
-      auto output = parser.inner.infer_type(tag_v<chunk_ptr>, ctx);
-      if (not output.is_error()) {
-        if (not *output or (*output)->is_not<table_slice>()) {
-          diagnostic::error("pipeline must return events")
-            .primary(parser.source.subloc(0, 1))
-            .emit(ctx);
+      // Validate that an explicit parser pipeline produces events.
+      if (auto parser = ctx.get(parser_arg)) {
+        auto output = parser->inner.infer_type(tag_v<chunk_ptr>, ctx);
+        if (not output.is_error()) {
+          if (not *output or (*output)->is_not<table_slice>()) {
+            diagnostic::error("pipeline must return events")
+              .primary(parser->source.subloc(0, 1))
+              .emit(ctx);
+          }
         }
       }
       return {};

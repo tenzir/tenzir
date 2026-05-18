@@ -1,0 +1,6 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_INFER_HEADER_OVERRIDES_EXTENSION_URL"), tls=false

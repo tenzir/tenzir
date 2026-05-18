@@ -541,6 +541,10 @@ public:
     TENZIR_UNUSED(inv, ctx);
     return check(pipeline::internal_parse_as_operator("read bitz"));
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"bitz"}};
+  }
 };
 
 class write_bitz_plugin final : public virtual operator_factory_plugin,

@@ -939,6 +939,10 @@ public:
       splitter{std::move(*value_split)},
     }});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"kv"}};
+  }
 };
 
 class write_kv : public operator_plugin2<write_kv_operator>,
