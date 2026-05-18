@@ -129,7 +129,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       }
       scan_complete_ = true;
       // NOTE: `previous_` can grow without bounds if neither `rename` nor
-      // `remove` are used with `watch=true`.
+      // `remove` are used with `watch`.
       std::swap(previous_, current_);
       current_.clear();
       while (not pending_.empty()) {
@@ -496,8 +496,11 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
                   continue;
                 }
                 // Clean up existing directory markers when `remove=true`.
-                // Directory markers are 0-sized objects with keys ending in '/'.
-                if (base_args_.remove and file.IsDirectory()) {
+                // Directory markers are 0-sized objects with keys ending in '/'
+                // that some object stores create. Real directories on local
+                // filesystems are not markers and must not be deleted.
+                if (base_args_.remove and file.IsDirectory()
+                    and fs_->type_name() != "local") {
                   co_await remove_file(file.path() + '/', dh);
                 }
               }
@@ -525,9 +528,10 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
         co_return;
       }
       auto elapsed = std::chrono::steady_clock::now() - start;
-      if (elapsed < watch_pause) {
+      auto interval = base_args_.watch->inner;
+      if (elapsed < interval) {
         auto dur = std::chrono::duration_cast<folly::HighResDuration>(
-          watch_pause - elapsed);
+          interval - elapsed);
         co_await folly::coro::sleep(dur);
       }
     }
@@ -610,7 +614,8 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   // `set_path` finalises `has_uuid()` based on the actual path portion and
   // emits any `{uuid}`-placement diagnostics.
   // TODO: Consider using separate types here to differentiate.
-  template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
+  template_.set_path(std::move(fs->path), base_args_.url.source, append(),
+                     ctx.dh());
   bytes_written_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
                        MetricsDirection::write, MetricsVisibility::external_,
@@ -887,7 +892,10 @@ auto ToArrowFsOperator::open_stream(Partition& part,
       co_return failure::promise();
     }
   }
-  auto result = co_await spawn_blocking([fs = fs_, path] {
+  auto result = co_await spawn_blocking([fs = fs_, path, append = append()] {
+    if (append) {
+      return fs->OpenAppendStream(path);
+    }
     return fs->OpenOutputStream(path);
   });
   if (not result.ok()) {

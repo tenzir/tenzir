@@ -1,0 +1,7 @@
+// First write to a fresh path. `append=true` against a non-existent file
+// creates it, so the file should contain exactly this single row when
+// step 02 reads it back.
+from {seq: 1, msg: "first"}
+to_file env("FILE_ROOT") + "/out/append/log.json", append=true {
+  write_ndjson
+}

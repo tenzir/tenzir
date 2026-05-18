@@ -1,0 +1,10 @@
+// Run the same partitioned write a second time. With `append=true`, each
+// region's file is extended rather than truncated — so `us` ends up with the
+// original two rows plus two more, and `eu` with one plus one.
+from {region: "us", val: "d"},
+     {region: "us", val: "e"},
+     {region: "eu", val: "f"}
+to_file env("FILE_ROOT") + "/out/append/by_region/**/data.json",
+        partition_by=[region], append=true {
+  write_ndjson
+}

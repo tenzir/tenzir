@@ -1,0 +1,7 @@
+// Second write to the same path. With `append=true` the operator opens the
+// existing file via `OpenAppendStream` instead of truncating, so rows from
+// step 01 must remain.
+from {seq: 2, msg: "second"}, {seq: 3, msg: "third"}
+to_file env("FILE_ROOT") + "/out/append/log.json", append=true {
+  write_ndjson
+}

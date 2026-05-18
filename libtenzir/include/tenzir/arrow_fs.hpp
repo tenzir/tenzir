@@ -43,7 +43,7 @@ namespace tenzir {
 /// Common arguments for Arrow filesystem-based operators.
 struct FromArrowFsArgs {
   located<secret> url;
-  Option<location> watch;
+  Option<located<duration>> watch;
   Option<location> remove;
   Option<ast::lambda_expr> rename;
   Option<duration> max_age;
@@ -57,7 +57,8 @@ struct FromArrowFsArgs {
              and std::invocable<F, DescribeCtx&>
   static auto describe_to(Describer<Args, Impls...>& d, F extra = {}) -> void {
     d.template positional<located<secret>>("url", &FromArrowFsArgs::url);
-    d.named("watch", &FromArrowFsArgs::watch);
+    auto watch_arg
+      = d.template named<located<duration>>("watch", &FromArrowFsArgs::watch);
     auto remove_arg = d.named("remove", &FromArrowFsArgs::remove);
     auto rename_arg
       = d.template named<ast::lambda_expr>("rename", &FromArrowFsArgs::rename);
@@ -73,6 +74,13 @@ struct FromArrowFsArgs {
           .primary(*remove_loc)
           .primary(*rename_loc)
           .emit(ctx);
+      }
+      if (auto watch = ctx.get(watch_arg)) {
+        if (watch->inner <= duration::zero()) {
+          diagnostic::error("`watch` must be a positive duration")
+            .primary(watch->source)
+            .emit(ctx);
+        }
       }
       if (auto max_age = ctx.get(max_age_arg)) {
         if (*max_age <= duration::zero()) {
@@ -264,7 +272,6 @@ protected:
   }
 
 private:
-  static constexpr auto watch_pause = std::chrono::seconds{10};
   static constexpr size_t max_jobs = 10;
   static constexpr size_t read_size = 10uz * 1024 * 1024;
 
@@ -462,6 +469,18 @@ protected:
   /// other user-facing args). Default is a no-op.
   virtual auto setup_args(ToArrowFsArgs& args, OpCtx& ctx)
     -> Task<failure_or<void>>;
+
+  /// Whether the operator should open output streams in append mode rather
+  /// than truncating. The returned `Option<location>` carries the source
+  /// location of the user-facing `append` argument so diagnostics can point
+  /// at it. Only derived operators that target filesystems with efficient
+  /// append support (currently local FS and Azure Blob) should override
+  /// this; Arrow's S3 and GCS backends reject `OpenAppendStream` with
+  /// `NotImplemented`. With a `{uuid}` placeholder in the path the flag is
+  /// effectively a no-op, since every rotation produces a fresh filename.
+  virtual auto append() const -> Option<location> {
+    return {};
+  }
 
   auto filesystem() const -> FileSystemPtr const& {
     return fs_;
