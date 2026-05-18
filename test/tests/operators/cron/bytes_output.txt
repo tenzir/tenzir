@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/cron/bytes_output.tql:5:21
+  |
+5 | cron "* * * * * *", {
+  |                     ^ 
+  |
