@@ -1,0 +1,73 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `every` @ 107..112
+         ],
+         ref: std::every/op
+       },
+       desc: "tql2.every",
+       args: [
+-        Incomplete constant duration "1s" @ 113..115
++        located "1s" @ 113..115
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             from_ir {
+               events: [
+                 record {
+                   begin: 125..126,
+                   items: [
+                     field {
+                       name: `x` @ 126..127,
+                       expr: constant int64 1 @ 129..130
+                     }
+                   ],
+                   end: 130..131
+                 }
+               ],
+               self: 120..124
+             },
+             GenericIr {
+               op: {
+                 path: [
+                   `discard` @ 134..141
+                 ],
+                 ref: std::discard/op
+               },
+               desc: "discard",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 116..143,
+         let_ids: {
+           
+         }
+       }
+     }
+   ]
+ }
