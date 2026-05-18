@@ -510,7 +510,12 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_prometheus"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_prometheus"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     if (args_.protobuf_message.inner == v2_protobuf_message) {
       protocol_ = Protocol::v2;
     }
@@ -830,6 +835,10 @@ private:
     if (series.empty()) {
       co_return;
     }
+    auto sample_count = uint64_t{0};
+    for (auto const& entry : series) {
+      sample_count += entry.samples.size();
+    }
     auto uncompressed = serialize(series);
     if (uncompressed.size() > args_.max_uncompressed_bytes.inner) {
       if (not can_split(series)) {
@@ -880,6 +889,7 @@ private:
       co_return;
     }
     bytes_write_counter_.add(compressed_size);
+    events_write_counter_.add(sample_count);
   }
 
   auto get_timeout() const -> std::chrono::milliseconds {
@@ -922,6 +932,7 @@ private:
   uint64_t pending_sample_count_ = 0;
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
   mutable Option<std::chrono::steady_clock::time_point> next_flush_;
   mutable Box<Notify> flush_ready_{std::in_place};
 };
