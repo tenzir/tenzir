@@ -644,6 +644,15 @@ public:
                            *desc_, main_location(), noop_dh};
     auto optimization = (*desc_->optimizer)(ctx, order_, std::move(filter));
     auto replacement = std::vector<Box<Operator>>{};
+    // construct replacement
+    if (pipeline_ and desc_->pipeline
+        and desc_->pipeline->sub_optimize == SubOptimize::from_downstream) {
+      // special case: down stream is the subpipeline
+      pipeline_->pipeline.inner.operators.insert_range(
+        pipeline_->pipeline.inner.operators.begin(),
+        optimization.filter_self | std::views::transform(make_where_ir));
+      optimization.filter_self.clear();
+    }
     if (not optimization.drop) {
       replacement.emplace_back(std::move(*this));
     }

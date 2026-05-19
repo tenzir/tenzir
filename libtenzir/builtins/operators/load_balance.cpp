@@ -555,7 +555,13 @@ public:
       }
       return {};
     });
-    return d.unordered();
+    return d.optimize([](DescribeCtx&, event_order,
+                         ir::optimize_filter filter) -> Optimization {
+      return {
+        .order = event_order::unordered,
+        .filter_upstream = std::move(filter),
+      };
+    });
   }
 };
 

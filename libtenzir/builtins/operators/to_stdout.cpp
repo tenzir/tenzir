@@ -367,7 +367,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<SaveStdoutArgs, SaveStdout>{};
     d.operator_location(&SaveStdoutArgs::self);
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 
@@ -398,7 +398,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

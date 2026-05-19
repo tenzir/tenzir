@@ -282,7 +282,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

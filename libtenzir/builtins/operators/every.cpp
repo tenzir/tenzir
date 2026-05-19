@@ -181,7 +181,7 @@ public:
           }};
       }
     });
-    return d.without_optimize();
+    return d.invariant_filter();
   }
 };
 

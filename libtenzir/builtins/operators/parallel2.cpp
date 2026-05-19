@@ -427,7 +427,7 @@ public:
         .emit(ctx);
       return failure::promise();
     });
-    return d.without_optimize();
+    return d.invariant_order_filter();
   }
 };
 

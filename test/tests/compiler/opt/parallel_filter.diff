@@ -1,0 +1,97 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 69..75
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ 93..94,
++            has_question_mark: false
++          },
++          op: "gt" @ 95..96,
++          right: constant int64 1 @ 97..98
++        }
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `parallel` @ 76..84
+         ],
+         ref: std::parallel/op
+       },
+       desc: "tql2.parallel",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+-            where_ir {
+-              self: 87..92,
+-              predicate: binary_expr {
+-                left: root_field {
+-                  id: `x` @ 93..94,
+-                  has_question_mark: false
+-                },
+-                op: "gt" @ 95..96,
+-                right: constant int64 1 @ 97..98
+-              }
+-            },
+             GenericIr {
+               op: {
+                 path: [
+                   `discard` @ 101..108
+                 ],
+                 ref: std::discard/op
+               },
+               desc: "discard",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 85..110,
+         let_ids: {
+           
+         }
+       }
+     }
+   ]
+ }

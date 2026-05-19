@@ -83,7 +83,7 @@ public:
     auto d = Describer<ToFileArgs, ToFileOperator>{};
     ToArrowFsArgs::describe_to(d);
     d.named("append", &ToFileArgs::append);
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 
