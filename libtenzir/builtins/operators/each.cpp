@@ -140,7 +140,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<EachArgs, Each>{};
     auto parallel = d.named_optional("parallel", &EachArgs::parallel);
-    auto pipe = d.pipeline(&EachArgs::pipe, {{"this", &EachArgs::this_id}});
+    auto pipe = d.pipeline(&EachArgs::pipe, SubOptimize::from_downstream,
+                           {{"this", &EachArgs::this_id}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto parallel_value, ctx.get(parallel));
       if (parallel_value < 1) {

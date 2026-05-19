@@ -1255,8 +1255,9 @@ public:
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
     auto server_arg = d.named("server", &FromHttpArgs::server);
-    auto parser_arg = d.pipeline(&FromHttpArgs::parser,
-                                 {{"response", &FromHttpArgs::response}});
+    auto parser_arg
+      = d.pipeline(&FromHttpArgs::parser, SubOptimize::from_downstream,
+                   {{"response", &FromHttpArgs::response}});
     d.operator_location(&FromHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Validate TLS options.

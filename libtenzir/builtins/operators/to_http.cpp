@@ -346,7 +346,8 @@ public:
       = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
     auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
-    auto printer_arg = d.pipeline(&ToHttpArgs::printer);
+    auto printer_arg
+      = d.pipeline(&ToHttpArgs::printer, SubOptimize::from_downstream);
     d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
@@ -427,7 +428,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

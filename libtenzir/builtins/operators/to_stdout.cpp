@@ -367,7 +367,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<SaveStdoutArgs, SaveStdout>{};
     d.operator_location(&SaveStdoutArgs::self);
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 
@@ -380,7 +380,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ToStdoutArgs, ToStdout>{};
     d.operator_location(&ToStdoutArgs::self);
-    auto pipe_arg = d.pipeline(&ToStdoutArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ToStdoutArgs::pipe, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto pipe = ctx.get(pipe_arg);
       if (not pipe) {
@@ -397,7 +398,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

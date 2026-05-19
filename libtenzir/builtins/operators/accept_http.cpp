@@ -594,8 +594,9 @@ public:
     auto tls_validator
       = tls_options{{.tls_default = false, .is_server = true}}.add_to_describer(
         d, &AcceptHttpArgs::tls);
-    auto parser_arg = d.pipeline(&AcceptHttpArgs::parser,
-                                 {{"request", &AcceptHttpArgs::request}});
+    auto parser_arg
+      = d.pipeline(&AcceptHttpArgs::parser, SubOptimize::from_downstream,
+                   {{"request", &AcceptHttpArgs::request}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto responses = ctx.get(responses_arg)) {

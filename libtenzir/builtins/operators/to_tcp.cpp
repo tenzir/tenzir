@@ -365,7 +365,8 @@ public:
     auto tls_arg = d.named("tls", &ToTcpArgs::tls);
     auto max_retry_count_arg
       = d.named("max_retry_count", &ToTcpArgs::max_retry_count);
-    auto printer_arg = d.pipeline(&ToTcpArgs::printer);
+    auto printer_arg
+      = d.pipeline(&ToTcpArgs::printer, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto endpoint_str, ctx.get(endpoint_arg));
       auto ep = to<Endpoint>(endpoint_str.inner);
@@ -403,7 +404,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

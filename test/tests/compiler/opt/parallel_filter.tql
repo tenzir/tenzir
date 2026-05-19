@@ -1,0 +1,3 @@
+// A filter inside a parallel subpipeline should be pushed upstream.
+export
+parallel { where x > 1 | discard }

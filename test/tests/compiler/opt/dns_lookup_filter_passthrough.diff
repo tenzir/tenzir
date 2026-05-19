@@ -15,7 +15,6 @@
          
        ],
        filter: [
--        
 +        binary_expr {
 +          left: root_field {
 +            id: `x` @ 42..43,
@@ -24,56 +23,33 @@
 +          op: "eq" @ 44..46,
 +          right: constant int64 1 @ 47..48
 +        }
-       ],
--      order: "ordered",
++      ],
 +      order: "unordered",
-       named_args: [
-         
-       ]
-     },
-     UnorderedIr {
-       pipeline: {
-         lets: [
-           
-         ],
-         operators: [
-           GenericIr {
-             op: {
-               path: [
-                 `dns_lookup` @ 21..31
-               ],
-               ref: std::dns_lookup/op
-             },
-             desc: "dns_lookup",
-             args: [
-               expression root_field {
-                 id: `x` @ 32..33,
-                 has_question_mark: false
-               }
-             ],
-             filter: [
-               
-             ],
--            order: "ordered",
-+            order: "unordered",
-             named_args: [
-               
-             ]
--          },
--          where_ir {
--            self: 36..41,
--            predicate: binary_expr {
--              left: root_field {
--                id: `x` @ 42..43,
--                has_question_mark: false
--              },
--              op: "eq" @ 44..46,
--              right: constant int64 1 @ 47..48
--            }
-           }
-         ]
-       },
-       loc: 7..16
++      named_args: [
++        
++      ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `dns_lookup` @ 21..31
++        ],
++        ref: std::dns_lookup/op
++      },
++      desc: "dns_lookup",
++      args: [
++        expression root_field {
++          id: `x` @ 32..33,
++          has_question_mark: false
++        }
++      ],
++      filter: [
++        
++      ],
++      order: "unordered",
++      named_args: [
++        
++      ]
 +    },
 +    GenericIr {
 +      op: {
@@ -87,12 +63,55 @@
 +        
 +      ],
 +      filter: [
-+        
-+      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+-    },
+-    UnorderedIr {
+-      pipeline: {
+-        lets: [
+-          
+-        ],
+-        operators: [
+-          GenericIr {
+-            op: {
+-              path: [
+-                `dns_lookup` @ 21..31
+-              ],
+-              ref: std::dns_lookup/op
+-            },
+-            desc: "dns_lookup",
+-            args: [
+-              expression root_field {
+-                id: `x` @ 32..33,
+-                has_question_mark: false
+-              }
+-            ],
+-            filter: [
+-              
+-            ],
+-            order: "ordered",
+-            named_args: [
+-              
+-            ]
+-          },
+-          where_ir {
+-            self: 36..41,
+-            predicate: binary_expr {
+-              left: root_field {
+-                id: `x` @ 42..43,
+-                has_question_mark: false
+-              },
+-              op: "eq" @ 44..46,
+-              right: constant int64 1 @ 47..48
+-            }
+-          }
+-        ]
+-      },
+-      loc: 7..16
      }
    ]
  }

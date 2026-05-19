@@ -362,7 +362,8 @@ public:
     d.positional("url", &ToFtpArgs::url);
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToFtpArgs::tls);
-    auto printer_arg = d.pipeline(&ToFtpArgs::printer);
+    auto printer_arg
+      = d.pipeline(&ToFtpArgs::printer, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       TRY(auto printer, ctx.get(printer_arg));
@@ -377,7 +378,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

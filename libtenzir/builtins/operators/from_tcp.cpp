@@ -384,8 +384,9 @@ public:
     auto d = Describer<FromTcpArgs, FromTcpConnector>{};
     auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &FromTcpArgs::tls);
-    auto pipeline_arg = d.pipeline(&FromTcpArgs::user_pipeline,
-                                   {{"peer", &FromTcpArgs::peer_info}});
+    auto pipeline_arg
+      = d.pipeline(&FromTcpArgs::user_pipeline, SubOptimize::from_downstream,
+                   {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<Endpoint>(ep_str.inner);

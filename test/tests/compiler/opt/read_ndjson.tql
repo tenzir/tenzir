@@ -1,5 +1,4 @@
 from_tcp "127.0.0.1:8000" {
   read_ndjson
 }
-sort x
 discard

@@ -379,7 +379,7 @@ public:
     auto jobs = d.positional("jobs", &ParallelArgs::jobs);
     auto route_by = d.named("route_by", &ParallelArgs::route_by, "any");
     d.named_optional("_fuse", &ParallelArgs::fuse);
-    auto pipe = d.pipeline(&ParallelArgs::pipe);
+    auto pipe = d.pipeline(&ParallelArgs::pipe, SubOptimize::from_downstream);
     d.validate([jobs](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and j->inner == 0) {
         diagnostic::error("`jobs` must not be zero").primary(*j).emit(ctx);
@@ -427,7 +427,7 @@ public:
         .emit(ctx);
       return failure::promise();
     });
-    return d.without_optimize();
+    return d.invariant_order_filter();
   }
 };
 

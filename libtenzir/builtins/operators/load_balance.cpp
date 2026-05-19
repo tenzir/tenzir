@@ -535,7 +535,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<LoadBalanceArgs, LoadBalance>{};
     auto over = d.positional("over", &LoadBalanceArgs::over, "list");
-    auto pipe = d.pipeline(&LoadBalanceArgs::pipe,
+    auto pipe = d.pipeline(&LoadBalanceArgs::pipe, SubOptimize::from_downstream,
                            {{"over", &LoadBalanceArgs::over_id}});
     d.validate([over, pipe](DescribeCtx& ctx) -> Empty {
       if (auto entries = ctx.get(over); entries and entries->inner.empty()) {

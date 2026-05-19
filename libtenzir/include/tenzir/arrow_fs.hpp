@@ -64,8 +64,9 @@ struct FromArrowFsArgs {
       = d.template named<ast::lambda_expr>("rename", &FromArrowFsArgs::rename);
     auto max_age_arg
       = d.template named<duration>("max_age", &FromArrowFsArgs::max_age);
-    auto pipe_arg = d.pipeline(&FromArrowFsArgs::pipe,
-                               {{"file", &FromArrowFsArgs::file_info}});
+    auto pipe_arg
+      = d.pipeline(&FromArrowFsArgs::pipe, SubOptimize::from_downstream,
+                   {{"file", &FromArrowFsArgs::file_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
@@ -334,7 +335,8 @@ struct ToArrowFsArgs {
       = d.template named_optional<duration>("timeout", &ToArrowFsArgs::timeout);
     auto partition_arg = d.template named<ast::expression>(
       "partition_by", &ToArrowFsArgs::partition_by, "list<field>");
-    auto pipe_arg = d.pipeline(&ToArrowFsArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ToArrowFsArgs::pipe, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto max_size = ctx.get(max_size_arg)) {
         if (*max_size == 0) {
