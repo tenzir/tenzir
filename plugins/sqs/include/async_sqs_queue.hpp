@@ -24,6 +24,12 @@ namespace tenzir::plugins::sqs {
 /// `https://`) rather than a queue name.
 auto is_sqs_queue_url(std::string_view s) -> bool;
 
+/// Returns whether `s` satisfies the AWS SQS queue naming rules.
+///
+/// See:
+/// https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html#API_CreateQueue_RequestParameters
+auto is_valid_sqs_queue_name(std::string_view s) -> bool;
+
 /// Extracts the AWS region from a standard SQS queue URL of the form
 /// `https://sqs.<region>.amazonaws.com[.cn]/<account>/<queue>`. Returns
 /// `None` for non-URLs and for endpoints that do not encode a region

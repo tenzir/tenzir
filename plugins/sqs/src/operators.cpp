@@ -52,6 +52,16 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   if (queue_name.inner.starts_with("sqs://")) {
     queue_name.inner.erase(0, 6);
   }
+  // Reject anything that isn't either a valid AWS SQS queue name or an HTTP(S)
+  // queue URL — this catches malformed inputs like `sqs://https://...` that
+  // would otherwise silently break region detection and SigV4 signing.
+  if (not is_sqs_queue_url(queue_name.inner)
+      and not is_valid_sqs_queue_name(queue_name.inner)) {
+    diagnostic::error("invalid SQS queue `{}`", args.queue.inner)
+      .primary(args.queue.source)
+      .hint("expected a queue name, `sqs://<name>`, or a full queue URL")
+      .throw_();
+  }
   // Resolve the effective region in priority order:
   //   1. Explicit `aws_region` (user override).
   //   2. Region parsed from a full queue URL (e.g. the `us-west-2` in
@@ -65,7 +75,7 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   auto region = std::string{};
   if (args.aws_region) {
     region = args.aws_region->inner;
-  } else if (auto url_region = region_from_sqs_url(args.queue.inner)) {
+  } else if (auto url_region = region_from_sqs_url(queue_name.inner)) {
     region = std::move(*url_region);
   } else if (resolved_creds and not resolved_creds->region.empty()) {
     region = resolved_creds->region;

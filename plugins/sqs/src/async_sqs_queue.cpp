@@ -27,6 +27,8 @@
 #include <aws/sqs/model/SendMessageResult.h>
 #include <folly/coro/Retry.h>
 
+#include <algorithm>
+
 namespace tenzir::plugins::sqs {
 
 namespace {
@@ -196,6 +198,27 @@ auto sqs_api_call(HttpPool& pool, Aws::Client::AWSAuthV4Signer& signer,
 
 auto is_sqs_queue_url(std::string_view s) -> bool {
   return s.starts_with("http://") or s.starts_with("https://");
+}
+
+auto is_valid_sqs_queue_name(std::string_view s) -> bool {
+  // AWS rules: up to 80 characters; alphanumeric, `-`, and `_`; FIFO queues
+  // additionally end with `.fifo` (the suffix counts toward the 80 chars).
+  // See:
+  // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html#API_CreateQueue_RequestParameters
+  if (s.empty() or s.size() > 80) {
+    return false;
+  }
+  auto base = s;
+  if (base.ends_with(".fifo")) {
+    base.remove_suffix(5);
+  }
+  if (base.empty()) {
+    return false;
+  }
+  return std::ranges::all_of(base, [](char c) {
+    return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
+           or (c >= '0' and c <= '9') or c == '-' or c == '_';
+  });
 }
 
 auto region_from_sqs_url(std::string_view url) -> Option<std::string> {
