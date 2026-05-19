@@ -97,6 +97,13 @@ public:
     : msg_{std::move(msg)}, body_rx_{std::move(body_rx)} {
   }
 
+  ~StreamingHTTPSource() override {
+    // Close the receiver to unblock any waiting sender.
+    if (body_rx_) {
+      body_rx_->close();
+    }
+  }
+
   auto readHeaderEvent()
     -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
     // Do not set Content-Length — the body size is unknown upfront, so
